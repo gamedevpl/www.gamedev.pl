@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { logModerationRejection, MODERATION_REJECTED_MSG } from './moderation-metrics.js';
+import { logModerationRejection, MODERATION_REJECTED_MSG, MODERATION_UNAVAILABLE_MSG } from './moderation-metrics.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -111,6 +111,7 @@ describe('every moderating module reports its rejections', () => {
       'creation/improve-routes.ts',
       'creation/refine.ts',
       'creation/remix.ts',
+      'delivery/delivery-moderation.ts',
       'notifications/contact.ts',
       'realtime/worlds.ts',
     ]);
@@ -122,23 +123,28 @@ describe('every moderating module reports its rejections', () => {
 
   it.each(callSites)('%s sends a category the client can actually look up', (name) => {
     // `category` is optional on a verdict, and JSON drops an undefined value rather than
-    // sending null — so a checker that refuses without classifying produces a 422 with no
-    // category field at all, and the client's `errors.contentRejected.<category>` lookup
-    // resolves to nothing. Every route normalized this except the worlds one, which is the
-    // shape of defect that survives precisely because five siblings are correct.
-    //
-    // Whitespace is collapsed first so the assertion does not depend on how prettier
-    // happens to wrap a long line.
+    // sending null — so a route that refuses without classifying produces a response with
+    // no category field, and the client's `errors.contentRejected.<category>` lookup
+    // resolves to nothing. Two spellings are correct: the old inline default, or
+    // rejectionFor(), whose return type makes category non-optional.
     const normalized = readFileSync(resolve(apiSrcRoot, name), 'utf8').replace(/\s+/g, ' ');
     const sendArguments = normalized
-      .split('.send(')
+      .split(/\.send\(|toolErr\(/)
       .slice(1)
       .map((fragment) => fragment.slice(0, 200));
     for (const argument of sendArguments) {
       if (argument.includes('category:')) {
-        expect(argument).toContain("?? 'other'");
+        expect(argument).toMatch(/\?\? 'other'|rejectionFor\([^)]*\)\.category|[Rr]ejection\.category/);
       }
     }
+  });
+
+  // The point of routing every module through one helper: a Vertex timeout is answered
+  // as an outage, never as a verdict on what the person wrote.
+  it.each(callSites)('%s answers an unavailable checker through rejectionFor', (name) => {
+    const source = readFileSync(resolve(apiSrcRoot, name), 'utf8');
+    expect(source).toMatch(/rejectionFor\(|replyModerationBlock\(/);
+    expect(source).not.toMatch(/status\(422\)\.send\(\{ error: 'content_rejected'/);
   });
 
   it.each(callSites)('%s reports once per rejection branch', (name) => {
@@ -178,5 +184,23 @@ describe('the alert that reads these logs', () => {
     const policy = script.slice(script.indexOf('A14 moderation rejection burst'));
     expect(policy).toContain('logging.googleapis.com/user/moderation_rejections');
     expect(policy.slice(0, 800)).toContain('service_name');
+  });
+});
+
+// The burst alert reads these lines to spot abuse. An outage in that stream reads as
+// a wave of rejections nobody made.
+describe('an outage is not a rejection in the metrics', () => {
+  it('logs an undecided verdict under its own message', () => {
+    const lines: { msg: string }[] = [];
+    const log = { warn: (_payload: unknown, msg: string) => lines.push({ msg }) } as never;
+
+    logModerationRejection(log, { surface: 'refine', uid: 'g:1', category: 'other', unavailable: true });
+    logModerationRejection(log, { surface: 'refine', uid: 'g:1', category: 'pii' });
+
+    expect(lines.map((line) => line.msg)).toEqual([MODERATION_UNAVAILABLE_MSG, MODERATION_REJECTED_MSG]);
+  });
+
+  it('keeps the two messages distinct, so one filter cannot match both', () => {
+    expect(MODERATION_UNAVAILABLE_MSG).not.toBe(MODERATION_REJECTED_MSG);
   });
 });

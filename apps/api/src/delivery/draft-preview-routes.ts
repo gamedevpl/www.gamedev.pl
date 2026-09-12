@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { createSharedDraftGate, sharedDraftVersion } from './draft-share-gate.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GamesStore } from './games-store.js';
 
 type DraftPreviewValue = { slug: string; title: string; html: string };
+export type DraftGrant = { jobId: number; version?: string };
 // `revision` is the delivered candidate's games-store version id.
 type CachedDraftPreview = { value: DraftPreviewValue; revision: string; expiresAt: number };
 
@@ -21,7 +23,8 @@ export interface DraftPreviewRoutesOptions {
 }
 
 export interface DraftPreviewRoutesHandle {
-  canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean>;
+  // Null refuses. A grant names the exact version it authorized.
+  canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null>;
   replyWithDraft(request: FastifyRequest, reply: FastifyReply, jobId: number, versionOverride?: string): Promise<void>;
 }
 
@@ -31,6 +34,7 @@ export async function registerDraftPreviewRoutes(
   options: DraftPreviewRoutesOptions,
 ): Promise<DraftPreviewRoutesHandle> {
   const { store, gamesStore, now, submissionTokenSecret, githubConfigured, checkUserAccess } = options;
+  const shareGate = createSharedDraftGate({ gamesStore, now });
   const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
 
   // Cached per issue; coalesces misses and serves stale on refresh failure.
@@ -51,14 +55,24 @@ export async function registerDraftPreviewRoutes(
   }
 
   // Playable only by its owner, or anyone the creator shared it with.
-  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean> {
-    if (!store) return false;
-    const record = await store.getSubmissionBySlug(slug);
-    // Abandoned builds are unplayable, even by their own creator.
-    if (!record || record.abandonedAt) return false;
-    if (record.draftSharedAt) return true;
+  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null> {
+    if (!store) return null;
+    let record = await store.getSubmissionBySlug(slug);
     const uid = request.user?.uid;
-    return Boolean(uid && uid === record.ownerUid);
+    // Slug index can lag the owner query on a just-written draft.
+    if (!record && uid) {
+      record = (await store.listSubmissionsByOwner(uid)).find((row) => row.slug === slug) ?? null;
+    }
+    if (!record || record.abandonedAt) return null;
+    // The owner sees their own red build; a stranger never does.
+    if (uid && uid === record.ownerUid) return { jobId: record.jobId };
+    // A pulled game is not re-opened by flipping the switch.
+    if (record.moderationBlockedAt) return null;
+    if (!record.draftSharedAt) return null;
+    const version = sharedDraftVersion(record);
+    if (!version || !(await shareGate.isGreen(slug, version))) return null;
+    // Pinned: a delivery landing now must not ride this answer.
+    return { jobId: record.jobId, version };
   }
 
   // Serves the gate's own bundle, never raw delivered sources.
@@ -206,13 +220,13 @@ export async function registerDraftPreviewRoutes(
       return reply.status(429).send({ error: 'too many preview requests, please try again later' });
     }
 
-    const record = await store.getSubmissionBySlug(parsedParams.data.slug);
     // Same sharing rule as /play/<slug>: owner, or anyone shared with.
-    if (!record || !(await canPlayDraft(request, parsedParams.data.slug))) {
+    const grant = await canPlayDraft(request, parsedParams.data.slug);
+    if (!grant) {
       return reply.status(404).send({ error: 'draft not found' });
     }
 
-    return replyWithDraft(request, reply, record.jobId);
+    return replyWithDraft(request, reply, grant.jobId, grant.version);
   });
 
   return { canPlayDraft, replyWithDraft };

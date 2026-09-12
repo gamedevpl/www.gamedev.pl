@@ -2,7 +2,12 @@ import type { Firestore } from '@google-cloud/firestore';
 import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
-import { nextRoundGeneration, type JobTransition } from '../../creation/job-state.js';
+import {
+  isActiveBuildRound,
+  nextRoundGeneration,
+  resolveJobState,
+  type JobTransition,
+} from '../../creation/job-state.js';
 import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
 import type { BuilderHandoff } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -20,7 +25,36 @@ export function clearRoundSignals(next: SubmissionRecord): void {
   delete next.roundLastGateMetricKey;
 }
 
+export function takeoverRecord(
+  sub: SubmissionRecord,
+  uid: string,
+  generation: number,
+  at: string,
+): SubmissionRecord | null {
+  const state = resolveJobState(sub) ?? 'queued';
+  if (
+    sub.ownerUid !== uid ||
+    (sub.roundGeneration ?? 1) !== generation ||
+    sub.abandonedAt ||
+    (sub.builder ?? sub.defaultBuilder ?? 'platform') !== 'self' ||
+    !isActiveBuildRound({ state, transitions: sub.transitions }) ||
+    state === 'submitted' ||
+    state === 'publishing' ||
+    sub.builderHandoff ||
+    sub.agentEndedAt ||
+    !sub.dispatch?.refs?.length
+  )
+    return null;
+  return {
+    ...sub,
+    roundGeneration: nextRoundGeneration(sub.roundGeneration ?? 1),
+    agentEndedAt: at,
+    agentEndedBy: 'end',
+  };
+}
+
 export interface RoundsStore {
+  takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean>;
   // Advances roundGeneration with no state change; null if the job is gone.
   bumpRoundGeneration(jobId: number): Promise<number | null>;
 
@@ -70,6 +104,14 @@ function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVe
 
 export class InMemoryRoundsStore implements RoundsStore {
   constructor(private submissions: Map<number, SubmissionRecord>) {}
+
+  async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
+    const sub = this.submissions.get(jobId);
+    const next = sub && takeoverRecord(sub, uid, generation, at);
+    if (!next) return false;
+    this.submissions.set(jobId, next);
+    return true;
+  }
 
   async bumpRoundGeneration(jobId: number): Promise<number | null> {
     const sub = this.submissions.get(jobId);
@@ -218,6 +260,17 @@ export class FirestoreRoundsStore implements RoundsStore {
 
   private ref(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));
+  }
+
+  async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
+    const ref = this.ref(jobId);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const next = snap.exists && takeoverRecord(snap.data() as SubmissionRecord, uid, generation, at);
+      if (!next) return false;
+      tx.set(ref, next);
+      return true;
+    });
   }
 
   async bumpRoundGeneration(jobId: number): Promise<number | null> {

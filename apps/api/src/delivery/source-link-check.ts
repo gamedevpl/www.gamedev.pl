@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 // Cross-file symbol link check; prefer false negatives.
 
 export type SourceLinkFinding = {
@@ -250,8 +252,43 @@ function isCheckableSourcePath(path: string): boolean {
   return /\.(?:[cm]?[jt]s|tsx|jsx)$/.test(path);
 }
 
+function kitSharedHas(kitShared: ReadonlySet<string>, rel: string): boolean {
+  if (kitShared.has(rel)) return true;
+  if (rel.endsWith('.js')) {
+    const stem = rel.slice(0, -3);
+    return kitShared.has(`${stem}.ts`) || kitShared.has(`${stem}.tsx`);
+  }
+  if (rel.endsWith('.ts') || rel.endsWith('.tsx')) {
+    return kitShared.has(rel.replace(/\.tsx?$/, '.js'));
+  }
+  if (!/\.[a-zA-Z0-9]+$/.test(rel)) {
+    for (const ext of ['.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js']) {
+      if (kitShared.has(rel + ext)) return true;
+    }
+  }
+  return false;
+}
+
+export type KitSharedLookup = ReadonlySet<string> | 'defer';
+
+// Set membership, or defer for copied candidates.
+function kitSharedImportState(
+  from: string,
+  importPath: string,
+  kitShared: KitSharedLookup | undefined,
+): 'not-kit' | 'owned' | 'missing' {
+  const workspacePath = posix.resolve('/games/delivery', posix.dirname(from), importPath);
+  if (!workspacePath.startsWith('/shared/')) return 'not-kit';
+  if (kitShared === 'defer') return 'owned';
+  if (!kitShared) return 'missing';
+  return kitSharedHas(kitShared, workspacePath.slice(1)) ? 'owned' : 'missing';
+}
+
 // Find unresolved relative imports across a source map.
-export function findUnresolvedSourceLinks(files: ReadonlyMap<string, string>): SourceLinkFinding[] {
+export function findUnresolvedSourceLinks(
+  files: ReadonlyMap<string, string>,
+  kitShared?: KitSharedLookup,
+): SourceLinkFinding[] {
   const findings: SourceLinkFinding[] = [];
   const exportCache = new Map<string, ExportInfo>();
 
@@ -268,6 +305,8 @@ export function findUnresolvedSourceLinks(files: ReadonlyMap<string, string>): S
     let bindingBudget = MAX_IMPORT_BINDINGS_PER_FILE;
     for (const imp of imports) {
       if (imp.isTypeOnly || imp.isNamespace) continue;
+      // Typecheck covers Kit symbols; missing Kit files still fail.
+      if (kitSharedImportState(from, imp.path, kitShared) === 'owned') continue;
       const resolved = resolveRelativeImport(from, imp.path, files);
       if (resolved == null) {
         if (/\.(?:[cm]?[jt]s|tsx|jsx)$/.test(imp.path) || !/\.[a-zA-Z0-9]+$/.test(imp.path)) {

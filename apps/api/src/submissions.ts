@@ -24,7 +24,15 @@ import {
   type GitHubClient,
 } from './catalog/github-client.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
+import {
+  createMediaUrlSignerFromEnv,
+  createStoreMediaUrlSignerFromEnv,
+  type MediaUrlSigner,
+} from './delivery/media-url-signer.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
+import { registerModerationFlagRoutes } from './community/moderation-flags.js';
+import { emitModerationFlag } from './notifications/notify.js';
+import { refuseUngatedShare, sharedDraftVersion, SHARE_REFUSAL_MESSAGES } from './delivery/draft-share-gate.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
@@ -176,7 +184,6 @@ export interface SubmissionRoutesOptions {
    * pre-breaker behaviour pass.
    */
   creationGate?: CreationGate | null;
-  // Whether `platform` can be offered right now; null means always available.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
   /** Global ceiling used when the Firestore config doc sets none. See creation-limits.ts. */
   globalDailySubmissionCap?: number;
@@ -257,6 +264,11 @@ export interface SubmissionRoutesOptions {
    * GitHub, never a requirement — see game-snapshot.ts.
    */
   snapshotReader?: GameSnapshotReader | null;
+  /** Injected by tests; production builds one from the environment. */
+  mediaUrlSigner?: MediaUrlSigner | null;
+  storeMediaUrlSigner?: MediaUrlSigner | null;
+  /** Daily ceiling on signed media URLs; tests pass small numbers. */
+  mintBudget?: { perIpPerDay: number; perInstancePerDay: number };
   /**
    * Cap on in-memory assembled draft previews (HTML can be large). Defaults to
    * 50; tests pass a smaller value to exercise eviction without minting dozens
@@ -271,6 +283,9 @@ export interface SubmissionRoutesOptions {
    * default for an environment that has not named an operator.
    */
   adminUids?: Set<string>;
+
+  // Who may raise a moderation flag; the review desk's own allowlist.
+  reviewerUids?: Set<string>;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -1143,6 +1158,12 @@ export async function registerSubmissionRoutes(
   const maxMediaPerWindow = 400;
   const mediaByIp = new Map<string, number[]>();
 
+  const mediaUrlSigner = options.mediaUrlSigner ?? createMediaUrlSignerFromEnv();
+  const storeMediaUrlSigner = options.storeMediaUrlSigner ?? createStoreMediaUrlSignerFromEnv();
+  if (mediaUrlSigner) {
+    app.log.info('serving published media as signed Cloud Storage redirects');
+  }
+
   const catalogRoutes = await registerCatalogRoutes(app, {
     store,
     gamesStore: options.agentChannel?.gamesStore,
@@ -1153,6 +1174,9 @@ export async function registerSubmissionRoutes(
     mediaByIp,
     maxMediaPerWindow,
     mediaRateLimitWindowMs: gamesRateLimitWindowMs,
+    mediaUrlSigner,
+    storeMediaUrlSigner,
+    mintBudget: options.mintBudget,
   });
   await registerCatalogSearchRoutes(app, {
     store,
@@ -1213,7 +1237,21 @@ export async function registerSubmissionRoutes(
     isSlugClaimed,
     confirmSlugClaim,
   });
+  await registerModerationFlagRoutes(app, {
+    store,
+    notifyFlagRaised: adminUids?.size
+      ? async (event) => {
+          await emitModerationFlag({ ...buildNotifyDeps(), adminUids }, event);
+        }
+      : undefined,
+    adminUids,
+    reviewerUids: options.reviewerUids,
+    now,
+    invalidatePublishedGameCaches,
+    isSlugPublished: catalogRoutes.isSlugPublished,
+  });
   await registerSelfBuildConnectRoutes(app, {
+    managedAvailabilityGate,
     store,
     now,
     submissionTokenSecret,
@@ -1223,6 +1261,15 @@ export async function registerSubmissionRoutes(
   });
   await registerDraftLifecycleRoutes(app, {
     store,
+    refuseShare: async (record) => {
+      const refusal = await refuseUngatedShare({
+        gamesStore: options.agentChannel?.gamesStore,
+        slug: record.slug,
+        version: sharedDraftVersion(record),
+        ...(record.moderationBlockedAt ? { moderationBlockedAt: record.moderationBlockedAt } : {}),
+      });
+      return refusal ? { error: refusal, message: SHARE_REFUSAL_MESSAGES[refusal] } : null;
+    },
     now,
     submissionTokenSecret,
     githubClient,
@@ -1761,6 +1808,7 @@ export async function registerSubmissionRoutes(
             ttlMs: options.creationLimitsTtlMs,
             logWarn: (payload, message) => app.log.warn(payload, message),
           }),
+          contentChecker,
           onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
           onEvent: invalidateDeliveryCaches,
           log: app.log,

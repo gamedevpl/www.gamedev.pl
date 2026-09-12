@@ -183,6 +183,11 @@ jobs:
           TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
           VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          MEDIA_DAILY_MINTS_PER_INSTANCE: ${{ vars.MEDIA_DAILY_MINTS_PER_INSTANCE }}
+          MEDIA_DAILY_MINTS_PER_IP: ${{ vars.MEDIA_DAILY_MINTS_PER_IP }}
+          MODERATION_FALLBACK_MODEL: ${{ vars.MODERATION_FALLBACK_MODEL }}
+          REFINE_FALLBACK_MODEL: ${{ vars.REFINE_FALLBACK_MODEL }}
+          MODERATION_FALLBACK_PROVIDER: ${{ vars.MODERATION_FALLBACK_PROVIDER }}
           VERTEX_MODEL: ${{ vars.VERTEX_MODEL }}
           VERTEX_REGION: ${{ vars.VERTEX_REGION }}
           TRUST_EDGE_CLIENT_IP: ${{ vars.TRUST_EDGE_CLIENT_IP }}
@@ -459,7 +464,9 @@ jobs:
           # leak twice — the flag was applied, worked for ten minutes, and vanished under
           # an unrelated deploy. An emergency lever that quietly reverts is worse than no
           # lever, because the operator believes the incident is over.
-          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL; do
+          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL \
+            MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER \
+            MEDIA_DAILY_MINTS_PER_IP MEDIA_DAILY_MINTS_PER_INSTANCE REFINE_FALLBACK_MODEL; do
             VERTEX_VAL="${!VERTEX_VAR}"
             if [ -n "$VERTEX_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
@@ -1051,3 +1058,24 @@ jobs:
             --project "$PROJECT_ID" \
             --to-latest \
             --remove-tags candidate
+
+      - name: Prune old Firebase Hosting versions
+        # Last, and after promotion: Hosting keeps every version ever deployed and bills
+        # storage over the free tier, but nothing here is worth delaying a release for.
+        # The script never deletes the live version, and keeps the newest KEEP besides it
+        # so a rollback still has somewhere to roll back to.
+        #
+        # continue-on-error, because by this line the release is already serving: a
+        # transient 500 from the Hosting API must not paint a live deployment red and
+        # send someone re-running it. A failure here costs one deploy's worth of stale
+        # versions, which the next successful run prunes anyway.
+        continue-on-error: true
+        env:
+          KEEP: '10'
+        run: |
+          if ! ./infra/prune-hosting-versions.sh; then
+            echo "::warning title=Hosting prune failed::Old Hosting versions were not pruned. \
+          The release is live and unaffected; storage stays high until the next deploy \
+          prunes, or until ./infra/prune-hosting-versions.sh is run by hand."
+            exit 1
+          fi

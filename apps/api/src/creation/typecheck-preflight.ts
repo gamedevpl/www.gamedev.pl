@@ -49,11 +49,7 @@ export function sharedSourcesFromKitTree(tree: KitTree): Record<string, string> 
   for (const [filePath, buf] of tree.files) {
     if (!filePath.startsWith(prefix)) continue;
     const rel = filePath.slice(prefix.length);
-    const isKitDts = rel === 'shared/game-kit.d.ts';
-    const isModule = rel.startsWith('shared/modules/') && rel.endsWith('.ts');
-    const isVertical = rel.startsWith('shared/verticals/') && rel.endsWith('.ts');
-    const isSharedSim = rel.startsWith('shared/sim/') && rel.endsWith('.ts');
-    if (isKitDts || isModule || isVertical || isSharedSim) {
+    if (rel.startsWith('shared/') && /\.tsx?$/.test(rel)) {
       out[rel] = buf.toString('utf8');
     }
   }
@@ -172,12 +168,15 @@ export function typecheckDeliverySources(input: {
     files.set(`${ROOT}/${rel}`, source);
   }
   const gameRoot = `${ROOT}/games/${input.slug}`;
+  // Root game files plus the ambient kit declaration.
+  const roots: string[] = [`${ROOT}/shared/game-kit.d.ts`];
   for (const [rel, source] of Object.entries(input.sources)) {
     if (rel.endsWith('.ts') || rel.endsWith('.tsx')) {
-      files.set(`${gameRoot}/${rel}`, source);
+      const virtual = `${gameRoot}/${rel}`;
+      files.set(virtual, source);
+      roots.push(virtual);
     }
   }
-  const roots = [...files.keys()];
 
   // Disk reads: TypeScript lib only (delivery is untrusted).
   const host: ts.CompilerHost = {

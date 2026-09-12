@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 export const X_CONTENT_TYPE_OPTIONS = 'nosniff';
 export const REFERRER_POLICY = 'strict-origin-when-cross-origin';
+export const STRICT_TRANSPORT_SECURITY = 'max-age=31536000';
 export const FRAME_ANCESTORS_NONE = "frame-ancestors 'none'";
 export const X_FRAME_OPTIONS = 'DENY';
 // Never name mic/camera/motion: the game frame delegates them.
@@ -21,7 +22,8 @@ export const APP_CSP_REPORT_ONLY = [
   // Avatars come from whichever identity provider signed the visitor in.
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "media-src 'self' data: blob:",
+  // storage.googleapis.com: published media redirects there.
+  "media-src 'self' data: blob: https://storage.googleapis.com",
   // Realtime hosts over WebSocket; the MediaPipe model file from GCS.
   "connect-src 'self' wss: https://accounts.google.com/gsi/ https://cdn.jsdelivr.net https://storage.googleapis.com",
   "frame-src 'self' blob: https://accounts.google.com/gsi/",
@@ -107,6 +109,7 @@ export function registerSecurityHeaders(app: FastifyInstance, options: SecurityH
   app.addHook('onSend', async (_request, reply, payload) => {
     setIfAbsent(reply, 'x-content-type-options', X_CONTENT_TYPE_OPTIONS);
     setIfAbsent(reply, 'referrer-policy', REFERRER_POLICY);
+    setIfAbsent(reply, 'strict-transport-security', STRICT_TRANSPORT_SECURITY);
     if (!isHtmlDocument(reply)) return payload;
     // A route that wrote its own CSP owns its embedding story.
     if (!reply.hasHeader('content-security-policy')) {

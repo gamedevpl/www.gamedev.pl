@@ -73,6 +73,7 @@ export {
   Zone,
   ZoneFullError,
   ZoneUnavailableError,
+  IDLE_SEAT_MS,
   PARK_GRACE_MS,
   SNAPSHOT_EVERY_MS,
   type SimSource,

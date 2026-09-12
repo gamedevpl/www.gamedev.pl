@@ -23,6 +23,7 @@ vi.mock('../../PublishedGameFrame.js', () => ({
 const reviewApi = vi.hoisted(() => ({
   fetchReviewQueue: vi.fn(),
   submitAssessment: vi.fn(),
+  raiseModerationFlag: vi.fn(),
 }));
 
 vi.mock('./reviewApi.js', () => reviewApi);
@@ -37,6 +38,8 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   reviewApi.fetchReviewQueue.mockReset();
   reviewApi.submitAssessment.mockReset();
+  reviewApi.raiseModerationFlag.mockReset();
+  reviewApi.raiseModerationFlag.mockResolvedValue(undefined);
   reviewApi.fetchReviewQueue.mockResolvedValue({
     source: 'all',
     remaining: 2,
@@ -246,6 +249,77 @@ describe('ReviewDesk', () => {
         checklist: expect.objectContaining({ graphics: 'ok', controls: 'ok' }),
       }),
     );
+  });
+
+  it('reports abuse without spending a verdict, and needs no checklist to do it', async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<ReviewDesk />);
+    });
+    await flush();
+
+    const open = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Report abuse'),
+    );
+    await act(async () => {
+      open!.click();
+    });
+
+    const note = container.querySelector<HTMLTextAreaElement>('.review-flag-note')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(note, 'A slur is painted on the title screen.');
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const reason = container.querySelector<HTMLSelectElement>('.review-flag-select')!;
+    const setSelect = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setSelect.call(reason, 'hate');
+      reason.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.review-flag-send')!.click();
+    });
+    await flush();
+
+    expect(reviewApi.raiseModerationFlag).toHaveBeenCalledWith({
+      slug: 'sky-dodge',
+      source: 'catalog',
+      reason: 'hate',
+      note: 'A slur is painted on the title screen.',
+    });
+    // Abuse is not a verdict: no assessment, card stays.
+    expect(reviewApi.submitAssessment).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Sky Dodge');
+    expect(container.textContent).toContain('An operator takes it from here');
+  });
+
+  it('will not let an arrow key file a verdict while the report dialog is open', async () => {
+    // The reason picker is a select, which the handler missed.
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<ReviewDesk />);
+    });
+    await flush();
+
+    await fillRequiredForm();
+    const open = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Report abuse'),
+    );
+    await act(async () => {
+      open!.click();
+    });
+
+    const reason = container.querySelector<HTMLSelectElement>('.review-flag-select')!;
+    await act(async () => {
+      reason.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      reason.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      reason.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+    await flush();
+
+    expect(reviewApi.submitAssessment).not.toHaveBeenCalled();
+    expect(container.querySelector('.review-flag')).not.toBeNull();
   });
 
   it('flags a slug an operator explicitly requeued for re-review', async () => {

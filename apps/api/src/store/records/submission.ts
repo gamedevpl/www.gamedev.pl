@@ -7,6 +7,7 @@ import type { AgentEndedBy, BuilderHandoff } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 
 export interface SubmissionRecord {
+  localActivity?: import('@gamedevpl/contract').LocalActivity & { generation: number };
   jobId: number;
   ownerUid: string;
   createdAt: string;
@@ -68,6 +69,8 @@ export interface SubmissionRecord {
    * question worth being able to answer later; clearing it turns sharing back off.
    */
   draftSharedAt?: string;
+  // Operator takedown. Unlike draftSharedAt, not the creator's to undo.
+  moderationBlockedAt?: string;
   /**
    * How many clarifying questions the creator actually answered before this was
    * submitted — 0 when they skipped the QA panel or it had nothing to ask.
@@ -290,8 +293,6 @@ export interface SubmissionRecord {
 // leaves every already-persisted document unreadable under the new name.
 export function fromStoredSubmission(data: unknown): SubmissionRecord {
   const record = data as SubmissionRecord & { issueNumber?: number };
-  // `gating` no longer typechecks as a JobState.
-
   // A record written before it was removed can still hold the string.
   const storedState: string | undefined = record.state;
   const state = storedState === 'gating' ? 'submitted' : record.state;

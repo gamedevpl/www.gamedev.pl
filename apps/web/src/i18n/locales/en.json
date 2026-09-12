@@ -1,4 +1,17 @@
 {
+  "localActivity": {
+    "interactive": "The interactive agent owns the terminal. Respond to permission prompts there.",
+    "title": "Local agent: {{agent}}",
+    "preparing": "Preparing the local workspace.",
+    "editing": "The agent is editing locally.",
+    "permission": "Waiting for permissions in the terminal.",
+    "verifying": "Checking the local changes.",
+    "ready": "Local checks passed. Ready to send with /submit.",
+    "failed": "The local task did not pass. Check the terminal for details.",
+    "stopped": "The local task was stopped.",
+    "offline": "Contact with the CLI was lost. Check the terminal; the agent may still be running.",
+    "localOnly": "Game files remain on your computer until you submit them."
+  },
   "app": {
     "loadingSurface": "Loading…",
     "surfaceLoadFailed": "This page didn't load — a newer version of the site is available.",
@@ -73,6 +86,10 @@
       "review_sweep": {
         "title": "A review sweep is ready",
         "body": "“{{title}}” has games waiting on the review desk."
+      },
+      "moderation_flag": {
+        "title": "A reviewer reported a game",
+        "body": "“{{title}}” was reported as {{detail}}. One report is enough to act on."
       }
     },
     "game": {
@@ -128,8 +145,8 @@
     "smartPlayBtn": "Play now",
     "smartRemixBtn": "Remix with AI",
     "smartMatchHint": "Looking for something else? Add more details above to build a new game.",
-    "smartNoMatchTitle": "Describe your game idea: \"{{query}}\"",
-    "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
+    "smartNoMatchTitle": "We'll build this",
+    "smartNoMatchSub": "A coding agent writes it, a human reviews it, then anyone can play.",
     "smartSearching": "Searching catalog…",
     "smartBuildBtn": "Build this game",
     "orBuildOwnGame": "or build your own game",
@@ -502,7 +519,9 @@
         "commandTypecheck": "Check types",
         "commandKit": "Open GameKit declaration",
         "commandBack": "Back to thread"
-      }
+      },
+      "deliverContentRejected": "Not published — the wording in SPEC.md or GAME.json is not publishable here. Rewrite the title, description or how-to-play and publish again. Your code was not read.",
+      "deliverModerationUnavailable": "Not published — the content check could not run just now. Your files are saved; try again in a moment."
     },
     "editor": {
       "loading": "Loading the editor…",
@@ -645,7 +664,10 @@
       "off": "Off",
       "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the catalog either way.",
       "hintOn": "Anyone with this link can play the latest build. It's the same link the game keeps once it's published, so there's nothing to re-send.",
-      "error": "We couldn't change that just now. Please try again in a moment."
+      "error": "We couldn't change that just now. Please try again in a moment.",
+      "gateRed": "This build didn't pass its checks, and a shared link is public. Fix it, deliver again, then share.",
+      "gatePending": "The checks on this build are still running. Sharing opens as soon as they come back green.",
+      "nothingDelivered": "There is nothing to play yet. Deliver a build first, then share the link."
     },
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
@@ -1224,6 +1246,7 @@
     "signInRequired": "Your sign-in expired. Sign in again and send this once more — your answers are kept.",
     "tooManyAttempts": "That's a lot of new games at once. Wait a few minutes and try again.",
     "creationPaused": "New games are paused for a moment while we look at something on our side. Your daily allowance hasn't been touched — please try again shortly.",
+    "moderationUnavailable": "We couldn't check your idea just now — that's on us, not on what you wrote. Your daily allowance hasn't been touched; please try again in a moment.",
     "creationOverCapacity": "We've hit today's ceiling on new games across the whole site, so we can't start another one right now. Your own allowance is untouched and still there tomorrow.",
     "nameUnavailable": "That name was taken while we were setting your game up. Give it a different one and try again.",
     "conceptTooShort": "We don't have enough to go on yet — tell us a bit more about the game (at least {{minLength}} characters): what you do, how you win or lose, what it looks like.",
@@ -1521,7 +1544,27 @@
     "noMedia": "No preview media yet — try the live game.",
     "previewImage": "Preview of {{title}}",
     "shotsLabel": "Screenshots",
-    "shotNamed": "Screenshot {{name}}"
+    "shotNamed": "Screenshot {{name}}",
+    "flag": {
+      "open": "Report abuse",
+      "title": "Report this game",
+      "lead": "This goes straight to an operator, separately from your verdict on “{{title}}”. Use it for content that should not be on the site at all — not for a game you simply think is weak.",
+      "reasonLabel": "What is wrong",
+      "reason": {
+        "sexual": "Sexual content",
+        "hate": "Hate or slurs",
+        "violence": "Gratuitous violence",
+        "targets_person": "Targets a real person",
+        "infringing": "Infringing material",
+        "other": "Something else"
+      },
+      "noteLabel": "What did you see",
+      "notePlaceholder": "Where it appears and what it is. An operator reads this, not the creator.",
+      "cancel": "Cancel",
+      "send": "Send report",
+      "sent": "Reported. An operator takes it from here.",
+      "error": "Could not send that report. Try again in a moment."
+    }
   },
   "creatorProfile": {
     "back": "Back",
@@ -2025,8 +2068,9 @@
     "copy": "Copy",
     "retry": "Try again",
     "platformBody": "The gamedev.pl agent will continue this round using your platform quota. You can follow its progress in Studio.",
-    "cliStart": "Choose a local checkout, a conversation, or an agent in the terminal. Describe what to build. You can return to Studio at any time.",
+    "cliStart": "Run these commands in your terminal, then choose your installed agent or a local checkout. Your agent uses its own account and billing. gamedevpl CLI connects it to this game; clicking Continue here does not start a managed agent.",
     "agentStart": "Paste this message into your agent’s chat. It identifies this game and asks the agent to start the current round.",
+    "localWaiting": "Local work is shown in your terminal and live preview. Studio cannot see local edits until you send them with /submit after validation passes.",
     "waiting": "Connection is not confirmed yet. This screen will update when your agent checks in. You can also open Studio below.",
     "cliSetup": "Run these commands in your terminal. You need Node.js 20.19 or newer. Sign in with the same account you use here.",
     "toolSetup": "Set up gamedev.pl in {{tool}}, then continue to the starting message.",
@@ -2061,6 +2105,8 @@
       "other": "Another MCP tool",
       "muse": "Muse Code (Meta)"
     },
-    "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet."
+    "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet.",
+    "panelWaiting": "Waiting for your agent to connect. You can close this panel and follow progress in the conversation.",
+    "selfMode": "This round: your own agent (BYOCA)"
   }
 }

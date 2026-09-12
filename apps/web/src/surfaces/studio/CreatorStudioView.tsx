@@ -14,6 +14,7 @@ import { CodeSurface } from './CodeSurface.js';
 import { EditorPanel } from './EditorPanel.js';
 import { StudioStage, type StagePosture, type StageStatus } from './StudioStage.js';
 import { StudioStrip } from './StudioStrip.js';
+import { useHandoffClickGuard } from './useHandoffClickGuard.js';
 import { usePlayChromeIdle } from '../../usePlayChromeIdle.js';
 import { StudioChatRail } from './StudioChatRail.js';
 import { StudioStageCard } from './StudioStageCard.js';
@@ -117,10 +118,10 @@ export function CreatorStudioView({
   onPlay,
   onRetryConcept,
 }: CreatorStudioViewProps) {
+  useHandoffClickGuard();
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
-  /** Claim-handle modal — only opened when the creator asks to clear the publish gate. */
   const [claimOpen, setClaimOpen] = useState(false);
   const [games, setGames] = useState<StudioGame[]>([]);
   const [healthRows, setHealthRows] = useState<GameHealth[]>([]);
@@ -914,6 +915,7 @@ export function CreatorStudioView({
                         onClaim={() => setClaimOpen(true)}
                         shareSlot={shareSlot}
                         onOpenTheater={() => setTheaterOpen(true)}
+                        onPlayPermalink={onPlay}
                         isCompact={shelfIsDrawer}
                         isChromeIdle={playChromeIdle}
                         onExit={() => onNavigate('/')}

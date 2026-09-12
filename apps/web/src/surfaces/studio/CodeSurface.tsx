@@ -82,6 +82,16 @@ import './code-surface-editor.css';
 import './code-surface-statusbar.css';
 import './code-actions-menu.css';
 
+// Rewrite the words, or wait out an outage: different answers.
+const DELIVER_REFUSAL_KEYS: Record<string, string> = {
+  content_rejected: 'studioPanel.code.deliverContentRejected',
+  moderation_unavailable: 'studioPanel.code.deliverModerationUnavailable',
+};
+
+function deliverRefusalKey(rejected: string): string {
+  return DELIVER_REFUSAL_KEYS[rejected] ?? 'studioPanel.code.deliverRefused';
+}
+
 /**
  * The Code surface (creator-code-editing-execution-plan.md CE-06/07/08/09/13/15):
  * docked over the stage the way `EditorPanel` docks for Edit.
@@ -844,7 +854,7 @@ export function CodeSurface({
         load(false);
       } else {
         setDeliverState('idle');
-        setDeliverMessage(t('studioPanel.code.deliverRefused'));
+        setDeliverMessage(t(deliverRefusalKey(outcome.rejected)));
       }
     } catch (error) {
       setDeliverState('idle');

@@ -1,4 +1,17 @@
 {
+  "localActivity": {
+    "interactive": "Interaktywny agent steruje terminalem. Odpowiadaj tam na pytania o zgodę.",
+    "title": "Lokalny agent: {{agent}}",
+    "preparing": "Przygotowywanie lokalnego katalogu.",
+    "editing": "Agent edytuje grę lokalnie.",
+    "permission": "Oczekiwanie na zgodę w terminalu.",
+    "verifying": "Sprawdzanie lokalnych zmian.",
+    "ready": "Lokalne testy przeszły. Możesz wysłać zmiany przez /submit.",
+    "failed": "Lokalne zadanie nie przeszło weryfikacji. Szczegóły w terminalu.",
+    "stopped": "Lokalne zadanie zostało zatrzymane.",
+    "offline": "Utracono kontakt z CLI. Sprawdź terminal — agent może nadal pracować.",
+    "localOnly": "Pliki gry pozostają na Twoim komputerze do momentu wysłania."
+  },
   "app": {
     "loadingSurface": "Wczytywanie…",
     "surfaceLoadFailed": "Ta strona się nie wczytała — dostępna jest nowsza wersja serwisu.",
@@ -73,6 +86,10 @@
       "review_sweep": {
         "title": "Przegląd gier jest gotowy",
         "body": "„{{title}}” czeka na biurku ocen."
+      },
+      "moderation_flag": {
+        "title": "Recenzent zgłosił grę",
+        "body": "„{{title}}” zgłoszono jako {{detail}}. Jedno zgłoszenie wystarczy, żeby zadziałać."
       }
     },
     "game": {
@@ -128,8 +145,8 @@
     "smartPlayBtn": "Zagraj teraz",
     "smartRemixBtn": "Stwórz nową wersję z AI",
     "smartMatchHint": "Chcesz stworzyć coś innego? Dopisz więcej szczegółów powyżej i stwórz nową grę.",
-    "smartNoMatchTitle": "Opisz swój pomysł na grę: \"{{query}}\"",
-    "smartNoMatchSub": "Zostań twórcą — pozwól agentom AI stworzyć Twój pomysł!",
+    "smartNoMatchTitle": "Zrobimy z tego grę",
+    "smartNoMatchSub": "Agent napisze kod, człowiek sprawdzi, potem każdy może zagrać.",
     "smartSearching": "Szukanie w katalogu…",
     "smartBuildBtn": "Stwórz taką grę",
     "orBuildOwnGame": "lub stwórz swoją grę",
@@ -508,7 +525,9 @@
         "commandTypecheck": "Sprawdź typy",
         "commandKit": "Otwórz deklarację GameKit",
         "commandBack": "Wróć do wątku"
-      }
+      },
+      "deliverContentRejected": "Nie opublikowano — tekst w SPEC.md lub GAME.json nie nadaje się do publikacji. Popraw tytuł, opis albo instrukcję i opublikuj ponownie. Twój kod nie był czytany.",
+      "deliverModerationUnavailable": "Nie opublikowano — sprawdzenie treści nie mogło się teraz wykonać. Twoje pliki są zapisane; spróbuj za chwilę."
     },
     "editor": {
       "loading": "Wczytywanie edytora…",
@@ -653,7 +672,10 @@
       "off": "Wył.",
       "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do katalogu.",
       "hintOn": "Każdy z tym linkiem może zagrać w najnowszą wersję. To ten sam link, który gra zachowa po publikacji, więc nie trzeba wysyłać go ponownie.",
-      "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę."
+      "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę.",
+      "gateRed": "Ten build nie przeszedł testów, a udostępniony link jest publiczny. Popraw go, dostarcz ponownie i wtedy udostępnij.",
+      "gatePending": "Testy tego buildu jeszcze trwają. Udostępnianie otworzy się, gdy wyjdą na zielono.",
+      "nothingDelivered": "Nie ma jeszcze czego grać. Najpierw dostarcz build, potem udostępnij link."
     },
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
@@ -1238,6 +1260,7 @@
     "signInRequired": "Twoja sesja wygasła. Zaloguj się ponownie i wyślij jeszcze raz — odpowiedzi są zachowane.",
     "tooManyAttempts": "To dużo nowych gier naraz. Odczekaj kilka minut i spróbuj ponownie.",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
+    "moderationUnavailable": "Nie udało nam się teraz sprawdzić Twojego pomysłu — to problem po naszej stronie, nie z tym, co napisałeś. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za chwilę.",
     "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
     "nameUnavailable": "Ta nazwa została zajęta, gdy przygotowywaliśmy Twoją grę. Nadaj inną i spróbuj ponownie.",
     "conceptTooShort": "To za mało, żebyśmy wiedzieli, co budować — opisz grę trochę szerzej (co najmniej {{minLength}} znaków): co się w niej robi, jak się wygrywa lub przegrywa, jak wygląda.",
@@ -1535,7 +1558,27 @@
     "noMedia": "Brak podglądu — spróbuj żywej gry.",
     "previewImage": "Podgląd: {{title}}",
     "shotsLabel": "Zrzuty ekranu",
-    "shotNamed": "Zrzut {{name}}"
+    "shotNamed": "Zrzut {{name}}",
+    "flag": {
+      "open": "Zgłoś nadużycie",
+      "title": "Zgłoś tę grę",
+      "lead": "To trafia prosto do operatora, niezależnie od twojego werdyktu o „{{title}}”. Użyj tego dla treści, której w ogóle nie powinno być na stronie — nie dla gry, która po prostu jest słaba.",
+      "reasonLabel": "Co jest nie tak",
+      "reason": {
+        "sexual": "Treści seksualne",
+        "hate": "Nienawiść lub obelgi",
+        "violence": "Nieuzasadniona przemoc",
+        "targets_person": "Uderza w realną osobę",
+        "infringing": "Narusza cudze prawa",
+        "other": "Coś innego"
+      },
+      "noteLabel": "Co widzisz",
+      "notePlaceholder": "Gdzie to jest i co to jest. Czyta to operator, nie twórca.",
+      "cancel": "Anuluj",
+      "send": "Wyślij zgłoszenie",
+      "sent": "Zgłoszone. Dalej zajmuje się tym operator.",
+      "error": "Nie udało się wysłać zgłoszenia. Spróbuj za chwilę."
+    }
   },
   "creatorProfile": {
     "back": "Wróć",
@@ -2039,8 +2082,9 @@
     "copy": "Kopiuj",
     "retry": "Spróbuj ponownie",
     "platformBody": "Agent gamedev.pl będzie kontynuował tę rundę, korzystając z Twojego limitu na platformie. Postęp zobaczysz w Studio.",
-    "cliStart": "W terminalu wybierz lokalne pliki, rozmowę lub agenta. Opisz, co zbudować. Do Studio możesz wrócić w każdej chwili.",
+    "cliStart": "Uruchom te polecenia w terminalu, a potem wybierz swojego zainstalowanego agenta lub lokalny checkout. Agent korzysta ze swojego konta i rozliczeń. gamedevpl CLI łączy go z tą grą; kliknięcie „Gotowe” tutaj nie uruchamia agenta managed.",
     "agentStart": "Wklej tę wiadomość w rozmowie ze swoim agentem. Wskaże mu tę grę i poprosi o rozpoczęcie bieżącej rundy.",
+    "localWaiting": "Postęp lokalnej pracy zobaczysz w terminalu i podglądzie gry. Studio nie widzi lokalnych zmian, dopóki nie wyślesz ich przez /submit po pomyślnej weryfikacji.",
     "waiting": "Połączenie nie jest jeszcze potwierdzone. Ten ekran zaktualizuje się, gdy agent się odezwie. Możesz też otworzyć Studio poniżej.",
     "cliSetup": "Uruchom te polecenia w terminalu. Potrzebujesz Node.js 20.19 lub nowszego. Zaloguj się na to samo konto co tutaj.",
     "toolSetup": "Dodaj gamedev.pl w {{tool}}, a potem przejdź do wiadomości rozpoczynającej pracę.",
@@ -2075,6 +2119,8 @@
       "other": "Inne narzędzie MCP",
       "muse": "Muse Code (Meta)"
     },
-    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai."
+    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
+    "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
+    "selfMode": "Ta runda: Twój agent (BYOCA)"
   }
 }

@@ -1961,6 +1961,20 @@ export async function registerAgentChannelRoutes(
             ...(delivery.rejected === 'gate_capacity'
               ? { reason: 'gate_capacity', retry: 'your sources are staged — deliver again later' }
               : {}),
+            ...(delivery.rejected === 'content_rejected'
+              ? {
+                  reason: 'content_rejected',
+                  category: delivery.category,
+                  retry:
+                    'SPEC.md or GAME.json carries text this platform will not publish. Rewrite it and deliver again.',
+                }
+              : {}),
+            ...(delivery.rejected === 'moderation_unavailable'
+              ? {
+                  reason: 'moderation_unavailable',
+                  retry: 'the content check could not run — your sources are staged, deliver again shortly',
+                }
+              : {}),
             ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
           });
         }

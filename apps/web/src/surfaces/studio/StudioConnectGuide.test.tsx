@@ -40,6 +40,7 @@ async function click(text: string) {
   });
 }
 beforeEach(async () => {
+  sessionStorage.clear();
   await i18n.changeLanguage('en');
   vi.mocked(getConnectPayload).mockResolvedValue(payload);
   Object.defineProperty(navigator, 'clipboard', { value: { writeText: clipboard }, configurable: true });
@@ -86,6 +87,15 @@ it('offers terminal commands separately, including Windows and a game without so
   await click('Windows');
   expect(host.textContent).toContain('install.ps1');
   expect(host.textContent).not.toContain('install.sh');
+  await click('Setup done — continue');
+  expect(host.textContent).toContain('install.ps1');
+  expect(host.textContent).toContain('gamedevpl connect sky');
+  expect(host.textContent).toContain('your own agent (BYOCA)');
+  expect(host.textContent).toContain('Studio cannot see local edits');
+  expect(host.textContent).toContain('/submit');
+  expect(host.textContent).not.toContain('not confirmed');
+  await click('Copy');
+  expect(clipboard).toHaveBeenCalledWith(expect.stringContaining('install.ps1'));
 });
 it('keeps generic manual credentials masked and copies the real header only on request', async () => {
   await act(async () => {
@@ -114,4 +124,77 @@ it('routes Muse through a local CLI checkout instead of claiming MCP support', a
   await click('Setup done — continue');
   expect(host.textContent).toContain('Open a local checkout');
   expect(host.textContent).toContain('does not configure MCP');
+});
+
+it('keeps unavailable managed builders out of the panel and uses panel-specific continuation copy', async () => {
+  vi.mocked(getConnectPayload).mockResolvedValue({ ...payload, canSwitchToPlatform: false });
+  await act(async () =>
+    root.render(
+      createElement(StudioConnectGuide, {
+        token: 'panel',
+        panel: true,
+        pending: false,
+        onSwitchToPlatform: vi.fn(),
+      }),
+    ),
+  );
+  expect(host.textContent).not.toContain('Not sure? Build it for me');
+  expect(host.querySelector('.connect-guide-panel')).not.toBeNull();
+  await act(async () => (host.querySelector('.connect-guide-option') as HTMLButtonElement).click());
+  await click('Setup done — continue');
+  expect(host.textContent).toContain('Studio cannot see local edits');
+  expect(host.textContent).not.toContain('not confirmed');
+});
+
+it('shows an empty-state explanation when the round cannot accept an agent', async () => {
+  vi.mocked(getConnectPayload).mockRejectedValue(
+    Object.assign(new Error('unavailable'), {
+      status: 409,
+      reason: 'not_self_round',
+    }),
+  );
+  await act(async () =>
+    root.render(
+      createElement(StudioConnectGuide, {
+        token: 'closed',
+        panel: true,
+        pending: false,
+        unavailableLabel: 'No agent setup for this round',
+        onSwitchToPlatform: vi.fn(),
+      }),
+    ),
+  );
+  expect(host.textContent).toBe('No agent setup for this round');
+  expect(host.querySelector('button')).toBeNull();
+});
+
+it('restores the CLI step and OS after remount without carrying them to another round', async () => {
+  await act(async () => (host.querySelector('.connect-guide-option') as HTMLButtonElement).click());
+  await click('Windows');
+  await click('Setup done — continue');
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () =>
+    root.render(createElement(StudioConnectGuide, { token: 'tok', pending: false, onSwitchToPlatform: vi.fn() })),
+  );
+  expect(host.textContent).toContain('Step 3 of 3');
+  expect(host.textContent).toContain('install.ps1');
+  await act(async () =>
+    root.render(
+      createElement(StudioConnectGuide, { token: 'different-round', pending: false, onSwitchToPlatform: vi.fn() }),
+    ),
+  );
+  expect(host.textContent).toContain('Step 1 of 4');
+  expect(host.querySelector('pre')).toBeNull();
+});
+it('drops a saved managed choice when that builder becomes unavailable', async () => {
+  await act(async () => (host.querySelectorAll('.connect-guide-option')[2] as HTMLButtonElement).click());
+  await act(async () => root.unmount());
+  vi.mocked(getConnectPayload).mockResolvedValue({ ...payload, canSwitchToPlatform: false });
+  root = createRoot(host);
+  await act(async () =>
+    root.render(createElement(StudioConnectGuide, { token: 'tok', pending: false, onSwitchToPlatform: vi.fn() })),
+  );
+  expect(host.textContent).toContain('Step 1 of 4');
+  expect(host.textContent).not.toContain('Let gamedev.pl take over');
 });

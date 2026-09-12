@@ -1,3 +1,4 @@
+import { SubmissionFacade } from './submission-facade.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -76,6 +77,14 @@ import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
 import { InMemoryReviewStore } from './slices/review.js';
+import { InMemoryModerationFlagStore } from './slices/moderation-flags.js';
+import type { ModerationFlag } from './records/moderation-flag.js';
+import type {
+  RaiseModerationFlagInput,
+  ResolveModerationFlagInput,
+  ResolveModerationFlagResult,
+} from './slices/moderation-flags.js';
+
 import { InMemoryRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
 import { InMemoryRoundsStore } from './slices/rounds.js';
 import { InMemorySocialStore } from './slices/social.js';
@@ -85,14 +94,14 @@ import { InMemoryTelemetryStore } from './slices/telemetry.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
-export class InMemoryStore implements Store {
+export class InMemoryStore extends SubmissionFacade implements Store {
   private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
-  private submissionStore = new InMemorySubmissionStore(this.submissions);
+  protected submissionStore = new InMemorySubmissionStore(this.submissions);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users);
   private buildMediaStore = new InMemoryBuildMediaStore();
@@ -105,6 +114,7 @@ export class InMemoryStore implements Store {
   private notificationsStore = new InMemoryNotificationsStore();
   private socialStore = new InMemorySocialStore();
   private reviewStore = new InMemoryReviewStore();
+  private moderationFlagStore = new InMemoryModerationFlagStore();
   private reviewSweepStore = new InMemoryReviewSweepStore();
   private playerDataStore = new InMemoryPlayerDataStore();
   private worldEntriesStore = new InMemoryWorldEntriesStore();
@@ -274,6 +284,10 @@ export class InMemoryStore implements Store {
     return this.dispatchStore.recordJobTransition(jobId, transition, guard);
   }
 
+  async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
+    return this.roundsStore.takeOverAgentRound(jobId, uid, generation, at);
+  }
+
   async bumpRoundGeneration(jobId: number): Promise<number | null> {
     return this.roundsStore.bumpRoundGeneration(jobId);
   }
@@ -438,22 +452,6 @@ export class InMemoryStore implements Store {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(jobId, slug);
-  }
-
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    return this.submissionStore.setSubmissionTitle(jobId, title);
-  }
-
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
-  }
-
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionPreviewVersion(jobId, version);
-  }
-
   async recordDeliveryNudge(jobId: number): Promise<number> {
     return this.submissionStore.recordDeliveryNudge(jobId);
   }
@@ -480,6 +478,10 @@ export class InMemoryStore implements Store {
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
     return this.submissionStore.setDraftShared(jobId, at);
+  }
+
+  async setModerationBlocked(jobId: number, at: string | null): Promise<void> {
+    return this.submissionStore.setModerationBlocked(jobId, at);
   }
 
   async setSubmissionLocale(jobId: number, locale: string): Promise<void> {
@@ -1046,6 +1048,34 @@ export class InMemoryStore implements Store {
 
   async countPlayerFeedback(slug: string): Promise<number> {
     return this.socialStore.countPlayerFeedback(slug);
+  }
+
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+    return this.moderationFlagStore.raiseModerationFlag(input);
+  }
+
+  async getModerationFlag(id: string): Promise<ModerationFlag | null> {
+    return this.moderationFlagStore.getModerationFlag(id);
+  }
+
+  async listModerationFlags(opts?: { status?: 'open' | 'resolved'; limit?: number }): Promise<ModerationFlag[]> {
+    return this.moderationFlagStore.listModerationFlags(opts);
+  }
+
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ResolveModerationFlagResult> {
+    return this.moderationFlagStore.resolveModerationFlag(id, input);
+  }
+
+  async reopenModerationFlag(id: string): Promise<void> {
+    return this.moderationFlagStore.reopenModerationFlag(id);
+  }
+
+  async countModerationFlagsByUid(uid: string): Promise<number> {
+    return this.moderationFlagStore.countModerationFlagsByUid(uid);
+  }
+
+  async deleteModerationFlagsByUid(uid: string): Promise<number> {
+    return this.moderationFlagStore.deleteModerationFlagsByUid(uid);
   }
 
   async upsertGameAssessment(

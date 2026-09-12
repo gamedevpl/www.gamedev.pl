@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { allowsSelfToPlatformHandoff, detectStall, isActiveBuildRound } from '../creation/job-state.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { ManagedAvailabilityGate } from './managed-availability.js';
 import { mintConnectPayload } from './self-build-connect.js';
 
 export interface SelfBuildConnectRoutesOptions {
   store?: Store;
+  managedAvailabilityGate?: ManagedAvailabilityGate | null;
   now: () => number;
   submissionTokenSecret?: string;
   appBaseUrl: string;
@@ -117,12 +119,16 @@ export async function registerSelfBuildConnectRoutes(
       // Payload carries a capability for Copy — never let intermediaries cache it.
       return reply.header('Cache-Control', 'no-store').send({
         ...payload,
-        canSwitchToPlatform: allowsSelfToPlatformHandoff({
-          currentBuilder: freshBuilder,
-          requestedBuilder: 'platform',
-          stall,
-          agentEndedAt: fresh.agentEndedAt,
-        }),
+        canSwitchToPlatform:
+          (options.managedAvailabilityGate
+            ? (await options.managedAvailabilityGate.peek(fresh.ownerUid, at.slice(0, 10))).available
+            : true) &&
+          allowsSelfToPlatformHandoff({
+            currentBuilder: freshBuilder,
+            requestedBuilder: 'platform',
+            stall,
+            agentEndedAt: fresh.agentEndedAt,
+          }),
       });
     },
   );

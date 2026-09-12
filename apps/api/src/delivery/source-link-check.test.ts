@@ -6,9 +6,26 @@ import {
   parseRelativeImports,
   resolveRelativeImport,
   sourceFilesToMap,
+  type KitSharedLookup,
 } from './source-link-check.js';
 
 describe('source-link-check', () => {
+  it('defers pinned Kit imports and still rejects missing Kit, local, and other external modules', () => {
+    const kit = new Set(['shared/editor-def.ts']);
+    const check = (from: string, target: string, kitShared?: KitSharedLookup) =>
+      findUnresolvedSourceLinks(new Map([[from, `import { defineEditor } from '${target}';`]]), kitShared);
+    expect(check('EDITOR.ts', '../../shared/editor-def.ts', kit)).toEqual([]);
+    expect(check('EDITOR.ts', '../../shared/editor-def.js', kit)).toEqual([]);
+    expect(check('game/editor.ts', '../../../shared/editor-def.ts', kit)).toEqual([]);
+    expect(check('EDITOR.ts', '../../shared/editor-def.ts', 'defer')).toEqual([]);
+    expect(check('EDITOR.ts', '../../shared/missing.ts', 'defer')).toEqual([]);
+    expect(check('EDITOR.ts', '../../shared/missing.ts', kit)).toHaveLength(1);
+    expect(check('EDITOR.ts', '../../shared/editor-def.ts')).toHaveLength(1);
+    expect(check('EDITOR.ts', './shared/editor-def.ts', kit)).toHaveLength(1);
+    expect(check('EDITOR.ts', '../../shared/../private/editor-def.ts', kit)).toHaveLength(1);
+    expect(check('EDITOR.ts', '../../other-game/editor-def.ts', kit)).toHaveLength(1);
+  });
+
   it('collects named exports, default, renames, and export *', () => {
     const info = collectExports(`
       export const WIN_SCORE = 10;

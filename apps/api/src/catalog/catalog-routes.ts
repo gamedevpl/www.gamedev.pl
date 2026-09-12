@@ -1,8 +1,16 @@
 import { createHash } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { catalogEntryFromSpec, parseGameMedia, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import { SnapshotUnavailableError, type GameSnapshotReader } from './game-snapshot.js';
+import { mediaUrlTtlSeconds, type MediaUrlSigner } from '../delivery/media-url-signer.js';
+import {
+  createMintBudgetState,
+  recordMint,
+  resolveMintBudget,
+  utcDay,
+  type MintBudgetLimits,
+} from '../platform/media-mint-budget.js';
 import { attachCatalogEnrichments } from './catalog-enricher.js';
 import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-profile.js';
 import { isVariantWidth } from '../platform/image-variants.js';
@@ -26,6 +34,11 @@ export interface CatalogRoutesOptions {
   mediaByIp: Map<string, number[]>;
   maxMediaPerWindow: number;
   mediaRateLimitWindowMs: number;
+  // Absent: the route serves media bytes itself, as before.
+  mediaUrlSigner?: MediaUrlSigner | null;
+  storeMediaUrlSigner?: MediaUrlSigner | null;
+  // Daily ceiling on signed URLs; tests pass small numbers.
+  mintBudget?: MintBudgetLimits;
 }
 
 export interface CatalogRoutesHandle {
@@ -43,7 +56,18 @@ export async function registerCatalogRoutes(
   app: FastifyInstance,
   options: CatalogRoutesOptions,
 ): Promise<CatalogRoutesHandle> {
-  const { store, gamesStore, now, githubClient, publishedRef, mediaByIp, maxMediaPerWindow, mediaRateLimitWindowMs } =
+  const {
+    store,
+    gamesStore,
+    now,
+    githubClient,
+    publishedRef,
+    mediaByIp,
+    maxMediaPerWindow,
+    mediaRateLimitWindowMs,
+    mediaUrlSigner,
+    storeMediaUrlSigner,
+  } =
     options;
   const snapshotReader = options.snapshotReader ?? null;
 
@@ -160,6 +184,57 @@ export async function registerCatalogRoutes(
     const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
     const title = (spec && catalogEntryFromSpec(slug, spec, () => null)?.title) || slug;
     return { slug, title, html: bundle.toString('utf8') };
+  }
+
+  // What readStorePublishedMedia would read, unread.
+  async function storePublishedMediaObject(slug: string, filename: string): Promise<string | null> {
+    if (!store || !gamesStore) return null;
+    const publication = await store.getPublication(slug);
+    if (!isPublished(publication)) return null;
+    const mediaMetadata = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json');
+    const media = parseGameMedia(mediaMetadata?.toString('utf8') ?? null);
+    if (!media) return null;
+    const allowed = new Set([
+      ...media.screenshots.map((screenshot) => screenshot.file),
+      ...(media.video ? [media.video] : []),
+    ]);
+    if (!allowed.has(filename)) return null;
+    return `games/${slug}/versions/${publication.currentVersion}/media/${filename}`;
+  }
+
+  // Per-minute bounds minting; this bounds a day.
+  const mintBudget = options.mintBudget ?? resolveMintBudget();
+  let mintState = createMintBudgetState(utcDay(now()));
+
+  // Returns whether it answered: reply.redirect() itself resolves to undefined.
+  async function redirectToSignedMedia(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    signer: MediaUrlSigner,
+    object: string,
+    filename: string,
+  ): Promise<boolean> {
+    const minted = recordMint(mintState, request.clientIp, now(), mintBudget);
+    mintState = minted.state;
+    if (minted.decision !== 'allowed') {
+      request.log.warn({ reason: minted.decision, ip: request.clientIp }, 'media URL budget exhausted');
+      // Serving bytes instead would cost more: refuse and say so.
+      reply.status(429).send({ error: 'too many game requests, please try again later' });
+      return true;
+    }
+
+    try {
+      const ttlSeconds = mediaUrlTtlSeconds(filename);
+      const signed = await signer.urlFor(object, ttlSeconds);
+      if (!signed) return false;
+      // Half-life, so a cached redirect never outlives the URL in it.
+      reply.header('Cache-Control', `public, max-age=${Math.floor(ttlSeconds / 2)}`).redirect(signed, 302);
+      return true;
+    } catch (error) {
+      // Signing is an optimisation; a failure must cost money, not pictures.
+      request.log.warn({ err: error, object }, 'media URL signing failed; serving inline');
+      return false;
+    }
   }
 
   async function readStorePublishedMedia(slug: string, filename: string): Promise<Buffer | null> {
@@ -318,6 +393,35 @@ export async function registerCatalogRoutes(
         ...(entry?.media?.screenshots.map((screenshot) => screenshot.file) ?? []),
         ...(entry?.media?.video ? [entry.media.video] : []),
       ]);
+
+      // Before any read: these bytes must not enter this process.
+      if (mediaUrlSigner && entry && allowedFiles.has(parsedParams.data.filename) && snapshotReader?.getMediaObjectName) {
+        const objectName =
+          (variantWidth !== undefined
+            ? await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename, variantWidth)
+            : null)
+          ?? (await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename));
+        if (
+          objectName
+          && (await redirectToSignedMedia(request, reply, mediaUrlSigner, objectName, parsedParams.data.filename))
+        ) {
+          return reply;
+        }
+      }
+
+      // Platform-made games keep media in the store bucket.
+      if (storeMediaUrlSigner) {
+        const storeObject = await storePublishedMediaObject(
+          parsedParams.data.slug,
+          parsedParams.data.filename,
+        );
+        if (
+          storeObject
+          && (await redirectToSignedMedia(request, reply, storeMediaUrlSigner, storeObject, parsedParams.data.filename))
+        ) {
+          return reply;
+        }
+      }
 
       let body: Buffer | null = null;
       if (entry && allowedFiles.has(parsedParams.data.filename)) {

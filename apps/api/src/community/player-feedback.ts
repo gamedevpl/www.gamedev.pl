@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store } from '../platform/store.js';
@@ -159,8 +159,10 @@ export async function registerPlayerFeedbackRoutes(
           surface: 'player_feedback',
           uid: request.user?.uid,
           category: moderation.category,
+          unavailable: moderation.unavailable,
         });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+        const rejection = rejectionFor(moderation);
+        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
       const currentTime = now();

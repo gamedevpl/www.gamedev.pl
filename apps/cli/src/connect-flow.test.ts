@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -50,6 +50,32 @@ describe('interactive game connection', () => {
     ).toBeNull();
     expect(pick.mock.calls.length).toBe(1);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('reuses dirty child checkout with agent selection (explicit: %s)', async (explicit) => {
+    const { api, fetch } = fixture();
+    const parent = directory();
+    const dest = join(parent, 'sky');
+    mkdirSync(join(dest, 'games', 'sky'), { recursive: true });
+    writeFileSync(join(dest, '.gamedev-slug'), 'sky');
+    const localFile = join(dest, 'games', 'sky', 'game.ts');
+    writeFileSync(localFile, 'my unsent changes');
+    const bin = join(parent, 'codex');
+    writeFileSync(bin, '#!/bin/sh\nexit 0\n');
+    chmodSync(bin, 0o755);
+    vi.spyOn(process, 'cwd').mockReturnValue(parent);
+    const result = await connectSession({
+      api,
+      slug: 'sky',
+      env: { PATH: parent },
+      ...(explicit ? { agent: 'codex' } : {}),
+      pick: async (choices) => choices?.find((choice) => choice.startsWith('codex —')) ?? '',
+      abort: { current: null },
+      write: () => {},
+    });
+    expect(result?.workshop).toMatchObject({ root: dest, selectedAgent: 'codex' });
+    expect(readFileSync(localFile, 'utf8')).toBe('my unsent changes');
+    expect(fetch.mock.calls.some(([url]) => url.includes('/workspace') || url.includes('/connect'))).toBe(false);
   });
 
   it('enters chat for the selected game without minting MCP credentials', async () => {

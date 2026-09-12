@@ -146,3 +146,25 @@
     padding: 16px;
   }
 }
+
+.connect-guide-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin: 0;
+  gap: 16px;
+}
+
+.connect-guide-panel .connect-guide-option {
+  padding: 14px 30px 14px 14px;
+}
+
+.connect-guide .connect-guide-mode {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--turquoise);
+  font-size: 0.8rem;
+  font-weight: 600;
+}

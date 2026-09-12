@@ -25,8 +25,11 @@
  * pseudonymous `g:<sub>` already written to logs elsewhere (admin.ts), not an email.
  */
 
-import type { FastifyBaseLogger } from 'fastify';
 import type { RejectCategory } from './moderation-terms.js';
+
+export interface ModerationLogger {
+  warn: (context: object, message: string) => void;
+}
 
 /**
  * Where the rejection happened. A closed set on purpose: this is a metric label, and a
@@ -50,6 +53,7 @@ export type ModerationSurface =
   | 'remix_share' // declared text a player is about to put behind a share link
   | 'remix_save' // title / text params baked into a private Studio fork
   | 'cli_chat' // pre-game CLI intake before a game exists
+  | 'delivery' // prose inside delivered sources: SPEC.md, GAME.json
   | 'contact' // the public contact form, no session required
   | 'proposal' // a proposed change to somebody else's game: title, description, review replies
   | 'mock_prompt'; // the dev-only mock generator route
@@ -57,12 +61,17 @@ export type ModerationSurface =
 /** The stable message every rejection logs. The alert's log filter matches on this. */
 export const MODERATION_REJECTED_MSG = 'moderation rejected';
 
+// Separate message: the burst alert must not count outages.
+export const MODERATION_UNAVAILABLE_MSG = 'moderation unavailable';
+
 export interface ModerationRejection {
   surface: ModerationSurface;
   /** Absent on unauthenticated surfaces (the contact form). Never an email. */
   uid?: string;
   /** Absent when a checker refused without classifying; recorded as `other`. */
   category?: RejectCategory;
+  /** Undecided: logged apart, since no text was refused. */
+  unavailable?: boolean;
 }
 
 /**
@@ -70,7 +79,7 @@ export interface ModerationRejection {
  * something is the system succeeding, and putting it at `error` would train the operator
  * to ignore errors — the exact habit that made the first alert catalog worthless.
  */
-export function logModerationRejection(log: FastifyBaseLogger, rejection: ModerationRejection): void {
+export function logModerationRejection(log: ModerationLogger, rejection: ModerationRejection): void {
   log.warn(
     {
       moderation: {
@@ -81,6 +90,6 @@ export function logModerationRejection(log: FastifyBaseLogger, rejection: Modera
         uid: rejection.uid ?? 'anonymous',
       },
     },
-    MODERATION_REJECTED_MSG,
+    rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG,
   );
 }
