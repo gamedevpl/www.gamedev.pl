@@ -17,8 +17,12 @@ export type ExecutionChoice = { builder: 'platform' } | { builder: 'self'; spec:
 export type PendingExecution = { current?: { choice: ExecutionChoice; request: string } };
 
 export function executionSettingsLabel(spec: AdapterSpec, env: NodeJS.ProcessEnv): string {
-  const selection = readAgentSelection(spec.name, env);
-  return `model: ${selection.model ?? 'agent default*'}; effort: ${selection.effort ?? 'agent default*'}`;
+  try {
+    const selection = readAgentSelection(spec.name, env);
+    return `model: ${selection.model ?? 'agent default*'}; effort: ${selection.effort ?? 'agent default*'}`;
+  } catch {
+    return 'model/effort unavailable: cannot read local settings';
+  }
 }
 
 export async function chooseExecution(input: {

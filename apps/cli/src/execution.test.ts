@@ -30,6 +30,19 @@ console.log('-p --print --verbose --permission-mode --output-format --mode --san
 }
 
 describe('conversational builder selection', () => {
+  it('keeps the platform selectable when local settings are corrupt', async () => {
+    const env = environment();
+    saveAgentSelection('claude', {}, env);
+    writeFileSync(join(env.HOME!, '.config/gamedevpl/agent-settings.json'), '{broken');
+    const choice = await chooseExecution({
+      env,
+      pick: async (choices) => {
+        expect(choices[0]).toContain('unavailable');
+        return choices.find((row) => row.startsWith('gamedev.pl builder'))!;
+      },
+    });
+    expect(choice).toEqual({ builder: 'platform' });
+  });
   it('chooses self before creating a new game and starts MCP afterwards', async () => {
     const order: string[] = [];
     const bodies: unknown[] = [];
