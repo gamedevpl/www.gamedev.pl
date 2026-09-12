@@ -46,6 +46,10 @@ describe('cli funnel', () => {
       { step: 'delegate_offered', visits: 0 },
       { step: 'delegate_used', visits: 0 },
       { step: 'verify_failed', visits: 0 },
+      { step: 'recovery_attempt', visits: 0 },
+      { step: 'recovery_succeeded', visits: 0 },
+      { step: 'recovery_failed', visits: 0 },
+      { step: 'recovery_canceled', visits: 0 },
     ]);
   });
 

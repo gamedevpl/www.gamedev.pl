@@ -1,6 +1,12 @@
 import type { SubmissionStore } from './slices/submission.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    return this.submissionStore.beginCheckoutRecovery(slug, nonce, now);
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    return this.submissionStore.finishCheckoutRecovery(slug, nonce);
+  }
   async setLocalActivity(
     jobId: number,
     activity: import('@gamedevpl/contract').LocalActivity,

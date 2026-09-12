@@ -4,6 +4,7 @@ import type { LocalActivity } from '@gamedevpl/contract';
 import type { SubmissionRecord } from '../records/submission.js';
 import type { SubmissionStore } from './submission.js';
 export class InMemorySubmissionStore implements SubmissionStore {
+  private recoveryAdmissions = new Map<string, { nonce: string; until: number }>();
   constructor(
     private submissions: Map<number, SubmissionRecord>,
     private publication?: Pick<PublicationStore, 'getPublication'>,
@@ -51,6 +52,14 @@ export class InMemorySubmissionStore implements SubmissionStore {
     return true;
   }
 
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    if ((this.recoveryAdmissions.get(slug)?.until ?? 0) > now) return false;
+    this.recoveryAdmissions.set(slug, { nonce, until: now + 15 * 60_000 });
+    return true;
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    if (this.recoveryAdmissions.get(slug)?.nonce === nonce) this.recoveryAdmissions.delete(slug);
+  }
   async claimSubmissionSlug(
     jobId: number,
     slug: string,

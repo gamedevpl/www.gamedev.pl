@@ -5,6 +5,8 @@ import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
+  beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
+  finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
   claimSubmissionSlug(
     jobId: number,
     slug: string,
@@ -130,6 +132,22 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     });
   }
 
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if ((snap.data()?.recoveryAdmission?.until ?? 0) > now) return false;
+      tx.set(ref, { recoveryAdmission: { nonce, until: now + 15 * 60_000 } }, { merge: true });
+      return true;
+    });
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    const ref = this.db.collection('games').doc(slug);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.data()?.recoveryAdmission?.nonce === nonce) tx.update(ref, { recoveryAdmission: FieldValue.delete() });
+    });
+  }
   async claimSubmissionSlug(
     jobId: number,
     slug: string,

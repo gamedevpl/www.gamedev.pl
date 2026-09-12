@@ -189,3 +189,35 @@ it('refuses archived recovery while an improvement round is active', async () =>
   await f.store.createSubmission(2, 'owner', 'Sky');
   expect(await f.store.claimSubmissionSlug(2, 'sky', 1)).toBe(false);
 });
+
+it('admits one concurrent recovery before creation spends and reuses its result', async () => {
+  const f = await fixture();
+  const real = f.createGame.getMockImplementation()!;
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  f.createGame.mockImplementation(async (input) => {
+    entered();
+    await blocked;
+    return real(input);
+  });
+  const body = payload();
+  const first = f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: body });
+  const firstResult = first.then((response) => response);
+  await started;
+  const duplicate = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: body });
+  expect(duplicate.statusCode).toBe(409);
+  expect(duplicate.json().error).toBe('recovery_in_progress');
+  expect(f.createGame).toHaveBeenCalledTimes(1);
+  release();
+  const completed = await firstResult;
+  expect(completed.statusCode).toBe(200);
+  const retry = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: body });
+  expect(retry.json()).toEqual(completed.json());
+  expect(f.createGame).toHaveBeenCalledTimes(1);
+});
