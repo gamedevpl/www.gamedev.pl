@@ -45,6 +45,13 @@ describe('TUI feedback', () => {
     view.input.write('o');
     await wait();
     expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
+
+    view.session.writeLine('local preview stopped');
+    await wait();
+    expect(view.frame()).not.toContain('o open preview');
+    view.input.write('o');
+    await wait();
+    expect(openPreview).toHaveBeenCalledTimes(1);
   });
 
   it('shows connection choices and returns to chat for the selected game', async () => {

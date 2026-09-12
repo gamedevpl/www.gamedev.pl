@@ -21,6 +21,7 @@ export type TuiSession = {
   get: () => TuiState;
   subscribe: (fn: (state: TuiState) => void) => () => void;
   writeLine: (text: string) => void;
+  clearPreview: () => void;
   setLive: (live: string[]) => void;
   setLocalTask: (agent: string) => void;
   setIdentity: (identity: string) => void;
@@ -80,12 +81,18 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     },
     writeLine(text) {
       const preview = /^(?:local live preview|live preview while .* edits): (https?:\/\/\S+)/m.exec(text)?.[1];
+      const previewStopped = /^(?:local preview stopped|no local preview is running)$/m.test(text);
       state = {
         ...state,
         lines: [...state.lines, ...text.split('\n')],
         lastOutputAt: Date.now(),
-        previewUrl: preview ?? state.previewUrl,
+        previewUrl: previewStopped ? '' : (preview ?? state.previewUrl),
       };
+      emit();
+    },
+    clearPreview() {
+      if (!state.previewUrl) return;
+      state = { ...state, previewUrl: '' };
       emit();
     },
     setLocalTask(localTask) {

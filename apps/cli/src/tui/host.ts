@@ -140,6 +140,7 @@ export async function runInkRepl(input: {
       watched = status.status;
     },
     onSlug: (next) => {
+      if (next !== slug) session.clearPreview();
       slug = next;
       paintIdentity();
     },
@@ -180,6 +181,7 @@ export async function runInkRepl(input: {
           pendingExecution,
           interactiveRun,
           onWorkshop: (opened) => {
+            if (workshop?.slug !== opened.slug || workshop?.root !== opened.root) session.clearPreview();
             workshop = opened;
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
@@ -208,6 +210,9 @@ export async function runInkRepl(input: {
         watch.poke();
       }
       if (result.workshop) {
+        if (workshop?.slug !== result.workshop.slug || workshop?.root !== result.workshop.root) {
+          session.clearPreview();
+        }
         workshop = result.workshop;
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
@@ -215,6 +220,7 @@ export async function runInkRepl(input: {
         workshop.activityApi = input.api;
       }
       if (result.slug) {
+        if (result.slug !== slug) session.clearPreview();
         slug = result.slug;
         paintIdentity();
       }
