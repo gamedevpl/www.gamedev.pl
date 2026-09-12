@@ -131,10 +131,14 @@ clean runner, and WebKit is skipped on push because the PR already sealed it
 (`gate-scope.mjs` `eventName === 'push'`). Opt-in GameKit modules
 (`gfx3d`, `sensing`, verticals, …) reverse-index to the games that select
 them in `GAME.json` and run `mode=static` on those slugs, with WebKit.
-Universal modules (`core`, `gfx`, `audio`, …) and `game-shell.css` still
-pay the full catalog gate — every published game loads them. The nightly
-04:23 UTC run remains the cheap full rebuild; Sunday 06:17 UTC remains the
-catalog seal.
+Universal modules (`core`, `drawing`, `gfx`, `audio`, …) use the same
+`--base <parent>` classify: a named function or `draw.*` field that only
+a subset of games call is `mode=static` on those slugs (WebKit included).
+An unidentifiable patch, a lifecycle symbol (`mount`, `createRenderer`, …),
+or a surface most of the catalog calls (`draw.rect`) stays full — post-merge
+`mode=static` would playtest more games than full's default suite.
+`game-shell.css` is still always full. The nightly 04:23 UTC run remains the
+cheap full rebuild; Sunday 06:17 UTC remains the catalog seal.
 
 No redeploy is needed — instances re-read the pointer on its own TTL.
 
