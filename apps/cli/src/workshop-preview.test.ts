@@ -196,13 +196,13 @@ it.each([true, false])('configures agy before preparation and launch: confirm=%s
   expect(ws.abort.current).toBeNull();
 });
 
-it('skips static success for a no-op, preserving previous local edits', async () => {
+it.each([false, true])('skips static success for a no-op: permission handoff=%s', async (handoff) => {
   const root = mkdtempSync(join(tmpdir(), 'gdpl-noop-'));
   roots.push(root);
   mkdirSync(join(root, 'games/robot'), { recursive: true });
   writeFileSync(join(root, 'games/robot/game.ts'), 'previous local work');
   const { loadAdapters } = await import('./adapters.js');
-  const spec = loadAdapters().adapters.find((item) => item.name === 'codex')!;
+  const spec = loadAdapters().adapters.find((item) => item.name === (handoff ? 'muse' : 'codex'))!;
   const run = vi.fn();
   const write = vi.fn();
   const ws: Workshop = {
@@ -212,14 +212,15 @@ it('skips static success for a no-op, preserving previous local edits', async ()
     env: {},
     adapters: [spec],
     builder: 'self',
-    pick: vi.fn(),
+    pick: vi.fn(async (choices) => choices[0]!),
+    interactiveRun: async () => ({ code: 0 }),
     abort: { current: null },
     run,
-    runAdapter: async () => ({ code: 0 }),
+    runAdapter: async () => ({ code: 0, ...(handoff ? { permissionSession: 'session-1' } : {}) }),
   };
   expect(await runLocalBuild({ ws, spec, brief: 'take screenshots', write })).toBe(false);
   expect(run).not.toHaveBeenCalled();
-  expect(ws.pick).not.toHaveBeenCalled();
+  expect(ws.pick).toHaveBeenCalledTimes(handoff ? 1 : 0);
   expect(write).toHaveBeenCalledWith(expect.stringContaining('No game files changed'));
   expect(write).not.toHaveBeenCalledWith('✓ static ladder green');
 });

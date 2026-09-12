@@ -349,8 +349,9 @@ export async function runLocalBuild(input: {
           },
         });
         if (controller.signal.aborted) return false;
+        let handedOff = false;
         if (result.permissionSession || (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended)) {
-          return permissionHandoff({
+          handedOff = await permissionHandoff({
             ws,
             spec,
             cwd,
@@ -360,14 +361,15 @@ export async function runLocalBuild(input: {
             abort: controller.signal,
             phase: (phase) => presence?.phase(phase),
           });
+          if (!handedOff) return false;
         }
-        if (blocked) {
+        if (blocked && !handedOff) {
           input.write(
             `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
           );
           return false;
         }
-        if ((result.code ?? 1) !== 0) {
+        if (!handedOff && (result.code ?? 1) !== 0) {
           input.write(
             formatError(
               failure.error(result.code, '/diff to review partial edits, then repeat your request when ready'),

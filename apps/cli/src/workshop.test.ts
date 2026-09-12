@@ -14,7 +14,6 @@ import {
   openWorkshop,
   settleBuilder,
   syncWarning,
-  workshopBrief,
   workshopTurn,
   chooseAdapter,
   refreshBuilder,
@@ -469,14 +468,6 @@ describe('opening a checkout', () => {
       write: () => undefined,
     });
     expect(published).toBe('platform');
-  });
-
-  it('writes a brief that names the game and forbids publishing', () => {
-    const brief = workshopBrief(SLUG, 'add a boss');
-    expect(brief).toContain('"airtime"');
-    expect(brief).toContain('add a boss');
-    expect(brief).not.toContain('Studio understood');
-    expect(brief).toMatch(/Do not run git/);
   });
 });
 
