@@ -1,6 +1,6 @@
+import { canClaimManualRound } from './manual-round-claim.js';
 import { assertRecoveryBinding } from './bind-submission-slug.js';
 import type { PublicationStore } from './publication.js';
-import { isActiveBuildRound } from '../../creation/job-state.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import type { LocalActivity } from '@gamedevpl/contract';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -57,19 +57,14 @@ export class InMemorySubmissionStore implements SubmissionStore {
   async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean> {
     const publication = await this.publication?.getPublication(slug);
     const target = this.submissions.get(jobId);
-    const holder = [...this.submissions.values()]
-      .filter((r) => r.slug === slug)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
     if (
       !target ||
-      target.slug ||
-      !holder ||
-      holder.jobId !== sourceJobId ||
-      holder.ownerUid !== target.ownerUid ||
-      holder.abandonedAt ||
-      holder.moderationBlockedAt ||
-      isActiveBuildRound(holder) ||
-      publication?.state === 'disabled'
+      !canClaimManualRound(
+        target,
+        [...this.submissions.values()].filter((r) => r.slug === slug),
+        sourceJobId,
+        publication?.state,
+      )
     )
       return false;
     this.submissions.set(jobId, { ...target, slug });
