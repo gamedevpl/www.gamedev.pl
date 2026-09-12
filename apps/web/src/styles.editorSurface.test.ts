@@ -22,6 +22,12 @@ describe('layered editor surface CSS contract', () => {
     expect(declarations('.editor-layer-board.is-active')).toMatch(/z-index:\s*2/);
   });
 
+  it('lets lower layers show through, or the stack reads as one board', () => {
+    // Opaque cells made every layer but the active one invisible.
+    expect(declarations('.editor-layer-board .editor-cell.is-blank')).toMatch(/background:\s*transparent/);
+    expect(declarations('.editor-layer-board.is-muted')).toMatch(/opacity:\s*0\.55/);
+  });
+
   it('keeps the picker readable beside the stacked board', () => {
     expect(declarations('.editor-layer-picker')).toMatch(/display:\s*flex/);
     expect(declarations('.editor-layer-picker-item.is-active')).toMatch(/border-color:/);
