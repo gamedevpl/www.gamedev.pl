@@ -106,7 +106,6 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       const closeDeps: CloseJobDeps = { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache };
       let closed = 0;
       const closedIds = new Set<number>();
-      // Active rounds are a subset of open ones: one read.
       const openRounds = await store.listOpenRounds();
       const activityByJob = new Map<number, number>();
       for (const record of openRounds) {
