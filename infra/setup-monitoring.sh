@@ -1007,6 +1007,47 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
 }
 EOF
 
+# A32 — the games bucket is shipping bytes at a rate nothing here explains.
+#
+# Media moved off the origin to signed Cloud Storage URLs on 2026-09-11, which took those
+# bytes off the Hosting meter — and out of every view that was watching it. A signed URL
+# is pullable by anyone holding it until it expires, so the per-request limiter bounds how
+# many links are handed out, never how much is pulled through them. This is the only thing
+# left that sees the bill forming.
+#
+# 120 MB/hour sustained over an hour is ~2.9 GB/day, roughly 24x a normal closed-beta day
+# (52 MB on 2026-09-10) and about $0.35/day of egress. Low enough to catch a scraper in
+# the first hour, high enough that a genuinely busy launch day does not page anyone.
+cat > "${POLICY_DIR}/a32.json" <<EOF
+{
+  "displayName": "A32 Games bucket egress abnormally high",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sent bytes sustained over an hour",
+    "conditionThreshold": {
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\"",
+      "aggregations": [{
+        "alignmentPeriod": "3600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM",
+        "groupByFields": ["resource.label.bucket_name"]
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 125829120,
+      "duration": "3600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Cloud Storage is serving far more than this project's traffic explains. Since 2026-09-11 game media is answered as a 302 to a signed URL, so these bytes leave the bucket directly and appear on no Hosting counter. Triage: group the metric by resource.label.bucket_name to see whether it is the snapshot bucket (catalog games) or the store bucket (games made on the platform). Then check whether mints match: jsonPayload.msg=\"media URL budget exhausted\" in the Cloud Run log says the daily ceiling is already refusing someone, and its absence means one or a few links are being pulled hard rather than many being handed out. Levers: MEDIA_DAILY_MINTS_PER_IP and MEDIA_DAILY_MINTS_GLOBAL (both deploy paths), and the video TTL in media-url-signer.ts. See docs/deployment.md 'Media egress'.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do

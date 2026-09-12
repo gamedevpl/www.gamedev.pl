@@ -343,7 +343,8 @@ fi
 # classifier's stand-in without a deploy — and a lever only one path threads is wiped by
 # the next release through the other.
 for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL \
-  MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER; do
+  MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER \
+  MEDIA_DAILY_MINTS_PER_IP MEDIA_DAILY_MINTS_GLOBAL; do
   eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
   if [ -n "${VERTEX_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
