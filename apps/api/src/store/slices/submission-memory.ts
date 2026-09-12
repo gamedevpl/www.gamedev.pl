@@ -94,6 +94,15 @@ export class InMemorySubmissionStore implements SubmissionStore {
     this.submissions.set(jobId, next);
   }
 
+  async setModerationBlocked(jobId: number, at: string | null): Promise<void> {
+    const sub = this.submissions.get(jobId);
+    if (!sub) return;
+    const next = { ...sub };
+    if (at) next.moderationBlockedAt = at;
+    else delete next.moderationBlockedAt;
+    this.submissions.set(jobId, next);
+  }
+
   async setSubmissionLocale(jobId: number, locale: string): Promise<void> {
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, locale });

@@ -13,6 +13,8 @@ export interface ModerationFlagRoutesOptions {
   adminUids?: Set<string>;
   now: () => number;
   invalidatePublishedGameCaches: (slug: string) => void;
+  // Repo-lane games publish from the snapshot, not the store.
+  isSlugPublished?: (slug: string) => Promise<boolean>;
 }
 
 const MAX_NOTE = 2000;
@@ -34,8 +36,11 @@ const ResolveSchema = z.object({
 });
 
 export interface TakedownOutcome {
-  unpublished: boolean;
+  blocked: boolean;
   unshared: boolean;
+  unpublished: boolean;
+  // Still reachable; an operator must act elsewhere.
+  stillPublic: boolean;
 }
 
 // Abuse lives in shared drafts too, not only publications.
@@ -45,27 +50,38 @@ export async function takeDownSlug(input: {
   reason: string;
   at: string;
   invalidatePublishedGameCaches: (slug: string) => void;
+  isSlugPublished?: (slug: string) => Promise<boolean>;
 }): Promise<TakedownOutcome> {
+  // Draft link first: the creator can re-open that one.
+  const record = await input.store.getSubmissionBySlug(input.slug);
+  let blocked = false;
+  let unshared = false;
+  if (record) {
+    await input.store.setModerationBlocked(record.jobId, input.at);
+    blocked = true;
+    if (record.draftSharedAt) {
+      await input.store.setDraftShared(record.jobId, null);
+      unshared = true;
+    }
+  }
+
   const publication = await input.store.getPublication(input.slug);
   let unpublished = false;
   if (isPublished(publication)) {
     unpublished = await input.store.archivePublication(input.slug, input.reason, input.at);
-    input.invalidatePublishedGameCaches(input.slug);
   }
-  const record = await input.store.getSubmissionBySlug(input.slug);
-  let unshared = false;
-  if (record?.draftSharedAt) {
-    await input.store.setDraftShared(record.jobId, null);
-    unshared = true;
-  }
-  return { unpublished, unshared };
+  input.invalidatePublishedGameCaches(input.slug);
+
+  // Repo-lane games have no publication; they serve from the snapshot.
+  const stillPublic = !unpublished && (await (input.isSlugPublished?.(input.slug) ?? Promise.resolve(false)));
+  return { blocked, unshared, unpublished, stillPublic };
 }
 
 export async function registerModerationFlagRoutes(
   app: FastifyInstance,
   options: ModerationFlagRoutesOptions,
 ): Promise<void> {
-  const { store, now, invalidatePublishedGameCaches } = options;
+  const { store, now, invalidatePublishedGameCaches, isSlugPublished } = options;
   const reviewerUids = options.reviewerUids ?? new Set<string>();
   const adminUids = options.adminUids ?? new Set<string>();
 
@@ -125,29 +141,41 @@ export async function registerModerationFlagRoutes(
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
-    const flag = await store.getModerationFlag(request.params.id);
-    if (!flag) return reply.status(404).send({ error: 'not_found' });
 
     const at = new Date(now()).toISOString();
     const action: ModerationFlagAction = parsed.data.action;
-    let outcome: TakedownOutcome = { unpublished: false, unshared: false };
-    if (action === 'taken_down') {
-      outcome = await takeDownSlug({
-        store,
-        slug: flag.slug,
-        reason: `moderation: ${flag.reason}`,
-        at,
-        invalidatePublishedGameCaches,
-      });
-    }
-
-    const resolved = await store.resolveModerationFlag(flag.id, {
+    // Claim first: two operators must not both take down.
+    const claim = await store.resolveModerationFlag(request.params.id, {
       action,
       resolvedByUid: request.user!.uid,
       resolutionNote: parsed.data.note ? sanitizeCreatorText(parsed.data.note, { singleLine: false }) : null,
       resolvedAt: at,
     });
-    request.log.warn({ slug: flag.slug, action, ...outcome }, 'moderation flag resolved');
-    return reply.send({ flag: resolved, ...outcome });
+    if (!claim.ok) {
+      const status = claim.reason === 'not_found' ? 404 : 409;
+      return reply.status(status).send({ error: claim.reason });
+    }
+
+    let outcome: TakedownOutcome = { blocked: false, unshared: false, unpublished: false, stillPublic: false };
+    if (action === 'taken_down') {
+      try {
+        outcome = await takeDownSlug({
+          store,
+          slug: claim.flag.slug,
+          reason: `moderation: ${claim.flag.reason}`,
+          at,
+          invalidatePublishedGameCaches,
+          ...(isSlugPublished ? { isSlugPublished } : {}),
+        });
+      } catch (error) {
+        // The claim outlived its takedown; hand it back.
+        await store.reopenModerationFlag(claim.flag.id).catch(() => {});
+        request.log.error({ err: error, slug: claim.flag.slug }, 'moderation takedown failed; flag reopened');
+        return reply.status(500).send({ error: 'takedown_failed' });
+      }
+    }
+
+    request.log.warn({ slug: claim.flag.slug, action, ...outcome }, 'moderation flag resolved');
+    return reply.send({ flag: claim.flag, ...outcome });
   });
 }

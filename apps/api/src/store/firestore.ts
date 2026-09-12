@@ -74,7 +74,11 @@ import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
 import { FirestoreReviewStore } from './slices/review.js';
 import { FirestoreModerationFlagStore } from './slices/moderation-flags.js';
 import type { ModerationFlag } from './records/moderation-flag.js';
-import type { RaiseModerationFlagInput, ResolveModerationFlagInput } from './slices/moderation-flags.js';
+import type {
+  RaiseModerationFlagInput,
+  ResolveModerationFlagInput,
+  ResolveModerationFlagResult,
+} from './slices/moderation-flags.js';
 
 import { FirestoreRoundBudgetStore } from './slices/round-budget.js';
 import { FirestoreRoundsStore } from './slices/rounds.js';
@@ -526,6 +530,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
     return this.submissionStore.setDraftShared(jobId, at);
+  }
+
+  async setModerationBlocked(jobId: number, at: string | null): Promise<void> {
+    return this.submissionStore.setModerationBlocked(jobId, at);
   }
 
   async setSubmissionLocale(jobId: number, locale: string): Promise<void> {
@@ -1097,8 +1105,20 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.moderationFlagStore.listModerationFlags(opts);
   }
 
-  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ModerationFlag | null> {
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ResolveModerationFlagResult> {
     return this.moderationFlagStore.resolveModerationFlag(id, input);
+  }
+
+  async reopenModerationFlag(id: string): Promise<void> {
+    return this.moderationFlagStore.reopenModerationFlag(id);
+  }
+
+  async countModerationFlagsByUid(uid: string): Promise<number> {
+    return this.moderationFlagStore.countModerationFlagsByUid(uid);
+  }
+
+  async deleteModerationFlagsByUid(uid: string): Promise<number> {
+    return this.moderationFlagStore.deleteModerationFlagsByUid(uid);
   }
 
   async upsertGameAssessment(

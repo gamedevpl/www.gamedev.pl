@@ -118,6 +118,58 @@ describe('sharing a draft', () => {
     expect((await app.inject({ method: 'GET', url: `/api/games/${SLUG}`, headers: headers() })).statusCode).toBe(200);
   });
 
+  it('serves the version it authorized, not one that landed mid-request', async () => {
+    // A delivery between the two reads used to ride the first answer.
+    const store = new InMemoryStore();
+    const jobId = 1_000_079;
+    await store.upsertUser({ uid: OWNER });
+    await store.createSubmission(jobId, OWNER, 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, SLUG);
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+    await store.setDraftShared(jobId, '2026-09-01T00:00:00.000Z');
+
+    // Flip to a red v2 the moment the gate has read v1.
+    let reads = 0;
+    const realLookup = store.getSubmissionBySlug.bind(store);
+    store.getSubmissionBySlug = async (slug: string) => {
+      const record = await realLookup(slug);
+      reads += 1;
+      if (reads === 1) await store.setSubmissionDeliveredVersion(jobId, 'v2');
+      return record;
+    };
+
+    const served: string[] = [];
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, version: string, name: string) => {
+        if (name !== 'bundle.html') return null;
+        served.push(version);
+        return Buffer.from('<!doctype html><title>TV Tycoon</title>');
+      },
+      getManifest: async (_s: string, version: string) => ({
+        version,
+        deliveryMode: 'publish',
+        gate: { green: version === 'v1', ranAt: '2026-09-01T00:00:00.000Z' },
+      }),
+    } as unknown as GamesStore;
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      contentChecker: allowAll,
+      submissionRoutes: {
+        githubToken: 'token',
+        githubClient,
+        submissionTokenSecret: secret,
+        gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+        agentChannel: { gamesStore },
+      },
+    });
+    apps.push(app);
+
+    expect((await app.inject({ method: 'GET', url: `/api/games/${SLUG}` })).statusCode).toBe(200);
+    expect(served).toEqual(['v1']);
+  });
+
   it('always lets the creator close the link again', async () => {
     const { app, jobId, goRed } = await draftApp({ shared: true });
     goRed();

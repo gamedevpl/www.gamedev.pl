@@ -5,6 +5,30 @@ import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { ContentChecker } from '../platform/moderation.js';
+import { mintToken } from '../platform/submission-token.js';
+import { mintSessionToken } from '../platform/auth.js';
+import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js';
+
+const secret = 'submission-secret';
+const sessionSecret = 'dev-session-secret-change-me';
+
+function githubStub(published: string[]): GitHubClient {
+  const catalog: CatalogGameEntry[] = published.map(
+    (slug) => ({ slug, title: slug, status: 'published' }) as unknown as CatalogGameEntry,
+  );
+  return {
+    getIssueState: async () => ({ state: 'open' as const }),
+    findLinkedPR: async () => null,
+    createIssueComment: async () => ({ id: 1 }),
+    updateIssueBody: async () => {},
+    closeIssue: async () => {},
+    getGameSources: async () => null,
+    getGameMedia: async () => null,
+    getCatalog: async () => catalog,
+    getProgressNotes: async () => null,
+    getRefSha: async () => null,
+  } as unknown as GitHubClient;
+}
 
 const allowAll: ContentChecker = {
   async check() {
@@ -27,13 +51,19 @@ describe('moderation flags', () => {
     return `${SESSION_COOKIE_NAME}=${res.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
   }
 
-  async function makeApp() {
+  async function makeApp(opts: { published?: string[] } = {}) {
     const store = new InMemoryStore();
     const app = await buildApp({
       store,
       contentChecker: allowAll,
       reviewerUids: 'dev:reviewer',
       adminUids: 'dev:boss',
+      submissionRoutes: {
+        githubToken: 'token',
+        githubClient: githubStub(opts.published ?? []),
+        submissionTokenSecret: secret,
+        gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+      },
     });
     apps.push(app);
     return { app, store };
@@ -121,6 +151,71 @@ describe('moderation flags', () => {
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json()).toMatchObject({ unpublished: false, unshared: true });
     expect((await store.getSubmission(jobId))?.draftSharedAt).toBeFalsy();
+  });
+
+  it('keeps a taken-down game down when the creator flips sharing back on', async () => {
+    // The creator holds the token; unsharing alone is undoable.
+    const { app, store } = await makeApp();
+    const jobId = 4_243;
+    await store.upsertUser({ uid: 'dev:creator' });
+    await store.createSubmission(jobId, 'dev:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(jobId, 'sky-dodge');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+    await store.setDraftShared(jobId, '2026-09-01T00:00:00.000Z');
+
+    const raised = await raise(app, await cookie(app, 'reviewer'));
+    await app.inject({
+      method: 'POST',
+      url: `/api/admin/moderation-flags/${encodeURIComponent(raised.json().flag.id as string)}/resolve`,
+      headers: { cookie: await cookie(app, 'boss') },
+      payload: { action: 'taken_down' },
+    });
+
+    const back = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(jobId, secret)}/share`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('dev:creator', sessionSecret)}` },
+      payload: { shared: true },
+    });
+    expect(back.statusCode).toBe(409);
+    expect(back.json()).toMatchObject({ error: 'moderation_blocked' });
+    expect((await store.getSubmission(jobId))?.draftSharedAt).toBeFalsy();
+  });
+
+  it('says so when the game stays public because it is not the store lane', async () => {
+    // Repo-lane games serve from the snapshot, not the store.
+    const { app, store } = await makeApp({ published: ['sky-dodge'] });
+    const raised = await raise(app, await cookie(app, 'reviewer'));
+
+    const resolved = await app.inject({
+      method: 'POST',
+      url: `/api/admin/moderation-flags/${encodeURIComponent(raised.json().flag.id as string)}/resolve`,
+      headers: { cookie: await cookie(app, 'boss') },
+      payload: { action: 'taken_down' },
+    });
+    expect(resolved.json()).toMatchObject({ unpublished: false, stillPublic: true });
+    expect(await store.getPublication('sky-dodge')).toBeNull();
+  });
+
+  it('refuses a second resolve rather than taking the game down twice', async () => {
+    const { app } = await makeApp();
+    const raised = await raise(app, await cookie(app, 'reviewer'));
+    const id = encodeURIComponent(raised.json().flag.id as string);
+    const url = `/api/admin/moderation-flags/${id}/resolve`;
+    const boss = await cookie(app, 'boss');
+
+    expect(
+      (await app.inject({ method: 'POST', url, headers: { cookie: boss }, payload: { action: 'dismissed' } }))
+        .statusCode,
+    ).toBe(200);
+    const again = await app.inject({
+      method: 'POST',
+      url,
+      headers: { cookie: boss },
+      payload: { action: 'taken_down' },
+    });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: 'already_resolved' });
   });
 
   it('records a dismissal without touching the game', async () => {

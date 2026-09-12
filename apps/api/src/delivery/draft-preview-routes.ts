@@ -7,6 +7,7 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GamesStore } from './games-store.js';
 
 type DraftPreviewValue = { slug: string; title: string; html: string };
+export type DraftGrant = { jobId: number; version?: string };
 // `revision` is the delivered candidate's games-store version id.
 type CachedDraftPreview = { value: DraftPreviewValue; revision: string; expiresAt: number };
 
@@ -22,7 +23,8 @@ export interface DraftPreviewRoutesOptions {
 }
 
 export interface DraftPreviewRoutesHandle {
-  canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean>;
+  // Null refuses. A grant names the exact version it authorized.
+  canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null>;
   replyWithDraft(request: FastifyRequest, reply: FastifyReply, jobId: number, versionOverride?: string): Promise<void>;
 }
 
@@ -53,18 +55,21 @@ export async function registerDraftPreviewRoutes(
   }
 
   // Playable only by its owner, or anyone the creator shared it with.
-  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean> {
-    if (!store) return false;
+  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null> {
+    if (!store) return null;
     const record = await store.getSubmissionBySlug(slug);
     // Abandoned builds are unplayable, even by their own creator.
-    if (!record || record.abandonedAt) return false;
+    if (!record || record.abandonedAt) return null;
     const uid = request.user?.uid;
     // The owner sees their own red build; a stranger never does.
-    if (uid && uid === record.ownerUid) return true;
-    if (!record.draftSharedAt) return false;
+    if (uid && uid === record.ownerUid) return { jobId: record.jobId };
+    // A pulled game is not re-opened by flipping the switch.
+    if (record.moderationBlockedAt) return null;
+    if (!record.draftSharedAt) return null;
     const version = sharedDraftVersion(record);
-    // The flip checks too, but deliveries land after it.
-    return Boolean(version && (await shareGate.isGreen(slug, version)));
+    if (!version || !(await shareGate.isGreen(slug, version))) return null;
+    // Pinned: a delivery landing now must not ride this answer.
+    return { jobId: record.jobId, version };
   }
 
   // Serves the gate's own bundle, never raw delivered sources.
@@ -212,13 +217,13 @@ export async function registerDraftPreviewRoutes(
       return reply.status(429).send({ error: 'too many preview requests, please try again later' });
     }
 
-    const record = await store.getSubmissionBySlug(parsedParams.data.slug);
     // Same sharing rule as /play/<slug>: owner, or anyone shared with.
-    if (!record || !(await canPlayDraft(request, parsedParams.data.slug))) {
+    const grant = await canPlayDraft(request, parsedParams.data.slug);
+    if (!grant) {
       return reply.status(404).send({ error: 'draft not found' });
     }
 
-    return replyWithDraft(request, reply, record.jobId);
+    return replyWithDraft(request, reply, grant.jobId, grant.version);
   });
 
   return { canPlayDraft, replyWithDraft };

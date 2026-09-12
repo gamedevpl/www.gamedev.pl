@@ -1225,6 +1225,7 @@ export async function registerSubmissionRoutes(
     reviewerUids: options.reviewerUids,
     now,
     invalidatePublishedGameCaches,
+    isSlugPublished: catalogRoutes.isSlugPublished,
   });
   await registerSelfBuildConnectRoutes(app, {
     managedAvailabilityGate,
@@ -1242,6 +1243,7 @@ export async function registerSubmissionRoutes(
         gamesStore: options.agentChannel?.gamesStore,
         slug: record.slug,
         version: sharedDraftVersion(record),
+        ...(record.moderationBlockedAt ? { moderationBlockedAt: record.moderationBlockedAt } : {}),
       });
       return refusal ? { error: refusal, message: SHARE_REFUSAL_MESSAGES[refusal] } : null;
     },

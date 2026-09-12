@@ -24,6 +24,9 @@ export interface ResolveModerationFlagInput {
   resolvedAt: string;
 }
 
+export type ResolveModerationFlagResult =
+  { ok: true; flag: ModerationFlag } | { ok: false; reason: 'not_found' | 'already_resolved' };
+
 export interface ModerationFlagStore {
   // Opens a report, or reopens the reviewer's resolved one.
   raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag>;
@@ -33,7 +36,15 @@ export interface ModerationFlagStore {
   // Newest first; an operator queue, not an audit export.
   listModerationFlags(opts?: { status?: 'open' | 'resolved'; limit?: number }): Promise<ModerationFlag[]>;
 
-  resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ModerationFlag | null>;
+  // Only from open, so a replay cannot re-run a takedown.
+  resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ResolveModerationFlagResult>;
+
+  // Undoes a claim whose takedown then failed.
+  reopenModerationFlag(id: string): Promise<void>;
+
+  countModerationFlagsByUid(uid: string): Promise<number>;
+
+  deleteModerationFlagsByUid(uid: string): Promise<number>;
 }
 
 function openFlag(input: RaiseModerationFlagInput): ModerationFlag {
@@ -54,7 +65,12 @@ function openFlag(input: RaiseModerationFlagInput): ModerationFlag {
 }
 
 function byNewest(rows: ModerationFlag[]): ModerationFlag[] {
-  return [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+}
+
+// A resolved flag names the operator as well as the reporter.
+function touchesUid(flag: ModerationFlag, uid: string): boolean {
+  return flag.raisedByUid === uid || flag.resolvedByUid === uid;
 }
 
 export class InMemoryModerationFlagStore implements ModerationFlagStore {
@@ -78,9 +94,10 @@ export class InMemoryModerationFlagStore implements ModerationFlagStore {
       .map((flag) => ({ ...flag }));
   }
 
-  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ModerationFlag | null> {
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ResolveModerationFlagResult> {
     const flag = this.flags.get(id);
-    if (!flag) return null;
+    if (!flag) return { ok: false, reason: 'not_found' };
+    if (flag.status !== 'open') return { ok: false, reason: 'already_resolved' };
     const resolved: ModerationFlag = {
       ...flag,
       status: 'resolved',
@@ -90,7 +107,34 @@ export class InMemoryModerationFlagStore implements ModerationFlagStore {
       resolutionNote: input.resolutionNote ?? null,
     };
     this.flags.set(id, resolved);
-    return { ...resolved };
+    return { ok: true, flag: { ...resolved } };
+  }
+
+  async reopenModerationFlag(id: string): Promise<void> {
+    const flag = this.flags.get(id);
+    if (!flag) return;
+    this.flags.set(id, {
+      ...flag,
+      status: 'open',
+      action: null,
+      resolvedByUid: null,
+      resolvedAt: null,
+      resolutionNote: null,
+    });
+  }
+
+  async countModerationFlagsByUid(uid: string): Promise<number> {
+    return [...this.flags.values()].filter((flag) => touchesUid(flag, uid)).length;
+  }
+
+  async deleteModerationFlagsByUid(uid: string): Promise<number> {
+    let deleted = 0;
+    for (const [id, flag] of [...this.flags.entries()]) {
+      if (!touchesUid(flag, uid)) continue;
+      this.flags.delete(id);
+      deleted += 1;
+    }
+    return deleted;
   }
 }
 
@@ -114,18 +158,20 @@ export class FirestoreModerationFlagStore implements ModerationFlagStore {
   }
 
   async listModerationFlags(opts?: { status?: 'open' | 'resolved'; limit?: number }): Promise<ModerationFlag[]> {
-    let query = this.db.collection(MODERATION_FLAGS_COLLECTION).orderBy('createdAt', 'desc');
-    if (opts?.status) query = query.where('status', '==', opts.status);
-    const snap = await query.limit(opts?.limit ?? 200).get();
-    return snap.docs.map((doc) => hydrateModerationFlag(doc.id, doc.data() as Omit<ModerationFlag, 'id'>));
+    // Equality only — no orderBy / composite index.
+    const collection = this.db.collection(MODERATION_FLAGS_COLLECTION);
+    const snap = await (opts?.status ? collection.where('status', '==', opts.status) : collection).get();
+    const rows = snap.docs.map((doc) => hydrateModerationFlag(doc.id, doc.data() as Omit<ModerationFlag, 'id'>));
+    return byNewest(rows).slice(0, opts?.limit ?? 200);
   }
 
-  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ModerationFlag | null> {
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ResolveModerationFlagResult> {
     const ref = this.ref(id);
-    return this.db.runTransaction(async (tx) => {
+    return this.db.runTransaction<ResolveModerationFlagResult>(async (tx) => {
       const snap = await tx.get(ref);
       const data = snap.data() as Omit<ModerationFlag, 'id'> | undefined;
-      if (!data) return null;
+      if (!data) return { ok: false, reason: 'not_found' };
+      if (data.status !== 'open') return { ok: false, reason: 'already_resolved' };
       const resolved = hydrateModerationFlag(id, {
         ...data,
         status: 'resolved',
@@ -135,7 +181,51 @@ export class FirestoreModerationFlagStore implements ModerationFlagStore {
         resolutionNote: input.resolutionNote ?? null,
       });
       tx.set(ref, resolved);
-      return resolved;
+      return { ok: true, flag: resolved };
     });
+  }
+
+  async reopenModerationFlag(id: string): Promise<void> {
+    const ref = this.ref(id);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.data() as Omit<ModerationFlag, 'id'> | undefined;
+      if (!data) return;
+      tx.set(
+        ref,
+        hydrateModerationFlag(id, {
+          ...data,
+          status: 'open',
+          action: null,
+          resolvedByUid: null,
+          resolvedAt: null,
+          resolutionNote: null,
+        }),
+      );
+    });
+  }
+
+  private async flagsTouching(uid: string): Promise<ModerationFlag[]> {
+    // Equality only — two reads, no composite index.
+    const collection = this.db.collection(MODERATION_FLAGS_COLLECTION);
+    const [raised, resolved] = await Promise.all([
+      collection.where('raisedByUid', '==', uid).get(),
+      collection.where('resolvedByUid', '==', uid).get(),
+    ]);
+    const rows = new Map<string, ModerationFlag>();
+    for (const doc of [...raised.docs, ...resolved.docs]) {
+      rows.set(doc.id, hydrateModerationFlag(doc.id, doc.data() as Omit<ModerationFlag, 'id'>));
+    }
+    return [...rows.values()];
+  }
+
+  async countModerationFlagsByUid(uid: string): Promise<number> {
+    return (await this.flagsTouching(uid)).length;
+  }
+
+  async deleteModerationFlagsByUid(uid: string): Promise<number> {
+    const rows = await this.flagsTouching(uid);
+    await Promise.all(rows.map((flag) => this.ref(flag.id).delete()));
+    return rows.length;
   }
 }

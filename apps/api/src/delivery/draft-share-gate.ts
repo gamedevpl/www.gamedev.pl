@@ -1,6 +1,6 @@
 import type { GamesStore, VersionManifest } from './games-store.js';
 
-export type ShareRefusal = 'nothing_delivered' | 'gate_pending' | 'gate_red';
+export type ShareRefusal = 'nothing_delivered' | 'gate_pending' | 'gate_red' | 'moderation_blocked';
 
 // Preview deliveries record their verdict apart from the publish lane's.
 export function manifestVerdict(manifest: VersionManifest): { green: boolean } | undefined {
@@ -16,13 +16,17 @@ export const SHARE_REFUSAL_MESSAGES: Record<ShareRefusal, string> = {
   nothing_delivered: 'deliver a build before sharing the link — there is nothing for a visitor to play yet',
   gate_pending: 'the gate has not returned a verdict for this build yet — sharing opens once it is green',
   gate_red: 'this build is red, and a shared link is public — fix it, deliver again, then share',
+  moderation_blocked: 'an operator pulled this game for a moderation reason — contact us before sharing it again',
 };
 
 export async function refuseUngatedShare(input: {
   gamesStore?: GamesStore;
   slug?: string;
   version?: string;
+  moderationBlockedAt?: string;
 }): Promise<ShareRefusal | null> {
+  // Not the creator's to undo, so it outranks every other answer.
+  if (input.moderationBlockedAt) return 'moderation_blocked';
   if (!input.slug || !input.version) return 'nothing_delivered';
   // No store, no readable verdict, so none to trust.
   if (!input.gamesStore) return 'gate_pending';
