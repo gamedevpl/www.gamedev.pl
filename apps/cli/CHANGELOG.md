@@ -10,7 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Recover Muse tasks waiting for approval by offering to resume the same session interactively (#1271).
-- Open a running local preview with `o` when terminal links cannot be clicked (#1276).
+- Open a running local preview with `o` when terminal links cannot be clicked (#1277).
 
 ## 0.14.0 — 2026-09-11
 
