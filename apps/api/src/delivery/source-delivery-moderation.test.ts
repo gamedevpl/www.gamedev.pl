@@ -5,6 +5,7 @@ import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
 import { InMemoryStore } from '../platform/store.js';
 import type { ContentChecker, ModerationVerdict } from '../platform/moderation.js';
 import { createSourceDeliveryService, type SourceDeliveryAuthority } from './source-delivery.js';
+import { MAX_MANIFEST_CHARS, MAX_SPEC_CHARS } from './delivered-prose.js';
 import { parseSpecTitle } from '../catalog/github-client.js';
 import {
   runTypecheckPreflight,
@@ -124,6 +125,28 @@ describe('delivered prose moderation', () => {
     // Code, track names and canvas numbers are not text a player reads.
     expect(fields.join('\n')).not.toContain('SECRET_TOKEN');
     expect(fields).not.toContain('drift-theme');
+  });
+
+  it('budgets what one batched call carries', async () => {
+    // checkFields joins fields into one prompt; the total is the cost.
+    const contentChecker = checker({ allowed: true });
+    const { service } = await setup({ contentChecker });
+
+    await deliver(service, [
+      { path: 'SPEC.md', content: 'x'.repeat(50_000) },
+      {
+        path: 'GAME.json',
+        content: JSON.stringify({
+          title: { en: 'y'.repeat(5_000), pl: 'z'.repeat(5_000) },
+          description: { en: 'w'.repeat(5_000), pl: 'v'.repeat(5_000) },
+        }),
+      },
+      { path: 'game.ts', content: 'export {};' },
+    ]);
+
+    const fields = contentChecker.checkFields.mock.calls[0]![0] as string[];
+    const total = fields.join('').length;
+    expect(total).toBeLessThanOrEqual(MAX_SPEC_CHARS + MAX_MANIFEST_CHARS);
   });
 
   it('costs nothing when a cap already refused the delivery', async () => {

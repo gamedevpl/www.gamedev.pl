@@ -107,9 +107,17 @@ this is the half of its mitigation that reads the artifact.
 - An outage is answered as an outage. `rejectionFor()` separates `content_rejected` from
   `moderation_unavailable`, the CLI prints a retry for the second, and the burst alert does
   not count it as a rejection.
-- Still uncovered on this lane: **images**. A PNG delivered under `images/` is checked for
-  shape and size, never for what it depicts. Layer 4 is the only thing standing in front of
-  it.
+- **The payload is budgeted, because `checkFields` batches.** Since #1280 every field joins
+  into one prompt, and that prompt has to fit three attempts inside one 20s deadline. A
+  delivery is not a 4000-character concept box — a SPEC.md can run to tens of thousands of
+  characters — so this lane caps what it sends: `MAX_SPEC_CHARS` (4000) from SPEC.md plus
+  `MAX_MANIFEST_CHARS` (2000) across every manifest string, the same order of magnitude the
+  prompt path already sends. Without the cap one delivery could hand the classifier 160k
+  characters and starve its own retry and fallback.
+- Two things that cap therefore does **not** cover, stated rather than implied: prose past
+  the first 4000 characters of a long SPEC.md, and **images** — a PNG under `images/` is
+  checked for shape and size, never for what it depicts. Layer 4 is what stands in front of
+  both.
 
 ## Layer 4 — Human merge (exists — keep it, name it)
 
@@ -154,7 +162,6 @@ this is the half of its mitigation that reads the artifact.
 > model outside a small allow-list of peer-or-better classifiers, because a classifier
 > that degrades to a cheaper model quietly lowers the bar on what passes — which is worse
 > than refusing to answer. OpenAI is disclosed as a processor in the privacy policy.
-
 
 Decision: **Vertex AI on the gamedevpl project** as the classifier. (Superseded in part
 on 2026-09-12, see the amendment above: a second vendor now stands in when Vertex cannot
