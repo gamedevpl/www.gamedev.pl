@@ -10,6 +10,7 @@ import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './acce
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
 import { registerClientAddress } from './client-address.js';
+import { registerReadMeterLog } from './read-meter-log.js';
 import { createLoadShedControls } from './load-shedding.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
@@ -249,6 +250,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   registerClientAddress(app);
+  registerReadMeterLog(app);
   registerApiCachePolicy(app);
 
   registerErrorHandler(app);
