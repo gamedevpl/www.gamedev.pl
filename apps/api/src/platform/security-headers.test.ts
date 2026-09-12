@@ -56,7 +56,7 @@ describe('security headers', () => {
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
 
-  it.each(['/play/unicorn-snap', '/play/unicorn-snap?ref=js13k', '/ay/rainbow-surfer'])(
+  it.each(['/play/unicorn-snap', '/play/unicorn-snap?ref=js13k', '/ay/rainbow-surfer', '/play/unicorn%2Dsnap'])(
     'lets any parent frame the play permalink at %s',
     async (url) => {
       const res = await app.inject({ method: 'GET', url });
@@ -166,11 +166,13 @@ describe('isPlayPermalinkPath', () => {
     expect(isPlayPermalinkPath('/play/unicorn-snap')).toBe(true);
     expect(isPlayPermalinkPath('/play/rainbow-surfer?x=1')).toBe(true);
     expect(isPlayPermalinkPath('/ai/seventh-color')).toBe(true);
+    expect(isPlayPermalinkPath('/play/unicorn%2Dsnap')).toBe(true);
   });
   it('rejects everything else', () => {
     expect(isPlayPermalinkPath('/')).toBe(false);
     expect(isPlayPermalinkPath('/play/')).toBe(false);
     expect(isPlayPermalinkPath('/play/unicorn-snap/')).toBe(false);
+    expect(isPlayPermalinkPath('/play/unicorn%E0')).toBe(false);
     expect(isPlayPermalinkPath('/play/-bad')).toBe(false);
     expect(isPlayPermalinkPath('/admin')).toBe(false);
     expect(isPlayPermalinkPath('/draft/unicorn-snap')).toBe(false);

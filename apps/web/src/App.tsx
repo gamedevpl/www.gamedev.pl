@@ -90,6 +90,7 @@ export function App() {
   } = useAppNavigation({ partySeedRef, setPendingScrollTarget });
 
   const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
+  const framedPlay = route.view === 'play' && window.parent !== window;
 
   const { catalogStatus, catalogError, catalogEntries, handleRetryCatalog, handlePullToRefresh } = useCatalogData({
     user,
@@ -121,7 +122,7 @@ export function App() {
 
   // Builds actually in flight, from the server — the header badge's source of truth.
   // Paused while a game is on screen because the player covers the header.
-  const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
+  const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent && !framedPlay);
 
   const {
     submissionStatus,
@@ -294,7 +295,7 @@ export function App() {
     return <ControllerView code={route.code} token={route.token} />;
   }
 
-  if (route.view === 'play' && window.parent !== window) {
+  if (route.view === 'play' && framedPlay) {
     return <FramedPlayInterstitial slug={route.slug} />;
   }
 

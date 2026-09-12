@@ -19,7 +19,8 @@ export class RouteChunkBoundary extends Component<{ fallback: ReactNode; childre
 export function readLocationRoute(): AppRoute {
   const canonical = canonicalPath(window.location.pathname);
   if (canonical) {
-    window.history.replaceState(null, '', canonical);
+    // Keep search and hash; framed-play UTM lives in search.
+    window.history.replaceState(null, '', `${canonical}${window.location.search}${window.location.hash}`);
   }
   return parsePathRoute(window.location.pathname, window.location.hash);
 }

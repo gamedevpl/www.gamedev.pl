@@ -12,6 +12,7 @@ import {
   type CodeStep,
   type CreateStep,
   type EditorStep,
+  type FramedPlayStep,
   type HowToPlayVia,
   type InviteStep,
   type PartyStep,
@@ -25,7 +26,7 @@ import {
   type VisitRouteKind,
   type WaitlistStep,
 } from '@gamedevpl/contract';
-import { NAVIGATE_EVENT, parsePathRoute } from './core/router.js';
+import { NAVIGATE_EVENT, parsePathRoute, playPath } from './core/router.js';
 import { routeKind } from './visitRouteKind.js';
 
 export { routeKind } from './visitRouteKind.js';
@@ -43,6 +44,7 @@ export type {
   CodeStep,
   CreateStep,
   EditorStep,
+  FramedPlayStep,
   HowToPlayVia,
   InviteStep,
   PlayVia,
@@ -112,6 +114,8 @@ export type VisitEvent =
   | { type: 'create_step'; step: CreateStep; builder?: BuilderDimension }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
+  // Framed /play/ interstitial: shown, then which exit they took.
+  | { type: 'framed_play_step'; step: FramedPlayStep }
   | { type: 'invite_step'; step: InviteStep }
   /**
    * Party mode's lifecycle on the shared screen. No slug and no room code — the visit
@@ -239,6 +243,17 @@ export function utmFields(
     ...(utmMedium === undefined ? {} : { utmMedium }),
     ...(utmCampaign === undefined ? {} : { utmCampaign }),
   };
+}
+
+// Play URL plus the three grouping UTM fields.
+export function playHandoffHref(slug: string, search: string): string {
+  const fields = utmFields(search);
+  const kept = new URLSearchParams();
+  if (fields.utmSource) kept.set('utm_source', fields.utmSource);
+  if (fields.utmMedium) kept.set('utm_medium', fields.utmMedium);
+  if (fields.utmCampaign) kept.set('utm_campaign', fields.utmCampaign);
+  const query = kept.toString();
+  return query ? `${playPath(slug)}?${query}` : playPath(slug);
 }
 
 /**
@@ -393,6 +408,16 @@ export function recordWaitlistStep(step: WaitlistStep): void {
   if (!currentSession || recordedWaitlistSteps.has(step)) return;
   recordedWaitlistSteps.add(step);
   currentSession.record({ type: 'waitlist_step', step });
+}
+
+let recordedFramedPlaySteps = new Set<FramedPlayStep>();
+
+export function recordFramedPlayStep(step: FramedPlayStep): void {
+  if (!currentSession || recordedFramedPlaySteps.has(step)) return;
+  recordedFramedPlaySteps.add(step);
+  currentSession.record({ type: 'framed_play_step', step });
+  // Clicks leave before the hide flush; send now.
+  if (step !== 'shown') currentSession.flush();
 }
 
 let recordedPartySteps = new Set<string>();
@@ -581,6 +606,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
@@ -623,6 +649,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();

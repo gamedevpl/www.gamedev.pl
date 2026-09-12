@@ -125,16 +125,45 @@ describe('anonymous visitors during closed beta', () => {
   it('shows an open-elsewhere interstitial when play is framed, not the game', async () => {
     mockApi(['airtime']);
     Object.defineProperty(window, 'parent', { configurable: true, value: {} });
-    window.history.pushState(null, '', '/play/airtime');
+    window.history.pushState(null, '', '/play/airtime?utm_source=js13k&utm_term=drop');
 
     const container = await renderApp();
 
     expect(container.querySelector('.framed-play')).not.toBeNull();
     expect(container.querySelector('.stage')).toBeNull();
-    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe('/play/airtime');
-    expect(container.querySelector('a[target="_top"]')?.getAttribute('href')).toBe('/play/airtime');
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe('/play/airtime?utm_source=js13k');
+    expect(container.querySelector('a[target="_top"]')?.getAttribute('href')).toBe('/play/airtime?utm_source=js13k');
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('rel')).toMatch(/noopener/);
     expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/games/airtime'))).toBe(
       false,
+    );
+  });
+
+  it('keeps UTM after rewriting a framed play alias', async () => {
+    mockApi(['airtime']);
+    Object.defineProperty(window, 'parent', { configurable: true, value: {} });
+    window.history.pushState(null, '', '/ay/airtime?utm_source=js13k&utm_term=drop');
+
+    const container = await renderApp();
+
+    expect(window.location.pathname).toBe('/play/airtime');
+    expect(window.location.search).toBe('?utm_source=js13k&utm_term=drop');
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe('/play/airtime?utm_source=js13k');
+    expect(container.querySelector('a[target="_top"]')?.getAttribute('href')).toBe('/play/airtime?utm_source=js13k');
+  });
+
+  it('keeps UTM after decoding a framed percent-encoded play slug', async () => {
+    mockApi(['unicorn-snap']);
+    Object.defineProperty(window, 'parent', { configurable: true, value: {} });
+    window.history.pushState(null, '', '/play/unicorn%2Dsnap?utm_source=js13k');
+
+    const container = await renderApp();
+
+    expect(window.location.pathname).toBe('/play/unicorn-snap');
+    expect(window.location.search).toBe('?utm_source=js13k');
+    expect(container.querySelector('.framed-play')).not.toBeNull();
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe(
+      '/play/unicorn-snap?utm_source=js13k',
     );
   });
 });

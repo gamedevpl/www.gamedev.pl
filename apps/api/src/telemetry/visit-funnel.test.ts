@@ -158,6 +158,29 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('reports the framed-play funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'framed_play_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'shown'),
+      step('a', 'open_new'),
+      started('b'),
+      step('b', 'shown'),
+      step('b', 'open_here'),
+      started('c'),
+      step('c', 'shown'),
+      started('d'),
+    ]);
+
+    expect(funnel.framedPlay).toEqual([
+      { step: 'shown', visits: 3 },
+      { step: 'open_new', visits: 1 },
+      { step: 'open_here', visits: 1 },
+    ]);
+  });
+
   it('splits party rungs by whether the bar or a seat drove them', () => {
     // A seat rung is evidence phones drive the room.
     const funnel = summarizeVisitFunnel([
@@ -212,6 +235,19 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 1 });
     expect(funnel.creating[0]).toEqual({ step: 'prompt_started', visits: 1 });
     expect(funnel.waitlist.find((row) => row.step === 'joined')?.visits).toBe(0);
+  });
+
+  it('keeps framed-play shown from colliding with beta-welcome shown', () => {
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      { visitId: 'a', type: 'framed_play_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step: 'shown' },
+      { visitId: 'a', type: 'beta_welcome_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 1, step: 'shown' },
+      { visitId: 'a', type: 'waitlist_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 2, step: 'cta_clicked' },
+    ]);
+    expect(funnel.framedPlay[0]).toEqual({ step: 'shown', visits: 1 });
+    expect(funnel.betaWelcome[0]).toEqual({ step: 'shown', visits: 1 });
+    expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 1 });
+    expect(funnel.framedPlay.find((row) => row.step === 'open_new')?.visits).toBe(0);
   });
 
   it('reports the editing funnel in step order, zeroes included', () => {
@@ -594,6 +630,11 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.waitlist).toEqual([
       { step: 'cta_clicked', visits: 0 },
       { step: 'joined', visits: 0 },
+    ]);
+    expect(funnel.framedPlay).toEqual([
+      { step: 'shown', visits: 0 },
+      { step: 'open_new', visits: 0 },
+      { step: 'open_here', visits: 0 },
     ]);
   });
 

@@ -94,6 +94,7 @@ export interface VisitEvent {
     | 'how_to_play_opened'
     | 'create_step'
     | 'waitlist_step'
+    | 'framed_play_step'
     | 'invite_step'
     | 'party_step'
     | 'beta_welcome_step'
@@ -113,7 +114,7 @@ export interface VisitEvent {
   /** `route_viewed`: the route kind now shown. Never its parameters. */
   route?: string;
   /**
-   * `create_step` / `waitlist_step` / `studio_step` / `editor_step` /
+   * `create_step` / `waitlist_step` / `framed_play_step` / `studio_step` / `editor_step` /
    * `assist_step` / `remix_step` / `code_step`: which funnel step or outcome this
    * visit reached. `code_step` never carries a file path or source text — see its
    * type definition in the web client for the closed vocabulary.

@@ -19,10 +19,10 @@ vi.mock('./submissionApi', async () => {
 });
 
 /** Renders the hook and reports what it returned. */
-async function renderCount() {
+async function renderCount(enabled = true) {
   const seen: number[] = [];
   function Probe() {
-    seen.push(useActiveBuildCount());
+    seen.push(useActiveBuildCount(0, enabled));
     return null;
   }
   const container = document.createElement('div');
@@ -116,6 +116,17 @@ describe('useActiveBuildCount', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
     expect(mockedCount).toHaveBeenCalledTimes(2);
+
+    root.unmount();
+  });
+
+  it('does not poll when disabled, even for a signed-in creator', async () => {
+    mockedCount.mockResolvedValue(3);
+
+    const { latest, root } = await renderCount(false);
+
+    expect(latest()).toBe(0);
+    expect(mockedCount).not.toHaveBeenCalled();
 
     root.unmount();
   });

@@ -32,6 +32,12 @@ const WAITLIST_LABELS: Record<string, string> = {
   joined: 'joined waitlist',
 };
 
+const FRAMED_PLAY_LABELS: Record<string, string> = {
+  shown: 'saw the framed play card',
+  open_new: 'opened in a new window',
+  open_here: 'opened in this tab',
+};
+
 const PARTY_LABELS: Record<string, string> = {
   lobby_opened: 'opened a party lobby',
   guest_joined: 'a phone joined',
@@ -288,6 +294,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Framed play</h3>
+          {(funnel.framedPlay ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody landed in a framed play in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of shown
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.framedPlay ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{FRAMED_PLAY_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.framedPlay?.[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
