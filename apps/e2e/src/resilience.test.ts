@@ -46,14 +46,13 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
     await api?.dispose();
   });
 
-  /** Rendered text, collapsed — enough to tell "a state" from "a blank page". */
+  // Collapsed body text: enough to tell a state from a blank page.
   const bodyText = async () => (await page.locator('body').innerText()).replace(/\s+/g, ' ').trim();
 
   it('serves a real 404 for an unknown path instead of silently showing home', async () => {
     const res = await visit(page, '/this-page-does-not-exist', 2_500);
 
-    // The status matters as much as the view: a soft-404 that answers 200 tells
-    // crawlers a typo'd URL is a real page.
+    // A soft-404 answering 200 tells crawlers a typo'd URL is real.
     expect(res?.status()).toBe(404);
     await expect.poll(() => page.locator('.not-found').count(), { timeout: 20_000 }).toBeGreaterThan(0);
     // The URL stays visible so the visitor can see what they mistyped.
