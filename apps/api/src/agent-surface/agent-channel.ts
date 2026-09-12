@@ -1086,7 +1086,8 @@ export async function registerAgentChannelRoutes(
         if (!(await (options.dreamingEnabled ?? (async () => false))())) {
           return reply.send({ accepted: false, rejected: 'proposals_off', ...(await channelState(jobId, record)) });
         }
-        if ((await store!.getUser(record.ownerUid))?.proposalsMutedAt) {
+        // Uncached: a mute from another instance must not buy two frames.
+        if (await store!.readProposalsMutedAt(record.ownerUid)) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
         }
         // Without a green capture the card can never post, and the agent would learn that

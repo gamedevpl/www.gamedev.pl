@@ -406,6 +406,18 @@ describeStoreContract('dream claim generations', (makeStore) => {
     });
   });
 
+  it('names the moved delivery, not the claim the old version still holds', async () => {
+    const store = await delivering(makeStore());
+    await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z', 1);
+    await store.setSubmissionPreviewVersion(11, 'v2');
+
+    // Both hold here; `claim` would say v2 needs no proposal.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'version',
+    });
+  });
+
   it('lets the reopened round claim the same delivery again', async () => {
     // A reopen leaves the version alone, so only the generation frees it.
     const store = await delivering(makeStore());

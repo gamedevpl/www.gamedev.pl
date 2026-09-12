@@ -131,7 +131,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
 
       if (stopReason(record)) return reject('stopped');
       if (!(await dreamingEnabled())) return reject('paused');
-      if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return reject('muted');
+      if (await store.readProposalsMutedAt(record.ownerUid)) return reject('muted');
 
       const version = record.previewVersion ?? record.deliveredVersion;
       if (!record.slug || !version) return reject('no_screenshot');

@@ -137,8 +137,9 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
   async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     const sub = this.submissions.get(jobId);
     if (!sub || (sub.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
-    if (dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return { claimed: false, refusedBy: 'claim' };
+    // A moved delivery outranks a held claim; both can hold.
     if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return { claimed: false, refusedBy: 'version' };
+    if (dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return { claimed: false, refusedBy: 'claim' };
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at, roundGeneration } });
     return { claimed: true };
   }
@@ -245,12 +246,12 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       const current = snap.data() as SubmissionRecord;
       // A caller whose round moved takes nothing on its way out.
       if ((current.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
-      if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration))
-        return { claimed: false, refusedBy: 'claim' };
-      // Read and claim together, or a late claim overwrites.
+      // A moved delivery outranks a held claim; both can hold.
       if ((current.previewVersion ?? current.deliveredVersion) !== version) {
         return { claimed: false, refusedBy: 'version' };
       }
+      if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration))
+        return { claimed: false, refusedBy: 'claim' };
       // A merged map keeps what it omits; start clean.
       tx.set(
         ref,
