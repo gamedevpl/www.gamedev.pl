@@ -358,7 +358,11 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis =
         <span className="featured-game-kicker">
           <PixelIcon name="sparkle" size={12} /> {t('catalog.featuredKicker')}
         </span>
-        <h3 className="featured-game-title">{entry.title}</h3>
+        <h3 className="featured-game-title">
+          <a className="featured-game-title-link" href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=featured`}>
+            {entry.title}
+          </a>
+        </h3>
         <p className="featured-game-meta">{t('catalog.controlsSummary', { controls: entry.controls })}</p>
         <p className="featured-game-author">
           {entry.creatorHandle && !isPlatformAuthor(entry.submittedBy) ? (

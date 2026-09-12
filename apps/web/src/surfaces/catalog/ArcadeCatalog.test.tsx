@@ -664,6 +664,9 @@ describe('ArcadeCatalog curated surfaces', () => {
     // The featured poster is clickable too, not just the Play button.
     const featuredHitArea = container.querySelector<HTMLAnchorElement>('.featured-game-hit-area');
     expect(featuredHitArea?.getAttribute('href')).toContain('?via=featured');
+    expect(container.querySelector<HTMLAnchorElement>('.featured-game-title-link')?.getAttribute('href')).toContain(
+      '?via=featured',
+    );
     // Nothing left over for Start here.
     expect(
       [...container.querySelectorAll('.catalog-rail-section')].some((s) => s.textContent?.includes('Start here')),
