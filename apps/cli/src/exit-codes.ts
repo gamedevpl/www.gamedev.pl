@@ -8,6 +8,7 @@ export type CliExitCode =
   typeof EXIT_GREEN | typeof EXIT_RED | typeof EXIT_REFUSED | typeof EXIT_AUTH | typeof EXIT_INPUT;
 
 export class CliError extends Error {
+  apiCode?: string;
   constructor(
     message: string,
     readonly exitCode: CliExitCode,

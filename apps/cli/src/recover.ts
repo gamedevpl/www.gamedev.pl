@@ -1,3 +1,5 @@
+import { detectLocalAdapters } from './workshop.js';
+import type { handleReplLine, ReplLineResult } from './repl.js';
 import { parseArgv } from './argv.js';
 import { randomUUID } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -7,6 +9,8 @@ import { findCheckout, localGameFiles, writeBase } from './checkout.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { PickChoice } from './workshop.js';
 
+export type RecoveryResult = { token: string; slug: string; root: string };
+
 export async function recoverCheckout(input: {
   api: ApiClient;
   cwd: string;
@@ -14,7 +18,7 @@ export async function recoverCheckout(input: {
   yes?: boolean;
   pick?: PickChoice;
   write: (line: string) => void;
-}): Promise<void> {
+}): Promise<RecoveryResult | undefined> {
   const checkout = findCheckout(resolve(input.cwd));
   if (!checkout) throw new CliError('No local checkout found.', EXIT_INPUT, 'gamedevpl recover <checkout-directory>');
   for (const name of ['.gamedev-slug', '.gamedev-base.json', '.gamedev-recovery.json']) {
@@ -57,9 +61,15 @@ export async function recoverCheckout(input: {
   if (dest !== checkout.root && existsSync(dest)) {
     const marker = join(dest, '.gamedev-import-key');
     if (pending && existsSync(marker) && readFileSync(marker, 'utf8') === pending.key) {
+      const recovered = await input.api.request<{ token: string; slug: string }>('POST', '/api/me/studio/recover', {
+        slug,
+        key: pending.key,
+        title,
+        concept,
+      });
       rmSync(pendingPath);
       input.write(`Recovery already completed: ${dest}. Run gamedevpl push there.`);
-      return;
+      return { ...recovered, root: dest };
     }
     throw new CliError(`Recovery destination already exists: ${dest}`, EXIT_REFUSED);
   }
@@ -79,12 +89,15 @@ export async function recoverCheckout(input: {
   }
   pending ??= { slug, key: randomUUID(), origin: input.api.origin };
   writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
+  let recovered: { token: string; slug: string };
   try {
-    await input.api.request('POST', '/api/me/studio/recover', { slug, key: pending.key, title, concept });
+    recovered = await input.api.request('POST', '/api/me/studio/recover', { slug, key: pending.key, title, concept });
   } catch (error) {
     if (
-      error instanceof Error &&
-      ['slug_unavailable', 'recovery_changed', 'invalid recovery request', 'content_rejected'].includes(error.message)
+      error instanceof CliError &&
+      ['slug_unavailable', 'recovery_changed', 'invalid recovery request', 'content_rejected'].includes(
+        error.apiCode ?? '',
+      )
     )
       rmSync(pendingPath);
     throw error;
@@ -148,6 +161,7 @@ export async function recoverCheckout(input: {
   input.write(
     `Sources recovered and staged. Checkout: ${dest}. Run gamedevpl push there to check and deliver a preview.`,
   );
+  return { ...recovered, root: dest };
 }
 
 export async function recoverCommand(
@@ -156,9 +170,9 @@ export async function recoverCommand(
   cwd: string,
   pick: PickChoice | undefined,
   write: (line: string) => void,
-): Promise<void> {
+): Promise<RecoveryResult | undefined> {
   const { args, flags } = parseArgv(['node', 'cli', ...line.slice(1).split(/\s+/)]);
-  await recoverCheckout({
+  return recoverCheckout({
     api,
     cwd: args[0] ?? cwd,
     slug: typeof flags.slug === 'string' ? flags.slug : undefined,
@@ -166,4 +180,32 @@ export async function recoverCommand(
     pick,
     write,
   });
+}
+
+export async function recoverRepl(input: Parameters<typeof handleReplLine>[0]): Promise<ReplLineResult> {
+  const recovered = await recoverCommand(
+    input.api,
+    input.line.trim(),
+    input.workshop?.root ?? process.cwd(),
+    input.pick,
+    input.write,
+  );
+  if (!recovered) return { next: 'continue' };
+  const env = input.env ?? process.env;
+  const workshop = {
+    env,
+    adapters: detectLocalAdapters(env),
+    pick:
+      input.pick ??
+      (async () => {
+        throw new CliError('This action needs an interactive terminal.', EXIT_INPUT);
+      }),
+    abort: input.abort ?? { current: null },
+    telemetry: input.telemetry,
+    ...input.workshop,
+    ...recovered,
+    builder: 'self',
+  };
+  input.onWorkshop?.(workshop);
+  return { next: 'continue', token: recovered.token, slug: recovered.slug, workshop };
 }

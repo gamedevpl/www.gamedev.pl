@@ -1,4 +1,4 @@
-import { recoverCommand } from './recover.js';
+import { recoverRepl } from './recover.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { readFileSync } from 'node:fs';
 import { modelCommand } from './model-command.js';
@@ -63,10 +63,7 @@ export async function handleReplLine(input: {
     input.write(input.workshop?.lastLog ? readFileSync(input.workshop.lastLog, 'utf8') : 'No local task log yet.');
     return { next: 'continue' };
   }
-  if (trimmed === '/recover' || trimmed.startsWith('/recover ')) {
-    await recoverCommand(input.api, trimmed, input.workshop?.root ?? process.cwd(), input.pick, input.write);
-    return { next: 'continue' };
-  }
+  if (trimmed === '/recover' || trimmed.startsWith('/recover ')) return recoverRepl(input);
   if (trimmed === '/model' || trimmed.startsWith('/model ')) {
     const parsed = parseArgv(['node', 'cli', ...trimmed.slice(1).split(/\s+/)]);
     await modelCommand({ ...parsed, env: input.env ?? process.env, pick: input.pick, write: input.write });
