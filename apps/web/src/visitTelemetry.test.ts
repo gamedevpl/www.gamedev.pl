@@ -475,6 +475,23 @@ describe('recordFramedPlayStep', () => {
     setVisitSessionForTesting(null);
     expect(() => recordFramedPlayStep('shown')).not.toThrow();
   });
+
+  it('flushes terminal handoff steps without waiting for hide', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordFramedPlayStep('shown');
+    expect(batches).toHaveLength(0);
+
+    recordFramedPlayStep('open_new');
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'framed_play_step', step: 'shown' }),
+      expect.objectContaining({ type: 'framed_play_step', step: 'open_new' }),
+    ]);
+  });
 });
 
 describe('recordBetaInviteStep', () => {

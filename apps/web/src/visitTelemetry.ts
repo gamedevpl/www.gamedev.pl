@@ -416,6 +416,8 @@ export function recordFramedPlayStep(step: FramedPlayStep): void {
   if (!currentSession || recordedFramedPlaySteps.has(step)) return;
   recordedFramedPlaySteps.add(step);
   currentSession.record({ type: 'framed_play_step', step });
+  // Clicks leave before the hide flush; send now.
+  if (step !== 'shown') currentSession.flush();
 }
 
 let recordedPartySteps = new Set<string>();
