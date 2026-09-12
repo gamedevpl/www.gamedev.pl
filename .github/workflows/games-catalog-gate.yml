@@ -258,13 +258,24 @@ jobs:
                 fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
                 || echo "Baseline fetch failed — classify from compare patches only"
             fi
+            set +e
             scope=$(printf '%s\n' "$files" | node tools/gate-scope.mjs --event push --base "$parent" --diffs-json "$diffs_json" --json)
+            status=$?
+            set -e
             rm -f "$diffs_json"
-            MODE=$(printf '%s' "$scope" | jq -r '.mode')
+            if [ "$status" -ne 0 ]; then
+              echo "gate-scope exited ${status} — full catalog gate"
+              return 1
+            fi
+            MODE=$(printf '%s' "$scope" | jq -r '.mode // empty')
+            if [ -z "$MODE" ] || [ "$MODE" = null ]; then
+              echo "gate-scope returned no mode — full catalog gate"
+              return 1
+            fi
             SLUGS=$(printf '%s' "$scope" | jq -r '.slugs | join(" ")')
-            NEED_WEBKIT=$(printf '%s' "$scope" | jq -r '.need_webkit')
-            NARROW_CONFORMANCE=$(printf '%s' "$scope" | jq -r '.narrow_conformance')
-            RUN_GATE=$(printf '%s' "$scope" | jq -r '.run_gate')
+            NEED_WEBKIT=$(printf '%s' "$scope" | jq -r '.need_webkit // empty')
+            NARROW_CONFORMANCE=$(printf '%s' "$scope" | jq -r '.narrow_conformance // empty')
+            RUN_GATE=$(printf '%s' "$scope" | jq -r '.run_gate // empty')
             echo "Push scope: mode=${MODE} run_gate=${RUN_GATE} webkit=${NEED_WEBKIT} slugs=${SLUGS:-"(none)"}"
             return 0
           }
@@ -469,6 +480,8 @@ jobs:
           ' $SLUGS)
           if [ "$need_webgl" = 1 ]; then npm run check:webgl; fi
 
+  # Overlaps catalog-gate (needs: resolve, not catalog-gate). A red gate still
+  # pays this sweep; cancel-in-progress makes that rare.
   webkit:
     needs: resolve
     if: needs.resolve.outputs.need_webkit == '1'
