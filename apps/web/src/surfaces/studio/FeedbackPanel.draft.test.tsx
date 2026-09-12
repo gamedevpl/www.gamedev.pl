@@ -60,6 +60,8 @@ describe('FeedbackPanel draft handling', () => {
 
     // Still live while the request is out; a pick reseeds it.
     await render({ text: 'Make the level happen at night instead.', seq: 2 });
+    const grown = container.querySelector('textarea');
+    if (grown) grown.style.height = '96px';
 
     await act(async () => {
       settle();
@@ -68,6 +70,8 @@ describe('FeedbackPanel draft handling', () => {
 
     const input = container.querySelector('textarea');
     expect(input?.value).toBe('Make the level happen at night instead.');
+    // The grown height belongs to the retained draft, not the sent message.
+    expect(input?.style.height).toBe('96px');
   });
 
   it('clears the box when nothing was picked during the send', async () => {

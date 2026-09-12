@@ -234,9 +234,9 @@ export function FeedbackPanel({
       if (seededSeq.current === seqAtSend) {
         setText('');
         resetAttachments();
+        // Reset to CSS height — not the sent message's grown size.
+        if (inputRef.current) inputRef.current.style.height = '';
       }
-      // Reset to CSS height — not the sent message's grown size.
-      if (inputRef.current) inputRef.current.style.height = '';
       // Echoes locally now; the next status poll picks up the real state.
       onSent(message);
       // Moves onto the new thread last, after the receipt and echo commit.
