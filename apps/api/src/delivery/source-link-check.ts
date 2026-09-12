@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 // Cross-file symbol link check; prefer false negatives.
 
 export type SourceLinkFinding = {
@@ -268,6 +270,9 @@ export function findUnresolvedSourceLinks(files: ReadonlyMap<string, string>): S
     let bindingBudget = MAX_IMPORT_BINDINGS_PER_FILE;
     for (const imp of imports) {
       if (imp.isTypeOnly || imp.isNamespace) continue;
+      // Kit imports are checked against the pinned Kit by typecheck.
+      const workspacePath = posix.resolve('/games/delivery', posix.dirname(from), imp.path);
+      if (workspacePath.startsWith('/shared/')) continue;
       const resolved = resolveRelativeImport(from, imp.path, files);
       if (resolved == null) {
         if (/\.(?:[cm]?[jt]s|tsx|jsx)$/.test(imp.path) || !/\.[a-zA-Z0-9]+$/.test(imp.path)) {
