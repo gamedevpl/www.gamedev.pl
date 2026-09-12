@@ -226,6 +226,15 @@ full working week of post-fix numbers rather than from an estimate — `read-cos
 is what that measurement looks like, and the type split belongs in the PR that moves a
 threshold.
 
+**The deploy gate has no voice of its own.** `Deploy to Cloud Run` triggers on `workflow_run`
+of CI and is gated on that run concluding success, so a red master skips every deploy while
+each merged pull request still reads green. On 2026-09-12 master was red from a direct push
+and two merges deployed nothing; production served the previous revision for over an hour with
+nothing reporting it. `infra/check-deploy-freshness.mjs` (run every half hour by
+`.github/workflows/deploy-watchdog.yml`) now asks whether master's newest settled commit has a
+*successful* deploy run, and opens one issue when it does not. Verified against that incident's
+own data: pointed at the red window it names `25703195c` and `5b5518841` exactly.
+
 **Owed after the sweep fixes land.** A30 and A31 are calibrated against the pre-fix floor
 described above. Give the change a full working week in production, then re-derive both from
 `infra/read-cost-report.sh 7d` and the per-route sums from the read meter, and put the type
