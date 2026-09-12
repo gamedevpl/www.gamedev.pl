@@ -100,6 +100,7 @@ it('can retry a failed renamed checkout copy without damaging the source', async
 });
 it.each([
   ['slug_unavailable', 409],
+  ['recovery_changed', 409],
   ['content_rejected', 422],
 ])('clears definitive %s refusal with a human-readable message', async (error, status) => {
   const f = fixture();
