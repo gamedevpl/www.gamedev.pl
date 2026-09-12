@@ -4,6 +4,7 @@ import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
+import type { CreatorMessage } from '../platform/store.js';
 import { progressOf } from './native-job-status.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
@@ -68,6 +69,19 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     }
     const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
     eventsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    return value;
+  }
+
+  // Same window as events; never a scan per poll.
+  const messagesCache = new Map<number, { expiresAt: number; value: CreatorMessage[] }>();
+
+  async function loadCreatorMessages(jobId: number): Promise<CreatorMessage[] | null> {
+    if (!store) return null;
+    const currentTime = now();
+    const cached = messagesCache.get(jobId);
+    if (cached && cached.expiresAt > currentTime) return cached.value;
+    const value = await store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null);
+    if (value) messagesCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }
 
@@ -259,15 +273,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     ]);
     // The posting transaction stamps the record already read here.
     const cardPostedAt = record?.dreamRun?.postedAt ?? '';
-    const newestRevisionAt = (status.progress?.revisions ?? []).reduce(
-      (at, revision) => (revision.createdAt > at ? revision.createdAt : at),
-      '',
+    // Presence, not order: two instances' clocks do not compare.
+    const cardShown = (status.progress?.revisions ?? []).some(
+      (revision) => Boolean(revision.proposal) && revision.createdAt === cardPostedAt,
     );
-    // One scan when a card landed elsewhere, not one per poll.
-    const messages =
-      store && cardPostedAt > newestRevisionAt
-        ? await store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null)
-        : null;
+    const messages = cardPostedAt && !cardShown ? await loadCreatorMessages(jobId) : null;
     const progress =
       (messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined) ??
       status.progress;

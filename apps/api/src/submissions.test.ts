@@ -1569,10 +1569,64 @@ describe('submission routes', () => {
       ownerUid: job.ownerUid,
     });
 
-    const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    const real = store.listCreatorMessages.bind(store);
+    let scans = 0;
+    store.listCreatorMessages = async (...args: Parameters<typeof real>) => {
+      scans += 1;
+      return await real(...args);
+    };
+
+    const poll = () => app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    const after = await poll();
     const revisions = after.json().progress.revisions;
     expect(revisions).toHaveLength(2);
     expect(revisions[1].proposal).toMatchObject({ sourceRef: 'shot-a' });
+
+    await poll();
+    await poll();
+    // One scan per window, not one per poll.
+    expect(scans).toBe(1);
+
+    await app.close();
+  });
+
+  it('shows a card whose stamp does not sort after the revisions already cached', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.jobId, secret);
+    const earlier = await store.appendCreatorMessage(job.jobId, 'Make the enemies slower.');
+
+    const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(before.json().progress.revisions).toHaveLength(1);
+
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    const claim = { version: 'v1', claimedAt: new Date().toISOString() };
+    await store.claimDreamRun(job.jobId, claim.version, claim.claimedAt);
+    await store.appendProposalMessage(job.jobId, claim, 'I sketched two directions.', {
+      proposal: { sourceRef: 'shot-a', version: 'v1', options: [] },
+      ownerUid: job.ownerUid,
+    });
+
+    // The worker's clock behind ours; its stamp ties a cached revision.
+    const readRecord = store.getSubmission.bind(store);
+    store.getSubmission = async (id: number) => {
+      const record = await readRecord(id);
+      return record?.dreamRun ? { ...record, dreamRun: { ...record.dreamRun, postedAt: earlier.createdAt } } : record;
+    };
+
+    const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(after.json().progress.revisions).toHaveLength(2);
 
     await app.close();
   });
