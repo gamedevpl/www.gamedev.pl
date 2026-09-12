@@ -167,6 +167,14 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     The Join CTA is visible before sign-in; the drop between click and join _is_ the
     sign-in wall, so there is no separate `signin_required` rung (that name already means
     the creation wall).
+  - ~~Framed `/play/` interstitial handoff unmeasured~~ — **closed 2026-09-12**: a
+    framed visit used to look like a bounce (the card) or a new "direct" visit (the
+    new tab), with no way to tell an embed click-through from a dead landing.
+    `framed_play_step` records `shown` → `open_new` / `open_here` on the visit stream.
+    No slug — the streams stay unjoinable. Handoff links keep only the sanitized UTM
+    fields so question 3 still groups the click-through. `FRAMED_PLAY_STEPS` lives in
+    `packages/contract/src/visit-vocab.ts`; `summarizeVisitFunnel` rolls them up as
+    `framedPlay` and `VisitFunnelPanel` renders the block.
   - ~~BYOCA / self-build funnel unmeasured~~ — **closed 2026-08-01 (BY-08)**: `studio_step`
     on the visit stream records `builder_chosen` → `connect_copied` (also `connect_deeplink`,
     `connect_dismissed`, `connect_restored`) → `agent_signaled` →

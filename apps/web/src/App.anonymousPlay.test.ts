@@ -125,14 +125,15 @@ describe('anonymous visitors during closed beta', () => {
   it('shows an open-elsewhere interstitial when play is framed, not the game', async () => {
     mockApi(['airtime']);
     Object.defineProperty(window, 'parent', { configurable: true, value: {} });
-    window.history.pushState(null, '', '/play/airtime');
+    window.history.pushState(null, '', '/play/airtime?utm_source=js13k&utm_term=drop');
 
     const container = await renderApp();
 
     expect(container.querySelector('.framed-play')).not.toBeNull();
     expect(container.querySelector('.stage')).toBeNull();
-    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe('/play/airtime');
-    expect(container.querySelector('a[target="_top"]')?.getAttribute('href')).toBe('/play/airtime');
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe('/play/airtime?utm_source=js13k');
+    expect(container.querySelector('a[target="_top"]')?.getAttribute('href')).toBe('/play/airtime?utm_source=js13k');
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('rel')).toMatch(/noopener/);
     expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/games/airtime'))).toBe(
       false,
     );

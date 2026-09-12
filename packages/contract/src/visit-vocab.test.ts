@@ -21,6 +21,7 @@ import {
   STUDIO_STEP_DETAILS,
   STUDIO_STEPS,
   VISIT_ROUTE_KINDS,
+  FRAMED_PLAY_STEPS,
   WAITLIST_STEPS,
 } from './visit-vocab.js';
 
@@ -75,6 +76,10 @@ describe('visit vocab', () => {
 
   it('lists waitlist steps', () => {
     expect(WAITLIST_STEPS).toEqual(['cta_clicked', 'joined']);
+  });
+
+  it('lists framed-play interstitial steps in order', () => {
+    expect(FRAMED_PLAY_STEPS).toEqual(['shown', 'open_new', 'open_here']);
   });
 
   it('lists invite steps', () => {

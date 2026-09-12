@@ -21,6 +21,7 @@ async function renderInterstitial(slug: string) {
 describe('FramedPlayInterstitial', () => {
   afterEach(() => {
     document.body.innerHTML = '';
+    window.history.pushState(null, '', '/');
   });
 
   it('offers a new-window link and a top-level fallback, never the theater', async () => {
@@ -29,10 +30,21 @@ describe('FramedPlayInterstitial', () => {
     const openNew = links.find((link) => link.getAttribute('target') === '_blank');
     const openHere = links.find((link) => link.getAttribute('target') === '_top');
     expect(openNew?.getAttribute('href')).toBe('/play/unicorn-snap');
-    expect(openNew?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(openNew?.getAttribute('rel')).toBe('noopener');
     expect(openHere?.getAttribute('href')).toBe('/play/unicorn-snap');
     expect(container.querySelector('.stage')).toBeNull();
     expect(container.textContent).toMatch(/new window/i);
+    root.unmount();
+  });
+
+  it('keeps the visit-stream UTM fields on both handoff links', async () => {
+    window.history.pushState(null, '', '/play/unicorn-snap?utm_source=JS13k&utm_medium=embed&utm_term=drop&foo=1');
+    const { container, root } = await renderInterstitial('unicorn-snap');
+    const hrefs = [...container.querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual([
+      '/play/unicorn-snap?utm_source=js13k&utm_medium=embed',
+      '/play/unicorn-snap?utm_source=js13k&utm_medium=embed',
+    ]);
     root.unmount();
   });
 });

@@ -6,6 +6,7 @@ import {
   CODE_STEPS,
   CREATE_STEPS,
   EDITOR_STEPS,
+  FRAMED_PLAY_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
   PARTY_STEPS,
@@ -61,6 +62,7 @@ const MAX_TRACKED_VISITS = 5000;
 const RouteKindSchema = z.enum(VISIT_ROUTE_KINDS);
 const CreateStepSchema = z.enum(CREATE_STEPS);
 const WaitlistStepSchema = z.enum(WAITLIST_STEPS);
+const FramedPlayStepSchema = z.enum(FRAMED_PLAY_STEPS);
 const InviteStepSchema = z.enum(INVITE_STEPS);
 const PartyStepSchema = z.enum(PARTY_STEPS);
 const PartyViaSchema = z.enum(PARTY_VIAS);
@@ -123,6 +125,7 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
+  z.object({ type: z.literal('framed_play_step'), step: FramedPlayStepSchema, ...offsetField }),
   z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
   z.object({
     type: z.literal('party_step'),
@@ -262,6 +265,8 @@ export async function registerVisitTelemetryRoutes(
             ...(event.builder === undefined ? {} : { builder: event.builder }),
           };
         case 'waitlist_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'framed_play_step':
           return { ...base, type: event.type, step: event.step };
         case 'invite_step':
           return { ...base, type: event.type, step: event.step };

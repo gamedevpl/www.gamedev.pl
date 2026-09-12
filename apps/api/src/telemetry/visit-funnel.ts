@@ -5,6 +5,7 @@ import {
   CODE_STEPS,
   CREATE_STEPS,
   EDITOR_STEPS,
+  FRAMED_PLAY_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
   PARTY_STEPS,
@@ -19,6 +20,7 @@ import {
   type CodeStep,
   type CreateStep,
   type EditorStep,
+  type FramedPlayStep,
   type HowToPlayVia,
   type InviteStep,
   type PartyStep,
@@ -98,6 +100,8 @@ export interface VisitFunnel {
    * present — including zeroes. Same posture as `creating`.
    */
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
+  // Framed /play/ interstitial; every step, zeroes included.
+  framedPlay: Array<{ step: FramedPlayStep; visits: number }>;
   invites: Array<{ step: InviteStep; visits: number }>;
   // Party lifecycle in order, zeroes included; seatVisits is evidence phones drive it.
   party: Array<{ step: PartyStep; visits: number; barVisits: number; seatVisits: number }>;
@@ -217,6 +221,8 @@ interface VisitRollup {
   steps: Set<string>;
   /** Waitlist steps this visit reached. Separate from create so the two funnels cannot collide. */
   waitlistSteps: Set<string>;
+  // Separate Set: `shown` is also a beta-welcome rung.
+  framedPlaySteps: Set<string>;
   inviteSteps: Set<string>;
   // Party rungs reached, keyed step and step:via so routes stay apart.
   partySteps: Set<string>;
@@ -281,6 +287,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       plays: 0,
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
+      framedPlaySteps: new Set<string>(),
       inviteSteps: new Set<string>(),
       partySteps: new Set<string>(),
       betaWelcomeSteps: new Set<string>(),
@@ -306,6 +313,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.steps.add(event.step);
     } else if (event.type === 'waitlist_step') {
       if (event.step) rollup.waitlistSteps.add(event.step);
+    } else if (event.type === 'framed_play_step') {
+      if (event.step) rollup.framedPlaySteps.add(event.step);
     } else if (event.type === 'invite_step') {
       if (event.step) rollup.inviteSteps.add(event.step);
     } else if (event.type === 'party_step') {
@@ -527,6 +536,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     waitlist: WAITLIST_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.waitlistSteps.has(step)).length,
+    })),
+    framedPlay: FRAMED_PLAY_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.framedPlaySteps.has(step)).length,
     })),
     invites: INVITE_STEPS.map((step) => ({
       step,

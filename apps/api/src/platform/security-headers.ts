@@ -60,7 +60,13 @@ function isHtmlDocument(reply: FastifyReply): boolean {
 export function isPlayPermalinkPath(url: string): boolean {
   // Trailing slash is not a play route; the SPA 404s it.
   const pathname = url.split('?')[0] ?? url;
-  return PLAY_PERMALINK.test(pathname);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return false;
+  }
+  return PLAY_PERMALINK.test(decoded);
 }
 
 function setIfAbsent(reply: FastifyReply, name: string, value: string): void {
