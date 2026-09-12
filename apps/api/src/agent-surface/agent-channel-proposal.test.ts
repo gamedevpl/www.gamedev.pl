@@ -45,7 +45,11 @@ export async function createApp(store: InMemoryStore, gamesStore: GamesStore) {
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
       agentChannel: { gamesStore },
-      dreamAvailabilityGate: { dreamingEnabled: async () => true, spendFrameSlot: async () => true },
+      dreamAvailabilityGate: {
+        // The operator's pause drives it, as one write does in production.
+        dreamingEnabled: async () => (await store.getCreationLimits())?.dreamsPaused !== true,
+        spendFrameSlot: async () => true,
+      },
     },
   });
 }
@@ -173,6 +177,44 @@ describe('agent-written concept proposals', () => {
 
     const response = await propose(app, frames);
     expect(response.json().rejected).toBe('muted');
+    expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
+  it('names the operator pause when it lands while the source shot is written', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
+    const real = store.appendBuildShot.bind(store);
+    store.appendBuildShot = async (jobId, shot) => {
+      await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
+      return await real(jobId, shot);
+    };
+
+    const response = await propose(app, frames);
+    // `already_proposed` would send the agent hunting an absent card.
+    expect(response.json().rejected).toBe('paused');
+    expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
+  it('stops the agent when the round closes while the source shot is written', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
+    const real = store.appendBuildShot.bind(store);
+    store.appendBuildShot = async (jobId, shot) => {
+      await store.setSubmissionAbandoned(ISSUE, '2026-09-07T12:00:00.000Z');
+      return await real(jobId, shot);
+    };
+
+    const response = await propose(app, frames);
+    expect(response.json().rejected).toBe('stopped');
+    // Read off the entry row, this stays false and the agent continues.
+    expect(response.json().control.stop).toBe(true);
+    expect(response.json().control.reason).toBe('abandoned');
     expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
   });
 

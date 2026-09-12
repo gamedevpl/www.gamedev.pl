@@ -115,8 +115,9 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      const reject = async (rejected: ProposalRefusal) =>
-        reply.send({ accepted: false, rejected, ...(await channelState(jobId, record)) });
+      // `on` is the row refused on; `control.stop` reads from it.
+      const reject = async (rejected: ProposalRefusal, on: SubmissionRecord = record) =>
+        reply.send({ accepted: false, rejected, ...(await channelState(jobId, on)) });
 
       if (stopReason(record)) return reject('stopped');
       if (!(await dreamingEnabled())) return reject('paused');
@@ -184,10 +185,13 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         blocked: (job) => stopReason(job) !== null,
       });
       if (!posted) {
-        // Three ways the transaction refuses; say which, rather than guess.
-        const live = await store.getSubmission(jobId);
-        if ((live?.roundGeneration ?? 1) !== roundGeneration) return reject('frame_stale');
-        return reject((await store.getUser(record.ownerUid))?.proposalsMutedAt ? 'muted' : 'already_proposed');
+        // Every way the transaction refuses, in the entry checks' order.
+        const live = (await store.getSubmission(jobId)) ?? record;
+        if (stopReason(live)) return reject('stopped', live);
+        if (!(await dreamingEnabled())) return reject('paused', live);
+        if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return reject('muted', live);
+        if ((live.roundGeneration ?? 1) !== roundGeneration) return reject('frame_stale', live);
+        return reject('already_proposed', live);
       }
       deps.onPosted?.(jobId);
 
