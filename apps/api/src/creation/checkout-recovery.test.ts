@@ -145,3 +145,28 @@ it('retries atomic collisions for ordinary same-title creation', async () => {
   expect(results.every((result) => result.ok)).toBe(true);
   expect(results.map((result) => result.ok && result.slug).sort()).toEqual(['same-title', 'same-title-2']);
 });
+
+it('recovers creator-archived publications while preserving the archived publication', async () => {
+  const f = await fixture('owner', 'queued');
+  await f.store.setPublication({ slug: 'sky', state: 'published', currentVersion: 'v1', publishedAt: '2026-01-01' });
+  await f.store.archivePublication('sky', 'deleted by creator', '2026-01-02');
+  expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'archived' });
+  expect((await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() })).statusCode).toBe(
+    200,
+  );
+  expect((await f.store.getPublication('sky'))?.state).toBe('archived');
+  const recovered = (await f.store.getSubmissionBySlug('sky'))!;
+  await f.store.setSubmissionPublishedAt(recovered.jobId, '2026-01-03');
+  await f.store.setPublication({ slug: 'sky', state: 'published', currentVersion: 'v2', publishedAt: '2026-01-03' });
+  await f.store.archivePublication('sky', 'deleted by creator', '2026-01-04');
+  expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'archived' });
+  expect((await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() })).statusCode).toBe(
+    200,
+  );
+  expect((await f.store.getSubmissionBySlug('sky'))?.jobId).not.toBe(recovered.jobId);
+});
+it('refuses moderation-disabled publications', async () => {
+  const f = await fixture();
+  await f.store.setPublication({ slug: 'sky', state: 'disabled', currentVersion: 'v1', publishedAt: '2026-01-01' });
+  expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'occupied' });
+});
