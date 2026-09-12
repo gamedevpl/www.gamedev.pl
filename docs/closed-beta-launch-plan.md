@@ -53,8 +53,10 @@ Order matches the approved queue in the coordination channel. All agent work.
    `cache-control: public, max-age=0` — every load revalidates everything
    against Cloud Run, no compression at all):
    - Precompress at build time: Vite emits `.br`/`.gz` next to each asset;
-     register `fastifyStatic` with `preCompressed: true` (zero runtime CPU —
-     Cloud Run bills CPU, so don't use on-the-fly `@fastify/compress`).
+     register `fastifyStatic` with `preCompressed: true` (zero runtime CPU).
+     (Superseded in part: `/api/*` bodies are generated, so there is nothing
+     to precompute and they *are* compressed per request. The CPU is ~200x
+     cheaper than the egress it saves — see "Bandwidth" in deployment.md.)
    - Cache headers via `setHeaders` on the static registration:
      `max-age=31536000, immutable` for `/assets/*` (content-hashed by Vite),
      `no-cache` for `index.html` (the deploy-rollout pivot).

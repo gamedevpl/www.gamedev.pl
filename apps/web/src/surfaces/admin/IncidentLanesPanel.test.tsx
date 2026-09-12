@@ -83,3 +83,35 @@ describe('IncidentLanesPanel', () => {
     await act(async () => root.unmount());
   });
 });
+
+describe('bandwidth rungs', () => {
+  it('shows a way out of each one', async () => {
+    const { container, root } = await render({
+      effective: effective({ videoPaused: true, mediaLean: true, anonymousPaused: true }),
+      busy: false,
+      message: null,
+      propagation: '60s',
+      onToggle: vi.fn(),
+    });
+
+    expect(button(container, 'Resume preview video')).toBeTruthy();
+    expect(button(container, 'Resume full-size images')).toBeTruthy();
+    expect(button(container, 'Resume visitors without an account')).toBeTruthy();
+    root.unmount();
+  });
+
+  it('never says every lane is open while the site is closed', async () => {
+    const { container, root } = await render({
+      effective: effective({ anonymousPaused: true }),
+      busy: false,
+      message: null,
+      propagation: '60s',
+      onToggle: vi.fn(),
+    });
+
+    const summary = container.querySelector('.health-summary')?.textContent ?? '';
+    expect(summary).not.toContain('Every lane is open');
+    expect(summary).toContain('visitors without an account');
+    root.unmount();
+  });
+});

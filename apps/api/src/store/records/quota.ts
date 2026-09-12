@@ -46,6 +46,12 @@ export interface CreationLimits {
   telemetrySampleRate?: number | null;
   // Refuse new party rooms honestly; play and running rooms are untouched.
   partyPaused?: boolean;
+  // Withhold preview video, the largest object we hand out. Play is untouched.
+  videoPaused?: boolean;
+  // Serve every image at its smallest baked width; the catalog looks worse.
+  mediaLean?: boolean;
+  // The last rung: close the site to visitors, like the beta.
+  anonymousPaused?: boolean;
   // Own daily ceiling on chat-agent calls, separate from the edit cap.
   globalDailyChatCap?: number | null;
   // Refuse the tab-complete ghost-text lane outright (TA-*); Play/editing untouched.

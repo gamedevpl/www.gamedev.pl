@@ -182,10 +182,32 @@ The monthly billing budget is the second publisher. Point it at the topic once
 
 The brake grades a budget by how far over it is: forecast past 100% stops the
 platform agent (managed); spent past 100% also stops round-0 seeding and the gate;
-spent past 150% stops everything. Ticks under threshold are acknowledged silently,
-and the same threshold is acted on once — a resume after it stands.
+spent past 125% also withholds preview video and serves every image at 96px; spent
+past 150% stops everything, which includes closing the site to visitors without an
+account. Ticks under threshold are acknowledged silently, and the same threshold is
+acted on once — a resume after it stands.
 
 Per-service budgets can name their own lanes in the display name instead, e.g.
 "Cloud Build lanes=gate" or "Vertex AI lanes=seeding_managed": over 100% pulls
 those lanes and nothing else. Every budget can share this one topic.
+
+Bandwidth is the one an open site spends without anybody asking for it, and it has
+no per-service budget yet. Create one, and point the two that already exist at the
+topic — a budget that only emails is not a brake:
+
+  # The service id is not guessable; read it rather than pasting one.
+  gcloud billing budgets create --billing-account ACCOUNT_ID \
+    --display-name="GCS egress lanes=video_media" \
+    --budget-amount=100PLN \
+    --filter-services="\$(gcloud beta billing services list \
+      --filter='displayName=\"Cloud Storage\"' --format='value(name)')" \
+    --threshold-rule=percent=0.5 --threshold-rule=percent=1.0 \
+    --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
+
+  # "Cloud Run" and "Firebase Hosting egress" publish nowhere today:
+  gcloud billing budgets list --billing-account ACCOUNT_ID \
+    --format='table(displayName, notificationsRule.pubsubTopic)'
+
+The lanes a budget may name are the keys of PAUSEABLE in spend-brake.ts: creation,
+editing, chat, tabComplete, search, gate, seeding, managed, video, media, anonymous.
 EOF

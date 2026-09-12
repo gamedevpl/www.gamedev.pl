@@ -14,8 +14,8 @@ export interface MintBudgetLimits {
 export const DEFAULT_MINT_BUDGET: MintBudgetLimits = {
   // Thousands a day is a person; tens of thousands is a script.
   perIpPerDay: 5_000,
-  // Four warm instances is 600k/day; a normal day is ~1k.
-  perInstancePerDay: 150_000,
+  // A runaway loop's backstop. Cost is the brake's job.
+  perInstancePerDay: 2_000_000,
 };
 
 export function createMintBudgetState(day: string): MintBudgetState {
