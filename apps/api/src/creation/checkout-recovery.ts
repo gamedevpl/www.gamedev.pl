@@ -1,3 +1,4 @@
+import { codeSurfaceEnabled } from './code-surface.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -42,18 +43,26 @@ export function registerCheckoutRecovery(
       holder,
     };
   };
-  app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/recovery', async (request, reply) => {
-    if (!deps.checkUserAccess(request, reply)) return;
-    if (!deps.store || !deps.submissionTokenSecret) return reply.code(503).send({ error: 'unavailable' });
-    if (!Slug.safeParse(request.params.slug).success) return reply.code(400).send({ error: 'invalid slug' });
-    const status = await inspect(request.params.slug, request.user!.uid);
-    return { kind: status.kind };
-  });
+  app.get<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/recovery',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      if (!deps.checkUserAccess(request, reply)) return;
+      if (!codeSurfaceEnabled())
+        return reply.code(503).send({ error: 'unavailable', message: 'Code recovery is temporarily disabled.' });
+      if (!deps.store || !deps.submissionTokenSecret) return reply.code(503).send({ error: 'unavailable' });
+      if (!Slug.safeParse(request.params.slug).success) return reply.code(400).send({ error: 'invalid slug' });
+      const status = await inspect(request.params.slug, request.user!.uid);
+      return { kind: status.kind };
+    },
+  );
   app.post(
     '/api/me/studio/recover',
     { bodyLimit: 20_000, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!deps.checkUserAccess(request, reply)) return;
+      if (!codeSurfaceEnabled())
+        return reply.code(503).send({ error: 'unavailable', message: 'Code recovery is temporarily disabled.' });
       if (!deps.store || !deps.submissionTokenSecret) return reply.code(503).send({ error: 'unavailable' });
       const parsed = Body.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'invalid recovery request' });
