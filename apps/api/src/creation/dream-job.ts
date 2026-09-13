@@ -1,10 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
-import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
+import {
+  DREAM_FRAME_SHOT_LABEL,
+  DREAM_SOURCE_SHOT_LABEL,
+  PROPOSAL_TEXT_EN,
+  PROPOSAL_TEXT_PL,
+} from '../platform/dream-shots.js';
 import { carriesPixels, imageSize, isJpeg, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
-import { dreamClaimHolds } from '../store/slices/round-budget.js';
-import { postedAttemptKey } from '../store/slices/build-log.js';
+import { dreamClaimHolds, ownsDreamClaim } from '../store/slices/round-budget.js';
+import { postedAttemptKey, type ProposalRefusedBy } from '../store/slices/build-log.js';
+import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
@@ -36,6 +42,16 @@ export type DreamOutcome =
   | 'superseded'
   | 'failed';
 
+// Naming for the store's refusal; a lost claim means superseded.
+const OUTCOME_OF: Record<ProposalRefusedBy, DreamOutcome> = {
+  paused: 'paused',
+  muted: 'muted',
+  blocked: 'superseded',
+  round: 'superseded',
+  version: 'superseded',
+  claim: 'superseded',
+};
+
 export interface DreamLog {
   error: (context: object, message: string) => void;
   warn: (context: object, message: string) => void;
@@ -66,9 +82,6 @@ export interface DreamRunInput {
 export interface DreamJob {
   runForVersion(input: DreamRunInput): Promise<DreamOutcome>;
 }
-
-export const PROPOSAL_TEXT_EN = 'I sketched two directions for the next round. Tap one to see it.';
-export const PROPOSAL_TEXT_PL = 'Naszkicowałem dwa kierunki na następną rundę. Kliknij, żeby zobaczyć.';
 
 function styleNoteFor(record: SubmissionRecord): string {
   const concept = (record.spec ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -139,12 +152,20 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
     // The same predicate the claim uses; two spellings would drift apart.
-    if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString())) return 'already_ran';
-    if (!(await store.claimDreamRun(jobId, version, claimedAt))) return 'already_ran';
-    // The switch and the creator's mute; either ends the run.
+    if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString(), record.roundGeneration ?? 1))
+      return 'already_ran';
+    if (!(await store.claimDreamRun(jobId, version, claimedAt, record.roundGeneration ?? 1)).claimed)
+      return 'already_ran';
+    // The switch, the mute, and anything that moved under this run.
     const stopped = async (): Promise<DreamOutcome | null> => {
       if (!(await availability.dreamingEnabled())) return 'paused';
       if (await store.readProposalsMutedAt(record.ownerUid)) return 'muted';
+      const live = await store.getSubmission(jobId);
+      // A reopen leaves the version alone, so the generation is the tell.
+      if ((live?.roundGeneration ?? 1) !== (record.roundGeneration ?? 1)) return 'superseded';
+      if ((live?.previewVersion ?? live?.deliveredVersion) !== version) return 'superseded';
+      // A retake after the TTL; two workers must not both write shots.
+      if (!ownsDreamClaim(live?.dreamRun, { version, claimedAt })) return 'superseded';
       return null;
     };
     let halt = await stopped();
@@ -196,13 +217,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The copy promises two directions; one is not a choice.
     if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
 
-    // Minutes of paid calls have passed; ask both again before writing.
+    // Minutes of paid calls have passed; ask every guard again before writing.
     halt = await stopped();
     if (halt) return halt;
-    // Cheap check before three writes; the post settles the race.
-    const current = await store.getSubmission(jobId);
-    if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';
-    if (current?.dreamRun?.version !== version) return 'superseded';
 
     // Reserved labels hide these, so a card that never posts strands them.
     const written: string[] = [];
@@ -248,6 +265,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         data: sourcePng,
         mediaType: 'image/png',
         label: DREAM_SOURCE_SHOT_LABEL,
+        platformDrawn: true,
       });
       const options: CreatorProposalOption[] = [];
       for (const { frame, idea } of dreamed) {
@@ -258,6 +276,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
           data: frame.data,
           mediaType: frame.mediaType,
           label: DREAM_FRAME_SHOT_LABEL,
+          platformDrawn: true,
         });
         options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
       }
@@ -268,20 +287,23 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         builder: record.builder === 'self' ? 'self' : 'platform',
       };
       // Posted only if the claim still holds, in one transaction.
-      const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
+      const result = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
         textLocalized: PROPOSAL_TEXT_PL,
         locale: 'pl',
         proposal,
         ownerUid: record.ownerUid,
+        roundGeneration: record.roundGeneration ?? 1,
+        // Publishing is this job's cue; abandoning and cancelling are stops.
+        blocked: (job) => Boolean(job.abandonedAt) || resolveJobState(job) === 'canceled',
       });
-      if (!posted) {
+      if (result.posted === null) {
         // A retry that saw our stamp refuses a card already there.
         if (await discard()) {
           deps.onPosted?.(jobId);
           return 'posted';
         }
-        // The transaction refuses on a mute too; name the real reason.
-        return (await stopped()) ?? 'superseded';
+        // The guard that fired, reported rather than re-derived from later reads.
+        return OUTCOME_OF[result.refusedBy];
       }
       deps.onPosted?.(jobId);
       return 'posted';

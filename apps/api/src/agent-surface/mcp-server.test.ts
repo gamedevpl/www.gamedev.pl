@@ -563,6 +563,34 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
   });
 
+  it('turns a refused concept proposal into an answer, not an error', async () => {
+    // Proposals are off in tests, and a refusal is the round's answer -- not a retry.
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    app = await createApp(store, stubGamesStore().gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const offered = await callTool(
+      app,
+      'suggest_next_round',
+      {
+        sessionKey,
+        options: [
+          { label: 'Colder', prompt: 'Cool the palette down.', frameId: 'shot-1' },
+          { label: 'Warmer', prompt: 'Warm the palette up.', frameId: 'shot-2' },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+
+    expect(offered.isError).toBe(false);
+    const structured = offered.structured as { posted: boolean; refused?: string };
+    expect(structured.posted).toBe(false);
+    expect(structured.refused).toContain('switched off');
+  });
+
   it('serves a window of the creator conversation through get_transcript, acked or not', async () => {
     // Where a terse "build my game plz" gets its conversation back.
     const store = new InMemoryStore();
