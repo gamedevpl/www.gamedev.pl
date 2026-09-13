@@ -166,6 +166,56 @@ describe('AdminJobsPanel confirmations', () => {
     await act(async () => root.unmount());
   });
 
+  it('requires a written reason after an editorial cut', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job()]));
+    mocked.publishJob
+      .mockResolvedValueOnce({
+        refused: 'editorial_cut',
+        editorial: { reviewers: 2, keep: 0, cut: 2, skip: 0, weakOrBad: { gameplay: 1 } },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        slug: 'comet-courier',
+        version: 'v1',
+        publishedAt: '2026-07-30T12:00:00Z',
+      });
+
+    const { container, root } = await render();
+    await act(async () => {
+      (container.querySelector('.admin-job-publish') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      confirmDialogButton('Publish').click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.admin-job-message')?.textContent).toContain('reviewers cut this game');
+    expect(confirmDialog()?.textContent).toMatch(/Override a cut consensus/i);
+    expect(confirmDialogButton('Override and publish').disabled).toBe(true);
+
+    const textarea = confirmDialog()?.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'reviewers are offline');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(confirmDialogButton('Override and publish').disabled).toBe(false);
+
+    await act(async () => {
+      confirmDialogButton('Override and publish').click();
+      await Promise.resolve();
+    });
+    expect(mocked.publishJob).toHaveBeenLastCalledWith(1_000_001, {
+      override: true,
+      overrideReason: 'reviewers are offline',
+    });
+    expect(container.querySelector('.admin-job-message')?.textContent).toContain('published comet-courier');
+
+    await act(async () => root.unmount());
+  });
+
   it('takes a confirmation dialog to cancel, because canceled has no undo', async () => {
     mocked.fetchJobQueue.mockResolvedValue(queue([job({ state: 'building' })]));
     mocked.cancelJob.mockResolvedValue({ ok: true, state: 'canceled', stopEnforced: false });
