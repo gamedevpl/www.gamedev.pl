@@ -235,6 +235,30 @@ describe('createDreamJob', () => {
 
     expect(await run()).toBe('muted');
     expect(await store.listCreatorMessages(7)).toEqual([]);
+    // Reserved labels hide these rows, so leaving them strands them for good.
+    expect(await store.listBuildShots(7)).toEqual([]);
+    expect(await store.countBuildShots(7)).toBe(0);
+  });
+
+  it('removes the shots it wrote when a later one fails', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const real = store.appendBuildShot.bind(store);
+    let writes = 0;
+    store.appendBuildShot = async (jobId, shot) => {
+      writes += 1;
+      if (writes === 3) throw new Error('firestore unavailable');
+      return await real(jobId, shot);
+    };
+
+    expect(await run()).toBe('failed');
+    expect(await store.countBuildShots(7)).toBe(0);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('keeps the shots of a card that posted', async () => {
+    const { store, run } = await harness({ hud: [] });
+    expect(await run()).toBe('posted');
+    expect(await store.countBuildShots(7)).toBe(3);
   });
 
   it('refuses when the shared daily cap is spent', async () => {

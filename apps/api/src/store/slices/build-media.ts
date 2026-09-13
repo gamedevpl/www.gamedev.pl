@@ -35,6 +35,9 @@ export interface BuildMediaStore {
   // How many screenshots a build has pushed -- bounds a runaway agent.
   countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number>;
 
+  // Drops shots by id; a card that never posted leaves none.
+  deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
+
   appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
@@ -121,6 +124,12 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 
   async countBuildPreviews(jobId: number): Promise<number> {
     return this.buildPreviews.get(jobId)?.length ?? 0;
+  }
+
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
+    const kept = (this.buildShots.get(jobId) ?? []).filter((shot) => !ids.includes(shot.id));
+    this.buildShots.set(jobId, kept);
   }
 
   async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {
@@ -217,6 +226,17 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async countBuildPreviews(jobId: number): Promise<number> {
     const snap = await this.previewsCollection(jobId).count().get();
     return snap.data().count;
+  }
+
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
+    // Chunked -- a Firestore batch caps at 500 ops.
+    const BATCH_LIMIT = 500;
+    for (let start = 0; start < ids.length; start += BATCH_LIMIT) {
+      const batch = this.db.batch();
+      for (const id of ids.slice(start, start + BATCH_LIMIT)) batch.delete(this.shotsCollection(jobId).doc(id));
+      await batch.commit();
+    }
   }
 
   async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {

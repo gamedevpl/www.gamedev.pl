@@ -413,3 +413,31 @@ describeStoreContract('media strip paging', (makeStore) => {
     expect(strip.map((item) => item.label)).toEqual(['Opening']);
   });
 });
+
+describeStoreContract('shot deletion', (makeStore) => {
+  const shot = (label: string) => ({ data: 'AAA=', mediaType: 'image/png' as const, label });
+
+  it('removes exactly the ids it was given', async () => {
+    const store = makeStore();
+    const keep = await store.appendBuildShot(13, shot('Opening'));
+    const source = await store.appendBuildShot(13, shot('Gate capture'));
+    const frame = await store.appendBuildShot(13, shot('AI concept'));
+
+    await store.deleteBuildShots(13, [source.id, frame.id]);
+
+    expect(await store.countBuildShots(13)).toBe(1);
+    expect(await store.getBuildShot(13, keep.id)).not.toBeNull();
+    expect(await store.getBuildShot(13, source.id)).toBeNull();
+    expect(await store.getBuildShot(13, frame.id)).toBeNull();
+  });
+
+  it('is a no-op for an empty list and for ids that are already gone', async () => {
+    const store = makeStore();
+    const only = await store.appendBuildShot(13, shot('Opening'));
+
+    await store.deleteBuildShots(13, []);
+    await store.deleteBuildShots(13, ['never-written']);
+
+    expect(await store.getBuildShot(13, only.id)).not.toBeNull();
+  });
+});

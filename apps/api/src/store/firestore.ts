@@ -626,6 +626,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildMediaStore.countBuildShots(jobId, opts);
   }
 
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    return this.buildMediaStore.deleteBuildShots(jobId, ids);
+  }
+
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },

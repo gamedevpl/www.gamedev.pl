@@ -190,37 +190,55 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';
     if (current?.dreamRun?.version !== version) return 'superseded';
 
-    const sourceShot = await store.appendBuildShot(jobId, {
-      data: sourcePng,
-      mediaType: 'image/png',
-      label: DREAM_SOURCE_SHOT_LABEL,
-    });
-    const options: CreatorProposalOption[] = [];
-    for (const { frame, idea } of dreamed) {
-      const shot = await store.appendBuildShot(jobId, {
-        data: frame.data,
-        mediaType: frame.mediaType,
-        label: DREAM_FRAME_SHOT_LABEL,
-      });
-      options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
-    }
-    const proposal: CreatorProposal = {
-      sourceRef: sourceShot.id,
-      version,
-      options,
-      builder: record.builder === 'self' ? 'self' : 'platform',
+    // Reserved labels hide these, so a card that never posts strands them.
+    const written: string[] = [];
+    const discard = async () => {
+      await store
+        .deleteBuildShots(jobId, written)
+        .catch((error: unknown) => log.warn({ err: error, jobId }, 'orphaned proposal shots not removed'));
     };
-    // Posted only if the claim still holds, in one transaction.
-    const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
-      textLocalized: PROPOSAL_TEXT_PL,
-      locale: 'pl',
-      proposal,
-      ownerUid: record.ownerUid,
-    });
-    // The transaction refuses on a mute too; name the real reason.
-    if (!posted) return (await stopped()) ?? 'superseded';
-    deps.onPosted?.(jobId);
-    return 'posted';
+    try {
+      const sourceShot = await store.appendBuildShot(jobId, {
+        data: sourcePng,
+        mediaType: 'image/png',
+        label: DREAM_SOURCE_SHOT_LABEL,
+      });
+      written.push(sourceShot.id);
+      const options: CreatorProposalOption[] = [];
+      for (const { frame, idea } of dreamed) {
+        const shot = await store.appendBuildShot(jobId, {
+          data: frame.data,
+          mediaType: frame.mediaType,
+          label: DREAM_FRAME_SHOT_LABEL,
+        });
+        written.push(shot.id);
+        options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
+      }
+      const proposal: CreatorProposal = {
+        sourceRef: sourceShot.id,
+        version,
+        options,
+        builder: record.builder === 'self' ? 'self' : 'platform',
+      };
+      // Posted only if the claim still holds, in one transaction.
+      const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
+        textLocalized: PROPOSAL_TEXT_PL,
+        locale: 'pl',
+        proposal,
+        ownerUid: record.ownerUid,
+      });
+      if (!posted) {
+        await discard();
+        // The transaction refuses on a mute too; name the real reason.
+        return (await stopped()) ?? 'superseded';
+      }
+      deps.onPosted?.(jobId);
+      return 'posted';
+    } catch (error) {
+      // A write that failed part-way leaves the same unreachable rows.
+      await discard();
+      throw error;
+    }
   }
 
   return {
