@@ -14,7 +14,8 @@ vi.mock('../../notificationsApi.js', () => ({
   onNotificationPreferencesChanged,
 }));
 
-const { PROPOSAL_PREFS_RETRY_MS, useProposalsMuted } = await import('./useProposalsMuted.js');
+const { PROPOSAL_PREFS_ATTEMPTS, PROPOSAL_PREFS_RETRY_MS, PROPOSAL_PREFS_SLOW_RETRY_MS, useProposalsMuted } =
+  await import('./useProposalsMuted.js');
 
 let seen: (boolean | null)[] = [];
 
@@ -76,7 +77,7 @@ describe('useProposalsMuted', () => {
     expect(seen.at(-1)).toBe(false);
   });
 
-  it('gives up rather than polling a dead endpoint', async () => {
+  it('slows to a crawl rather than polling a dead endpoint', async () => {
     fetchNotificationPreferences.mockRejectedValue(new Error('offline'));
     await mount();
     for (let round = 0; round < 6; round += 1) {
@@ -85,7 +86,27 @@ describe('useProposalsMuted', () => {
       });
     }
 
-    expect(fetchNotificationPreferences).toHaveBeenCalledTimes(3);
+    // The quick tries are spent; the next is a minute out.
+    expect(fetchNotificationPreferences).toHaveBeenCalledTimes(PROPOSAL_PREFS_ATTEMPTS);
     expect(seen.at(-1)).toBeNull();
+  });
+
+  it('shows the card once the endpoint comes back, without a reload', async () => {
+    fetchNotificationPreferences.mockRejectedValue(new Error('offline'));
+    await mount();
+    for (let round = 0; round < 4; round += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PROPOSAL_PREFS_RETRY_MS);
+      });
+    }
+    expect(seen.at(-1)).toBeNull();
+
+    fetchNotificationPreferences.mockResolvedValue({ proposals: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROPOSAL_PREFS_SLOW_RETRY_MS);
+    });
+
+    // Giving up for the whole mount is what left the card unreachable.
+    expect(seen.at(-1)).toBe(false);
   });
 });

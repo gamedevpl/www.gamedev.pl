@@ -272,6 +272,30 @@ describe('createDreamJob', () => {
     expect(await store.countBuildShots(7)).toBe(3);
   });
 
+  it('leaves the frames alone when it cannot read whether the card landed', async () => {
+    const { errors, log: capturing } = capturingLog();
+    const { store, run } = await harness({ hud: [], log: capturing });
+    const append = store.appendBuildShot.bind(store);
+    const read = store.getSubmission.bind(store);
+    let writes = 0;
+    store.appendBuildShot = async (jobId, shot) => {
+      writes += 1;
+      const stored = await append(jobId, shot);
+      if (writes === 3) throw new Error('firestore unavailable');
+      return stored;
+    };
+    // Reads work until the writes begin, then the outage takes them too.
+    store.getSubmission = async (jobId) => {
+      if (writes > 0) throw new Error('firestore unavailable');
+      return await read(jobId);
+    };
+
+    expect(await run()).toBe('failed');
+    // A read that never answered must not condemn these rows.
+    expect(await store.countBuildShots(7)).toBe(3);
+    expect(errors.some((entry) => entry.message.includes('orphaned'))).toBe(true);
+  });
+
   it('keeps the shots of a card that posted', async () => {
     const { store, run } = await harness({ hud: [] });
     expect(await run()).toBe('posted');

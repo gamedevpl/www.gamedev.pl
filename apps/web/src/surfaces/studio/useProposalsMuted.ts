@@ -5,9 +5,11 @@ import {
   updateNotificationPreferences,
 } from '../../notificationsApi.js';
 
-// A blip must not hide a card; nor may we poll forever.
+// A blip must not hide a card, nor retries become a poll.
 export const PROPOSAL_PREFS_ATTEMPTS = 3;
 export const PROPOSAL_PREFS_RETRY_MS = 4000;
+// After the quick tries, slow down rather than stop: an outage ends.
+export const PROPOSAL_PREFS_SLOW_RETRY_MS = 60_000;
 
 export interface ProposalsMuted {
   // Null until the account preference is known; cards wait for it.
@@ -21,7 +23,7 @@ export function useProposalsMuted(proposalOnScreen: boolean): ProposalsMuted {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (muted !== null || !proposalOnScreen || attempt >= PROPOSAL_PREFS_ATTEMPTS) return;
+    if (muted !== null || !proposalOnScreen) return;
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
     fetchNotificationPreferences()
@@ -30,7 +32,9 @@ export function useProposalsMuted(proposalOnScreen: boolean): ProposalsMuted {
       })
       .catch(() => {
         // Unknown, not unmuted; bumping state is what retries.
-        if (!cancelled) retry = setTimeout(() => setAttempt((n) => n + 1), PROPOSAL_PREFS_RETRY_MS);
+        const spent = attempt + 1 >= PROPOSAL_PREFS_ATTEMPTS;
+        const delay = spent ? PROPOSAL_PREFS_SLOW_RETRY_MS : PROPOSAL_PREFS_RETRY_MS;
+        if (!cancelled) retry = setTimeout(() => setAttempt((n) => n + 1), delay);
       });
     return () => {
       cancelled = true;

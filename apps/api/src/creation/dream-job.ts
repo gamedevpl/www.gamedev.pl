@@ -200,14 +200,23 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
 
     // Reserved labels hide these, so a card that never posts strands them.
     const written: string[] = [];
-    // A lost answer can hide a commit; the stamp is the tell.
-    const cardLanded = async (): Promise<boolean> => {
-      const live = await store.getSubmission(jobId).catch(() => null);
-      return Boolean(live?.dreamRun?.postedAt) && ownsDreamClaim(live?.dreamRun, { version, claimedAt });
+    // A lost answer hides a commit; `null` means untold.
+    const cardLanded = async (): Promise<boolean | null> => {
+      try {
+        const live = await store.getSubmission(jobId);
+        return Boolean(live?.dreamRun?.postedAt) && ownsDreamClaim(live?.dreamRun, { version, claimedAt });
+      } catch {
+        return null;
+      }
     };
     // The outage that failed a write fails this too; nothing sweeps after.
     const discard = async () => {
       if (!written.length) return;
+      // Only a read that answered may condemn these rows.
+      if ((await cardLanded()) !== false) {
+        log.error({ jobId, shots: written }, 'proposal shots orphaned; delete these ids by hand');
+        return;
+      }
       for (let attempt = 1; attempt <= DISCARD_ATTEMPTS; attempt += 1) {
         try {
           await store.deleteBuildShots(jobId, written);
@@ -258,7 +267,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       });
       if (!posted) {
         // A retry that saw our stamp refuses a card already there.
-        if (await cardLanded()) {
+        if ((await cardLanded()) === true) {
           deps.onPosted?.(jobId);
           return 'posted';
         }
@@ -270,7 +279,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       return 'posted';
     } catch (error) {
       // The throw may have followed a commit, so ask before deleting.
-      if (await cardLanded()) {
+      if ((await cardLanded()) === true) {
         deps.onPosted?.(jobId);
         return 'posted';
       }
