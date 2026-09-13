@@ -7,6 +7,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Name the command that actually clears a refused `pull` or `push`, `--force` included when that is the only way through.
+- Stop a conflicted `pull` from pointing at `checkout`, which its own message never meant.
+- Say that `diff` will show both sides whenever a sync is refused.
+
 ## 0.15.1 — 2026-09-13
 
 ### Fixed
