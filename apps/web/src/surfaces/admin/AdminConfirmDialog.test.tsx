@@ -99,4 +99,54 @@ describe('AdminConfirmDialog', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('requires a written reason before confirm when asked', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onConfirm = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        createElement(AdminConfirmDialog, {
+          title: 'Override a cut consensus?',
+          body: 'Reviewers judged this game a cut.',
+          confirmLabel: 'Override and publish',
+          reasonLabel: 'Why override',
+          reasonValue: '',
+          onReasonChange: vi.fn(),
+          reasonRequired: true,
+          onConfirm,
+          onDismiss: vi.fn(),
+        }),
+      );
+    });
+    expect(dialogButton('Override and publish').disabled).toBe(true);
+    expect(document.activeElement).toBe(dialog()?.querySelector('textarea'));
+    await act(async () => root.unmount());
+  });
+
+  it('enables confirm once the required reason is filled', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        createElement(AdminConfirmDialog, {
+          title: 'Override a cut consensus?',
+          body: 'Reviewers judged this game a cut.',
+          confirmLabel: 'Override and publish',
+          reasonLabel: 'Why override',
+          reasonValue: 'reviewers are offline',
+          onReasonChange: vi.fn(),
+          reasonRequired: true,
+          onConfirm: vi.fn(),
+          onDismiss: vi.fn(),
+        }),
+      );
+    });
+    expect(dialogButton('Override and publish').disabled).toBe(false);
+    await act(async () => root.unmount());
+  });
 });

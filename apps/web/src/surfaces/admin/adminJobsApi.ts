@@ -61,24 +61,59 @@ export interface PublishResult {
  * publish" would collapse three different next steps into one shrug.
  */
 export type PublishRefusal =
-  'gate_red' | 'not_gated' | 'nothing_delivered' | 'profile_required' | 'store_unavailable' | 'unknown';
+  | 'gate_red'
+  | 'not_gated'
+  | 'nothing_delivered'
+  | 'profile_required'
+  | 'store_unavailable'
+  | 'editorial_cut'
+  | 'editorial_pending'
+  | 'reason_required'
+  | 'unknown';
 
-export async function publishJob(jobId: number): Promise<PublishResult | { refused: PublishRefusal }> {
+export interface EditorialCounts {
+  reviewers: number;
+  keep: number;
+  cut: number;
+  skip: number;
+  weakOrBad: Record<string, number>;
+}
+
+export type PublishOutcome = PublishResult | { refused: PublishRefusal; editorial?: EditorialCounts };
+
+export async function publishJob(
+  jobId: number,
+  body?: { override?: boolean; overrideReason?: string },
+): Promise<PublishOutcome> {
   const response = await fetch(`/api/admin/jobs/${jobId}/publish`, {
     method: 'POST',
     credentials: 'include',
+    ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
   });
   if (response.ok) return (await response.json()) as PublishResult;
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const payload = (await response.json().catch(() => ({}))) as Partial<EditorialCounts> & { error?: string };
   const known: PublishRefusal[] = [
     'gate_red',
     'not_gated',
     'nothing_delivered',
     'profile_required',
     'store_unavailable',
+    'editorial_cut',
+    'editorial_pending',
+    'reason_required',
   ];
-  const refusal = known.find((code) => code === body.error) ?? 'unknown';
-  return { refused: refusal };
+  const refused = known.find((code) => code === payload.error) ?? 'unknown';
+  const editorial =
+    typeof payload.reviewers === 'number'
+      ? {
+          reviewers: payload.reviewers,
+          keep: payload.keep ?? 0,
+          cut: payload.cut ?? 0,
+          skip: payload.skip ?? 0,
+          weakOrBad: payload.weakOrBad ?? {},
+        }
+      : undefined;
+  return { refused, editorial };
 }
 
 export interface CancelResult {

@@ -14,6 +14,10 @@ export function AdminConfirmDialog({
   danger = false,
   busy = false,
   busyLabel,
+  reasonLabel,
+  reasonValue,
+  onReasonChange,
+  reasonRequired = false,
   onConfirm,
   onDismiss,
 }: {
@@ -24,6 +28,10 @@ export function AdminConfirmDialog({
   danger?: boolean;
   busy?: boolean;
   busyLabel?: string;
+  reasonLabel?: string;
+  reasonValue?: string;
+  onReasonChange?: (value: string) => void;
+  reasonRequired?: boolean;
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
@@ -31,6 +39,7 @@ export function AdminConfirmDialog({
   const bodyId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
   const openerRef = useRef<HTMLElement | null | undefined>(undefined);
   // First render, before commit moves focus.
   if (openerRef.current === undefined) {
@@ -42,11 +51,11 @@ export function AdminConfirmDialog({
   onDismissRef.current = onDismiss;
 
   useLayoutEffect(() => {
-    confirmRef.current?.focus();
+    (reasonLabel ? reasonRef : confirmRef).current?.focus();
     return () => {
       openerRef.current?.focus?.();
     };
-  }, []);
+  }, [reasonLabel]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -102,6 +111,18 @@ export function AdminConfirmDialog({
       >
         <h3 id={titleId}>{title}</h3>
         <p id={bodyId}>{body}</p>
+        {reasonLabel ? (
+          <label className="admin-job-confirm-reason">
+            {reasonLabel}
+            <textarea
+              ref={reasonRef}
+              value={reasonValue ?? ''}
+              onChange={(event) => onReasonChange?.(event.target.value)}
+              disabled={busy}
+              required={reasonRequired}
+            />
+          </label>
+        ) : null}
         <div className="admin-job-confirm-actions">
           <button type="button" className="admin-job-cancel" onClick={onDismiss} disabled={busy}>
             {dismissLabel}
@@ -111,7 +132,7 @@ export function AdminConfirmDialog({
             type="button"
             className={danger ? 'admin-job-cancel is-armed' : 'admin-job-publish is-promoted'}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || (reasonRequired && !(reasonValue ?? '').trim())}
           >
             {busy ? (busyLabel ?? 'Working…') : confirmLabel}
           </button>

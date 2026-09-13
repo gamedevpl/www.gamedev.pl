@@ -240,6 +240,8 @@ const FILE_BUCKET = {
   'creator-self-routes': 'creation',
   'job-costs': 'creation',
   'job-admin-routes': 'creation',
+  'job-admin-preview': 'creation',
+  'job-admin-publish': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',
   'creation-limits': 'creation',
@@ -473,6 +475,7 @@ const FILE_BUCKET = {
   'suggestion-sweep': 'community',
   suggestions: 'community',
   'editorial-suggestions': 'community',
+  'editorial-clearance': 'community',
   // "Who reviews this game" and "may the platform act on my behalf" are proposal/
   // suggestion routing rules, not catalog or creation business logic.
   'owner-of-record': 'community',

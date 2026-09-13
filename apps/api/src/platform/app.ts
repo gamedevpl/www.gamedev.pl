@@ -18,6 +18,7 @@ import { isPublicPlayRequest, parsePublicPlaySlugs } from './public-play.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
+import { decideEditorialClearance } from '../community/editorial-clearance.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
 import { registerGateVerdictRoutes } from '../delivery/gate-verdict-routes.js';
@@ -806,6 +807,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         log: { error: (context, message) => app.log.error(context, message) },
       })(event);
     },
+    // Policy at composition root, not a route invariant.
+    editorialClearance: store
+      ? async (slug) => decideEditorialClearance(await store.listGameAssessmentsBySlug(slug), slug)
+      : undefined,
   });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
