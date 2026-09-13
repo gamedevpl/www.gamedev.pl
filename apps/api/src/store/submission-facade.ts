@@ -36,9 +36,9 @@ export abstract class SubmissionFacade {
   ): Promise<boolean> {
     const won = await this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
     if (!won) return false;
-    const job = await this.submissionStore.getSubmission(jobId);
-    if (job?.ownerUid)
-      await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, new Date().toISOString());
+
+    // The claim is durable; a failed record cannot fail it.
+    await this.tryRecordOwner(jobId, slug);
     return true;
   }
 
@@ -47,12 +47,27 @@ export abstract class SubmissionFacade {
   // Only while the name is uncontested; a contested one waits for settleSlugClaim.
   async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
     await this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
-    const job = await this.submissionStore.getSubmission(jobId);
-    if (!job?.ownerUid) return;
-    const claimants = await this.submissionQueryStore.listSubmissionsBySlug(slug);
-    const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
-    if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
-    await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, new Date().toISOString());
+    try {
+      const job = await this.submissionStore.getSubmission(jobId);
+      if (!job?.ownerUid) return;
+      const claimants = await this.submissionQueryStore.listSubmissionsBySlug(slug);
+      const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
+      if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
+      await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, new Date().toISOString());
+    } catch {
+      // Derived state: the backfill repairs it, a throw would not.
+    }
+  }
+
+  // Derived from the claim: repairable, never fatal.
+  private async tryRecordOwner(jobId: number, slug: string): Promise<void> {
+    try {
+      const job = await this.submissionStore.getSubmission(jobId);
+      if (!job?.ownerUid) return;
+      await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, new Date().toISOString());
+    } catch {
+      // A throw here would strand a slug the claim already took.
+    }
   }
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
     return this.submissionStore.setSubmissionTitle(jobId, title);
@@ -83,6 +98,10 @@ export abstract class SubmissionFacade {
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
     return this.gameAccessStore.beginAccountErasure(uid, at);
+  }
+
+  async clearAccountErasure(uid: string): Promise<void> {
+    return this.gameAccessStore.clearAccountErasure(uid);
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {

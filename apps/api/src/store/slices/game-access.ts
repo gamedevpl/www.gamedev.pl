@@ -30,6 +30,9 @@ export interface GameAccessStore {
   // Erasure's first act: no writer may name the uid after it.
   beginAccountErasure(uid: string, at: string): Promise<void>;
 
+  // Lifted when a genuinely new account takes the uid back.
+  clearAccountErasure(uid: string): Promise<void>;
+
   // Erasure's scrub, run after the fence.
   eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]>;
 }
@@ -53,6 +56,10 @@ export class InMemoryGameAccessStore implements GameAccessStore {
 
   async beginAccountErasure(uid: string, _at: string): Promise<void> {
     this.erasing.add(uid);
+  }
+
+  async clearAccountErasure(uid: string): Promise<void> {
+    this.erasing.delete(uid);
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
@@ -130,17 +137,26 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     await this.erasureFence(uid).set({ uid, at });
   }
 
+  async clearAccountErasure(uid: string): Promise<void> {
+    await this.erasureFence(uid).delete();
+  }
+
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
     const snap = await this.db.collection('gameAccess').where('memberUids', 'array-contains', uid).get();
-    const batch = this.db.batch();
     const touched: string[] = [];
+
+    // Per record: the snapshot may be stale, and batches cap at 500.
     for (const doc of snap.docs) {
-      const erased = withMemberErased(doc.data() as GameAccessRecord, uid, DELETED_ACCOUNT_UID, at);
-      if (!erased) continue;
-      batch.set(doc.ref, erased);
-      touched.push(erased.slug);
+      const slug = await this.db.runTransaction(async (tx) => {
+        const current = await tx.get(doc.ref);
+        if (!current.exists) return null;
+        const erased = withMemberErased(current.data() as GameAccessRecord, uid, DELETED_ACCOUNT_UID, at);
+        if (!erased) return null;
+        tx.set(doc.ref, erased);
+        return erased.slug;
+      });
+      if (slug) touched.push(slug);
     }
-    if (touched.length) await batch.commit();
     return touched;
   }
 

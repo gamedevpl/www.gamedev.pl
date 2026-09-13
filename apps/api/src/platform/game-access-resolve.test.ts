@@ -262,6 +262,56 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await store.listGameAccessByMember('g:ada')).toEqual([]);
     });
 
+    it('keeps a durable slug claim even when the access record cannot be written', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
+      await store.createSubmission(1, 'g:ada', 'Durable Claim');
+
+      const access = (store as unknown as { gameAccessStore: GameAccessStore }).gameAccessStore;
+      const settle = access.recordSettledOwner.bind(access);
+      access.recordSettledOwner = async () => {
+        access.recordSettledOwner = settle;
+        throw new Error('access store unavailable');
+      };
+
+      await expect(store.claimSubmissionSlug(1, 'durable-claim', null)).resolves.toBe(true);
+      expect((await store.getSubmission(1))?.slug).toBe('durable-claim');
+    });
+
+    it('leaves a game alone when a newer owner settled before erasure scrubbed it', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
+      await store.upsertUser({ uid: 'g:grace', name: 'Grace' });
+      await submit(store, 1, 'g:ada', 'contested-erase');
+
+      // Grace takes the name over while Ada's erasure runs.
+      const access = (store as unknown as { gameAccessStore: GameAccessStore }).gameAccessStore;
+      const scrub = access.eraseMemberFromAllGameAccess.bind(access);
+      access.eraseMemberFromAllGameAccess = async (uid, at) => {
+        access.eraseMemberFromAllGameAccess = scrub;
+        await tick();
+        await submit(store, 2, 'g:grace', 'contested-erase');
+        await settleSlugClaim(store, 2, 'contested-erase', 'Contested', async () => true);
+        return scrub(uid, at);
+      };
+
+      await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+
+      expect(await store.getGameAccess('contested-erase')).toMatchObject({ ownerUid: 'g:grace' });
+    });
+
+    it('lets a recreated account own games again', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
+      await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+
+      // Same uid from the provider, so the fence must lift.
+      await store.upsertUser({ uid: 'g:ada', name: 'Ada again' });
+      await submit(store, 9, 'g:ada', 'second-life');
+
+      expect(await store.getGameAccess('second-life')).toMatchObject({ ownerUid: 'g:ada' });
+    });
+
     it('lists every named game a job claimed, drafts included', async () => {
       const store = makeStore();
       await submit(store, 1, 'g:ada', 'unpublished-draft');
