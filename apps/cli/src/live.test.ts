@@ -5,8 +5,10 @@ import {
   formatStatusEvent,
   isPublishTransition,
   formatRoundLive,
+  proposalLines,
   runStatusVerb,
   shouldAnnounceStatus,
+  statusFingerprint,
   statusWatchDelayMs,
 } from './status-watch.js';
 import { createApi } from './api.js';
@@ -101,6 +103,84 @@ describe('status watch', () => {
     ).toBe(true);
     expect(shouldAnnounceStatus({ status: 'building' }, '', 'building')).toBe(false);
     expect(shouldAnnounceStatus({ status: 'building', stall: 'quiet' }, 'building', 'building|quiet')).toBe(false);
+    expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: true } })).toBe(
+      'round finished — Studio is waiting (preview green)',
+    );
+  });
+
+  const carded = {
+    status: 'needs_changes',
+    slug: 'squad-game',
+    previewGate: { green: true },
+    progress: {
+      revisions: [
+        { text: 'earlier note' },
+        {
+          proposal: {
+            sourceRef: 'shot-source',
+            version: 'v7',
+            options: [
+              {
+                id: 'a',
+                label: { en: 'Night patrol', pl: 'Nocny patrol' },
+                prompt: { en: 'p', pl: 'p' },
+                frameRef: 'a',
+              },
+              {
+                id: 'b',
+                label: { en: 'Crowded stands', pl: 'Pełne trybuny' },
+                prompt: { en: 'p', pl: 'p' },
+                frameRef: 'b',
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  it('names the concept directions and sends the pick to Studio', () => {
+    expect(formatStatusEvent(carded)).toBe(
+      'round finished — Studio has concept directions: "Night patrol" / "Crowded stands"',
+    );
+    expect(proposalLines(carded, 'https://x')).toEqual([
+      'concept directions waiting: "Night patrol" / "Crowded stands"',
+      'pick one in Studio: https://x/studio/squad-game',
+    ]);
+    expect(formatRoundLive(carded, 'https://x')).toContain('pick one in Studio: https://x/studio/squad-game');
+    expect(formatStatusLines(carded, 'https://x')).toContain(
+      'concept directions waiting: "Night patrol" / "Crowded stands"',
+    );
+  });
+
+  it('announces a card that lands after the round was already a boundary', () => {
+    const before = { status: 'needs_changes', slug: 'squad-game', previewGate: { green: true } };
+    const key = statusFingerprint(before);
+    expect(statusFingerprint(carded)).not.toBe(key);
+    expect(shouldAnnounceStatus(carded, key, statusFingerprint(carded))).toBe(true);
+  });
+
+  it('strips terminal escapes out of an agent-written label', () => {
+    const hostile = {
+      ...carded,
+      progress: {
+        revisions: [
+          {
+            proposal: {
+              ...carded.progress.revisions[1].proposal,
+              options: [
+                { id: 'a', label: { en: '\u001b[31mred', pl: 'x' }, prompt: { en: 'p', pl: 'p' }, frameRef: 'a' },
+              ],
+            },
+          },
+        ],
+      },
+    };
+    expect(formatStatusEvent(hostile)).not.toContain('\u001b');
+  });
+
+  it('says nothing about concepts when no card was drawn', () => {
+    expect(proposalLines({ status: 'needs_changes', slug: 'squad-game' }, 'https://x')).toEqual([]);
     expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: true } })).toBe(
       'round finished — Studio is waiting (preview green)',
     );

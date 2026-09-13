@@ -1,5 +1,6 @@
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
+import type { CreatorProposal } from '@gamedevpl/contract';
 
 export type TurnResult = { kind: 'reply'; text: string } | { kind: 'build'; ack?: string; roundId: number };
 export type PreparedTurnResult = TurnResult | { kind: 'proposal'; ack?: string };
@@ -29,6 +30,8 @@ export type RoundStatus = {
   preview?: { slug: string };
   stall?: string;
   failure?: { reason: string };
+  // The studio thread, only as far as a concept card.
+  progress?: { revisions?: Array<{ proposal?: CreatorProposal }> };
 };
 
 export async function getStatus(api: ApiClient, token: string): Promise<RoundStatus> {
@@ -41,6 +44,20 @@ export function isTerminalStatus(status: string): boolean {
 
 export function previewUrl(origin: string, slug: string): string {
   return `${origin}/play/${slug}`;
+}
+
+export function studioUrl(origin: string, slug: string): string {
+  return `${origin}/studio/${slug}`;
+}
+
+// The card drawn after the gate went green.
+export function latestProposal(status: RoundStatus): CreatorProposal | null {
+  const revisions = status.progress?.revisions ?? [];
+  for (let at = revisions.length - 1; at >= 0; at -= 1) {
+    const proposal = revisions[at]?.proposal;
+    if (proposal?.options?.length) return proposal;
+  }
+  return null;
 }
 
 export function assertNoBuild(kind: TurnResult['kind']): void {
