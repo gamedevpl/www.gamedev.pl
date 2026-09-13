@@ -163,7 +163,22 @@ export async function registerCatalogRoutes(
   }
 
   async function readCatalogFresh(): Promise<CatalogGameEntry[]> {
-    const entries = await loadCatalog();
+    let entries: CatalogGameEntry[];
+    if (snapshotReader) {
+      // Bypasses both this function's cache and the reader's pointer cache.
+      try {
+        const fresh = await snapshotReader.getCatalogFresh();
+        if (!fresh) throw new SnapshotUnavailableError('snapshot catalog is not published');
+        entries = fresh;
+      } catch (error) {
+        if (error instanceof SnapshotUnavailableError) throw error;
+        throw new SnapshotUnavailableError('snapshot catalog unavailable', { cause: error });
+      }
+    } else if (githubClient) {
+      entries = await githubClient.getCatalog(publishedRef);
+    } else {
+      entries = [];
+    }
     catalogCache = { entries, expiresAt: now() + catalogTtlMs };
     return entries;
   }

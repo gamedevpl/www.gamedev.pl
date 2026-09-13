@@ -3,6 +3,7 @@ import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
+import type { GameSnapshotReader } from './game-snapshot.js';
 
 const secret = 'dev-session-secret-change-me';
 
@@ -108,6 +109,56 @@ describe('game access backfill route', () => {
     await app.inject({ method: 'POST', url: '/api/admin/game-access-backfill?dryRun=1', headers: { cookie } });
 
     expect(reads).toBe(warmed + 1);
+  });
+
+  it('bypasses the snapshot pointer cache, not just its own cache', async () => {
+    let freshReads = 0;
+    let cachedReads = 0;
+    const pointerHealthy = true;
+    const reader: GameSnapshotReader = {
+      getPointer: async () => (pointerHealthy ? { snapshotId: 's1' } : null),
+      getCatalog: async () => {
+        cachedReads += 1;
+        return [{ slug: 'repo-only', title: 'repo-only', description: '' } as CatalogGameEntry];
+      },
+      getCatalogFresh: async () => {
+        freshReads += 1;
+        // A fresh read must not reuse a cached pointer.
+        return pointerHealthy ? [{ slug: 'repo-only', title: 'repo-only', description: '' } as CatalogGameEntry] : null;
+      },
+      getGame: async () => null,
+      getMedia: async () => null,
+    };
+
+    const store = new InMemoryStore();
+    const app = await buildApp({
+      store,
+      sessionSecret: secret,
+      adminUids: 'dev:boss',
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: 'test-submission-secret',
+        snapshotReader: reader,
+      },
+    });
+    apps.push(app);
+    const session = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: { uid: 'boss' } });
+    const cookie = `${SESSION_COOKIE_NAME}=${session.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
+
+    // Warm the app-level cache the way ordinary traffic does.
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(cachedReads).toBe(1);
+    expect(freshReads).toBe(0);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/game-access-backfill?dryRun=1',
+      headers: { cookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(freshReads).toBe(1);
+    expect(cachedReads).toBe(1);
   });
 
   it('refuses once refreshes fail, even while the cache still serves', async () => {
