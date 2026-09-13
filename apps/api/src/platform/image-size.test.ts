@@ -7,15 +7,30 @@ export function pngHeader(width: number, height: number): Buffer {
   ihdr.writeUInt32BE(height, 4);
   const length = Buffer.alloc(4);
   length.writeUInt32BE(13, 0);
+  const idatLength = Buffer.alloc(4);
+  idatLength.writeUInt32BE(4, 0);
+  const idat = Buffer.concat([idatLength, Buffer.from('IDAT'), Buffer.from([1, 2, 3, 4]), Buffer.alloc(4)]);
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     length,
     Buffer.from('IHDR'),
     ihdr,
     Buffer.alloc(4),
-    // A whole file ends with IEND; `truncated` drops it.
+    // Pixels live in IDAT; `headerOnly` is how a test leaves them out.
+    idat,
     Buffer.concat([Buffer.alloc(4), Buffer.from('IEND'), Buffer.alloc(4)]),
   ]);
+}
+
+// Everything but the pixels: measures fine, renders nothing.
+export function headerOnlyPng(width: number, height: number): Buffer {
+  const whole = pngHeader(width, height);
+  return Buffer.concat([whole.subarray(0, 33), whole.subarray(whole.length - 12)]);
+}
+
+export function headerOnlyJpeg(width: number, height: number): Buffer {
+  const whole = jpegHeader(width, height);
+  return Buffer.concat([whole.subarray(0, 39), Buffer.from([0xff, 0xd9])]);
 }
 
 // The same bytes without their terminator, as a short read leaves them.
@@ -32,7 +47,10 @@ export function jpegHeader(width: number, height: number): Buffer {
   sof.writeUInt8(8, 4);
   sof.writeUInt16BE(height, 5);
   sof.writeUInt16BE(width, 7);
-  return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof, Buffer.from([0xff, 0xd9])]);
+  // SOS, a little entropy data, then EOI: pixels included.
+  const sos = Buffer.from([0xff, 0xda, 0x00, 0x08, 1, 1, 0, 0, 63, 0]);
+  const scan = Buffer.from([0x12, 0x34, 0x56]);
+  return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof, sos, scan, Buffer.from([0xff, 0xd9])]);
 }
 
 describe('imageSize', () => {

@@ -40,19 +40,53 @@ export function imageSize(bytes: Buffer): ImageSize | null {
   return null;
 }
 
-// A truncated payload keeps its header, so the end is what tells.
-export function isComplete(bytes: Buffer): boolean {
-  if (isPng(bytes)) {
-    // IEND: the last chunk, four bytes of type plus its CRC.
-    return bytes.length >= 12 && bytes.subarray(bytes.length - 8, bytes.length - 4).toString('latin1') === 'IEND';
+// Walks the chunks; pixels live in IDAT, so none means none.
+function pngCarriesPixels(bytes: Buffer): boolean {
+  let at = 8;
+  let sawPixels = false;
+  while (at + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(at);
+    const type = bytes.subarray(at + 4, at + 8).toString('latin1');
+    const next = at + 12 + length;
+    // A length past the end is a short read, not a chunk.
+    if (length > bytes.length || next > bytes.length) return false;
+    if (type === 'IDAT' && length > 0) sawPixels = true;
+    if (type === 'IEND') return sawPixels && next === bytes.length;
+    at = next;
   }
-  if (isJpeg(bytes)) {
-    // EOI, allowing the padding some encoders leave after it.
-    for (let at = bytes.length - 2; at >= 2 && at >= bytes.length - 34; at -= 1) {
-      if (bytes.readUInt8(at) === 0xff && bytes.readUInt8(at + 1) === 0xd9) return true;
+  return false;
+}
+
+// Entropy-coded pixels follow SOS; a header with no scan draws nothing.
+function jpegCarriesPixels(bytes: Buffer): boolean {
+  let at = 2;
+  while (at + 4 <= bytes.length) {
+    if (bytes.readUInt8(at) !== 0xff) return false;
+    const marker = bytes.readUInt8(at + 1);
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      at += 2;
+      continue;
     }
-    return false;
+    const length = bytes.readUInt16BE(at + 2);
+    if (length < 2 || at + 2 + length > bytes.length) return false;
+    if (marker === 0xda) {
+      // The scan runs to EOI, so it must continue and end there.
+      const scanStart = at + 2 + length;
+      return (
+        scanStart < bytes.length - 2 &&
+        bytes.readUInt8(bytes.length - 2) === 0xff &&
+        bytes.readUInt8(bytes.length - 1) === 0xd9
+      );
+    }
+    at += 2 + length;
   }
+  return false;
+}
+
+// A header alone measures fine and renders nothing; look for the pixels.
+export function carriesPixels(bytes: Buffer): boolean {
+  if (isPng(bytes)) return pngCarriesPixels(bytes);
+  if (isJpeg(bytes)) return jpegCarriesPixels(bytes);
   return false;
 }
 

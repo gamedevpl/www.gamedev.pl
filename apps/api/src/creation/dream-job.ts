@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
-import { imageSize, isComplete, isJpeg, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
+import { carriesPixels, imageSize, isJpeg, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import { postedAttemptKey } from '../store/slices/build-log.js';
@@ -82,7 +82,7 @@ function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | nu
   const bytes = Buffer.from(frame.data, 'base64');
   if (bytes.length === 0 || bytes.length > MAX_DREAM_FRAME_BYTES) return null;
   // The card outlives the claim, so an unrenderable frame is permanent.
-  if (!isComplete(bytes)) return null;
+  if (!carriesPixels(bytes)) return null;
   const declared = frame.mediaType === 'image/png' ? isPng(bytes) : isJpeg(bytes);
   if (!declared) return null;
   const size = imageSize(bytes);
