@@ -13,7 +13,14 @@ export function pngHeader(width: number, height: number): Buffer {
     Buffer.from('IHDR'),
     ihdr,
     Buffer.alloc(4),
+    // A whole file ends with IEND; `truncated` drops it.
+    Buffer.concat([Buffer.alloc(4), Buffer.from('IEND'), Buffer.alloc(4)]),
   ]);
+}
+
+// The same bytes without their terminator, as a short read leaves them.
+export function truncated(bytes: Buffer): Buffer {
+  return bytes.subarray(0, bytes.length - 8);
 }
 
 export function jpegHeader(width: number, height: number): Buffer {
@@ -25,7 +32,7 @@ export function jpegHeader(width: number, height: number): Buffer {
   sof.writeUInt8(8, 4);
   sof.writeUInt16BE(height, 5);
   sof.writeUInt16BE(width, 7);
-  return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof]);
+  return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof, Buffer.from([0xff, 0xd9])]);
 }
 
 describe('imageSize', () => {

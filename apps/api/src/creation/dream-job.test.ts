@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_DREAM_IMAGE_MODEL } from './dream-frames.js';
 import { DEFAULT_NEXT_IDEAS_MODEL } from './next-ideas.js';
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SHOT_LABELS, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
-import { jpegHeader } from '../platform/image-size.test.js';
+import { jpegHeader, pngHeader, truncated } from '../platform/image-size.test.js';
 import { capturingLog, harness } from './dream-job.harness.js';
 
 describe('createDreamJob', () => {
@@ -323,6 +323,27 @@ describe('createDreamJob', () => {
     const { store, run } = await harness({ hud: [] });
     expect(await run()).toBe('posted');
     expect(await store.countBuildShots(7)).toBe(3);
+  });
+
+  it('posts no card from a frame whose bytes stop early', async () => {
+    const { store, run } = await harness({
+      hud: [],
+      // Enough header to measure, not enough file to draw.
+      frame: { data: truncated(jpegHeader(1024, 1024)).toString('base64'), mediaType: 'image/jpeg' },
+    });
+
+    expect(await run()).toBe('no_frames');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('posts no card from a frame that is not the type it claims', async () => {
+    const { store, run } = await harness({
+      hud: [],
+      frame: { data: pngHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' },
+    });
+
+    expect(await run()).toBe('no_frames');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
   it('refuses when the shared daily cap is spent', async () => {

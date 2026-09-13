@@ -40,6 +40,22 @@ export function imageSize(bytes: Buffer): ImageSize | null {
   return null;
 }
 
+// A truncated payload keeps its header, so the end is what tells.
+export function isComplete(bytes: Buffer): boolean {
+  if (isPng(bytes)) {
+    // IEND: the last chunk, four bytes of type plus its CRC.
+    return bytes.length >= 12 && bytes.subarray(bytes.length - 8, bytes.length - 4).toString('latin1') === 'IEND';
+  }
+  if (isJpeg(bytes)) {
+    // EOI, allowing the padding some encoders leave after it.
+    for (let at = bytes.length - 2; at >= 2 && at >= bytes.length - 34; at -= 1) {
+      if (bytes.readUInt8(at) === 0xff && bytes.readUInt8(at + 1) === 0xd9) return true;
+    }
+    return false;
+  }
+  return false;
+}
+
 // True when both frames share an aspect ratio within `tolerance`.
 export function sameAspectRatio(a: ImageSize, b: ImageSize, tolerance = 0.02): boolean {
   if (a.height === 0 || b.height === 0) return false;
