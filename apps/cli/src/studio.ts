@@ -2,6 +2,21 @@ import type { ApiClient } from './api.js';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_INPUT } from './exit-codes.js';
 
+export class MissingStudioGame extends CliError {
+  constructor(
+    slug: string,
+    readonly recoveryKind?: string,
+  ) {
+    super(
+      recoveryKind === 'canceled'
+        ? `The round for ${slug} was canceled. Local sources can be recovered.`
+        : `no owned game ${slug}`,
+      EXIT_INPUT,
+      `${cliUsage('games')} lists accessible games; to create a new game, run gamedevpl and describe your idea. If you have local sources after cancellation/deletion: gamedevpl recover <checkout-directory>`,
+    );
+  }
+}
+
 export async function studioToken(api: ApiClient, slug: string): Promise<string> {
   const studio = await api.request<{ games?: Array<{ slug?: string; token?: string; title?: string }> }>(
     'GET',
@@ -12,13 +27,7 @@ export async function studioToken(api: ApiClient, slug: string): Promise<string>
     const recovery = await api
       .request<{ kind: string }>('GET', `/api/me/studio/games/${encodeURIComponent(slug)}/recovery`)
       .catch(() => null);
-    throw new CliError(
-      recovery?.kind === 'canceled'
-        ? `The round for ${slug} was canceled. Local sources can be recovered.`
-        : `no owned game ${slug}`,
-      EXIT_INPUT,
-      `${cliUsage('games')} lists accessible games. If you have local sources after cancellation/deletion: gamedevpl recover <checkout-directory>; to create a new game, run gamedevpl and describe your idea`,
-    );
+    throw new MissingStudioGame(slug, recovery?.kind);
   }
   return row.token;
 }
