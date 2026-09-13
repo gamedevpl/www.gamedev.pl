@@ -1,4 +1,4 @@
-import type { BuilderKind } from '@gamedevpl/contract';
+import type { SubmissionRoutesHandle } from '../submissions.js';
 import {
   resolveCreatorAgentKeyForOpenRound,
   resolveOwnedSlugForOpenRound,
@@ -21,7 +21,6 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { quotaHeadroom } from './agent-quota-headroom.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
-import type { ManagedUnavailableReason } from './managed-availability.js';
 import {
   toolOk,
   toolErr,
@@ -48,19 +47,11 @@ export interface RoundReopenToolsDeps {
   agentTokenSecret: string | undefined;
   platformConnectorSecret: string | undefined;
   startImprovementRound:
-    | ((input: {
-        jobId: number;
-        text: string;
-        title: string;
-        locale: string;
-        log: { error: (context: object, message: string) => void };
-        builder?: BuilderKind;
-        openedBy?: 'creator' | 'agent';
-        requestedBy?: 'creator' | 'agent';
-        ownerUid?: string;
-      }) => Promise<
-        { route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null
-      >)
+    | ((
+        input: Omit<Parameters<SubmissionRoutesHandle['startImprovementRound']>[0], 'requestedBy'> & {
+          requestedBy?: 'creator' | 'agent';
+        },
+      ) => ReturnType<SubmissionRoutesHandle['startImprovementRound']>)
     | undefined;
   continueDraftRound:
     | ((input: {
@@ -248,7 +239,8 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           logModerationRejection(ctx.request.log, {
             surface: 'creator_feedback',
             uid: resolved.creatorUid,
-            category: moderation.category, unavailable: moderation.unavailable,
+            category: moderation.category,
+            unavailable: moderation.unavailable,
           });
           return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
         }
@@ -277,18 +269,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           }
 
           const dateStr = at.slice(0, 10);
-          const quota = await store.checkAndIncrementQuota(
-            resolved.creatorUid,
-            dateStr,
-            dailyImprovementQuota,
-            'improvements',
-          );
-          if (!quota.allowed) {
-            if (quota.tier === 'blocked') {
-              return toolErr('account is blocked');
-            }
-            return toolErr(IMPROVEMENT_QUOTA_EXHAUSTED_REASON);
-          }
+          let quotaError: string | undefined;
 
           const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
           const sanitizedTitle = sanitizeCreatorText(`Improve ${resolved.publishedRecord.title}`, {
@@ -296,6 +277,17 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           });
           const started = await startImprovementRound({
             jobId: resolved.publishedRecord.jobId,
+            beforeDispatch: async () => {
+              const quota = await store.checkAndIncrementQuota(
+                resolved.creatorUid,
+                dateStr,
+                dailyImprovementQuota,
+                'improvements',
+              );
+              if (quota.allowed) return true;
+              quotaError = quota.tier === 'blocked' ? 'account is blocked' : IMPROVEMENT_QUOTA_EXHAUSTED_REASON;
+              return false;
+            },
             text: sanitizedFeedback,
             title: sanitizedTitle,
             locale: resolved.publishedRecord.locale ?? 'en',
@@ -307,6 +299,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             // Authorized creator wins over the published record's owner after a transfer.
             ownerUid: resolved.creatorUid,
           });
+          if (quotaError) return toolErr(quotaError);
           if (!started || started.route === 'unavailable') {
             return toolErr('could not open an improvement round for this game');
           }
@@ -457,7 +450,8 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           logModerationRejection(ctx.request.log, {
             surface: 'creator_feedback',
             uid: resolved.creatorUid,
-            category: moderation.category, unavailable: moderation.unavailable,
+            category: moderation.category,
+            unavailable: moderation.unavailable,
           });
           return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
         }
