@@ -516,6 +516,7 @@ describe('what may stand in for the classifier', () => {
     expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'vertex', hasApiKey: true })).toBeUndefined();
     // Vertex 404s Claude here; the seed providers are its way in.
     expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'claude-sonnet-5', provider: 'vertex', hasApiKey: true })).toBeUndefined();
   });
 
   it('has no fallback at all without a key for the second vendor', () => {
