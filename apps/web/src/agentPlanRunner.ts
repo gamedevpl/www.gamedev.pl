@@ -29,13 +29,22 @@ export type PlanRunResult = {
 };
 
 type Reply = { frame: number; snapshot: PlanSnapshot };
+type Capture = { png: string | null; reply: Reply };
 
 const REPLY_TIMEOUT_MS = 20_000;
 const TRACE_CAP = 200;
 // Evenly spaced frames when a plan asks for none.
 const AUTO_CAPTURES = 6;
 
-function awaitFrom(frame: HTMLIFrameElement | null, type: string, timeoutMs = REPLY_TIMEOUT_MS): Promise<unknown> {
+// Ids correlate replies: a screenshot answers twice and would shift the trace.
+let nextCommandId = 0;
+
+function awaitFrom(
+  frame: HTMLIFrameElement | null,
+  type: string,
+  id: number,
+  timeoutMs = REPLY_TIMEOUT_MS,
+): Promise<unknown> {
   const contentWindow = frame?.contentWindow;
   if (!contentWindow) return Promise.reject(new Error('the game frame went away'));
   return new Promise((resolve, reject) => {
@@ -46,8 +55,9 @@ function awaitFrom(frame: HTMLIFrameElement | null, type: string, timeoutMs = RE
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
       if (event.source !== null && event.source !== contentWindow) return;
-      const data = event.data as { source?: string; type?: string } | null;
+      const data = event.data as { source?: string; type?: string; id?: unknown } | null;
       if (!data || data.source !== 'gdpl-player' || data.type !== type) return;
+      if (data.id !== id) return;
       window.clearTimeout(timer);
       window.removeEventListener('message', onMessage);
       resolve(data);
@@ -57,17 +67,25 @@ function awaitFrom(frame: HTMLIFrameElement | null, type: string, timeoutMs = RE
 }
 
 async function send(frame: HTMLIFrameElement | null, command: AgentCommand, timeoutMs: number): Promise<Reply> {
-  const reply = awaitFrom(frame, 'agent:state', timeoutMs);
-  postGameHostMessage(frame, { type: 'agent:command', command });
+  const id = ++nextCommandId;
+  const reply = awaitFrom(frame, 'agent:state', id, timeoutMs);
+  postGameHostMessage(frame, { type: 'agent:command', id, command });
   const data = (await reply) as { frame?: unknown; snapshot?: unknown };
   return { frame: Number(data.frame) || 0, snapshot: (data.snapshot ?? {}) as PlanSnapshot };
 }
 
-async function capture(frame: HTMLIFrameElement | null, timeoutMs: number): Promise<string | null> {
-  const reply = awaitFrom(frame, 'agent:shot', timeoutMs);
-  postGameHostMessage(frame, { type: 'agent:command', command: { kind: 'screenshot' } });
-  const data = (await reply) as { png?: unknown };
-  return typeof data.png === 'string' && data.png.length > 0 ? data.png : null;
+async function capture(frame: HTMLIFrameElement | null, timeoutMs: number): Promise<Capture> {
+  const id = ++nextCommandId;
+  const shot = awaitFrom(frame, 'agent:shot', id, timeoutMs);
+  // The trailing state belongs here, not to the next command.
+  const state = awaitFrom(frame, 'agent:state', id, timeoutMs);
+  postGameHostMessage(frame, { type: 'agent:command', id, command: { kind: 'screenshot' } });
+  const data = (await shot) as { png?: unknown };
+  const after = (await state) as { frame?: unknown; snapshot?: unknown };
+  return {
+    png: typeof data.png === 'string' && data.png.length > 0 ? data.png : null,
+    reply: { frame: Number(after.frame) || 0, snapshot: (after.snapshot ?? {}) as PlanSnapshot },
+  };
 }
 
 function label(action: PlanAction): string {
@@ -130,7 +148,9 @@ export async function runAgentPlan(
 
     try {
       if ('capture' in action) {
-        captures.push({ name: action.capture, frame: last.frame, png: await capture(frame, timeoutMs) });
+        const shot = await capture(frame, timeoutMs);
+        captures.push({ name: action.capture, frame: last.frame, png: shot.png });
+        last = shot.reply;
         record(action);
       } else if ('assert' in action) {
         const passed = evaluateCondition(action.assert, last.snapshot);
@@ -162,11 +182,22 @@ export async function runAgentPlan(
       } else {
         const command = commandForAction(action);
         if (command) {
+          // `wait 100` under a 10-frame plan ran all hundred; clamp instead.
+          const wanted = 'frames' in command ? command.frames : 1;
+          const left = plan.maxFrames - spent;
+          const clamped = Math.min(wanted, left);
+          if (clamped < wanted) {
+            outcome = 'exhausted';
+            note = `the plan ran out of its ${plan.maxFrames} frames`;
+          }
           const before = last.frame;
-          last = await send(frame, command, timeoutMs);
+          last = await send(frame, { ...command, ...('frames' in command ? { frames: clamped } : {}) }, timeoutMs);
           spent += Math.max(0, last.frame - before);
+          record(action);
+          if (outcome === 'exhausted') break;
+        } else {
+          record(action);
         }
-        record(action);
       }
     } catch (error) {
       outcome = 'aborted';
@@ -175,11 +206,9 @@ export async function runAgentPlan(
     }
 
     if (autoEvery && index % autoEvery === 0 && captures.length < AUTO_CAPTURES) {
-      captures.push({
-        name: `frame ${last.frame}`,
-        frame: last.frame,
-        png: await capture(frame, timeoutMs).catch(() => null),
-      });
+      const auto = await capture(frame, timeoutMs).catch(() => null);
+      captures.push({ name: `frame ${last.frame}`, frame: last.frame, png: auto?.png ?? null });
+      if (auto) last = auto.reply;
     }
     done += 1;
     options.onProgress?.(done, flat.length);
@@ -187,7 +216,8 @@ export async function runAgentPlan(
 
   // Every run ends on a frame: the last thing seen.
   if (wantsAuto || captures.length === 0) {
-    captures.push({ name: 'final', frame: last.frame, png: await capture(frame, timeoutMs).catch(() => null) });
+    const closing = await capture(frame, timeoutMs).catch(() => null);
+    captures.push({ name: 'final', frame: last.frame, png: closing?.png ?? null });
   }
 
   return {

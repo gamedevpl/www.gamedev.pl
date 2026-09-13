@@ -17,8 +17,10 @@ import './remix-host.css';
 type PublishedGameFrameProps = {
   slug: string;
   title: string;
-  // Agent executor, served to reviewers only; absent means no mode.
+  // Agent executor for reviewers; absent means the mode does not exist here.
   agentBridge?: string | null;
+  // True only while the executor answer is still in flight.
+  agentBridgePending?: boolean;
   frameRef?: MutableRefObject<HTMLIFrameElement | null>;
   embed?: boolean;
   /** Connected controller slots, when this game was opened as a party session. */
@@ -78,6 +80,7 @@ export function PublishedGameFrame({
   theaterChromeHidden,
   onRevealChrome,
   agentBridge,
+  agentBridgePending,
 }: PublishedGameFrameProps) {
   const { t } = useTranslation();
   const [gameTitle, setGameTitle] = useState<string>(title);
@@ -181,7 +184,8 @@ export function PublishedGameFrame({
       </div>
     );
   }
-  if (html === null) {
+  // The bridge answer is part of the document; mounting early navigates twice.
+  if (html === null || agentBridgePending) {
     return <GameLoadScreen progress={progress} />;
   }
   // `embed` describes chrome, not ownership — the theater always embeds — so the

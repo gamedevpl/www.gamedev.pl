@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseAgentPlan } from './agentPlan.js';
 import { runAgentPlan } from './agentPlanRunner.js';
 
-type Sent = { type?: string; command?: { kind?: string; frames?: number } };
+type Sent = { type?: string; id?: number; command?: { kind?: string; frames?: number } };
 
 // Answers every command as the bridge would, counting frames.
 function fakeGame(options: { startsPlayingAfter?: number; score?: (frame: number) => number } = {}) {
@@ -14,12 +14,20 @@ function fakeGame(options: { startsPlayingAfter?: number; score?: (frame: number
   let frame = 0;
   const startsPlayingAfter = options.startsPlayingAfter ?? 0;
 
+  const snapshotAt = (at: number) => ({
+    state: at >= startsPlayingAfter ? 'playing' : 'intro',
+    score: options.score ? options.score(at) : 0,
+  });
+
   const contentWindow = {
     postMessage(message: Sent) {
       sent.push(message);
       const command = message.command ?? {};
+      const id = message.id;
       if (command.kind === 'screenshot') {
-        reply({ type: 'agent:shot', png: 'UE5H', frame });
+        // Two replies, as the executor sends: shot, then trailing state.
+        reply({ type: 'agent:shot', id, png: 'UE5H', frame });
+        reply({ type: 'agent:state', id, frame, snapshot: snapshotAt(frame) });
         return;
       }
       if (command.kind === 'step' || command.kind === 'press' || command.kind === 'drag') {
@@ -27,14 +35,7 @@ function fakeGame(options: { startsPlayingAfter?: number; score?: (frame: number
       } else if (command.kind === 'tap' || command.kind === 'click') {
         frame += 1;
       }
-      reply({
-        type: 'agent:state',
-        frame,
-        snapshot: {
-          state: frame >= startsPlayingAfter ? 'playing' : 'intro',
-          score: options.score ? options.score(frame) : 0,
-        },
-      });
+      reply({ type: 'agent:state', id, frame, snapshot: snapshotAt(frame) });
     },
   };
 
@@ -146,6 +147,29 @@ describe('runAgentPlan', () => {
     // Games that describe nothing in text are seen this way.
     expect(result.captures.length).toBeGreaterThan(0);
     expect(result.captures.at(-1)?.name).toBe('final');
+  });
+
+  it("does not mistake a screenshot's trailing state for the next command's reply", async () => {
+    const game = fakeGame();
+    const result = await runAgentPlan(
+      game.frame,
+      plan({ fps: 30, maxFrames: 120, script: [{ capture: 'start' }, { wait: 7 }] }),
+    );
+
+    // Without ids the wait read the shot's state: frame 0.
+    const wait = result.trace.find((entry) => entry.action === 'wait 7');
+    expect(wait?.frame).toBe(7);
+    expect(result.outcome).toBe('completed');
+  });
+
+  it('clamps an action to the frames the plan has left', async () => {
+    const game = fakeGame();
+    const result = await runAgentPlan(game.frame, plan({ fps: 30, maxFrames: 10, script: [{ wait: 100 }] }));
+
+    // An oversized action used to run in full and report completion.
+    expect(result.outcome).toBe('exhausted');
+    expect(result.frames).toBeLessThanOrEqual(10);
+    expect(game.frames()).toBeLessThanOrEqual(10);
   });
 
   it('gives up rather than hanging when the frame stops answering', async () => {

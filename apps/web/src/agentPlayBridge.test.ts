@@ -298,6 +298,71 @@ describe('the agent bridge, running for real', () => {
     expect(lastOf(received, 'agent:policy-result')).toBeUndefined();
   });
 
+  it('redacts a hidden answer before it ever leaves the frame', async () => {
+    (window as unknown as { __GAME_AGENT_HIDDEN__?: string[] }).__GAME_AGENT_HIDDEN__ = ['observation'];
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state')!;
+    // Host-side redaction would already have put it on the wire.
+    expect(state.snapshot as Record<string, unknown>).not.toHaveProperty('observation');
+    expect(JSON.stringify(state)).not.toContain('cellar');
+    delete (window as unknown as { __GAME_AGENT_HIDDEN__?: string[] }).__GAME_AGENT_HIDDEN__;
+  });
+
+  it('answers each command with its own id, so a screenshot cannot answer twice', async () => {
+    send({ type: 'agent:enable' });
+    await settle();
+    received.length = 0;
+    send({ type: 'agent:command', id: 41, command: { kind: 'screenshot' } });
+    await settle();
+
+    const shot = lastOf(received, 'agent:shot')!;
+    const state = lastOf(received, 'agent:state')!;
+    // Both replies belong to the screenshot and say so.
+    expect(shot.id).toBe(41);
+    expect(state.id).toBe(41);
+  });
+
+  it('releases a key it is still holding when the mode closes', async () => {
+    const keys: Array<{ type: string; key: string }> = [];
+    const listener = (event: KeyboardEvent) => keys.push({ type: event.type, key: event.key });
+    window.addEventListener('keyup', listener);
+
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'keyDown', key: 'ArrowRight', code: 'ArrowRight' } });
+    await settle();
+    keys.length = 0;
+    send({ type: 'agent:disable' });
+    await settle();
+
+    // Otherwise the human taking over inherits a stuck key.
+    expect(keys).toEqual([{ type: 'keyup', key: 'ArrowRight' }]);
+    window.removeEventListener('keyup', listener);
+  });
+
+  it('releases held input when a policy ends, however it ended', async () => {
+    const keys: string[] = [];
+    const listener = (event: KeyboardEvent) => keys.push(`${event.type}:${event.key}`);
+    window.addEventListener('keyup', listener);
+
+    send({ type: 'agent:enable' });
+    await settle();
+    keys.length = 0;
+    send({
+      type: 'agent:policy',
+      code: 'function playAgent(a){ a.down("ArrowLeft"); throw new Error("gave up"); }',
+      budget: 50,
+    });
+    await settle();
+
+    expect(keys).toContain('keyup:ArrowLeft');
+    window.removeEventListener('keyup', listener);
+  });
+
   it('ignores agent traffic that did not come from the host', async () => {
     window.postMessage({ source: 'gdpl-player', type: 'agent:enable' }, '*');
     await settle();

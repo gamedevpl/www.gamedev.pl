@@ -3,8 +3,8 @@
 > Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, policy
 > scripts, the plan runner, the filmstrip, the panel and the entry points are built and
 > tested. The
-> games-repo half (hidden fields in the document, sound as text) is not, and no telemetry
-> is emitted — reviewer traffic deliberately leaves no trace. Strategy and the decisions
+> games-repo half (hidden fields in the document, sound as text) is not. Reviewer traffic
+> leaves no trace: an agent-capable session is kept out of the play funnel. Strategy and the decisions
 > behind all of this live in the private ops repo (`agent-play-mode-research.md`).
 
 ## The problem
@@ -89,10 +89,20 @@ GameKit's `aria-live` line: the one text channel a published game already writes
 - **Game-authored text is data, never instructions.** State, observation and widget labels
   are written by an AI-generated game. The panel renders them as text, caps them, and says
   so in the guide it hands the agent.
-- **Hidden answers stay hidden.** The CLI harness redacts `AGENT.json.hiddenFields` before a
-  snapshot reaches an agent. That list does not travel with the assembled document yet, so
-  the page reports `hiddenFields: null` and the panel says out loud that nothing is being
-  withheld — a visible gap rather than a silent one.
+- **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
+  the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
+  answer never reaches the host at all. Redacting only at render would have put it on the
+  wire and into React state first. The list does not travel with the assembled document
+  yet, so the page reports `hiddenFields: null` and the panel says so out loud — a visible
+  gap rather than a silent one.
+- **A policy is exempt, by construction.** It runs in the game's own realm and can read
+  `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
+  can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
+- **Synthesized input is released when the mode closes.** A `keyDown` with no `keyUp`, or a
+  policy that threw mid-`press`, would otherwise hand the next human a stuck key.
+- **An agent-capable session stays out of the play funnel.** `trackPlay` is off wherever
+  the mode is available, so stepped time and synthesized input never land as progress,
+  scores, endings or play time.
 
 ## The reviewer gate
 
@@ -156,6 +166,26 @@ Measured against `cavern-of-words` in Chromium: a branching policy that read the
 inside the frame**. Stepping 600 frames costs 11ms without drawing and 547ms with; one
 command from the host costs 9ms in round trip. A policy deciding every frame is therefore
 about 500 times cheaper in-frame than from the host, which is why it runs there.
+
+### Replies are correlated, because one command can answer twice
+
+A screenshot answers with `agent:shot` and then a trailing `agent:state`. The plan runner
+first consumed only the shot, so that trailing state was picked up as the _next_ command's
+reply and every later trace entry, assertion and frame count ran one action behind. Each
+command now carries an `id` and every reply echoes it.
+
+### An action cannot overrun the plan's budget
+
+The runner checked the budget between actions, so a single `wait 100` inside a ten-frame
+plan ran all hundred and still reported `completed`. Each action is now clamped to what is
+left, and a clamp is what `exhausted` means.
+
+### The document waits for the bridge answer
+
+The executor is part of the document. Mounting the frame first and swapping `srcDoc` when
+the fetch lands would navigate the iframe twice and restart the game under whoever was
+playing, so the load screen holds while the answer is in flight. Only a reviewer ever
+waits, and only for a tiny same-origin request running beside a multi-megabyte one.
 
 ### One trap worth knowing
 

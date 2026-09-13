@@ -180,6 +180,8 @@ export function GameTheater({
   const agentBridge = useAgentBridge('slug' in source);
   // The server's answer is the gate, not the URL or menu.
   const agentAvailable = typeof agentBridge === 'string';
+
+  // Stepped time is not a play; see docs/agent-play-mode.md.
   const [agentWanted, setAgentWanted] = useState(() => agentModeRequested() || isAgentModeEnabled(agentModeKey));
   const agentOpen = agentAvailable && agentWanted;
   useEffect(() => setAgentModeEnabled(agentModeKey, agentOpen), [agentModeKey, agentOpen]);
@@ -831,8 +833,9 @@ export function GameTheater({
             embed
             via={via}
             remixable={canRemix}
-            trackPlay={trackPlay}
+            trackPlay={trackPlay && !agentAvailable}
             agentBridge={agentBridge ?? null}
+            agentBridgePending={agentBridge === undefined}
             remixOpenNonce={remixOpenNonce}
             initialRemixRequest={initialRemixRequest}
             painterNonce={painterNonce}

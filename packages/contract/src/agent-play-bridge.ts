@@ -20,10 +20,18 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     agentLog.push({frame:agentFrameNo(),kind:String(kind),detail:String(detail==null?'':detail).slice(0,160)});
     if(agentLog.length>AGENT_LOG_CAP)agentLog.splice(0,agentLog.length-AGENT_LOG_CAP);
   }
+  // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
+  // A policy runs in the game's own realm and can still read the harness directly;
+  // that hole is documented rather than pretended away.
   function agentSnapshot(){
-    var h=agentHarness(),out={};
+    var h=agentHarness(),out={},hidden=agentHidden(),i;
     if(!h||!h.metadata)return out;
-    for(var k in h.metadata){if(Object.prototype.hasOwnProperty.call(h.metadata,k))out[k]=h.metadata[k];}
+    for(var k in h.metadata){
+      if(!Object.prototype.hasOwnProperty.call(h.metadata,k))continue;
+      var skip=false;
+      if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]===k)skip=true;
+      if(!skip)out[k]=h.metadata[k];
+    }
     return out;
   }
   function agentUi(){
@@ -49,10 +57,11 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     var rows=legendRows();
     return {rows:rows,kit:kitRows(),hint:text(document.querySelector('.hint'))};
   }
-  function agentState(reason){
+  function agentState(reason,id){
     post({
       type:'agent:state',
       reason:reason||'look',
+      id:id===undefined?null:id,
       frame:agentFrameNo(),
       snapshot:agentSnapshot(),
       ui:agentUi(),
@@ -81,7 +90,29 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     if(raw.length===1)return {key:raw.toLowerCase(),code:'Key'+raw.toUpperCase()};
     return {key:raw,code:raw};
   }
+  // Held input we synthesized, so closing the mode cannot hand a human a stuck key.
+  var agentHeldKeys=[],agentPointerIsDown=false,agentPointerAt={x:0,y:0};
+  function agentNoteHeld(type,key,code){
+    var i;
+    if(type==='keydown'){
+      for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key===key)return;
+      agentHeldKeys.push({key:key,code:code});
+      return;
+    }
+    for(i=agentHeldKeys.length-1;i>=0;i--)if(agentHeldKeys[i].key===key)agentHeldKeys.splice(i,1);
+  }
+  function agentReleaseInput(){
+    var held=agentHeldKeys.slice();
+    for(var i=0;i<held.length;i++)agentKey('keyup',held[i].key,held[i].code);
+    agentHeldKeys=[];
+    if(agentPointerIsDown){
+      agentPointer('pointerup',agentPointerAt.x,agentPointerAt.y,0,false);
+      agentPointerIsDown=false;
+    }
+    agentTilt=null;
+  }
   function agentKey(type,key,code){
+    agentNoteHeld(type,key,code);
     var target=agentCanvas()||window,ev;
     try{ev=new KeyboardEvent(type,{key:key,code:code,bubbles:true,cancelable:true});}
     catch(err){
@@ -103,6 +134,9 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   function agentPointer(type,x,y,buttons,synthesizeClick){
     var canvas=agentCanvas();
     if(!canvas){agentNote('error','no canvas to point at');return;}
+    if(type==='pointerdown'){agentPointerIsDown=true;agentPointerAt={x:x,y:y};}
+    else if(type==='pointerup'){agentPointerIsDown=false;}
+    else if(agentPointerIsDown){agentPointerAt={x:x,y:y};}
     var at=agentClientPoint(canvas,x,y);
     var init={bubbles:true,cancelable:true,clientX:at.x,clientY:at.y,pointerId:1,pointerType:'mouse',
       isPrimary:true,button:0,buttons:buttons};
@@ -154,18 +188,18 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   function agentDisable(){
     if(!agentOn)return;
     agentOn=false;
-    agentTilt=null;
+    agentReleaseInput();
     agentSetStepped(false);
   }
-  function agentRun(command){
+  function agentRun(command,id){
     var kind=command&&command.kind;
-    if(kind==='look'){agentState('look');return;}
-    if(kind==='step'){agentStep(command.frames);agentState('step');return;}
+    if(kind==='look'){agentState('look',id);return;}
+    if(kind==='step'){agentStep(command.frames);agentState('step',id);return;}
     if(kind==='press'){
       agentKey('keydown',command.key,command.code);
       agentStep(command.frames);
       agentKey('keyup',command.key,command.code);
-      agentState('press');
+      agentState('press',id);
       return;
     }
     if(kind==='tap'){
@@ -174,19 +208,19 @@ export const AGENT_PLAY_BRIDGE = `(function(){
       agentKey('keydown',command.key,command.code);
       agentStep(1);
       agentKey('keyup',command.key,command.code);
-      agentState('tap');
+      agentState('tap',id);
       return;
     }
-    if(kind==='keyDown'){agentKey('keydown',command.key,command.code);agentState('down');return;}
-    if(kind==='keyUp'){agentKey('keyup',command.key,command.code);agentState('up');return;}
+    if(kind==='keyDown'){agentKey('keydown',command.key,command.code);agentState('down',id);return;}
+    if(kind==='keyUp'){agentKey('keyup',command.key,command.code);agentState('up',id);return;}
     if(kind==='click'){
       agentPointer('pointerdown',command.x,command.y,1,true);
       agentPointer('pointerup',command.x,command.y,0,false);
       agentStep(1);
-      agentState('click');
+      agentState('click',id);
       return;
     }
-    if(kind==='move'){agentPointer('pointermove',command.x,command.y,0,false);agentState('move');return;}
+    if(kind==='move'){agentPointer('pointermove',command.x,command.y,0,false);agentState('move',id);return;}
     if(kind==='drag'){
       agentPointer('pointerdown',command.from.x,command.from.y,1,false);
       for(var i=1;i<=command.frames;i++){
@@ -197,21 +231,21 @@ export const AGENT_PLAY_BRIDGE = `(function(){
         agentStep(1);
       }
       agentPointer('pointerup',command.to.x,command.to.y,0,false);
-      agentState('drag');
+      agentState('drag',id);
       return;
     }
     if(kind==='tilt'){
       agentTilt={x:command.x,y:command.y};
       var h=agentHarness();
       if(!h||typeof h.injectSensing!=='function')agentNote('error','this game accepts no tilt');
-      agentState('tilt');
+      agentState('tilt',id);
       return;
     }
     if(kind==='restart'){
       var harness=agentHarness();
       var ok=!!(harness&&typeof harness.restart==='function'&&harness.restart());
       agentNote('agent',ok?'restarted':'restart refused — the round is not over');
-      agentState('restart');
+      agentState('restart',id);
       return;
     }
     if(kind==='playFor'){
@@ -221,14 +255,14 @@ export const AGENT_PLAY_BRIDGE = `(function(){
         agentLiveTimer=0;
         if(!agentOn)return;
         agentSetStepped(true);
-        agentState('play');
+        agentState('play',id);
       },command.ms);
       return;
     }
-    if(kind==='live'){agentDisable();agentState('live');return;}
-    if(kind==='screenshot'){post({type:'agent:shot',png:capturePng(),frame:agentFrameNo()});agentState('screenshot');return;}
+    if(kind==='live'){agentDisable();agentState('live',id);return;}
+    if(kind==='screenshot'){post({type:'agent:shot',id:id===undefined?null:id,png:capturePng(),frame:agentFrameNo()});agentState('screenshot',id);return;}
     agentNote('error','unsupported command');
-    agentState('error');
+    agentState('error',id);
   }
 
   // --- policy scripts -------------------------------------------------------
@@ -364,6 +398,7 @@ export const AGENT_PLAY_BRIDGE = `(function(){
       outcome='failed';
       message=String((err&&err.stack)||(err&&err.message)||err).slice(0,600);
     }finally{
+      agentReleaseInput();
       console.log=realConsole.log;console.warn=realConsole.warn;console.error=realConsole.error;
       try{delete window.__AGENT__;}catch(err){window.__AGENT__=undefined;}
     }
@@ -388,10 +423,10 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     if(m.type==='agent:disable'){agentDisable();return;}
     if(m.type!=='agent:command')return;
     if(!agentOn){agentEnable();return;}
-    try{agentRun(m.command||{});}
+    try{agentRun(m.command||{},m.id);}
     catch(err){
       agentNote('error',String((err&&err.message)||err));
-      agentState('error');
+      agentState('error',m.id);
     }
   }
 
