@@ -38,6 +38,9 @@ export interface SubmissionQueryStore {
   listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]>;
 
   listQueuedSubmissions(): Promise<SubmissionRecord[]>;
+
+  // Every game a job named, drafts included -- the backfill's work list.
+  listSubmissionSlugs(): Promise<string[]>;
 }
 
 export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
@@ -117,6 +120,12 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
       .filter((s) => s.ownerUid === ownerUid && isRoundOpen(s))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
       .map((s) => ({ ...s }));
+  }
+
+  async listSubmissionSlugs(): Promise<string[]> {
+    const slugs = new Set<string>();
+    for (const record of this.submissions.values()) if (record.slug) slugs.add(record.slug);
+    return [...slugs].sort();
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
@@ -244,6 +253,17 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
       .map((d) => fromStoredSubmission(d.data()))
       .filter(isRoundOpen)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
+  }
+
+  async listSubmissionSlugs(): Promise<string[]> {
+    // Field projection: an operator batch pass reads names, not whole submissions.
+    const snap = await this.db.collection('submissions').select('slug').get();
+    const slugs = new Set<string>();
+    for (const doc of snap.docs) {
+      const slug = (doc.data() as { slug?: unknown }).slug;
+      if (typeof slug === 'string' && slug) slugs.add(slug);
+    }
+    return [...slugs].sort();
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

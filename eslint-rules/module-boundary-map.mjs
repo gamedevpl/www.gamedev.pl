@@ -127,6 +127,8 @@ const FILE_BUCKET = {
   // A single Store-querying ownership check, factored out of agent-game-key-resolve.ts
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
+  'game-access-resolve': 'platform',
+  'game-access-backfill': 'platform',
   'atomic-slug-claim': 'platform',
   'slug-policy': 'platform',
   // Bare env-driven constant factored out of creation/builder.ts because delivery,

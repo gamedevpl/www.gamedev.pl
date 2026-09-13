@@ -4,10 +4,19 @@ import type { Store, SubmissionRecord } from './store.js';
 // Whether anything answers to this name; `except` excuses one record.
 export type SlugClaimProbe = (slug: string, except?: number) => Promise<boolean>;
 
-// The two store calls settling a claim needs.
+// The store calls settling a claim needs.
 export interface SlugClaimStore {
   setSubmissionSlug(jobId: number, slug: string): Promise<void>;
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
+
+  // The name stops moving here, so authority is recorded here.
+  recordSettledOwner(
+    slug: string,
+    ownerUid: string,
+    jobId: number,
+    workAt: string,
+    at: string,
+  ): Promise<{ ownerUid: string; settledJobId?: number } | null>;
 }
 
 // Reads back a slug a job wrote, settling who holds it.
@@ -24,7 +33,22 @@ export async function settleSlugClaim(
 ): Promise<string | null> {
   const holds = async (candidate: string): Promise<boolean> => {
     const holder = await store.getSubmissionBySlug(candidate);
-    return holder?.jobId === jobId;
+    if (holder?.jobId !== jobId) return false;
+    if (!holder.ownerUid) return true;
+
+    // A newer job settled while we waited: we lost, late.
+    const inForce = await store.recordSettledOwner(
+      candidate,
+      holder.ownerUid,
+      jobId,
+      holder.createdAt,
+      new Date().toISOString(),
+    );
+
+    // Refused leaves the name ours; another owner does not.
+    if (!inForce) return true;
+    if (inForce.ownerUid !== holder.ownerUid) return false;
+    return inForce.settledJobId === undefined || inForce.settledJobId === jobId;
   };
 
   if (await holds(slug)) return slug;

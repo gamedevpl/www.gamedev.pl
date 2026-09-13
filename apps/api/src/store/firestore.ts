@@ -74,6 +74,7 @@ import { FirestoreNotificationsStore } from './slices/notifications.js';
 import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
+import { FirestoreGameAccessStore } from './slices/game-access.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
@@ -117,11 +118,12 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private socialStore: FirestoreSocialStore;
   private contributionStore: FirestoreContributionStore;
   private publicationStore: FirestorePublicationStore;
+  protected gameAccessStore: FirestoreGameAccessStore;
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
   protected submissionStore: FirestoreSubmissionStore;
-  private submissionQueryStore: FirestoreSubmissionQueryStore;
+  protected submissionQueryStore: FirestoreSubmissionQueryStore;
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
@@ -148,6 +150,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.socialStore = new FirestoreSocialStore(this.db);
     this.contributionStore = new FirestoreContributionStore(this.db);
     this.publicationStore = new FirestorePublicationStore(this.db);
+    this.gameAccessStore = new FirestoreGameAccessStore(this.db);
     this.roundsStore = new FirestoreRoundsStore(this.db);
     this.roundBudgetStore = new FirestoreRoundBudgetStore(this.db);
     this.dispatchStore = new FirestoreDispatchStore(this.db);
@@ -187,6 +190,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
+    // Fence first: every access writer reads it transactionally and refuses after this.
+    await this.gameAccessStore.beginAccountErasure(uid, at);
     const user = await this.getUser(uid);
     const submissions = await this.db.collection('submissions').where('ownerUid', '==', uid).get();
     const owned = submissions.docs.map((doc) => ({ doc, record: doc.data() as SubmissionRecord }));
@@ -242,6 +247,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       this.db.collection('betaInvites').where('createdByUid', '==', uid).get(),
       this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
     ]);
+
+    // After the fence, so a record created mid-erasure is either refused or seen here.
+    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
 
     // Refresh rows may lack ownerUid; join them through owned grants.
     const grantIds = new Set(oauthGrants.docs.map((doc) => doc.id));
@@ -771,6 +779,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
+  }
+
+  async listSubmissionSlugs(): Promise<string[]> {
+    return this.submissionQueryStore.listSubmissionSlugs();
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

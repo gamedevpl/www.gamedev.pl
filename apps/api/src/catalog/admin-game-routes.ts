@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { parseSpecTitle } from './github-client.js';
 import { startHealthCheck, type HealthGateTrigger } from './game-health.js';
 import { runSlugBackfill, type SlugClaimProbe } from './slug-backfill.js';
+import { runGameAccessBackfill } from '../platform/game-access-backfill.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
@@ -17,6 +18,9 @@ export interface AdminGameRoutesOptions {
   invalidatePublishedGameCaches: (slug: string) => void;
   isSlugClaimed: SlugClaimProbe;
   confirmSlugClaim: (jobId: number, slug: string, title: string) => Promise<string | null>;
+
+  // Repo-lane catalog; without it coverage is unknown.
+  getCatalogEntries?: () => Promise<ReadonlyArray<{ slug: string }>>;
 }
 
 // Operator's published-games shelf: list, re-gate, delete, backfills.
@@ -30,6 +34,7 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     invalidatePublishedGameCaches,
     isSlugClaimed,
     confirmSlugClaim,
+    getCatalogEntries,
   } = options;
 
   // Slugs only — titles would cost a manifest read per game.
@@ -96,6 +101,54 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     const result = await runSlugBackfill({ store, isSlugClaimed, dryRun, confirmSlugClaim });
     const { named } = result;
     request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
+    return reply.send(result);
+  });
+
+  // Canonical access records for older games. Dry run first.
+  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/game-access-backfill', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+
+    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
+
+    // Both lanes plus drafts, and the repo catalog none of them lists.
+
+    // Unreadable catalog means unknown coverage, so the pass refuses.
+    if (!getCatalogEntries) return reply.status(503).send({ error: 'catalog_unavailable' });
+    let catalogEntries: ReadonlyArray<{ slug: string }>;
+    try {
+      catalogEntries = await getCatalogEntries();
+    } catch (error) {
+      request.log.error({ err: error }, 'game access backfill: repo catalog unavailable');
+      return reply.status(503).send({ error: 'catalog_unavailable' });
+    }
+
+    const [gameSlugs, submissionSlugs, publications] = await Promise.all([
+      store.listGameSlugs(),
+      store.listSubmissionSlugs(),
+      store.listPublications(),
+    ]);
+    const slugs = [
+      ...new Set([
+        ...gameSlugs,
+        ...submissionSlugs,
+        ...publications.map((entry) => entry.slug),
+        ...catalogEntries.map((entry) => entry.slug),
+      ]),
+    ];
+    const result = await runGameAccessBackfill({ store, slugs, dryRun });
+    request.log.info(
+      {
+        dryRun,
+        scanned: result.scanned,
+        created: result.created,
+        createdPlatform: result.createdPlatform,
+        alreadyRecorded: result.alreadyRecorded,
+        diverged: result.diverged.length,
+        quarantined: result.quarantined.length,
+      },
+      'game access backfill complete',
+    );
     return reply.send(result);
   });
 

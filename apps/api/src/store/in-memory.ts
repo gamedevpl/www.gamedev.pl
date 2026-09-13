@@ -74,6 +74,7 @@ import { InMemoryNotificationsStore } from './slices/notifications.js';
 import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
+import { InMemoryGameAccessStore } from './slices/game-access.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
@@ -100,11 +101,12 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
+  protected gameAccessStore = new InMemoryGameAccessStore((uid) => this.identityStore.users.has(uid));
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
-  private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
+  protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
     this.quotaStore.getCreationLimits(),
   );
@@ -156,6 +158,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
+    // Fence first: a writer racing this erasure is refused, not scrubbed afterwards.
+    await this.gameAccessStore.beginAccountErasure(uid, at);
     const user = this.identityStore.users.get(uid);
     const owned = [...this.submissions.values()].filter((submission) => submission.ownerUid === uid);
     const publishedSlugs = owned
@@ -200,6 +204,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     for (const [tokenId, record] of [...this.accessTokensStore.accessTokens]) {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
+    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
     for (const [slug, record] of [...this.agentKeysStore.gameAgentKeys]) {
       if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
     }
@@ -690,6 +695,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
+  }
+
+  async listSubmissionSlugs(): Promise<string[]> {
+    return this.submissionQueryStore.listSubmissionSlugs();
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
