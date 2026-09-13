@@ -268,3 +268,12 @@ it('refuses a title the recovery route would reject', async () => {
   await expect(recoverCheckout(f)).rejects.toThrow(/must be 3 to 120 characters/);
   expect(f.fetch.mock.calls.some(([url]) => url.endsWith('/recover'))).toBe(false);
 });
+it('refuses a pending key the recovery route would reject', async () => {
+  const f = fixture();
+  writeFileSync(
+    join(f.cwd, '.gamedev-recovery.json'),
+    JSON.stringify({ slug: 'sky', origin: 'https://test.example', key: '1'.repeat(36) }),
+  );
+  await expect(recoverCheckout(f)).rejects.toThrow(/pending recovery is unreadable/);
+  expect(f.fetch.mock.calls.some(([url]) => url.endsWith('/recover'))).toBe(false);
+});

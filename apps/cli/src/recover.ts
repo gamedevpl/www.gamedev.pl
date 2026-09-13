@@ -22,6 +22,9 @@ function titleText(value: unknown): string {
   return typeof picked === 'string' ? picked.trim() : '';
 }
 
+// The route takes a uuid, so looking uuid-shaped is not enough.
+const RECOVERY_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 // Mirrors the bounds the recovery route enforces.
 const TITLE_MIN = 3;
 const TITLE_MAX = 120;
@@ -61,7 +64,12 @@ function readPending(path: string): PendingRecovery {
     parsed = null;
   }
   const record = (parsed && typeof parsed === 'object' ? parsed : {}) as Partial<PendingRecovery>;
-  if (typeof record.slug !== 'string' || typeof record.key !== 'string' || typeof record.origin !== 'string')
+  if (
+    typeof record.slug !== 'string' ||
+    typeof record.origin !== 'string' ||
+    typeof record.key !== 'string' ||
+    !RECOVERY_KEY.test(record.key)
+  )
     throw new CliError(
       `A pending recovery is unreadable: ${path} — local files are unchanged.`,
       EXIT_REFUSED,
@@ -117,7 +125,7 @@ async function performRecovery(input: {
   let pending: PendingRecovery | undefined;
   if (existsSync(pendingPath)) {
     pending = readPending(pendingPath);
-    if (pending?.slug !== slug || pending?.origin !== input.api.origin || !/^[0-9a-f-]{36}$/.test(pending?.key ?? ''))
+    if (pending?.slug !== slug || pending?.origin !== input.api.origin)
       throw new CliError('A different recovery is pending. Resume it before changing the destination.', EXIT_REFUSED);
   }
   if (status.kind === 'occupied') {
