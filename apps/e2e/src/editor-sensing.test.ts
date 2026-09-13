@@ -47,13 +47,17 @@ describe.skipIf(!prereq.ok)('editor canvas sensing geometry', () => {
     await page.setViewportSize({ width: 1366, height: 768 });
     const { box, frameRect } = await measure(page, false);
 
-    // Measured inside the iframe, so the origin is the frame's.
-    const local = await page
-      .frameLocator('#frame')
-      .locator('#game')
-      .evaluate((node) => node.getBoundingClientRect().left);
-    expect(box.x - box.insetX, 'box x is frame-local').toBeCloseTo(local, 1);
-    expect(frameRect.x + box.x, 'page position needs the frame offset').toBeCloseTo(frameRect.x + box.insetX, 1);
+    // A frame locator reads in page space; the box does not.
+    const onPage = await page.frameLocator('#frame').locator('#game').boundingBox();
+    if (!onPage) throw new Error('the canvas has no page-space box');
+    expect(frameRect.x, 'the frame must be offset, or this proves nothing').toBeGreaterThan(1);
+
+    // Two independent readings: inner rect plus frame origin, versus page space.
+    expect(frameRect.x + box.x, 'picture left in page space').toBeCloseTo(onPage.x + box.insetX, 1);
+    expect(frameRect.y + box.y, 'picture top in page space').toBeCloseTo(onPage.y + box.insetY, 1);
+
+    // Smaller than its page position, so not page space.
+    expect(box.x, 'box x is frame-local').toBeLessThan(onPage.x);
     await context.close();
   });
 });

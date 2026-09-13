@@ -45,7 +45,10 @@ function stagePage(docked: boolean): string {
       ${STAGE_CSS}
       html, body { margin: 0; width: 100%; height: 100%; }
       body { display: flex; }
+      /* Scaffolding: Studio never puts the stage at the page origin. */
+      .rail { flex: 0 0 96px; }
     </style>
+    <div class="rail"></div>
     <div class="studio-stage-layout">
       <div class="studio-stage">
         <div class="studio-stage-frame">

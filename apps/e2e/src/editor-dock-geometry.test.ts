@@ -27,8 +27,8 @@ describe.skipIf(!prereq.ok)('docked edit panel geometry', () => {
       const where = `${viewport.width}x${viewport.height}`;
       if (!overlay) throw new Error(`${where} rendered no docked panel`);
 
-      // Pin the width too, so a resize is visible.
-      expect(overlay.width, `${where} dock width`).toBeCloseTo(Math.min(360, viewport.width), 0);
+      // min(360px, 100%) is 100% of the stage, not of the viewport.
+      expect(overlay.width, `${where} dock width`).toBeCloseTo(Math.min(360, frameRect.width), 0);
 
       const centre = frameRect.x + box.x + (box.width * box.scale) / 2;
       expect(centre < overlay.x, `${where} centre clear of the dock`).toBe(frameRect.width > overlay.width * 2);
