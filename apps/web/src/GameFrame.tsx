@@ -19,6 +19,8 @@ type GameFrameProps = GameFrameSource & {
    * already pointer-inert there, and a build landing mid-poll must not yank focus out
    * of whatever the creator is typing into. */
   autoFocus?: boolean;
+  // Agent executor, served to reviewers only; absent means no mode.
+  agentBridge?: string | null;
 };
 
 /**
@@ -54,7 +56,7 @@ export function GameFrame(props: GameFrameProps) {
   let srcDoc = props.html ?? undefined;
   if (srcDoc != null) {
     srcDoc = withGameLocale(srcDoc, i18n.language);
-    if (props.embed) srcDoc = embedGameHtml(srcDoc);
+    if (props.embed) srcDoc = embedGameHtml(srcDoc, props.agentBridge);
   }
 
   const autoFocus = props.autoFocus ?? true;

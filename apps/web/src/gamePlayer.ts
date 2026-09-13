@@ -290,16 +290,21 @@ const BRIDGE = `(function(){
       aliveFrames:lastAlive
     });
   }
-  function setPaused(next){
-    if(next===paused){if(next)sendSnapshot('pause');return;}
+  // options.veil:false freezes without the dimming overlay, and options.snapshot:false
+  // without the PNG round trip — agent play mode pauses on every command, and both would
+  // otherwise show up in the screenshots it takes and in its per-command cost.
+  function setPaused(next,options){
+    var veil=!(options&&options.veil===false);
+    var wantSnapshot=!(options&&options.snapshot===false);
+    if(next===paused){if(next&&wantSnapshot)sendSnapshot('pause');return;}
     paused=next;
     if(paused){
       // Snapshot first — then veil — so the overlay never lands in the PNG.
-      var png=capturePng();
+      var png=wantSnapshot?capturePng():null;
       document.dispatchEvent(new CustomEvent('gdpl-pause'));
-      showOverlay();
+      if(veil)showOverlay();
       suspendAudio(true);
-      sendSnapshot('pause',png);
+      if(wantSnapshot)sendSnapshot('pause',png);
     }else{
       hideOverlay();
       suspendAudio(false);
@@ -390,6 +395,14 @@ const BRIDGE = `(function(){
     setTimeout(function(){sendMeta();sendControls();},400);
   }
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
+  // Handle for the agent script, which cannot share this closure.
+
+  // Grants the game nothing: it can already post, capture and stop itself.
+  window.__GDPL_BRIDGE__={
+    post:post,el:el,text:text,setPaused:setPaused,capturePng:capturePng,
+    legendRows:legendRows,kitRows:kitRows,largestCanvas:largestCanvas,
+    isPaused:function(){return paused;}
+  };
 })();`;
 
 // Hide in-game chrome; theater owns title and sound.
@@ -446,8 +459,10 @@ const HIDE_CHROME =
  * Prefers `<head>` (then `<body>`, then `</body>`, then append) so rAF / AudioContext
  * patches land before game scripts schedule their loops — Studio pause depends on that.
  */
-export function embedGameHtml(html: string): string {
-  const inject = `<style id="gdpl-embed">${HIDE_CHROME}</style><script>${BRIDGE}</script>`;
+export function embedGameHtml(html: string, agentBridge?: string | null): string {
+  // Appended, not concatenated: without it there is no agent code.
+  const agent = agentBridge ? `<script>${agentBridge}</script>` : '';
+  const inject = `<style id="gdpl-embed">${HIDE_CHROME}</style><script>${BRIDGE}</script>${agent}`;
   if (/<head\b[^>]*>/i.test(html)) {
     return html.replace(/<head\b[^>]*>/i, (open) => `${open}${inject}`);
   }

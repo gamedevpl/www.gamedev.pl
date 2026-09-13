@@ -451,6 +451,7 @@ const FILE_BUCKET = {
   'assessment-pagination': 'community',
   'assessment-resolution': 'community',
   review: 'community',
+  'agent-play-routes': 'community',
   'review-checklist': 'community',
   'review-queue-cache': 'community',
   'moderation-flags': 'community',

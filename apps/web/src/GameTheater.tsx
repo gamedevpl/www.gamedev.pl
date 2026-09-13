@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { gamePageHandle, isPlatformAuthor, type CatalogEditor, type CatalogTouch } from './catalog.js';
+import { AgentPlayPanel } from './AgentPlayPanel.js';
+import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
+import { useAgentBridge } from './useAgentBridge.js';
 import { GameFrame } from './GameFrame.js';
 import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
@@ -171,6 +174,17 @@ export function GameTheater({
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  // Agent mode; see docs/agent-play-mode.md.
+  const agentModeKey = reportSlug ?? 'draft';
+
+  const agentBridge = useAgentBridge('slug' in source);
+  // The server's answer is the gate, not the URL or menu.
+  const agentAvailable = typeof agentBridge === 'string';
+
+  // Stepped time is not a play; see docs/agent-play-mode.md.
+  const [agentWanted, setAgentWanted] = useState(() => agentModeRequested() || isAgentModeEnabled(agentModeKey));
+  const agentOpen = agentAvailable && agentWanted;
+  useEffect(() => setAgentModeEnabled(agentModeKey, agentOpen), [agentModeKey, agentOpen]);
   const [playerEngaged, setPlayerEngaged] = useState(false);
   const [chromeIdle, setChromeIdle] = useState(false);
   const [chromeFocused, setChromeFocused] = useState(false);
@@ -728,6 +742,21 @@ export function GameTheater({
                 </button>
                 <div className="theater-more-panel" role="menu">
                   {howToPlayControl('theater-menu-item howto-menu', 'more')}
+                  {agentAvailable ? (
+                    <button
+                      type="button"
+                      className="theater-menu-item"
+                      role="menuitem"
+                      aria-pressed={agentOpen}
+                      onClick={() => {
+                        setMoreOpen(false);
+                        setAgentWanted((open) => !open);
+                      }}
+                    >
+                      <PixelIcon name="gamepad" size={13} />
+                      <span className="btn-label">{t('player.agent.menu')}</span>
+                    </button>
+                  ) : null}
                   {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
@@ -804,7 +833,9 @@ export function GameTheater({
             embed
             via={via}
             remixable={canRemix}
-            trackPlay={trackPlay}
+            trackPlay={trackPlay && !agentAvailable}
+            agentBridge={agentBridge ?? null}
+            agentBridgePending={agentBridge === undefined}
             remixOpenNonce={remixOpenNonce}
             initialRemixRequest={initialRemixRequest}
             painterNonce={painterNonce}
@@ -848,6 +879,7 @@ export function GameTheater({
           <PixelIcon name="close" size={16} />
         </button>
       ) : null}
+      <AgentPlayPanel open={agentOpen} frameRef={frameRef} onClose={() => setAgentWanted(false)} />
       <HowToPlayPanel
         open={howToOpen}
         rows={controlRows}
