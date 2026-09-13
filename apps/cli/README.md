@@ -323,3 +323,29 @@ Answer or continue there, then exit to let the CLI verify the local checkout.
 No command is automatically approved, and choosing to return preserves local edits.
 Unattended runs stop and print the exact `muse resume <session-id>` command instead
 of opening a picker or delivering unverified work. Session logging must remain enabled.
+
+### Recover local sources
+
+If an admin canceled a round, or the game record was deleted, run:
+
+```sh
+gamedevpl recover ./my-game
+# Inspect the result, then confirm:
+gamedevpl recover ./my-game --yes
+```
+
+Recovery creates a self-build draft and stages the local sources. It does not start
+an agent, run a build or publish. Run `gamedevpl push` in the recovered checkout to
+validate and deliver a preview. Existing local files are preserved.
+
+If the slug belongs to another game, choose an unused name:
+
+```sh
+gamedevpl recover ./my-game --slug my-recovered-game --yes
+```
+
+The renamed copy is created beside the original as `my-recovered-game-recovered`.
+The original checkout is kept. Interrupted staging can be retried with the same
+command; `.gamedev-recovery.json` retains the recovery key until completion.
+Recovery uses the normal creation moderation and quota rules. It cannot restore
+server history that was permanently deleted.

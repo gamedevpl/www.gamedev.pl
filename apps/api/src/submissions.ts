@@ -1,3 +1,5 @@
+import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
+import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
@@ -151,10 +153,6 @@ export type SubmissionRoutesStore = IdentityStore &
   QuotaStore &
   AgentKeysStore;
 
-// Base64 PNG, no data: prefix — same shape as a playtest screenshot.
-
-// Re-exported for callers (and tests) that knew it here; it now lives with the status
-// parser, which reads the same marker back off the PR to rebuild the revision history.
 export { CREATOR_FEEDBACK_MARKER };
 
 interface CachedStatus {
@@ -174,7 +172,6 @@ export interface SubmissionRoutesOptions {
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
-  // Kept wide for the factories it forwards to; narrowing is Phase 3.
   store?: Store;
   playableWithoutSession?: (slug: string) => Promise<boolean>;
   dailySubmissionQuota?: number;
@@ -192,18 +189,13 @@ export interface SubmissionRoutesOptions {
   dailyFeedbackQuota?: number;
   /** Separate from submissions so improving a live game does not crowd out creating one. */
   dailyImprovementQuota?: number;
-  // Fronts every feedback/improve message (chat-agent.ts). Always on when set.
   chatAgent?: StudioChatAgent;
   intakeAgent?: IntakeAgent;
-  // The chat agent's own circuit breaker (creation-limits.ts); null disables.
   chatGate?: ChatGate | null;
-  // Ceiling used when the config doc sets none (creation-limits.ts).
   globalDailyChatCap?: number;
-  // Per-creator daily ceiling on chat-agent turns — separate from build quota.
   dailyChatQuota?: number;
   contentChecker?: ContentChecker;
   internalAuthVerifier?: InternalAuthVerifier;
-  // Seed handoff (seed-dispatch.ts); undefined reads env, null forces inline.
   seedDispatch?: SeedDispatchClient | null;
   /** Mailer for notification email fan-out; defaults to createMailerFromEnv(). */
   notifyMailer?: Mailer;
@@ -230,9 +222,7 @@ export interface SubmissionRoutesOptions {
    * an empty directory, which is what they all did before seeding existed.
    */
   gameSeeder?: GameSeeder;
-  // Provider ids `gameSeeder` was built with, and the fallback provider.
   seedProviders?: { providers: string[]; defaultProvider: string };
-  // Test seam for the availability gate.
   seedAvailabilityGate?: SeedAvailabilityGate;
   // Concept proposals after a green preview (dream-job.ts); null disables.
   dreamJob?: DreamJob | null;
@@ -284,7 +274,6 @@ export interface SubmissionRoutesOptions {
    */
   adminUids?: Set<string>;
 
-  // Who may raise a moderation flag; the review desk's own allowlist.
   reviewerUids?: Set<string>;
 }
 
@@ -301,9 +290,6 @@ function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean 
 }
 
 /** What `registerSubmissionRoutes` hands back for other route modules to build on. */
-// What the two agent surfaces need that only this registrar can build.
-
-// buildApp mounts both and supplies the rest — store, buckets, gate trigger, flags.
 
 export interface AgentSurfaceSeams {
   channel: Pick<
@@ -331,19 +317,14 @@ export interface AgentSurfaceSeams {
 }
 
 export interface SubmissionRoutesHandle {
-  // The agent channel and MCP mounts' half of the wiring; buildApp mounts both.
   agentSurface: AgentSurfaceSeams;
   /** The resolved games-repo client, or null when this deployment cannot reach one. */
   githubClient: GitHubClient | null;
   /** Whether the resolved registry has a platform backend. */
   hasPlatformBackend: boolean;
-  // Vendors with a real backend built at boot.
   configuredVendors: string[];
-  // MANAGED_AGENT_VENDOR, the fallback when no override is stored.
   defaultVendor?: string;
-  // Seed vendors configured at boot — vertex is always in here.
   configuredSeedProviders: string[];
-  // Fallback when no console override is stored.
   defaultSeedProvider: string;
   /**
    * Finds a published entry in the repo-backed catalog only.
@@ -388,6 +369,7 @@ export interface SubmissionRoutesHandle {
     requestedBy?: CreatorMessageOrigin;
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
+    beforeDispatch?: () => Promise<boolean>;
   }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
   /**
    * Drops the cached status response for a job, so the next poll reflects a write that
@@ -410,7 +392,6 @@ export interface SubmissionRoutesHandle {
     jobId: number;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }>;
-  // /api/internal/seed's worker: first dispatch from the stored brief.
   dispatchQueuedJob: DispatchQueuedJob;
   // The seed route's other jobs: regenerate a seed, assemble a preview.
   regenerateSeedNow: SeedPipeline['runSeedRegeneration'];
@@ -821,84 +802,93 @@ export async function registerSubmissionRoutes(
      * authorized creator after a slug transfer so quota and Studio stay aligned.
      */
     ownerUid?: string;
+    beforeDispatch?: () => Promise<boolean>;
   }): Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.jobId);
-    // Without a slug there is no game to improve, and dispatching would quietly
-    // commission a brand-new one against a creator's improvement request.
     if (!source?.slug) return null;
+    const slug = source.slug;
+    return withImprovementAdmission(store, slug, now, async (admissionNonce) => {
+      const holder = await store.getSubmissionBySlug(slug);
+      if (!holder) return null;
 
-    // Resolve against the *source* game before the new job exists. `dispatchBuild`
-    // would otherwise ask `builderOf` on a blank record and always pick `platform`.
-    const builder = input.builder ?? builderOf(source);
+      // Resolve against the *source* game before the new job exists. `dispatchBuild`
+      // would otherwise ask `builderOf` on a blank record and always pick `platform`.
+      const builder = input.builder ?? builderOf(source);
 
-    if (builder === 'platform' && managedAvailabilityGate) {
-      const ownerUid = input.ownerUid ?? source.ownerUid;
-      const dateStr = new Date(now()).toISOString().slice(0, 10);
-      const availability = await managedAvailabilityGate.checkAndSpend(ownerUid, dateStr);
-      if (!availability.available) return { route: 'unavailable', reason: availability.reason };
-    }
-
-    const jobId = await store.allocateJobId();
-    await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
-    await store.setSubmissionLocale(jobId, input.locale);
-    // Set before dispatch: the slug is what makes this an improvement rather than a new
-    // game, and a job that dispatched without one has already told the agent the wrong
-    // thing.
-    await store.setSubmissionSlug(jobId, source.slug);
-    // The change request is this round's brief, so persist it. `dispatchBuild` below
-    // carries the same text into a platform backend's prompt, but a self round has no
-    // backend to read it: the creator's own agent calls get_brief, which serves the
-    // stored brief and nothing else. Without this an agent-opened improvement round
-    // starts with an empty spec and no idea what the creator asked for.
-    // No requestedBy means an autonomous suggestion sweep wrote `text`, not the creator.
-    await store.setSubmissionBrief(jobId, {
-      spec: input.text,
-      qa: [],
-      ...(input.requestedBy ? {} : { specIsSystemGenerated: true }),
-    });
-    // Open the new job's thread with the request that started it. Written already
-    // delivered: the brief below carries the same words to the agent, and a pending
-    // note would read as a second, newer instruction to act on.
-    if (input.requestedBy) {
-      try {
-        const relayed = await relayedMessageLocalization(input.requestedBy, input.text);
-        await store.appendCreatorMessage(jobId, relayed.text, {
-          origin: input.requestedBy,
-          delivered: true,
-          ...(relayed.textLocalized && relayed.locale
-            ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
-            : {}),
-        });
-      } catch (seedError) {
-        // Best effort. The request still reaches the agent as the brief, so a failure
-        // here costs the creator the echo, not the round.
-        input.log.error({ err: seedError, jobId }, 'failed to seed the improvement thread');
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
+      await store.setSubmissionLocale(jobId, input.locale);
+      // Self agents read this persisted brief through get_brief.
+      // No requestedBy means an autonomous suggestion sweep wrote `text`, not the creator.
+      await store.setSubmissionBrief(jobId, {
+        spec: input.text,
+        qa: [],
+        ...(input.requestedBy ? {} : { specIsSystemGenerated: true }),
+      });
+      // Seed the thread once; the brief already delivers this request.
+      if (input.requestedBy) {
+        try {
+          const relayed = await relayedMessageLocalization(input.requestedBy, input.text);
+          await store.appendCreatorMessage(jobId, relayed.text, {
+            origin: input.requestedBy,
+            delivered: true,
+            ...(relayed.textLocalized && relayed.locale
+              ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
+              : {}),
+          });
+        } catch (seedError) {
+          // Best effort. The request still reaches the agent as the brief, so a failure
+          // here costs the creator the echo, not the round.
+          input.log.error({ err: seedError, jobId }, 'failed to seed the improvement thread');
+        }
       }
-    }
-    await store.recordJobTransition(jobId, {
-      to: 'queued',
-      at: new Date(now()).toISOString(),
-      by: input.openedBy === 'agent' ? 'agent' : 'creator',
-      reason: input.openedBy === 'agent' ? 'agent_open_round' : 'improvement_requested',
-    });
+      await store.recordJobTransition(jobId, {
+        to: 'queued',
+        at: new Date(now()).toISOString(),
+        by: input.openedBy === 'agent' ? 'agent' : 'creator',
+        reason: input.openedBy === 'agent' ? 'agent_open_round' : 'improvement_requested',
+      });
 
-    const dispatched = await dispatchBuild({
-      jobId,
-      // The brief is both the spec and the change request: `feedback` selects the
-      // "revise, do not rebuild" prompt, and `spec` is what a backend without that
-      // distinction would read.
-      spec: input.text,
-      feedback: input.text,
-      slug: source.slug,
-      locale: input.locale,
-      log: input.log,
-      builder,
+      try {
+        if (
+          !(await store.claimManualRoundSlug(jobId, slug, holder.jobId, admissionNonce)) ||
+          (input.beforeDispatch && !(await input.beforeDispatch()))
+        ) {
+          await abandonImprovement(store, jobId, now);
+          return null;
+        }
+        if (builder === 'platform' && managedAvailabilityGate) {
+          const ownerUid = input.ownerUid ?? source.ownerUid;
+          const dateStr = new Date(now()).toISOString().slice(0, 10);
+          const availability = await managedAvailabilityGate.checkAndSpend(ownerUid, dateStr);
+          if (!availability.available) {
+            await abandonImprovement(store, jobId, now);
+            return { route: 'unavailable' as const, reason: availability.reason };
+          }
+        }
+      } catch (error) {
+        await abandonImprovement(store, jobId, now);
+        throw error;
+      }
+
+      const dispatched = await dispatchBuild({
+        jobId,
+        // The brief is both the spec and the change request: `feedback` selects the
+        // "revise, do not rebuild" prompt, and `spec` is what a backend without that
+        // distinction would read.
+        spec: input.text,
+        feedback: input.text,
+        slug,
+        locale: input.locale,
+        log: input.log,
+        builder,
+      });
+      // The job exists either way. A failed dispatch leaves it `queued`, which the operator
+      // queue already reports as `not_dispatched` — a visible stall rather than a silently
+      // dead request.
+      return dispatched ? { route: 'job' as const, jobId } : null;
     });
-    // The job exists either way. A failed dispatch leaves it `queued`, which the operator
-    // queue already reports as `not_dispatched` — a visible stall rather than a silently
-    // dead request.
-    return dispatched ? { route: 'job', jobId } : null;
   }
 
   /**
@@ -1420,6 +1410,15 @@ export async function registerSubmissionRoutes(
     confirmSlugClaim,
     dispatchQueuedJob,
     ...(seedDispatch ? { enqueueSeed: (jobId: number) => seedDispatch.enqueue(jobId) } : {}),
+  });
+
+  registerCheckoutRecovery(app, {
+    store,
+    githubClient,
+    submissionTokenSecret,
+    checkUserAccess,
+    createGame,
+    isSlugPublished: catalogRoutes.isSlugPublished,
   });
 
   registerCreateGameRoute(app, {

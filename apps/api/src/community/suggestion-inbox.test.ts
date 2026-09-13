@@ -3,13 +3,6 @@ import { buildApp } from '../platform/app.js';
 import { InMemoryStore, type Scorecard, type SuggestionRecord } from '../platform/store.js';
 import { buildImprovementBrief, DISMISS_REASONS } from './suggestion-inbox.js';
 
-/**
- * The inbox is where a suggestion stops being an opinion and becomes work on somebody's
- * game. These tests are about the two things that makes load-bearing: only the owner may
- * decide, and a decision is never lost — including when the implementer cannot be reached,
- * which is the loop's known structural risk rather than a hypothetical.
- */
-
 const OWNER = 'g:owner';
 const OTHER = 'g:someone-else';
 const AT = Date.parse('2026-07-30T12:00:00.000Z');
@@ -53,7 +46,11 @@ function scorecard(untrusted: Partial<Scorecard['untrusted']> = {}): Scorecard {
 }
 
 /** A backend that starts a native job round, which is what dispatch does today. */
-const dispatches = (start = vi.fn(async () => ({ route: 'job' as const }))) => start;
+const dispatches = () =>
+  vi.fn(async (input: { beforeDispatch?: () => Promise<boolean> }) => {
+    if (input.beforeDispatch && !(await input.beforeDispatch())) return null;
+    return { route: 'job' as const };
+  });
 
 async function appFor(startImprovementRound?: ReturnType<typeof dispatches>, uid: string = OWNER) {
   const app = await buildApp({
@@ -158,15 +155,18 @@ describe('POST /api/me/suggestions/:id/approve', () => {
     // silently does nothing.
     await publish('crashy');
     await store.putSuggestion(suggestion());
-    // The backend reports it could not start a round; approval must survive that.
-    const app = await appFor(vi.fn(async () => null));
+    const app = await appFor(
+      vi.fn(async (input) => {
+        await input.beforeDispatch?.();
+        return null;
+      }),
+    );
 
     const res = await app.inject({ method: 'POST', url: '/api/me/suggestions/sug-crashy-defect-2026-07-30/approve' });
 
     expect(res.statusCode).toBe(200);
     expect(res.json().suggestion).toMatchObject({ status: 'no-implementer', decidedBy: OWNER });
     expect(res.json().suggestion.statusReason).toContain('retried');
-    // Durable, not just reported.
     expect((await store.getSuggestion('sug-crashy-defect-2026-07-30'))?.status).toBe('no-implementer');
     await app.close();
   });

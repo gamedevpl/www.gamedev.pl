@@ -185,20 +185,11 @@ export async function registerSuggestionInboxRoutes(
 
     const record = await loadOwned(id, uid, reply);
     if (!record) return reply;
-    // Only an undecided suggestion can be approved. Re-approving a filed one would file a
-    // second issue for the same evidence, which is how an implementer ends up with
-    // duplicate work and a creator ends up not trusting the button.
     if (record.status !== 'proposed') {
       return reply.status(409).send({ error: 'this suggestion has already been decided', status: record.status });
     }
 
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    const quota = await store.checkAndIncrementQuota(uid, dateStr, dailyImprovementQuota, 'improvements');
-    if (!quota.allowed) {
-      if (quota.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
-      return reply.status(429).send({ error: 'daily improvement quota exceeded' });
-    }
-
     const at = new Date(now()).toISOString();
     const card = await store.getScorecard(record.slug);
     // Captured now, not read back after the work ships: the scorecard is a rolling
@@ -216,8 +207,6 @@ export async function registerSuggestionInboxRoutes(
 
     let next: SuggestionRecord;
     if (!startImprovementRound || !submission) {
-      // Not an error: "no implementer available" is a state the creator can see. Their
-      // decision is recorded either way.
       next = {
         ...record,
         ...decided,
@@ -225,14 +214,25 @@ export async function registerSuggestionInboxRoutes(
         statusReason: 'work cannot be dispatched from this deployment',
       };
     } else {
+      let admitted = false;
       const outcome = await startImprovementRound({
         jobId: submission.jobId,
+        beforeDispatch: async () => {
+          admitted = true;
+          const quota = await store.checkAndIncrementQuota(uid, dateStr, dailyImprovementQuota, 'improvements');
+          if (quota.allowed) return true;
+          reply.status(quota.tier === 'blocked' ? 403 : 429).send({
+            error: quota.tier === 'blocked' ? 'account is blocked' : 'daily improvement quota exceeded',
+          });
+          return false;
+        },
         text: brief,
         title: `Improve ${record.slug}: ${record.class}`,
         locale: submission.locale ?? 'en',
         log: request.log,
       });
-      // No per-reason copy here — folded into the ordinary "no implementer" case.
+      if (reply.sent) return reply;
+      if (!outcome && !admitted) return reply.status(409).send({ error: 'round changed; retry this suggestion' });
       const started = outcome?.route === 'job' ? outcome : null;
       next = started
         ? {

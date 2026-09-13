@@ -1,3 +1,4 @@
+import { RESERVED_SLUGS } from './slug-policy.js';
 /**
  * Turning a creator's title into the name a game is addressed by, for its whole life.
  *
@@ -11,7 +12,6 @@
  * Pure except for the caller-supplied `isTaken` probe, so the shape of a slug can be
  * tested without a store, a catalog, or a network.
  */
-
 /**
  * Long enough to stay recognisable as the creator's title, short enough to be a URL a
  * person can read out. The delivery contract's own ceiling is 64, and a collision
@@ -21,27 +21,6 @@ const MAX_SLUG_LENGTH = 48;
 
 /** What a title reduces to when it has no ASCII-able characters at all. */
 const FALLBACK_SLUG = 'game';
-
-/**
- * Path segments the app itself uses. None of them can currently collide — a game slug
- * is always addressed under `/play/` or `/studio/` — but a game called
- * "admin" is a trap laid for the next person who adds a route, and the cost of not
- * laying it is this list.
- */
-const RESERVED_SLUGS = new Set([
-  'admin',
-  'api',
-  'contact',
-  'draft',
-  'health',
-  'join',
-  'new',
-  'play',
-  'privacy',
-  'studio',
-  'status',
-  'terms',
-]);
 
 /**
  * Letters that survive Unicode decomposition unchanged and would otherwise be dropped.

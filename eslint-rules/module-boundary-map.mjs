@@ -127,6 +127,8 @@ const FILE_BUCKET = {
   // A single Store-querying ownership check, factored out of agent-game-key-resolve.ts
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
+  'atomic-slug-claim': 'platform',
+  'slug-policy': 'platform',
   // Bare env-driven constant factored out of creation/builder.ts because delivery,
   // agent-surface, and submissions.ts all need the cap without the rest of builder.ts's
   // handoff-authorization logic.
@@ -223,6 +225,7 @@ const FILE_BUCKET = {
   'feedback-request': 'creation',
   'feedback-routes': 'creation',
   'improve-routes': 'creation',
+  'improvement-admission': 'creation',
   'create-game': 'creation',
   'job-reconciler': 'creation',
   'dispatch-build': 'creation',
@@ -239,6 +242,7 @@ const FILE_BUCKET = {
   'typecheck-preflight': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
+  'checkout-recovery': 'creation',
   'symbol-map': 'creation',
   'type-check': 'creation',
   'tab-complete': 'creation',
@@ -448,6 +452,7 @@ const FILE_BUCKET = {
   'proposal-base': 'community',
   'proposal-diff': 'community',
   'proposal-routes': 'community',
+  'proposal-admission': 'community',
   'proposal-state': 'community',
   proposals: 'community',
   'suggestion-inbox': 'community',

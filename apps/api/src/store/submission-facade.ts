@@ -1,6 +1,20 @@
 import type { SubmissionStore } from './slices/submission.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
+  async claimManualRoundSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number,
+    admissionNonce?: string,
+  ): Promise<boolean> {
+    return this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
+  }
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    return this.submissionStore.beginCheckoutRecovery(slug, nonce, now);
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    return this.submissionStore.finishCheckoutRecovery(slug, nonce);
+  }
   async setLocalActivity(
     jobId: number,
     activity: import('@gamedevpl/contract').LocalActivity,
@@ -8,8 +22,16 @@ export abstract class SubmissionFacade {
   ): Promise<boolean> {
     return this.submissionStore.setLocalActivity(jobId, activity, start);
   }
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(jobId, slug);
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
+  ): Promise<boolean> {
+    return this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
+  }
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+    return this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
   }
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
     return this.submissionStore.setSubmissionTitle(jobId, title);

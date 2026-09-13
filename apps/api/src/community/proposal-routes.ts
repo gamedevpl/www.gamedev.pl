@@ -1,3 +1,4 @@
+import type { ProposalAdopter } from './proposal-admission.js';
 // HTTP for proposals.
 //
 // Three audiences share one collection, and the routes are grouped by which of them is
@@ -89,7 +90,7 @@ export interface ProposalRoutesOptions {
    * could not be created, which the caller reports rather than swallowing — an accepted
    * proposal with no job is a change the owner cannot publish.
    */
-  adoptIntoJob?: (input: { proposal: ProposalRecord; ownerUid: string | null }) => Promise<{ jobId: number } | null>;
+  adoptIntoJob?: ProposalAdopter;
   now?: () => number;
 }
 

@@ -41,7 +41,7 @@ export async function runDispatchReaperSweep(deps: DispatchReaperSweepDeps): Pro
 
   for (const record of queued) {
     const since = Date.parse(record.stateSince ?? record.createdAt);
-    if (!Number.isFinite(since) || now() - since < thresholdMs) {
+    if ((record.builder === 'self' && record.recoveryKey) || !Number.isFinite(since) || now() - since < thresholdMs) {
       skipped++;
       continue;
     }
