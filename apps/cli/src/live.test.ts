@@ -113,6 +113,7 @@ describe('status watch', () => {
     slug: 'squad-game',
     previewGate: { green: true },
     progress: {
+      headSha: 'v7',
       revisions: [
         { text: 'earlier note' },
         {
@@ -153,10 +154,20 @@ describe('status watch', () => {
     );
   });
 
+  it('drops a card whose delivery a retry replaced', () => {
+    const retried = { ...carded, progress: { ...carded.progress, headSha: 'v8' } };
+    expect(proposalLines(retried, 'https://x')).toEqual([]);
+  });
+
+  it('says nothing when the status names no delivery to match against', () => {
+    const { headSha: _headSha, ...withoutHead } = carded.progress;
+    expect(proposalLines({ ...carded, progress: withoutHead }, 'https://x')).toEqual([]);
+  });
+
   it('stops naming a card the creator already answered', () => {
     const answered = {
       ...carded,
-      progress: { revisions: [...carded.progress.revisions, { text: 'make it night' }] },
+      progress: { ...carded.progress, revisions: [...carded.progress.revisions, { text: 'make it night' }] },
     };
     expect(proposalLines(answered, 'https://x')).toEqual([]);
     expect(formatStatusEvent(answered)).toBe('round finished — Studio is waiting (preview green)');
@@ -165,7 +176,10 @@ describe('status watch', () => {
   it('keeps naming a card when only the platform spoke after it', () => {
     const acked = {
       ...carded,
-      progress: { revisions: [...carded.progress.revisions, { text: 'on it', origin: 'studio' }] },
+      progress: {
+        ...carded.progress,
+        revisions: [...carded.progress.revisions, { text: 'on it', origin: 'studio' }],
+      },
     };
     expect(proposalLines(acked, 'https://x')).not.toEqual([]);
   });
