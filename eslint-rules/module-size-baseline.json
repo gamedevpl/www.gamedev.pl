@@ -915,7 +915,7 @@
     "apps/web/src/surfaces/studio/StudioVersionRibbon.test.tsx": 105,
     "apps/web/src/surfaces/studio/StudioVersionRibbon.tsx": 83,
     "apps/web/src/surfaces/studio/studioWelcome.ts": 38,
-    "apps/web/src/surfaces/studio/StudioWelcomeView.test.tsx": 168,
+    "apps/web/src/surfaces/studio/StudioWelcomeView.test.tsx": 195,
     "apps/web/src/surfaces/studio/StudioWelcomeView.tsx": 389,
     "apps/web/src/surfaces/studio/StudioWorkspaceCheckoutPanel.test.tsx": 223,
     "apps/web/src/surfaces/studio/StudioWorkspaceCheckoutPanel.tsx": 130,

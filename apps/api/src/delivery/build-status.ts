@@ -2,6 +2,7 @@ import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
+import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
@@ -24,6 +25,22 @@ import type {
 } from '../platform/store.js';
 
 // 'studio_ack' displays exactly like 'studio' — only the backend tells them apart.
+
+// Newest stamp that means this round moved.
+function sinceMovement(
+  record: { stateSince?: string; lastAgentSignalAt?: string; createdAt: string },
+  status: { events?: Array<{ createdAt: string }> },
+  at: number,
+): number {
+  const movedAt = lastMovementAt([
+    record.stateSince,
+    record.lastAgentSignalAt,
+    status.events?.[0]?.createdAt,
+    record.createdAt,
+  ]);
+  return movedAt === undefined ? Number.NaN : at - movedAt;
+}
+
 export function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' | 'studio' | undefined {
   if (message.origin === 'agent') return 'agent';
   if (isStudioOrigin(message.origin)) return 'studio';
@@ -320,6 +337,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     });
     if (stall) next.stall = stall;
     else delete next.stall;
+
+    // Recomputed with the stall: a cache hit overlays a fresher signal.
+    const floor = statusPollFloorMs({
+      terminal: next.status === 'published' || next.status === 'abandoned',
+      dispatched: next.phase === 'dispatched',
+      msSinceMovement: sinceMovement(record, next, now()),
+    });
+    if (floor === undefined) delete next.pollAfterMs;
+    else next.pollAfterMs = floor;
 
     // Gate milestones — refresh outside the 60s cache.
     const playableVersion = record.previewVersion ?? record.deliveredVersion;

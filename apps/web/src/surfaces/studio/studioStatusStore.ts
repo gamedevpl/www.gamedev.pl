@@ -31,12 +31,7 @@ const polls = new Map<string, PollState>();
 let lastInteractionAt = Date.now();
 let attentionWired = false;
 
-/**
- * Records that somebody is actually using the page.
- *
- * Exported so a surface can report an interaction the document-level listeners below
- * cannot see, and so tests can drive the idle gate without synthesising events.
- */
+// Records that somebody is actually using the page.
 export function noteStudioInteraction(): void {
   const at = Date.now();
   // A slow timer is already scheduled; the reset needs it recomputed.

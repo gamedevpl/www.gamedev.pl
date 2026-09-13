@@ -131,6 +131,21 @@ None of the three delays the creator: their own actions invalidate the cache and
 `pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
 never the first read — a mount still answers the page once.
 
+**A gate on the store reaches only what subscribes to it.** The welcome dialog and the
+connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both
+polled at three seconds behind a hidden tab and neither honoured `pollAfterMs` — measured at
+**30 requests in five hidden minutes** for the welcome dialog alone. Both now go through
+`useGatedStatusPoll`, which subscribes to the store and therefore inherits all three gates,
+and shares one fetch with anything else watching the same round. `EditorPanel`'s loop stays
+as it is on purpose: it runs only while a creator is waiting for a publish they asked for,
+and ends on the seal, so throttling it would stall an action rather than save an idle poll.
+
+**A sandboxed frame eats the events the gate listens for.** Games render with no
+`allow-same-origin`, so a creator playtesting inside the Studio stage produces no
+`pointerdown` or `keydown` on the parent document at all — the most engaged creator on the
+site would have been classified idle after two minutes. `StudioStage`'s `onGameActivity`,
+which already existed for play chrome, now also reports the interaction.
+
 **Resetting the idle clock is not the same as lifting the gate.** Recording a fresh
 interaction leaves the slow timer that is already scheduled, so a creator who typed just
 after a poll waited out the old sixty seconds anyway. `noteStudioInteraction` reschedules

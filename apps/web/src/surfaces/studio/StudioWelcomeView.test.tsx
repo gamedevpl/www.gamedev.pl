@@ -78,6 +78,33 @@ describe('StudioWelcomeView', () => {
     expect(localStorage.getItem('gamedev_studio_onboarded')).toBe('1');
   });
 
+  it('stops polling while the tab is hidden, rather than running its own timer', async () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    try {
+      await act(async () => {
+        createRoot(container).render(
+          createElement(StudioWelcomeView, { game: 'bastion-wave', onOpenStudio: vi.fn() }),
+        );
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await vi.waitFor(() => expect(getStatus).toHaveBeenCalled());
+
+      hidden.mockReturnValue(true);
+      document.dispatchEvent(new Event('visibilitychange'));
+      const settled = getStatus.mock.calls.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+      });
+
+      expect(getStatus.mock.calls.length).toBe(settled);
+    } finally {
+      hidden.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('clearly displays draft ready state and Play CTA when build finishes', async () => {
     getStatus.mockResolvedValue({
       status: 'in_review',
