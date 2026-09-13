@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { resolveRefineFallbackModel } from './vertex-fallback-models.js';
 
 describe('what may stand in for the refiner', () => {
-  it('defaults to a peer model', () => {
-    expect(resolveRefineFallbackModel({})).toBe('claude-sonnet-5');
+  // Vertex 404s Claude for this project, under either publisher.
+  it('stands nothing in until an operator names a model that exists', () => {
+    expect(resolveRefineFallbackModel({})).toBeUndefined();
   });
 
   it('accepts another peer when one is configured', () => {
