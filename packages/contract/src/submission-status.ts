@@ -212,6 +212,8 @@ export interface SubmissionStatusResponseBase {
   recentBuilds?: RecentBuild[];
   // Total number of recorded build versions for this game.
   totalBuildsCount?: number;
+  // Soonest this answer could differ; a client must not poll faster.
+  pollAfterMs?: number;
 }
 
 // A published build always carries its slug.

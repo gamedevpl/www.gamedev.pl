@@ -16,6 +16,7 @@ import type { StageOrigin, StageSource } from '../../useStageSource.js';
 import './status-feedback.css';
 import './studio-stage.css';
 import { StudioStageStatusbar } from './StudioStageStatusbar.js';
+import { noteStudioInteraction } from './studioStatusStore.js';
 import { toFeedbackContext } from './studioFeedbackContext.js';
 
 /**
@@ -378,6 +379,8 @@ export function StudioStage({
   const requestWatch = useCallback(() => onPostureChange('watch'), [onPostureChange]);
   const onGameActivity = useCallback(() => {
     lastInputAtRef.current = Date.now();
+    // The sandboxed frame eats these events, so the status poll cannot see them.
+    noteStudioInteraction();
     onPlayActivity?.();
   }, [onPlayActivity]);
   const onPointerHeldChange = useCallback((held: boolean) => {

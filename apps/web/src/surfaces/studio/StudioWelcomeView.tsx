@@ -6,8 +6,8 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { welcomeHandoffHref } from './welcomeHandoff.js';
 import { BuildProgressChecklist } from '../../BuildProgressChecklist.js';
 import { isStudioOnboarded, markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
-import { pollDelayMs } from './studioStatusPoll.js';
-import { getSubmissionStatus, type SubmissionStatus } from '../../submissionApi.js';
+import { useGatedStatusPoll } from './useGatedStatusPoll.js';
+import type { SubmissionStatus } from '../../submissionApi.js';
 import { recordCreateStep } from '../../visitTelemetry.js';
 import { welcomeProgressMessage, welcomeStatusLabel } from '../../welcomeProgress.js';
 import { isRoundSealed } from './roundSealed.js';
@@ -105,8 +105,9 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const [tracksViewport, setTracksViewport] = useState(false);
   const [title, setTitle] = useState(game);
   const [token, setToken] = useState<string | null>(null);
-  const [status, setStatus] = useState<SubmissionStatus | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const status = useGatedStatusPoll(token, i18n.language, setFailed);
+  const loadError = failed ? t('welcome.loadError') : null;
   const [primerExpanded] = useState(() => !isStudioOnboarded());
   const [now, setNow] = useState<number>(() => Date.now());
 
@@ -147,38 +148,6 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
     };
   }, [game]);
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const pull = async () => {
-      try {
-        const next = await getSubmissionStatus(token, i18n.language);
-        if (cancelled) return;
-        setStatus(next);
-        setLoadError(null);
-        const delay = pollDelayMs(next.status, next.stall, next.phase);
-        if (delay != null) {
-          timer = setTimeout(() => {
-            void pull();
-          }, delay);
-        }
-      } catch {
-        if (cancelled) return;
-        setLoadError(t('welcome.loadError'));
-        timer = setTimeout(() => {
-          void pull();
-        }, 10_000);
-      }
-    };
-
-    void pull();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [token, i18n.language, t]);
 
   useEffect(() => {
     headingRef.current?.focus();

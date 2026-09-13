@@ -8,10 +8,9 @@ import { connectCardMode, shouldShowConnectCard, type SelfBuildCopyInput } from 
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioConnectGuide } from './StudioConnectGuide.js';
 import { markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
-import { pollDelayMs } from './studioStatusPoll.js';
+import { useGatedStatusPoll } from './useGatedStatusPoll.js';
 import {
   buildMediaUrl,
-  getSubmissionStatus,
   handoffToPlatform,
   type BuildEvent,
   type SubmissionStatus,
@@ -76,8 +75,9 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
   const [tracksViewport, setTracksViewport] = useState(false);
   const [title, setTitle] = useState(game);
   const [token, setToken] = useState<string | null>(null);
-  const [status, setStatus] = useState<SubmissionStatus | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const status = useGatedStatusPoll(token, i18n.language, setFailed);
+  const loadError = failed ? t('connectWizard.loadError') : null;
 
   const awaiting = stillNeedsConnect(status);
   const chapterOver = connectChapterOver(status);
@@ -102,38 +102,6 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     };
   }, [game]);
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const pull = async () => {
-      try {
-        const next = await getSubmissionStatus(token, i18n.language);
-        if (cancelled) return;
-        setStatus(next);
-        setLoadError(null);
-        const delay = pollDelayMs(next.status, next.stall, next.phase);
-        if (delay != null) {
-          timer = setTimeout(() => {
-            void pull();
-          }, delay);
-        }
-      } catch {
-        if (cancelled) return;
-        setLoadError(t('connectWizard.loadError'));
-        timer = setTimeout(() => {
-          void pull();
-        }, 10_000);
-      }
-    };
-
-    void pull();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [token, i18n.language, t]);
 
   useEffect(() => {
     headingRef.current?.focus();

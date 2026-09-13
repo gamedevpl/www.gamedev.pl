@@ -72,6 +72,88 @@ Two things bound it:
 The general rule this leaves: **a poll's cost is its cadence times its cheapest possible
 answer, and "nothing to show" is the answer it will give most of the time.**
 
+### The status poll: three different meanings of "nobody is watching"
+
+`/api/submissions/:token` is the Studio status poll, three seconds per open tab on any
+round that is not `published` or `abandoned`. On 2026-09-13 it served **2,572 requests in
+the 02:00 UTC hour** — the user agents were two ordinary browser tabs on a Mac, not a CLI
+and not an agent. One of them held the service above A30's 8 reads/s drift threshold for
+**six and a half unbroken hours**; A30's condition needs three. Closing a single tab took
+the rate from 13/s to 0.76/s.
+
+Per-request cost was not the problem: it had already fallen from 26–35 reads to 7.35, and
+the minimum idle rate never moved (3.07 / 3.30 / 3.65 reads/s across 09-11, 09-12, 09-13).
+What rose was **occupancy** — the share of the day spent above the line went 29% to 61% to
+96%. Split the distribution before calling a higher hourly average a new floor; "the code
+got more expensive" and "something is polling more of the time" have opposite fixes.
+
+One open tab is about 285K reads a day, so this scales with **creators**, the axis the
+product is supposed to grow on. Neither of the two existing axes covers it: the tab is not
+shared work and the cost is not keyed by what the reader has done.
+
+So `pollDelayMs` answers how fast a round wants to be watched, and `pollGating.ts` answers
+how fast anyone actually is. Three gates, because "nobody is watching" has three distinct
+causes and each needs a different signal:
+
+| Gate | Signal | Effect |
+| --- | --- | --- |
+| Hidden | `document.hidden` | stops; catches up on `visibilitychange` |
+| Idle | no `pointerdown`/`keydown` | 10s after 2 min, 30s after 10, 60s after 30 |
+| Server floor | `pollAfterMs` in the status | 3s while moving, 10s once quiet |
+
+**The two client gates may be aggressive; the server floor may not.** Both client gates are
+conditioned on nobody looking, and interaction lifts them at once, so a minute of staleness
+costs a creator nothing. The server floor applies to every client, including a tab someone
+is watching right now, so it is sized by what can still happen rather than by how long
+nothing has.
+
+**Visibility alone does not catch a creator who walked away**, which is why the idle gate
+exists: a forgotten tab stays focused, and `document.hidden` reports it as watched. Equally,
+idleness is never *inferred from an absence of observation* — where there is no `document`
+to listen to, the idle gate does not apply at all, or a non-browser consumer would throttle
+itself to a minute with nothing able to reset it.
+
+**The server floor is where the policy belongs.** A cadence compiled into a bundle can only
+change on a deploy that every open tab must reload to receive; a number in the response
+reaches the next poll.
+
+Sizing it against the 60s status-cache TTL was the first attempt and was wrong, which is
+worth recording because the reasoning is seductive: a poll faster than the TTL can only
+re-read an identical cached body, so the TTL looks like a free ceiling. **A cache TTL bounds
+how stale the server's own copy may be; it says nothing about the answer.** `onEvent` busts
+that cache the moment an agent acts, and a quiet self round is precisely the one an agent
+rejoins — `start` pulses Studio so "agent stopped" cannot sit beside live progress, and
+every stage refreshes the heartbeat (`.claude/skills/byoca-mcp/SKILL.md`). A minute-long
+floor would have restored a lingering-state bug that skill records as already fixed. The
+widening therefore stops at **10s**, and `dispatched` keeps 2s to match its own cache.
+
+None of the three delays the creator: their own actions invalidate the cache and call
+`pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
+never the first read — a mount still answers the page once.
+
+**A gate on the store reaches only what subscribes to it.** The welcome dialog and the
+connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both
+polled at three seconds behind a hidden tab and neither honoured `pollAfterMs` — measured at
+**30 requests in five hidden minutes** for the welcome dialog alone. Both now go through
+`useGatedStatusPoll`, which subscribes to the store and therefore inherits all three gates,
+and shares one fetch with anything else watching the same round. `EditorPanel`'s loop stays
+as it is on purpose: it runs only while a creator is waiting for a publish they asked for,
+and ends on the seal, so throttling it would stall an action rather than save an idle poll.
+
+**A sandboxed frame eats the events the gate listens for.** Games render with no
+`allow-same-origin`, so a creator playtesting inside the Studio stage produces no
+`pointerdown` or `keydown` on the parent document at all — the most engaged creator on the
+site would have been classified idle after two minutes. `StudioStage`'s `onGameActivity`,
+which already existed for play chrome, now also reports the interaction.
+
+**Resetting the idle clock is not the same as lifting the gate.** Recording a fresh
+interaction leaves the slow timer that is already scheduled, so a creator who typed just
+after a poll waited out the old sixty seconds anyway. `noteStudioInteraction` reschedules
+whenever the floor it just lifted was non-zero — and only then, so ordinary typing does not
+churn timers. The test for this originally dispatched `visibilitychange` alongside the
+interaction, which reached `rescheduleAll` by the other path and hid the bug completely.
+
+
 ### The per-user half is the only part that grows with visitors
 
 The shared windows above make the frightening numbers flat: `/api/catalog` costs 293 reads
