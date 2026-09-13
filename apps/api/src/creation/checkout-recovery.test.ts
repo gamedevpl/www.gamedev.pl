@@ -323,3 +323,18 @@ it('reserves a canceled recovery slug against Code opening a manual round during
   expect(result.statusCode).toBe(200);
   expect((await f.store.getSubmissionBySlug('sky'))?.recoveryKey).toBeTruthy();
 });
+
+it.each(['success', 'refusal'])('preserves recovery %s when admission cleanup fails', async (mode) => {
+  const f = await fixture();
+  vi.spyOn(f.store, 'finishCheckoutRecovery').mockRejectedValue(new Error('Firestore unavailable'));
+  if (mode === 'refusal') f.createGame.mockResolvedValueOnce({ ok: false, status: 429, error: 'quota exceeded' });
+  const response = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+  if (mode === 'success') {
+    expect(response.statusCode).toBe(200);
+    expect(response.json().token).toBeTruthy();
+    expect((await f.store.getSubmissionBySlug('sky'))?.recoveryKey).toBeTruthy();
+  } else {
+    expect(response.statusCode).toBe(429);
+    expect(response.json().error).toBe('quota exceeded');
+  }
+});

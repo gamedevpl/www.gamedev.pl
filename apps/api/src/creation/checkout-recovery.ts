@@ -105,7 +105,7 @@ export function registerCheckoutRecovery(
         if (!created.ok) return reply.code(created.status).send({ error: created.error, category: created.category });
         return { slug: created.slug, token: mintToken(created.jobId, deps.submissionTokenSecret) };
       } finally {
-        await deps.store.finishCheckoutRecovery(slug, nonce);
+        await deps.store.finishCheckoutRecovery(slug, nonce).catch(() => {});
       }
     },
   );
