@@ -9,6 +9,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Say which file is damaged when recovery metadata cannot be read, instead of showing a parser error.
+- Stop reporting a damaged local file as a network problem.
+- Name `GAME.json` when it is not valid JSON, rather than failing part-way through a recovery.
+- Keep the previous recovery metadata when a write is interrupted, so the next `push` still works.
+
+### Fixed
+
 - Offer recovery when starting or connecting in a canceled or deleted local checkout, then continue in the same session without losing local edits (#1317).
 
 ### Added
