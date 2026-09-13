@@ -25,8 +25,8 @@ function fixture(kind = 'missing') {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     let body: unknown = {};
     if (url.includes('/studio?'))
-      body = { games: active || kind === 'archived' ? [{ slug: 'sky', token: 'round' }] : [] };
-    else if (url.endsWith('/recovery')) body = { kind: active ? 'active' : kind };
+      body = { games: active || kind === 'archived' || kind === 'published' ? [{ slug: 'sky', token: 'round' }] : [] };
+    else if (url.endsWith('/recovery')) body = { kind: active ? 'active' : kind === 'published' ? 'occupied' : kind };
     else if (url.endsWith('/recover')) {
       active = true;
       body = { token: 'round', slug: 'sky' };
@@ -146,6 +146,19 @@ it('does not recover when lifecycle lookup fails despite an existing shelf token
     url.endsWith('/recovery') ? new Response('{"error":"unavailable"}', { status: 503 }) : normal(url, init),
   );
   await handleReplLine({ ...f, token: null, cwd: f.root, line: '/connect' });
+  expect(f.pick).not.toHaveBeenCalled();
+  expect(f.fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+});
+
+it('opens owned published games even though recovery reports occupied', async () => {
+  const f = fixture('published');
+  expect(await replStart(f.api, f.root)).toMatchObject({
+    token: 'round',
+    checkout: { root: f.root },
+    initialLine: undefined,
+  });
+  const result = await connectSession({ ...f, cwd: f.parent, slug: 'sky', agent: 'codex' });
+  expect(result).toMatchObject({ token: 'round', workshop: { root: f.root, selectedAgent: 'codex' } });
   expect(f.pick).not.toHaveBeenCalled();
   expect(f.fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
 });

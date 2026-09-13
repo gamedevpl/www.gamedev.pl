@@ -20,8 +20,7 @@ async function localStudioToken(api: ApiClient, slug: string): Promise<string> {
     'GET',
     `/api/me/studio/games/${encodeURIComponent(slug)}/recovery`,
   );
-  if (['missing', 'canceled', 'archived', 'occupied'].includes(recovery.kind))
-    throw new MissingStudioGame(slug, recovery.kind);
+  if (['missing', 'canceled', 'archived'].includes(recovery.kind)) throw new MissingStudioGame(slug, recovery.kind);
   return token;
 }
 
