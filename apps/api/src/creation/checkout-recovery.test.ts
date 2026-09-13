@@ -338,3 +338,24 @@ it.each(['success', 'refusal'])('preserves recovery %s when admission cleanup fa
     expect(response.json().error).toBe('quota exceeded');
   }
 });
+it('names the field it refused instead of only saying the request is invalid', async () => {
+  const f = await fixture();
+  const res = await f.app.inject({
+    method: 'POST',
+    url: '/api/me/studio/recover',
+    payload: { ...payload(), title: { en: 'Sky Game' } },
+  });
+  expect(res.statusCode).toBe(400);
+  expect(res.json().message).toContain('title');
+});
+it('reports a length bound without echoing the value it refused', async () => {
+  const f = await fixture();
+  const res = await f.app.inject({
+    method: 'POST',
+    url: '/api/me/studio/recover',
+    payload: { ...payload(), concept: 'too short to survive' },
+  });
+  expect(res.statusCode).toBe(400);
+  expect(res.json().message).toContain('concept is shorter than 30');
+  expect(res.json().message).not.toContain('too short to survive');
+});

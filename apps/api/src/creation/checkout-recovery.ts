@@ -16,6 +16,17 @@ const Body = z.object({
   concept: z.string().min(30).max(4000),
 });
 
+// Zod knows which field failed; names and bounds only, never the value.
+function describeBody(error: z.ZodError): string {
+  const parts = error.issues.map((issue) => {
+    const field = issue.path.join('.') || 'request';
+    if (issue.code === 'too_small') return `${field} is shorter than ${String(issue.minimum)}`;
+    if (issue.code === 'too_big') return `${field} is longer than ${String(issue.maximum)}`;
+    return `${field} is not valid`;
+  });
+  return [...new Set(parts)].join('; ');
+}
+
 export function registerCheckoutRecovery(
   app: FastifyInstance,
   deps: CreateGameRouteDeps & {
@@ -67,7 +78,10 @@ export function registerCheckoutRecovery(
         return reply.code(503).send({ error: 'unavailable', message: 'Code recovery is temporarily disabled.' });
       if (!deps.store || !deps.submissionTokenSecret) return reply.code(503).send({ error: 'unavailable' });
       const parsed = Body.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'invalid recovery request' });
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ error: 'invalid recovery request', message: `Recovery refused: ${describeBody(parsed.error)}.` });
       const { slug, key, title, concept } = parsed.data;
       const nonce = randomUUID();
       if (!(await deps.store.beginCheckoutRecovery(slug, nonce, Date.now())))
