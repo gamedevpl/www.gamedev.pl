@@ -1,7 +1,7 @@
 import { sanitizeEventPayload } from './ansi.js';
 import { EXIT_GREEN, EXIT_RED } from './exit-codes.js';
 import { createLiveScreen } from './live.js';
-import { getStatus, isTerminalStatus, previewUrl, type RoundStatus } from './turn.js';
+import { getStatus, isTerminalStatus, latestProposal, previewUrl, studioUrl, type RoundStatus } from './turn.js';
 import type { ApiClient } from './api.js';
 import type { CliTelemetry } from './telemetry.js';
 
@@ -15,12 +15,30 @@ export function statusWatchDelayMs(status: Pick<RoundStatus, 'status' | 'phase' 
   return active ? 3000 : 10_000;
 }
 
+// Agent-authored text reaching a terminal; strip it like any payload.
+function proposalLabels(status: RoundStatus): string {
+  const proposal = latestProposal(status);
+  if (!proposal) return '';
+  return proposal.options.map((option) => `"${sanitizeEventPayload(option.label.en)}"`).join(' / ');
+}
+
+// The pick compares two pictures; route there, do not ask here.
+export function proposalLines(status: RoundStatus, origin: string): string[] {
+  const labels = proposalLabels(status);
+  if (!labels) return [];
+  const slug = status.slug ?? status.preview?.slug;
+  const lines = [`concept directions waiting: ${labels}`];
+  if (slug) lines.push(`pick one in Studio: ${studioUrl(origin, slug)}`);
+  return lines;
+}
+
 export function formatStatusLines(status: RoundStatus, origin: string): string[] {
   const lines = [`${status.status}${status.stall ? ` (${status.stall})` : ''}`];
   if (status.gateProgress) {
     lines.push(`${status.gateProgress.stage} ${status.gateProgress.index}/${status.gateProgress.total}`);
   }
   if (status.preview?.slug) lines.push(previewUrl(origin, status.preview.slug));
+  lines.push(...proposalLines(status, origin));
   if (status.failure?.reason) lines.push(sanitizeEventPayload(status.failure.reason));
   return lines;
 }
@@ -37,6 +55,8 @@ export function statusFingerprint(status: RoundStatus): string {
     status.slug ?? '',
     status.failure?.reason ?? '',
     preview == null ? '' : preview.green ? '1' : '0',
+    // A card lands after the boundary; without this it never announces.
+    latestProposal(status)?.version ?? '',
   ].join('|');
 }
 
@@ -56,6 +76,8 @@ export function isPublishTransition(previous: string, next: string): boolean {
 
 export function isRoundBoundary(status: RoundStatus): boolean {
   if (isTerminalStatus(status.status)) return true;
+  // A green preview leaves the job building; the card is news.
+  if (latestProposal(status)) return true;
   return status.status === 'needs_changes' && !isRepairableNeedsChanges(status);
 }
 
@@ -64,7 +86,11 @@ export function formatStatusEvent(status: RoundStatus): string {
     const why = status.failure?.reason ?? 'preview red';
     return `needs_changes (${sanitizeEventPayload(why)})`;
   }
-  if (status.status === 'needs_changes' && status.previewGate?.green) {
+  const labels = proposalLabels(status);
+  const finished = status.status === 'needs_changes' && status.previewGate?.green;
+  // A card can land while the job still reads building.
+  if (labels) return `${finished ? 'round finished — ' : ''}Studio has concept directions: ${labels}`;
+  if (finished) {
     return 'round finished — Studio is waiting (preview green)';
   }
   if (status.status === 'needs_changes') {
@@ -89,6 +115,9 @@ export function shouldAnnounceStatus(status: RoundStatus, previousKey: string, k
 export function formatRoundLive(status: RoundStatus, origin: string): string[] {
   const lines = [formatStatusEvent(status)];
   if (status.preview?.slug) lines.push(previewUrl(origin, status.preview.slug));
+  // The event names the directions; this says where to act.
+  const slug = status.slug ?? status.preview?.slug;
+  if (slug && latestProposal(status)) lines.push(`pick one in Studio: ${studioUrl(origin, slug)}`);
   const reason = status.failure?.reason ? sanitizeEventPayload(status.failure.reason) : '';
   if (reason && !lines[0]?.includes(reason)) lines.push(reason);
   return lines.slice(0, 4);

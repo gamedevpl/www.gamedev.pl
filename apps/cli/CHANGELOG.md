@@ -13,6 +13,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Say when a finished round has AI concept directions waiting, naming them and linking to
+  Studio, where the two frames can be compared and picked (#1321).
 - Recover canceled or deleted games from local checkout sources with `recover`, keeping local edits and supporting a new slug when needed (#1305).
 
 ## 0.14.2 — 2026-09-12
