@@ -108,8 +108,8 @@ export async function listAuthorizedRoundsForSlug(
   slug: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<SubmissionRecord[]> {
-  const own = await store.listSubmissionsByOwnerAndSlug(uid, slug);
-  if (!gameAccessAuthoritative(env)) return own;
+  if (!gameAccessAuthoritative(env)) return store.listSubmissionsByOwnerAndSlug(uid, slug);
   if (!(await creatorOwnsSlug(store, slug, uid, env))) return [];
-  return own.length > 0 ? own : store.listSubmissionsBySlug(slug);
+  // Every round — an intervening owner's round may be the tip.
+  return store.listSubmissionsBySlug(slug);
 }

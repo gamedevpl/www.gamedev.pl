@@ -165,4 +165,16 @@ describe('listAuthorizedRoundsForSlug', () => {
 
     expect(await listAuthorizedRoundsForSlug(store, 'g:someone-else', 'sky', ON)).toEqual([]);
   });
+
+  it('flag on: a transfer back does not hide the intervening owner rounds', async () => {
+    // Ada -> Grace -> back to Ada: Grace's round must not stay hidden.
+    const store = transferredGameStore({
+      jobs: [job(1, 'g:ada', 'sky'), job(2, 'g:grace', 'sky')],
+      access: access('sky', 'g:ada'),
+    });
+
+    const rounds = await listAuthorizedRoundsForSlug(store, 'g:ada', 'sky', ON);
+
+    expect(rounds.map((r) => r.jobId).sort()).toEqual([1, 2]);
+  });
 });
