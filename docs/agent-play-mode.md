@@ -23,7 +23,7 @@ reduced to guessing from stills.
 ## The shape
 
 A theater overlay a reviewer opens from the player's overflow menu, or with `?agent=1`.
-It works at two altitudes: **submit a plan and read the evidence** for playing, and a
+It works at three altitudes: **a policy** to play, **a plan** to pin a sequence down, and a
 command box for finding your feet first. Four rules carry the design:
 
 1. **Time belongs to the agent.** Entering the mode pauses the game; `step 5` advances five
@@ -46,6 +46,7 @@ command box for finding your feet first. Four rules carry the design:
 | Grammar, formatting, redaction | `apps/web/src/agentPlay.ts`                   | Pure and typed; parses a line into a command, formats state, hides declared fields               |
 | The plan language              | `apps/web/src/agentPlan.ts`                   | Parses and bounds a `CAPTURE.json`-shaped plan; evaluates its conditions                         |
 | The runner                     | `apps/web/src/agentPlanRunner.ts`             | Drives the plan over the bridge, collects trace, checks and captures                             |
+| The policy runner              | `apps/web/src/agentPolicy.ts`                 | Sends a `playAgent` function into the frame and brings back its transcript                       |
 | In-frame executor              | `packages/contract/src/agent-play-bridge.ts`  | A source fragment concatenated into the player bridge; runs the verbs against `__GAME_HARNESS__` |
 | Host state                     | `apps/web/src/useAgentPlay.ts`                | Sends commands, validates what comes back, folds in the game's play signals                      |
 | The panel                      | `apps/web/src/AgentPlayPanel.tsx`             | The rail an agent reads and types into                                                           |
