@@ -1,4 +1,5 @@
 import { getSubmissionStatus, type SubmissionApiError, type SubmissionStatus } from '../../submissionApi.js';
+import { gatedPollDelayMs } from './pollGating.js';
 
 // One shared poll per (token, locale); each subscriber sets its own cadence.
 export interface StudioStatusSubscriber {
@@ -26,6 +27,40 @@ interface PollState {
 
 const polls = new Map<string, PollState>();
 
+// Attention belongs to the document, not to one poll.
+let lastInteractionAt = Date.now();
+let attentionWired = false;
+
+/**
+ * Records that somebody is actually using the page.
+ *
+ * Exported so a surface can report an interaction the document-level listeners below
+ * cannot see, and so tests can drive the idle gate without synthesising events.
+ */
+export function noteStudioInteraction(): void {
+  lastInteractionAt = Date.now();
+}
+
+function rescheduleAll(): void {
+  for (const [key, state] of polls) {
+    // An in-flight tick reschedules itself when it settles.
+    if (state.subscribers.size === 0 || state.ticking) continue;
+    schedule(key, state);
+  }
+}
+
+function wireAttention(): void {
+  if (attentionWired || typeof document === 'undefined') return;
+  attentionWired = true;
+  document.addEventListener('pointerdown', noteStudioInteraction, { passive: true });
+  document.addEventListener('keydown', noteStudioInteraction, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    // Coming back to a tab is itself an act of attention.
+    if (!document.hidden) noteStudioInteraction();
+    rescheduleAll();
+  });
+}
+
 function keyFor(token: string, locale: string): string {
   return `${token}:${locale}`;
 }
@@ -45,14 +80,23 @@ function nextDelay(state: PollState): number | null {
   return delay;
 }
 
+// Gates the repeats, never the first read.
 function schedule(key: string, state: PollState): void {
   if (state.timer !== undefined) clearTimeout(state.timer);
-  const wanted = nextDelay(state);
+  wireAttention();
+  const at = Date.now();
+  // No document means no attention to observe, so assume none missing.
+  const wanted = gatedPollDelayMs({
+    wantedMs: nextDelay(state),
+    hidden: typeof document !== 'undefined' && document.hidden,
+    msSinceInteraction: attentionWired ? at - lastInteractionAt : 0,
+    serverFloorMs: state.latest?.pollAfterMs,
+  });
   if (wanted === null) {
     state.timer = undefined;
     return;
   }
-  const elapsed = state.lastTickAt === undefined ? 0 : Date.now() - state.lastTickAt;
+  const elapsed = state.lastTickAt === undefined ? 0 : at - state.lastTickAt;
   const delay = Math.max(0, wanted - elapsed);
   const generation = state.generation;
   state.timer = setTimeout(() => void tick(key, generation), delay);

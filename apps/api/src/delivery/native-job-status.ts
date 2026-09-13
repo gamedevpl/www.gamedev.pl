@@ -2,6 +2,7 @@ import { detectStall, gateCrashStall, toSubmissionStatus } from '../creation/job
 import { sealRefusal } from '../platform/seal-preview.js';
 import { toRecentBuilds } from './recent-builds.js';
 import { revisionOriginOf } from './build-status.js';
+import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import type { BuilderKind } from '../creation/builder.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
@@ -183,6 +184,19 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
     } else if (queuedTransition?.reason === 'improvement_requested') {
       status.openedBy = 'creator';
     }
+    // Events arrive newest first, so the head is freshest.
+    const movedAt = lastMovementAt([
+      record.stateSince,
+      record.lastAgentSignalAt,
+      status.events?.[0]?.createdAt,
+      record.createdAt,
+    ]);
+    const floor = statusPollFloorMs({
+      terminal: status.status === 'published' || status.status === 'abandoned',
+      dispatched: status.phase === 'dispatched',
+      msSinceMovement: movedAt === undefined ? Number.NaN : now() - movedAt,
+    });
+    if (floor !== undefined) status.pollAfterMs = floor;
     return status;
   }
 
