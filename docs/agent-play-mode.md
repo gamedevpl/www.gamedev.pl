@@ -1,5 +1,8 @@
 # Agent play mode — the design
 
+> ⚠️ **Read "The shape is under revision" below before extending this.** The per-command
+> interface shipped here is the right plumbing under the wrong primary interaction.
+>
 > Status: 🚧 **implementation spike (2026-09-13).** The bridge, the panel and the entry
 > points are built and tested; the games-repo half (hidden fields in the document, sound
 > as text) is not, and no telemetry is emitted yet. Strategy, options and the decisions
@@ -86,6 +89,30 @@ GameKit's `aria-live` line: the one text channel a published game already writes
   snapshot reaches an agent. That list does not travel with the assembled document yet, so
   the page reports `hiddenFields: null` and the panel says out loud that nothing is being
   withheld — a visible gap rather than a silent one.
+
+## The shape is under revision
+
+Reviewed the same day it was built, and two defects stand. Recorded here so nobody
+extends the wrong half.
+
+**It is not generic enough.** Counted across the 123 games in the games repo: 118 report a
+`snapshot()`, all 123 carry a how-to-play legend and canvas pixels — but only 34 author a
+`snapshot.observation`, and only 4 register `ui` affordances. So on a typical game the
+panel's two richest blocks are empty. Closing that per game is the trap, not the fix. The
+universally available channels are the snapshot, the legend and **the pixels**, and this
+spike treats pixels as an afterthought rather than as the main way a generic game is seen.
+
+**It puts the model in the frame loop.** One command per model turn cannot play a
+real-time game: the play window is 120 seconds, catalog games run at 30 fps, so one
+attempt is roughly 3600 frames. The games repo's own review programme already moved from
+an interactive loop to replayed `CAPTURE.json` plans for exactly this reason.
+
+**Where it goes.** The unit should be an _attempt_, not a keypress: the agent submits a
+plan in the games repo's existing script language (`press`, `click`, `drag`, `repeat`,
+`assert`, `waitFor`, `capture`), the page runs it at full speed over this bridge, and
+answers with a trace plus the captured frames as a filmstrip. Everything in this document
+below stays true — the bridge is exactly the `PlanDriver` such a runner needs — but the
+command box becomes the exploration mode rather than the way anyone plays.
 
 ## Not built yet
 
