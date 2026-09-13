@@ -13,9 +13,11 @@ type Message = Record<string, unknown>;
 const HOST = 'gdpl-host';
 
 // The player half, as injected; the agent half arrives separately.
+
+// Case-insensitive: a regex over tags should not care about case.
 function playerBridgeSource(): string {
   const html = embedGameHtml('<html><head></head><body></body></html>');
-  const match = /<script>([\s\S]*?)<\/script>/.exec(html);
+  const match = /<script>([\s\S]*?)<\/script>/i.exec(html);
   if (!match) throw new Error('bridge script not found in the embedded document');
   return match[1]!;
 }
