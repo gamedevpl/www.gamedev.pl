@@ -2,6 +2,12 @@
 name: Deploy watchdog
 
 on:
+  # GitHub throttles schedules on a quiet repo: a */30 cron was observed
+  # delivering 1h41m and 4h57m apart. A deploy settling is the real moment.
+  workflow_run:
+    workflows: ['Deploy to Cloud Run']
+    types: [completed]
+    branches: [master]
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
@@ -31,6 +37,8 @@ jobs:
       - id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A deploy just settled, so there is no latency left to forgive.
+          GRACE_MINUTES: ${{ github.event_name == 'workflow_run' && '0' || '25' }}
         run: |
           set +e
           node infra/check-deploy-freshness.mjs > verdict.txt 2>&1
