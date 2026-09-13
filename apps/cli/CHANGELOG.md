@@ -7,22 +7,20 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.15.0 — 2026-09-13
+
+### Added
+
+- Say when a finished round has AI concept directions waiting, naming them and linking to Studio, where the two frames can be compared and picked (#1321).
+- Recover canceled or deleted games from local checkout sources with `recover`, keeping local edits and supporting a new slug when needed (#1305).
+
 ### Fixed
 
 - Say which file is damaged when recovery metadata cannot be read, instead of showing a parser error.
 - Stop reporting a damaged local file as a network problem.
 - Name `GAME.json` when it is not valid JSON, rather than failing part-way through a recovery.
 - Keep the previous recovery metadata when a write is interrupted, so the next `push` still works.
-
-### Fixed
-
 - Offer recovery when starting or connecting in a canceled or deleted local checkout, then continue in the same session without losing local edits (#1317).
-
-### Added
-
-- Say when a finished round has AI concept directions waiting, naming them and linking to
-  Studio, where the two frames can be compared and picked (#1321).
-- Recover canceled or deleted games from local checkout sources with `recover`, keeping local edits and supporting a new slug when needed (#1305).
 
 ## 0.14.2 — 2026-09-12
 
