@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { mintToken } from '../platform/submission-token.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Store } from '../platform/store.js';
 import type { CreateGameRouteDeps } from './create-game.js';
 
@@ -41,7 +42,7 @@ export function registerCheckoutRecovery(
     if ((publication && !archived) || (await deps.isSlugPublished(slug))) return { kind: 'occupied' as const };
     if (!holder) return { kind: publication ? ('occupied' as const) : ('missing' as const) };
     if (
-      holder.ownerUid !== uid ||
+      !(await ownsSubmissionOrSlug(deps.store!, holder, uid)) ||
       (holder.abandonedAt && holder.state !== 'canceled' && !archived && !isAbandonedRecovery(holder)) ||
       holder.moderationBlockedAt
     )

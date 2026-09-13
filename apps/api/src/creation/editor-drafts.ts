@@ -15,8 +15,9 @@ import {
 import { editorKitV2Enabled } from '../platform/editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from '../delivery/games-store.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from '../platform/store.js';
-import { replyModerationBlock, type ContentChecker  } from '../platform/moderation.js';
+import { replyModerationBlock, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
 import type { EditingGate } from './creation-limits.js';
@@ -143,7 +144,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       return null;
     }
     const submission = await store.getSubmissionBySlug(params.data.slug);
-    if (!submission || submission.ownerUid !== request.user!.uid) {
+    if (!submission || !(await ownsSubmissionOrSlug(store, submission, request.user!.uid))) {
       reply.status(404).send({ error: 'not found' });
       return null;
     }
@@ -623,7 +624,8 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       // `submitted`.
       const source = resolved.submission;
       const jobId = await store.allocateJobId();
-      await store.createSubmission(jobId, source.ownerUid, source.title);
+      // The caller, not source.ownerUid, which a transfer leaves stale.
+      await store.createSubmission(jobId, request.user!.uid, source.title);
       if (source.locale) await store.setSubmissionLocale(jobId, source.locale);
       await store.setSubmissionSlug(jobId, slug);
       const at = () => new Date(now()).toISOString();

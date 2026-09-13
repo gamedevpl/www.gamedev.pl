@@ -27,7 +27,7 @@
     "apps/api/src/agent-surface/agent-creator-key-resolve.ts": 172,
     "apps/api/src/agent-surface/agent-creator-key.test.ts": 15,
     "apps/api/src/agent-surface/agent-creator-key.ts": 257,
-    "apps/api/src/agent-surface/agent-game-key-resolve.test.ts": 90,
+    "apps/api/src/agent-surface/agent-game-key-resolve.test.ts": 117,
     "apps/api/src/agent-surface/agent-game-key-resolve.ts": 302,
     "apps/api/src/agent-surface/agent-game-key.ts": 346,
     "apps/api/src/agent-surface/agent-session-revocation.ts": 81,

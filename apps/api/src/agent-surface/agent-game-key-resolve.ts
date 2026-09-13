@@ -19,6 +19,7 @@ import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import { isActiveBuildRound } from '../creation/job-state.js';
 import type { GameAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
 import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { gameAccessAuthoritative } from '../platform/game-access-cutover.js';
 
 export type ResolveGameKeyResult =
   { ok: true; claims: GameAgentKeyClaims; record: SubmissionRecord } | { ok: false; reason: string };
@@ -33,14 +34,29 @@ export type ResolveGameKeyForOpenRoundResult =
     }
   | { ok: false; reason: string };
 
+// Flag on + canonical owner: the whole slug, not just their own past rounds.
+async function widenIfTransferred(
+  store: Store,
+  slug: string,
+  creatorUid: string,
+  env: NodeJS.ProcessEnv,
+): Promise<SubmissionRecord[]> {
+  if (!gameAccessAuthoritative(env)) {
+    return (await store.listSubmissionsBySlug(slug)).filter((job) => job.ownerUid === creatorUid);
+  }
+  if (!(await creatorOwnsSlug(store, slug, creatorUid, env))) return [];
+  return store.listSubmissionsBySlug(slug);
+}
+
 /** Newest active build round for this slug owned by the creator, or null. */
 export async function findActiveRoundForSlug(
   store: Store,
   slug: string,
   creatorUid: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<SubmissionRecord | null> {
-  const bySlug = await store.listSubmissionsBySlug(slug);
-  return bySlug.find((job) => job.ownerUid === creatorUid && !job.abandonedAt && isActiveBuildRound(job)) ?? null;
+  const candidates = await widenIfTransferred(store, slug, creatorUid, env);
+  return candidates.find((job) => !job.abandonedAt && isActiveBuildRound(job)) ?? null;
 }
 
 /**
@@ -51,9 +67,10 @@ export async function findDraftJobForSlug(
   store: Store,
   slug: string,
   creatorUid: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<SubmissionRecord | null> {
-  const bySlug = await store.listSubmissionsBySlug(slug);
-  return bySlug.find((job) => job.ownerUid === creatorUid && !job.abandonedAt && !job.publishedAt) ?? null;
+  const candidates = await widenIfTransferred(store, slug, creatorUid, env);
+  return candidates.find((job) => !job.abandonedAt && !job.publishedAt) ?? null;
 }
 
 /**

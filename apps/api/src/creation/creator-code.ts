@@ -27,6 +27,7 @@ import {
 } from './module-size.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
+import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
 import type { SourceDeliveryService } from '../delivery/source-delivery.js';
 import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
@@ -132,7 +133,7 @@ const SLUG_PARAM_PATTERN = /^[a-z0-9][a-z0-9-]{0,60}$/;
  * hand an owner's edit back a stale base to overwrite newer published work.
  */
 async function resolveOwnedRecord(store: Store, uid: string, slug: string): Promise<SubmissionRecord | null> {
-  const records = await store.listSubmissionsByOwnerAndSlug(uid, slug);
+  const records = await listAuthorizedRoundsForSlug(store, uid, slug);
   // The query returns them newest-first already.
   return records.find((record) => !record.abandonedAt && record.state !== 'canceled') ?? null;
 }
@@ -202,9 +203,16 @@ export async function registerCreatorCodeRoutes(
   }
 
   // CE-17: opens a fresh job, `published` forbids reopening one in place.
-  async function openManualRound(store: Store, source: SubmissionRecord, slug: string): Promise<SubmissionRecord> {
+
+  // ownerUid is the caller, not source.ownerUid, which a transfer leaves stale.
+  async function openManualRound(
+    store: Store,
+    source: SubmissionRecord,
+    slug: string,
+    ownerUid: string,
+  ): Promise<SubmissionRecord> {
     const jobId = await store.allocateJobId();
-    await store.createSubmission(jobId, source.ownerUid, source.title);
+    await store.createSubmission(jobId, ownerUid, source.title);
     await store.setSubmissionLocale(jobId, source.locale ?? 'en');
     await store.recordJobTransition(jobId, {
       to: 'queued',
@@ -225,7 +233,7 @@ export async function registerCreatorCodeRoutes(
       await store.setSubmissionAbandoned(jobId, new Date().toISOString());
       throw Object.assign(new Error('The game round changed. Refresh before editing.'), { statusCode: 409 });
     }
-    return (await store.getSubmission(jobId)) ?? { ...source, jobId, roundGeneration: undefined };
+    return (await store.getSubmission(jobId)) ?? { ...source, ownerUid, jobId, roundGeneration: undefined };
   }
 
   /** Owner-resolved round + version, or the exact reply already sent on failure. */
@@ -390,7 +398,9 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+      const activeRecord = roundIsClosed(record)
+        ? await openManualRound(store, record, slug, request.user!.uid)
+        : record;
 
       const parsed = StageInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -455,7 +465,9 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+      const activeRecord = roundIsClosed(record)
+        ? await openManualRound(store, record, slug, request.user!.uid)
+        : record;
 
       const parsed = DeleteFileInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -541,7 +553,9 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+      const activeRecord = roundIsClosed(record)
+        ? await openManualRound(store, record, slug, request.user!.uid)
+        : record;
 
       const parsed = PatchInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -695,7 +709,9 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+      const activeRecord = roundIsClosed(record)
+        ? await openManualRound(store, record, slug, request.user!.uid)
+        : record;
 
       const parsed = RestoreInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -1243,7 +1259,9 @@ export async function registerCreatorCodeRoutes(
         return reply.status(400).send({ error: `target version ${targetVersion} contains no source files` });
       }
 
-      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+      const activeRecord = roundIsClosed(record)
+        ? await openManualRound(store, record, slug, request.user!.uid)
+        : record;
 
       let kitEngineRef: string | undefined = targetManifest.kitEngineRef;
       if (options.objectStore) {

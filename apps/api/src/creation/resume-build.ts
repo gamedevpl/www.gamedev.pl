@@ -93,6 +93,8 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     builder?: BuilderKind;
     // Handoffs keep the per-job delivery budget across builder changes.
     preserveRoundBudget?: boolean;
+    // The authenticated caller, when it may differ from record.ownerUid (a transfer).
+    ownerUid?: string;
   }): Promise<ResumeOutcome> {
     if (!submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.jobId);
@@ -101,10 +103,11 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
     const selected = await backendFor(builder);
     if (!selected) return { started: false, reason: 'not_configured' };
+    const spendingUid = input.ownerUid ?? record?.ownerUid;
     // Skip for undelivered continuations — not a fresh dispatch.
-    if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && record?.ownerUid) {
+    if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && spendingUid) {
       const dateStr = new Date(now()).toISOString().slice(0, 10);
-      const availability = await managedAvailabilityGate.checkAndSpend(record.ownerUid, dateStr);
+      const availability = await managedAvailabilityGate.checkAndSpend(spendingUid, dateStr);
       if (!availability.available) {
         return { started: false, reason: 'platform_unavailable', unavailableReason: availability.reason };
       }

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { creatorOwnsSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
@@ -83,7 +83,7 @@ export async function registerDraftLifecycleRoutes(
       }
 
       const record = await store.getSubmission(jobId);
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can share this game' });
       }
       if (!record.slug) {
@@ -132,7 +132,7 @@ export async function registerDraftLifecycleRoutes(
       }
 
       const record = await store.getSubmission(jobId);
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can abandon this build' });
       }
       if (record.abandonedAt) {

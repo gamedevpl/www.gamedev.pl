@@ -130,6 +130,7 @@ const FILE_BUCKET = {
   'slug-ownership': 'platform',
   'game-access-resolve': 'platform',
   'game-access-backfill': 'platform',
+  'game-access-cutover': 'platform',
   'atomic-slug-claim': 'platform',
   'slug-policy': 'platform',
   // Bare env-driven constant factored out of creation/builder.ts because delivery,

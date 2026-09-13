@@ -8,6 +8,7 @@ import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from '../platform/submission-token.js';
@@ -41,6 +42,7 @@ export interface ImproveRoutesOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     requestedBy?: 'creator' | 'agent';
+    ownerUid?: string;
     beforeDispatch?: () => Promise<boolean>;
   }) => Promise<ImprovementRoundOutcome>;
 }
@@ -118,7 +120,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       const record = await store.getSubmission(jobId);
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can request improvements' });
       }
       if (record.abandonedAt) {
@@ -247,6 +249,8 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         title: sanitizedTitle,
         // Their own words, so the new round's thread opens with them.
         requestedBy: 'creator',
+        // The caller, not record.ownerUid, which a transfer leaves stale.
+        ownerUid: request.user!.uid,
         // The record was already loaded above for the ownership check.
         locale: record.locale ?? 'en',
         log: request.log,
