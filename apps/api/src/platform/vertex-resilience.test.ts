@@ -205,21 +205,32 @@ describe('leaving room for the stand-in', () => {
 
 // A stand-in that 404s takes budget and hides the cause.
 describe('an unreachable stand-in', () => {
-  it('costs the real attempts more than a third of the budget', async () => {
+  it('leaves the real attempts under two thirds of the budget', async () => {
     const budgets: number[] = [];
     const attempt = async (_model: string | undefined, timeoutMs: number) => {
       budgets.push(timeoutMs);
       throw new Error('503 UNAVAILABLE');
     };
+    // Frozen, so each share is exact rather than whatever the clock left.
+    const run = (fallbackModel?: string) =>
+      callWithVertexResilience({
+        attempt,
+        timeoutMs: 20_000,
+        retryDelayMs: 0,
+        now: () => 0,
+        ...(fallbackModel ? { fallbackModel } : {}),
+      }).catch(() => undefined);
 
-    await callWithVertexResilience({ attempt, timeoutMs: 20_000, retryDelayMs: 0, fallbackModel: 'absent-model' })
-      .catch(() => undefined);
-    const withStandIn = budgets.splice(0).slice(0, 2).reduce((a, b) => a + b, 0);
+    await run('absent-model');
+    const standInBudgets = budgets.splice(0);
+    const real = standInBudgets.slice(0, 2).reduce((a, b) => a + b, 0);
 
-    await callWithVertexResilience({ attempt, timeoutMs: 20_000, retryDelayMs: 0 }).catch(() => undefined);
-    const withoutStandIn = budgets.reduce((a, b) => a + b, 0);
+    await run();
+    const withoutStandIn = budgets.splice(0).reduce((a, b) => a + b, 0);
 
-    expect(withStandIn).toBeLessThan(withoutStandIn);
+    expect(withoutStandIn).toBe(20_000);
+    expect(standInBudgets).toHaveLength(3);
+    expect(real).toBeLessThan((withoutStandIn * 2) / 3);
   });
 
   it('replaces a retryable cause with the stand-in 404', async () => {
