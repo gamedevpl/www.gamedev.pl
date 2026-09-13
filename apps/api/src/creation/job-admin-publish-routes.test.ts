@@ -8,7 +8,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
   const sessionSecret = 'dev-session-secret-change-me';
   const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
 
-  /** A store holding one delivered version, gated as told. */
+  // One delivered version, gated as told.
   function gamesStoreWith(
     gate: { green: boolean } | null,
     bundle = '<!doctype html>assembled',
@@ -80,11 +80,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
   }
 
   it('refuses to publish a proposal version, however green its gate', async () => {
-    // The load-bearing refusal for the proposals feature. A proposal is somebody else's
-    // change, and a green gate on one says only that it runs — it becomes publishable when
-    // the game's owner accepts it, which rewrites the mode. Read off the manifest rather
-    // than from the proposal registry on purpose: this must hold for a caller who has
-    // never heard of proposals.
+    // Proposal mode is not publishable even when green.
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }, undefined, 'proposal'));
 
     const response = await app.inject({
@@ -126,14 +122,12 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       state: 'published',
       currentVersion: 'v1',
     });
-    // Through `publishing`, not straight to `published`: the intermediate state is what
-    // a failed publish has to fall back from, and skipping it leaves no record it existed.
+    // Publish goes through publishing, not straight to published.
     const record = await store.getSubmission(1_000_001);
     expect(record?.state).toBe('published');
     expect(record?.transitions?.map((entry) => entry.to)).toEqual(['publishing', 'published']);
     expect(record?.publishedAt).toBeTruthy();
-    // The creator rail reads `lastStatus`, not `state` — without this a published game
-    // also kept rendering as an in-progress "yours" card.
+    // Creator rail reads lastStatus, not state.
     expect(record?.lastStatus).toBe('published');
 
     await app.close();
@@ -223,7 +217,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:someone', sessionSecret)}` },
     });
 
-    // 404 rather than 403: the operator surface does not confirm its own existence.
+    // 404, not 403: operator surface stays invisible.
     expect(response.statusCode).toBe(404);
     expect(await store.getPublication('comet-courier')).toBeNull();
 
