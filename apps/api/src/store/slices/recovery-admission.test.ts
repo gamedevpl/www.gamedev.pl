@@ -4,8 +4,8 @@ import { InMemoryStore } from '../../platform/store.js';
 import { FirestoreSubmissionStore } from './submission.js';
 import { permitsRecoveryClaim } from './recovery-admission.js';
 
-function firestoreStore() {
-  const docs = new Map<string, Record<string, unknown>>();
+function firestoreStore(initial: Array<[string, Record<string, unknown>]> = []) {
+  const docs = new Map<string, Record<string, unknown>>(initial);
   const db = {
     collection: (name: string) => ({
       doc: (id: string) => ({
@@ -111,5 +111,32 @@ it.each(['memory', 'firestore'])(
     expect(await store.beginCheckoutRecovery('sky', 'expired', Date.now() - 16 * 60_000)).toBe(true);
     expect(await store.claimManualRoundSlug(2, 'sky', 1, 'expired')).toBe(false);
     expect(await store.claimManualRoundSlug(2, 'sky', 1)).toBe(true);
+  },
+);
+
+it.each([
+  { recoveryKey: 'old', ownerUid: 'owner', moderationBlockedAt: undefined, allowed: true },
+  { recoveryKey: undefined, ownerUid: 'owner', moderationBlockedAt: undefined, allowed: false },
+  { recoveryKey: 'old', ownerUid: 'foreign', moderationBlockedAt: undefined, allowed: false },
+  { recoveryKey: 'old', ownerUid: 'owner', moderationBlockedAt: 'blocked', allowed: false },
+])(
+  'Firestore reclaims abandoned recovery only with matching ownership and no moderation: $allowed',
+  async ({ allowed, ...source }) => {
+    const store = firestoreStore([
+      [
+        'submissions/1',
+        {
+          jobId: 1,
+          title: 'Sky',
+          slug: 'sky',
+          createdAt: '2026-01-01',
+          state: 'abandoned',
+          abandonedAt: '2026-01-02',
+          ...source,
+        },
+      ],
+    ]);
+    await store.createSubmission(2, 'owner', 'Sky');
+    expect(await store.claimSubmissionSlug(2, 'sky', 1, { key: 'fresh', spec: 'local', locale: 'en' })).toBe(allowed);
   },
 );

@@ -23,7 +23,8 @@ export async function withImprovementAdmission<T>(
     }
     return await action(nonce);
   } finally {
-    await store.finishCheckoutRecovery(slug, nonce);
+    // The lease expires; cleanup must not replace the action's outcome.
+    await store.finishCheckoutRecovery(slug, nonce).catch(() => {});
   }
 }
 

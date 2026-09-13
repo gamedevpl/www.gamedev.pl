@@ -1,3 +1,4 @@
+import { isAbandonedRecovery } from '../store/slices/recovery-admission.js';
 import { isCanonicalSlug } from '../platform/slug-policy.js';
 import { codeSurfaceEnabled } from './code-surface.js';
 import { randomUUID } from 'node:crypto';
@@ -30,7 +31,7 @@ export function registerCheckoutRecovery(
     if (!holder) return { kind: publication ? ('occupied' as const) : ('missing' as const) };
     if (
       holder.ownerUid !== uid ||
-      (holder.abandonedAt && holder.state !== 'canceled' && !archived) ||
+      (holder.abandonedAt && holder.state !== 'canceled' && !archived && !isAbandonedRecovery(holder)) ||
       holder.moderationBlockedAt
     )
       return { kind: 'occupied' as const };
@@ -38,7 +39,7 @@ export function registerCheckoutRecovery(
       kind:
         archived && ['published', 'failed', 'canceled', 'abandoned'].includes(holder.state ?? '')
           ? ('archived' as const)
-          : holder.state === 'canceled'
+          : holder.state === 'canceled' || isAbandonedRecovery(holder)
             ? ('canceled' as const)
             : ('active' as const),
       holder,

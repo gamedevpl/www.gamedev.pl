@@ -1,3 +1,4 @@
+import { withImprovementAdmission } from './creation/improvement-admission.js';
 import Fastify from 'fastify';
 import { expect, it, vi } from 'vitest';
 import { registerSubmissionRoutes } from './submissions.js';
@@ -95,4 +96,18 @@ it('releases admission and abandons a claimed draft when quota storage fails', a
   } finally {
     await app.close();
   }
+});
+
+it.each(['success', 'failure'])('preserves the action %s when lease cleanup fails', async (mode) => {
+  const store = new InMemoryStore();
+  vi.spyOn(store, 'finishCheckoutRecovery').mockRejectedValue(new Error('cleanup unavailable'));
+  const expected = { route: 'job', jobId: 123 };
+  const failure = new Error('dispatch unavailable');
+  const result = withImprovementAdmission(store, 'sky', Date.now, async () => {
+    if (mode === 'failure') throw failure;
+    return expected;
+  });
+  if (mode === 'success') await expect(result).resolves.toBe(expected);
+  else await expect(result).rejects.toBe(failure);
+  expect(store.finishCheckoutRecovery).toHaveBeenCalledOnce();
 });

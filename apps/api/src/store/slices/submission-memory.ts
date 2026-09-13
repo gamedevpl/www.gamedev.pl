@@ -1,4 +1,4 @@
-import { permitsRecoveryClaim } from './recovery-admission.js';
+import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
 import { canClaimManualRound } from './manual-round-claim.js';
 import { assertRecoveryBinding } from './bind-submission-slug.js';
 import type { PublicationStore } from './publication.js';
@@ -106,7 +106,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
         : !holder ||
           holder.jobId !== sourceJobId ||
           holder.ownerUid !== target.ownerUid ||
-          (holder.state !== 'canceled' &&
+          (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
             !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
           holder.moderationBlockedAt
     )

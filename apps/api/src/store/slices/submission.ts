@@ -1,4 +1,4 @@
-import { permitsRecoveryClaim } from './recovery-admission.js';
+import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
 import { bindSubmissionSlug } from './bind-submission-slug.js';
 import type { LocalActivity } from '@gamedevpl/contract';
 import { claimManualRoundSlug } from './manual-round-claim.js';
@@ -179,7 +179,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
           : !holder ||
             holder.jobId !== sourceJobId ||
             holder.ownerUid !== target.data()?.ownerUid ||
-            (holder.state !== 'canceled' &&
+            (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
               !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
             holder.moderationBlockedAt
       )
