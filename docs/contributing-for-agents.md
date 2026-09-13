@@ -82,7 +82,9 @@ the diff, and both have blocked a merge on work that was correct:
 
 Raising a timeout is the right fix **only** when the test asserts behaviour. If a test is
 asserting that something completes inside a deadline, the deadline belongs in the test, not in
-the config — and then a failure is a real signal.
+the config — and then a failure is a real signal. `apps/e2e` is the worked example: 90 s and
+120 s, because every test there drives a real browser against a real deployment and the default
+fails on network latency alone.
 
 ### Exercising the authenticated half of the product
 
