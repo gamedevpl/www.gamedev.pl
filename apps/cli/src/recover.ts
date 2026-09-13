@@ -30,6 +30,56 @@ export async function recoverCheckout(
   }
 }
 
+interface PendingRecovery {
+  slug: string;
+  key: string;
+  origin: string;
+  paths?: string[];
+  base?: { version: string; files: TreeFile[] };
+  session?: DeliverySession;
+}
+
+// A half-written pending file may name another slug, so refuse.
+function readPending(path: string): PendingRecovery {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    parsed = null;
+  }
+  const record = (parsed && typeof parsed === 'object' ? parsed : {}) as Partial<PendingRecovery>;
+  if (typeof record.slug !== 'string' || typeof record.key !== 'string' || typeof record.origin !== 'string')
+    throw new CliError(
+      `A pending recovery is unreadable: ${path} — local files are unchanged.`,
+      EXIT_REFUSED,
+      'delete that file to start the recovery over',
+    );
+  return record as PendingRecovery;
+}
+
+// Rename so an interrupted write leaves the previous pending file intact.
+function writePending(path: string, record: PendingRecovery): void {
+  const temporary = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify(record), { mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true, recursive: true });
+  }
+}
+
+// Named so a hand-edited GAME.json reports itself, not "Unexpected token".
+function parseJsonObject(raw: string, label: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new CliError(`${label} is not valid JSON.`, EXIT_INPUT);
+  }
+  if (!parsed || typeof parsed !== 'object') throw new CliError(`${label} must be a JSON object.`, EXIT_INPUT);
+  return parsed as Record<string, unknown>;
+}
+
 async function performRecovery(input: {
   api: ApiClient;
   telemetry?: CliTelemetry;
@@ -51,18 +101,9 @@ async function performRecovery(input: {
   if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) throw new CliError('Invalid recovery slug.', EXIT_INPUT);
   const status = await input.api.request<{ kind: string }>('GET', `/api/me/studio/games/${slug}/recovery`);
   const pendingPath = join(checkout.root, '.gamedev-recovery.json');
-  let pending:
-    | {
-        slug: string;
-        key: string;
-        origin: string;
-        paths?: string[];
-        base?: { version: string; files: TreeFile[] };
-        session?: DeliverySession;
-      }
-    | undefined;
+  let pending: PendingRecovery | undefined;
   if (existsSync(pendingPath)) {
-    pending = JSON.parse(readFileSync(pendingPath, 'utf8'));
+    pending = readPending(pendingPath);
     if (pending?.slug !== slug || pending?.origin !== input.api.origin || !/^[0-9a-f-]{36}$/.test(pending?.key ?? ''))
       throw new CliError('A different recovery is pending. Resume it before changing the destination.', EXIT_REFUSED);
   }
@@ -83,7 +124,7 @@ async function performRecovery(input: {
   if (!spec) throw new CliError('Recovery needs SPEC.md in the game directory.', EXIT_INPUT);
   let metadata: { title?: string } = {};
   const game = files.find((f) => f.path === 'GAME.json');
-  if (game) metadata = JSON.parse(game.content);
+  if (game) metadata = parseJsonObject(game.content, 'GAME.json') as { title?: string };
   const title = metadata.title ?? spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1];
   if (!title) throw new CliError('Set the title in GAME.json or SPEC.md before recovery.', EXIT_INPUT);
   const concept = spec.slice(0, 4000);
@@ -139,17 +180,17 @@ async function performRecovery(input: {
     return;
   }
   pending ??= { slug, key: randomUUID(), origin: input.api.origin };
-  writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
+  writePending(pendingPath, pending);
   const recovered = await requestRecovery(pending.key);
   pending.base ??= await fetchLatestTree(input.api, slug);
   pending.session ??= (await deliverySession(input.api, slug)) ?? undefined;
   if (!pending.session) throw new CliError('Recovery session is unavailable. Retry recovery.', EXIT_REFUSED);
-  writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
+  writePending(pendingPath, pending);
   const imported = files.map((file) => {
     if (slug === checkout.slug) return file;
     if (file.path === 'SPEC.md') return { ...file, content: file.content.replace(/^slug:.*$/m, `slug: ${slug}`) };
     if (file.path === 'GAME.json') {
-      const json = JSON.parse(file.content);
+      const json = parseJsonObject(file.content, 'GAME.json');
       if (json.slug !== undefined) json.slug = slug;
       return { ...file, content: JSON.stringify(json, null, 2) + '\n' };
     }
@@ -162,7 +203,7 @@ async function performRecovery(input: {
       await input.api.request('POST', `/api/me/studio/games/${slug}/sources/stage/delete`, { path });
   }
   pending.paths = [...new Set([...(pending.paths ?? []), ...currentPaths])];
-  writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
+  writePending(pendingPath, pending);
   for (const file of imported) {
     if (alreadyStaged.has(file.path)) continue;
     const result = await input.api.request<{ accepted?: boolean }>(
@@ -188,7 +229,7 @@ async function performRecovery(input: {
         writeFileSync(join(output, 'games', slug, file.path), file.content);
       const lockPath = join(output, 'gamedev.lock');
       if (existsSync(lockPath)) {
-        const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+        const lock = parseJsonObject(readFileSync(lockPath, 'utf8'), 'gamedev.lock');
         lock.slug = slug;
         writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
       }

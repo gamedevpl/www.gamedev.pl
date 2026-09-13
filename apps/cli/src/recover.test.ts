@@ -7,6 +7,7 @@ import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { handleReplLine } from './repl.js';
 import { recoverCheckout } from './recover.js';
+import { CliError } from './exit-codes.js';
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })));
 function fixture(kind = 'missing') {
@@ -208,4 +209,34 @@ it('retires a pending recovery when the destination becomes occupied', async () 
   await expect(recoverCheckout(f)).rejects.toThrow('unavailable');
   expect(existsSync(join(f.cwd, '.gamedev-recovery.json'))).toBe(false);
   expect(readFileSync(join(f.cwd, 'games/sky/game.ts'), 'utf8')).toBe('local edits');
+});
+it('names GAME.json instead of reporting a parser error', async () => {
+  const f = fixture();
+  writeFileSync(join(f.cwd, 'games', 'sky', 'GAME.json'), '{ "title": "Sky Game", }');
+  await expect(recoverCheckout(f)).rejects.toThrow(/GAME\.json is not valid JSON/);
+});
+it('names the pending file when recovery cannot read its own state', async () => {
+  const f = fixture();
+  writeFileSync(join(f.cwd, '.gamedev-recovery.json'), '{"slug":"sk');
+  const caught = await recoverCheckout(f).catch((error: unknown) => error);
+  expect(caught).toBeInstanceOf(CliError);
+  expect((caught as CliError).message).toContain('.gamedev-recovery.json');
+  expect((caught as CliError).next).toContain('delete that file');
+});
+it('keeps the pending file intact when the scratch path is occupied', async () => {
+  const f = fixture();
+  const original = f.fetch.getMockImplementation()!;
+  f.fetch.mockImplementation(async (url) => {
+    if (url.endsWith('/sources/stage')) return new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 });
+    return original(url);
+  });
+  await expect(recoverCheckout(f)).rejects.toThrow();
+  const pendingPath = join(f.cwd, '.gamedev-recovery.json');
+  const before = readFileSync(pendingPath, 'utf8');
+  // Any write that lands would add this path to pending.
+  writeFileSync(join(f.cwd, 'games', 'sky', 'extra.ts'), 'added between attempts');
+  mkdirSync(`${pendingPath}.${process.pid}.tmp`);
+  await expect(recoverCheckout(f)).rejects.toThrow();
+  expect(readFileSync(pendingPath, 'utf8')).toBe(before);
+  expect(JSON.stringify(JSON.parse(before).paths)).not.toContain('extra.ts');
 });
