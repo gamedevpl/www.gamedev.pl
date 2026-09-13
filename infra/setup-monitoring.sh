@@ -68,6 +68,9 @@ PRIMARY_SERVICE="${PRIMARY_SERVICE:-gamedev-app}"
 WORLD_SERVICE="${WORLD_SERVICE:-gamedev-world}"
 HEALTH_PATH="${HEALTH_PATH:-/api/health}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-${PROJECT_ID}-firestore-backups}"
+# Same defaults and names as setup-gcp.sh, so an override reaches the alerts too.
+SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
+STORE_BUCKET="${GAMES_STORE_BUCKET:-${PROJECT_ID}-games-store}"
 : "${ALERT_EMAIL:?set ALERT_EMAIL to the address that should receive alerts}"
 
 # The world service is watched by A6/A7 and deliberately has no uptime check: a probe
@@ -1043,7 +1046,7 @@ cat > "${POLICY_DIR}/a32.json" <<EOF
   "conditions": [{
     "displayName": "sent bytes sustained over an hour",
     "conditionThreshold": {
-      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name != \"${PROJECT_ID}-games-store\"",
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name != \"${STORE_BUCKET}\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -1058,7 +1061,7 @@ cat > "${POLICY_DIR}/a32.json" <<EOF
   }, {
     "displayName": "store bucket sent bytes sustained over an hour",
     "conditionThreshold": {
-      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name = \"${PROJECT_ID}-games-store\"",
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name = \"${STORE_BUCKET}\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -1100,7 +1103,7 @@ cat > "${POLICY_DIR}/a33.json" <<EOF
   "conditions": [{
     "displayName": "snapshot bucket sent bytes sustained over an hour",
     "conditionThreshold": {
-      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name=\"${PROJECT_ID}-games-snapshots\"",
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name=\"${SNAPSHOT_BUCKET}\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
