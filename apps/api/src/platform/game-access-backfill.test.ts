@@ -14,6 +14,11 @@ class LegacyStore extends InMemoryGameAccessStore implements GameAccessResolveSt
     super((uid) => this.accounts.has(uid));
   }
 
+  async erase(uid: string, at: string): Promise<void> {
+    await this.beginAccountErasure(uid, at);
+    this.accounts.delete(uid);
+  }
+
   eraseAccount(uid: string): void {
     this.accounts.delete(uid);
   }
@@ -139,10 +144,10 @@ describe('game access backfill under concurrency', () => {
 
     // Someone else's record lands between the read and the write.
     const original = store.backfillGameAccess.bind(store);
-    store.backfillGameAccess = async (slug, ownerUid, checkAccount, at) => {
+    store.backfillGameAccess = async (slug, ownerUid, jobId, workAt, checkAccount, at) => {
       store.backfillGameAccess = original;
-      await store.ensureGameAccess(slug, 'g:grace', at);
-      return original(slug, ownerUid, checkAccount, at);
+      await store.ensureGameAccess(slug, 'g:grace', workAt, at);
+      return original(slug, ownerUid, jobId, workAt, checkAccount, at);
     };
 
     const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
@@ -177,11 +182,11 @@ describe('game access backfill versus erasure', () => {
 
     // Erasure lands after the final read, before the create.
     const original = store.backfillGameAccess.bind(store);
-    store.backfillGameAccess = async (slug, ownerUid, checkAccount, at) => {
+    store.backfillGameAccess = async (slug, ownerUid, jobId, workAt, checkAccount, at) => {
       store.backfillGameAccess = original;
       store.eraseAccount(ownerUid);
       store.addJob(2, DELETED_ACCOUNT_UID, slug);
-      return original(slug, ownerUid, checkAccount, at);
+      return original(slug, ownerUid, jobId, workAt, checkAccount, at);
     };
 
     const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
@@ -192,5 +197,27 @@ describe('game access backfill versus erasure', () => {
       kind: 'platform',
       reason: 'owner_deleted',
     });
+  });
+});
+
+describe('game access backfill dry run', () => {
+  it('reaches the same verdict as the write for an erased owner', async () => {
+    const store = new LegacyStore().addJob(1, 'g:ada', 'orbital-dogfight');
+    await store.erase('g:ada', new Date(2027, 0, 1).toISOString());
+
+    const dry = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: true });
+    const apply = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
+
+    expect(dry).toMatchObject({ created: 0, quarantined: ['orbital-dogfight'] });
+    expect(apply).toMatchObject({ created: 0, quarantined: ['orbital-dogfight'] });
+    expect(await store.getGameAccess('orbital-dogfight')).toBeNull();
+  });
+
+  it('records a migrated game as settled by the job it came from', async () => {
+    const store = new LegacyStore().addJob(7, 'g:ada', 'orbital-dogfight');
+
+    await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
+
+    expect(await store.getGameAccess('orbital-dogfight')).toMatchObject({ settledJobId: 7 });
   });
 });

@@ -14,8 +14,9 @@ export interface SlugClaimStore {
     slug: string,
     ownerUid: string,
     jobId: number,
+    workAt: string,
     at: string,
-  ): Promise<{ settledJobId?: number } | null>;
+  ): Promise<{ ownerUid: string; settledJobId?: number } | null>;
 }
 
 // Reads back a slug a job wrote, settling who holds it.
@@ -36,8 +37,17 @@ export async function settleSlugClaim(
     if (!holder.ownerUid) return true;
 
     // A newer job settled while we waited: we lost, late.
-    const inForce = await store.recordSettledOwner(candidate, holder.ownerUid, jobId, new Date().toISOString());
+    const inForce = await store.recordSettledOwner(
+      candidate,
+      holder.ownerUid,
+      jobId,
+      holder.createdAt,
+      new Date().toISOString(),
+    );
+
+    // Refused leaves the name ours; another owner does not.
     if (!inForce) return true;
+    if (inForce.ownerUid !== holder.ownerUid) return false;
     return inForce.settledJobId === undefined || inForce.settledJobId === jobId;
   };
 

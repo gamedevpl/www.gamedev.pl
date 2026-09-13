@@ -53,7 +53,7 @@ export abstract class SubmissionFacade {
       const claimants = await this.submissionQueryStore.listSubmissionsBySlug(slug);
       const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
       if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
-      await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, new Date().toISOString());
+      await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, job.createdAt, new Date().toISOString());
     } catch {
       // Derived state: the backfill repairs it, a throw would not.
     }
@@ -64,7 +64,7 @@ export abstract class SubmissionFacade {
     try {
       const job = await this.submissionStore.getSubmission(jobId);
       if (!job?.ownerUid) return;
-      await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, new Date().toISOString());
+      await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, job.createdAt, new Date().toISOString());
     } catch {
       // A throw here would strand a slug the claim already took.
     }
@@ -83,25 +83,22 @@ export abstract class SubmissionFacade {
     return this.gameAccessStore.getGameAccess(slug);
   }
 
-  async ensureGameAccess(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.ensureGameAccess(slug, ownerUid, at);
+  async ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null> {
+    return this.gameAccessStore.ensureGameAccess(slug, ownerUid, workAt, at);
   }
 
   async recordSettledOwner(
     slug: string,
     ownerUid: string,
     jobId: number,
+    workAt: string,
     at: string,
   ): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, at);
+    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, workAt, at);
   }
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
     return this.gameAccessStore.beginAccountErasure(uid, at);
-  }
-
-  async clearAccountErasure(uid: string): Promise<void> {
-    return this.gameAccessStore.clearAccountErasure(uid);
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
@@ -111,10 +108,20 @@ export abstract class SubmissionFacade {
   async backfillGameAccess(
     slug: string,
     ownerUid: string,
+    jobId: number,
+    workAt: string,
     checkAccount: boolean,
     at: string,
   ): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.backfillGameAccess(slug, ownerUid, checkAccount, at);
+    return this.gameAccessStore.backfillGameAccess(slug, ownerUid, jobId, workAt, checkAccount, at);
+  }
+
+  async getAccountErasure(uid: string): Promise<string | null> {
+    return this.gameAccessStore.getAccountErasure(uid);
+  }
+
+  async accountExists(uid: string): Promise<boolean> {
+    return this.gameAccessStore.accountExists(uid);
   }
 
   async listGameAccessByMember(uid: string): Promise<GameAccessRecord[]> {

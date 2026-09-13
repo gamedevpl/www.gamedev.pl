@@ -2,6 +2,7 @@
 
 // Migration protocol: ops docs/game-ownership-and-collaboration-plan.md (GO-01).
 
+import { fencedOut } from '../store/records/game-access.js';
 import {
   classifyOwnerUid,
   deriveOwnerFromSubmissions,
@@ -76,22 +77,39 @@ export async function runGameAccessBackfill(options: GameAccessBackfillOptions):
 
     // Re-read before writing: an erasure mid-pass is not recorded.
     const fresh = await store.listSubmissionsBySlug(slug);
-    const ownerUid = fresh.find((record) => !record.abandonedAt)?.ownerUid;
-    if (!ownerUid) {
+    const job = fresh.find((record) => !record.abandonedAt);
+    if (!job?.ownerUid) {
       result.quarantined.push(slug);
       continue;
     }
 
+    const ownerUid = job.ownerUid;
+    const owner = classifyOwnerUid(ownerUid);
+    const checkAccount = owner.kind === 'creator';
+
+    // Dry run reads what the write enforces, so verdicts match.
+    if (fencedOut(await store.getAccountErasure(ownerUid), job.createdAt)) {
+      result.quarantined.push(slug);
+      continue;
+    }
+    if (checkAccount && !(await store.accountExists(ownerUid))) {
+      result.quarantined.push(slug);
+      continue;
+    }
     if (dryRun) {
-      countCreate(result, classifyOwnerUid(ownerUid));
+      countCreate(result, owner);
       continue;
     }
 
     // Report the record in force, not the intended one.
-
-    // An account gone since the read is quarantined, not guessed.
-    const owner = classifyOwnerUid(ownerUid);
-    const inForce = await store.backfillGameAccess(slug, ownerUid, owner.kind === 'creator', now().toISOString());
+    const inForce = await store.backfillGameAccess(
+      slug,
+      ownerUid,
+      job.jobId,
+      job.createdAt,
+      checkAccount,
+      now().toISOString(),
+    );
     if (!inForce) result.quarantined.push(slug);
     else if (inForce.ownerUid === ownerUid) countCreate(result, owner);
     else recordOutcome(result, slug, inForce.ownerUid, deriveOwnerFromSubmissions(fresh));

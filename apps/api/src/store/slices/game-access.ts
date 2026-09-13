@@ -1,18 +1,31 @@
 import type { Firestore } from '@google-cloud/firestore';
-import { newGameAccess, settlementWins, withMemberErased, type GameAccessRecord } from '../records/game-access.js';
+import {
+  fencedOut,
+  newGameAccess,
+  settledOver,
+  settlementWins,
+  withMemberErased,
+  type GameAccessRecord,
+} from '../records/game-access.js';
 import { DELETED_ACCOUNT_UID } from '../records/identity.js';
 
 // Read plus conditional creates, each fenced against account erasure.
 export interface GameAccessStore {
   getGameAccess(slug: string): Promise<GameAccessRecord | null>;
 
-  // Null when the owner is being erased; every writer below can refuse.
-  ensureGameAccess(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord | null>;
+  // workAt is when the work began: pre-erasure work stays refused forever.
+  ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null>;
 
   // Settlement: corrects a record only while nothing but settlement has written it.
 
   // A transferred, shared, or newer job's record is left alone.
-  recordSettledOwner(slug: string, ownerUid: string, jobId: number, at: string): Promise<GameAccessRecord | null>;
+  recordSettledOwner(
+    slug: string,
+    ownerUid: string,
+    jobId: number,
+    workAt: string,
+    at: string,
+  ): Promise<GameAccessRecord | null>;
 
   // Backfill: records an owner only while that account still exists.
 
@@ -20,18 +33,22 @@ export interface GameAccessStore {
   backfillGameAccess(
     slug: string,
     ownerUid: string,
+    jobId: number,
+    workAt: string,
     checkAccount: boolean,
     at: string,
   ): Promise<GameAccessRecord | null>;
+
+  // What a dry run reads to match the write's verdict.
+  getAccountErasure(uid: string): Promise<string | null>;
+
+  accountExists(uid: string): Promise<boolean>;
 
   // The shelf query collaboration needs.
   listGameAccessByMember(uid: string): Promise<GameAccessRecord[]>;
 
   // Erasure's first act: no writer may name the uid after it.
   beginAccountErasure(uid: string, at: string): Promise<void>;
-
-  // Lifted when a genuinely new account takes the uid back.
-  clearAccountErasure(uid: string): Promise<void>;
 
   // Erasure's scrub, run after the fence.
   eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]>;
@@ -47,19 +64,23 @@ const clone = (record: GameAccessRecord): GameAccessRecord => ({
 });
 
 export class InMemoryGameAccessStore implements GameAccessStore {
-  constructor(private accountExists: (uid: string) => boolean = () => true) {}
+  constructor(private hasAccount: (uid: string) => boolean = () => true) {}
 
   // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
   access = new Map<string, GameAccessRecord>();
 
-  private erasing = new Set<string>();
+  private erasedAt = new Map<string, string>();
 
-  async beginAccountErasure(uid: string, _at: string): Promise<void> {
-    this.erasing.add(uid);
+  async beginAccountErasure(uid: string, at: string): Promise<void> {
+    this.erasedAt.set(uid, at);
   }
 
-  async clearAccountErasure(uid: string): Promise<void> {
-    this.erasing.delete(uid);
+  async getAccountErasure(uid: string): Promise<string | null> {
+    return this.erasedAt.get(uid) ?? null;
+  }
+
+  async accountExists(uid: string): Promise<boolean> {
+    return this.hasAccount(uid);
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
@@ -78,10 +99,10 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     return record ? clone(record) : null;
   }
 
-  async ensureGameAccess(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord | null> {
+  async ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null> {
     const existing = this.access.get(slug);
     if (existing) return clone(existing);
-    if (this.erasing.has(ownerUid)) return null;
+    if (fencedOut(this.erasedAt.get(ownerUid) ?? null, workAt)) return null;
     const record = newGameAccess(slug, ownerUid, at);
     this.access.set(slug, record);
     return clone(record);
@@ -91,13 +112,14 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     slug: string,
     ownerUid: string,
     jobId: number,
+    workAt: string,
     at: string,
   ): Promise<GameAccessRecord | null> {
     const existing = this.access.get(slug);
     if (existing && (!isPristine(existing) || !settlementWins(existing, jobId))) return clone(existing);
     if (existing?.ownerUid === ownerUid && existing.settledJobId === jobId) return clone(existing);
-    if (this.erasing.has(ownerUid)) return existing ? clone(existing) : null;
-    const record = newGameAccess(slug, ownerUid, at, jobId);
+    if (fencedOut(this.erasedAt.get(ownerUid) ?? null, workAt)) return existing ? clone(existing) : null;
+    const record = settledOver(existing ?? null, slug, ownerUid, at, jobId);
     this.access.set(slug, record);
     return clone(record);
   }
@@ -105,14 +127,18 @@ export class InMemoryGameAccessStore implements GameAccessStore {
   async backfillGameAccess(
     slug: string,
     ownerUid: string,
+    jobId: number,
+    workAt: string,
     checkAccount: boolean,
     at: string,
   ): Promise<GameAccessRecord | null> {
     const existing = this.access.get(slug);
     if (existing) return clone(existing);
-    if (this.erasing.has(ownerUid)) return null;
-    if (checkAccount && !this.accountExists(ownerUid)) return null;
-    const record = newGameAccess(slug, ownerUid, at);
+    if (fencedOut(this.erasedAt.get(ownerUid) ?? null, workAt)) return null;
+    if (checkAccount && !this.hasAccount(ownerUid)) return null;
+
+    // Settled by its own job: a migrated record is not tentative.
+    const record = newGameAccess(slug, ownerUid, at, jobId);
     this.access.set(slug, record);
     return clone(record);
   }
@@ -133,12 +159,22 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return this.db.collection('erasedAccounts').doc(uid);
   }
 
+  private async fenceAt(tx: FirebaseFirestore.Transaction, uid: string): Promise<string | null> {
+    const snap = await tx.get(this.erasureFence(uid));
+    return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
+  }
+
   async beginAccountErasure(uid: string, at: string): Promise<void> {
     await this.erasureFence(uid).set({ uid, at });
   }
 
-  async clearAccountErasure(uid: string): Promise<void> {
-    await this.erasureFence(uid).delete();
+  async getAccountErasure(uid: string): Promise<string | null> {
+    const snap = await this.erasureFence(uid).get();
+    return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
+  }
+
+  async accountExists(uid: string): Promise<boolean> {
+    return (await this.db.collection('users').doc(uid).get()).exists;
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
@@ -165,7 +201,7 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return snap.exists ? (snap.data() as GameAccessRecord) : null;
   }
 
-  async ensureGameAccess(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord | null> {
+  async ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null> {
     const ref = this.doc(slug);
 
     // Transaction, not create-and-catch: creation races the backfill.
@@ -174,7 +210,7 @@ export class FirestoreGameAccessStore implements GameAccessStore {
       if (snap.exists) return snap.data() as GameAccessRecord;
 
       // Reading the fence here is what orders this write against erasure.
-      if ((await tx.get(this.erasureFence(ownerUid))).exists) return null;
+      if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return null;
       const record = newGameAccess(slug, ownerUid, at);
       tx.create(ref, record);
       return record;
@@ -185,6 +221,7 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     slug: string,
     ownerUid: string,
     jobId: number,
+    workAt: string,
     at: string,
   ): Promise<GameAccessRecord | null> {
     const ref = this.doc(slug);
@@ -193,8 +230,8 @@ export class FirestoreGameAccessStore implements GameAccessStore {
       const existing = snap.exists ? (snap.data() as GameAccessRecord) : null;
       if (existing && (!isPristine(existing) || !settlementWins(existing, jobId))) return existing;
       if (existing?.ownerUid === ownerUid && existing.settledJobId === jobId) return existing;
-      if ((await tx.get(this.erasureFence(ownerUid))).exists) return existing;
-      const record = newGameAccess(slug, ownerUid, at, jobId);
+      if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return existing;
+      const record = settledOver(existing, slug, ownerUid, at, jobId);
       if (existing) tx.set(ref, record);
       else tx.create(ref, record);
       return record;
@@ -204,6 +241,8 @@ export class FirestoreGameAccessStore implements GameAccessStore {
   async backfillGameAccess(
     slug: string,
     ownerUid: string,
+    jobId: number,
+    workAt: string,
     checkAccount: boolean,
     at: string,
   ): Promise<GameAccessRecord | null> {
@@ -213,9 +252,11 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (snap.exists) return snap.data() as GameAccessRecord;
-      if ((await tx.get(this.erasureFence(ownerUid))).exists) return null;
+      if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return null;
       if (checkAccount && !(await tx.get(this.db.collection('users').doc(ownerUid))).exists) return null;
-      const record = newGameAccess(slug, ownerUid, at);
+
+      // Settled by its own job: a migrated record is not tentative.
+      const record = newGameAccess(slug, ownerUid, at, jobId);
       tx.create(ref, record);
       return record;
     });

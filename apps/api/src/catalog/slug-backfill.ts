@@ -21,8 +21,9 @@ export interface SlugBackfillStore {
     slug: string,
     ownerUid: string,
     jobId: number,
+    workAt: string,
     at: string,
-  ): Promise<{ settledJobId?: number } | null>;
+  ): Promise<{ ownerUid: string; settledJobId?: number } | null>;
 }
 
 export interface SlugBackfillResult {

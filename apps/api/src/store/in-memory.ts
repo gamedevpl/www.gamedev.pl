@@ -258,11 +258,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async upsertUser(userData: Partial<User> & { uid: string }): Promise<User> {
-    const user = await this.identityStore.upsertUser(userData);
-
-    // A provider re-issues the same uid, so a new account must lift the old fence.
-    if (user.createdAt === user.lastLoginAt) await this.gameAccessStore.clearAccountErasure(user.uid);
-    return user;
+    return this.identityStore.upsertUser(userData);
   }
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {

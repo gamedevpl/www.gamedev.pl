@@ -193,7 +193,14 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await settleSlugClaim(store, 2, 'same-title', 'Same title', async () => true);
 
       // Ada resumes and writes late.
-      const inForce = await store.recordSettledOwner('same-title', 'g:ada', 1, new Date().toISOString());
+      const adaJob = await store.getSubmission(1);
+      const inForce = await store.recordSettledOwner(
+        'same-title',
+        'g:ada',
+        1,
+        adaJob!.createdAt,
+        new Date().toISOString(),
+      );
 
       expect(inForce).toMatchObject({ ownerUid: 'g:grace', settledJobId: 2 });
       expect(await store.getGameAccess('same-title')).toMatchObject({ ownerUid: 'g:grace' });
@@ -218,7 +225,13 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await submit(store, 1, 'g:ada', 'orbital-dogfight');
       await store.deleteAccountIdentity('g:ada', new Date().toISOString());
 
-      await store.recordSettledOwner('orbital-dogfight', 'g:grace', new Date().toISOString());
+      await store.recordSettledOwner(
+        'orbital-dogfight',
+        'g:grace',
+        2,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
 
       expect(await store.getGameAccess('orbital-dogfight')).toMatchObject({
         ownerUid: DELETED_ACCOUNT_UID,
@@ -231,13 +244,13 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
       await store.createSubmission(1, 'g:ada', 'Legacy Game');
 
-      // The fence is erasure's first act; in-flight writers lose.
+      // Work that began before the fence belongs to the erased incarnation.
+      const at = (await store.getSubmission(1))!.createdAt;
+      await tick();
       await store.beginAccountErasure('g:ada', new Date().toISOString());
-
-      const at = new Date().toISOString();
-      expect(await store.ensureGameAccess('legacy-game', 'g:ada', at)).toBeNull();
-      expect(await store.recordSettledOwner('legacy-game', 'g:ada', 1, at)).toBeNull();
-      expect(await store.backfillGameAccess('legacy-game', 'g:ada', false, at)).toBeNull();
+      expect(await store.ensureGameAccess('legacy-game', 'g:ada', at, at)).toBeNull();
+      expect(await store.recordSettledOwner('legacy-game', 'g:ada', 1, at, at)).toBeNull();
+      expect(await store.backfillGameAccess('legacy-game', 'g:ada', 1, at, false, at)).toBeNull();
       expect(await store.getGameAccess('legacy-game')).toBeNull();
       expect(await store.listGameAccessByMember('g:ada')).toEqual([]);
     });
@@ -300,16 +313,40 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await store.getGameAccess('contested-erase')).toMatchObject({ ownerUid: 'g:grace' });
     });
 
-    it('lets a recreated account own games again', async () => {
+    it('admits a returning accounts new work while still refusing its erased incarnation', async () => {
       const store = makeStore();
       await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
+      await store.createSubmission(1, 'g:ada', 'Before');
+      const before = (await store.getSubmission(1))!.createdAt;
+      await tick();
       await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+      await tick();
 
-      // Same uid from the provider, so the fence must lift.
+      // Same uid back; the tombstone stays, scoped by time.
       await store.upsertUser({ uid: 'g:ada', name: 'Ada again' });
       await submit(store, 9, 'g:ada', 'second-life');
 
       expect(await store.getGameAccess('second-life')).toMatchObject({ ownerUid: 'g:ada' });
+
+      // A writer still carrying pre-erasure work is refused, tombstone intact.
+      const at = new Date().toISOString();
+      expect(await store.ensureGameAccess('before-game', 'g:ada', before, at)).toBeNull();
+    });
+
+    it('carries the revision forward when settlement replaces a tentative owner', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'same-title');
+      expect(await store.getGameAccess('same-title')).toMatchObject({ accessRevision: 1 });
+
+      await tick();
+      await submit(store, 2, 'g:grace', 'same-title');
+      await settleSlugClaim(store, 2, 'same-title', 'Same title', async () => true);
+
+      // An owner change is an authority change; revision continues.
+      expect(await store.getGameAccess('same-title')).toMatchObject({
+        ownerUid: 'g:grace',
+        accessRevision: 2,
+      });
     });
 
     it('lists every named game a job claimed, drafts included', async () => {

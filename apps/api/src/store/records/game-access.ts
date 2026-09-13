@@ -53,6 +53,24 @@ export function settlementWins(existing: GameAccessRecord, jobId: number): boole
   return existing.settledJobId === undefined || existing.settledJobId <= jobId;
 }
 
+// An owner change carries the revision on, never restarts it.
+export function settledOver(
+  existing: GameAccessRecord | null,
+  slug: string,
+  ownerUid: string,
+  at: string,
+  jobId: number,
+): GameAccessRecord {
+  const fresh = newGameAccess(slug, ownerUid, at, jobId);
+  if (!existing) return fresh;
+  return { ...fresh, createdAt: existing.createdAt, accessRevision: existing.accessRevision + 1 };
+}
+
+// Work begun before erasure belongs to the erased incarnation.
+export function fencedOut(erasedAt: string | null, workAt: string): boolean {
+  return erasedAt !== null && workAt <= erasedAt;
+}
+
 // Erasure: the platform takes custody, and the uid leaves every membership.
 
 // Null when the record does not involve the uid at all.
