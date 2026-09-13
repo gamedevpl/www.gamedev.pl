@@ -122,8 +122,9 @@ export function syncRefuse(sync: SyncResult, op: 'pull' | 'submit'): { message: 
     };
   }
   if (sync.kind === 'conflict') {
+    const alsoLost = sync.local.length ? ` It discards ${sync.local.join(', ')} as well.` : '';
     return {
-      message: `conflict on ${sync.conflict.join(', ')} — ${cliUsage('diff')} shows both sides. Plain pull refuses while they disagree: copy those files aside, then ${cliUsage('pull', '--force')} takes the platform copy for you to merge yours back into`,
+      message: `conflict on ${sync.conflict.join(', ')} — ${cliUsage('diff')} shows both sides. Plain pull refuses while they disagree: copy the whole games/<slug> aside, then ${cliUsage('pull', '--force')} replaces it with the platform copy for you to merge yours back into.${alsoLost}`,
       next: cliUsage('diff'),
     };
   }

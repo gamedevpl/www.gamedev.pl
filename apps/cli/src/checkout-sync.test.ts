@@ -144,6 +144,21 @@ describe('what a refused sync tells you to do next', () => {
     expect(refused.next).toBe('gamedevpl diff');
   });
 
+  it('says force replaces the directory, not only the conflicting files', () => {
+    const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'] }), 'pull');
+    expect(refused.message).toContain('games/<slug>');
+  });
+
+  it('names the untouched local edits a force would take down with it', () => {
+    const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'], local: ['level.ts', 'hud.ts'] }), 'pull');
+    expect(refused.message).toContain('discards level.ts, hud.ts as well');
+  });
+
+  it('stays quiet about other edits when a conflict is the only divergence', () => {
+    const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'] }), 'pull');
+    expect(refused.message).not.toContain('as well');
+  });
+
   it('never tells a conflict to run plain pull, which refuses again', () => {
     const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'] }), 'pull');
     expect(refused.next).not.toBe('gamedevpl pull');
