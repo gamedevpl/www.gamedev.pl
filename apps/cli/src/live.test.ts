@@ -153,6 +153,23 @@ describe('status watch', () => {
     );
   });
 
+  it('stops naming a card the creator already answered', () => {
+    const answered = {
+      ...carded,
+      progress: { revisions: [...carded.progress.revisions, { text: 'make it night' }] },
+    };
+    expect(proposalLines(answered, 'https://x')).toEqual([]);
+    expect(formatStatusEvent(answered)).toBe('round finished — Studio is waiting (preview green)');
+  });
+
+  it('keeps naming a card when only the platform spoke after it', () => {
+    const acked = {
+      ...carded,
+      progress: { revisions: [...carded.progress.revisions, { text: 'on it', origin: 'studio' }] },
+    };
+    expect(proposalLines(acked, 'https://x')).not.toEqual([]);
+  });
+
   it('announces a card that lands after the round was already a boundary', () => {
     const before = { status: 'needs_changes', slug: 'squad-game', previewGate: { green: true } };
     const key = statusFingerprint(before);

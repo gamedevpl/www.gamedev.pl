@@ -31,7 +31,7 @@ export type RoundStatus = {
   stall?: string;
   failure?: { reason: string };
   // The studio thread, only as far as a concept card.
-  progress?: { revisions?: Array<{ proposal?: CreatorProposal }> };
+  progress?: { revisions?: Array<{ origin?: string; proposal?: CreatorProposal }> };
 };
 
 export async function getStatus(api: ApiClient, token: string): Promise<RoundStatus> {
@@ -50,12 +50,14 @@ export function studioUrl(origin: string, slug: string): string {
   return `${origin}/studio/${slug}`;
 }
 
-// The card drawn after the gate went green.
+// A card still waiting; what the creator sent after one answered it.
 export function latestProposal(status: RoundStatus): CreatorProposal | null {
   const revisions = status.progress?.revisions ?? [];
   for (let at = revisions.length - 1; at >= 0; at -= 1) {
-    const proposal = revisions[at]?.proposal;
-    if (proposal?.options?.length) return proposal;
+    const revision = revisions[at];
+    if (revision?.proposal?.options?.length) return revision.proposal;
+    // The creator's own rows carry no origin; theirs is the answer.
+    if (revision && !revision.origin) return null;
   }
   return null;
 }
