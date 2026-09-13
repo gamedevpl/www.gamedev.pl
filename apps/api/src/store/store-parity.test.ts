@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
@@ -790,5 +790,64 @@ describeStoreContract('shot deletion', (makeStore) => {
     await store.deleteBuildShots(13, ['never-written']);
 
     expect(await store.getBuildShot(13, only.id)).not.toBeNull();
+  });
+});
+
+// The narrow shelf query: one owner, one game.
+describeStoreContract('submissions by owner and slug', (makeStore) => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns only this owner’s rounds for this slug', async () => {
+    const store = makeStore();
+    await store.createSubmission(10, 'g:owner', 'Mine, older');
+    await store.setSubmissionSlug(10, 'sky');
+    await store.createSubmission(11, 'g:owner', 'Mine, other game');
+    await store.setSubmissionSlug(11, 'dunes');
+    await store.createSubmission(12, 'g:stranger', 'Same slug, not mine');
+    await store.setSubmissionSlug(12, 'sky');
+
+    const rounds = await store.listSubmissionsByOwnerAndSlug('g:owner', 'sky');
+
+    expect(rounds.map((round) => round.jobId)).toEqual([10]);
+  });
+
+  it('orders rounds newest first', async () => {
+    const store = makeStore();
+    for (const jobId of [20, 21, 22]) {
+      await store.createSubmission(jobId, 'g:owner', `Round ${jobId}`);
+      await store.setSubmissionSlug(jobId, 'sky');
+      // createdAt is millisecond ISO, so rounds need a real gap.
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+
+    const rounds = await store.listSubmissionsByOwnerAndSlug('g:owner', 'sky');
+
+    expect(rounds.map((round) => round.jobId)).toEqual([22, 21, 20]);
+    expect(rounds[0]!.createdAt > rounds[2]!.createdAt).toBe(true);
+  });
+
+  it('breaks a same-instant tie on the job id, never on insertion order', async () => {
+    const store = makeStore();
+    // A frozen clock is the only way to make createdAt actually tie.
+    vi.useFakeTimers({ now: new Date('2026-09-13T10:00:00.000Z') });
+    for (const jobId of [25, 27, 26]) {
+      await store.createSubmission(jobId, 'g:owner', `Round ${jobId}`);
+      await store.setSubmissionSlug(jobId, 'sky');
+    }
+
+    const rounds = await store.listSubmissionsByOwnerAndSlug('g:owner', 'sky');
+
+    expect(new Set(rounds.map((round) => round.createdAt)).size).toBe(1);
+    expect(rounds.map((round) => round.jobId)).toEqual([27, 26, 25]);
+  });
+
+  it('returns nothing for a slug the owner never claimed', async () => {
+    const store = makeStore();
+    await store.createSubmission(30, 'g:owner', 'Mine');
+    await store.setSubmissionSlug(30, 'sky');
+
+    expect(await store.listSubmissionsByOwnerAndSlug('g:owner', 'dunes')).toEqual([]);
   });
 });

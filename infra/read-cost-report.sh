@@ -57,39 +57,50 @@ ACCESS_TOKEN="$(gcloud auth print-access-token)"
 END_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 START_TIME="$(started_at)"
 
+# A page goes to a file, never to argv: a week of per-minute DELTA points is megabytes,
+# and passing that as an argument exits with "Argument list too long" before node starts.
 fetch_page() {
   local page_token="$1"
+  local out="$2"
   local url="https://monitoring.googleapis.com/v3/projects/${PROJECT_ID}/timeSeries"
   url+="?filter=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' 'metric.type="firestore.googleapis.com/document/read_count"')"
   url+="&interval.startTime=${START_TIME}&interval.endTime=${END_TIME}"
   if [ -n "$page_token" ]; then
     url+="&pageToken=${page_token}"
   fi
-  curl -sS -H "Authorization: Bearer ${ACCESS_TOKEN}" "$url"
+  curl -sS -H "Authorization: Bearer ${ACCESS_TOKEN}" "$url" -o "$out"
 }
 
 TMP_ALL="$(mktemp)"
-trap 'rm -f "$TMP_ALL"' EXIT
+TMP_PAGE="$(mktemp)"
+trap 'rm -f "$TMP_ALL" "$TMP_PAGE"' EXIT
 echo "[]" >"$TMP_ALL"
 
 page_token=""
 while :; do
-  page="$(fetch_page "$page_token")"
-  if echo "$page" | node -e 'let r="";process.stdin.on("data",c=>r+=c);process.stdin.on("end",()=>{const j=JSON.parse(r);if(j.error){console.error(JSON.stringify(j.error));process.exit(1)}})'; then
-    :
-  else
+  fetch_page "$page_token" "$TMP_PAGE"
+  if ! node -e '
+    const fs = require("fs");
+    const page = JSON.parse(fs.readFileSync(process.argv[1], "utf8") || "{}");
+    if (page.error) {
+      console.error(JSON.stringify(page.error));
+      process.exit(1);
+    }
+  ' "$TMP_PAGE"; then
     echo "Monitoring API error (see above)" >&2
     exit 1
   fi
   node -e '
     const fs = require("fs");
-    const [prevPath, pageJson] = [process.argv[1], process.argv[2]];
+    const [prevPath, pagePath] = [process.argv[1], process.argv[2]];
     const prev = JSON.parse(fs.readFileSync(prevPath, "utf8"));
-    const page = JSON.parse(pageJson || "{}");
-    const merged = prev.concat(page.timeSeries ?? []);
-    fs.writeFileSync(prevPath, JSON.stringify(merged));
-  ' "$TMP_ALL" "$page"
-  page_token="$(node -e 'console.log(JSON.parse(process.argv[1]).nextPageToken ?? "")' "$page")"
+    const page = JSON.parse(fs.readFileSync(pagePath, "utf8") || "{}");
+    fs.writeFileSync(prevPath, JSON.stringify(prev.concat(page.timeSeries ?? [])));
+  ' "$TMP_ALL" "$TMP_PAGE"
+  page_token="$(node -e '
+    const fs = require("fs");
+    console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8") || "{}").nextPageToken ?? "");
+  ' "$TMP_PAGE")"
   if [ -z "$page_token" ]; then
     break
   fi

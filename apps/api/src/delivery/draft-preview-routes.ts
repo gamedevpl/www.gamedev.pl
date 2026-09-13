@@ -67,7 +67,7 @@ export async function registerDraftPreviewRoutes(
     const uid = request.user?.uid;
     // Slug index can lag the owner query on a just-written draft.
     if (!record && uid) {
-      record = (await store.listSubmissionsByOwner(uid)).find((row) => row.slug === slug) ?? null;
+      record = (await store.listSubmissionsByOwnerAndSlug(uid, slug))[0] ?? null;
     }
     if (!record || record.abandonedAt) return null;
     // The owner sees their own red build; a stranger never does.

@@ -68,6 +68,22 @@ npm run type-check && npm run lint && npm run test && npm run build
 This mirrors the CI workflow (`.github/workflows/ci.yml`, Node 20). A Husky `pre-commit` hook
 runs `lint-staged` (Prettier) on staged files.
 
+**A red suite is not always a red change.** Two failure classes here have nothing to do with
+the diff, and both have blocked a merge on work that was correct:
+
+- **Stale `node_modules` in a worktree.** A worktree installed before a dependency bump keeps
+  serving the old copy, and the mismatch fails whole files and the type-check for reasons the
+  diff cannot explain. Check the suspicious package against `package-lock.json` before reading
+  a failure as yours.
+- **CPU contention against the test timeout.** Vitest's default 5000 ms is wall clock, not work,
+  so a suite that needs 13 s on a loaded machine fails a test that asserts nothing about time.
+  `apps/api` and `apps/web` therefore set `testTimeout` and `hookTimeout` to 20 s. That buys
+  headroom without hiding a hang: a genuinely stuck test still fails, 15 s later.
+
+Raising a timeout is the right fix **only** when the test asserts behaviour. If a test is
+asserting that something completes inside a deadline, the deadline belongs in the test, not in
+the config — and then a failure is a real signal.
+
 ### Exercising the authenticated half of the product
 
 A green gate says the code compiles and its tests pass. It does not say the flow works. If

@@ -765,6 +765,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.submissionQueryStore.listSubmissionsByOwner(ownerUid, opts);
   }
 
+  async listSubmissionsByOwnerAndSlug(ownerUid: string, slug: string): Promise<SubmissionRecord[]> {
+    return this.submissionQueryStore.listSubmissionsByOwnerAndSlug(ownerUid, slug);
+  }
+
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
   }
