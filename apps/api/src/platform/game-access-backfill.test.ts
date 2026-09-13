@@ -8,8 +8,18 @@ import { resolveGameAccess, type GameAccessResolveStore } from './game-access-re
 // Games as they exist pre-migration: jobs, no record.
 class LegacyStore extends InMemoryGameAccessStore implements GameAccessResolveStore {
   private jobs: SubmissionRecord[] = [];
+  private accounts = new Set<string>();
+
+  constructor() {
+    super((uid) => this.accounts.has(uid));
+  }
+
+  eraseAccount(uid: string): void {
+    this.accounts.delete(uid);
+  }
 
   addJob(jobId: number, ownerUid: string, slug: string, opts?: { abandoned?: boolean }): this {
+    this.accounts.add(ownerUid);
     this.jobs.unshift({
       jobId,
       ownerUid,
@@ -128,11 +138,11 @@ describe('game access backfill under concurrency', () => {
     const store = new LegacyStore().addJob(1, 'g:ada', 'orbital-dogfight');
 
     // Someone else's record lands between the read and the write.
-    const original = store.ensureGameAccess.bind(store);
-    store.ensureGameAccess = async (slug, ownerUid, at) => {
-      store.ensureGameAccess = original;
-      await original(slug, 'g:grace', at);
-      return original(slug, ownerUid, at);
+    const original = store.backfillGameAccess.bind(store);
+    store.backfillGameAccess = async (slug, ownerUid, checkAccount, at) => {
+      store.backfillGameAccess = original;
+      await store.ensureGameAccess(slug, 'g:grace', at);
+      return original(slug, ownerUid, checkAccount, at);
     };
 
     const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
@@ -154,6 +164,30 @@ describe('game access backfill under concurrency', () => {
     const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
 
     expect(result).toMatchObject({ created: 0, createdPlatform: 1 });
+    expect((await resolveGameAccess(store, 'orbital-dogfight')).owner).toEqual({
+      kind: 'platform',
+      reason: 'owner_deleted',
+    });
+  });
+});
+
+describe('game access backfill versus erasure', () => {
+  it('does not record an account erased after the last source read', async () => {
+    const store = new LegacyStore().addJob(1, 'g:ada', 'orbital-dogfight');
+
+    // Erasure lands after the final read, before the create.
+    const original = store.backfillGameAccess.bind(store);
+    store.backfillGameAccess = async (slug, ownerUid, checkAccount, at) => {
+      store.backfillGameAccess = original;
+      store.eraseAccount(ownerUid);
+      store.addJob(2, DELETED_ACCOUNT_UID, slug);
+      return original(slug, ownerUid, checkAccount, at);
+    };
+
+    const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
+
+    expect(await store.getGameAccess('orbital-dogfight')).toBeNull();
+    expect(result).toMatchObject({ created: 0, createdPlatform: 0, quarantined: ['orbital-dogfight'] });
     expect((await resolveGameAccess(store, 'orbital-dogfight')).owner).toEqual({
       kind: 'platform',
       reason: 'owner_deleted',

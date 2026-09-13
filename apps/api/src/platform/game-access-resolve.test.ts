@@ -164,6 +164,39 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await store.getGameAccess('tide-pool')).toMatchObject({ ownerUid: 'g:grace', accessRevision: 1 });
     });
 
+    it('does not let a paused loser overwrite the job that won the name', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'same-title');
+
+      // Ada reads herself as holder, then stalls before publishing authority.
+      const adaHolder = await store.getSubmissionBySlug('same-title');
+      expect(adaHolder?.jobId).toBe(1);
+
+      await tick();
+      await submit(store, 2, 'g:grace', 'same-title');
+      await settleSlugClaim(store, 2, 'same-title', 'Same title', async () => true);
+
+      // Ada resumes and writes late.
+      const inForce = await store.recordSettledOwner('same-title', 'g:ada', 1, new Date().toISOString());
+
+      expect(inForce).toMatchObject({ ownerUid: 'g:grace', settledJobId: 2 });
+      expect(await store.getGameAccess('same-title')).toMatchObject({ ownerUid: 'g:grace' });
+    });
+
+    it('tells the late loser it did not settle', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'contested');
+      await tick();
+      await submit(store, 2, 'g:grace', 'contested');
+      await settleSlugClaim(store, 2, 'contested', 'Contested', async () => true);
+
+      // Ada's settlement fails rather than claiming the name.
+      const settled = await settleSlugClaim(store, 1, 'contested', 'Contested', async () => true);
+
+      expect(settled).not.toBe('contested');
+      expect(await store.getGameAccess('contested')).toMatchObject({ ownerUid: 'g:grace' });
+    });
+
     it('leaves a record settlement did not write alone', async () => {
       const store = makeStore();
       await submit(store, 1, 'g:ada', 'orbital-dogfight');

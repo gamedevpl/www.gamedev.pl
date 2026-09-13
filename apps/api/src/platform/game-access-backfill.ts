@@ -88,8 +88,12 @@ export async function runGameAccessBackfill(options: GameAccessBackfillOptions):
     }
 
     // Report the record in force, not the intended one.
-    const inForce = await store.ensureGameAccess(slug, ownerUid, now().toISOString());
-    if (inForce.ownerUid === ownerUid) countCreate(result, classifyOwnerUid(ownerUid));
+
+    // An account gone since the read is quarantined, not guessed.
+    const owner = classifyOwnerUid(ownerUid);
+    const inForce = await store.backfillGameAccess(slug, ownerUid, owner.kind === 'creator', now().toISOString());
+    if (!inForce) result.quarantined.push(slug);
+    else if (inForce.ownerUid === ownerUid) countCreate(result, owner);
     else recordOutcome(result, slug, inForce.ownerUid, deriveOwnerFromSubmissions(fresh));
   }
 

@@ -19,6 +19,9 @@ export interface GameAccessRecord {
   // Bumped on every authority change; fences work admitted before a revocation.
   accessRevision: number;
 
+  // The job whose settled slug claim wrote this. Absent while still tentative.
+  settledJobId?: number;
+
   createdAt: string;
 
   updatedAt: string;
@@ -32,16 +35,22 @@ export function membersOf(ownerUid: string, editorUids: readonly string[]): stri
   return [ownerUid, ...editorUids.filter((uid) => uid !== ownerUid)];
 }
 
-export function newGameAccess(slug: string, ownerUid: string, at: string): GameAccessRecord {
+export function newGameAccess(slug: string, ownerUid: string, at: string, settledJobId?: number): GameAccessRecord {
   return {
     slug,
     ownerUid,
     editorUids: [],
     memberUids: membersOf(ownerUid, []),
     accessRevision: 1,
+    ...(settledJobId === undefined ? {} : { settledJobId }),
     createdAt: at,
     updatedAt: at,
   };
+}
+
+// A later job settles over a tentative record; earlier never wins.
+export function settlementWins(existing: GameAccessRecord, jobId: number): boolean {
+  return existing.settledJobId === undefined || existing.settledJobId <= jobId;
 }
 
 // Erasure: the platform takes custody, and the uid leaves every membership.

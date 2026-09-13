@@ -43,8 +43,17 @@ export abstract class SubmissionFacade {
     return this.gameAccessStore.ensureGameAccess(slug, ownerUid, at);
   }
 
-  async recordSettledOwner(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord> {
-    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, at);
+  async recordSettledOwner(slug: string, ownerUid: string, jobId: number, at: string): Promise<GameAccessRecord> {
+    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, at);
+  }
+
+  async backfillGameAccess(
+    slug: string,
+    ownerUid: string,
+    checkAccount: boolean,
+    at: string,
+  ): Promise<GameAccessRecord | null> {
+    return this.gameAccessStore.backfillGameAccess(slug, ownerUid, checkAccount, at);
   }
 
   async listGameAccessByMember(uid: string): Promise<GameAccessRecord[]> {

@@ -10,7 +10,7 @@ export interface SlugClaimStore {
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
 
   // The name stops moving here, so authority is recorded here.
-  recordSettledOwner(slug: string, ownerUid: string, at: string): Promise<unknown>;
+  recordSettledOwner(slug: string, ownerUid: string, jobId: number, at: string): Promise<{ settledJobId?: number }>;
 }
 
 // Reads back a slug a job wrote, settling who holds it.
@@ -28,8 +28,11 @@ export async function settleSlugClaim(
   const holds = async (candidate: string): Promise<boolean> => {
     const holder = await store.getSubmissionBySlug(candidate);
     if (holder?.jobId !== jobId) return false;
-    if (holder.ownerUid) await store.recordSettledOwner(candidate, holder.ownerUid, new Date().toISOString());
-    return true;
+    if (!holder.ownerUid) return true;
+
+    // A newer job settled while we waited: we lost, late.
+    const inForce = await store.recordSettledOwner(candidate, holder.ownerUid, jobId, new Date().toISOString());
+    return inForce.settledJobId === undefined || inForce.settledJobId === jobId;
   };
 
   if (await holds(slug)) return slug;
