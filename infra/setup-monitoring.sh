@@ -1015,9 +1015,27 @@ EOF
 # many links are handed out, never how much is pulled through them. This is the only thing
 # left that sees the bill forming.
 #
-# 120 MB/hour sustained over an hour is ~2.9 GB/day, roughly 24x a normal closed-beta day
-# (52 MB on 2026-09-10) and about $0.35/day of egress. Low enough to catch a scraper in
-# the first hour, high enough that a genuinely busy launch day does not page anyone.
+# One threshold cannot serve buckets whose normals differ by an order of magnitude, so
+# there are two conditions. Measured 2026-09-13, in MiB/hour:
+#
+#                       72h median   24h median   24h max   hours over 120 (of 24)
+#   games-store              278           96        1096          8
+#   games-snapshots           15           32          96          0
+#   _cloudbuild               74           74          74          0
+#   firestore-backups          1            1           1          0
+#
+# The store bucket was above the single 120 MB threshold for 56 of 73 hours, so this policy
+# was firing continuously rather than alerting. An alarm that is always on is not an alarm;
+# it trains everyone to ignore the one time it means something.
+#
+# The store bucket's load is bursty, not steady -- the coding agent reading kit files. Its
+# median fell by two thirds between the two windows while its peak did not move at all, so
+# the threshold is set off the peak, which is the statistic a bursty workload has.
+#
+# Quiet buckets keep 120 MB/hour: ~2.9 GB/day, roughly 24x a normal closed-beta day (52 MB
+# on 2026-09-10), about $0.35/day of egress, and still above the snapshot bucket's observed
+# peak. The store bucket gets 1.5 GiB/hour -- ~36 GB/day, about $4.35/day, and ~1.4x its own
+# 24h peak. Below that it is doing its job; above it, something is wrong.
 cat > "${POLICY_DIR}/a32.json" <<EOF
 {
   "displayName": "A32 Games bucket egress abnormally high",
@@ -1025,7 +1043,7 @@ cat > "${POLICY_DIR}/a32.json" <<EOF
   "conditions": [{
     "displayName": "sent bytes sustained over an hour",
     "conditionThreshold": {
-      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\"",
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name != \"${PROJECT_ID}-games-store\"",
       "aggregations": [{
         "alignmentPeriod": "3600s",
         "perSeriesAligner": "ALIGN_SUM",
@@ -1034,6 +1052,21 @@ cat > "${POLICY_DIR}/a32.json" <<EOF
       }],
       "comparison": "COMPARISON_GT",
       "thresholdValue": 125829120,
+      "duration": "3600s",
+      "trigger": { "count": 1 }
+    }
+  }, {
+    "displayName": "store bucket sent bytes sustained over an hour",
+    "conditionThreshold": {
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name = \"${PROJECT_ID}-games-store\"",
+      "aggregations": [{
+        "alignmentPeriod": "3600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM",
+        "groupByFields": ["resource.label.bucket_name"]
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 1610612736,
       "duration": "3600s",
       "trigger": { "count": 1 }
     }
