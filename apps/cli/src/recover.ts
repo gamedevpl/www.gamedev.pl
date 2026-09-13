@@ -13,7 +13,7 @@ import { findCheckout, localGameFiles, writeBase, fetchLatestTree, initializeChe
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { PickChoice } from './workshop.js';
 
-// GAME.json titles may be localized, same as the catalog reader.
+// The canonical name lives in SPEC.md, not the manifest.
 function titleText(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (!value || typeof value !== 'object') return '';
@@ -146,7 +146,7 @@ async function performRecovery(input: {
   let metadata: { title?: unknown } = {};
   const game = files.find((f) => f.path === 'GAME.json');
   if (game) metadata = parseJsonObject(game.content, 'GAME.json');
-  const title = titleText(metadata.title) || titleText(spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]);
+  const title = titleText(spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]) || titleText(metadata.title);
   if (!title) throw new CliError('Set the title in GAME.json or SPEC.md before recovery.', EXIT_INPUT);
   if (title.length < TITLE_MIN || title.length > TITLE_MAX)
     throw new CliError(
