@@ -24,7 +24,8 @@ function fixture(kind = 'missing') {
   let active = kind === 'active';
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     let body: unknown = {};
-    if (url.includes('/studio?')) body = { games: active ? [{ slug: 'sky', token: 'round' }] : [] };
+    if (url.includes('/studio?'))
+      body = { games: active || kind === 'archived' ? [{ slug: 'sky', token: 'round' }] : [] };
     else if (url.endsWith('/recovery')) body = { kind: active ? 'active' : kind };
     else if (url.endsWith('/recover')) {
       active = true;
@@ -108,14 +109,14 @@ it('does not recover an occupied slug', async () => {
   expect(f.pick).not.toHaveBeenCalled();
   expect(f.fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
 });
-it('opens healthy checkouts immediately without checking recovery', async () => {
+it('opens healthy checkouts immediately after checking their lifecycle', async () => {
   const f = fixture('active');
   expect(await replStart(f.api, f.root)).toMatchObject({
     token: 'round',
     checkout: { root: f.root },
     initialLine: undefined,
   });
-  expect(f.fetch).toHaveBeenCalledTimes(1);
+  expect(f.fetch).toHaveBeenCalledTimes(2);
 });
 it('resumes interrupted staging even when Studio already has the recovered round', async () => {
   const f = fixture();
@@ -137,4 +138,14 @@ it('resumes interrupted staging even when Studio already has the recovered round
   expect(existsSync(join(f.root, '.gamedev-recovery.json'))).toBe(false);
   const requests = f.fetch.mock.calls.filter(([url]) => url.endsWith('/recover'));
   expect(JSON.parse(String(requests[0]![1]!.body)).key).toBe(JSON.parse(String(requests[1]![1]!.body)).key);
+});
+it('does not recover when lifecycle lookup fails despite an existing shelf token', async () => {
+  const f = fixture('active');
+  const normal = f.fetch.getMockImplementation()!;
+  f.fetch.mockImplementation(async (url, init) =>
+    url.endsWith('/recovery') ? new Response('{"error":"unavailable"}', { status: 503 }) : normal(url, init),
+  );
+  await handleReplLine({ ...f, token: null, cwd: f.root, line: '/connect' });
+  expect(f.pick).not.toHaveBeenCalled();
+  expect(f.fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
 });

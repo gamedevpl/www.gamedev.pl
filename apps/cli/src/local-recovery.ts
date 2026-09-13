@@ -14,6 +14,17 @@ export function matchingCheckout(cwd: string, slug: string) {
   return child?.slug === slug ? child : null;
 }
 
+async function localStudioToken(api: ApiClient, slug: string): Promise<string> {
+  const token = await studioToken(api, slug);
+  const recovery = await api.request<{ kind: string }>(
+    'GET',
+    `/api/me/studio/games/${encodeURIComponent(slug)}/recovery`,
+  );
+  if (['missing', 'canceled', 'archived', 'occupied'].includes(recovery.kind))
+    throw new MissingStudioGame(slug, recovery.kind);
+  return token;
+}
+
 export async function resolveLocalGame(input: {
   api: ApiClient;
   slug: string;
@@ -25,7 +36,7 @@ export async function resolveLocalGame(input: {
   const pending = existsSync(join(input.root, '.gamedev-recovery.json'));
   if (!pending) {
     try {
-      return { token: await studioToken(input.api, input.slug), recovered: false };
+      return { token: await localStudioToken(input.api, input.slug), recovered: false };
     } catch (error) {
       if (
         !(error instanceof MissingStudioGame) ||
@@ -44,7 +55,7 @@ export async function openCheckoutGame(api: ApiClient, cwd: string) {
   const found = findCheckout(cwd);
   if (!found || existsSync(join(found.root, '.gamedev-recovery.json'))) return null;
   try {
-    return { token: await studioToken(api, found.slug), ...found };
+    return { token: await localStudioToken(api, found.slug), ...found };
   } catch {
     return null;
   }
