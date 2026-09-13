@@ -289,7 +289,7 @@ describe('recommendation routes', () => {
       headers: authHeaders('g:alice'),
     });
     expect(personal.statusCode).toBe(200);
-    // Affinity is per-request; community Firestore reads stay cached.
+    // Affinity has a per-uid window; community Firestore reads stay cached.
     expect(scorecardReads).toBe(1);
     expect(recentPublishedReads).toBe(1);
     const personalBody = personal.json() as { items: Array<{ slug: string; reason: string }> };
