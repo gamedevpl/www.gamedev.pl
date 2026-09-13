@@ -4,6 +4,7 @@ import { fakeFirestore } from '../store/fake-firestore.js';
 import { classifyOwnerUid, gameAccessMatchesDerived, ownsGame, resolveGameAccess } from './game-access-resolve.js';
 import { creatorOwnsSlug, settleSlugClaim } from './slug-ownership.js';
 import { claimAvailableSlug } from './atomic-slug-claim.js';
+import type { GameAccessStore } from '../store/slices/game-access.js';
 import { resolveOwnerOfRecord } from '../community/owner-of-record.js';
 
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -223,6 +224,42 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
         ownerUid: DELETED_ACCOUNT_UID,
         accessRevision: 2,
       });
+    });
+
+    it('refuses every writer that commits after the erasure fence', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
+      await store.createSubmission(1, 'g:ada', 'Legacy Game');
+
+      // The fence is erasure's first act; in-flight writers lose.
+      await store.beginAccountErasure('g:ada', new Date().toISOString());
+
+      const at = new Date().toISOString();
+      expect(await store.ensureGameAccess('legacy-game', 'g:ada', at)).toBeNull();
+      expect(await store.recordSettledOwner('legacy-game', 'g:ada', 1, at)).toBeNull();
+      expect(await store.backfillGameAccess('legacy-game', 'g:ada', false, at)).toBeNull();
+      expect(await store.getGameAccess('legacy-game')).toBeNull();
+      expect(await store.listGameAccessByMember('g:ada')).toEqual([]);
+    });
+
+    it('refuses a settlement that resumes after the account is gone', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
+      await store.createSubmission(1, 'g:ada', 'Late Claim');
+
+      // The claim wins, erasure completes, then the record is written.
+      const access = (store as unknown as { gameAccessStore: GameAccessStore }).gameAccessStore;
+      const settle = access.recordSettledOwner.bind(access);
+      access.recordSettledOwner = async (slug, ownerUid, jobId, at) => {
+        access.recordSettledOwner = settle;
+        await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+        return settle(slug, ownerUid, jobId, at);
+      };
+
+      await store.claimSubmissionSlug(1, 'late-claim', null);
+
+      expect(await store.getGameAccess('late-claim')).toBeNull();
+      expect(await store.listGameAccessByMember('g:ada')).toEqual([]);
     });
 
     it('lists every named game a job claimed, drafts included', async () => {

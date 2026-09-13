@@ -75,7 +75,6 @@ import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGameAccessStore } from './slices/game-access.js';
-import { withMemberErased, type GameAccessRecord } from './records/game-access.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
@@ -191,6 +190,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
+    // Fence first: every access writer reads it transactionally and refuses after this.
+    await this.gameAccessStore.beginAccountErasure(uid, at);
     const user = await this.getUser(uid);
     const submissions = await this.db.collection('submissions').where('ownerUid', '==', uid).get();
     const owned = submissions.docs.map((doc) => ({ doc, record: doc.data() as SubmissionRecord }));
@@ -225,7 +226,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       waitlistByEmail,
       betaInvitesCreated,
       betaInvitesClaimed,
-      gameAccess,
     ] = await Promise.all([
       this.db.collection('accessTokens').where('uid', '==', uid).get(),
       this.db.collection('gameAgentKeys').where('ownerUid', '==', uid).get(),
@@ -246,8 +246,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       email ? this.db.collection('waitlist').where('email', '==', email).get() : Promise.resolve(null),
       this.db.collection('betaInvites').where('createdByUid', '==', uid).get(),
       this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
-      this.db.collection('gameAccess').where('memberUids', 'array-contains', uid).get(),
     ]);
+
+    // After the fence, so a record created mid-erasure is either refused or seen here.
+    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
 
     // Refresh rows may lack ownerUid; join them through owned grants.
     const grantIds = new Set(oauthGrants.docs.map((doc) => doc.id));
@@ -301,10 +303,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
           { merge: true },
         ),
       );
-    }
-    for (const doc of gameAccess.docs) {
-      const erased = withMemberErased(doc.data() as GameAccessRecord, uid, DELETED_ACCOUNT_UID, at);
-      if (erased) writes.push((batch) => batch.set(doc.ref, erased));
     }
     for (const doc of suggestions.docs) {
       writes.push((batch) => batch.set(doc.ref, { ownerUid: null, updatedAt: at }, { merge: true }));

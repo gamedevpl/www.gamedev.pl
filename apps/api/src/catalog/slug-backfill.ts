@@ -17,7 +17,12 @@ export interface SlugBackfillStore {
   listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
   setSubmissionSlug(jobId: number, slug: string): Promise<void>;
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
-  recordSettledOwner(slug: string, ownerUid: string, jobId: number, at: string): Promise<{ settledJobId?: number }>;
+  recordSettledOwner(
+    slug: string,
+    ownerUid: string,
+    jobId: number,
+    at: string,
+  ): Promise<{ settledJobId?: number } | null>;
 }
 
 export interface SlugBackfillResult {

@@ -75,7 +75,6 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
-import { withMemberErased } from './records/game-access.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
@@ -159,6 +158,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
+    // Fence first: a writer racing this erasure is refused, not scrubbed afterwards.
+    await this.gameAccessStore.beginAccountErasure(uid, at);
     const user = this.identityStore.users.get(uid);
     const owned = [...this.submissions.values()].filter((submission) => submission.ownerUid === uid);
     const publishedSlugs = owned
@@ -203,10 +204,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     for (const [tokenId, record] of [...this.accessTokensStore.accessTokens]) {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
-    for (const [slug, record] of [...this.gameAccessStore.access]) {
-      const erased = withMemberErased(record, uid, DELETED_ACCOUNT_UID, at);
-      if (erased) this.gameAccessStore.access.set(slug, erased);
-    }
+    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
     for (const [slug, record] of [...this.agentKeysStore.gameAgentKeys]) {
       if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
     }
