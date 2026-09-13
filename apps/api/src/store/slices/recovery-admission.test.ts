@@ -86,3 +86,30 @@ it('rejects a replaced nonce even when its original lifetime has not elapsed', (
     time.mockRestore();
   }
 });
+
+it.each(['memory', 'firestore'])(
+  '%s fences manual rounds during admission and admits the matching improvement',
+  async (mode) => {
+    const store = mode === 'memory' ? new InMemoryStore() : firestoreStore();
+    await store.createSubmission(1, 'owner', 'Sky');
+    await store.setSubmissionSlug(1, 'sky');
+    await store.createSubmission(2, 'owner', 'Sky');
+    expect(await store.beginCheckoutRecovery('sky', 'improvement', Date.now())).toBe(true);
+    expect(await store.claimManualRoundSlug(2, 'sky', 1)).toBe(false);
+    expect(await store.claimManualRoundSlug(2, 'sky', 1, 'different')).toBe(false);
+    expect(await store.claimManualRoundSlug(2, 'sky', 1, 'improvement')).toBe(true);
+  },
+);
+
+it.each(['memory', 'firestore'])(
+  '%s refuses an expired improvement nonce but permits unleased manual work',
+  async (mode) => {
+    const store = mode === 'memory' ? new InMemoryStore() : firestoreStore();
+    await store.createSubmission(1, 'owner', 'Sky');
+    await store.setSubmissionSlug(1, 'sky');
+    await store.createSubmission(2, 'owner', 'Sky');
+    expect(await store.beginCheckoutRecovery('sky', 'expired', Date.now() - 16 * 60_000)).toBe(true);
+    expect(await store.claimManualRoundSlug(2, 'sky', 1, 'expired')).toBe(false);
+    expect(await store.claimManualRoundSlug(2, 'sky', 1)).toBe(true);
+  },
+);

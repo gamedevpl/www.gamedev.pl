@@ -55,11 +55,17 @@ export class InMemorySubmissionStore implements SubmissionStore {
     return true;
   }
 
-  async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean> {
+  async claimManualRoundSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number,
+    admissionNonce?: string,
+  ): Promise<boolean> {
     const publication = await this.publication?.getPublication(slug);
     const target = this.submissions.get(jobId);
     if (
       !target ||
+      !permitsRecoveryClaim(this.recoveryAdmissions.get(slug), admissionNonce) ||
       !canClaimManualRound(
         target,
         [...this.submissions.values()].filter((r) => r.slug === slug),

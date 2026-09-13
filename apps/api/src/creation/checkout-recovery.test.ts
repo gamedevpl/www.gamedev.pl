@@ -307,3 +307,16 @@ it('reserves a missing recovery slug against normal creation during moderation',
   expect((await f.store.getSubmissionBySlug('missing'))?.ownerUid).toBe('owner');
   expect(quota).toHaveBeenCalledTimes(1);
 });
+
+it('reserves a canceled recovery slug against Code opening a manual round during moderation', async () => {
+  const f = await fixture();
+  f.moderate.mockImplementationOnce(async () => {
+    const competing = await f.store.allocateJobId();
+    await f.store.createSubmission(competing, 'owner', 'Sky Game');
+    expect(await f.store.claimManualRoundSlug(competing, 'sky', 1)).toBe(false);
+    return { allowed: true };
+  });
+  const result = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+  expect(result.statusCode).toBe(200);
+  expect((await f.store.getSubmissionBySlug('sky'))?.recoveryKey).toBeTruthy();
+});

@@ -793,7 +793,7 @@ export async function registerSubmissionRoutes(
     const source = await store.getSubmission(input.jobId);
     if (!source?.slug) return null;
     const slug = source.slug;
-    return withImprovementAdmission(store, slug, now, async () => {
+    return withImprovementAdmission(store, slug, now, async (admissionNonce) => {
       const holder = await store.getSubmissionBySlug(slug);
       if (!holder) return null;
 
@@ -837,7 +837,7 @@ export async function registerSubmissionRoutes(
 
       try {
         if (
-          !(await store.claimManualRoundSlug(jobId, slug, holder.jobId)) ||
+          !(await store.claimManualRoundSlug(jobId, slug, holder.jobId, admissionNonce)) ||
           (input.beforeDispatch && !(await input.beforeDispatch()))
         ) {
           await abandonImprovement(store, jobId, now);

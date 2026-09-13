@@ -1,3 +1,4 @@
+import { permitsRecoveryClaim } from './recovery-admission.js';
 import type { Firestore } from '@google-cloud/firestore';
 import { isActiveBuildRound } from '../../creation/job-state.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
@@ -7,6 +8,7 @@ export async function claimManualRoundSlug(
   jobId: number,
   slug: string,
   sourceJobId: number,
+  admissionNonce?: string,
 ): Promise<boolean> {
   return db.runTransaction(async (tx) => {
     const target = await tx.get(db.collection('submissions').doc(String(jobId)));
@@ -15,6 +17,7 @@ export async function claimManualRoundSlug(
     const game = await tx.get(claim);
     if (
       !target.exists ||
+      !permitsRecoveryClaim(game.data()?.recoveryAdmission, admissionNonce) ||
       !canClaimManualRound(
         fromStoredSubmission(target.data()!),
         rows.docs.map((d) => fromStoredSubmission(d.data())),

@@ -8,7 +8,7 @@ import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
-  claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean>;
+  claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number, admissionNonce?: string): Promise<boolean>;
   beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
   finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
   claimSubmissionSlug(
@@ -136,8 +136,8 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     });
   }
 
-  async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean> {
-    return claimManualRoundSlug(this.db, jobId, slug, sourceJobId);
+  async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number, nonce?: string): Promise<boolean> {
+    return claimManualRoundSlug(this.db, jobId, slug, sourceJobId, nonce);
   }
 
   async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {

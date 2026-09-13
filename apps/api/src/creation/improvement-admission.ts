@@ -6,7 +6,7 @@ export async function withImprovementAdmission<T>(
   store: Store,
   slug: string,
   now: () => number,
-  action: () => Promise<T>,
+  action: (nonce: string) => Promise<T>,
 ): Promise<T> {
   const nonce = randomUUID();
   if (!(await store.beginCheckoutRecovery(slug, nonce, now()))) {
@@ -21,7 +21,7 @@ export async function withImprovementAdmission<T>(
         statusCode: 409,
       });
     }
-    return await action();
+    return await action(nonce);
   } finally {
     await store.finishCheckoutRecovery(slug, nonce);
   }
