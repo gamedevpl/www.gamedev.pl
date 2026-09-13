@@ -60,3 +60,64 @@ describe('createGcsObjectStore', () => {
     expect(calls.some((c) => !c.includes('alt=media') && c.includes('kits'))).toBe(true);
   });
 });
+
+// Fakes elsewhere assume this; only the real signer can prove it.
+describe('a V4 signature at a fixed instant', () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const signBlob = async (stringToSign: string) =>
+    cryptoSign('RSA-SHA256', Buffer.from(stringToSign, 'utf8'), createPrivateKey(pem)).toString('base64');
+
+  const at = (nowMs: number) =>
+    signGcsReadUrl({
+      bucket: 'gamedevpl-games-snapshots',
+      object: 'snapshots/s1/media/airtime/opening.png',
+      expiresSeconds: 172800,
+      now: () => nowMs,
+      serviceAccountEmail: 'runtime@gamedevpl.iam.gserviceaccount.com',
+      signBlob,
+    });
+
+  const anchor = Date.parse('2026-09-11T00:00:00.000Z');
+
+  it('is byte-identical, so two instances hand out one cache entry', async () => {
+    expect(await at(anchor)).toBe(await at(anchor));
+  });
+
+  it('differs at the next instant, which is what anchoring exists to remove', async () => {
+    expect(await at(anchor + 1_000)).not.toBe(await at(anchor));
+  });
+});
+
+// The media signer anchors through the store, not through signGcsReadUrl.
+describe('createGcsObjectStore.signReadUrl', () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+
+  const storeAt = (nowMs: number) =>
+    createGcsObjectStore({
+      bucket: 'gamedevpl-games-snapshots',
+      now: () => nowMs,
+      serviceAccountEmail: 'runtime@gamedevpl.iam.gserviceaccount.com',
+      signBlob: async (stringToSign: string) =>
+        cryptoSign('RSA-SHA256', Buffer.from(stringToSign, 'utf8'), createPrivateKey(pem)).toString('base64'),
+    });
+
+  const pinned = Date.parse('2026-09-11T00:00:00.000Z');
+  const object = 'snapshots/s1/media/airtime/opening.png';
+
+  it('honours a pinned instant over its own clock', async () => {
+    const early = await storeAt(pinned + 60_000).signReadUrl(object, 172800, pinned);
+    const late = await storeAt(pinned + 9 * 3_600_000).signReadUrl(object, 172800, pinned);
+
+    expect(late).toBe(early);
+    expect(late).toContain('X-Goog-Date=20260911T000000Z');
+  });
+
+  // Without the pin the store must keep signing at its own clock.
+  it('falls back to its own clock when no instant is pinned', async () => {
+    const url = await storeAt(pinned + 9 * 3_600_000).signReadUrl(object, 900);
+
+    expect(url).toContain('X-Goog-Date=20260911T090000Z');
+  });
+});

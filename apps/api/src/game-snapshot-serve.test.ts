@@ -4,6 +4,7 @@ import { buildApp } from './platform/app.js';
 import type { GameSnapshotReader, SnapshotGame } from './catalog/game-snapshot.js';
 import type { CatalogGameEntry, GameSources, GitHubClient } from './catalog/github-client.js';
 import { InMemoryStore } from './platform/store.js';
+import { MEDIA_URL_ANCHOR_SECONDS } from './delivery/media-url-signer.js';
 
 /**
  * The serve half of the snapshot: when configured, published games are read
@@ -481,8 +482,11 @@ describe('serving media straight from Cloud Storage', () => {
     expect(response.headers.location).toBe(
       'https://storage.googleapis.com/b/snapshots/s1/media/bubble-pop/opening.png?signed',
     );
-    // Half the URL's life; the media is public anyway.
-    expect(response.headers['cache-control']).toBe('public, max-age=10800');
+    // Until the anchor rolls; no stale redirect to an old URL.
+    const maxAge = Number(/max-age=(\d+)/.exec(response.headers['cache-control'] as string)?.[1]);
+    expect(maxAge).toBeGreaterThan(0);
+    expect(maxAge).toBeLessThanOrEqual(MEDIA_URL_ANCHOR_SECONDS);
+    expect(response.headers['cache-control']).toBe(`public, max-age=${maxAge}`);
     expect(response.rawPayload.length).toBe(0);
     expect(snapshot.getMedia).not.toHaveBeenCalled();
     await app.close();

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.js';
+export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
@@ -51,20 +53,6 @@ export function isGitRemoteHelper(argv: string[]): boolean {
   const first = argv[2];
   if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
   return true;
-}
-
-// A checkout here means working on that game, not a new one.
-export async function openCheckoutGame(
-  api: ApiClient,
-  cwd: string,
-): Promise<{ token: string; slug: string; root: string } | null> {
-  const found = findCheckout(cwd);
-  if (!found) return null;
-  try {
-    return { token: await studioToken(api, found.slug), ...found };
-  } catch {
-    return null;
-  }
 }
 
 // Non-interactive twin of the REPL turn: agent, ladder, optional delivery.
@@ -328,11 +316,13 @@ export async function runCli(
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
       if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
         const { runInkRepl } = await import('./tui/host.js');
+        const checkout = matchingCheckout(process.cwd(), slug) ?? undefined;
         return runInkRepl({
           api,
           env,
           io,
-          token: await studioToken(api, slug),
+          token: checkout ? null : await studioToken(api, slug),
+          checkout,
           slug,
           currentPath: argv[1],
           initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}${typeof flags.agent === 'string' ? ` --agent ${flags.agent}` : ''}`,
@@ -368,27 +358,12 @@ export async function runCli(
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       const { runInkRepl } = await import('./tui/host.js');
-      const requestedSlug = args[0];
-      const local = findCheckout(process.cwd());
-      const opened =
-        typeof flags.token === 'string' || (requestedSlug && local?.slug !== requestedSlug)
-          ? null
-          : await openCheckoutGame(api, process.cwd());
-      const token =
-        typeof flags.token === 'string'
-          ? flags.token
-          : requestedSlug
-            ? await studioToken(api, requestedSlug)
-            : (opened?.token ?? null);
       return runInkRepl({
         api,
         env,
         io,
-        token,
-        slug: requestedSlug,
-        initialLine: requestedSlug && !opened ? `/connect ${requestedSlug}` : undefined,
         currentPath: argv[1],
-        ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
+        ...(await replStart(api, process.cwd(), args[0], typeof flags.token === 'string' ? flags.token : undefined)),
       });
     }
     io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);

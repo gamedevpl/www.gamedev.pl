@@ -331,9 +331,9 @@ export async function registerCreatorStudioRoutes(
       return reply.status(400).send({ error: 'invalid slug' });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
-    const owned = records.some((record) => record.slug === slug);
-    if (!owned) {
+    // One game's rounds, not the owner's whole shelf.
+    const rounds = await store.listSubmissionsByOwnerAndSlug(request.user!.uid, slug);
+    if (rounds.length === 0) {
       return reply.status(404).send({ error: 'no such game' });
     }
 
@@ -349,7 +349,7 @@ export async function registerCreatorStudioRoutes(
     const totalCount = options.gamesStore.countVersions
       ? await options.gamesStore.countVersions(slug)
       : allVersions.length;
-    const locale = normalizeLocale(parsed.data.locale ?? records.find((record) => record.slug === slug)?.locale);
+    const locale = normalizeLocale(parsed.data.locale ?? rounds[0]?.locale);
 
     const body: CreatorBuildsResponse = {
       builds: await hydrateRecentBuildSummaries({
@@ -397,23 +397,21 @@ export async function registerCreatorStudioRoutes(
         return reply.status(400).send({ error: 'invalid slug' });
       }
 
-      const records = await store.listSubmissionsByOwner(request.user!.uid);
+      const records = await store.listSubmissionsByOwnerAndSlug(request.user!.uid, slug);
       // Canceled rounds are excluded as well as abandoned ones, matching the shelf the
       // creator is looking at when they click this. A round the operator canceled can still
       // carry a preview or delivery, and it is newer than the job that published the live
       // game — so keeping it would hand back work that was rejected, and a delivery built on
       // it would overwrite what is live. That is the same hazard as picking a stale record,
       // reached from the other direction.
-      const owned = records.filter(
-        (record) => record.slug === slug && !record.abandonedAt && record.state !== 'canceled',
-      );
+      const owned = records.filter((record) => !record.abandonedAt && record.state !== 'canceled');
       if (owned.length === 0) {
         return reply.status(404).send({ error: 'no such game' });
       }
 
       const kitOnly = (request.query as { kitOnly?: string }).kitOnly === 'true';
-      // Prefer the newest round, then the live publication.
-      const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      // The query is newest-first already; then the live publication.
+      const tip = owned[0];
       let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
       if (!version) {
         const publication = await store.getPublication(slug);

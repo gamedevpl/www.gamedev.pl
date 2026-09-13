@@ -31,6 +31,9 @@ export interface SubmissionQueryStore {
   // Every submission a creator owns, newest first -- backs the "my games" rail.
   listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
 
+  // One game's rounds for one owner, newest first.
+  listSubmissionsByOwnerAndSlug(ownerUid: string, slug: string): Promise<SubmissionRecord[]>;
+
   // The creator's unfinished rounds only -- what the header badge counts.
   listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]>;
 
@@ -103,6 +106,13 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
       .map((s) => ({ ...s }));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async listSubmissionsByOwnerAndSlug(ownerUid: string, slug: string): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => s.ownerUid === ownerUid && s.slug === slug)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
+      .map((s) => ({ ...s }));
   }
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
@@ -222,6 +232,18 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
       .map((d) => fromStoredSubmission(d.data()))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async listSubmissionsByOwnerAndSlug(ownerUid: string, slug: string): Promise<SubmissionRecord[]> {
+    // Two equality clauses, so the two single-field indexes intersect.
+    const snap = await this.db
+      .collection('submissions')
+      .where('ownerUid', '==', ownerUid)
+      .where('slug', '==', slug)
+      .get();
+    return snap.docs
+      .map((d) => fromStoredSubmission(d.data()))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
   }
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {

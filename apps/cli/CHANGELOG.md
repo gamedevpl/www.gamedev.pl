@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Offer recovery when starting or connecting in a canceled or deleted local checkout, then continue in the same session without losing local edits (#1317).
+
 ### Added
 
 - Recover canceled or deleted games from local checkout sources with `recover`, keeping local edits and supporting a new slug when needed (#1305).

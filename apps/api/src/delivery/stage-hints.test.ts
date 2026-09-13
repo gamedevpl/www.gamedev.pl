@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { KitTree, KitFileStore } from '../agent-surface/kit-files.js';
 import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
-import type { Store } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { computeStageAdvisories } from './stage-hints.js';
 import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
@@ -57,14 +57,21 @@ function fakeGamesStore(staged: Record<string, string>, delivered: Record<string
   } as unknown as GamesStore;
 }
 
-const fakeStore: Pick<Store, 'getPublication' | 'listSubmissionsByOwner'> = {
-  async getPublication() {
-    return null;
-  },
-  async listSubmissionsByOwner() {
-    return [];
-  },
-};
+type BaseStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwnerAndSlug'>;
+
+// Siblings: this owner's other rounds on the slug, newest first.
+function fakeBaseStore(siblings: SubmissionRecord[] = []): BaseStore {
+  return {
+    async getPublication() {
+      return null;
+    },
+    async listSubmissionsByOwnerAndSlug() {
+      return siblings;
+    },
+  };
+}
+
+const fakeStore = fakeBaseStore();
 
 const BASE_INPUT = {
   slug: 'my-game',
@@ -72,7 +79,7 @@ const BASE_INPUT = {
   roundGeneration: 1,
   engineRef: 'engine-1',
   store: fakeStore,
-  record: {} as { slug?: string; previewVersion?: string; deliveredVersion?: string },
+  record: {} as { slug?: string; previewVersion?: string; deliveredVersion?: string; ownerUid?: string },
   runTypecheckPreflight,
   sharedSourcesFromKitTree,
 };
@@ -272,6 +279,32 @@ export function tick(state: GameState) {
     const result = await computeStageAdvisories({
       ...BASE_INPUT,
       record: { slug: 'my-game', deliveredVersion: 'v1' },
+      kitFileStore: fakeKitFileStore(kitTree({ 'shared/game-kit.d.ts': KIT_DTS })),
+      gamesStore: fakeGamesStore({}, { 'game/model.ts': `export type GameState = { score: number };\n` }),
+      path: 'game/runtime.ts',
+      content: `
+import type { GameState } from './model.ts';
+export function tick(state: GameState) {
+  return state.score;
+}
+`,
+    });
+    expect(result.typecheckHint).toBeUndefined();
+  });
+
+  it('overlays a sibling round\u2019s delivery when this round has delivered nothing yet', async () => {
+    const sibling = {
+      jobId: 2,
+      ownerUid: 'g:owner',
+      slug: 'my-game',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      deliveredVersion: 'v1',
+    } as unknown as SubmissionRecord;
+    const result = await computeStageAdvisories({
+      ...BASE_INPUT,
+      // No version of its own; the base must come from the sibling.
+      record: { slug: 'my-game', ownerUid: 'g:owner' },
+      store: fakeBaseStore([sibling]),
       kitFileStore: fakeKitFileStore(kitTree({ 'shared/game-kit.d.ts': KIT_DTS })),
       gamesStore: fakeGamesStore({}, { 'game/model.ts': `export type GameState = { score: number };\n` }),
       path: 'game/runtime.ts',

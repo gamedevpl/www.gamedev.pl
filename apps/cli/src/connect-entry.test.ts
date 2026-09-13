@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from './main.js';
@@ -85,3 +88,28 @@ describe('connect entry points', () => {
     expect(io.output()).toContain('No agent has been started');
   });
 });
+
+it.each([{ args: [] }, { args: ['repl', 'sky'] }, { args: ['connect', 'sky'] }])(
+  'opens orphan recovery inside the TUI for $args',
+  async ({ args }) => {
+    const parent = mkdtempSync(join(tmpdir(), 'entry space '));
+    const root = join(parent, 'sky');
+    mkdirSync(root);
+    writeFileSync(join(root, '.gamedev-slug'), 'sky');
+    vi.spyOn(process, 'cwd').mockReturnValue(args[0] === 'connect' ? parent : root);
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ games: [], kind: 'missing' })));
+    vi.stubGlobal('fetch', fetch);
+    try {
+      expect(await runCli(['node', 'cli', ...args], env, streams())).toBe(0);
+      expect(runInkRepl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: null,
+          checkout: { root, slug: 'sky' },
+          initialLine: args[0] === 'connect' ? '/connect sky' : '/checkout sky',
+        }),
+      );
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  },
+);

@@ -132,10 +132,9 @@ const SLUG_PARAM_PATTERN = /^[a-z0-9][a-z0-9-]{0,60}$/;
  * hand an owner's edit back a stale base to overwrite newer published work.
  */
 async function resolveOwnedRecord(store: Store, uid: string, slug: string): Promise<SubmissionRecord | null> {
-  const records = await store.listSubmissionsByOwner(uid);
-  const owned = records.filter((record) => record.slug === slug && !record.abandonedAt && record.state !== 'canceled');
-  if (owned.length === 0) return null;
-  return [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!;
+  const records = await store.listSubmissionsByOwnerAndSlug(uid, slug);
+  // The query returns them newest-first already.
+  return records.find((record) => !record.abandonedAt && record.state !== 'canceled') ?? null;
 }
 
 // The delivery this round builds on — see round-base-version.ts.
