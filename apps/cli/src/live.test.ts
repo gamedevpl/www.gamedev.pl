@@ -208,7 +208,7 @@ describe('status watch', () => {
         ],
       },
     };
-    // Assert the card is named at all, or a hidden card would pass as stripped.
+    // A hidden card would pass as stripped; assert it is named.
     expect(formatStatusEvent(hostile)).toContain('red');
     expect(formatStatusEvent(hostile)).not.toContain('\u001b');
   });
