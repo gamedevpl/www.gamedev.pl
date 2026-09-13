@@ -299,6 +299,26 @@ describe('createDreamJob', () => {
     expect(errors.some((entry) => entry.message.includes('orphaned'))).toBe(true);
   });
 
+  it('keeps the frames when a newer delivery claims the job before the look back', async () => {
+    const { errors, log: capturing } = capturingLog();
+    const { store, run } = await harness({ hud: [], log: capturing });
+    const real = store.appendProposalMessage.bind(store);
+    store.appendProposalMessage = async (jobId, claim, text, opts) => {
+      await real(jobId, claim, text, opts);
+      // The answer is lost, and a green preview claims the job meanwhile.
+      await store.setSubmissionPreviewVersion(7, 'v2');
+      await store.claimDreamRun(7, 'v2', '2026-09-07T12:05:00.000Z');
+      throw new Error('connection reset');
+    };
+
+    expect(await run()).toBe('posted');
+    // The claim that carried `postedAt` is gone; the card is not.
+    expect((await store.getSubmission(7))?.dreamRun?.version).toBe('v2');
+    expect(await store.listCreatorMessages(7)).toHaveLength(1);
+    expect(await store.countBuildShots(7)).toBe(3);
+    expect(errors).toEqual([]);
+  });
+
   it('keeps the shots of a card that posted', async () => {
     const { store, run } = await harness({ hud: [] });
     expect(await run()).toBe('posted');

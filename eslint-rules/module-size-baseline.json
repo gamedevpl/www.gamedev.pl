@@ -457,7 +457,7 @@
     "apps/api/src/store/firestore.ts": 1502,
     "apps/api/src/store/in-memory.ts": 1433,
     "apps/api/src/store/records/notifications.ts": 114,
-    "apps/api/src/store/records/submission.ts": 302,
+    "apps/api/src/store/records/submission.ts": 306,
     "apps/api/src/store/slices/dispatch.ts": 416,
     "apps/api/src/store/slices/submission.ts": 287,
     "apps/api/src/store/slices/world-entries.test.ts": 68,

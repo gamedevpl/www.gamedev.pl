@@ -191,8 +191,13 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     if (!holdsDreamClaim(record, claim)) return null;
     if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return null;
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
-    // Stamped with the card: only a posted claim is final.
-    this.submissions.set(jobId, { ...record!, dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt } });
+    // Stamped with the card; the list outlives the claim it stamps.
+    const postedVersions = [...new Set([...(record!.proposalPostedVersions ?? []), claim.version])];
+    this.submissions.set(jobId, {
+      ...record!,
+      dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt },
+      proposalPostedVersions: postedVersions,
+    });
     return posted;
   }
 
@@ -356,8 +361,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       if (!snap.exists || !holdsDreamClaim(job, claim)) return null;
       if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) return null;
       transaction.set(this.messagesCollection(jobId).doc(record.id), record);
-      // Stamped with the card: only a posted claim is final.
-      transaction.set(this.submissionRef(jobId), { dreamRun: { ...job!.dreamRun!, postedAt: now } }, { merge: true });
+      // Stamped with the card; the list outlives the claim it stamps.
+      const postedVersions = [...new Set([...(job!.proposalPostedVersions ?? []), claim.version])];
+      transaction.set(
+        this.submissionRef(jobId),
+        { dreamRun: { ...job!.dreamRun!, postedAt: now }, proposalPostedVersions: postedVersions },
+        { merge: true },
+      );
       return record;
     });
   }

@@ -261,6 +261,9 @@ export interface SubmissionRecord {
   roundLastGateMetricKey?: string;
   // Dream job's claim; `postedAt` is what makes it final.
   dreamRun?: { version: string; claimedAt: string; postedAt?: string; endedAt?: string };
+  /** Versions whose card is on the thread. A newer claim replaces `dreamRun` and takes
+   * its `postedAt` along, so a run that lost the answer to its own write asks this. */
+  proposalPostedVersions?: string[];
   /**
    * Creator concept text (sanitized), without the QA clarifications block.
    *

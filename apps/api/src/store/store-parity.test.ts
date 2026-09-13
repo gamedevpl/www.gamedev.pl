@@ -336,6 +336,25 @@ describeStoreContract('proposal posting', (makeStore) => {
     expect(await store.appendProposalMessage(11, claim, 'Again.', { proposal, ownerUid: 'g:owner' })).toBeNull();
   });
 
+  it('records the posted version where a newer claim cannot erase it', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', {
+      proposal,
+      ownerUid: 'g:owner',
+      roundGeneration: 1,
+      blocked: () => false,
+    });
+
+    // A newer delivery takes the claim, and `postedAt` goes with it.
+    await store.setSubmissionPreviewVersion(11, 'v2');
+    await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z', 1);
+
+    const live = await store.getSubmission(11);
+    expect(live?.dreamRun?.postedAt).toBeUndefined();
+    expect(live?.proposalPostedVersions).toEqual(['v1']);
+  });
+
   it('leaves a finished run finished, however it ended', async () => {
     const store = makeStore();
     await claimed(store);
