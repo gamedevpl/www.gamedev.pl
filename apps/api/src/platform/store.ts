@@ -18,6 +18,10 @@ import type { CatalogEnrichmentStore } from '../store/slices/catalog-enrichment.
 export type { CatalogEnrichmentStore };
 import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichment.js';
 export type { CatalogEnrichmentRecord };
+import type { GameAccessStore } from '../store/slices/game-access.js';
+export type { GameAccessStore };
+import type { GameAccessRecord, GameAccessRole } from '../store/records/game-access.js';
+export type { GameAccessRecord, GameAccessRole };
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -248,6 +252,7 @@ export interface Store
     AccessTokensStore,
     AgentKeysStore,
     CatalogEnrichmentStore,
+    GameAccessStore,
     OAuthStore,
     CliChatStore {}
 

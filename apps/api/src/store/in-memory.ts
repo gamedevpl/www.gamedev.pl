@@ -68,6 +68,7 @@ import { InMemoryNotificationsStore } from './slices/notifications.js';
 import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
+import { InMemoryGameAccessStore } from './slices/game-access.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
@@ -93,6 +94,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
+  protected gameAccessStore = new InMemoryGameAccessStore();
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);

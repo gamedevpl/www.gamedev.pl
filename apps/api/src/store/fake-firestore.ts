@@ -235,7 +235,9 @@ export function fakeFirestore() {
       opts.select ? Object.fromEntries(opts.select.map((field) => [field, getField(data, field)])) : data;
     // == and in already exclude an absent field naturally; only inequalities need this.
     const withRequired = (field: string, op: string) =>
-      op === '==' || op === 'in' ? opts : { ...opts, requireFields: [...(opts.requireFields ?? []), field] };
+      op === '==' || op === 'in' || op === 'array-contains'
+        ? opts
+        : { ...opts, requireFields: [...(opts.requireFields ?? []), field] };
     const query = {
       where: (field: string, op: string, value: unknown) => {
         const test =
@@ -254,7 +256,12 @@ export function fakeFirestore() {
                       : op === 'in'
                         ? (data: Record<string, unknown>) =>
                             Array.isArray(value) && value.includes(getField(data, field))
-                        : null;
+                        : op === 'array-contains'
+                          ? (data: Record<string, unknown>) => {
+                              const held = getField(data, field);
+                              return Array.isArray(held) && held.includes(value);
+                            }
+                          : null;
         if (!test) throw new Error(`fake doesn't support the "${op}" operator`);
         return makeQuery(paths, (data) => (filter ? filter(data) : true) && test(data), withRequired(field, op));
       },
