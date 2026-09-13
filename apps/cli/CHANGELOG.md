@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.15.1 — 2026-09-13
+
 ### Fixed
 
 - Recover a game whose `GAME.json` title is localized, instead of refusing the request outright.
