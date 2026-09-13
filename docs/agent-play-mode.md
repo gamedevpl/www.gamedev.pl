@@ -3,9 +3,9 @@
 > ⚠️ **Read "The shape is under revision" below before extending this.** The per-command
 > interface shipped here is the right plumbing under the wrong primary interaction.
 >
-> Status: 🚧 **implementation spike (2026-09-13).** The bridge, the panel and the entry
-> points are built and tested; the games-repo half (hidden fields in the document, sound
-> as text) is not, and no telemetry is emitted yet. Strategy, options and the decisions
+> Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, the
+> panel and the entry points are built and tested; the games-repo half (hidden fields in
+> the document, sound as text) is not, and no telemetry is emitted yet. Strategy, options and the decisions
 > this queues up live in the private ops repo (`agent-play-mode-research.md`).
 
 ## The problem
@@ -42,13 +42,15 @@ an agent is handed. Four rules carry the design:
 
 ## How it is put together
 
-| Piece                          | File                              | Role                                                                                             |
-| ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Grammar, formatting, redaction | `apps/web/src/agentPlay.ts`       | Pure and typed; parses a line into a command, formats state, hides declared fields               |
-| In-frame executor              | `apps/web/src/agentPlayBridge.ts` | A source fragment concatenated into the player bridge; runs the verbs against `__GAME_HARNESS__` |
-| Host state                     | `apps/web/src/useAgentPlay.ts`    | Sends commands, validates what comes back, folds in the game's play signals                      |
-| The panel                      | `apps/web/src/AgentPlayPanel.tsx` | The rail an agent reads and types into                                                           |
-| Entry points                   | `apps/web/src/GameTheater.tsx`    | Overflow-menu item, `?agent=1`, per-tab memory                                                   |
+| Piece                          | File                                          | Role                                                                                             |
+| ------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Grammar, formatting, redaction | `apps/web/src/agentPlay.ts`                   | Pure and typed; parses a line into a command, formats state, hides declared fields               |
+| In-frame executor              | `packages/contract/src/agent-play-bridge.ts`  | A source fragment concatenated into the player bridge; runs the verbs against `__GAME_HARNESS__` |
+| Host state                     | `apps/web/src/useAgentPlay.ts`                | Sends commands, validates what comes back, folds in the game's play signals                      |
+| The panel                      | `apps/web/src/AgentPlayPanel.tsx`             | The rail an agent reads and types into                                                           |
+| Entry points                   | `apps/web/src/GameTheater.tsx`                | Overflow-menu item, `?agent=1`, per-tab memory                                                   |
+| The gate                       | `apps/api/src/community/agent-play-routes.ts` | Serves the executor to a reviewer session, 404 to everyone else                                  |
+| The fetch                      | `apps/web/src/useAgentBridge.ts`              | Asks for it; the answer, not the session hint, decides the mode exists                           |
 
 The bridge fragment is not a module: it is a string, executed as an inline `<script>` inside
 the game's opaque-origin document, which is the only vantage point that can reach the
@@ -90,6 +92,35 @@ GameKit's `aria-live` line: the one text channel a published game already writes
   the page reports `hiddenFields: null` and the panel says out loud that nothing is being
   withheld — a visible gap rather than a silent one.
 
+## The reviewer gate
+
+The mode is for reviewers, and the gate is the server's, not the client's.
+
+**The executor is a separate script the API serves.** `GET /api/agent-play/bridge` answers
+`404` unless `isReviewerSession` — the same check and the same 404 the review desk gives,
+so probing tells nobody whether they lack the route or the role. A reviewer gets
+`{ source }` under `cache-control: private, no-store`, and the theater appends it to the
+game document as a second inline `<script>`.
+
+**So there is no flag to flip.** The session's `reviewer` hint only decides whether to
+_attempt_ the fetch, sparing everyone else a certain 404; what decides the mode exists is
+the response. A visitor who sets that hint by hand gets a 404 and a document with no agent
+code in it, and every `agent:*` message they send lands in a frame with no listener for it.
+Verified against a real game: a non-reviewer document answers zero agent messages, the
+executor is absent from its HTML, and the ordinary player bridge keeps working.
+
+**What the split costs.** The two scripts cannot share a closure, so the player bridge
+publishes the handful of helpers the executor needs on `window.__GDPL_BRIDGE__` (post,
+canvas lookup, the pause primitive, the capture, the legend readers). That handle is
+reachable by game code too and deliberately grants it nothing new: a game can already
+post to the parent, screenshot its own canvas, and stop its own loop.
+
+**The honest limit.** This withholds _our_ agent interface. It cannot stop a determined
+person from driving their own browser: `window.__GAME_HARNESS__` is GameKit's own surface
+and has been in every published game since long before this mode existed. That is
+acceptable here only because nothing scored or recorded comes out of this surface — the
+gate and that decision hold each other up.
+
 ## The shape is under revision
 
 Reviewed the same day it was built, and two defects stand. Recorded here so nobody
@@ -115,15 +146,6 @@ below stays true — the bridge is exactly the `PlanDriver` such a runner needs 
 command box becomes the exploration mode rather than the way anyone plays.
 
 ## Not built yet
-
-- **The reviewer gate.** The mode is for reviewers, not players. The session already
-  carries a `reviewer` hint (set from `REVIEWER_UIDS`, the same signal the review desk
-  uses), and both the overflow entry and `?agent=1` must check it — `?agent=1` no-opping
-  for everyone else rather than hiding a panel that still runs. The spike opens for
-  anyone in the theater, so this is a must-fix, not a nicety. Note what the gate is and
-  is not: the bridge, the stepping and the input all live in the visitor's own browser,
-  so this is a product decision and not a security boundary, and it is only tolerable
-  because nothing scored or recorded comes out of this surface.
 
 - **The games-repo half.** Carrying `hiddenFields` into the assembled document, and
   emitting `sfx` / `music` events so sound becomes readable text. Until then a game with a

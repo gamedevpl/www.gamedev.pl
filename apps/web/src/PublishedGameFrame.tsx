@@ -17,6 +17,8 @@ import './remix-host.css';
 type PublishedGameFrameProps = {
   slug: string;
   title: string;
+  // Agent executor, served to reviewers only; absent means no mode.
+  agentBridge?: string | null;
   frameRef?: MutableRefObject<HTMLIFrameElement | null>;
   embed?: boolean;
   /** Connected controller slots, when this game was opened as a party session. */
@@ -75,6 +77,7 @@ export function PublishedGameFrame({
   onRemixCapabilities,
   theaterChromeHidden,
   onRevealChrome,
+  agentBridge,
 }: PublishedGameFrameProps) {
   const { t } = useTranslation();
   const [gameTitle, setGameTitle] = useState<string>(title);
@@ -185,7 +188,15 @@ export function PublishedGameFrame({
   // gate is the explicit prop plus "this frame is one player's", which a party
   // session (slots) is not.
   const showRemix = Boolean(remixable) && slots === undefined;
-  const frame = <GameFrame title={gameTitle} html={remixHtml ?? html} frameRef={activeFrameRef} embed={embed} />;
+  const frame = (
+    <GameFrame
+      title={gameTitle}
+      html={remixHtml ?? html}
+      frameRef={activeFrameRef}
+      embed={embed}
+      agentBridge={agentBridge}
+    />
+  );
   if (!showRemix) return frame;
 
   const hostClass = [

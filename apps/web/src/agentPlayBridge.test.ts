@@ -5,13 +5,15 @@
 // jsdom is parent === window, so posts land back on this window.
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 import { embedGameHtml } from './gamePlayer.js';
 
 type Message = Record<string, unknown>;
 
 const HOST = 'gdpl-host';
 
-function bridgeSource(): string {
+// The player half, as injected; the agent half arrives separately.
+function playerBridgeSource(): string {
   const html = embedGameHtml('<html><head></head><body></body></html>');
   const match = /<script>([\s\S]*?)<\/script>/.exec(html);
   if (!match) throw new Error('bridge script not found in the embedded document');
@@ -94,8 +96,9 @@ describe('the agent bridge, running for real', () => {
     mountGameDocument();
     harness = installHarness();
     collectMessages();
-    // Indirect eval on purpose: this test runs the real script.
-    (0, eval)(bridgeSource());
+    // Indirect eval on purpose: this test runs the real scripts.
+    (0, eval)(playerBridgeSource());
+    (0, eval)(AGENT_PLAY_BRIDGE);
   });
 
   beforeEach(() => {
@@ -206,6 +209,15 @@ describe('the agent bridge, running for real', () => {
     await settle();
 
     expect(lastOf(received, 'agent:state')!.stepped).toBe(false);
+  });
+
+  it('is absent from a document the API did not serve it into', () => {
+    const plain = embedGameHtml('<html><head></head><body></body></html>');
+    expect(plain).not.toContain('agent:state');
+    expect(plain).toContain('__GDPL_BRIDGE__');
+
+    const served = embedGameHtml('<html><head></head><body></body></html>', AGENT_PLAY_BRIDGE);
+    expect(served).toContain('agent:state');
   });
 
   it('ignores agent traffic that did not come from the host', async () => {

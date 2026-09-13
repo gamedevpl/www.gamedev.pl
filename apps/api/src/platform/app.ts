@@ -84,6 +84,7 @@ import { createRelayClientFromEnv, isRelayOnly } from '../realtime/mp-relay.js';
 import { registerNotificationRoutes } from '../notifications/notifications.js';
 import { emitProposalNotification, emitReviewSweep } from '../notifications/notify.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from '../community/player-feedback.js';
+import { registerAgentPlayRoutes } from '../community/agent-play-routes.js';
 import { registerReviewRoutes, type ReviewRoutesOptions } from '../community/review.js';
 import { registerPushRoutes } from '../notifications/push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
@@ -682,6 +683,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       media: entry.media ?? null,
     }));
   };
+  // The agent executor, withheld from every non-reviewer session.
+  await registerAgentPlayRoutes(app, { reviewerUids, adminUids });
   await registerReviewRoutes(app, {
     store,
     reviewerUids,

@@ -1,7 +1,6 @@
 import type { Locale } from '@gamedevpl/contract';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
-import { AGENT_BRIDGE } from './agentPlayBridge.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 
@@ -337,7 +336,6 @@ const BRIDGE = `(function(){
     else if(m.type==='capture'){sendSnapshot('capture');}
     else if(m.type==='snapshotState'){sendStateSnapshot();}
     else if(m.type==='restoreState'){applyStateRestore(m.data);}
-    else if(typeof m.type==='string'&&m.type.indexOf('agent:')===0){handleAgentMessage(m);}
   });
   var lastActivity=0;
   function reportActivity(){
@@ -397,7 +395,14 @@ const BRIDGE = `(function(){
     setTimeout(function(){sendMeta();sendControls();},400);
   }
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
-${AGENT_BRIDGE}
+  // Handle for the agent script, which cannot share this closure.
+
+  // Grants the game nothing: it can already post, capture and stop itself.
+  window.__GDPL_BRIDGE__={
+    post:post,el:el,text:text,setPaused:setPaused,capturePng:capturePng,
+    legendRows:legendRows,kitRows:kitRows,largestCanvas:largestCanvas,
+    isPaused:function(){return paused;}
+  };
 })();`;
 
 // Hide in-game chrome; theater owns title and sound.
@@ -454,8 +459,10 @@ const HIDE_CHROME =
  * Prefers `<head>` (then `<body>`, then `</body>`, then append) so rAF / AudioContext
  * patches land before game scripts schedule their loops — Studio pause depends on that.
  */
-export function embedGameHtml(html: string): string {
-  const inject = `<style id="gdpl-embed">${HIDE_CHROME}</style><script>${BRIDGE}</script>`;
+export function embedGameHtml(html: string, agentBridge?: string | null): string {
+  // Appended, not concatenated: without it there is no agent code.
+  const agent = agentBridge ? `<script>${agentBridge}</script>` : '';
+  const inject = `<style id="gdpl-embed">${HIDE_CHROME}</style><script>${BRIDGE}</script>${agent}`;
   if (/<head\b[^>]*>/i.test(html)) {
     return html.replace(/<head\b[^>]*>/i, (open) => `${open}${inject}`);
   }

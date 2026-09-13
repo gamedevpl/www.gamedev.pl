@@ -1,9 +1,16 @@
-// In-frame executor; see docs/agent-play-mode.md.
+// Agent play executor; see the website's docs/agent-play-mode.md.
 
-// A source fragment, not a module: concatenated into the player bridge.
+// Served only to reviewers, so other documents lack it.
 
-export const AGENT_BRIDGE = `
-  // --- agent play mode ------------------------------------------------------
+// Takes the player bridge's helpers off window.__GDPL_BRIDGE__.
+
+export const AGENT_PLAY_BRIDGE = `(function(){
+  'use strict';
+  var host=window.__GDPL_BRIDGE__;
+  if(!host)return;
+  var post=host.post,el=host.el,text=host.text,setPaused=host.setPaused;
+  var capturePng=host.capturePng,legendRows=host.legendRows,kitRows=host.kitRows;
+  var largestCanvas=host.largestCanvas;
   var agentOn=false,agentFps=60,agentTilt=null,agentLog=[],agentLiveTimer=0,agentStatusSeen='';
   var AGENT_LOG_CAP=60,AGENT_UI_CAP=80;
   function agentHarness(){return window.__GAME_HARNESS__;}
@@ -51,7 +58,7 @@ export const AGENT_BRIDGE = `
       ui:agentUi(),
       hiddenFields:agentHidden(),
       log:agentLog.slice(-20),
-      stepped:paused,
+      stepped:host.isPaused(),
       fps:agentFps
     });
   }
@@ -224,4 +231,11 @@ export const AGENT_BRIDGE = `
       agentState('error');
     }
   }
-`;
+
+  addEventListener('message',function(e){
+    var m=e.data||{};
+    if(!m||m.source!=='gdpl-host')return;
+    if(typeof m.type!=='string'||m.type.indexOf('agent:')!==0)return;
+    handleAgentMessage(m);
+  });
+})();`;
