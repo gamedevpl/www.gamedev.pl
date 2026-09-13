@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { isSubmissionInFlight } from '@gamedevpl/contract';
 import { pageOwnerGames } from './owner-games.js';
+import { recordShelfShadow } from './shelf-shadow.js';
 import { mintToken } from '../platform/submission-token.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { Store } from '../platform/store.js';
@@ -63,6 +64,8 @@ export async function registerCreatorSelfRoutes(
     }
 
     const records = await store.listSubmissionsByOwner(request.user!.uid);
+    // Shadow only: source still answers, the document is judged against it.
+    await recordShelfShadow({ store, log: request.log }, request.user!.uid, records);
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
     return reply.send({
       submissions: shelf.map(({ tip, catalogPublishedAt }) => ({

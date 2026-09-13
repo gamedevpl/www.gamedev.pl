@@ -2,17 +2,24 @@ import type { SubmissionStore } from './slices/submission.js';
 import type { GameAccessStore } from './slices/game-access.js';
 import type { GameAccessRecord } from './records/game-access.js';
 import type { SubmissionQueryStore } from './slices/submission-queries.js';
+import type { ShelfMirror } from '../creation/shelf-mirror.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
   protected abstract submissionQueryStore: SubmissionQueryStore;
+
+  // Mirrors the owner's rounds; see creation/shelf-mirror.ts.
+  protected abstract shelfMirror: ShelfMirror;
   async claimManualRoundSlug(
     jobId: number,
     slug: string,
     sourceJobId: number,
     admissionNonce?: string,
   ): Promise<boolean> {
-    return this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
+    const won = await this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
+    // An atomic claim writes the slug itself.
+    if (won) await this.shelfMirror.afterJobWrite(jobId);
+    return won;
   }
   async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
     return this.submissionStore.beginCheckoutRecovery(slug, nonce, now);
@@ -37,6 +44,7 @@ export abstract class SubmissionFacade {
     const won = await this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
     if (!won) return false;
 
+    await this.shelfMirror.afterJobWrite(jobId);
     // The claim is durable; a failed record cannot fail it.
     await this.tryRecordOwner(jobId, slug);
     return true;
@@ -47,6 +55,8 @@ export abstract class SubmissionFacade {
   // Only while the name is uncontested; a contested one waits for settleSlugClaim.
   async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
     await this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
+    // Before the access block: its early returns must not skip the mirror.
+    await this.shelfMirror.afterJobWrite(jobId);
     try {
       const job = await this.submissionStore.getSubmission(jobId);
       if (!job?.ownerUid) return;
@@ -70,13 +80,16 @@ export abstract class SubmissionFacade {
     }
   }
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    return this.submissionStore.setSubmissionTitle(jobId, title);
+    await this.submissionStore.setSubmissionTitle(jobId, title);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
   async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
+    await this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
   async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionPreviewVersion(jobId, version);
+    await this.submissionStore.setSubmissionPreviewVersion(jobId, version);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async getGameAccess(slug: string): Promise<GameAccessRecord | null> {

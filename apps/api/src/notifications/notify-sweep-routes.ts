@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
+import { runShelfRebuildPass } from '../platform/shelf-rebuild-pass.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
 import { createSweepCadence } from '../platform/sweep-cadence.js';
 import { isSweepActive } from '../platform/sweep-scope.js';
@@ -315,6 +316,9 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         }
       }
 
+      // Bounded floor under the shelf write-through; failures are counted, never thrown.
+      const shelfRebuild = await runShelfRebuildPass({ store, now });
+
       // Error level so a job nobody watches cannot fail quietly for weeks.
       const sweepLog =
         stalledIssues.length > 0 ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
@@ -332,6 +336,9 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           stalledCauses,
           healthResolved,
           unhealthy,
+          shelvesRebuilt: shelfRebuild.rebuilt,
+          shelvesFailed: shelfRebuild.failed,
+          ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),
         },
         stalledIssues.length > 0
           ? 'creator feedback undelivered past the stall threshold — no agent has collected it'
@@ -349,6 +356,9 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         stalledCauses,
         healthResolved,
         unhealthy,
+        shelvesRebuilt: shelfRebuild.rebuilt,
+        shelvesFailed: shelfRebuild.failed,
+        ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),
       });
     },
   );

@@ -1,5 +1,5 @@
 import { erasePlayerSignals, type ErasePlayerSignalsResult } from './erase-player-signals.js';
-import type { AccountIdentityDeletionResult, Store } from './store.js';
+import { DELETED_ACCOUNT_UID, type AccountIdentityDeletionResult, type Store } from './store.js';
 
 export interface EraseAccountResult {
   signals: ErasePlayerSignalsResult;
@@ -45,5 +45,16 @@ export async function eraseAccount(options: {
   const identity = dryRun
     ? preview
     : await options.store.deleteAccountIdentity(options.uid, options.at ?? new Date().toISOString());
+  if (!dryRun) await moveShelf(options.store, options.uid);
   return { signals, identity };
+}
+
+// Rounds moved owner, so both shelves are wrong.
+async function moveShelf(store: Store, uid: string): Promise<void> {
+  try {
+    await store.deleteShelf(uid);
+    await store.rebuildShelf(DELETED_ACCOUNT_UID);
+  } catch {
+    // An erasure must never fail on a cache.
+  }
 }

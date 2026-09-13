@@ -15,6 +15,7 @@ import { clipCliChatTurns, type CliChatRecord, type CliChatTurn } from '../store
 import { CREATION_REFUSAL_CODES, type ChatGate } from './creation-limits.js';
 import type { CreateGameResult } from './create-game.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES } from './owner-games.js';
+import { recordShelfShadow } from './shelf-shadow.js';
 import { failClosedReply, IntakeChatAgent, type IntakeAgent } from './intake-agent.js';
 
 const ChatBodySchema = z.object({
@@ -158,6 +159,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       let gamesTotal;
       try {
         const records = await store.listSubmissionsByOwner(uid);
+        await recordShelfShadow({ store, log: request.log }, uid, records);
         const shelf = collapseJobsToOwnerGames(records, 'shelf');
         gamesTotal = shelf.length;
         games = shelf

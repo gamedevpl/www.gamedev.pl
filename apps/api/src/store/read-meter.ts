@@ -8,6 +8,8 @@ export interface ReadTally {
   commits: number;
   transactions: number;
   byPath: Map<string, number>;
+  // Route-supplied fields for this request's own log line.
+  notes?: Record<string, string | number | boolean>;
 }
 
 type AsyncFn = (...args: unknown[]) => Promise<unknown>;
@@ -32,6 +34,13 @@ export function beginReadTally(): ReadTally {
 
 export function currentReadTally(): ReadTally | undefined {
   return storage.getStore();
+}
+
+// Annotates this request's firestore-reads line.
+export function noteReadTally(key: string, value: string | number | boolean): void {
+  const tally = storage.getStore();
+  if (!tally) return;
+  tally.notes = { ...tally.notes, [key]: value };
 }
 
 export function runWithReadTally<T>(tally: ReadTally, fn: () => T): T {

@@ -189,6 +189,81 @@ That shape does not scale with traffic and it does not scale with the catalog. I
 it grows without anybody visiting. A per-request ranking never flags it, because on six of the
 seven accounts it is cheap.
 
+### The shelf itself: mirrored, and on probation
+
+The narrow query above fixes the callers that wanted one game. The shelf readers genuinely
+need every round: `collapseJobsToOwnerGames` picks each game's newest live round as its tip,
+and a game whose tip is unpublished can still carry `catalogPublishedAt` from an older
+published sibling. Limit the query and games go missing or get the wrong tip. Those reads are
+the data the answer requires, so the only way to make them cheaper is to stop deriving the
+answer from source on every poll.
+
+`shelves/{ownerUid}` is that mirror: one document holding the **minimal fields of every
+round**, over which the reader runs the existing collapse unchanged. Deliberately not
+precomputed tips — the collapse differs by mode (shelf mode drops canceled rounds before
+grouping, published mode does not, so one precomputed tip cannot serve both), and a document
+that reimplemented the rules would drift from `owner-games.ts` the first time either changed.
+
+**Three consistency layers, because no single one is enough.** There is no write chokepoint
+to hook — `createSubmission`, `recordJobTransition`, the two status setters, `publishedAt`,
+`abandonedAt`, the slug/title/version setters and the erase path's `ownerUid` reassignment all
+write directly — and submissions carry no `updatedAt`:
+
+1. **Write-through, rebuilt from source.** Every shelf-relevant writer rebuilds the whole
+   document from `listSubmissionsByOwner`. A rebuild rather than a patch of one entry, so it
+   is correct by construction and there is no drift arithmetic to get wrong. Because the
+   document is in Firestore, **every instance sees it** — unlike the per-instance windows
+   above. "Every writer" includes the two *atomic* slug claims, which write the slug
+   themselves rather than through the plain setter, and `setDraftShared`.
+
+   Coalescing concurrent rebuilds is not enough: a write landing after a running rebuild has
+   read source but before it writes would be waited on and then lost, so the mirror requeues
+   one more pass instead of joining a snapshot that is already behind. Same invariant as the
+   sweep cadence — *void the deferral when the record moves*.
+2. **A count on read.** The document stores `sourceCount`; the reader spends one `count()`
+   aggregate and rebuilds on disagreement. This catches a create or a reassignment without
+   knowing who wrote. It cannot catch an in-place field update, which is why there is a third
+   layer.
+3. **A bounded pass, never once-ever.** `runShelfRebuildPass` rebuilds shelves older than an
+   hour, ten per run, riding `notify-sweep`. It reports failures by *inspecting the rebuild's
+   answer*, because the mirror swallows its own errors — a `try`/`catch` around it can never
+   fire, so the first version reported `shelvesFailed: 0` however many shelves went unwritten,
+   certifying a repair layer that had done nothing. Listing failures are caught too: this is
+   derived state riding a notification job, and a throw here would turn a completed sweep into
+   a 500 and a scheduler retry. The marker is *when the last pass ran*, never
+   that one happened — a rollback puts code in front of traffic that writes rounds without
+   knowing the document exists, so a once-ever marker would retire the only thing that
+   notices it. Same lesson as `open-round-backfill.ts`.
+
+Staleness, stated: immediate on every instance for a hooked writer, **at most one hour** for a
+writer nobody hooked or a rollback revision.
+
+**Readers still read source.** This is a shadow: each shelf read also loads the document,
+judges it against what the reader is about to serve, and annotates its own `firestore reads`
+line with `shelfShadow` and, on disagreement, `shelfMismatch`. The comparison is on the
+**collapsed** output, so a difference the collapse would have hidden is not reported as drift,
+and `absent` / `version` / `truncated` / `count` / `collapse` are distinguished rather than
+lumped into one failure. The bar for pointing readers at the document is **zero mismatches
+over a full week**, not "it seemed fine".
+
+**A probation check is only as strong as its fingerprint**, and the first version of this one
+was not strong enough: it compared jobId, slug, title and status, and so would have certified
+a mirror that served a different `publishedAt`, a different Edit pill (`previewVersion` /
+`deliveredVersion`) or a missing draft-sharing indicator. It now covers every tip field either
+shelf response serves, with a test that walks them one at a time. The same review found
+`draftSharedAt` missing from the mirrored round altogether and `setDraftShared` unhooked — a
+rebuilt shelf lost the sharing state permanently, and the weak fingerprint called it a match.
+Two independent holes that happened to hide each other, which is the argument for making the
+check specific rather than plausible.
+
+**The cost this trades, stated plainly, because it is not obviously a win.** A shelf-relevant
+write now costs one owner-query plus one document write, so a heavy account's round pays its
+whole round count per write. That is cheaper than the poll it replaces only if writes are
+genuinely rarer than reads for that account, and during an active build they may not be.
+The shadow week is what settles it: sum `route=/api/submissions/mine` against the write path
+in the meter before flipping anything. If write amplification exceeds the read it saves, the
+right answer is to keep source as the reader and delete the document.
+
 `listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
 Firestore intersects the two single-field indexes and no composite index is configured —
 the same trick `listOpenRoundsByOwner` already used. The wide `listSubmissionsByOwner` stays
