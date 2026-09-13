@@ -18,7 +18,7 @@ function suggestion(partial: Partial<SuggestionRecord> = {}): SuggestionRecord {
   };
 }
 
-it('keeps quota and suggestion untouched when round admission refuses', async () => {
+it.each(['admission', 'claim'])('keeps quota and suggestion untouched when %s refuses', async (mode) => {
   const store = new InMemoryStore();
   await store.createSubmission(1, OWNER, 'Crashy');
   await store.setSubmissionSlug(1, 'crashy');
@@ -28,6 +28,7 @@ it('keeps quota and suggestion untouched when round admission refuses', async ()
     store,
     suggestionInboxRoutes: {
       startImprovementRound: async () => {
+        if (mode === 'claim') return null;
         throw Object.assign(new Error('Recovery in progress'), { statusCode: 409 });
       },
     },

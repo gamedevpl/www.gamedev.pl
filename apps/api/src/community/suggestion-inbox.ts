@@ -207,8 +207,6 @@ export async function registerSuggestionInboxRoutes(
 
     let next: SuggestionRecord;
     if (!startImprovementRound || !submission) {
-      // Not an error: "no implementer available" is a state the creator can see. Their
-      // decision is recorded either way.
       next = {
         ...record,
         ...decided,
@@ -216,9 +214,11 @@ export async function registerSuggestionInboxRoutes(
         statusReason: 'work cannot be dispatched from this deployment',
       };
     } else {
+      let admitted = false;
       const outcome = await startImprovementRound({
         jobId: submission.jobId,
         beforeDispatch: async () => {
+          admitted = true;
           const quota = await store.checkAndIncrementQuota(uid, dateStr, dailyImprovementQuota, 'improvements');
           if (quota.allowed) return true;
           reply.status(quota.tier === 'blocked' ? 403 : 429).send({
@@ -232,7 +232,7 @@ export async function registerSuggestionInboxRoutes(
         log: request.log,
       });
       if (reply.sent) return reply;
-      // No per-reason copy here — folded into the ordinary "no implementer" case.
+      if (!outcome && !admitted) return reply.status(409).send({ error: 'round changed; retry this suggestion' });
       const started = outcome?.route === 'job' ? outcome : null;
       next = started
         ? {

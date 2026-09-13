@@ -155,15 +155,18 @@ describe('POST /api/me/suggestions/:id/approve', () => {
     // silently does nothing.
     await publish('crashy');
     await store.putSuggestion(suggestion());
-    // The backend reports it could not start a round; approval must survive that.
-    const app = await appFor(vi.fn(async () => null));
+    const app = await appFor(
+      vi.fn(async (input) => {
+        await input.beforeDispatch?.();
+        return null;
+      }),
+    );
 
     const res = await app.inject({ method: 'POST', url: '/api/me/suggestions/sug-crashy-defect-2026-07-30/approve' });
 
     expect(res.statusCode).toBe(200);
     expect(res.json().suggestion).toMatchObject({ status: 'no-implementer', decidedBy: OWNER });
     expect(res.json().suggestion.statusReason).toContain('retried');
-    // Durable, not just reported.
     expect((await store.getSuggestion('sug-crashy-defect-2026-07-30'))?.status).toBe('no-implementer');
     await app.close();
   });
