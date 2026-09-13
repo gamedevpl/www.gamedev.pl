@@ -12,6 +12,10 @@ import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
 // Two directions per proposal; a third would be a menu again.
 export const DREAM_OPTIONS = 2;
 
+// A blip must not strand them; an outage is logged instead.
+export const DISCARD_ATTEMPTS = 3;
+export const DISCARD_BACKOFF_MS = 250;
+
 // One image-model frame; Firestore holds it base64 in one document.
 export const MAX_DREAM_FRAME_BYTES = 600 * 1024;
 
@@ -44,6 +48,8 @@ export interface DreamJobDeps {
   readHudRegions: HudRegionsReader;
   log: DreamLog;
   now?: () => number;
+  // A seam beside `now`; tests must not wait on the cleanup backoff.
+  wait?: (ms: number) => Promise<void>;
   // Called once a proposal is stored, so the next poll shows it.
   onPosted?: (jobId: number) => void;
 }
@@ -79,6 +85,7 @@ function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | nu
 export function createDreamJob(deps: DreamJobDeps): DreamJob {
   const { store, gamesStore, availability, ideas, frames, readHudRegions, log } = deps;
   const now = deps.now ?? Date.now;
+  const wait = deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   async function dreamFrame(input: {
     idea: NextIdea;
@@ -192,10 +199,21 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
 
     // Reserved labels hide these, so a card that never posts strands them.
     const written: string[] = [];
+    // The outage that failed a write fails this too; nothing sweeps after.
     const discard = async () => {
-      await store
-        .deleteBuildShots(jobId, written)
-        .catch((error: unknown) => log.warn({ err: error, jobId }, 'orphaned proposal shots not removed'));
+      if (!written.length) return;
+      for (let attempt = 1; attempt <= DISCARD_ATTEMPTS; attempt += 1) {
+        try {
+          await store.deleteBuildShots(jobId, written);
+          return;
+        } catch (error) {
+          if (attempt === DISCARD_ATTEMPTS) {
+            log.error({ err: error, jobId, shots: written }, 'proposal shots orphaned; delete these ids by hand');
+            return;
+          }
+          await wait(DISCARD_BACKOFF_MS * 2 ** (attempt - 1));
+        }
+      }
     };
     try {
       const sourceShot = await store.appendBuildShot(jobId, {

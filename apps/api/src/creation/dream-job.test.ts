@@ -16,6 +16,11 @@ const ideas: NextIdea[] = [
 
 const log = { error: () => {}, warn: () => {}, info: () => {} };
 
+function capturingLog() {
+  const errors: { context: object; message: string }[] = [];
+  return { errors, log: { ...log, error: (context: object, message: string) => errors.push({ context, message }) } };
+}
+
 async function harness(params: {
   artifacts?: Record<string, Buffer | null>;
   frame?: DreamFrame | null | ((request: { direction: string }) => DreamFrame | null | Promise<DreamFrame | null>);
@@ -23,6 +28,7 @@ async function harness(params: {
   hud?: unknown;
   record?: Partial<SubmissionRecord>;
   limits?: { dreamsPaused?: boolean; globalDailyDreamCap?: number };
+  log?: DreamJobDeps['log'];
 }) {
   const store = new InMemoryStore();
   if (params.limits) await store.setCreationLimits(params.limits, 'g:boss');
@@ -67,8 +73,10 @@ async function harness(params: {
         h: r.h,
       }));
     },
-    log,
+    log: params.log ?? log,
     now: () => Date.parse('2026-09-07T12:00:00.000Z'),
+    // Never a real timer: the cleanup backoff would hold the suite.
+    wait: async () => {},
     onPosted: (jobId) => posted.push(jobId),
   };
   const job = createDreamJob(deps);
@@ -253,6 +261,49 @@ describe('createDreamJob', () => {
     expect(await run()).toBe('failed');
     expect(await store.countBuildShots(7)).toBe(0);
     expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('retries a cleanup that failed, so a blip does not strand the shots', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const append = store.appendBuildShot.bind(store);
+    const remove = store.deleteBuildShots.bind(store);
+    let writes = 0;
+    store.appendBuildShot = async (jobId, shot) => {
+      writes += 1;
+      if (writes === 3) throw new Error('firestore unavailable');
+      return await append(jobId, shot);
+    };
+    let deletes = 0;
+    store.deleteBuildShots = async (jobId, ids) => {
+      deletes += 1;
+      if (deletes === 1) throw new Error('firestore unavailable');
+      return await remove(jobId, ids);
+    };
+
+    expect(await run()).toBe('failed');
+    expect(deletes).toBe(2);
+    expect(await store.countBuildShots(7)).toBe(0);
+  });
+
+  it('names the ids it could not delete, since nothing sweeps after it', async () => {
+    const { errors, log: capturing } = capturingLog();
+    const { store, run } = await harness({ hud: [], log: capturing });
+    const append = store.appendBuildShot.bind(store);
+    let writes = 0;
+    store.appendBuildShot = async (jobId, shot) => {
+      writes += 1;
+      if (writes === 3) throw new Error('firestore unavailable');
+      return await append(jobId, shot);
+    };
+    store.deleteBuildShots = async () => {
+      throw new Error('firestore unavailable');
+    };
+
+    expect(await run()).toBe('failed');
+    const orphaned = errors.find((entry) => entry.message.includes('orphaned'));
+    // Two shots landed before the third failed; name both ids.
+    expect((orphaned?.context as { shots?: string[] })?.shots).toHaveLength(2);
+    expect(await store.countBuildShots(7)).toBe(2);
   });
 
   it('keeps the shots of a card that posted', async () => {

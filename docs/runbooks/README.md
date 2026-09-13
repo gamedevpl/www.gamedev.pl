@@ -233,6 +233,15 @@ below they really are deployable:
 | `DREAM_TIMEOUT_MS`       | Deadline for one image call.                                                                                                                                          | `60000`                  |
 | `NEXT_IDEAS_TIMEOUT_MS`  | Deadline for the call that proposes the two directions.                                                                                                               | `8000`                   |
 
+**`proposal shots orphaned; delete these ids by hand`** is the one concept-proposal log that
+needs a human. The job writes three shots before the posting transaction decides, and deletes
+them again if the card is refused or a write fails part-way; that delete retries, and this
+error means it still failed — almost always because Firestore was unavailable for both. The
+rows carry a reserved label, so they are hidden from the media strip and counted in no quota,
+and nothing sweeps them later. The log line names `jobId` and `shots`; delete those document
+ids under `submissions/{jobId}/shots`. Each is up to 600KB, so this is storage, not
+correctness — the creator sees nothing either way.
+
 Pausing concept art during an incident does **not** need a redeploy, and should not wait for
 one: `dreamsPaused` on the creation-limits document is the runtime lever, and the spend brake
 pulls it on its own as the `dreams` lane (see `PAUSEABLE` in
