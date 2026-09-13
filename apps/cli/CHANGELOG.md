@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Offer recovery when starting or connecting in a canceled or deleted local checkout, then continue in the same session without losing local edits.
+- Offer recovery when starting or connecting in a canceled or deleted local checkout, then continue in the same session without losing local edits (#1317).
 
 ### Added
 
