@@ -73,7 +73,15 @@ export type EditorPathSpec = {
   properties: Record<string, EditorPropertySpec>;
 };
 
-export type EditorCollectionItemSpec = EditorTilemapSpec | EditorEntitiesSpec | EditorPathSpec;
+// A per-level stack: each item owns its own layers.
+export type EditorLayeredSpec = {
+  widget: 'layered';
+  layers: Record<string, EditorLayerSpec>;
+  constraints: EditorLayerConstraint[];
+  properties: Record<string, EditorPropertySpec>;
+};
+
+export type EditorCollectionItemSpec = EditorTilemapSpec | EditorEntitiesSpec | EditorPathSpec | EditorLayeredSpec;
 
 export type EditorCollectionSpec = {
   widget: 'collection';
@@ -102,7 +110,9 @@ export type EditorTilemapItemContent = { properties: Record<string, unknown>; ro
 export type EditorEntityItemContent = { properties: Record<string, unknown> };
 export type EditorPathPoint = { x: number; y: number };
 export type EditorPathItemContent = { properties: Record<string, unknown>; points: EditorPathPoint[] };
-export type EditorItemContent = EditorTilemapItemContent | EditorEntityItemContent | EditorPathItemContent;
+export type EditorLayeredItemContent = { properties: Record<string, unknown>; layers: EditorLayersDoc };
+export type EditorItemContent =
+  EditorTilemapItemContent | EditorEntityItemContent | EditorPathItemContent | EditorLayeredItemContent;
 
 export type EditorParamValue = string | number | boolean;
 
