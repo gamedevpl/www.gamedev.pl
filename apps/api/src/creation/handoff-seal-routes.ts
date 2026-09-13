@@ -6,6 +6,7 @@ import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js'
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { sealRefusal } from '../platform/seal-preview.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import { allowsCreatorBuilderHandoff, isActiveBuildRound, type BuilderKind } from './builder.js';
@@ -82,7 +83,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       }
 
       const record = await store.getSubmission(jobId);
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can hand off this build' });
       }
 
@@ -275,7 +276,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       }
 
       const owner = await store.getSubmission(jobId);
-      if (!owner || owner.ownerUid !== request.user!.uid) {
+      if (!owner || !(await ownsSubmissionOrSlug(store, owner, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can seal this build' });
       }
 

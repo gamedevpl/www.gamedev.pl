@@ -1,6 +1,7 @@
 import { DISMISS_REASONS } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Scorecard, Store, SuggestionRecord } from '../platform/store.js';
 import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
 import { AUTONOMY_MODES, DEFAULT_AUTONOMY, type AutonomyMode } from './autonomy.js';
@@ -155,7 +156,7 @@ export async function registerSuggestionInboxRoutes(
    */
   async function loadOwned(id: string, uid: string, reply: FastifyReplyLike): Promise<SuggestionRecord | null> {
     const record = await store.getSuggestion(id);
-    if (!record || record.ownerUid !== uid) {
+    if (!record || !(await ownsSubmissionOrSlug(store, record, uid))) {
       reply.status(404).send({ error: 'not found' });
       return null;
     }
@@ -268,7 +269,7 @@ export async function registerSuggestionInboxRoutes(
     const submission = await store.getPublishedSubmissionBySlug(slug);
     // 404 rather than 403, like the suggestion routes: a slug is public, so confirming
     // that one exists but belongs to somebody else says more than it needs to.
-    if (!submission || submission.ownerUid !== request.user!.uid) {
+    if (!submission || !(await ownsSubmissionOrSlug(store, submission, request.user!.uid))) {
       return reply.status(404).send({ error: 'not found' });
     }
     const mode = ((await store.getGameAutonomy(slug)) ?? DEFAULT_AUTONOMY) as AutonomyMode;
@@ -283,7 +284,7 @@ export async function registerSuggestionInboxRoutes(
       return reply.status(400).send({ error: 'unknown autonomy mode', modes: AUTONOMY_MODES });
     }
     const submission = await store.getPublishedSubmissionBySlug(slug);
-    if (!submission || submission.ownerUid !== request.user!.uid) {
+    if (!submission || !(await ownsSubmissionOrSlug(store, submission, request.user!.uid))) {
       return reply.status(404).send({ error: 'not found' });
     }
     await store.setGameAutonomy(slug, parsed.data.mode);

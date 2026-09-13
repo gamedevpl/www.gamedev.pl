@@ -4,6 +4,7 @@ import { allowsSelfToPlatformHandoff, detectStall, isActiveBuildRound } from '..
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { ManagedAvailabilityGate } from './managed-availability.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import { mintConnectPayload } from './self-build-connect.js';
 
 export interface SelfBuildConnectRoutesOptions {
@@ -57,7 +58,7 @@ export async function registerSelfBuildConnectRoutes(
 
       const record = await store.getSubmission(jobId);
       // Same shape as share/abandon — 403 hides which is true.
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can connect a build' });
       }
 

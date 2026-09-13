@@ -6,8 +6,9 @@ import { checkUserAccess } from '../platform/auth.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import { isModerationBlock, rejectionFor, type ContentChecker  } from '../platform/moderation.js';
+import { isModerationBlock, rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Store } from '../platform/store.js';
 import { mintToken, verifyToken } from '../platform/submission-token.js';
 import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
@@ -102,7 +103,9 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
             return reply.status(403).send({ error: 'invalid active game' });
           }
           const record = await store.getSubmission(jobId);
-          if (!record || record.ownerUid !== uid) return reply.status(403).send({ error: 'invalid active game' });
+          if (!record || !(await ownsSubmissionOrSlug(store, record, uid))) {
+            return reply.status(403).send({ error: 'invalid active game' });
+          }
           if (supplied.checkoutSlug && supplied.checkoutSlug !== record.slug) {
             return reply.status(400).send({ error: 'checkout does not match active game' });
           }

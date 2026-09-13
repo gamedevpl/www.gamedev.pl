@@ -27,6 +27,7 @@ export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/workspace-archive.js';
+import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
 import { buildSpecStub } from './creator-code.js';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
@@ -335,7 +336,7 @@ export async function registerCreatorStudioRoutes(
     }
 
     // One game's rounds, not the owner's whole shelf.
-    const rounds = await store.listSubmissionsByOwnerAndSlug(request.user!.uid, slug);
+    const rounds = await listAuthorizedRoundsForSlug(store, request.user!.uid, slug);
     if (rounds.length === 0) {
       return reply.status(404).send({ error: 'no such game' });
     }
@@ -400,7 +401,7 @@ export async function registerCreatorStudioRoutes(
         return reply.status(400).send({ error: 'invalid slug' });
       }
 
-      const records = await store.listSubmissionsByOwnerAndSlug(request.user!.uid, slug);
+      const records = await listAuthorizedRoundsForSlug(store, request.user!.uid, slug);
       // Canceled rounds are excluded as well as abandoned ones, matching the shelf the
       // creator is looking at when they click this. A round the operator canceled can still
       // carry a preview or delivery, and it is newer than the job that published the live

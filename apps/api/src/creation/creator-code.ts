@@ -27,6 +27,7 @@ import {
 } from './module-size.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
+import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
 import type { SourceDeliveryService } from '../delivery/source-delivery.js';
 import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
@@ -132,7 +133,7 @@ const SLUG_PARAM_PATTERN = /^[a-z0-9][a-z0-9-]{0,60}$/;
  * hand an owner's edit back a stale base to overwrite newer published work.
  */
 async function resolveOwnedRecord(store: Store, uid: string, slug: string): Promise<SubmissionRecord | null> {
-  const records = await store.listSubmissionsByOwnerAndSlug(uid, slug);
+  const records = await listAuthorizedRoundsForSlug(store, uid, slug);
   // The query returns them newest-first already.
   return records.find((record) => !record.abandonedAt && record.state !== 'canceled') ?? null;
 }

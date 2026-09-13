@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createSharedDraftGate, sharedDraftVersion } from './draft-share-gate.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
+import { listAuthorizedRoundsForSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GamesStore } from './games-store.js';
@@ -67,11 +68,11 @@ export async function registerDraftPreviewRoutes(
     const uid = request.user?.uid;
     // Slug index can lag the owner query on a just-written draft.
     if (!record && uid) {
-      record = (await store.listSubmissionsByOwnerAndSlug(uid, slug))[0] ?? null;
+      record = (await listAuthorizedRoundsForSlug(store, uid, slug))[0] ?? null;
     }
     if (!record || record.abandonedAt) return null;
     // The owner sees their own red build; a stranger never does.
-    if (uid && uid === record.ownerUid) return { jobId: record.jobId };
+    if (uid && (await ownsSubmissionOrSlug(store, record, uid))) return { jobId: record.jobId };
     // A pulled game is not re-opened by flipping the switch.
     if (record.moderationBlockedAt) return null;
     if (!record.draftSharedAt) return null;
@@ -199,7 +200,6 @@ export async function registerDraftPreviewRoutes(
 
       await replyWithDraft(request, reply, jobId, requestedVersion);
       return reply; // resolve only after that send finished
-
     },
   );
 

@@ -7,6 +7,8 @@ import {
   mintGameAgentKey,
 } from './agent-game-key.js';
 import {
+  findActiveRoundForSlug,
+  findDraftJobForSlug,
   resolveGameAgentKeyForOpenRound,
   resolveGameAgentKeyForStart,
   verifyDurableGameAgentKey,
@@ -273,5 +275,54 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
       const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
       expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
     });
+  });
+});
+
+describe('findActiveRoundForSlug / findDraftJobForSlug widen after transfer', () => {
+  const newOwnerUid = 'g:new-owner';
+  const ON = { GAME_ACCESS_AUTHORITATIVE: 'true' };
+  const OFF = {};
+
+  // No transfer API yet (GO-02); overwrite the auto-created record directly.
+  function transferTo(store: InMemoryStore, transferSlug: string, uid: string): void {
+    const gameAccessStore = (store as unknown as { gameAccessStore: { access: Map<string, { ownerUid: string }> } })
+      .gameAccessStore;
+    const record = gameAccessStore.access.get(transferSlug);
+    if (!record) throw new Error(`transferTo: no GameAccess record for ${transferSlug} yet`);
+    gameAccessStore.access.set(transferSlug, { ...record, ownerUid: uid });
+  }
+
+  it('flag off: an active round under the former owner is invisible to the new owner', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfRound(store, 1, 'self');
+    transferTo(store, slug, newOwnerUid);
+
+    expect(await findActiveRoundForSlug(store, slug, newOwnerUid, OFF)).toBeNull();
+  });
+
+  it('flag on: an active round under the former owner is found for the new owner', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfRound(store, 1, 'self');
+    transferTo(store, slug, newOwnerUid);
+
+    const found = await findActiveRoundForSlug(store, slug, newOwnerUid, ON);
+    expect(found?.jobId).toBe(1);
+  });
+
+  it('flag on: a draft job under the former owner is found for the new owner', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, ownerUid, 'Comet Courier');
+    await store.setSubmissionSlug(1, slug);
+    transferTo(store, slug, newOwnerUid);
+
+    const found = await findDraftJobForSlug(store, slug, newOwnerUid, ON);
+    expect(found?.jobId).toBe(1);
+  });
+
+  it('flag on: a stranger with no canonical claim still finds nothing', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfRound(store, 1, 'self');
+
+    expect(await findActiveRoundForSlug(store, slug, 'g:stranger', ON)).toBeNull();
   });
 });

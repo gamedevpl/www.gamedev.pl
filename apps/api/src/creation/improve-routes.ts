@@ -8,6 +8,7 @@ import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from '../platform/submission-token.js';
@@ -118,7 +119,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       const record = await store.getSubmission(jobId);
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
         return reply.status(403).send({ error: 'only the creator can request improvements' });
       }
       if (record.abandonedAt) {
