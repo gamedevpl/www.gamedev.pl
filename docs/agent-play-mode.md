@@ -116,6 +116,15 @@ command box becomes the exploration mode rather than the way anyone plays.
 
 ## Not built yet
 
+- **The reviewer gate.** The mode is for reviewers, not players. The session already
+  carries a `reviewer` hint (set from `REVIEWER_UIDS`, the same signal the review desk
+  uses), and both the overflow entry and `?agent=1` must check it — `?agent=1` no-opping
+  for everyone else rather than hiding a panel that still runs. The spike opens for
+  anyone in the theater, so this is a must-fix, not a nicety. Note what the gate is and
+  is not: the bridge, the stepping and the input all live in the visitor's own browser,
+  so this is a product decision and not a security boundary, and it is only tolerable
+  because nothing scored or recorded comes out of this surface.
+
 - **The games-repo half.** Carrying `hiddenFields` into the assembled document, and
   emitting `sfx` / `music` events so sound becomes readable text. Until then a game with a
   hidden answer can leak it here, and an agent still cannot judge audio feedback.
