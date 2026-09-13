@@ -4,6 +4,7 @@ import {
   formatStatusLines,
   formatStatusEvent,
   isPublishTransition,
+  isRoundBoundary,
   formatRoundLive,
   proposalLines,
   runStatusVerb,
@@ -152,6 +153,25 @@ describe('status watch', () => {
     expect(formatStatusLines(carded, 'https://x')).toContain(
       'concept directions waiting: "Night patrol" / "Crowded stands"',
     );
+  });
+
+  it('names a card that lands while the job still reads as building', () => {
+    // A green native preview leaves the job submitted, which shows as building.
+    const midBuild = { ...carded, status: 'building', previewGate: undefined };
+    expect(isRoundBoundary(midBuild)).toBe(true);
+    expect(formatStatusEvent(midBuild)).toBe('Studio has concept directions: "Night patrol" / "Crowded stands"');
+    expect(shouldAnnounceStatus(midBuild, 'building', statusFingerprint(midBuild))).toBe(true);
+  });
+
+  it('treats an agent-relayed request as answering the card', () => {
+    const relayed = {
+      ...carded,
+      progress: {
+        ...carded.progress,
+        revisions: [...carded.progress.revisions, { text: 'make it night', origin: 'agent' }],
+      },
+    };
+    expect(proposalLines(relayed, 'https://x')).toEqual([]);
   });
 
   it('drops a card whose delivery a retry replaced', () => {

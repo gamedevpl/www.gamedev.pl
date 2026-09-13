@@ -60,8 +60,8 @@ export function latestProposal(status: RoundStatus): CreatorProposal | null {
     if (revision?.proposal?.options?.length) {
       return delivered && revision.proposal.version === delivered ? revision.proposal : null;
     }
-    // The creator's own rows carry no origin; theirs is the answer.
-    if (revision && !revision.origin) return null;
+    // Only the studio's voice is no answer; 'agent' relays the creator.
+    if (revision && revision.origin !== 'studio') return null;
   }
   return null;
 }

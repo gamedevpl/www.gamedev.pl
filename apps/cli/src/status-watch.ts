@@ -76,6 +76,8 @@ export function isPublishTransition(previous: string, next: string): boolean {
 
 export function isRoundBoundary(status: RoundStatus): boolean {
   if (isTerminalStatus(status.status)) return true;
+  // A green preview leaves the job building; the card is news.
+  if (latestProposal(status)) return true;
   return status.status === 'needs_changes' && !isRepairableNeedsChanges(status);
 }
 
@@ -84,9 +86,11 @@ export function formatStatusEvent(status: RoundStatus): string {
     const why = status.failure?.reason ?? 'preview red';
     return `needs_changes (${sanitizeEventPayload(why)})`;
   }
-  if (status.status === 'needs_changes' && status.previewGate?.green) {
-    const labels = proposalLabels(status);
-    if (labels) return `round finished — Studio has concept directions: ${labels}`;
+  const labels = proposalLabels(status);
+  const finished = status.status === 'needs_changes' && status.previewGate?.green;
+  // A card can land while the job still reads building.
+  if (labels) return `${finished ? 'round finished — ' : ''}Studio has concept directions: ${labels}`;
+  if (finished) {
     return 'round finished — Studio is waiting (preview green)';
   }
   if (status.status === 'needs_changes') {
