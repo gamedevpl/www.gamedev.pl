@@ -13,6 +13,19 @@ import { findCheckout, localGameFiles, writeBase, fetchLatestTree, initializeChe
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { PickChoice } from './workshop.js';
 
+// GAME.json titles may be localized, same as the catalog reader.
+function titleText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (!value || typeof value !== 'object') return '';
+  const localized = value as Record<string, unknown>;
+  const picked = [localized.en, ...Object.values(localized)].find((entry) => typeof entry === 'string');
+  return typeof picked === 'string' ? picked.trim() : '';
+}
+
+// Mirrors the bounds the recovery route enforces.
+const TITLE_MIN = 3;
+const TITLE_MAX = 120;
+
 export type RecoveryResult = { token: string; slug: string; root: string };
 
 export async function recoverCheckout(
@@ -122,11 +135,16 @@ async function performRecovery(input: {
   const files = localGameFiles(checkout.root, checkout.slug);
   const spec = files.find((f) => f.path === 'SPEC.md')?.content;
   if (!spec) throw new CliError('Recovery needs SPEC.md in the game directory.', EXIT_INPUT);
-  let metadata: { title?: string } = {};
+  let metadata: { title?: unknown } = {};
   const game = files.find((f) => f.path === 'GAME.json');
-  if (game) metadata = parseJsonObject(game.content, 'GAME.json') as { title?: string };
-  const title = metadata.title ?? spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1];
+  if (game) metadata = parseJsonObject(game.content, 'GAME.json');
+  const title = titleText(metadata.title) || titleText(spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]);
   if (!title) throw new CliError('Set the title in GAME.json or SPEC.md before recovery.', EXIT_INPUT);
+  if (title.length < TITLE_MIN || title.length > TITLE_MAX)
+    throw new CliError(
+      `The title must be ${TITLE_MIN} to ${TITLE_MAX} characters. Fix it in GAME.json or SPEC.md.`,
+      EXIT_INPUT,
+    );
   const concept = spec.slice(0, 4000);
   if (concept.trim().length < 30)
     throw new CliError('SPEC.md needs a game description of at least 30 characters.', EXIT_INPUT);

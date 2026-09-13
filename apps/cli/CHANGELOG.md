@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Recover a game whose `GAME.json` title is localized, instead of refusing the request outright.
+- Say which field a refused recovery names, rather than reporting `invalid recovery request` alone.
+
 ## 0.15.0 — 2026-09-13
 
 ### Added

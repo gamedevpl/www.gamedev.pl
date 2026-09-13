@@ -240,3 +240,31 @@ it('keeps the pending file intact when the scratch path is occupied', async () =
   expect(readFileSync(pendingPath, 'utf8')).toBe(before);
   expect(JSON.stringify(JSON.parse(before).paths)).not.toContain('extra.ts');
 });
+function recoverBody(f: ReturnType<typeof fixture>): { title?: unknown } {
+  const call = f.fetch.mock.calls.find(([url]) => url.endsWith('/recover')) as unknown as [string, RequestInit];
+  return JSON.parse(String(call[1].body)) as { title?: unknown };
+}
+it('picks one string when GAME.json localizes the title', async () => {
+  const f = fixture();
+  writeFileSync(join(f.cwd, 'games', 'sky', 'GAME.json'), JSON.stringify({ title: { en: 'Sky Game', pl: 'Gra Sky' } }));
+  await recoverCheckout(f);
+  expect(recoverBody(f).title).toBe('Sky Game');
+});
+it('falls back to SPEC.md when GAME.json carries no usable title', async () => {
+  const f = fixture();
+  writeFileSync(join(f.cwd, 'games', 'sky', 'GAME.json'), JSON.stringify({ title: {} }));
+  await recoverCheckout(f);
+  expect(recoverBody(f).title).toBe('Sky Game');
+});
+it('still takes a plain GAME.json title', async () => {
+  const f = fixture();
+  writeFileSync(join(f.cwd, 'games', 'sky', 'GAME.json'), JSON.stringify({ title: '  Rolling Marble  ' }));
+  await recoverCheckout(f);
+  expect(recoverBody(f).title).toBe('Rolling Marble');
+});
+it('refuses a title the recovery route would reject', async () => {
+  const f = fixture();
+  writeFileSync(join(f.cwd, 'games', 'sky', 'GAME.json'), JSON.stringify({ title: { en: 'ab' } }));
+  await expect(recoverCheckout(f)).rejects.toThrow(/must be 3 to 120 characters/);
+  expect(f.fetch.mock.calls.some(([url]) => url.endsWith('/recover'))).toBe(false);
+});
