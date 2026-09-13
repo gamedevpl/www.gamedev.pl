@@ -21,11 +21,15 @@ export const VIEWPORTS = [
   { width: 3440, height: 1440 },
 ] as const;
 
+function webCss(file: string): string {
+  return readFileSync(fileURLToPath(new URL(`../../web/src/${file}`, import.meta.url)), 'utf8');
+}
+
+// tokens.css first, as main.tsx loads it: it sets border-box.
+const TOKENS_CSS = webCss('core/styles/tokens.css');
+
 // The shipped stage rules, not a copy of them.
-const STAGE_CSS = readFileSync(
-  fileURLToPath(new URL('../../web/src/surfaces/studio/studio-stage.css', import.meta.url)),
-  'utf8',
-);
+const STAGE_CSS = webCss('surfaces/studio/studio-stage.css');
 
 // The canvas lives inside the game iframe.
 const GAME_DOC = `
@@ -37,10 +41,10 @@ const GAME_DOC = `
 function stagePage(docked: boolean): string {
   return `
     <style>
-      html, body { margin: 0; width: 100%; height: 100%; }
-      :root { --panel: #11151b; --panel-border: #2a3240; }
-      body { display: flex; }
+      ${TOKENS_CSS}
       ${STAGE_CSS}
+      html, body { margin: 0; width: 100%; height: 100%; }
+      body { display: flex; }
     </style>
     <div class="studio-stage-layout">
       <div class="studio-stage">
