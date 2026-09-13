@@ -1,3 +1,4 @@
+import { matchingCheckout, resolveLocalGame } from './local-recovery.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { dirname, join, resolve } from 'node:path';
 import type { ApiClient } from './api.js';
@@ -13,6 +14,8 @@ type Input = {
   api: ApiClient;
   slug: string;
   dest?: string;
+  cwd?: string;
+  sessionToken?: string;
   env: NodeJS.ProcessEnv;
   pick?: PickChoice;
   abort: Workshop['abort'];
@@ -23,14 +26,20 @@ type Input = {
   interactiveRun?: InteractiveRun;
 };
 
-export async function checkoutSession(input: Input): Promise<GameSession> {
-  const token = await studioToken(input.api, input.slug);
-  const current = input.workshop ?? findCheckout(process.cwd());
+export async function checkoutSession(input: Input): Promise<GameSession | null> {
+  const current = input.workshop ?? findCheckout(input.cwd ?? process.cwd());
   const root = resolve(
     input.dest ??
       (current ? (current.slug === input.slug ? current.root : join(dirname(current.root), input.slug)) : input.slug),
   );
   const existing = findCheckout(root);
+  const session = input.sessionToken
+    ? { token: input.sessionToken }
+    : existing?.root === root && existing.slug === input.slug
+      ? await resolveLocalGame({ ...input, root })
+      : { token: await studioToken(input.api, input.slug) };
+  if (!session) return null;
+  const { token } = session;
   if (existing?.root !== root || existing.slug !== input.slug) {
     input.onActivity?.(`Downloading ${input.slug}`);
     await checkoutGame({ api: input.api, slug: input.slug, dest: root, allowUndelivered: true });
@@ -51,7 +60,7 @@ export async function checkoutSession(input: Input): Promise<GameSession> {
   if (localGameFiles(root, input.slug).every((file) => file.path.endsWith('.md'))) {
     input.write('This game has a brief but no playable build yet. Tell the agent what to build first.');
   }
-  input.write(`Working in ${root}. Say what to change; /play previews, /submit delivers.`);
+  input.write(`Working in ${root}. Say what to change; /play previews, /push delivers.`);
   return { token, slug: input.slug, workshop, conversationId: '' };
 }
 
@@ -59,13 +68,12 @@ export async function connectSession(
   input: Input & { agent?: string; handoff?: boolean; manual?: boolean },
 ): Promise<GameSession | null> {
   let agent = input.agent;
-  const base = resolve(input.dest ?? input.workshop?.root ?? process.cwd());
-  const here = findCheckout(base);
-  const child = findCheckout(join(base, input.slug));
-  const existing = here?.slug === input.slug ? here : child?.slug === input.slug ? child : null;
+  const base = resolve(input.dest ?? input.workshop?.root ?? input.cwd ?? process.cwd());
+  const existing = matchingCheckout(base, input.slug);
+  let sessionToken: string | undefined;
   const openLocal = async (selected?: string) => {
-    const opened = await checkoutSession({ ...input, dest: existing?.root ?? input.dest });
-    if (opened.workshop && selected) {
+    const opened = await checkoutSession({ ...input, sessionToken, dest: existing?.root ?? input.dest });
+    if (opened?.workshop && selected) {
       opened.workshop.selectedAgent = selected;
       input.write(`${selected} will edit your existing local files. Say what to change; /play previews locally.`);
     }
@@ -73,7 +81,10 @@ export async function connectSession(
   };
   if (existing && !input.manual) {
     input.write(`Found local checkout: ${existing.root} — local files are preserved.`);
-    if (agent) return openLocal(agent);
+    const resolved = await resolveLocalGame({ ...input, root: existing.root });
+    if (!resolved) return null;
+    sessionToken = resolved.token;
+    if (resolved.recovered || agent) return openLocal(agent);
   }
   input.telemetry?.record('connect_opened');
   if (!agent && !input.manual && input.pick) {
@@ -104,7 +115,7 @@ export async function connectSession(
     await connectGame({
       ...input,
       agent,
-      dest: input.dest ?? input.workshop?.root ?? process.cwd(),
+      dest: input.dest ?? input.workshop?.root ?? input.cwd ?? process.cwd(),
       abort: controller.signal,
     });
     input.write(

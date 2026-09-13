@@ -349,3 +349,16 @@ The original checkout is kept. Interrupted staging can be retried with the same
 command; `.gamedev-recovery.json` retains the recovery key until completion.
 Recovery uses the normal creation moderation and quota rules. It cannot restore
 server history that was permanently deleted.
+
+### Returning to a deleted or canceled game
+
+Run `gamedevpl` inside its local checkout, or `gamedevpl connect <slug>` inside
+that checkout or its parent directory. If the game is missing or its round was
+canceled or archived, the CLI offers **Recover and continue**. Confirm once to
+stage your existing sources and continue editing in the same session. Local
+edits are preserved; recovery does not publish the game. Use `/push` when ready.
+
+Canceling keeps the session attached to those local files. Use `/recover` to
+try again or `/connect` to retry connecting. Authentication and network failures
+do not trigger recovery. Explicit `gamedevpl recover <directory>` remains
+available for scripts and recovery under another slug.

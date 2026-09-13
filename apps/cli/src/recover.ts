@@ -36,6 +36,7 @@ async function performRecovery(input: {
   cwd: string;
   slug?: string;
   yes?: boolean;
+  continueAfter?: boolean;
   pick?: PickChoice;
   write: (line: string) => void;
 }): Promise<RecoveryResult | undefined> {
@@ -123,13 +124,18 @@ async function performRecovery(input: {
       ? 'The round was canceled. Recover into a new self-build round.'
       : 'Import local sources into a self-build draft. Nothing will be published.',
   );
+  const recoverLabel = input.continueAfter ? 'Recover and continue' : 'Recover local sources';
   if (
     !input.yes &&
     (!input.pick ||
-      (await input.pick(['Recover local sources', 'Keep files and return'], 'Recover this checkout?')) !==
-        'Recover local sources')
+      (await input.pick([recoverLabel, 'Keep files and return'], `Recover ${slug} from this checkout?`)) !==
+        recoverLabel)
   ) {
-    input.write('Files unchanged. To recover from your shell, repeat with --yes.');
+    input.write(
+      input.continueAfter
+        ? 'Your files are safe. Use /recover when you are ready to continue.'
+        : 'Files unchanged. To recover from your shell, repeat with --yes.',
+    );
     return;
   }
   pending ??= { slug, key: randomUUID(), origin: input.api.origin };
@@ -200,7 +206,9 @@ async function performRecovery(input: {
   }
   rmSync(pendingPath);
   input.write(
-    `Sources recovered and staged. Checkout: ${dest}. Run gamedevpl push there to check and deliver a preview.`,
+    input.continueAfter
+      ? 'Sources recovered. Continue editing here; /push checks and delivers a preview when ready.'
+      : `Sources recovered and staged. Checkout: ${dest}. Run gamedevpl push there to check and deliver a preview.`,
   );
   return { ...recovered, root: dest };
 }
@@ -229,7 +237,7 @@ export async function recoverRepl(input: Parameters<typeof handleReplLine>[0]): 
   const recovered = await recoverCommand(
     input.api,
     input.line.trim(),
-    input.workshop?.root ?? process.cwd(),
+    input.workshop?.root ?? input.cwd ?? process.cwd(),
     input.pick,
     input.write,
     input.telemetry,

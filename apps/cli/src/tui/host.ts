@@ -109,7 +109,7 @@ export async function runInkRepl(input: {
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
   }
-  if (input.checkout) {
+  if (input.checkout && token) {
     const controller = new AbortController();
     abort.current = controller;
     try {
@@ -161,7 +161,7 @@ export async function runInkRepl(input: {
     for (;;) {
       const line = initialLine ?? (await session.prompt());
       initialLine = undefined;
-      if (!spoke && line.trim() && !line.trim().startsWith('/')) {
+      if (!spoke && (!input.checkout || token) && line.trim() && !line.trim().startsWith('/')) {
         spoke = true;
         telemetry.record('first_turn');
       }
@@ -175,6 +175,7 @@ export async function runInkRepl(input: {
           workshop,
           env: input.env,
           currentPath: input.currentPath,
+          cwd: input.checkout?.root,
           pick: session.prompt,
           abort,
           telemetry,

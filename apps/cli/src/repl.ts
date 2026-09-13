@@ -33,13 +33,11 @@ export type ReplLineResult = {
   conversationId?: string;
   workshop?: Workshop;
 };
-
 export async function handleReplLine(input: {
   line: string;
   api: ApiClient;
   token: string | null;
   conversationId?: string;
-  // Set when the session opened from a game checkout.
   workshop?: Workshop;
   env?: NodeJS.ProcessEnv;
   pick?: PickChoice;
@@ -51,7 +49,14 @@ export async function handleReplLine(input: {
   write: (s: string) => void;
   onActivity?: (activity: string) => void;
   currentPath?: string;
+  cwd?: string;
 }): Promise<ReplLineResult> {
+  if (input.cwd && !input.token && input.line.trim() && !input.line.trim().startsWith('/')) {
+    input.write(
+      'This checkout is not connected yet. Use /recover to restore it or /connect to retry. Your files are safe.',
+    );
+    return { next: 'continue' };
+  }
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
     input.write('no pending task to retry');
@@ -76,7 +81,7 @@ export async function handleReplLine(input: {
     try {
       await (trimmed === '/kit update' ? updateKit : offerKitUpdate)({
         api: input.api,
-        cwd: input.workshop?.root ?? process.cwd(),
+        cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
         env: input.env ?? process.env,
         pick: input.pick,
         write: input.write,
@@ -104,7 +109,7 @@ export async function handleReplLine(input: {
         (input.token ? (await getStatus(input.api, input.token)).slug : undefined);
       input.onActivity?.('Starting game preview');
       await playGame({
-        cwd: input.workshop?.root ?? process.cwd(),
+        cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
         slug,
         origin: input.api.origin,
         env: input.env,
@@ -150,7 +155,7 @@ export async function handleReplLine(input: {
     if (cmd === 'submit' || cmd === 'push') {
       try {
         const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
-        const dest = parsed.args[0] ?? input.workshop?.root ?? process.cwd();
+        const dest = parsed.args[0] ?? input.workshop?.root ?? input.cwd ?? process.cwd();
         const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
         if (!slug) {
           input.write(`run it as ${cliUsage(cmd, '[dir]')}`);
@@ -173,7 +178,7 @@ export async function handleReplLine(input: {
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
       try {
         const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
-        const cwd = input.workshop?.root ?? process.cwd();
+        const cwd = input.workshop?.root ?? input.cwd ?? process.cwd();
         const sessionSlug =
           (cmd === 'connect' || cmd === 'checkout') && !parsed.args[0] && !input.workshop && input.token
             ? (await getStatus(input.api, input.token)).slug
@@ -259,7 +264,7 @@ export async function handleReplLine(input: {
         if (result.action.name === 'play') {
           input.onActivity?.('Starting game preview');
           await playGame({
-            cwd: input.workshop?.root ?? process.cwd(),
+            cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
             slug: result.action.slug,
             origin: input.api.origin,
             env: input.env,
