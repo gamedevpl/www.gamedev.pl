@@ -93,6 +93,35 @@ The rule this leaves for any new surface: **ask which half of the request is sha
 is keyed by the reader.** Only the second half multiplies by traffic, and it is never the half
 that looks expensive in a per-request ranking.
 
+### The third axis: a query keyed by the owner, not the reader
+
+Neither half of that split covers a query keyed by _whose_ data it is. `submissions` was read
+by `ownerUid` alone in four places that wanted a single game — `resolveOwnedRecord`,
+`resolveRoundBaseVersion`, the staged-preview base lookup and the draft-preview fallback. Each
+paid for the owner's entire shelf to answer a question about one slug. Measured on 2026-09-12
+the shelf distribution was 154/9/8/5/4/4/2 rounds per owner across 186 submissions and 7 owners,
+so the expensive case was one account, and the median was five.
+
+That shape does not scale with traffic and it does not scale with the catalog. It scales with
+**how much one creator has made**, which is the one axis a product like this wants to grow, and
+it grows without anybody visiting. A per-request ranking never flags it, because on six of the
+seven accounts it is cheap.
+
+`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
+Firestore intersects the two single-field indexes and no composite index is configured —
+the same trick `listOpenRoundsByOwner` already used. The wide `listSubmissionsByOwner` stays
+for the surfaces that genuinely want the whole shelf: the Studio rail, the public creator page,
+account erasure.
+
+Ordering is part of the contract, not an implementation detail. The query returns rounds
+newest first with the job id breaking a tie, which the callers rely on to pick the round an
+improvement builds from — `resolveOwnedRecord` picking the wrong record hands an owner's edit
+a stale base to overwrite newer published work. The old in-memory sort compared `createdAt`
+alone, so two rounds created in the same millisecond resolved in whatever order the scan
+returned them. `store-parity.test.ts` pins both halves against the in-memory and fake-Firestore
+stores, and pins the tie under a frozen clock — a tie test that waits on the real clock is a
+lottery, not a test.
+
 ## The other half of the floor: our own sweeps
 
 A browser poll needs a tab open. `notify-sweep` needs nothing — Cloud Scheduler posts to it
@@ -276,3 +305,15 @@ Three rules the first draft got wrong, all three found in review:
 described above. Give the change a full working week in production, then re-derive both from
 `infra/read-cost-report.sh 7d` and the per-route sums from the read meter, and put the type
 split in the PR that moves either threshold. Do not move them from the estimate.
+
+The fixes went live on 2026-09-12, so **the earliest honest re-derivation is the week ending
+2026-09-19**. Nothing before that is a working week of post-fix traffic, and a threshold moved
+from one weekend's numbers is the same estimate the paragraph above forbids, just with a
+measurement attached.
+
+`read-cost-report.sh` could not actually be run at the window it documents. It passed each
+Monitoring page to `node` as a command-line argument, and a week of per-minute `DELTA` points
+is megabytes, so `7d` exited with `Argument list too long` before node started — `1d` fit and
+hid it. Pages now go through a temp file. The lesson generalises: a tool whose only real use is
+one large window should be exercised at that window, because the small one is not a smaller
+version of the same code path.

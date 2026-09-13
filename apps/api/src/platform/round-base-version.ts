@@ -7,7 +7,7 @@
 import type { Store, SubmissionRecord } from './store.js';
 import { publishedVersion } from '../platform/publication-state.js';
 
-export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwner'>;
+export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwnerAndSlug'>;
 
 // A `SubmissionRecord`, structurally.
 export type BaseVersionRecord = Pick<SubmissionRecord, 'previewVersion' | 'deliveredVersion'> & {
@@ -38,13 +38,11 @@ async function resolveSiblingRoundVersion(
   slug: string,
 ): Promise<string | null> {
   if (!record.ownerUid) return null;
-  const owned = await store.listSubmissionsByOwner(record.ownerUid);
-  const priors = owned
-    .filter(
-      (other) =>
-        other.slug === slug && other.jobId !== record.jobId && !other.abandonedAt && other.state !== 'canceled',
-    )
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const owned = await store.listSubmissionsByOwnerAndSlug(record.ownerUid, slug);
+  // Already newest-first and slug-scoped; only the round identity still filters.
+  const priors = owned.filter(
+    (other) => other.jobId !== record.jobId && !other.abandonedAt && other.state !== 'canceled',
+  );
   for (const prior of priors) {
     const version = prior.previewVersion ?? prior.deliveredVersion;
     if (version) return version;
