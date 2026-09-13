@@ -338,6 +338,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           unhealthy,
           shelvesRebuilt: shelfRebuild.rebuilt,
           shelvesFailed: shelfRebuild.failed,
+          ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),
         },
         stalledIssues.length > 0
           ? 'creator feedback undelivered past the stall threshold — no agent has collected it'
@@ -357,6 +358,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         unhealthy,
         shelvesRebuilt: shelfRebuild.rebuilt,
         shelvesFailed: shelfRebuild.failed,
+        ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),
       });
     },
   );

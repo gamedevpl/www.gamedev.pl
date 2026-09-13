@@ -35,6 +35,23 @@ describe('judgeShelfShadow', () => {
     expect(judgeShelfShadow(drifted, source, 2).verdict).toBe('collapse');
   });
 
+  it('catches a drift in every tip field a shelf response serves', () => {
+    // Each of these reaches the creator's screen.
+    const drifts: Array<Partial<SubmissionRecord>> = [
+      { title: 'Renamed' },
+      { publishedAt: '2026-09-12T00:00:00.000Z' },
+      { previewVersion: 'v9' },
+      { deliveredVersion: 'v9' },
+      { draftSharedAt: '2026-09-12T00:00:00.000Z' },
+      { lastStatus: 'needs_changes' },
+      { createdAt: '2026-09-09T00:00:00.000Z' },
+    ];
+    for (const drift of drifts) {
+      const one = [record(1, { slug: 'sky', ...drift }), record(2, { slug: 'dunes' })];
+      expect(judgeShelfShadow(buildShelfDocument(one, at), source, 2).verdict).toBe('collapse');
+    }
+  });
+
   it('ignores a difference the collapse would have hidden anyway', () => {
     // deliveryNudges is not mirrored and not read.
     const noisy = [record(1, { slug: 'sky', deliveryNudges: 4 }), record(2, { slug: 'dunes' })];

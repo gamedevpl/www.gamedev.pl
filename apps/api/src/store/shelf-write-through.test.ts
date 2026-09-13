@@ -59,6 +59,36 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await agrees(store, 'g:owner')).toBe('match');
     });
 
+    it('mirrors draft sharing, which the Studio shelf renders', async () => {
+      const store = makeStore();
+      await store.createSubmission(1, 'g:owner', 'First');
+      await store.setSubmissionSlug(1, 'sky');
+
+      await store.setDraftShared(1, '2026-09-13T00:00:00.000Z');
+      expect(await agrees(store, 'g:owner')).toBe('match');
+      expect((await store.getShelf('g:owner'))?.rounds[0]?.draftSharedAt).toBe('2026-09-13T00:00:00.000Z');
+
+      await store.setDraftShared(1, null);
+      expect(await agrees(store, 'g:owner')).toBe('match');
+      expect((await store.getShelf('g:owner'))?.rounds[0]?.draftSharedAt).toBeUndefined();
+    });
+
+    it('mirrors a slug taken by an atomic claim, not only by the plain setter', async () => {
+      const store = makeStore();
+      await store.createSubmission(1, 'g:owner', 'First');
+
+      expect(await store.claimSubmissionSlug(1, 'sky', null)).toBe(true);
+      expect(await agrees(store, 'g:owner')).toBe('match');
+      expect((await store.getShelf('g:owner'))?.rounds[0]?.slug).toBe('sky');
+    });
+
+    it('answers false from rebuildShelf only when it could not write', async () => {
+      const store = makeStore();
+      await store.createSubmission(1, 'g:owner', 'First');
+
+      expect(await store.rebuildShelf('g:owner')).toBe(true);
+    });
+
     it('mirrors what the reader would serve, not just the round count', async () => {
       const store = makeStore();
       await store.createSubmission(1, 'g:owner', 'First');

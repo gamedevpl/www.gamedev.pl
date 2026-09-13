@@ -16,7 +16,7 @@ export interface ShelfDocumentStore {
 
 // The Store adds the rebuild; the document store cannot.
 export interface ShelfStoreSlice extends ShelfDocumentStore {
-  rebuildShelf(ownerUid: string): Promise<void>;
+  rebuildShelf(ownerUid: string): Promise<boolean>;
 }
 
 export class InMemoryShelfStore implements ShelfDocumentStore {

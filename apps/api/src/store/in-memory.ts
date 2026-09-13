@@ -310,8 +310,9 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.shelfStore.listStaleShelfOwners(builtBefore, limit);
   }
 
-  async rebuildShelf(ownerUid: string): Promise<void> {
-    await this.shelfMirror.rebuild(ownerUid);
+  async rebuildShelf(ownerUid: string): Promise<boolean> {
+    // The mirror swallows its own errors, so the answer is the only failure signal.
+    return (await this.shelfMirror.rebuild(ownerUid)) !== null;
   }
 
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
@@ -535,7 +536,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
-    return this.submissionStore.setDraftShared(jobId, at);
+    await this.submissionStore.setDraftShared(jobId, at);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async setModerationBlocked(jobId: number, at: string | null): Promise<void> {

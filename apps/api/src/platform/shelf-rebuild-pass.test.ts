@@ -3,7 +3,7 @@ import { runShelfRebuildPass, SHELF_REBUILD_INTERVAL_MS } from './shelf-rebuild-
 
 const NOW = Date.parse('2026-09-13T12:00:00.000Z');
 
-function passStore(stale: string[], failing = new Set<string>()) {
+function passStore(stale: string[], options: { throwing?: Set<string>; refusing?: Set<string> } = {}) {
   const rebuilt: string[] = [];
   const cutoffs: string[] = [];
   return {
@@ -14,8 +14,10 @@ function passStore(stale: string[], failing = new Set<string>()) {
       return stale.slice(0, limit);
     },
     async rebuildShelf(ownerUid: string) {
-      if (failing.has(ownerUid)) throw new Error('nope');
+      if (options.throwing?.has(ownerUid)) throw new Error('nope');
+      if (options.refusing?.has(ownerUid)) return false;
       rebuilt.push(ownerUid);
+      return true;
     },
   };
 }
@@ -37,7 +39,7 @@ describe('runShelfRebuildPass', () => {
   });
 
   it('keeps going past one bad shelf, and counts it', async () => {
-    const store = passStore(['g:a', 'g:bad', 'g:c'], new Set(['g:bad']));
+    const store = passStore(['g:a', 'g:bad', 'g:c'], { throwing: new Set(['g:bad']) });
     const result = await runShelfRebuildPass({ store, now: () => NOW });
 
     expect(store.rebuilt).toEqual(['g:a', 'g:c']);
@@ -68,5 +70,31 @@ describe('runShelfRebuildPass', () => {
     // Records when the last pass ran, never that one happened.
     expect(store.cutoffs[0]).not.toEqual(store.cutoffs[1]);
     expect(store.rebuilt).toEqual(['g:a', 'g:a']);
+  });
+
+  it('counts a rebuild that wrote nothing as failed, not as repaired', async () => {
+    // The mirror swallows its errors and answers false.
+    const store = passStore(['g:a', 'g:quiet'], { refusing: new Set(['g:quiet']) });
+    const result = await runShelfRebuildPass({ store, now: () => NOW });
+
+    expect(store.rebuilt).toEqual(['g:a']);
+    expect(result).toEqual({ rebuilt: 1, failed: 1 });
+  });
+
+  it('reports a discovery failure instead of throwing into the sweep that hosts it', async () => {
+    const store = {
+      async listStaleShelfOwners(): Promise<string[]> {
+        throw new Error('index is having a day');
+      },
+      async rebuildShelf(): Promise<boolean> {
+        throw new Error('never reached');
+      },
+    };
+
+    await expect(runShelfRebuildPass({ store, now: () => NOW })).resolves.toEqual({
+      rebuilt: 0,
+      failed: 0,
+      unlisted: true,
+    });
   });
 });

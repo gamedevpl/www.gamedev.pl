@@ -20,6 +20,7 @@ export interface ShelfRound {
   lastNotifiedStatus?: SubmissionRecord['lastNotifiedStatus'];
   previewVersion?: string;
   deliveredVersion?: string;
+  draftSharedAt?: string;
 }
 
 export interface ShelfDocument {
@@ -51,6 +52,7 @@ export function toShelfRound(record: SubmissionRecord): ShelfRound {
     lastNotifiedStatus: record.lastNotifiedStatus,
     previewVersion: record.previewVersion,
     deliveredVersion: record.deliveredVersion,
+    draftSharedAt: record.draftSharedAt,
   });
 }
 

@@ -11,7 +11,8 @@ export const SHELF_REBUILD_BATCH = 10;
 
 export interface ShelfRebuildStore {
   listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]>;
-  rebuildShelf(ownerUid: string): Promise<void>;
+  // False when the rebuild could not write; the mirror does not throw.
+  rebuildShelf(ownerUid: string): Promise<boolean>;
 }
 
 export interface ShelfRebuildPassOptions {
@@ -24,18 +25,27 @@ export interface ShelfRebuildPassOptions {
 export interface ShelfRebuildPassResult {
   rebuilt: number;
   failed: number;
+  // True when the pass could not even list what was stale.
+  unlisted?: true;
 }
 
 export async function runShelfRebuildPass(options: ShelfRebuildPassOptions): Promise<ShelfRebuildPassResult> {
   const intervalMs = options.intervalMs ?? SHELF_REBUILD_INTERVAL_MS;
   const cutoff = new Date(options.now() - intervalMs).toISOString();
-  const owners = await options.store.listStaleShelfOwners(cutoff, options.batch ?? SHELF_REBUILD_BATCH);
+  let owners: string[];
+  try {
+    owners = await options.store.listStaleShelfOwners(cutoff, options.batch ?? SHELF_REBUILD_BATCH);
+  } catch {
+    // Derived state riding a notification job, so never throw.
+    return { rebuilt: 0, failed: 0, unlisted: true };
+  }
   let rebuilt = 0;
   let failed = 0;
   for (const ownerUid of owners) {
     try {
-      await options.store.rebuildShelf(ownerUid);
-      rebuilt += 1;
+      // False is a failure the mirror already swallowed.
+      if (await options.store.rebuildShelf(ownerUid)) rebuilt += 1;
+      else failed += 1;
     } catch {
       // One bad shelf must not stop the pass.
       failed += 1;

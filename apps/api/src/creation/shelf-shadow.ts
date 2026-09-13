@@ -21,15 +21,20 @@ export interface ShelfShadowResult {
   shelfCount?: number;
 }
 
-// What the reader would serve, not the raw rounds.
+// Every tip field either shelf response serves, or the bar means nothing.
 function collapsedFingerprint(records: readonly SubmissionRecord[]): string {
   return collapseJobsToOwnerGames(records, 'shelf')
     .map(({ tip, catalogPublishedAt }) =>
       [
         tip.jobId,
+        tip.createdAt,
         tip.slug ?? '',
         tip.title ?? '',
         tip.lastStatus ?? tip.lastNotifiedStatus ?? '',
+        tip.publishedAt ?? '',
+        tip.previewVersion ?? '',
+        tip.deliveredVersion ?? '',
+        tip.draftSharedAt ?? '',
         catalogPublishedAt ?? '',
       ].join('~'),
     )

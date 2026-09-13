@@ -17,6 +17,7 @@ export interface ShelfMirrorOptions {
 }
 
 export interface ShelfMirror {
+  // The document written, or null when nothing could be.
   rebuild(ownerUid: string): Promise<ShelfDocument | null>;
   // The writers know a job, not an owner.
   afterJobWrite(jobId: number): Promise<void>;
@@ -27,6 +28,8 @@ export interface ShelfMirror {
 export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   const { store, now } = options;
   const inFlight = new Map<string, Promise<ShelfDocument | null>>();
+  // Written to mid-rebuild: that pass may be behind.
+  const requeued = new Set<string>();
 
   const report = (error: unknown, context: { ownerUid?: string; jobId?: number }) => {
     options.onError?.(error, context);
@@ -42,15 +45,27 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   function rebuild(ownerUid: string): Promise<ShelfDocument | null> {
     // A burst of writes costs one rebuild, not one each.
     const running = inFlight.get(ownerUid);
-    if (running) return running;
-    const work = rebuildNow(ownerUid)
-      .catch((error: unknown) => {
-        report(error, { ownerUid });
-        return null;
-      })
-      .finally(() => {
-        inFlight.delete(ownerUid);
-      });
+    if (running) {
+      // The running pass may have read source already.
+      requeued.add(ownerUid);
+      return running;
+    }
+    const work = (async () => {
+      // Loops, not recurses, so writes cannot grow the stack.
+      for (;;) {
+        requeued.delete(ownerUid);
+        let built: ShelfDocument | null = null;
+        try {
+          built = await rebuildNow(ownerUid);
+        } catch (error) {
+          report(error, { ownerUid });
+        }
+        if (!requeued.has(ownerUid)) return built;
+      }
+    })().finally(() => {
+      requeued.delete(ownerUid);
+      inFlight.delete(ownerUid);
+    });
     inFlight.set(ownerUid, work);
     return work;
   }

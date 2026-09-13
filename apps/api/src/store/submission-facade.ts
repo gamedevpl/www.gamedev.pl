@@ -16,7 +16,10 @@ export abstract class SubmissionFacade {
     sourceJobId: number,
     admissionNonce?: string,
   ): Promise<boolean> {
-    return this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
+    const won = await this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
+    // An atomic claim writes the slug itself.
+    if (won) await this.shelfMirror.afterJobWrite(jobId);
+    return won;
   }
   async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
     return this.submissionStore.beginCheckoutRecovery(slug, nonce, now);
@@ -41,6 +44,7 @@ export abstract class SubmissionFacade {
     const won = await this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
     if (!won) return false;
 
+    await this.shelfMirror.afterJobWrite(jobId);
     // The claim is durable; a failed record cannot fail it.
     await this.tryRecordOwner(jobId, slug);
     return true;

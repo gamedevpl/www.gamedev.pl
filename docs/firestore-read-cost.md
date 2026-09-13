@@ -213,13 +213,24 @@ write directly — and submissions carry no `updatedAt`:
    document from `listSubmissionsByOwner`. A rebuild rather than a patch of one entry, so it
    is correct by construction and there is no drift arithmetic to get wrong. Because the
    document is in Firestore, **every instance sees it** — unlike the per-instance windows
-   above.
+   above. "Every writer" includes the two *atomic* slug claims, which write the slug
+   themselves rather than through the plain setter, and `setDraftShared`.
+
+   Coalescing concurrent rebuilds is not enough: a write landing after a running rebuild has
+   read source but before it writes would be waited on and then lost, so the mirror requeues
+   one more pass instead of joining a snapshot that is already behind. Same invariant as the
+   sweep cadence — *void the deferral when the record moves*.
 2. **A count on read.** The document stores `sourceCount`; the reader spends one `count()`
    aggregate and rebuilds on disagreement. This catches a create or a reassignment without
    knowing who wrote. It cannot catch an in-place field update, which is why there is a third
    layer.
 3. **A bounded pass, never once-ever.** `runShelfRebuildPass` rebuilds shelves older than an
-   hour, ten per run, riding `notify-sweep`. The marker is *when the last pass ran*, never
+   hour, ten per run, riding `notify-sweep`. It reports failures by *inspecting the rebuild's
+   answer*, because the mirror swallows its own errors — a `try`/`catch` around it can never
+   fire, so the first version reported `shelvesFailed: 0` however many shelves went unwritten,
+   certifying a repair layer that had done nothing. Listing failures are caught too: this is
+   derived state riding a notification job, and a throw here would turn a completed sweep into
+   a 500 and a scheduler retry. The marker is *when the last pass ran*, never
    that one happened — a rollback puts code in front of traffic that writes rounds without
    knowing the document exists, so a once-ever marker would retire the only thing that
    notices it. Same lesson as `open-round-backfill.ts`.
@@ -234,6 +245,16 @@ line with `shelfShadow` and, on disagreement, `shelfMismatch`. The comparison is
 and `absent` / `version` / `truncated` / `count` / `collapse` are distinguished rather than
 lumped into one failure. The bar for pointing readers at the document is **zero mismatches
 over a full week**, not "it seemed fine".
+
+**A probation check is only as strong as its fingerprint**, and the first version of this one
+was not strong enough: it compared jobId, slug, title and status, and so would have certified
+a mirror that served a different `publishedAt`, a different Edit pill (`previewVersion` /
+`deliveredVersion`) or a missing draft-sharing indicator. It now covers every tip field either
+shelf response serves, with a test that walks them one at a time. The same review found
+`draftSharedAt` missing from the mirrored round altogether and `setDraftShared` unhooked — a
+rebuilt shelf lost the sharing state permanently, and the weak fingerprint called it a match.
+Two independent holes that happened to hide each other, which is the argument for making the
+check specific rather than plausible.
 
 **The cost this trades, stated plainly, because it is not obviously a win.** A shelf-relevant
 write now costs one owner-query plus one document write, so a heavy account's round pays its
