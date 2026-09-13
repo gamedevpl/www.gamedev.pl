@@ -188,6 +188,8 @@ import type { GameAgentKeyRecord, CreatorAgentKeyRecord } from '../store/records
 export type { GameAgentKeyRecord, CreatorAgentKeyRecord };
 import type { AgentKeysStore } from '../store/slices/agent-keys.js';
 export type { AgentKeysStore };
+import type { GameAdmissionStore } from '../store/slices/game-admission.js';
+export type { GameAdmissionStore };
 import type {
   OAuthClientRecord,
   OAuthGrantRecord,
@@ -254,6 +256,7 @@ export interface Store
     ContributionStore,
     AccessTokensStore,
     AgentKeysStore,
+    GameAdmissionStore,
     CatalogEnrichmentStore,
     GameAccessStore,
     OAuthStore,

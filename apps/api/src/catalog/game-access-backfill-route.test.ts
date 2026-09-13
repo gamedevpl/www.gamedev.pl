@@ -12,10 +12,13 @@ describe('game access backfill route', () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
 
   afterEach(async () => {
+    failCatalog = false;
     while (apps.length) await apps.pop()!.close();
   });
 
-  async function makeApp(catalog: CatalogGameEntry[] | Error) {
+  let failCatalog = false;
+
+  async function makeApp(catalog: CatalogGameEntry[] | Error, onCatalogRead?: () => void) {
     const store = new InMemoryStore();
     const app = await buildApp({
       store,
@@ -27,6 +30,8 @@ describe('game access backfill route', () => {
         snapshotReader: null,
         githubClient: {
           getCatalog: async () => {
+            onCatalogRead?.();
+            if (failCatalog) throw new Error('catalog refresh failed');
             if (catalog instanceof Error) throw catalog;
             return catalog;
           },
@@ -88,5 +93,38 @@ describe('game access backfill route', () => {
     const response = await app.inject({ method: 'POST', url: '/api/admin/game-access-backfill' });
 
     expect(response.statusCode).toBe(404);
+  });
+
+  it('reads the catalog itself rather than trusting a warm cache', async () => {
+    let reads = 0;
+    const { app, cookie } = await makeApp([repoEntry('repo-only')], () => {
+      reads += 1;
+    });
+
+    // Warm the shared cache the way ordinary traffic does.
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    const warmed = reads;
+
+    await app.inject({ method: 'POST', url: '/api/admin/game-access-backfill?dryRun=1', headers: { cookie } });
+
+    expect(reads).toBe(warmed + 1);
+  });
+
+  it('refuses once refreshes fail, even while the cache still serves', async () => {
+    const { app, cookie } = await makeApp([repoEntry('repo-only')]);
+
+    // The warm cache keeps serving; only a fresh read sees the failure.
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    failCatalog = true;
+    expect((await app.inject({ method: 'GET', url: '/api/catalog' })).statusCode).toBe(200);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/game-access-backfill?dryRun=1',
+      headers: { cookie },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: 'catalog_unavailable' });
   });
 });
