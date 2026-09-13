@@ -418,6 +418,7 @@ const FILE_BUCKET = {
   'game-snapshot-publish': 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
+  'affinity-cache': 'catalog',
   recommend: 'catalog',
   recommendations: 'catalog',
   'published-slugs': 'catalog',

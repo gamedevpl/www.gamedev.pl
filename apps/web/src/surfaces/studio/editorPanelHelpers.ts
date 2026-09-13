@@ -5,11 +5,14 @@ import type {
   EditorContentDoc,
   EditorItemContent,
   EditorLabel,
+  EditorLayerSpec,
+  EditorLayersDoc,
   EditorParamValue,
   EditorPathSpec,
   EditorTilemapSpec,
   GameEditorState,
 } from '../../studioApi.js';
+import { defaultLayerKey, defaultLayerTileKey } from '../../editorContentTools.js';
 
 export function useLabel(): (label: EditorLabel) => string {
   const { i18n } = useTranslation();
@@ -53,4 +56,34 @@ export function pathCollection(
   spec: EditorCollectionSpec | null,
 ): (EditorCollectionSpec & { item: EditorPathSpec }) | null {
   return spec && spec.item.widget === 'path' ? (spec as EditorCollectionSpec & { item: EditorPathSpec }) : null;
+}
+
+// The stack being edited when a collection item carries layers.
+export function layeredItemView(
+  spec: EditorCollectionSpec | null,
+  item: EditorItemContent | null,
+  selectedLayerKey: string | null,
+  tileKey: string | null,
+): {
+  specs: Record<string, EditorLayerSpec>;
+  layers: EditorLayersDoc;
+  layerKey: string;
+  tileKey: string | null;
+} | null {
+  if (spec?.item.widget !== 'layered') return null;
+  const specs = spec.item.layers;
+  const layerKey = selectedLayerKey && specs[selectedLayerKey] ? selectedLayerKey : defaultLayerKey(specs);
+  if (!layerKey) return null;
+  const active = specs[layerKey];
+  // A key from another palette would paint nothing.
+  const usable =
+    active?.widget === 'tilemap' && active.tiles.some((tile) => tile.key === tileKey)
+      ? tileKey
+      : defaultLayerTileKey(specs, layerKey);
+  return {
+    specs,
+    layers: ((item as { layers?: EditorLayersDoc } | null)?.layers ?? {}) as EditorLayersDoc,
+    layerKey,
+    tileKey: usable,
+  };
 }
