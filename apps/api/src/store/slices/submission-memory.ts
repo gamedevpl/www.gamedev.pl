@@ -137,11 +137,11 @@ export class InMemorySubmissionStore implements SubmissionStore {
     return true;
   }
 
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
     const holder = [...this.submissions.values()]
       .filter((r) => r.slug === slug)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
-    assertRecoveryBinding(jobId, holder, this.recoveryAdmissions.get(slug));
+    assertRecoveryBinding(jobId, holder, this.recoveryAdmissions.get(slug), admissionNonce);
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, slug });
   }

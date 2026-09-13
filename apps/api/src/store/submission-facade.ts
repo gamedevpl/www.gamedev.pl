@@ -30,8 +30,8 @@ export abstract class SubmissionFacade {
   ): Promise<boolean> {
     return this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
   }
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(jobId, slug);
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+    return this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
   }
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
     return this.submissionStore.setSubmissionTitle(jobId, title);

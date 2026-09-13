@@ -438,6 +438,7 @@ const FILE_BUCKET = {
   'proposal-base': 'community',
   'proposal-diff': 'community',
   'proposal-routes': 'community',
+  'proposal-admission': 'community',
   'proposal-state': 'community',
   proposals: 'community',
   'suggestion-inbox': 'community',

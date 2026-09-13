@@ -28,7 +28,7 @@ export interface SubmissionStore {
   setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void>;
 
   // Records the game directory a submission is building, once it is known.
-  setSubmissionSlug(jobId: number, slug: string): Promise<void>;
+  setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void>;
 
   // Updates the shelf/studio/notification name -- delivery adopts the SPEC title.
   setSubmissionTitle(jobId: number, title: string): Promise<void>;
@@ -210,8 +210,8 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       return true;
     });
   }
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    await bindSubmissionSlug(this.db, jobId, slug);
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+    await bindSubmissionSlug(this.db, jobId, slug, admissionNonce);
   }
 
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {

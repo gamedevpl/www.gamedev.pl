@@ -140,3 +140,14 @@ it.each([
     expect(await store.claimSubmissionSlug(2, 'sky', 1, { key: 'fresh', spec: 'local', locale: 'en' })).toBe(allowed);
   },
 );
+
+it.each(['memory', 'firestore'])('%s allows a proposal binder only with its admission nonce', async (mode) => {
+  const store = mode === 'memory' ? new InMemoryStore() : firestoreStore();
+  await store.createSubmission(1, 'owner', 'Sky');
+  await store.setSubmissionSlug(1, 'sky');
+  await store.createSubmission(2, 'owner', 'Sky');
+  expect(await store.beginCheckoutRecovery('sky', 'proposal', Date.now())).toBe(true);
+  await expect(store.setSubmissionSlug(2, 'sky')).rejects.toMatchObject({ statusCode: 409 });
+  await expect(store.setSubmissionSlug(2, 'sky', 'other')).rejects.toMatchObject({ statusCode: 409 });
+  await expect(store.setSubmissionSlug(2, 'sky', 'proposal')).resolves.toBeUndefined();
+});
