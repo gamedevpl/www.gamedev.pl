@@ -141,7 +141,7 @@ describe('createDreamJob shot cleanup', () => {
       await real(jobId, claim, text, opts);
       // The answer is lost, and a green preview claims the job meanwhile.
       await store.setSubmissionPreviewVersion(7, 'v2');
-      await store.claimDreamRun(7, 'v2', '2026-09-07T12:05:00.000Z');
+      await store.claimDreamRun(7, 'v2', '2026-09-07T12:05:00.000Z', 1);
       throw new Error('connection reset');
     };
 

@@ -260,7 +260,7 @@ export interface SubmissionRecord {
   // Last `${version}:${status}` already logged for gate metrics.
   roundLastGateMetricKey?: string;
   // Dream job's claim; `postedAt` is what makes it final.
-  dreamRun?: { version: string; claimedAt: string; postedAt?: string; endedAt?: string };
+  dreamRun?: { version: string; claimedAt: string; roundGeneration?: number; postedAt?: string; endedAt?: string };
   /** `${version}:${claimedAt}` of every attempt whose card reached the thread. A newer
    * claim replaces `dreamRun` and takes its `postedAt` along, so an attempt that lost the
    * answer to its own write asks this instead. Keyed by attempt, not version: a second

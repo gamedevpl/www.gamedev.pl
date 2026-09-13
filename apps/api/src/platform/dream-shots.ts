@@ -1,4 +1,4 @@
-// Reserved captions for shots the dream job stores under a build.
+// Reserved captions and studio wording shared by every proposal writer.
 
 // The real gate frame a proposal was drawn from.
 export const DREAM_SOURCE_SHOT_LABEL = 'Dream source';
@@ -13,3 +13,10 @@ export const DREAM_SHOT_LABELS: readonly string[] = [DREAM_SOURCE_SHOT_LABEL, DR
 export function isDreamShotLabel(label: string | undefined): boolean {
   return DREAM_SHOT_LABELS.includes(label ?? '');
 }
+
+// The studio's own line above the frames, whoever drew them.
+export const PROPOSAL_TEXT_EN = 'I sketched two directions for the next round. Tap one to see it.';
+export const PROPOSAL_TEXT_PL = 'Naszkicowałem dwa kierunki na następną rundę. Kliknij, żeby zobaczyć.';
+
+// One concept frame; Firestore holds it base64 in one document.
+export const MAX_PROPOSAL_FRAME_BYTES = 600 * 1024;
