@@ -43,6 +43,9 @@ export interface CatalogRoutesOptions {
 
 export interface CatalogRoutesHandle {
   getCatalogEntries(): Promise<CatalogGameEntry[]>;
+
+  // Fails rather than serving a stale snapshot: migration coverage cannot guess.
+  readCatalogFresh(): Promise<CatalogGameEntry[]>;
   isSlugPublished(slug: string): Promise<boolean>;
   getPublishedCatalogEntry(slug: string): Promise<CatalogGameEntry | null>;
   readSnapshotGame(slug: string): Promise<PublishedGame | null>;
@@ -67,8 +70,7 @@ export async function registerCatalogRoutes(
     mediaRateLimitWindowMs,
     mediaUrlSigner,
     storeMediaUrlSigner,
-  } =
-    options;
+  } = options;
   const snapshotReader = options.snapshotReader ?? null;
 
   const catalogTtlMs = 10 * 60_000;
@@ -158,6 +160,27 @@ export async function registerCatalogRoutes(
     } catch (error) {
       return serveStaleOrRethrow(error);
     }
+  }
+
+  async function readCatalogFresh(): Promise<CatalogGameEntry[]> {
+    let entries: CatalogGameEntry[];
+    if (snapshotReader) {
+      // Bypasses both this function's cache and the reader's pointer cache.
+      try {
+        const fresh = await snapshotReader.getCatalogFresh();
+        if (!fresh) throw new SnapshotUnavailableError('snapshot catalog is not published');
+        entries = fresh;
+      } catch (error) {
+        if (error instanceof SnapshotUnavailableError) throw error;
+        throw new SnapshotUnavailableError('snapshot catalog unavailable', { cause: error });
+      }
+    } else if (githubClient) {
+      entries = await githubClient.getCatalog(publishedRef);
+    } else {
+      entries = [];
+    }
+    catalogCache = { entries, expiresAt: now() + catalogTtlMs };
+    return entries;
   }
 
   async function isSlugPublished(slug: string): Promise<boolean> {
@@ -395,15 +418,19 @@ export async function registerCatalogRoutes(
       ]);
 
       // Before any read: these bytes must not enter this process.
-      if (mediaUrlSigner && entry && allowedFiles.has(parsedParams.data.filename) && snapshotReader?.getMediaObjectName) {
+      if (
+        mediaUrlSigner &&
+        entry &&
+        allowedFiles.has(parsedParams.data.filename) &&
+        snapshotReader?.getMediaObjectName
+      ) {
         const objectName =
           (variantWidth !== undefined
             ? await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename, variantWidth)
-            : null)
-          ?? (await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename));
+            : null) ?? (await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename));
         if (
-          objectName
-          && (await redirectToSignedMedia(request, reply, mediaUrlSigner, objectName, parsedParams.data.filename))
+          objectName &&
+          (await redirectToSignedMedia(request, reply, mediaUrlSigner, objectName, parsedParams.data.filename))
         ) {
           return reply;
         }
@@ -411,13 +438,10 @@ export async function registerCatalogRoutes(
 
       // Platform-made games keep media in the store bucket.
       if (storeMediaUrlSigner) {
-        const storeObject = await storePublishedMediaObject(
-          parsedParams.data.slug,
-          parsedParams.data.filename,
-        );
+        const storeObject = await storePublishedMediaObject(parsedParams.data.slug, parsedParams.data.filename);
         if (
-          storeObject
-          && (await redirectToSignedMedia(request, reply, storeMediaUrlSigner, storeObject, parsedParams.data.filename))
+          storeObject &&
+          (await redirectToSignedMedia(request, reply, storeMediaUrlSigner, storeObject, parsedParams.data.filename))
         ) {
           return reply;
         }
@@ -475,6 +499,7 @@ export async function registerCatalogRoutes(
 
   return {
     getCatalogEntries,
+    readCatalogFresh,
     isSlugPublished,
     getPublishedCatalogEntry,
     readSnapshotGame,

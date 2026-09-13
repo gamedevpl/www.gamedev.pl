@@ -60,6 +60,7 @@ import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
 import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
+import { FirestoreGameAdmissionStore } from './slices/game-admission.js';
 import { FirestoreBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
 import {
   FirestoreBuildMediaStore,
@@ -110,6 +111,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private notificationsStore: FirestoreNotificationsStore;
   private accessTokensStore: FirestoreAccessTokensStore;
   private agentKeysStore: FirestoreAgentKeysStore;
+  private gameAdmissionStore: FirestoreGameAdmissionStore;
   private accessStore: FirestoreAccessStore;
   private reviewStore: FirestoreReviewStore;
   private moderationFlagStore: FirestoreModerationFlagStore;
@@ -143,6 +145,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.notificationsStore = new FirestoreNotificationsStore(this.db);
     this.accessTokensStore = new FirestoreAccessTokensStore(this.db);
     this.agentKeysStore = new FirestoreAgentKeysStore(this.db);
+    this.gameAdmissionStore = new FirestoreGameAdmissionStore(this.db);
     this.accessStore = new FirestoreAccessStore(this.db);
     this.reviewStore = new FirestoreReviewStore(this.db);
     this.moderationFlagStore = new FirestoreModerationFlagStore(this.db);
@@ -1457,23 +1460,23 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null> {
-    return this.agentKeysStore.getGameAgentKey(slug);
+    return this.gameAdmissionStore.getGameAgentKey(slug);
   }
 
   async ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    return this.agentKeysStore.ensureGameAgentKey(slug, ownerUid, at);
+    return this.gameAdmissionStore.ensureGameAgentKey(slug, ownerUid, at);
   }
 
   async rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    return this.agentKeysStore.rotateGameAgentKey(slug, ownerUid, at);
+    return this.gameAdmissionStore.rotateGameAgentKey(slug, ownerUid, at);
   }
 
   async beginAgentOpenRound(slug: string, at: string): Promise<boolean> {
-    return this.agentKeysStore.beginAgentOpenRound(slug, at);
+    return this.gameAdmissionStore.beginAgentOpenRound(slug, at);
   }
 
   async finishAgentOpenRound(slug: string, at: string): Promise<void> {
-    return this.agentKeysStore.finishAgentOpenRound(slug, at);
+    return this.gameAdmissionStore.finishAgentOpenRound(slug, at);
   }
 
   async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {

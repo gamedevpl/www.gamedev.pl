@@ -87,6 +87,9 @@ export class SnapshotIncompleteError extends Error {
 export interface GameSnapshotReader {
   getPointer(): Promise<SnapshotPointer | null>;
   getCatalog(): Promise<CatalogGameEntry[] | null>;
+
+  // Bypasses the pointer cache and its stale-on-error fallback.
+  getCatalogFresh(): Promise<CatalogGameEntry[] | null>;
   getGame(slug: string): Promise<SnapshotGame | null>;
   /**
    * `width` asks for a baked size variant. Callers must treat a null as "serve the
@@ -359,6 +362,14 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
 
     async getCatalog() {
       const pointer = await this.getPointer();
+      if (!pointer) return null;
+      return readJson<CatalogGameEntry[]>(catalogObject(pointer.snapshotId));
+    },
+
+    async getCatalogFresh() {
+      // No pointer cache read; a failure propagates instead of a stale fallback.
+      const pointer = await readJson<SnapshotPointer>(POINTER_OBJECT);
+      pointerCache = { value: pointer, expiresAt: now() + pointerTtlMs };
       if (!pointer) return null;
       return readJson<CatalogGameEntry[]>(catalogObject(pointer.snapshotId));
     },

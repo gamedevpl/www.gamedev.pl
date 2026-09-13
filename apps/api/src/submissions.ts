@@ -1227,7 +1227,7 @@ export async function registerSubmissionRoutes(
     invalidatePublishedGameCaches,
     isSlugClaimed,
     confirmSlugClaim,
-    getCatalogEntries: catalogRoutes.getCatalogEntries,
+    readCatalogFresh: catalogRoutes.readCatalogFresh,
   });
   await registerModerationFlagRoutes(app, {
     store,

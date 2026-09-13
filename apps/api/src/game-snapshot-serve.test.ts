@@ -81,6 +81,7 @@ function createSnapshotStub(params: {
   const reader: GameSnapshotReader = {
     getPointer: vi.fn(async () => null),
     getCatalog,
+    getCatalogFresh: getCatalog,
     getGame,
     getMedia,
     getMediaObjectName,
@@ -414,6 +415,7 @@ describe('gallery media', () => {
     const reader: GameSnapshotReader = {
       getPointer: vi.fn(async () => null),
       getCatalog,
+      getCatalogFresh: getCatalog,
       getGame: vi.fn(async () => null),
       getMedia,
     };

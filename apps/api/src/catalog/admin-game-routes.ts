@@ -19,8 +19,8 @@ export interface AdminGameRoutesOptions {
   isSlugClaimed: SlugClaimProbe;
   confirmSlugClaim: (jobId: number, slug: string, title: string) => Promise<string | null>;
 
-  // Repo-lane catalog; without it coverage is unknown.
-  getCatalogEntries?: () => Promise<ReadonlyArray<{ slug: string }>>;
+  // Repo-lane catalog, read fresh; without it coverage is unknown.
+  readCatalogFresh?: () => Promise<ReadonlyArray<{ slug: string }>>;
 }
 
 // Operator's published-games shelf: list, re-gate, delete, backfills.
@@ -34,7 +34,7 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     invalidatePublishedGameCaches,
     isSlugClaimed,
     confirmSlugClaim,
-    getCatalogEntries,
+    readCatalogFresh,
   } = options;
 
   // Slugs only — titles would cost a manifest read per game.
@@ -113,11 +113,11 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
 
     // Both lanes plus drafts, and the repo catalog none of them lists.
 
-    // Unreadable catalog means unknown coverage, so the pass refuses.
-    if (!getCatalogEntries) return reply.status(503).send({ error: 'catalog_unavailable' });
+    // Unreadable or stale catalog means unknown coverage, so the pass refuses.
+    if (!readCatalogFresh) return reply.status(503).send({ error: 'catalog_unavailable' });
     let catalogEntries: ReadonlyArray<{ slug: string }>;
     try {
-      catalogEntries = await getCatalogEntries();
+      catalogEntries = await readCatalogFresh();
     } catch (error) {
       request.log.error({ err: error }, 'game access backfill: repo catalog unavailable');
       return reply.status(503).send({ error: 'catalog_unavailable' });
