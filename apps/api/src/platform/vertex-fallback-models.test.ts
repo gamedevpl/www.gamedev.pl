@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { resolveRefineFallbackModel } from './vertex-fallback-models.js';
 
 describe('what may stand in for the refiner', () => {
-  // Vertex 404s Claude for this project, under either publisher.
-  it('stands nothing in until an operator names a model that exists', () => {
+  it('stands nothing in until an operator asks for it', () => {
     expect(resolveRefineFallbackModel({})).toBeUndefined();
   });
 
-  it('accepts another peer when one is configured', () => {
-    expect(resolveRefineFallbackModel({ REFINE_FALLBACK_MODEL: 'claude-opus-5' })).toBe('claude-opus-5');
+  it('accepts a peer Vertex serves when one is configured', () => {
+    expect(resolveRefineFallbackModel({ REFINE_FALLBACK_MODEL: 'gemini-3.8-flash' })).toBe('gemini-3.8-flash');
+  });
+
+  // Claude comes through the Anthropic and OpenRouter seed providers.
+  it('refuses a model Vertex does not serve us, peer or not', () => {
+    expect(resolveRefineFallbackModel({ REFINE_FALLBACK_MODEL: 'claude-sonnet-5' })).toBeUndefined();
+    expect(resolveRefineFallbackModel({ REFINE_FALLBACK_MODEL: 'claude-opus-5' })).toBeUndefined();
   });
 
   // Refinement shapes what gets built.
