@@ -57,9 +57,12 @@ function pngCarriesPixels(bytes: Buffer): boolean {
   return false;
 }
 
-// Entropy-coded pixels follow SOS; a header with no scan draws nothing.
+// A scan needs components to draw and the tables that decode them.
 function jpegCarriesPixels(bytes: Buffer): boolean {
   let at = 2;
+  let components = 0;
+  let quantTables = false;
+  let huffmanTables = false;
   while (at + 4 <= bytes.length) {
     if (bytes.readUInt8(at) !== 0xff) return false;
     const marker = bytes.readUInt8(at + 1);
@@ -69,14 +72,19 @@ function jpegCarriesPixels(bytes: Buffer): boolean {
     }
     const length = bytes.readUInt16BE(at + 2);
     if (length < 2 || at + 2 + length > bytes.length) return false;
+    if (marker === 0xdb) quantTables = true;
+    if (marker === 0xc4) huffmanTables = true;
+    const isFrameHeader = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    // Byte nine of SOF counts the components the scan will draw.
+    if (isFrameHeader && length >= 8) components = bytes.readUInt8(at + 9);
     if (marker === 0xda) {
-      // The scan runs to EOI, so it must continue and end there.
       const scanStart = at + 2 + length;
-      return (
+      const endsAtEoi =
         scanStart < bytes.length - 2 &&
         bytes.readUInt8(bytes.length - 2) === 0xff &&
-        bytes.readUInt8(bytes.length - 1) === 0xd9
-      );
+        bytes.readUInt8(bytes.length - 1) === 0xd9;
+      // Entropy bytes still go unchecked; that needs a decoder.
+      return endsAtEoi && components > 0 && quantTables && huffmanTables;
     }
     at += 2 + length;
   }

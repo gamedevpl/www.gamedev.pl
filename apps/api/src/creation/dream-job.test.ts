@@ -196,6 +196,20 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('posts no card from a JPEG whose frame draws no components', async () => {
+    const whole = jpegHeader(1024, 1024);
+    const noComponents = Buffer.from(whole);
+    // Byte nine of SOF is the component count; zero draws nothing.
+    noComponents.writeUInt8(0, whole.indexOf(Buffer.from([0xff, 0xc0])) + 9);
+    const { store, run } = await harness({
+      hud: [],
+      frame: { data: noComponents.toString('base64'), mediaType: 'image/jpeg' },
+    });
+
+    expect(await run()).toBe('no_frames');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
   it('posts no card from a PNG frame with no IDAT', async () => {
     const { store, run } = await harness({
       hud: [],

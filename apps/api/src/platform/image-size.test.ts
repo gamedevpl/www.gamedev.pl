@@ -30,7 +30,8 @@ export function headerOnlyPng(width: number, height: number): Buffer {
 
 export function headerOnlyJpeg(width: number, height: number): Buffer {
   const whole = jpegHeader(width, height);
-  return Buffer.concat([whole.subarray(0, 39), Buffer.from([0xff, 0xd9])]);
+  const sos = whole.indexOf(Buffer.from([0xff, 0xda]));
+  return Buffer.concat([whole.subarray(0, sos), Buffer.from([0xff, 0xd9])]);
 }
 
 // The same bytes without their terminator, as a short read leaves them.
@@ -40,6 +41,9 @@ export function truncated(bytes: Buffer): Buffer {
 
 export function jpegHeader(width: number, height: number): Buffer {
   const app0 = Buffer.from([0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 1, 1, 0, 0, 1, 0, 1, 0, 0]);
+  // One quantization table and one Huffman table, as a decoder needs.
+  const dqt = Buffer.concat([Buffer.from([0xff, 0xdb, 0x00, 0x43, 0x00]), Buffer.alloc(64, 1)]);
+  const dht = Buffer.concat([Buffer.from([0xff, 0xc4, 0x00, 0x1f, 0x00]), Buffer.alloc(28, 1)]);
   const sof = Buffer.alloc(19);
   sof.writeUInt8(0xff, 0);
   sof.writeUInt8(0xc0, 1);
@@ -47,10 +51,12 @@ export function jpegHeader(width: number, height: number): Buffer {
   sof.writeUInt8(8, 4);
   sof.writeUInt16BE(height, 5);
   sof.writeUInt16BE(width, 7);
+  // Three components; a frame that draws none is not a picture.
+  sof.writeUInt8(3, 9);
   // SOS, a little entropy data, then EOI: pixels included.
   const sos = Buffer.from([0xff, 0xda, 0x00, 0x08, 1, 1, 0, 0, 63, 0]);
   const scan = Buffer.from([0x12, 0x34, 0x56]);
-  return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof, sos, scan, Buffer.from([0xff, 0xd9])]);
+  return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, dqt, dht, sof, sos, scan, Buffer.from([0xff, 0xd9])]);
 }
 
 describe('imageSize', () => {
