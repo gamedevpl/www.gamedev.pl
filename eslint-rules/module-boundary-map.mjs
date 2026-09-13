@@ -61,6 +61,8 @@ const FILE_BUCKET = {
   'credential-scan': 'platform',
   'dream-shots': 'platform',
   'image-size': 'platform',
+  // PNG/JPEG fixtures; a harness outside a test file imports them.
+  'image-size.test': 'platform',
   'canonical-app-url': 'platform',
   'canonical-base64': 'platform',
   'bounded-map': 'platform',
@@ -267,6 +269,7 @@ const FILE_BUCKET = {
   'dream-frames': 'creation',
   'dream-job': 'creation',
   'dream-job-env': 'creation',
+  'dream-job.harness': 'creation',
   'hud-regions': 'creation',
   'next-ideas': 'creation',
   'seed-stream': 'creation',

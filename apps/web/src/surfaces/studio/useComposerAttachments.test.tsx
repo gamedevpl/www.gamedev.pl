@@ -75,6 +75,30 @@ describe('useComposerAttachments', () => {
     expect(api.attachments.map((item) => item.name)).toEqual(['B']);
   });
 
+  it('drops only what a send carried, keeping a frame picked since', async () => {
+    vi.mocked(fetch).mockResolvedValue(pngResponse());
+    await mount();
+
+    await act(async () => {
+      api.addAttachmentFromUrl('sent', '/shot/sent', {});
+    });
+    await settle();
+    // What the in-flight request already carries.
+    const carried = api.attachments.map((item) => item.id);
+
+    await act(async () => {
+      api.addAttachmentFromUrl('picked', '/shot/picked', { replaces: 'proposal' });
+    });
+    await settle();
+
+    await act(async () => {
+      api.dropAttachments(carried);
+    });
+
+    // Resending the first with the pick's draft is the defect.
+    expect(api.attachments.map((item) => item.name)).toEqual(['picked']);
+  });
+
   it('says so rather than dropping the frame when the composer is full', async () => {
     vi.mocked(fetch).mockResolvedValue(pngResponse());
     await mount();

@@ -3,7 +3,7 @@ import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
-import { dreamClaimHolds } from '../store/slices/round-budget.js';
+import { dreamClaimHolds, ownsDreamClaim } from '../store/slices/round-budget.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
@@ -200,6 +200,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
 
     // Reserved labels hide these, so a card that never posts strands them.
     const written: string[] = [];
+    // A lost answer can hide a commit; the stamp is the tell.
+    const cardLanded = async (): Promise<boolean> => {
+      const live = await store.getSubmission(jobId).catch(() => null);
+      return Boolean(live?.dreamRun?.postedAt) && ownsDreamClaim(live?.dreamRun, { version, claimedAt });
+    };
     // The outage that failed a write fails this too; nothing sweeps after.
     const discard = async () => {
       if (!written.length) return;
@@ -252,6 +257,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         ownerUid: record.ownerUid,
       });
       if (!posted) {
+        // A retry that saw our stamp refuses a card already there.
+        if (await cardLanded()) {
+          deps.onPosted?.(jobId);
+          return 'posted';
+        }
         await discard();
         // The transaction refuses on a mute too; name the real reason.
         return (await stopped()) ?? 'superseded';
@@ -259,6 +269,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       deps.onPosted?.(jobId);
       return 'posted';
     } catch (error) {
+      // The throw may have followed a commit, so ask before deleting.
+      if (await cardLanded()) {
+        deps.onPosted?.(jobId);
+        return 'posted';
+      }
       // A write that failed part-way leaves the same unreachable rows.
       await discard();
       throw error;

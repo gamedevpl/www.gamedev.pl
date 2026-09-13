@@ -96,7 +96,7 @@ export function FeedbackPanel({
   // The pick that seeded the box, so a newer one survives.
   const seededSeq = useRef<number | undefined>(undefined);
   const attachmentsApi = useComposerAttachments(sending);
-  const { attachments, pendingAttachmentReads, resetAttachments } = attachmentsApi;
+  const { attachments, pendingAttachmentReads, dropAttachments, resetAttachments } = attachmentsApi;
 
   useEffect(() => {
     setBuilder(initialBuilder);
@@ -182,6 +182,8 @@ export function FeedbackPanel({
     if (message.length < 10 || state === 'sending' || pendingAttachmentReads > 0) return;
     setState('sending');
     const seqAtSend = seededSeq.current;
+    // What this send carries; a pick mid-flight must not resend them.
+    const sentIds = attachments.map((item) => item.id);
     setError(null);
     setNotice(null);
     // Shows Sending for the whole round trip — never abort the fetch.
@@ -236,6 +238,9 @@ export function FeedbackPanel({
         resetAttachments();
         // Reset to CSS height — not the sent message's grown size.
         if (inputRef.current) inputRef.current.style.height = '';
+      } else {
+        // The pick's frame stays; what this send carried does not.
+        dropAttachments(sentIds);
       }
       // Echoes locally now; the next status poll picks up the real state.
       onSent(message);

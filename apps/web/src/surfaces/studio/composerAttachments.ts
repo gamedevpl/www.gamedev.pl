@@ -148,6 +148,12 @@ export function useComposerAttachments(sending: boolean) {
     }
   };
 
+  // Clears exactly what a send carried; anything added since survives.
+  const dropAttachments = (ids: readonly string[]) => {
+    if (!ids.length) return;
+    setAttachments((prev) => prev.filter((item) => !ids.includes(item.id)));
+  };
+
   const resetAttachments = () => {
     setBlockedAttachment(null);
     setAttachments([]);
@@ -168,6 +174,7 @@ export function useComposerAttachments(sending: boolean) {
     addAttachmentFromUrl,
     handleSaveSketch,
     removeAttachment,
+    dropAttachments,
     resetAttachments,
   };
 }

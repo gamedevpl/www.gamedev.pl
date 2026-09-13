@@ -1,89 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createDreamJob, type DreamJobDeps, type DreamOutcome } from './dream-job.js';
-import { createDreamAvailabilityGate } from './dream-availability.js';
-import { DEFAULT_DREAM_IMAGE_MODEL, StubDreamFrameGenerator, type DreamFrame } from './dream-frames.js';
-import { DEFAULT_NEXT_IDEAS_MODEL, StubNextIdeaGenerator, type NextIdea } from './next-ideas.js';
+import { DEFAULT_DREAM_IMAGE_MODEL } from './dream-frames.js';
+import { DEFAULT_NEXT_IDEAS_MODEL } from './next-ideas.js';
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SHOT_LABELS, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
-import { InMemoryStore } from '../platform/store.js';
-import { jpegHeader, pngHeader } from '../platform/image-size.test.js';
-import type { SubmissionRecord } from '../store/records/submission.js';
-
-const ideas: NextIdea[] = [
-  { id: 'idea_0', label: { en: 'Night mode', pl: 'Tryb nocny' }, prompt: { en: 'Make it night.', pl: 'Zrób noc.' } },
-  { id: 'idea_1', label: { en: 'More rocks', pl: 'Więcej skał' }, prompt: { en: 'Add rocks.', pl: 'Dodaj skały.' } },
-  { id: 'idea_2', label: { en: 'Third', pl: 'Trzeci' }, prompt: { en: 'Third.', pl: 'Trzeci.' } },
-];
-
-const log = { error: () => {}, warn: () => {}, info: () => {} };
-
-function capturingLog() {
-  const errors: { context: object; message: string }[] = [];
-  return { errors, log: { ...log, error: (context: object, message: string) => errors.push({ context, message }) } };
-}
-
-async function harness(params: {
-  artifacts?: Record<string, Buffer | null>;
-  frame?: DreamFrame | null | ((request: { direction: string }) => DreamFrame | null | Promise<DreamFrame | null>);
-  ideas?: NextIdea[];
-  hud?: unknown;
-  record?: Partial<SubmissionRecord>;
-  limits?: { dreamsPaused?: boolean; globalDailyDreamCap?: number };
-  log?: DreamJobDeps['log'];
-}) {
-  const store = new InMemoryStore();
-  if (params.limits) await store.setCreationLimits(params.limits, 'g:boss');
-  const created = await store.createSubmission(7, 'g:owner', 'Parcel Run');
-  // The claim needs the version to be current.
-  await store.setSubmissionPreviewVersion(7, 'v1');
-  const record: SubmissionRecord = {
-    ...created,
-    slug: 'parcel-run',
-    spec: 'Deliver parcels between moons in a tiny rocket.',
-    locale: 'pl',
-    ...params.record,
-  };
-  const metadata = params.hud === undefined ? { frames: 3 } : { frames: 3, hud: params.hud };
-  const artifacts: Record<string, Buffer | null> = {
-    'media/opening.png': pngHeader(900, 900),
-    'media/metadata.json': Buffer.from(JSON.stringify(metadata)),
-    ...params.artifacts,
-  };
-  const ideaGenerator = new StubNextIdeaGenerator(params.ideas ?? ideas);
-  const frames = new StubDreamFrameGenerator(
-    params.frame === undefined
-      ? { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' }
-      : params.frame,
-  );
-  const posted: number[] = [];
-  const deps: DreamJobDeps = {
-    store,
-    gamesStore: { getDerivedArtifact: async (_slug, _version, name) => artifacts[name] ?? null },
-    availability: createDreamAvailabilityGate({ store }),
-    ideas: ideaGenerator,
-    frames,
-    readHudRegions: async ({ slug, version, width, height }) => {
-      const body = artifacts['media/metadata.json'];
-      if (!body || slug !== 'parcel-run' || version !== 'v1') return null;
-      const parsed = JSON.parse(body.toString()) as { hud?: unknown };
-      if (!Array.isArray(parsed.hud)) return null;
-      return (parsed.hud as { x: number; y: number; w: number; h: number }[]).map((r) => ({
-        x: Math.min(r.x, width),
-        y: Math.min(r.y, height),
-        w: r.w,
-        h: r.h,
-      }));
-    },
-    log: params.log ?? log,
-    now: () => Date.parse('2026-09-07T12:00:00.000Z'),
-    // Never a real timer: the cleanup backoff would hold the suite.
-    wait: async () => {},
-    onPosted: (jobId) => posted.push(jobId),
-  };
-  const job = createDreamJob(deps);
-  const run = (overrides: Partial<{ version: string; screenshotPath?: string }> = {}): Promise<DreamOutcome> =>
-    job.runForVersion({ record, version: 'v1', screenshotPath: 'media/opening.png', ...overrides });
-  return { store, record, frames, ideas: ideaGenerator, posted, run };
-}
+import { jpegHeader } from '../platform/image-size.test.js';
+import { capturingLog, harness } from './dream-job.harness.js';
 
 describe('createDreamJob', () => {
   it('refuses the idea call when the pause lands after the gate opened', async () => {
@@ -321,6 +241,35 @@ describe('createDreamJob', () => {
     expect(await run()).toBe('failed');
     // Both rows committed, so both must be gone.
     expect(await store.countBuildShots(7)).toBe(0);
+  });
+
+  it('keeps the frames when the card landed but the answer did not', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const real = store.appendProposalMessage.bind(store);
+    store.appendProposalMessage = async (jobId, claim, text, opts) => {
+      // The card commits, then the response is lost on the way back.
+      await real(jobId, claim, text, opts);
+      throw new Error('connection reset');
+    };
+
+    expect(await run()).toBe('posted');
+    // The card is on the thread; its frames must survive.
+    expect(await store.listCreatorMessages(7)).toHaveLength(1);
+    expect(await store.countBuildShots(7)).toBe(3);
+  });
+
+  it('keeps the frames when a transaction retry sees its own stamp', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const real = store.appendProposalMessage.bind(store);
+    store.appendProposalMessage = async (jobId, claim, text, opts) => {
+      // The commit landed; the retry re-reads and refuses its own card.
+      await real(jobId, claim, text, opts);
+      return null;
+    };
+
+    expect(await run()).toBe('posted');
+    expect(await store.listCreatorMessages(7)).toHaveLength(1);
+    expect(await store.countBuildShots(7)).toBe(3);
   });
 
   it('keeps the shots of a card that posted', async () => {
