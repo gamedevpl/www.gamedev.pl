@@ -8,13 +8,74 @@ export const MEDIA_URL_TTL_SECONDS = 6 * 60 * 60;
 // Video carries the bytes, and a live link is pullable by anyone.
 export const MEDIA_VIDEO_URL_TTL_SECONDS = 30 * 60;
 
+// One window of images. Quantised instant, so every visitor gets one URL.
+export const MEDIA_URL_ANCHOR_SECONDS = 24 * 60 * 60;
+
+// Two windows, so a URL minted late still lives a full one.
+export const MEDIA_ANCHORED_TTL_SECONDS = 2 * MEDIA_URL_ANCHOR_SECONDS;
+
+export interface MediaUrlPolicy {
+  ttlSeconds: number;
+  // Zero signs at the current instant, as video wants.
+  anchorSeconds: number;
+}
+
+// Video stays unanchored: shareable long links are what its TTL guards against.
+export function mediaUrlPolicy(filename: string): MediaUrlPolicy {
+  if (filename.endsWith('.mp4')) {
+    return { ttlSeconds: MEDIA_VIDEO_URL_TTL_SECONDS, anchorSeconds: 0 };
+  }
+  return { ttlSeconds: MEDIA_ANCHORED_TTL_SECONDS, anchorSeconds: MEDIA_URL_ANCHOR_SECONDS };
+}
+
 export function mediaUrlTtlSeconds(filename: string): number {
-  return filename.endsWith('.mp4') ? MEDIA_VIDEO_URL_TTL_SECONDS : MEDIA_URL_TTL_SECONDS;
+  return mediaUrlPolicy(filename).ttlSeconds;
+}
+
+// Start of the window nowMs falls in, epoch milliseconds.
+export function anchorStart(nowMs: number, anchorSeconds: number): number {
+  const windowMs = anchorSeconds * 1000;
+  return Math.floor(nowMs / windowMs) * windowMs;
+}
+
+// Seconds until the roll hands out a different URL.
+export function anchorRemainingSeconds(nowMs: number, anchorSeconds: number): number {
+  if (anchorSeconds <= 0) return 0;
+  const windowMs = anchorSeconds * 1000;
+  return Math.max(1, Math.ceil((anchorStart(nowMs, anchorSeconds) + windowMs - nowMs) / 1000));
+}
+
+// How long the redirect itself may be cached.
+export function redirectMaxAge(policy: MediaUrlPolicy, nowMs: number): number {
+  if (policy.anchorSeconds <= 0) return Math.floor(policy.ttlSeconds / 2);
+  return anchorRemainingSeconds(nowMs, policy.anchorSeconds);
+}
+
+export function mediaRedirectMaxAgeSeconds(filename: string, nowMs: number): number {
+  return redirectMaxAge(mediaUrlPolicy(filename), nowMs);
+}
+
+// One clock sample decides the URL and its max-age.
+export function mediaRedirectPlan(filename: string, atMs: number): MediaRedirectPlan {
+  const policy = mediaUrlPolicy(filename);
+  const anchored = policy.anchorSeconds > 0;
+  return {
+    ttlSeconds: policy.ttlSeconds,
+    signedAtMs: anchored ? anchorStart(atMs, policy.anchorSeconds) : undefined,
+    maxAgeSeconds: redirectMaxAge(policy, atMs),
+  };
+}
+
+export interface MediaRedirectPlan {
+  ttlSeconds: number;
+  // Undefined signs at the current instant, as video wants.
+  signedAtMs?: number;
+  maxAgeSeconds: number;
 }
 
 export interface MediaUrlSigner {
   // Null when absent: a redirect cannot fall through.
-  urlFor(object: string, ttlSeconds?: number): Promise<string | null>;
+  urlFor(object: string, ttlSeconds?: number, signedAtMs?: number): Promise<string | null>;
 }
 
 export function createMediaUrlSigner(options: {
@@ -31,18 +92,21 @@ export function createMediaUrlSigner(options: {
   const cache = new Map<string, { url: string; signedAt: number }>();
 
   return {
-    async urlFor(object: string, requestedTtl?: number): Promise<string | null> {
+    async urlFor(object: string, requestedTtl?: number, signedAtMs?: number): Promise<string | null> {
       const ttl = requestedTtl ?? ttlSeconds;
-      const key = `${object}#${ttl}`;
-      const cached = cache.get(key);
       const currentTime = now();
-      // Half of this URL's life, not the default one's.
-      if (cached && currentTime - cached.signedAt < (ttl * 1000) / 2) return cached.url;
+      // Pinned instant in the key, so a roll re-mints.
+      const anchored = signedAtMs !== undefined;
+      const key = anchored ? `${object}#${ttl}#${signedAtMs}` : `${object}#${ttl}`;
+
+      const cached = cache.get(key);
+      // Anchored URLs outlive their window, so age cannot retire them.
+      if (cached && (anchored || currentTime - cached.signedAt < (ttl * 1000) / 2)) return cached.url;
 
       // Probed only when minting; a cached URL proves existence.
       if (!(await options.store.objectExists(object))) return null;
 
-      const url = await options.store.signReadUrl(object, ttl);
+      const url = await options.store.signReadUrl(object, ttl, signedAtMs);
       if (cache.size >= maxCached) {
         const oldest = cache.keys().next().value;
         if (oldest !== undefined) cache.delete(oldest);

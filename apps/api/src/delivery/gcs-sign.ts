@@ -95,8 +95,8 @@ export interface GcsObjectStore {
   readObject(name: string): Promise<Buffer | null>;
   /** Metadata probe — true when the object exists. Does not download the body. */
   objectExists(name: string): Promise<boolean>;
-  /** Short-lived V4 GET URL for an existing object. */
-  signReadUrl(name: string, expiresSeconds?: number): Promise<string>;
+  // V4 GET URL. signedAtMs pins the instant, which anchors media URLs.
+  signReadUrl(name: string, expiresSeconds?: number, signedAtMs?: number): Promise<string>;
 }
 
 export interface CreateGcsObjectStoreOptions {
@@ -178,13 +178,13 @@ export function createGcsObjectStore(options: CreateGcsObjectStoreOptions): GcsO
       return true;
     },
 
-    async signReadUrl(name, expiresSeconds = DEFAULT_SIGNED_URL_TTL_SECONDS) {
+    async signReadUrl(name, expiresSeconds = DEFAULT_SIGNED_URL_TTL_SECONDS, signedAtMs) {
       const email = await resolveEmail();
       return signGcsReadUrl({
         bucket,
         object: name,
         expiresSeconds,
-        now,
+        now: signedAtMs === undefined ? now : () => signedAtMs,
         serviceAccountEmail: email,
         signBlob,
       });
