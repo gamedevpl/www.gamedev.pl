@@ -122,3 +122,41 @@ describe('game access backfill', () => {
     expect(result.scanned).toBe(1);
   });
 });
+
+describe('game access backfill under concurrency', () => {
+  it('reports the owner a concurrent write actually established', async () => {
+    const store = new LegacyStore().addJob(1, 'g:ada', 'orbital-dogfight');
+
+    // Someone else's record lands between the read and the write.
+    const original = store.ensureGameAccess.bind(store);
+    store.ensureGameAccess = async (slug, ownerUid, at) => {
+      store.ensureGameAccess = original;
+      await original(slug, 'g:grace', at);
+      return original(slug, ownerUid, at);
+    };
+
+    const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
+
+    expect(await store.getGameAccess('orbital-dogfight')).toMatchObject({ ownerUid: 'g:grace' });
+    expect(result).toMatchObject({ created: 0, diverged: ['orbital-dogfight'] });
+  });
+
+  it('does not record an owner erased after the pass began', async () => {
+    const store = new LegacyStore().addJob(1, 'g:ada', 'orbital-dogfight');
+
+    const original = store.listSubmissionsBySlug.bind(store);
+    store.listSubmissionsBySlug = async (slug) => {
+      store.listSubmissionsBySlug = original;
+      store.addJob(2, DELETED_ACCOUNT_UID, slug);
+      return original(slug);
+    };
+
+    const result = await runGameAccessBackfill({ store, slugs: ['orbital-dogfight'], dryRun: false });
+
+    expect(result).toMatchObject({ created: 0, createdPlatform: 1 });
+    expect((await resolveGameAccess(store, 'orbital-dogfight')).owner).toEqual({
+      kind: 'platform',
+      reason: 'owner_deleted',
+    });
+  });
+});

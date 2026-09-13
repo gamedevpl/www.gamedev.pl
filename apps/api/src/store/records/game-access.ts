@@ -43,3 +43,28 @@ export function newGameAccess(slug: string, ownerUid: string, at: string): GameA
     updatedAt: at,
   };
 }
+
+// Erasure: the platform takes custody, and the uid leaves every membership.
+
+// Null when the record does not involve the uid at all.
+export function withMemberErased(
+  record: GameAccessRecord,
+  uid: string,
+  platformUid: string,
+  at: string,
+): GameAccessRecord | null {
+  const wasOwner = record.ownerUid === uid;
+  const wasEditor = record.editorUids.includes(uid);
+  if (!wasOwner && !wasEditor) return null;
+
+  const ownerUid = wasOwner ? platformUid : record.ownerUid;
+  const editorUids = record.editorUids.filter((editor) => editor !== uid);
+  return {
+    ...record,
+    ownerUid,
+    editorUids,
+    memberUids: membersOf(ownerUid, editorUids),
+    accessRevision: record.accessRevision + 1,
+    updatedAt: at,
+  };
+}

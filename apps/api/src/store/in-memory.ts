@@ -69,6 +69,7 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
+import { withMemberErased } from './records/game-access.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
@@ -99,7 +100,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions);
-  private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
+  protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions);
   private buildMediaStore = new InMemoryBuildMediaStore();
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
@@ -191,6 +192,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     this.playerDataStore.playAffinity.delete(uid);
     for (const [tokenId, record] of [...this.accessTokensStore.accessTokens]) {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
+    }
+    for (const [slug, record] of [...this.gameAccessStore.access]) {
+      const erased = withMemberErased(record, uid, DELETED_ACCOUNT_UID, at);
+      if (erased) this.gameAccessStore.access.set(slug, erased);
     }
     for (const [slug, record] of [...this.agentKeysStore.gameAgentKeys]) {
       if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
@@ -627,6 +632,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
+  }
+
+  async listSubmissionSlugs(): Promise<string[]> {
+    return this.submissionQueryStore.listSubmissionSlugs();
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

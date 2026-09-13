@@ -7,6 +7,7 @@ import {
   deriveOwnerFromSubmissions,
   sameOwner,
   type GameAccessResolveStore,
+  type GameOwner,
 } from './game-access-resolve.js';
 
 export type GameAccessBackfillOutcome =
@@ -34,6 +35,21 @@ export interface GameAccessBackfillOptions {
   now?: () => Date;
 }
 
+function countCreate(result: GameAccessBackfillResult, owner: GameOwner): void {
+  if (owner.kind === 'platform') result.createdPlatform += 1;
+  else result.created += 1;
+}
+
+// Does the record in force still agree with today's rule?
+function recordOutcome(result: GameAccessBackfillResult, slug: string, ownerUid: string, derived: GameOwner): void {
+  if (sameOwner(classifyOwnerUid(ownerUid), derived)) result.alreadyRecorded += 1;
+  else result.diverged.push(slug);
+}
+
+async function derive(store: GameAccessResolveStore, slug: string): Promise<GameOwner> {
+  return deriveOwnerFromSubmissions(await store.listSubmissionsBySlug(slug));
+}
+
 // Slugs are public; uids are not. Nothing here returns one.
 export async function runGameAccessBackfill(options: GameAccessBackfillOptions): Promise<GameAccessBackfillResult> {
   const { store, slugs, dryRun } = options;
@@ -52,32 +68,29 @@ export async function runGameAccessBackfill(options: GameAccessBackfillOptions):
 
   for (const slug of new Set(slugs)) {
     result.scanned += 1;
-    const records = await store.listSubmissionsBySlug(slug);
-    const derived = deriveOwnerFromSubmissions(records);
     const existing = await store.getGameAccess(slug);
-
     if (existing) {
-      if (sameOwner(classifyOwnerUid(existing.ownerUid), derived)) result.alreadyRecorded += 1;
-      else result.diverged.push(slug);
+      recordOutcome(result, slug, existing.ownerUid, await derive(store, slug));
       continue;
     }
 
-    if (derived.kind === 'platform' && derived.reason === 'no_owner') {
-      result.quarantined.push(slug);
-      continue;
-    }
-
-    const ownerUid = records.find((record) => !record.abandonedAt)?.ownerUid;
+    // Re-read before writing: an erasure mid-pass is not recorded.
+    const fresh = await store.listSubmissionsBySlug(slug);
+    const ownerUid = fresh.find((record) => !record.abandonedAt)?.ownerUid;
     if (!ownerUid) {
       result.quarantined.push(slug);
       continue;
     }
 
-    if (derived.kind === 'platform') result.createdPlatform += 1;
-    else result.created += 1;
+    if (dryRun) {
+      countCreate(result, classifyOwnerUid(ownerUid));
+      continue;
+    }
 
-    // Conditional: a record written mid-pass survives.
-    if (!dryRun) await store.ensureGameAccess(slug, ownerUid, now().toISOString());
+    // Report the record in force, not the intended one.
+    const inForce = await store.ensureGameAccess(slug, ownerUid, now().toISOString());
+    if (inForce.ownerUid === ownerUid) countCreate(result, classifyOwnerUid(ownerUid));
+    else recordOutcome(result, slug, inForce.ownerUid, deriveOwnerFromSubmissions(fresh));
   }
 
   return result;

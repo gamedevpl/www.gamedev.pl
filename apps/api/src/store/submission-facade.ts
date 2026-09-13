@@ -1,9 +1,11 @@
 import type { SubmissionStore } from './slices/submission.js';
 import type { GameAccessStore } from './slices/game-access.js';
 import type { GameAccessRecord } from './records/game-access.js';
+import type { SubmissionQueryStore } from './slices/submission-queries.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
+  protected abstract submissionQueryStore: SubmissionQueryStore;
   async setLocalActivity(
     jobId: number,
     activity: import('@gamedevpl/contract').LocalActivity,
@@ -12,11 +14,16 @@ export abstract class SubmissionFacade {
     return this.submissionStore.setLocalActivity(jobId, activity, start);
   }
   // Access record created here so no slug caller forgets it.
+
+  // Only while the name is uncontested; a contested one waits for settleSlugClaim.
   async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
     await this.submissionStore.setSubmissionSlug(jobId, slug);
-    const record = await this.submissionStore.getSubmission(jobId);
-    if (!record?.ownerUid) return;
-    await this.gameAccessStore.ensureGameAccess(slug, record.ownerUid, new Date().toISOString());
+    const job = await this.submissionStore.getSubmission(jobId);
+    if (!job?.ownerUid) return;
+    const claimants = await this.submissionQueryStore.listSubmissionsBySlug(slug);
+    const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
+    if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
+    await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, new Date().toISOString());
   }
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
     return this.submissionStore.setSubmissionTitle(jobId, title);
@@ -34,6 +41,10 @@ export abstract class SubmissionFacade {
 
   async ensureGameAccess(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord> {
     return this.gameAccessStore.ensureGameAccess(slug, ownerUid, at);
+  }
+
+  async recordSettledOwner(slug: string, ownerUid: string, at: string): Promise<GameAccessRecord> {
+    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, at);
   }
 
   async listGameAccessByMember(uid: string): Promise<GameAccessRecord[]> {

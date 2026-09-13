@@ -69,6 +69,7 @@ import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGameAccessStore } from './slices/game-access.js';
+import { withMemberErased, type GameAccessRecord } from './records/game-access.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
@@ -115,7 +116,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
   protected submissionStore: FirestoreSubmissionStore;
-  private submissionQueryStore: FirestoreSubmissionQueryStore;
+  protected submissionQueryStore: FirestoreSubmissionQueryStore;
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
@@ -215,6 +216,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       waitlistByEmail,
       betaInvitesCreated,
       betaInvitesClaimed,
+      gameAccess,
     ] = await Promise.all([
       this.db.collection('accessTokens').where('uid', '==', uid).get(),
       this.db.collection('gameAgentKeys').where('ownerUid', '==', uid).get(),
@@ -235,6 +237,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       email ? this.db.collection('waitlist').where('email', '==', email).get() : Promise.resolve(null),
       this.db.collection('betaInvites').where('createdByUid', '==', uid).get(),
       this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
+      this.db.collection('gameAccess').where('memberUids', 'array-contains', uid).get(),
     ]);
 
     // Refresh rows may lack ownerUid; join them through owned grants.
@@ -289,6 +292,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
           { merge: true },
         ),
       );
+    }
+    for (const doc of gameAccess.docs) {
+      const erased = withMemberErased(doc.data() as GameAccessRecord, uid, DELETED_ACCOUNT_UID, at);
+      if (erased) writes.push((batch) => batch.set(doc.ref, erased));
     }
     for (const doc of suggestions.docs) {
       writes.push((batch) => batch.set(doc.ref, { ownerUid: null, updatedAt: at }, { merge: true }));
@@ -710,6 +717,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
+  }
+
+  async listSubmissionSlugs(): Promise<string[]> {
+    return this.submissionQueryStore.listSubmissionSlugs();
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

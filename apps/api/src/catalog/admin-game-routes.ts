@@ -106,7 +106,14 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     if (!store) return reply.status(503).send({ error: 'store_unavailable' });
 
     const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
-    const slugs = await store.listGameSlugs();
+
+    // Both lanes plus drafts: a games doc alone misses every unpublished project.
+    const [gameSlugs, submissionSlugs, publications] = await Promise.all([
+      store.listGameSlugs(),
+      store.listSubmissionSlugs(),
+      store.listPublications(),
+    ]);
+    const slugs = [...new Set([...gameSlugs, ...submissionSlugs, ...publications.map((entry) => entry.slug)])];
     const result = await runGameAccessBackfill({ store, slugs, dryRun });
     request.log.info(
       {

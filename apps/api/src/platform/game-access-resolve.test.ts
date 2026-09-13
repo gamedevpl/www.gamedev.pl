@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore, DELETED_ACCOUNT_UID, type Store } from './store.js';
 import { fakeFirestore } from '../store/fake-firestore.js';
 import { classifyOwnerUid, gameAccessMatchesDerived, ownsGame, resolveGameAccess } from './game-access-resolve.js';
-import { creatorOwnsSlug } from './slug-ownership.js';
+import { creatorOwnsSlug, settleSlugClaim } from './slug-ownership.js';
 import { resolveOwnerOfRecord } from '../community/owner-of-record.js';
 
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -120,3 +120,68 @@ describe('owner classification', () => {
     expect(classifyOwnerUid(DELETED_ACCOUNT_UID)).toEqual({ kind: 'platform', reason: 'owner_deleted' });
   });
 });
+
+for (const [implName, makeStore] of IMPLEMENTATIONS) {
+  describe(`game access, contested and erased (${implName})`, () => {
+    it('records the job that actually holds the slug, not the one that lost it', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'same-title');
+      await tick();
+      await submit(store, 2, 'g:grace', 'same-title');
+
+      // Settlement as slug-resolver runs it: Ada takes the alternative.
+      await settleSlugClaim(store, 2, 'same-title', 'Same title', async () => true);
+      await store.setSubmissionSlug(1, 'same-title-2');
+      await settleSlugClaim(store, 1, 'same-title-2', 'Same title', async () => true);
+
+      expect(await store.getGameAccess('same-title')).toMatchObject({ ownerUid: 'g:grace' });
+      expect(await store.getGameAccess('same-title-2')).toMatchObject({ ownerUid: 'g:ada' });
+    });
+
+    it('hands an erased owners games to the platform', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'orbital-dogfight');
+
+      await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+
+      const record = await store.getGameAccess('orbital-dogfight');
+      expect(record).toMatchObject({ ownerUid: DELETED_ACCOUNT_UID, memberUids: [DELETED_ACCOUNT_UID] });
+      expect(record!.accessRevision).toBe(2);
+      expect((await resolveGameAccess(store, 'orbital-dogfight')).owner).toEqual({
+        kind: 'platform',
+        reason: 'owner_deleted',
+      });
+      expect(await store.listGameAccessByMember('g:ada')).toEqual([]);
+    });
+
+    it('leaves another creators game untouched by an erasure', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'orbital-dogfight');
+      await submit(store, 2, 'g:grace', 'tide-pool');
+
+      await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+
+      expect(await store.getGameAccess('tide-pool')).toMatchObject({ ownerUid: 'g:grace', accessRevision: 1 });
+    });
+
+    it('leaves a record settlement did not write alone', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'orbital-dogfight');
+      await store.deleteAccountIdentity('g:ada', new Date().toISOString());
+
+      await store.recordSettledOwner('orbital-dogfight', 'g:grace', new Date().toISOString());
+
+      expect(await store.getGameAccess('orbital-dogfight')).toMatchObject({
+        ownerUid: DELETED_ACCOUNT_UID,
+        accessRevision: 2,
+      });
+    });
+
+    it('lists every named game a job claimed, drafts included', async () => {
+      const store = makeStore();
+      await submit(store, 1, 'g:ada', 'unpublished-draft');
+
+      expect(await store.listSubmissionSlugs()).toEqual(['unpublished-draft']);
+    });
+  });
+}
