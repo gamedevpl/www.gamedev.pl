@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { catalogEntryFromSpec, parseGameMedia, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import { SnapshotUnavailableError, type GameSnapshotReader } from './game-snapshot.js';
-import { mediaUrlTtlSeconds, type MediaUrlSigner } from '../delivery/media-url-signer.js';
+import { mediaUrlPolicy, redirectMaxAge, type MediaUrlSigner } from '../delivery/media-url-signer.js';
 import {
   createMintBudgetState,
   recordMint,
@@ -224,11 +224,11 @@ export async function registerCatalogRoutes(
     }
 
     try {
-      const ttlSeconds = mediaUrlTtlSeconds(filename);
-      const signed = await signer.urlFor(object, ttlSeconds);
+      const policy = mediaUrlPolicy(filename);
+      const signed = await signer.urlFor(object, policy.ttlSeconds, policy.anchorSeconds);
       if (!signed) return false;
-      // Half-life, so a cached redirect never outlives the URL in it.
-      reply.header('Cache-Control', `public, max-age=${Math.floor(ttlSeconds / 2)}`).redirect(signed, 302);
+      // Never past the roll that replaces this URL.
+      reply.header('Cache-Control', `public, max-age=${redirectMaxAge(policy, now())}`).redirect(signed, 302);
       return true;
     } catch (error) {
       // Signing is an optimisation; a failure must cost money, not pictures.

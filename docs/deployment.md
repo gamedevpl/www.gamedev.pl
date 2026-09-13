@@ -466,13 +466,36 @@ the way an inline read does.
 the reason a switch was not worth its own variable: the failure mode it would guard
 against is already handled in code, per request, without anyone having to notice.
 
-Redirects carry `Cache-Control: public, max-age=10800` — half the URL's life, so a cached
-redirect never outlives what it points at. `public`, and the TTL six hours rather than
-fifteen minutes, because the alternative was worse than the risk it avoided: a short
-private redirect made every repeat catalog view re-download `gameplay.mp4` from Cloud
-Storage under a new query string, which no cache can reuse. The files are already
-reachable without a session, so treating each screenshot as a short-lived credential
-bought nothing and cost bandwidth.
+### Anchored image URLs
+
+A V4 signature is a pure function of the object, the signing instant and the expiry. For
+a long time we passed the current instant, so **every mint produced a different URL** —
+and a URL is a cache key. Two visitors asking for the same screenshot got two keys, one
+visitor across the six-hour re-sign boundary got two keys, and nothing downstream could
+share a byte. That, not the snapshot id in the object path, was what made repeat views
+re-download from Cloud Storage; the public URL (`/api/games/<slug>/media/<file>`) has
+never contained a snapshot id at all.
+
+Image URLs are now **anchored**: the signing instant is quantised to the start of the
+current 24-hour window (`MEDIA_URL_ANCHOR_SECONDS`), so every visitor served anywhere in
+that window, by any instance, receives the byte-identical URL. They are signed for two
+windows, so a URL minted in the last second of one still has a full window to live and a
+roll never strands a redirect already in someone's cache.
+
+The redirect's own `Cache-Control: public, max-age=<seconds until the roll>` follows from
+that: caching it past the roll would keep sending visitors to the previous window's URL —
+still valid, but a cache entry nobody else shares, which is the churn anchoring exists to
+remove.
+
+**Video is deliberately left unanchored** and keeps its 30-minute TTL and half-life
+redirect. It is the largest object we hand out and a live link is pullable by anyone; an
+anchored video URL would be both longer-lived and shareable, which is the opposite of
+what that TTL is for.
+
+The trade is leak duration. An image URL that escapes is now good for up to 48 hours
+instead of 6. These are unauthenticated screenshots reachable without a session, so the
+URL was never a credential — but it is the reason the same treatment is not extended to
+video, and the reason the window is a day rather than the seven days V4 allows.
 
 To put media back on the origin, revert the change — there is no variable to unset.
 

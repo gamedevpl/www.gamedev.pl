@@ -3,7 +3,12 @@ import {
   createMediaUrlSigner,
   createMediaUrlSignerFromEnv,
   createStoreMediaUrlSignerFromEnv,
+  MEDIA_URL_ANCHOR_SECONDS,
   MEDIA_URL_TTL_SECONDS,
+  MEDIA_VIDEO_URL_TTL_SECONDS,
+  mediaRedirectMaxAgeSeconds,
+  mediaUrlPolicy,
+  anchorStart,
 } from './media-url-signer.js';
 
 // Fixed, not the constant: these cases test the reuse window.
@@ -131,5 +136,106 @@ describe('environment wiring', () => {
   it('signs store media against the store bucket', () => {
     expect(createStoreMediaUrlSignerFromEnv({ GAMES_STORE_BUCKET: 'gamedevpl-games-store' })).not.toBeNull();
     expect(createStoreMediaUrlSignerFromEnv({})).toBeNull();
+  });
+});
+
+// The point of anchoring: two instances, two visitors, one cache entry.
+describe('anchored image URLs', () => {
+  function instanceAt(clock: () => number) {
+    return createMediaUrlSigner({
+      now: clock,
+      store: {
+        objectExists: async () => true,
+        // Mirrors what the real signer does: the instant is the whole signature.
+        signReadUrl: async (name: string, ttl?: number, signedAtMs?: number) => `url:${name}:${ttl}:${signedAtMs}`,
+      },
+    });
+  }
+
+  const policy = mediaUrlPolicy('opening.png');
+  const windowStart = anchorStart(NOW, policy.anchorSeconds);
+
+  it('hands the same URL to a visitor 9 hours later on a different instance', async () => {
+    const early = await instanceAt(() => windowStart + 60_000).urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds);
+    const late = await instanceAt(() => windowStart + 9 * 3_600_000).urlFor(
+      'm/opening.png',
+      policy.ttlSeconds,
+      policy.anchorSeconds,
+    );
+
+    expect(late).toBe(early);
+  });
+
+  it('hands a different URL once the window rolls', async () => {
+    const before = await instanceAt(() => windowStart + 1_000).urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds);
+    const after = await instanceAt(() => windowStart + policy.anchorSeconds * 1000 + 1_000).urlFor(
+      'm/opening.png',
+      policy.ttlSeconds,
+      policy.anchorSeconds,
+    );
+
+    expect(after).not.toBe(before);
+  });
+
+  // Stale redirects still point at the previous window's URL.
+  it('signs for longer than one window, so a roll never strands a cached redirect', () => {
+    expect(policy.ttlSeconds).toBeGreaterThanOrEqual(2 * policy.anchorSeconds);
+  });
+
+  it('re-signs across a roll even on one long-lived instance', async () => {
+    let clock = windowStart + 1_000;
+    const signer = instanceAt(() => clock);
+    const before = await signer.urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds);
+    clock += policy.anchorSeconds * 1000;
+
+    expect(await signer.urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds)).not.toBe(before);
+  });
+});
+
+// Video is the largest object we hand out.
+describe('video URLs', () => {
+  it('are left unanchored, so they stay short-lived and unshareable', () => {
+    const policy = mediaUrlPolicy('gameplay.mp4');
+
+    expect(policy.anchorSeconds).toBe(0);
+    expect(policy.ttlSeconds).toBe(MEDIA_VIDEO_URL_TTL_SECONDS);
+  });
+
+  it('mint a fresh URL for each viewer', async () => {
+    let clock = NOW;
+    const signer = createMediaUrlSigner({
+      now: () => clock,
+      store: {
+        objectExists: async () => true,
+        signReadUrl: async (name: string, ttl?: number, signedAtMs?: number) => `url:${name}:${signedAtMs ?? clock}`,
+      },
+    });
+    const policy = mediaUrlPolicy('gameplay.mp4');
+    const first = await signer.urlFor('m/gameplay.mp4', policy.ttlSeconds, policy.anchorSeconds);
+    clock += (policy.ttlSeconds * 1000) / 2 + 1_000;
+
+    expect(await signer.urlFor('m/gameplay.mp4', policy.ttlSeconds, policy.anchorSeconds)).not.toBe(first);
+  });
+});
+
+describe('how long the redirect may be cached', () => {
+  it('expires exactly when the anchor rolls, not a second later', () => {
+    const anchor = MEDIA_URL_ANCHOR_SECONDS;
+    const start = anchorStart(NOW, anchor);
+
+    expect(mediaRedirectMaxAgeSeconds('opening.png', start)).toBe(anchor);
+    expect(mediaRedirectMaxAgeSeconds('opening.png', start + (anchor - 30) * 1000)).toBe(30);
+  });
+
+  // A cached redirect outliving its URL would 403 for everyone holding it.
+  it('never outlives the URL it carries', () => {
+    for (const filename of ['opening.png', 'gameplay.mp4']) {
+      const policy = mediaUrlPolicy(filename);
+      expect(mediaRedirectMaxAgeSeconds(filename, NOW)).toBeLessThanOrEqual(policy.ttlSeconds);
+    }
+  });
+
+  it('keeps video on its half-life, which anchoring does not touch', () => {
+    expect(mediaRedirectMaxAgeSeconds('gameplay.mp4', NOW)).toBe(MEDIA_VIDEO_URL_TTL_SECONDS / 2);
   });
 });

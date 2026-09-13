@@ -60,3 +60,31 @@ describe('createGcsObjectStore', () => {
     expect(calls.some((c) => !c.includes('alt=media') && c.includes('kits'))).toBe(true);
   });
 });
+
+// Fakes elsewhere assume this; only the real signer can prove it.
+describe('a V4 signature at a fixed instant', () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const signBlob = async (stringToSign: string) =>
+    cryptoSign('RSA-SHA256', Buffer.from(stringToSign, 'utf8'), createPrivateKey(pem)).toString('base64');
+
+  const at = (nowMs: number) =>
+    signGcsReadUrl({
+      bucket: 'gamedevpl-games-snapshots',
+      object: 'snapshots/s1/media/airtime/opening.png',
+      expiresSeconds: 172800,
+      now: () => nowMs,
+      serviceAccountEmail: 'runtime@gamedevpl.iam.gserviceaccount.com',
+      signBlob,
+    });
+
+  const anchor = Date.parse('2026-09-11T00:00:00.000Z');
+
+  it('is byte-identical, so two instances hand out one cache entry', async () => {
+    expect(await at(anchor)).toBe(await at(anchor));
+  });
+
+  it('differs at the next instant, which is what anchoring exists to remove', async () => {
+    expect(await at(anchor + 1_000)).not.toBe(await at(anchor));
+  });
+});
