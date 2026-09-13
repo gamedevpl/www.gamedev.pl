@@ -1,9 +1,17 @@
+import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
+import { canClaimManualRound } from './manual-round-claim.js';
+import { assertRecoveryBinding } from './bind-submission-slug.js';
+import type { PublicationStore } from './publication.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import type { LocalActivity } from '@gamedevpl/contract';
 import type { SubmissionRecord } from '../records/submission.js';
 import type { SubmissionStore } from './submission.js';
 export class InMemorySubmissionStore implements SubmissionStore {
-  constructor(private submissions: Map<number, SubmissionRecord>) {}
+  private recoveryAdmissions = new Map<string, { nonce: string; until: number }>();
+  constructor(
+    private submissions: Map<number, SubmissionRecord>,
+    private publication?: Pick<PublicationStore, 'getPublication'>,
+  ) {}
 
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
     const createdAt = new Date().toISOString();
@@ -47,7 +55,93 @@ export class InMemorySubmissionStore implements SubmissionStore {
     return true;
   }
 
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
+  async claimManualRoundSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number,
+    admissionNonce?: string,
+  ): Promise<boolean> {
+    const publication = await this.publication?.getPublication(slug);
+    const target = this.submissions.get(jobId);
+    if (
+      !target ||
+      !permitsRecoveryClaim(this.recoveryAdmissions.get(slug), admissionNonce) ||
+      !canClaimManualRound(
+        target,
+        [...this.submissions.values()].filter((r) => r.slug === slug),
+        sourceJobId,
+        publication?.state,
+      )
+    )
+      return false;
+    this.submissions.set(jobId, { ...target, slug });
+    return true;
+  }
+
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    if ((this.recoveryAdmissions.get(slug)?.until ?? 0) > now) return false;
+    this.recoveryAdmissions.set(slug, { nonce, until: now + 15 * 60_000 });
+    return true;
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    if (this.recoveryAdmissions.get(slug)?.nonce === nonce) this.recoveryAdmissions.delete(slug);
+  }
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
+  ): Promise<boolean> {
+    const publication = await this.publication?.getPublication(slug);
+    if (!permitsRecoveryClaim(this.recoveryAdmissions.get(slug), recovery?.admissionNonce)) return false;
+    const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+    if (publication && !(sourceJobId !== null && archived)) return false;
+    const target = this.submissions.get(jobId);
+    const records = [...this.submissions.values()].filter((r) => r.slug === slug);
+    const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+    if (!target || target.slug) return false;
+    if (
+      sourceJobId === null
+        ? records.length > 0
+        : !holder ||
+          holder.jobId !== sourceJobId ||
+          holder.ownerUid !== target.ownerUid ||
+          (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
+            !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
+          holder.moderationBlockedAt
+    )
+      return false;
+    this.submissions.set(jobId, {
+      ...target,
+      slug,
+      ...(recovery
+        ? {
+            recoveryKey: recovery.key,
+            spec: recovery.spec,
+            qa: [],
+            locale: recovery.locale,
+            builder: 'self' as const,
+            state: 'queued' as const,
+            stateSince: new Date().toISOString(),
+            transitions: [
+              {
+                to: 'queued' as const,
+                at: new Date().toISOString(),
+                by: 'creator' as const,
+                reason: 'checkout_recovered',
+              },
+            ],
+          }
+        : {}),
+    });
+    return true;
+  }
+
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+    const holder = [...this.submissions.values()]
+      .filter((r) => r.slug === slug)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+    assertRecoveryBinding(jobId, holder, this.recoveryAdmissions.get(slug), admissionNonce);
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, slug });
   }

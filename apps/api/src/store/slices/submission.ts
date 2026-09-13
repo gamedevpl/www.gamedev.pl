@@ -1,10 +1,22 @@
+import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
+import { bindSubmissionSlug } from './bind-submission-slug.js';
 import type { LocalActivity } from '@gamedevpl/contract';
+import { claimManualRoundSlug } from './manual-round-claim.js';
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { isRoundOpen } from '../../platform/sweep-scope.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
+  claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number, admissionNonce?: string): Promise<boolean>;
+  beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
+  finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
+  claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
+  ): Promise<boolean>;
   setLocalActivity(jobId: number, activity: LocalActivity, start: boolean): Promise<boolean>;
   createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
 
@@ -16,7 +28,7 @@ export interface SubmissionStore {
   setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void>;
 
   // Records the game directory a submission is building, once it is known.
-  setSubmissionSlug(jobId: number, slug: string): Promise<void>;
+  setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void>;
 
   // Updates the shelf/studio/notification name -- delivery adopts the SPEC title.
   setSubmissionTitle(jobId: number, title: string): Promise<void>;
@@ -124,8 +136,82 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     });
   }
 
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    await this.ref(jobId).set({ slug }, { merge: true });
+  async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number, nonce?: string): Promise<boolean> {
+    return claimManualRoundSlug(this.db, jobId, slug, sourceJobId, nonce);
+  }
+
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if ((snap.data()?.recoveryAdmission?.until ?? 0) > now) return false;
+      tx.set(ref, { recoveryAdmission: { nonce, until: now + 15 * 60_000 } }, { merge: true });
+      return true;
+    });
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    const ref = this.db.collection('games').doc(slug);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.data()?.recoveryAdmission?.nonce === nonce) tx.update(ref, { recoveryAdmission: FieldValue.delete() });
+    });
+  }
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
+  ): Promise<boolean> {
+    return this.db.runTransaction(async (tx) => {
+      const target = await tx.get(this.ref(jobId));
+      const rows = await tx.get(this.db.collection('submissions').where('slug', '==', slug));
+      const game = await tx.get(this.db.collection('games').doc(slug));
+      if (!permitsRecoveryClaim(game.data()?.recoveryAdmission, recovery?.admissionNonce)) return false;
+      const publication = game.data()?.publication;
+      const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+      if (publication && !(sourceJobId !== null && archived)) return false;
+      const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
+      const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+      if (!target.exists || target.data()?.slug) return false;
+      if (
+        sourceJobId === null
+          ? records.length > 0
+          : !holder ||
+            holder.jobId !== sourceJobId ||
+            holder.ownerUid !== target.data()?.ownerUid ||
+            (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
+              !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
+            holder.moderationBlockedAt
+      )
+        return false;
+      tx.set(this.db.collection('games').doc(slug), { slugClaimJobId: jobId }, { merge: true });
+      tx.update(this.ref(jobId), {
+        slug,
+        ...(recovery
+          ? {
+              recoveryKey: recovery.key,
+              spec: recovery.spec,
+              qa: [],
+              locale: recovery.locale,
+              builder: 'self' as const,
+              state: 'queued' as const,
+              stateSince: new Date().toISOString(),
+              transitions: [
+                {
+                  to: 'queued' as const,
+                  at: new Date().toISOString(),
+                  by: 'creator' as const,
+                  reason: 'checkout_recovered',
+                },
+              ],
+            }
+          : {}),
+      });
+      return true;
+    });
+  }
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+    await bindSubmissionSlug(this.db, jobId, slug, admissionNonce);
   }
 
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
@@ -133,7 +219,6 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    // Last write wins -- the newest delivery is worth previewing.
     await this.ref(jobId).set({ deliveredVersion: version, previewVersion: version }, { merge: true });
   }
 
@@ -142,7 +227,6 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {
-    // Transactional -- a lost increment grants an unowed agent session.
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);

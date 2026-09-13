@@ -3,6 +3,7 @@ import { FirestoreStore, InMemoryStore, DELETED_ACCOUNT_UID, type Store } from '
 import { fakeFirestore } from '../store/fake-firestore.js';
 import { classifyOwnerUid, gameAccessMatchesDerived, ownsGame, resolveGameAccess } from './game-access-resolve.js';
 import { creatorOwnsSlug, settleSlugClaim } from './slug-ownership.js';
+import { claimAvailableSlug } from './atomic-slug-claim.js';
 import { resolveOwnerOfRecord } from '../community/owner-of-record.js';
 
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -162,6 +163,20 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.deleteAccountIdentity('g:ada', new Date().toISOString());
 
       expect(await store.getGameAccess('tide-pool')).toMatchObject({ ownerUid: 'g:grace', accessRevision: 1 });
+    });
+
+    it('records the winner of an atomic claim, and only the winner', async () => {
+      const store = makeStore();
+      await store.createSubmission(1, 'g:ada', 'Same title');
+      await store.createSubmission(2, 'g:grace', 'Same title');
+
+      const adaSlug = await claimAvailableSlug(store, 1, 'same-title', 'Same title', async () => false);
+      const graceSlug = await claimAvailableSlug(store, 2, 'same-title', 'Same title', async () => false);
+
+      expect(adaSlug).toBe('same-title');
+      expect(graceSlug).not.toBe('same-title');
+      expect(await store.getGameAccess('same-title')).toMatchObject({ ownerUid: 'g:ada', settledJobId: 1 });
+      expect(await store.getGameAccess(graceSlug!)).toMatchObject({ ownerUid: 'g:grace', settledJobId: 2 });
     });
 
     it('does not let a paused loser overwrite the job that won the name', async () => {

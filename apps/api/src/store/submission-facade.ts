@@ -6,6 +6,20 @@ export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
   protected abstract submissionQueryStore: SubmissionQueryStore;
+  async claimManualRoundSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number,
+    admissionNonce?: string,
+  ): Promise<boolean> {
+    return this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
+  }
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    return this.submissionStore.beginCheckoutRecovery(slug, nonce, now);
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    return this.submissionStore.finishCheckoutRecovery(slug, nonce);
+  }
   async setLocalActivity(
     jobId: number,
     activity: import('@gamedevpl/contract').LocalActivity,
@@ -13,11 +27,26 @@ export abstract class SubmissionFacade {
   ): Promise<boolean> {
     return this.submissionStore.setLocalActivity(jobId, activity, start);
   }
+  // An atomic claim settles authority, so it writes the record.
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
+  ): Promise<boolean> {
+    const won = await this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
+    if (!won) return false;
+    const job = await this.submissionStore.getSubmission(jobId);
+    if (job?.ownerUid)
+      await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, new Date().toISOString());
+    return true;
+  }
+
   // Access record created here so no slug caller forgets it.
 
   // Only while the name is uncontested; a contested one waits for settleSlugClaim.
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    await this.submissionStore.setSubmissionSlug(jobId, slug);
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+    await this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
     const job = await this.submissionStore.getSubmission(jobId);
     if (!job?.ownerUid) return;
     const claimants = await this.submissionQueryStore.listSubmissionsBySlug(slug);

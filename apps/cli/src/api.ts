@@ -19,10 +19,17 @@ export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv):
 }
 
 function throwForStatus(res: Response, errBody: { error?: string; message?: string }): never {
-  if (res.status === 422 && errBody.error === 'content_rejected') throw moderationRefusal();
-  if (res.status === 401) throw credentialExpired();
-  if (res.status === 404) throw new CliError('not found', EXIT_REFUSED);
-  throw new CliError(errBody.message ?? errBody.error ?? `request failed (${res.status})`, EXIT_REFUSED);
+  const error =
+    res.status === 422 && errBody.error === 'content_rejected'
+      ? moderationRefusal()
+      : res.status === 401
+        ? credentialExpired()
+        : new CliError(
+            res.status === 404 ? 'not found' : (errBody.message ?? errBody.error ?? `request failed (${res.status})`),
+            EXIT_REFUSED,
+          );
+  error.apiCode = errBody.error;
+  throw error;
 }
 
 export function createApi(input: {

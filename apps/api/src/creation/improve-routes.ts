@@ -41,6 +41,7 @@ export interface ImproveRoutesOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     requestedBy?: 'creator' | 'agent';
+    beforeDispatch?: () => Promise<boolean>;
   }) => Promise<ImprovementRoundOutcome>;
 }
 
@@ -66,8 +67,6 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
   // Creator-requested improvement on an already-published game.
 
   // The draft path returns 409 once a game ships; this succeeds it.
-
-  // A new games-repo issue amends the live SPEC, fenced as data.
 
   // Ownership is store-checked: a shared status link is not enough.
 
@@ -229,21 +228,21 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         }
       }
 
-      const quota = await store.checkAndIncrementQuota(
-        request.user!.uid,
-        dateStr,
-        dailyImprovementQuota,
-        'improvements',
-      );
-      if (!quota.allowed) {
-        if (quota.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily improvement quota exceeded' });
-      }
-
       const started = await startImprovementRound({
         jobId,
+        beforeDispatch: async () => {
+          const quota = await store.checkAndIncrementQuota(
+            request.user!.uid,
+            dateStr,
+            dailyImprovementQuota,
+            'improvements',
+          );
+          if (quota.allowed) return true;
+          reply
+            .status(quota.tier === 'blocked' ? 403 : 429)
+            .send({ error: quota.tier === 'blocked' ? 'account is blocked' : 'daily improvement quota exceeded' });
+          return false;
+        },
         text: inboxText,
         title: sanitizedTitle,
         // Their own words, so the new round's thread opens with them.
@@ -254,6 +253,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         // A new job, so builder choice needs no active-round lock.
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
       });
+      if (reply.sent) return reply;
       if (!started) {
         return reply.status(502).send({ error: 'failed to submit improvement request' });
       }

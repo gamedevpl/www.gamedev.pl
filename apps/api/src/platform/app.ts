@@ -957,7 +957,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       );
       return applied.ok ? { number: applied.pr.number, url: applied.pr.url } : null;
     },
-    adoptIntoJob: async ({ proposal, ownerUid }) => {
+    adoptIntoJob: async ({ proposal, ownerUid, admissionNonce }) => {
       const source = await store.getSubmissionBySlug(proposal.targetSlug);
       const at = new Date().toISOString();
       const jobId = await store.allocateJobId();
@@ -969,7 +969,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         source?.title ?? proposal.targetSlug,
       );
       if (source?.locale) await store.setSubmissionLocale(jobId, source.locale);
-      await store.setSubmissionSlug(jobId, proposal.targetSlug);
+      await store.setSubmissionSlug(jobId, proposal.targetSlug, admissionNonce);
       await store.recordJobTransition(jobId, { to: 'queued', at, by: 'creator', reason: 'proposal_accepted' });
       await store.recordJobTransition(jobId, { to: 'building', at, by: 'creator', reason: 'proposal_accepted' });
       await store.setSubmissionDeliveredVersion(jobId, proposal.version!);
