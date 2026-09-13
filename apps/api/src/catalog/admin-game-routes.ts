@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { parseSpecTitle } from './github-client.js';
 import { startHealthCheck, type HealthGateTrigger } from './game-health.js';
 import { runSlugBackfill, type SlugClaimProbe } from './slug-backfill.js';
+import { runGameAccessBackfill } from '../platform/game-access-backfill.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
@@ -96,6 +97,29 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     const result = await runSlugBackfill({ store, isSlugClaimed, dryRun, confirmSlugClaim });
     const { named } = result;
     request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
+    return reply.send(result);
+  });
+
+  // Canonical access records for older games. Dry run first.
+  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/game-access-backfill', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+
+    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
+    const slugs = await store.listGameSlugs();
+    const result = await runGameAccessBackfill({ store, slugs, dryRun });
+    request.log.info(
+      {
+        dryRun,
+        scanned: result.scanned,
+        created: result.created,
+        createdPlatform: result.createdPlatform,
+        alreadyRecorded: result.alreadyRecorded,
+        diverged: result.diverged.length,
+        quarantined: result.quarantined.length,
+      },
+      'game access backfill complete',
+    );
     return reply.send(result);
   });
 

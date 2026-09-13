@@ -64,12 +64,16 @@ export function ownsGame(access: ResolvedGameAccess, uid: string): boolean {
   return access.owner.kind === 'creator' && access.owner.uid === uid;
 }
 
+// Same authority, by kind and by uid where there is one.
+export function sameOwner(a: GameOwner, b: GameOwner): boolean {
+  if (a.kind !== b.kind) return false;
+  return a.kind === 'creator' && b.kind === 'creator' ? a.uid === b.uid : true;
+}
+
 // The migration's dry-run gate.
 export async function gameAccessMatchesDerived(store: GameAccessResolveStore, slug: string): Promise<boolean> {
   const record = await store.getGameAccess(slug);
   if (!record) return true;
   const derived = deriveOwnerFromSubmissions(await store.listSubmissionsBySlug(slug));
-  const canonical = classifyOwnerUid(record.ownerUid);
-  if (canonical.kind !== derived.kind) return false;
-  return canonical.kind === 'creator' && derived.kind === 'creator' ? canonical.uid === derived.uid : true;
+  return sameOwner(classifyOwnerUid(record.ownerUid), derived);
 }
