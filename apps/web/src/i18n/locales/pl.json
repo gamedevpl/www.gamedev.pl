@@ -236,7 +236,10 @@
       "inputLabel": "Komenda agenta",
       "shotAlt": "Klatka gry w obecnym stanie, uchwycona przy zatrzymanym czasie",
       "planLabel": "Plan agenta",
-      "runPlan": "Uruchom plan"
+      "runPlan": "Uruchom plan",
+      "policyLabel": "Polityka agenta",
+      "runPolicy": "Uruchom politykę",
+      "policyRunning": "Działa…"
     }
   },
   "catalog": {

@@ -71,6 +71,16 @@ export const AGENT_PLAY_BRIDGE = `(function(){
       try{h.step(dt,{present:true});}catch(err){agentNote('error',String((err&&err.message)||err));break;}
     }
   }
+  var AGENT_KEY_ALIASES={left:{key:'ArrowLeft',code:'ArrowLeft'},right:{key:'ArrowRight',code:'ArrowRight'},
+    up:{key:'ArrowUp',code:'ArrowUp'},down:{key:'ArrowDown',code:'ArrowDown'},space:{key:' ',code:'Space'},
+    enter:{key:'Enter',code:'Enter'},escape:{key:'Escape',code:'Escape'}};
+  function agentResolveKey(token){
+    var raw=String(token==null?'':token);
+    var lower=raw.toLowerCase();
+    if(Object.prototype.hasOwnProperty.call(AGENT_KEY_ALIASES,lower))return AGENT_KEY_ALIASES[lower];
+    if(raw.length===1)return {key:raw.toLowerCase(),code:'Key'+raw.toUpperCase()};
+    return {key:raw,code:raw};
+  }
   function agentKey(type,key,code){
     var target=agentCanvas()||window,ev;
     try{ev=new KeyboardEvent(type,{key:key,code:code,bubbles:true,cancelable:true});}
@@ -220,8 +230,161 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     agentNote('error','unsupported command');
     agentState('error');
   }
+
+  // --- policy scripts -------------------------------------------------------
+  // A declarative plan cannot branch, so playing anything real needs a policy the
+  // reviewer writes. It runs here, in the frame, because a decision per frame costs
+  // microseconds here and a postMessage round trip from the host.
+  var AGENT_LOG_LINES=400,AGENT_WATCH_POINTS=400,AGENT_WALL_MS=20000;
+  function agentPolicyApi(budget,logs,watches,shots){
+    var used=0,startedAt=Date.now();
+    function note(kind,args){
+      if(logs.length>=AGENT_LOG_LINES)return;
+      var parts=[];
+      for(var i=0;i<args.length;i++){
+        var value=args[i];
+        try{parts.push(typeof value==='string'?value:JSON.stringify(value));}
+        catch(err){parts.push(String(value));}
+      }
+      logs.push({frame:agentFrameNo(),kind:kind,text:parts.join(' ').slice(0,400)});
+    }
+    function spend(count){
+      used+=count;
+      if(used>budget)throw new Error('the policy used its whole budget of '+budget+' frames');
+      if(Date.now()-startedAt>AGENT_WALL_MS)throw new Error('the policy ran longer than '+AGENT_WALL_MS+'ms');
+    }
+    var api={
+      // Time. Drawing is off by default: simulating without it is far cheaper,
+      // and nothing needs a painted frame until something looks at one.
+      step:function(count,draw){
+        var n=Math.max(1,Math.floor(Number(count)||1));
+        spend(n);
+        var h=agentHarness();
+        if(!h||typeof h.step!=='function')throw new Error('this game exposes no harness');
+        for(var i=0;i<n;i++){
+          if(agentTilt&&typeof h.injectSensing==='function'){try{h.injectSensing({tilt:agentTilt});}catch(err){}}
+          h.step(1/agentFps,{present:draw===true});
+        }
+        return api.state();
+      },
+      paint:function(){var h=agentHarness();if(h&&typeof h.paint==='function')h.paint();},
+      frame:function(){return agentFrameNo();},
+      framesUsed:function(){return used;},
+      framesLeft:function(){return Math.max(0,budget-used);},
+      // What the game says about itself, redacted the same way look is.
+      state:function(){return agentSnapshot();},
+      observation:function(){
+        var raw=agentSnapshot().observation;
+        if(typeof raw!=='string')return null;
+        try{return JSON.parse(raw);}catch(err){return raw;}
+      },
+      ui:function(){return agentUi();},
+      // Input, same verbs the command box has.
+      press:function(key,frames,draw){
+        var resolved=agentResolveKey(key);
+        agentKey('keydown',resolved.key,resolved.code);
+        api.step(frames||1,draw);
+        agentKey('keyup',resolved.key,resolved.code);
+        return api.state();
+      },
+      tap:function(key){return api.press(key,1);},
+      down:function(key){var r=agentResolveKey(key);agentKey('keydown',r.key,r.code);},
+      up:function(key){var r=agentResolveKey(key);agentKey('keyup',r.key,r.code);},
+      click:function(x,y){
+        agentPointer('pointerdown',x,y,1,true);
+        agentPointer('pointerup',x,y,0,false);
+        return api.step(1);
+      },
+      move:function(x,y){agentPointer('pointermove',x,y,0,false);},
+      drag:function(x1,y1,x2,y2,frames){
+        var n=Math.max(1,Math.floor(Number(frames)||1));
+        agentPointer('pointerdown',x1,y1,1,false);
+        for(var i=1;i<=n;i++){
+          var t=i/n;
+          agentPointer('pointermove',x1+(x2-x1)*t,y1+(y2-y1)*t,1,false);
+          api.step(1);
+        }
+        agentPointer('pointerup',x2,y2,0,false);
+        return api.state();
+      },
+      tilt:function(x,y){agentTilt={x:Number(x)||0,y:Number(y)||0};},
+      restart:function(){var h=agentHarness();return !!(h&&typeof h.restart==='function'&&h.restart());},
+      // Debugging, which is the point: a run you cannot see into teaches nothing.
+      log:function(){note('log',arguments);},
+      // A named series sampled over the run — a trajectory, not a snapshot.
+      watch:function(name,value){
+        if(watches.length>=AGENT_WATCH_POINTS)return;
+        var reading;
+        try{reading=typeof value==='function'?value():value;}catch(err){reading='error: '+String(err&&err.message||err);}
+        watches.push({frame:agentFrameNo(),name:String(name).slice(0,40),value:reading});
+      },
+      // A painted frame, kept for the answer. Paints first: stepping does not draw.
+      capture:function(name){
+        api.paint();
+        shots.push({name:String(name||('frame '+agentFrameNo())).slice(0,60),frame:agentFrameNo(),png:capturePng()});
+      },
+      // The game's own globals, for a policy that needs more than the snapshot.
+      game:function(){return window.GameKit;},
+      canvas:function(){return agentCanvas();}
+    };
+    return api;
+  }
+  function agentRunPolicy(code,budget){
+    var logs=[],watches=[],shots=[];
+    var api=agentPolicyApi(Math.max(1,Math.min(Number(budget)||3600,20000)),logs,watches,shots);
+    var startedAt=Date.now();
+    var outcome='completed',message=null;
+    // Console inside the frame is invisible to the host, so borrow it for the run.
+    var realConsole={log:console.log,warn:console.warn,error:console.error};
+    function relay(kind){return function(){api.log.apply(null,arguments);void kind;};}
+    try{
+      console.log=relay('log');console.warn=relay('warn');console.error=relay('error');
+      window.__AGENT__=api;
+      window.playAgent=undefined;
+      // An inline script first: repo-lane documents and API-assembled ones are served
+      // with different CSP, and this is the path that runs under both.
+      var el=document.createElement('script');
+      el.textContent=code;
+      el.setAttribute('data-agent-policy','1');
+      document.documentElement.appendChild(el);
+      el.remove();
+      // Where script elements do not execute, indirect eval still might; where neither
+      // does, the policy simply never defined anything and the message below says so.
+      if(typeof window.playAgent!=='function'&&typeof window.__AGENT_POLICY__!=='function'){
+        try{(0,eval)(code);}catch(err){}
+      }
+      if(typeof window.playAgent==='function'){
+        window.playAgent(api);
+      }else if(typeof window.__AGENT_POLICY__==='function'){
+        window.__AGENT_POLICY__(api);
+      }else{
+        throw new Error('the policy defined no playAgent(agent) function');
+      }
+    }catch(err){
+      outcome='failed';
+      message=String((err&&err.stack)||(err&&err.message)||err).slice(0,600);
+    }finally{
+      console.log=realConsole.log;console.warn=realConsole.warn;console.error=realConsole.error;
+      try{delete window.__AGENT__;}catch(err){window.__AGENT__=undefined;}
+    }
+    post({
+      type:'agent:policy-result',
+      outcome:outcome,
+      message:message,
+      frames:api.framesUsed(),
+      ms:Date.now()-startedAt,
+      logs:logs,
+      watches:watches,
+      shots:shots,
+      snapshot:agentSnapshot(),
+      hiddenFields:agentHidden()
+    });
+    agentState('policy');
+  }
+
   function handleAgentMessage(m){
     if(m.type==='agent:enable'){agentEnable(m.fps);return;}
+    if(m.type==='agent:policy'){if(!agentOn)agentEnable();agentRunPolicy(String(m.code||''),m.budget);return;}
     if(m.type==='agent:disable'){agentDisable();return;}
     if(m.type!=='agent:command')return;
     if(!agentOn){agentEnable();return;}

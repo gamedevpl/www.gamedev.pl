@@ -212,3 +212,7 @@
 .agent-play-plan {
   min-height: 140px;
 }
+
+.agent-play-policy-input {
+  min-height: 220px;
+}

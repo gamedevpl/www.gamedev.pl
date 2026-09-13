@@ -220,6 +220,82 @@ describe('the agent bridge, running for real', () => {
     expect(served).toContain('agent:state');
   });
 
+  // A policy is the reason this surface exists: a plan cannot branch.
+  async function runPolicy(code: string, budget = 200): Promise<Message> {
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:policy', code, budget });
+    await settle();
+    const result = lastOf(received, 'agent:policy-result');
+    if (!result) throw new Error('the policy never answered');
+    return result;
+  }
+
+  it('runs a policy and brings back what it logged', async () => {
+    const result = await runPolicy(`function playAgent(agent) {
+      agent.log('starting at', agent.frame());
+      agent.step(4);
+      agent.log('now at', agent.frame());
+    }`);
+
+    expect(result.outcome).toBe('completed');
+    expect(result.frames).toBe(4);
+    const logs = result.logs as Array<{ text: string }>;
+    expect(logs[0]!.text).toContain('starting at');
+    expect(logs[1]!.text).toContain('now at 4');
+  });
+
+  it('captures console.log from inside the frame, which the host cannot see', async () => {
+    const result = await runPolicy(`function playAgent(agent) { console.log('from console', 42); }`);
+    const logs = result.logs as Array<{ text: string }>;
+    expect(logs.some((line) => line.text.includes('from console 42'))).toBe(true);
+  });
+
+  it('keeps a named series, so a reviewer sees a trajectory and not a snapshot', async () => {
+    const result = await runPolicy(`function playAgent(agent) {
+      for (let i = 0; i < 3; i++) { agent.step(2); agent.watch('score', agent.state().score); }
+    }`);
+
+    const watches = result.watches as Array<{ name: string; value: unknown }>;
+    expect(watches).toHaveLength(3);
+    expect(watches.every((point) => point.name === 'score')).toBe(true);
+    expect(watches.map((point) => point.value)).toEqual([2, 4, 6]);
+  });
+
+  it('reports a policy that threw, with the message and where it was', async () => {
+    const result = await runPolicy(
+      `function playAgent(agent) { agent.step(1); throw new Error('no idea what to do'); }`,
+    );
+
+    expect(result.outcome).toBe('failed');
+    expect(String(result.message)).toContain('no idea what to do');
+    // The frames it did spend before breaking are still reported.
+    expect(result.frames).toBe(1);
+  });
+
+  it('stops a policy that would step forever', async () => {
+    const result = await runPolicy(`function playAgent(agent) { for (;;) agent.step(1); }`, 25);
+
+    expect(result.outcome).toBe('failed');
+    expect(String(result.message)).toContain('budget of 25 frames');
+    expect(result.frames).toBeGreaterThanOrEqual(25);
+  });
+
+  it('takes the API back off the window when the run ends', async () => {
+    await runPolicy(`function playAgent(agent) { agent.log('hi'); }`);
+    expect((window as unknown as { __AGENT__?: unknown }).__AGENT__).toBeUndefined();
+  });
+
+  it('ignores a policy message whose payload tried to pose as the sender', async () => {
+    // The envelope owns `source`; the payload field is `code`.
+    send({ type: 'agent:enable' });
+    await settle();
+    received.length = 0;
+    send({ type: 'agent:policy', source: 'function playAgent(a) { a.log("nope"); }' });
+    await settle();
+    expect(lastOf(received, 'agent:policy-result')).toBeUndefined();
+  });
+
   it('ignores agent traffic that did not come from the host', async () => {
     window.postMessage({ source: 'gdpl-player', type: 'agent:enable' }, '*');
     await settle();

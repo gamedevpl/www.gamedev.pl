@@ -1,7 +1,8 @@
 # Agent play mode — the design
 
-> Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, the plan
-> runner, the filmstrip, the panel and the entry points are built and tested. The
+> Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, policy
+> scripts, the plan runner, the filmstrip, the panel and the entry points are built and
+> tested. The
 > games-repo half (hidden fields in the document, sound as text) is not, and no telemetry
 > is emitted — reviewer traffic deliberately leaves no trace. Strategy and the decisions
 > behind all of this live in the private ops repo (`agent-play-mode-research.md`).
@@ -120,6 +121,47 @@ person from driving their own browser: `window.__GAME_HARNESS__` is GameKit's ow
 and has been in every published game since long before this mode existed. That is
 acceptable here only because nothing scored or recorded comes out of this surface — the
 gate and that decision hold each other up.
+
+## Two ways to play, and when each is right
+
+**A policy is how you play.** The reviewer writes a `playAgent(agent)` function, the page
+injects it into the game document as an inline script, and it runs there — where a decision
+costs microseconds instead of a message. It can branch, which is the whole difference: a
+plan cannot say "if the game shows an east exit, take it", and playing anything real is
+made of decisions like that.
+
+It is also where debugging lives, because a run you cannot see into teaches nothing:
+
+- `agent.log(...)` writes the transcript, and `console.log` inside the frame is captured
+  into the same place — otherwise it is invisible to the host across an opaque origin.
+- `agent.watch(name, value)` keeps a named series, so the answer shows a **trajectory**
+  rather than a final snapshot. "Did input ever move anything" is a question only a series
+  answers.
+- `agent.capture(name)` paints and keeps a frame for the filmstrip.
+- A policy that throws comes back as `failed` with its message and the frames it had spent.
+- `agent.state()`, `observation()`, `ui()`, and `game()` for the game's own globals.
+
+Bounds, because the policy runs in the page: `agent.step()` counts against a frame budget
+and throws past it, and a wall-clock cap stops a policy that steps forever. A policy that
+loops without ever stepping can still hang its own frame, which is the reviewer's own tab.
+
+**A plan is how you pin a sequence down.** The `CAPTURE.json` shape — `press`, `tap`,
+`click`, `drag`, `wait`, `repeat`, `assert`, `waitFor`, `capture` — stays for fixed
+reproductions, and it needs no injected script. It is the right tool for "this sequence
+soft-locks the game" and the wrong tool for playing.
+
+Measured against `cavern-of-words` in Chromium: a branching policy that read the game's own
+`exits` field, clicked the matching widget and reported each move ran **138 frames in 63ms
+inside the frame**. Stepping 600 frames costs 11ms without drawing and 547ms with; one
+command from the host costs 9ms in round trip. A policy deciding every frame is therefore
+about 500 times cheaper in-frame than from the host, which is why it runs there.
+
+### One trap worth knowing
+
+The bridge envelope owns the field name `source` — it is how the receiver tells our own
+messages from a stranger's. The policy payload is `code` for that reason. A first cut named
+it `source`, the envelope's tag was silently overwritten, and every policy message was
+dropped as foreign.
 
 ## The unit is an attempt, not a keypress
 

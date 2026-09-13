@@ -14,6 +14,7 @@ import {
 } from './agentPlay.js';
 import { parseAgentPlan, PlanError } from './agentPlan.js';
 import { runAgentPlan, type PlanRunResult } from './agentPlanRunner.js';
+import { POLICY_API_HELP, POLICY_EXAMPLE, runAgentPolicy, type PolicyResult } from './agentPolicy.js';
 import { useAgentPlay, type AgentLogEntry } from './useAgentPlay.js';
 import { PixelIcon } from './PixelIcon.js';
 import './agent-play.css';
@@ -48,6 +49,31 @@ function logLine(entry: AgentLogEntry): string {
   return `f${entry.frame} ${entry.kind}${entry.detail ? `: ${entry.detail}` : ''}`;
 }
 
+// The transcript: what ran, logged, and watched move.
+function describePolicyRun(result: PolicyResult): string {
+  const series = new Map<string, string[]>();
+  for (const point of result.watches) {
+    const points = series.get(point.name) ?? [];
+    points.push(`f${point.frame}=${JSON.stringify(point.value)}`);
+    series.set(point.name, points);
+  }
+  const lines = [
+    `outcome: ${result.outcome}`,
+    `frames: ${result.frames} in ${result.ms}ms`,
+    `final: ${formatSnapshotText(result.frames, result.snapshot, result.hiddenFields)}`,
+  ];
+  if (result.message) lines.push('', 'error:', result.message);
+  if (result.logs.length) {
+    lines.push('', 'transcript:');
+    for (const line of result.logs) lines.push(`  f${line.frame} ${line.text}`);
+  }
+  if (series.size) {
+    lines.push('', 'watched:');
+    for (const [name, points] of series) lines.push(`  ${name}: ${points.join(' ')}`);
+  }
+  return lines.join('\n');
+}
+
 export function AgentPlayPanel({ open, frameRef, onClose }: AgentPlayPanelProps) {
   const { t } = useTranslation();
   const { hello, state, shot, history, signals, run, clearShot } = useAgentPlay(frameRef, open);
@@ -57,10 +83,28 @@ export function AgentPlayPanel({ open, frameRef, onClose }: AgentPlayPanelProps)
   const [planError, setPlanError] = useState<string | null>(null);
   const [planResult, setPlanResult] = useState<PlanRunResult | null>(null);
   const [planProgress, setPlanProgress] = useState<string | null>(null);
+  const [policyDraft, setPolicyDraft] = useState(POLICY_EXAMPLE);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policyResult, setPolicyResult] = useState<PolicyResult | null>(null);
+  const [policyRunning, setPolicyRunning] = useState(false);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  // A policy branches, unlike a plan, and runs in-frame.
+  const runPolicy = useCallback(async () => {
+    setPolicyError(null);
+    setPolicyResult(null);
+    setPolicyRunning(true);
+    try {
+      setPolicyResult(await runAgentPolicy(frameRef.current, policyDraft));
+    } catch (error) {
+      setPolicyError(error instanceof Error ? error.message : 'the policy could not run');
+    } finally {
+      setPolicyRunning(false);
+    }
+  }, [frameRef, policyDraft]);
 
   // An attempt, not a keypress: full speed, no model in the loop.
   const runPlan = useCallback(async () => {
@@ -167,6 +211,50 @@ export function AgentPlayPanel({ open, frameRef, onClose }: AgentPlayPanelProps)
           <section className="agent-play-block">
             <h3>screenshot</h3>
             <img className="agent-play-shot" src={`data:image/png;base64,${shot}`} alt={t('player.agent.shotAlt')} />
+          </section>
+        ) : null}
+
+        <section className="agent-play-block">
+          <h3>policy</h3>
+          <textarea
+            className="agent-play-input agent-play-policy-input"
+            rows={12}
+            value={policyDraft}
+            spellCheck={false}
+            aria-label={t('player.agent.policyLabel')}
+            onChange={(event) => setPolicyDraft(event.target.value)}
+          />
+          <div className="agent-play-actions">
+            <button
+              type="button"
+              className="primary-btn agent-play-run-policy"
+              onClick={() => void runPolicy()}
+              disabled={policyRunning}
+            >
+              {policyRunning ? t('player.agent.policyRunning') : t('player.agent.runPolicy')}
+            </button>
+          </div>
+          {policyError ? <p className="agent-play-warn">{policyError}</p> : null}
+        </section>
+
+        {policyResult ? (
+          <section className="agent-play-block">
+            <h3>run</h3>
+            <pre aria-live="polite">{describePolicyRun(policyResult)}</pre>
+            {policyResult.shots.length > 0 ? (
+              <div className="agent-play-strip">
+                {policyResult.shots.map((shot, index) =>
+                  shot.png ? (
+                    <figure key={`${shot.name}-${index}`}>
+                      <img src={`data:image/png;base64,${shot.png}`} alt={`${shot.name}, frame ${shot.frame}`} />
+                      <figcaption>
+                        {shot.name} · f{shot.frame}
+                      </figcaption>
+                    </figure>
+                  ) : null,
+                )}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -281,6 +369,7 @@ export function AgentPlayPanel({ open, frameRef, onClose }: AgentPlayPanelProps)
         <details className="agent-play-guide">
           <summary>{t('player.agent.guide')}</summary>
           <pre>{AGENT_GUIDE}</pre>
+          <pre>{POLICY_API_HELP}</pre>
           <pre>{AGENT_COMMANDS.join('\n')}</pre>
           <pre>{JSON.stringify(AGENT_CAPABILITIES, null, 1)}</pre>
         </details>
