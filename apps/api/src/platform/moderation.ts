@@ -368,7 +368,7 @@ ${text}
 // Keyed by provider: a model it cannot serve dies on a 404.
 const SOTA_FALLBACK_MODELS: Record<'openai' | 'vertex', ReadonlySet<string>> = {
   openai: new Set(['gpt-5.6-luna']),
-  vertex: new Set(['gemini-3.8-flash', 'claude-sonnet-5', 'claude-opus-5']),
+  vertex: new Set(['gemini-3.8-flash']),
 };
 
 export function resolveFallbackModel(input: {

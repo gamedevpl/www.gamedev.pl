@@ -500,8 +500,8 @@ describe('checking several fields', () => {
 describe('what may stand in for the classifier', () => {
   it('accepts a peer-or-better model on the second vendor', () => {
     expect(resolveFallbackModel({ configured: undefined, provider: 'openai', hasApiKey: true })).toBe('gpt-5.6-luna');
-    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBe(
-      'claude-opus-5',
+    expect(resolveFallbackModel({ configured: 'gemini-3.8-flash', provider: 'vertex', hasApiKey: true })).toBe(
+      'gemini-3.8-flash',
     );
   });
 
@@ -514,9 +514,8 @@ describe('what may stand in for the classifier', () => {
   it('refuses a peer model the configured provider does not serve', () => {
     expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'openai', hasApiKey: true })).toBeUndefined();
     expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'vertex', hasApiKey: true })).toBeUndefined();
-    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBe(
-      'claude-opus-5',
-    );
+    // Vertex 404s Claude here; the seed providers are its way in.
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBeUndefined();
   });
 
   it('has no fallback at all without a key for the second vendor', () => {
