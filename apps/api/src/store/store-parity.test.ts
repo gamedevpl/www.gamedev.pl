@@ -352,7 +352,26 @@ describeStoreContract('proposal posting', (makeStore) => {
 
     const live = await store.getSubmission(11);
     expect(live?.dreamRun?.postedAt).toBeUndefined();
-    expect(live?.proposalPostedVersions).toEqual(['v1']);
+    expect(live?.proposalPostedAttempts).toEqual([`v1:${claim.claimedAt}`]);
+  });
+
+  it('names the attempt, so a retake for the same version answers only for itself', async () => {
+    const store = makeStore();
+    await claimed(store);
+    // The first attempt outlives its TTL; a second takes the claim.
+    const retaken = { version: 'v1', claimedAt: '2026-09-07T12:20:00.000Z' };
+    await store.claimDreamRun(11, retaken.version, retaken.claimedAt, 1);
+    await store.appendProposalMessage(11, retaken, 'Two directions.', {
+      proposal,
+      ownerUid: 'g:owner',
+      roundGeneration: 1,
+      blocked: () => false,
+    });
+
+    const attempts = (await store.getSubmission(11))?.proposalPostedAttempts;
+    expect(attempts).toEqual([`v1:${retaken.claimedAt}`]);
+    // The first attempt's shots are still its own to clean up.
+    expect(attempts).not.toContain(`v1:${claim.claimedAt}`);
   });
 
   it('leaves a finished run finished, however it ended', async () => {

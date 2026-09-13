@@ -261,9 +261,11 @@ export interface SubmissionRecord {
   roundLastGateMetricKey?: string;
   // Dream job's claim; `postedAt` is what makes it final.
   dreamRun?: { version: string; claimedAt: string; postedAt?: string; endedAt?: string };
-  /** Versions whose card is on the thread. A newer claim replaces `dreamRun` and takes
-   * its `postedAt` along, so a run that lost the answer to its own write asks this. */
-  proposalPostedVersions?: string[];
+  /** `${version}:${claimedAt}` of every attempt whose card reached the thread. A newer
+   * claim replaces `dreamRun` and takes its `postedAt` along, so an attempt that lost the
+   * answer to its own write asks this instead. Keyed by attempt, not version: a second
+   * worker posting the same version must not answer for the first one's shots. */
+  proposalPostedAttempts?: string[];
   /**
    * Creator concept text (sanitized), without the QA clarifications block.
    *

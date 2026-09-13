@@ -69,6 +69,11 @@ export interface BuildLogStore {
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
 }
 
+// Names the attempt, so another worker's card cannot answer for it.
+export function postedAttemptKey(claim: DreamClaimRef): string {
+  return `${claim.version}:${claim.claimedAt}`;
+}
+
 // This attempt holds the claim, nothing posted, delivery unchanged.
 function holdsDreamClaim(
   record: Pick<SubmissionRecord, 'dreamRun' | 'previewVersion' | 'deliveredVersion'> | undefined,
@@ -192,11 +197,11 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return null;
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
     // Stamped with the card; the list outlives the claim it stamps.
-    const postedVersions = [...new Set([...(record!.proposalPostedVersions ?? []), claim.version])];
+    const attempts = [...new Set([...(record!.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
     this.submissions.set(jobId, {
       ...record!,
       dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt },
-      proposalPostedVersions: postedVersions,
+      proposalPostedAttempts: attempts,
     });
     return posted;
   }
@@ -362,10 +367,10 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) return null;
       transaction.set(this.messagesCollection(jobId).doc(record.id), record);
       // Stamped with the card; the list outlives the claim it stamps.
-      const postedVersions = [...new Set([...(job!.proposalPostedVersions ?? []), claim.version])];
+      const attempts = [...new Set([...(job!.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
       transaction.set(
         this.submissionRef(jobId),
-        { dreamRun: { ...job!.dreamRun!, postedAt: now }, proposalPostedVersions: postedVersions },
+        { dreamRun: { ...job!.dreamRun!, postedAt: now }, proposalPostedAttempts: attempts },
         { merge: true },
       );
       return record;

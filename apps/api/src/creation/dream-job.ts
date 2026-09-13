@@ -4,6 +4,7 @@ import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dre
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
+import { postedAttemptKey } from '../store/slices/build-log.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
@@ -206,7 +207,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       try {
         const live = await store.getSubmission(jobId);
         // Not the claim: a newer delivery replaces it and takes `postedAt` along.
-        return Boolean(live?.proposalPostedVersions?.includes(version));
+        return Boolean(live?.proposalPostedAttempts?.includes(postedAttemptKey({ version, claimedAt })));
       } catch {
         return null;
       }
