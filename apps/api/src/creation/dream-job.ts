@@ -14,6 +14,7 @@ import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
 export const DREAM_OPTIONS = 2;
 
 // A blip must not strand them; an outage is logged instead.
+const ORPHAN_LOG = 'proposal shots may be orphaned; delete only if no card references them';
 export const DISCARD_ATTEMPTS = 3;
 export const DISCARD_BACKOFF_MS = 250;
 
@@ -209,26 +210,28 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         return null;
       }
     };
-    // The outage that failed a write fails this too; nothing sweeps after.
-    const discard = async () => {
-      if (!written.length) return;
+    // Answers `true` when a look back proves the card landed after all.
+    const discard = async (): Promise<boolean> => {
+      if (!written.length) return false;
+      const landed = await cardLanded();
       // Only a read that answered may condemn these rows.
-      if ((await cardLanded()) !== false) {
-        log.error({ jobId, shots: written }, 'proposal shots orphaned; delete these ids by hand');
-        return;
+      if (landed !== false) {
+        if (landed === null) log.error({ jobId, shots: written }, ORPHAN_LOG);
+        return landed === true;
       }
       for (let attempt = 1; attempt <= DISCARD_ATTEMPTS; attempt += 1) {
         try {
           await store.deleteBuildShots(jobId, written);
-          return;
+          return false;
         } catch (error) {
           if (attempt === DISCARD_ATTEMPTS) {
-            log.error({ err: error, jobId, shots: written }, 'proposal shots orphaned; delete these ids by hand');
-            return;
+            log.error({ err: error, jobId, shots: written }, ORPHAN_LOG);
+            return false;
           }
           await wait(DISCARD_BACKOFF_MS * 2 ** (attempt - 1));
         }
       }
+      return false;
     };
     try {
       // Named before the write; a lost response still leaves an id.
@@ -267,11 +270,10 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       });
       if (!posted) {
         // A retry that saw our stamp refuses a card already there.
-        if ((await cardLanded()) === true) {
+        if (await discard()) {
           deps.onPosted?.(jobId);
           return 'posted';
         }
-        await discard();
         // The transaction refuses on a mute too; name the real reason.
         return (await stopped()) ?? 'superseded';
       }
@@ -279,12 +281,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       return 'posted';
     } catch (error) {
       // The throw may have followed a commit, so ask before deleting.
-      if ((await cardLanded()) === true) {
+      if (await discard()) {
         deps.onPosted?.(jobId);
         return 'posted';
       }
       // A write that failed part-way leaves the same unreachable rows.
-      await discard();
       throw error;
     }
   }

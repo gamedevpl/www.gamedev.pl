@@ -244,7 +244,8 @@ describe('createDreamJob', () => {
   });
 
   it('keeps the frames when the card landed but the answer did not', async () => {
-    const { store, run } = await harness({ hud: [] });
+    const { errors, log: capturing } = capturingLog();
+    const { store, run } = await harness({ hud: [], log: capturing });
     const real = store.appendProposalMessage.bind(store);
     store.appendProposalMessage = async (jobId, claim, text, opts) => {
       // The card commits, then the response is lost on the way back.
@@ -256,6 +257,8 @@ describe('createDreamJob', () => {
     // The card is on the thread; its frames must survive.
     expect(await store.listCreatorMessages(7)).toHaveLength(1);
     expect(await store.countBuildShots(7)).toBe(3);
+    // Logging live frames is an instruction to break the card.
+    expect(errors).toEqual([]);
   });
 
   it('keeps the frames when a transaction retry sees its own stamp', async () => {

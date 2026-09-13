@@ -233,14 +233,20 @@ below they really are deployable:
 | `DREAM_TIMEOUT_MS`       | Deadline for one image call.                                                                                                                                          | `60000`                  |
 | `NEXT_IDEAS_TIMEOUT_MS`  | Deadline for the call that proposes the two directions.                                                                                                               | `8000`                   |
 
-**`proposal shots orphaned; delete these ids by hand`** is the one concept-proposal log that
-needs a human. The job writes three shots before the posting transaction decides, and deletes
-them again if the card is refused or a write fails part-way; that delete retries, and this
-error means it still failed — almost always because Firestore was unavailable for both. The
-rows carry a reserved label, so they are hidden from the media strip and counted in no quota,
-and nothing sweeps them later. The log line names `jobId` and `shots`; delete those document
-ids under `submissions/{jobId}/shots`. Each is up to 600KB, so this is storage, not
-correctness — the creator sees nothing either way.
+**`proposal shots may be orphaned; delete only if no card references them`** is the one
+concept-proposal log that needs a human. The job writes three shots before the posting
+transaction decides, and deletes them again if the card is refused or a write fails part-way.
+This error means that cleanup did not happen: either the delete failed its retries, or the
+job could not read back whether the card had posted — usually the same Firestore outage in
+both cases. The rows carry a reserved label, so they are hidden from the media strip and
+counted in no quota, and nothing sweeps them later.
+
+**Check before deleting.** The ids are candidates, not confirmed orphans: when the read
+failed, the job could not tell whether its card landed. Open the job's thread, or read
+`submissions/{jobId}` and look at `dreamRun.postedAt`. A card on the thread means those
+frames are live and deleting them leaves it showing broken images — the one outcome worse
+than leaving the rows. With no card, delete the ids the log names under
+`submissions/{jobId}/shots`. Each is up to 600KB, so this is storage, not correctness.
 
 Pausing concept art during an incident does **not** need a redeploy, and should not wait for
 one: `dreamsPaused` on the creation-limits document is the runtime lever, and the spend brake
