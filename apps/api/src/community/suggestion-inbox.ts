@@ -229,6 +229,9 @@ export async function registerSuggestionInboxRoutes(
         },
         text: brief,
         title: `Improve ${record.slug}: ${record.class}`,
+        // The reviewer, not submission.ownerUid — canReviewSlug already
+        // verified them; a transfer must not misattribute the new round.
+        ownerUid: uid,
         locale: submission.locale ?? 'en',
         log: request.log,
       });

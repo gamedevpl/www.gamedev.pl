@@ -87,22 +87,21 @@ export async function creatorOwnsSlug(
 
 // record.ownerUid is right until a slug can transfer ownership.
 
-// Past that, only the canonical record can say who owns it.
+// Past that, a stale record.ownerUid must not outrank the canonical one.
 export async function ownsSubmissionOrSlug(
   store: Store,
   record: { ownerUid: string | null; slug?: SubmissionRecord['slug'] },
   uid: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
-  if (record.ownerUid === uid) return true;
-  if (!record.slug) return false;
-  if (!gameAccessAuthoritative(env)) return false;
+  if (!record.slug) return record.ownerUid === uid;
+  if (!gameAccessAuthoritative(env)) return record.ownerUid === uid;
   return creatorOwnsSlug(store, record.slug, uid, env);
 }
 
 // The rounds a uid may see for a slug: their own rounds.
 
-// Post-transfer, the new canonical owner sees every round.
+// Post-transfer, only the new canonical owner sees any of them.
 export async function listAuthorizedRoundsForSlug(
   store: Store,
   uid: string,
@@ -110,8 +109,7 @@ export async function listAuthorizedRoundsForSlug(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<SubmissionRecord[]> {
   const own = await store.listSubmissionsByOwnerAndSlug(uid, slug);
-  if (own.length > 0) return own;
   if (!gameAccessAuthoritative(env)) return own;
-  if (!(await creatorOwnsSlug(store, slug, uid, env))) return own;
-  return store.listSubmissionsBySlug(slug);
+  if (!(await creatorOwnsSlug(store, slug, uid, env))) return [];
+  return own.length > 0 ? own : store.listSubmissionsBySlug(slug);
 }

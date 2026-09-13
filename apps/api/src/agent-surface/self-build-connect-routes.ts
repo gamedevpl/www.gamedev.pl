@@ -94,13 +94,16 @@ export async function registerSelfBuildConnectRoutes(
       }
 
       const at = new Date(now()).toISOString();
+      const callerUid = request.user!.uid;
       // BY-27b: hands out the creator-wide key, never per-game.
-      const keyRecord = await store.ensureCreatorAgentKey(fresh.ownerUid, at);
+
+      // The caller, not fresh.ownerUid, which a transfer leaves stale.
+      const keyRecord = await store.ensureCreatorAgentKey(callerUid, at);
 
       const pendingMessages = await store.listPendingCreatorMessages(jobId);
       const payload = mintConnectPayload({
         slug,
-        ownerUid: fresh.ownerUid,
+        ownerUid: callerUid,
         keyGeneration: keyRecord.keyGeneration,
         title: fresh.title,
         submissionTokenSecret,
@@ -122,7 +125,7 @@ export async function registerSelfBuildConnectRoutes(
         ...payload,
         canSwitchToPlatform:
           (options.managedAvailabilityGate
-            ? (await options.managedAvailabilityGate.peek(fresh.ownerUid, at.slice(0, 10))).available
+            ? (await options.managedAvailabilityGate.peek(callerUid, at.slice(0, 10))).available
             : true) &&
           allowsSelfToPlatformHandoff({
             currentBuilder: freshBuilder,

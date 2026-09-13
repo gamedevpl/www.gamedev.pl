@@ -107,17 +107,34 @@ describe('ownsSubmissionOrSlug', () => {
 
     expect(await ownsSubmissionOrSlug(store, record, 'g:grace', ON)).toBe(true);
   });
+
+  it('flag on: the former owner is refused even though record.ownerUid still names them', async () => {
+    const store = transferredGameStore({
+      jobs: [job(1, 'g:ada', 'sky')],
+      access: access('sky', 'g:grace'),
+    });
+    const record = { ownerUid: 'g:ada', slug: 'sky' };
+
+    expect(await ownsSubmissionOrSlug(store, record, 'g:ada', ON)).toBe(false);
+  });
 });
 
 describe('listAuthorizedRoundsForSlug', () => {
-  it("returns the caller's own rounds unchanged when they have any", async () => {
-    const store = transferredGameStore({
-      jobs: [job(1, 'g:ada', 'sky'), job(2, 'g:grace', 'sky')],
-    });
+  it('flag on: an untransferred owner still sees their own rounds', async () => {
+    const store = transferredGameStore({ jobs: [job(1, 'g:ada', 'sky')] });
 
     const rounds = await listAuthorizedRoundsForSlug(store, 'g:ada', 'sky', ON);
 
     expect(rounds.map((r) => r.jobId)).toEqual([1]);
+  });
+
+  it('flag on: a former owner keeps rounds under their uid but loses access after transfer', async () => {
+    const store = transferredGameStore({
+      jobs: [job(1, 'g:ada', 'sky')],
+      access: access('sky', 'g:grace'),
+    });
+
+    expect(await listAuthorizedRoundsForSlug(store, 'g:ada', 'sky', ON)).toEqual([]);
   });
 
   it('flag off: an owner with zero rounds of their own sees nothing', async () => {

@@ -42,6 +42,7 @@ export interface ImproveRoutesOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     requestedBy?: 'creator' | 'agent';
+    ownerUid?: string;
     beforeDispatch?: () => Promise<boolean>;
   }) => Promise<ImprovementRoundOutcome>;
 }
@@ -248,6 +249,8 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         title: sanitizedTitle,
         // Their own words, so the new round's thread opens with them.
         requestedBy: 'creator',
+        // The caller, not record.ownerUid, which a transfer leaves stale.
+        ownerUid: request.user!.uid,
         // The record was already loaded above for the ownership check.
         locale: record.locale ?? 'en',
         log: request.log,
