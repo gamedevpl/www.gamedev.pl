@@ -195,7 +195,7 @@ export function LayeredBoard({
                           role="gridcell"
                           tabIndex={layerEditable ? 0 : -1}
                           disabled={!layerEditable}
-                          className={`editor-cell${tile?.color ? '' : ` tile-${tile?.key ?? 'unknown'}`}`}
+                          className={`editor-cell${tile?.color ? '' : ` tile-${tile?.key ?? 'unknown'} is-blank`}`}
                           {...(tile?.color ? { style: { background: tile.color } } : {})}
                           aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
                           onClick={() => {

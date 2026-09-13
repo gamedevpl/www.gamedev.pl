@@ -23,6 +23,7 @@ import { createInboxTools } from './mcp-inbox-tools.js';
 import { createSeedTools } from './mcp-seed-tools.js';
 import { createRoundCardTools } from './mcp-round-card-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
+import { createConceptTools } from './mcp-concept-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourcePatchTools } from './mcp-source-patch-tools.js';
@@ -1315,6 +1316,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
+    ...createConceptTools({ resolveAuth, injectChannel }),
 
     ...createInboxTools({ resolveAuth, injectChannel, writePiggyback }),
   };

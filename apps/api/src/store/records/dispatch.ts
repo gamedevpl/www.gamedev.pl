@@ -42,7 +42,7 @@ export interface JobSeedOutcome {
  * (docs: architecture B), so that arriving is a writer, not a migration.
  */
 export interface JobCostEntry {
-  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat' | 'tab_complete';
+  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat' | 'tab_complete' | 'concept';
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —

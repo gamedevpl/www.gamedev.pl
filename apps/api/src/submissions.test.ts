@@ -1,3 +1,4 @@
+import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './platform/agent-token.js';
@@ -143,6 +144,7 @@ async function createApp(params: {
   // Undefined reads env, unset under vitest, so the default is inline.
   seedDispatch?: SeedDispatchClient | null;
   seedDispatchRoutes?: { internalAuthVerifier: InternalAuthVerifier };
+  dreamJob?: DreamJob | null;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -176,6 +178,7 @@ async function createApp(params: {
       ...(params.dailyChatQuota !== undefined ? { dailyChatQuota: params.dailyChatQuota } : {}),
       ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
       ...(params.seedDispatch !== undefined ? { seedDispatch: params.seedDispatch } : {}),
+      ...(params.dreamJob !== undefined ? { dreamJob: params.dreamJob } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -2035,6 +2038,242 @@ describe('submission routes', () => {
     expect(again.statusCode).toBe(409);
     expect(again.json()).toMatchObject({ error: 'not_reviewable' });
     expect(sealed).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('hands a green preview to the dream job once per version, with the capture frame', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 504 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z', screenshot: 'media/opening.png' },
+      }),
+    } as unknown as GamesStore;
+    const runs: DreamRunInput[] = [];
+    const dreamJob: DreamJob = {
+      runForVersion: async (input) => {
+        runs.push(input);
+        return 'posted';
+      },
+    };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      dreamJob,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'sources_delivered',
+    });
+
+    const token = mintToken(job.jobId, secret);
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(status.statusCode).toBe(200);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ version: 'v1', screenshotPath: 'media/opening.png' });
+    expect(runs[0]?.record.jobId).toBe(job.jobId);
+    // A green preview never moves the job; proposals ride alongside.
+    expect((await store.getSubmission(job.jobId))?.state).toBe('submitted');
+
+    await app.close();
+  });
+
+  it('hands the dream to the seed route rather than running it after the response', async () => {
+    // Cloud Run throttles CPU once a response is served, and the job claims the
+    // version before generating: a suspended run would lose that proposal for good.
+    const { githubClient } = createGithubClientStub({ jobId: 505 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z', screenshot: 'media/opening.png' },
+      }),
+    } as unknown as GamesStore;
+    const runs: DreamRunInput[] = [];
+    const dreamJob: DreamJob = {
+      runForVersion: async (input) => {
+        runs.push(input);
+        return 'posted';
+      },
+    };
+    const handed: Array<{ jobId: number; work?: SeedWork }> = [];
+    const seedDispatch: SeedDispatchClient = {
+      enqueue: async (jobId, work) => {
+        // A real handoff mints a token and waits for 202, so it outlives a tick.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        handed.push({ jobId, ...(work ? { work } : {}) });
+        return true;
+      },
+    };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      dreamJob,
+      seedDispatch,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'sources_delivered',
+    });
+
+    const token = mintToken(job.jobId, secret);
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(status.statusCode).toBe(200);
+    // Recorded by the time the response returns: the request waited for the handoff.
+    expect(handed.filter((entry) => entry.work?.action === 'dream')).toEqual([
+      { jobId: job.jobId, work: { action: 'dream', version: 'v1', screenshotPath: 'media/opening.png' } },
+    ]);
+    expect(runs).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('stops handing off a version that already carries a claim', async () => {
+    // The seam fires on every poll while the preview stays green.
+    const { githubClient } = createGithubClientStub({ jobId: 506 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z', screenshot: 'media/opening.png' },
+      }),
+    } as unknown as GamesStore;
+    const handed: Array<{ jobId: number; work?: SeedWork }> = [];
+    const seedDispatch: SeedDispatchClient = {
+      enqueue: async (jobId, work) => {
+        handed.push({ jobId, ...(work ? { work } : {}) });
+        return true;
+      },
+    };
+    const dreamJob: DreamJob = { runForVersion: async () => 'posted' };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      dreamJob,
+      seedDispatch,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'sources_delivered',
+    });
+    await store.claimDreamRun(job.jobId, 'v1', new Date().toISOString(), 1);
+
+    const token = mintToken(job.jobId, secret);
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    expect(handed.filter((entry) => entry.work?.action === 'dream')).toEqual([]);
+
+    await app.close();
+  });
+
+  it('hands off again once a claim went stale, so a dead worker is recoverable', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 507 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z', screenshot: 'media/opening.png' },
+      }),
+    } as unknown as GamesStore;
+    const handed: Array<{ jobId: number; work?: SeedWork }> = [];
+    const seedDispatch: SeedDispatchClient = {
+      enqueue: async (jobId, work) => {
+        handed.push({ jobId, ...(work ? { work } : {}) });
+        return true;
+      },
+    };
+    const dreamJob: DreamJob = { runForVersion: async () => 'posted' };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      dreamJob,
+      seedDispatch,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'sources_delivered',
+    });
+    // Claimed an hour ago with no card: that worker never came back.
+    await store.claimDreamRun(job.jobId, 'v1', new Date(Date.now() - 60 * 60_000).toISOString(), 1);
+
+    const token = mintToken(job.jobId, secret);
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    expect(handed.filter((entry) => entry.work?.action === 'dream')).toHaveLength(1);
 
     await app.close();
   });
@@ -5079,9 +5318,9 @@ describe('managed (platform) builder availability', () => {
  */
 describe('status route under store pressure', () => {
   /**
-   * The route reads the store twice per request: an abandoned-check that deliberately
-   * sits outside the cache, then the coalesced refresh. `failOnCall` targets the second
-   * of those, because the stale-serve being tested only wraps the refresh.
+   * The route reads the record once per cache miss, and that read serves both the
+   * abandoned check and the coalesced refresh. `failOnCall` targets it, because the
+   * stale-serve being tested wraps the whole derivation.
    */
   function spyStore(opts: { onGet?: () => Promise<void>; failOnCall?: number } = {}) {
     const inner = new InMemoryStore();
@@ -5092,22 +5331,29 @@ describe('status route under store pressure', () => {
       if (opts.onGet) await opts.onGet();
       return inner.getSubmission(jobId);
     });
+    // Once per derivation, so it counts refreshes rather than reads.
+    const listCreatorMessages = vi.fn(inner.listCreatorMessages.bind(inner));
     const store = new Proxy(inner, {
-      get: (target, prop) => (prop === 'getSubmission' ? getSubmission : Reflect.get(target, prop)),
+      get: (target, prop) => {
+        if (prop === 'getSubmission') return getSubmission;
+        if (prop === 'listCreatorMessages') return listCreatorMessages;
+        return Reflect.get(target, prop);
+      },
     }) as Store;
-    return { store, getSubmission };
+    return { store, inner, getSubmission, listCreatorMessages };
   }
 
   it('coalesces concurrent cache misses into a single derivation', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    const { store, getSubmission } = spyStore({ onGet: () => gate });
+    const { store, inner, getSubmission, listCreatorMessages } = spyStore({ onGet: () => gate });
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,
       store,
       submissionTokenSecret: secret,
     });
     const token = mintToken(123, secret);
+    await inner.createSubmission(123, 'g:owner', 'Coalesced');
 
     const polls = Promise.all([
       app.inject({ method: 'GET', url: `/api/submissions/${token}` }),
@@ -5118,31 +5364,33 @@ describe('status route under store pressure', () => {
     release();
     const responses = await polls;
 
-    // Three abandoned-checks + one coalesced refresh + three heartbeat overlays
-    // (attachBuildEvents runs per response). A second refresh would mean no coalescing.
-    expect(getSubmission).toHaveBeenCalledTimes(7);
+    // Coalescing is asserted directly now: one derivation for three polls.
+    expect(listCreatorMessages).toHaveBeenCalledTimes(1);
+    // Three seed reads plus three heartbeat overlays; the refresh reuses the seed.
+    expect(getSubmission).toHaveBeenCalledTimes(6);
     for (const response of responses) expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
   it('keeps the two locales apart while coalescing', async () => {
-    const { store, getSubmission } = spyStore();
+    const { store, inner, getSubmission, listCreatorMessages } = spyStore();
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,
       store,
       submissionTokenSecret: secret,
     });
     const token = mintToken(123, secret);
+    await inner.createSubmission(123, 'g:owner', 'Two Locales');
 
     await Promise.all([
       app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=en` }),
       app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=pl` }),
     ]);
 
-    // Two keys → two refreshes (a shared one would hand a Polish reader English),
-    // plus two abandoned-checks and two heartbeat overlays.
-    expect(getSubmission).toHaveBeenCalledTimes(6);
+    // Two keys → two derivations; a shared one would hand a Polish reader English.
+    expect(listCreatorMessages).toHaveBeenCalledTimes(2);
+    expect(getSubmission).toHaveBeenCalledTimes(4);
 
     await app.close();
   });
@@ -5176,7 +5424,7 @@ describe('status route under store pressure', () => {
   });
 
   it('still 502s when it fails with nothing cached to fall back on', async () => {
-    const { store } = spyStore({ failOnCall: 2 });
+    const { store } = spyStore({ failOnCall: 1 });
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,
       store,

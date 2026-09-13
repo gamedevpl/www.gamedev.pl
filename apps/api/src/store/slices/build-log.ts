@@ -1,15 +1,22 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { randomUUID } from 'node:crypto';
+import type { CreatorProposal } from '@gamedevpl/contract';
 import type { BuildEvent } from '../../platform/submission-status.js';
 import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
 import { isStudioOrigin } from '../records/build-log.js';
 import type { AgentEndedBy } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
+import { ownsDreamClaim, type DreamClaimRef } from './round-budget.js';
 
 // Newest first, id as a tie-break for same-millisecond events.
 export function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
 }
+
+// Which guard refused, decided with the write rather than read back after.
+export type ProposalRefusedBy = 'claim' | 'version' | 'round' | 'muted' | 'paused' | 'blocked';
+
+export type ProposalPostResult = { posted: CreatorMessage } | { posted: null; refusedBy: ProposalRefusedBy };
 
 export interface BuildLogStore {
   // Appends a progress event. Returns it with its assigned id and timestamp.
@@ -40,24 +47,67 @@ export interface BuildLogStore {
   appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      proposal?: CreatorProposal;
+    },
   ): Promise<CreatorMessage>;
+
+  // Posts only into the round and claim it was drawn for.
+  appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+      // The caller's stop rule, re-checked against the written row.
+      blocked: (job: SubmissionRecord) => boolean;
+    },
+  ): Promise<ProposalPostResult>;
 
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
 
-  // Every creator message on a build, delivered or not, oldest first.
-  listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  // Every creator message, oldest first; cards drop before the limit.
+  listCreatorMessages(jobId: number, opts?: { limit?: number; excludeProposals?: boolean }): Promise<CreatorMessage[]>;
 
   // Marks messages collected, so the agent isn't handed them twice.
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
+}
+
+// Names the attempt, so another worker's card cannot answer for it.
+export function postedAttemptKey(claim: DreamClaimRef): string {
+  return `${claim.version}:${claim.claimedAt}`;
+}
+
+// Which of the two refused; one must not read as the other.
+function dreamClaimRefusal(
+  record: Pick<SubmissionRecord, 'dreamRun' | 'previewVersion' | 'deliveredVersion'> | undefined,
+  claim: DreamClaimRef,
+): 'claim' | 'version' | null {
+  if (!record || !ownsDreamClaim(record.dreamRun, claim)) return 'claim';
+  if (record.dreamRun?.postedAt) return 'claim';
+  // A moved delivery leaves the new one unclaimed, not carded.
+  if ((record.previewVersion ?? record.deliveredVersion) !== claim.version) return 'version';
+  return null;
 }
 
 export class InMemoryBuildLogStore implements BuildLogStore {
   private buildEvents = new Map<number, BuildEvent[]>();
   private creatorMessages = new Map<number, CreatorMessage[]>();
 
-  constructor(private submissions: Map<number, SubmissionRecord>) {}
+  constructor(
+    private submissions: Map<number, SubmissionRecord>,
+    private users: Map<string, { proposalsMutedAt?: string | null }>,
+    private limits: () => Promise<{ dreamsPaused?: boolean } | null>,
+  ) {}
 
   async appendBuildEvent(
     jobId: number,
@@ -128,7 +178,13 @@ export class InMemoryBuildLogStore implements BuildLogStore {
   async appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      proposal?: CreatorProposal;
+    },
   ): Promise<CreatorMessage> {
     const now = new Date().toISOString();
     const record: CreatorMessage = {
@@ -138,11 +194,43 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      ...(opts?.proposal ? { proposal: opts.proposal } : {}),
     };
     const existing = this.creatorMessages.get(jobId) ?? [];
     existing.push(record);
     this.creatorMessages.set(jobId, existing);
     return { ...record };
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+      blocked: (job: SubmissionRecord) => boolean;
+    },
+  ): Promise<ProposalPostResult> {
+    const record = this.submissions.get(jobId);
+    const refusedBy = dreamClaimRefusal(record, claim);
+    if (refusedBy) return { posted: null, refusedBy };
+    if ((record?.roundGeneration ?? 1) !== opts.roundGeneration) return { posted: null, refusedBy: 'round' };
+    if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return { posted: null, refusedBy: 'muted' };
+    if ((await this.limits())?.dreamsPaused === true) return { posted: null, refusedBy: 'paused' };
+    if (opts.blocked(record!)) return { posted: null, refusedBy: 'blocked' };
+    const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
+    // Stamped with the card; the list outlives the claim it stamps.
+    const attempts = [...new Set([...(record!.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
+    this.submissions.set(jobId, {
+      ...record!,
+      dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt },
+      proposalPostedAttempts: attempts,
+    });
+    return { posted };
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
@@ -153,10 +241,14 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       .map((message) => ({ ...message }));
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     // No id tie-break -- a stable sort keeps same-millisecond append order.
     return [...(this.creatorMessages.get(jobId) ?? [])]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .filter((message) => !(opts?.excludeProposals && message.proposal))
       .slice(-(opts?.limit ?? 20))
       .map((message) => ({ ...message }));
   }
@@ -253,7 +345,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
   async appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      proposal?: CreatorProposal;
+    },
   ): Promise<CreatorMessage> {
     // Spread in only for agent/studio — Firestore rejects an explicit undefined.
     const now = new Date().toISOString();
@@ -264,9 +362,64 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      ...(opts?.proposal ? { proposal: opts.proposal } : {}),
     };
     await this.messagesCollection(jobId).doc(record.id).set(record);
     return record;
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+      blocked: (job: SubmissionRecord) => boolean;
+    },
+  ): Promise<ProposalPostResult> {
+    const now = new Date().toISOString();
+    const record: CreatorMessage = {
+      id: randomUUID(),
+      text,
+      createdAt: now,
+      deliveredAt: now,
+      origin: 'studio',
+      ...(opts.textLocalized && opts.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      proposal: opts.proposal,
+    };
+    return await this.db.runTransaction(async (transaction) => {
+      // Read and post together, or a newer delivery wins the gap.
+      const snap = await transaction.get(this.submissionRef(jobId));
+      // Read here too, so an opt-out mid-write still refuses.
+      const owner = await transaction.get(this.db.collection('users').doc(opts.ownerUid));
+      // The operator's pause, read with the write rather than before it.
+      const ops = await transaction.get(this.db.collection('opsConfig').doc('creationLimits'));
+      const job = snap.data() as SubmissionRecord | undefined;
+      const refusedBy = !snap.exists ? 'claim' : dreamClaimRefusal(job, claim);
+      if (refusedBy) return { posted: null, refusedBy };
+      // A reopen bumps the generation and leaves the version alone.
+      if ((job?.roundGeneration ?? 1) !== opts.roundGeneration) return { posted: null, refusedBy: 'round' };
+      if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) {
+        return { posted: null, refusedBy: 'muted' };
+      }
+      if ((ops.data() as { dreamsPaused?: boolean } | undefined)?.dreamsPaused === true) {
+        return { posted: null, refusedBy: 'paused' };
+      }
+      if (opts.blocked(job!)) return { posted: null, refusedBy: 'blocked' };
+      transaction.set(this.messagesCollection(jobId).doc(record.id), record);
+      // Stamped with the card; the list outlives the claim it stamps.
+      const attempts = [...new Set([...(job!.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
+      transaction.set(
+        this.submissionRef(jobId),
+        { dreamRun: { ...job!.dreamRun!, postedAt: now }, proposalPostedAttempts: attempts },
+        { merge: true },
+      );
+      return { posted: record };
+    });
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
@@ -279,12 +432,16 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       .slice(0, opts?.limit ?? 10);
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     // Slices the newest `limit` off an oldest-first sort, matching InMemory.
     const snap = await this.messagesCollection(jobId).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .filter((message) => !(opts?.excludeProposals && message.proposal))
       .slice(-(opts?.limit ?? 20));
   }
 

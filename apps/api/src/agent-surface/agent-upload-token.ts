@@ -19,6 +19,8 @@ export interface UploadTokenClaims {
   path?: string;
   // Optional caption bound into the URL.
   label?: string;
+  // Delivery current when the URL was issued.
+  version?: string;
   // Unix seconds.
   exp: number;
   nonce: string;
@@ -30,6 +32,7 @@ export interface MintUploadTokenOptions {
   kind: UploadKind;
   path?: string;
   label?: string;
+  version?: string;
   // Epoch ms; defaults to Date.now().
   now?: number;
   // Override TTL seconds (tests).
@@ -46,6 +49,25 @@ function decodeOptional(raw: string): string | undefined {
 }
 
 function sign(
+  jobId: number,
+  roundGeneration: number,
+  kind: UploadKind,
+  path: string | undefined,
+  label: string | undefined,
+  version: string | undefined,
+  exp: number,
+  nonce: string,
+  secret: string,
+): string {
+  return createHmac('sha256', secret)
+    .update(
+      `${SCOPE}:${jobId}:${roundGeneration}:${kind}:${path ?? ''}:${label ?? ''}:${version ?? ''}:${exp}:${nonce}`,
+    )
+    .digest('hex');
+}
+
+// The encoding before the version; a deploy leaves these in flight.
+function signWithoutVersion(
   jobId: number,
   roundGeneration: number,
   kind: UploadKind,
@@ -85,26 +107,40 @@ export function mintUploadToken(secret: string, options: MintUploadTokenOptions)
   const nonce = randomBytes(12).toString('hex');
   const path = options.path?.trim() || undefined;
   const label = options.label?.trim() || undefined;
-  const signature = sign(options.jobId, options.roundGeneration, options.kind, path, label, exp, nonce, secret);
+  const version = options.version?.trim() || undefined;
+  const signature = sign(
+    options.jobId,
+    options.roundGeneration,
+    options.kind,
+    path,
+    label,
+    version,
+    exp,
+    nonce,
+    secret,
+  );
   return Buffer.from(
-    `${options.jobId}.${options.roundGeneration}.${options.kind}.${encodeOptional(path)}.${encodeOptional(label)}.${exp}.${nonce}.${signature}`,
+    `${options.jobId}.${options.roundGeneration}.${options.kind}.${encodeOptional(path)}.${encodeOptional(label)}.${encodeOptional(version)}.${exp}.${nonce}.${signature}`,
     'utf8',
   ).toString('base64url');
 }
 
 export function verifyUploadToken(token: string, secret: string): UploadTokenClaims {
   try {
-    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
-    if (parts.length !== 8) {
+    const raw = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    if (raw.length !== 9 && raw.length !== 8) {
       throw new InvalidAgentTokenError();
     }
-    const [jobIdRaw, generationRaw, kindRaw, pathRaw, labelRaw, expRaw, nonce, signature] = parts;
+    const legacy = raw.length === 8;
+    const parts = legacy ? [...raw.slice(0, 5), '', ...raw.slice(5)] : raw;
+    const [jobIdRaw, generationRaw, kindRaw, pathRaw, labelRaw, versionRaw, expRaw, nonce, signature] = parts;
     if (
       !jobIdRaw ||
       !generationRaw ||
       !kindRaw ||
       pathRaw === undefined ||
       labelRaw === undefined ||
+      versionRaw === undefined ||
       !expRaw ||
       !nonce ||
       !signature ||
@@ -123,6 +159,7 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
     const kind = kindRaw as UploadKind;
     const path = decodeOptional(pathRaw);
     const label = decodeOptional(labelRaw);
+    const version = decodeOptional(versionRaw);
     if (
       !Number.isSafeInteger(jobId) ||
       jobId <= 0 ||
@@ -133,7 +170,10 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
     ) {
       throw new InvalidAgentTokenError();
     }
-    if (!safeEqualHex(signature, sign(jobId, roundGeneration, kind, path, label, exp, nonce, secret))) {
+    const expected = legacy
+      ? signWithoutVersion(jobId, roundGeneration, kind, path, label, exp, nonce, secret)
+      : sign(jobId, roundGeneration, kind, path, label, version, exp, nonce, secret);
+    if (!safeEqualHex(signature, expected)) {
       throw new InvalidAgentTokenError();
     }
     return {
@@ -142,6 +182,7 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
       kind,
       ...(path ? { path } : {}),
       ...(label ? { label } : {}),
+      ...(version ? { version } : {}),
       exp,
       nonce,
     };

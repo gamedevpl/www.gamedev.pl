@@ -1,3 +1,4 @@
+import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -132,7 +133,7 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
 
     const [events, shots] = await Promise.all([
       store.listBuildEvents(auth.jobId, { limit: 1 }),
-      store.listBuildShots(auth.jobId, { limit: 1 }),
+      store.listBuildShots(auth.jobId, { limit: 1, excludeLabels: DREAM_SHOT_LABELS }),
     ]);
 
     const latestEvent = events[0];

@@ -78,6 +78,8 @@ import type { QuotaStore } from '../store/slices/quota.js';
 export type { QuotaStore };
 import type { GlobalQuotaStore } from '../store/slices/quota-global.js';
 export type { GlobalQuotaStore };
+import type { DreamQuotaStore } from '../store/slices/quota-dreams.js';
+export type { DreamQuotaStore };
 import type { TelemetryEventType, TelemetryEvent, VisitEvent } from '../store/records/telemetry.js';
 export type { TelemetryEventType, TelemetryEvent, VisitEvent };
 // The retention constants (TELEMETRY_TTL_FIELD, telemetryExpiresAt, ...) are no longer
@@ -240,6 +242,7 @@ export interface Store
     TelemetryStore,
     QuotaStore,
     GlobalQuotaStore,
+    DreamQuotaStore,
     AccessStore,
     NotificationsStore,
     SocialStore,

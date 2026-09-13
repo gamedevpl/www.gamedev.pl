@@ -1,23 +1,87 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
+import type { SubmissionRecord } from '../records/submission.js';
 import { byNewestFirst } from './build-log.js';
+import { DREAM_SOURCE_SHOT_LABEL } from '../../platform/dream-shots.js';
+
+export interface BuildShotCountOptions {
+  // Platform-written captions to leave out of agent-facing counts.
+  excludeLabels?: readonly string[];
+  // Leaves out what the platform drew, whatever caption it carries.
+  excludePlatformDrawn?: boolean;
+}
+
+// One read covers the common case; a crowd costs another.
+const SHOT_PAGE_SIZE = 24;
+
+export interface BuildShotListOptions extends BuildShotCountOptions {
+  limit?: number;
+}
+
+// Narrows a count to one delivery's frames in one round.
+export interface DeliveryShotQuery {
+  label: string;
+  deliveryVersion: string;
+  roundGeneration: number;
+}
+
+// A frame belongs to one delivery of one round.
+function currentRound(record: SubmissionRecord | undefined, query: DeliveryShotQuery): boolean {
+  if (!record) return false;
+  if ((record.roundGeneration ?? 1) !== query.roundGeneration) return false;
+  return (record.previewVersion ?? record.deliveredVersion) === query.deliveryVersion;
+}
+
+// Refusals the caller must tell apart; only one is retryable.
+export type DeliveryShotOutcome =
+  { ok: true; shot: BuildShot } | { ok: false; refused: 'stale_delivery' | 'too_many_shots' };
+
+function matchesDelivery(query: DeliveryShotQuery) {
+  return (shot: { label?: string; deliveryVersion?: string; roundGeneration?: number; platformDrawn?: true }) =>
+    !shot.platformDrawn &&
+    shot.label === query.label &&
+    shot.deliveryVersion === query.deliveryVersion &&
+    shot.roundGeneration === query.roundGeneration;
+}
+
+// Only the platform writes a source shot; legacy rows lack the stamp.
+function platformWrote(shot: { label?: string; platformDrawn?: true }): boolean {
+  return Boolean(shot.platformDrawn) || shot.label === DREAM_SOURCE_SHOT_LABEL;
+}
+
+function keeps(excludeLabels: readonly string[] | undefined) {
+  return (shot: { label?: string }) => !excludeLabels?.includes(shot.label ?? '');
+}
 
 export interface BuildMediaStore {
-  // Stores a screenshot the agent pushed straight to us, before any commit.
+  // Stores a screenshot the agent pushed; `id` names it before the write.
   appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot>;
 
   // A build's pushed screenshots, newest first; bytes omitted here.
-  listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]>;
+  listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]>;
 
   // One pushed screenshot, bytes included -- the read behind serving it.
   getBuildShot(jobId: number, id: string): Promise<BuildShot | null>;
 
   // How many screenshots a build has pushed -- bounds a runaway agent.
-  countBuildShots(jobId: number): Promise<number>;
+  countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number>;
+
+  // Frames a delivery already holds; their room is already spent.
+  countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number>;
+
+  // Stores a frame under `max` in one write; `id` makes retries idempotent.
+  appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome>;
+
+  // Drops shots by id; a card that never posted leaves none.
+  deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
 
   appendBuildPreview(
     jobId: number,
@@ -38,19 +102,26 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
 
+  constructor(private submissions?: Map<number, SubmissionRecord>) {}
+
   async appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const record: BuildShot = {
+      ...shot,
+      id: shot.id ?? randomUUID(),
+      createdAt: shot.createdAt ?? new Date().toISOString(),
+    };
     const existing = this.buildShots.get(jobId) ?? [];
     existing.push(record);
     this.buildShots.set(jobId, existing);
     return { ...record };
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     return [...(this.buildShots.get(jobId) ?? [])]
+      .filter(keeps(opts?.excludeLabels))
       .sort(byNewestFirst)
       .slice(0, opts?.limit ?? 12)
       .map(({ data: _data, ...summary }) => ({ ...summary }));
@@ -61,8 +132,34 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return found ? { ...found } : null;
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    return this.buildShots.get(jobId)?.length ?? 0;
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    return (this.buildShots.get(jobId) ?? [])
+      .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !(opts?.excludePlatformDrawn && platformWrote(shot))).length;
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return (this.buildShots.get(jobId) ?? []).filter(matchesDelivery(query)).length;
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome> {
+    if (!currentRound(this.submissions?.get(jobId), query)) return { ok: false, refused: 'stale_delivery' };
+    // Counted and pushed without awaiting in between, which is the whole point.
+    const existing = this.buildShots.get(jobId) ?? [];
+    const at = query.id ? existing.findIndex((item) => item.id === query.id) : -1;
+    // First write wins; a posted card keeps the frame it named.
+    if (at >= 0) return { ok: true, shot: { ...existing[at]! } };
+    if (existing.filter(matchesDelivery(query)).length >= query.max) {
+      return { ok: false, refused: 'too_many_shots' };
+    }
+    const record: BuildShot = { ...shot, id: query.id ?? randomUUID(), createdAt: new Date().toISOString() };
+    existing.push(record);
+    this.buildShots.set(jobId, existing);
+    return { ok: true, shot: { ...record } };
   }
 
   async appendBuildPreview(
@@ -106,6 +203,12 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return this.buildPreviews.get(jobId)?.length ?? 0;
   }
 
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
+    const kept = (this.buildShots.get(jobId) ?? []).filter((shot) => !ids.includes(shot.id));
+    this.buildShots.set(jobId, kept);
+  }
+
   async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {
     const existing = this.buildPreviews.get(jobId) ?? [];
     if (existing.length <= keep) return 0;
@@ -128,22 +231,37 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const record: BuildShot = {
+      ...shot,
+      id: shot.id ?? randomUUID(),
+      createdAt: shot.createdAt ?? new Date().toISOString(),
+    };
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await this.shotsCollection(jobId).doc(record.id).set(document);
     return record;
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
-    // `select()` keeps bytes off the polled status response.
-    const snap = await this.shotsCollection(jobId)
-      .select('id', 'label', 'labelLocalized', 'locale', 'createdAt')
-      .orderBy('createdAt', 'desc')
-      .limit(opts?.limit ?? 12)
-      .get();
-    return snap.docs.map((doc) => doc.data() as BuildShotSummary).sort(byNewestFirst);
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
+    const limit = opts?.limit ?? 12;
+    const page = Math.max(limit, SHOT_PAGE_SIZE);
+    const kept: BuildShotSummary[] = [];
+    let after: { id: string } | undefined;
+    // Until `limit` survive the filter, or the collection runs out.
+    while (kept.length < limit) {
+      // `select()` keeps bytes off the polled status response.
+      const base = this.shotsCollection(jobId)
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .orderBy('createdAt', 'desc')
+        .limit(page);
+      const snap = await (after ? base.startAfter(after) : base).get();
+      if (snap.empty) break;
+      after = snap.docs[snap.docs.length - 1];
+      kept.push(...snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(keeps(opts?.excludeLabels)));
+      if (snap.docs.length < page) break;
+    }
+    return kept.sort(byNewestFirst).slice(0, limit);
   }
 
   async getBuildShot(jobId: number, id: string): Promise<BuildShot | null> {
@@ -151,9 +269,51 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     return doc.exists ? (doc.data() as BuildShot) : null;
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    const snap = await this.shotsCollection(jobId).count().get();
-    return snap.data().count;
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    // One snapshot: two aggregates can straddle a proposal write and disagree.
+    const snap = await this.shotsCollection(jobId).select('label', 'platformDrawn').get();
+    return snap.docs
+      .map((doc) => doc.data() as { label?: string; platformDrawn?: true })
+      .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !(opts?.excludePlatformDrawn && platformWrote(shot))).length;
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    // One equality field, so no composite index is needed.
+    const snap = await this.shotsCollection(jobId)
+      .where('deliveryVersion', '==', query.deliveryVersion)
+      // Every field the predicate reads: an unselected one comes back undefined.
+      .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn')
+      .get();
+    return snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome> {
+    const ref = query.id ? this.shotsCollection(jobId).doc(query.id) : this.shotsCollection(jobId).doc();
+    return await this.db.runTransaction<DeliveryShotOutcome>(async (transaction) => {
+      // Count and write together, or every PUT sees room.
+      const job = await transaction.get(this.db.collection('submissions').doc(String(jobId)));
+      if (!currentRound(job.data() as SubmissionRecord | undefined, query)) {
+        return { ok: false, refused: 'stale_delivery' };
+      }
+      const mine = await transaction.get(ref);
+      // First write wins; a posted card keeps the frame it named.
+      if (mine.exists) return { ok: true, shot: mine.data() as BuildShot };
+      const snap = await transaction.get(
+        this.shotsCollection(jobId)
+          .where('deliveryVersion', '==', query.deliveryVersion)
+          .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn'),
+      );
+      const held = snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
+      if (held >= query.max) return { ok: false, refused: 'too_many_shots' };
+      const record: BuildShot = { ...shot, id: ref.id, createdAt: new Date().toISOString() };
+      transaction.set(ref, Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)));
+      return { ok: true, shot: record };
+    });
   }
 
   async appendBuildPreview(
@@ -188,6 +348,17 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async countBuildPreviews(jobId: number): Promise<number> {
     const snap = await this.previewsCollection(jobId).count().get();
     return snap.data().count;
+  }
+
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
+    // Chunked -- a Firestore batch caps at 500 ops.
+    const BATCH_LIMIT = 500;
+    for (let start = 0; start < ids.length; start += BATCH_LIMIT) {
+      const batch = this.db.batch();
+      for (const id of ids.slice(start, start + BATCH_LIMIT)) batch.delete(this.shotsCollection(jobId).doc(id));
+      await batch.commit();
+    }
   }
 
   async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {

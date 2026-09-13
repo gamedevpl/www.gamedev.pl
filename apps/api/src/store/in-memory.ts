@@ -57,8 +57,14 @@ import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { InMemoryAccessTokensStore } from './slices/access-tokens.js';
 import { InMemoryAccessStore } from './slices/access.js';
 import { InMemoryAgentKeysStore } from './slices/agent-keys.js';
-import { InMemoryBuildLogStore } from './slices/build-log.js';
-import { InMemoryBuildMediaStore } from './slices/build-media.js';
+import { InMemoryBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
+import {
+  InMemoryBuildMediaStore,
+  type BuildShotCountOptions,
+  type DeliveryShotOutcome,
+  type DeliveryShotQuery,
+  type BuildShotListOptions,
+} from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
@@ -71,6 +77,7 @@ import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
 import { withMemberErased } from './records/game-access.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
+import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
 import { InMemoryReviewStore } from './slices/review.js';
@@ -82,14 +89,14 @@ import type {
   ResolveModerationFlagResult,
 } from './slices/moderation-flags.js';
 
-import { InMemoryRoundBudgetStore } from './slices/round-budget.js';
+import { InMemoryRoundBudgetStore, type DreamClaimRef, type DreamClaimResult } from './slices/round-budget.js';
 import { InMemoryRoundsStore } from './slices/rounds.js';
 import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
 import { InMemorySubmissionStore } from './slices/submission.js';
 import { InMemoryTelemetryStore } from './slices/telemetry.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
-import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
+import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore extends SubmissionFacade implements Store {
   private identityStore = new InMemoryIdentityStore();
@@ -101,11 +108,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions);
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
-  private buildLogStore = new InMemoryBuildLogStore(this.submissions);
-  private buildMediaStore = new InMemoryBuildMediaStore();
+  private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
+    this.quotaStore.getCreationLimits(),
+  );
+  private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
+  private dreamQuotaStore = new InMemoryDreamQuotaStore();
   private accessStore = new InMemoryAccessStore();
   private telemetryStore = new InMemoryTelemetryStore();
   private notificationsStore = new InMemoryNotificationsStore();
@@ -261,6 +271,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.identityStore.setDigestOptOut(uid, at);
   }
 
+  async setProposalsMuted(uid: string, at: string | null): Promise<void> {
+    return this.identityStore.setProposalsMuted(uid, at);
+  }
+
+  async readProposalsMutedAt(uid: string): Promise<string | null> {
+    return this.identityStore.readProposalsMutedAt(uid);
+  }
+
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
     return this.submissionStore.createSubmission(jobId, ownerUid, title);
   }
@@ -364,6 +382,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
+  }
+
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
+    return this.roundBudgetStore.claimDreamRun(jobId, version, at, roundGeneration);
+  }
+
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
   }
 
   async allocateJobId(): Promise<number> {
@@ -528,7 +554,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.buildMediaStore.appendBuildShot(jobId, shot);
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     return this.buildMediaStore.listBuildShots(jobId, opts);
   }
 
@@ -536,8 +562,24 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.buildMediaStore.getBuildShot(jobId, id);
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    return this.buildMediaStore.countBuildShots(jobId);
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    return this.buildMediaStore.countBuildShots(jobId, opts);
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return this.buildMediaStore.countDeliveryShots(jobId, query);
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome> {
+    return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);
+  }
+
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    return this.buildMediaStore.deleteBuildShots(jobId, ids);
   }
 
   async appendBuildPreview(
@@ -571,11 +613,30 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.buildLogStore.appendCreatorMessage(jobId, text, opts);
   }
 
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+      blocked: (job: SubmissionRecord) => boolean;
+    },
+  ): Promise<ProposalPostResult> {
+    return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
+  }
+
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     return this.buildLogStore.listCreatorMessages(jobId, opts);
   }
 
@@ -753,6 +814,18 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async checkAndIncrementGlobalSeeds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
     return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
+  }
+
+  async getGlobalDreamCount(dateStr: string): Promise<number> {
+    return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count?: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit, count);
   }
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {

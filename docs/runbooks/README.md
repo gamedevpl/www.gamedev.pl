@@ -211,10 +211,49 @@ GitHub **repository variable** and confirm the name appears in _both_
 [`infra/deploy-api.sh`](../../infra/deploy-api.sh). Threaded today:
 
 `ADMIN_UIDS`, `REVIEWER_UIDS`, `APPLE_CLIENT_IDS`, `BETA_ALLOWED_EMAILS`, `BETA_ALLOWED_UIDS`,
-`CANONICAL_HOST`, `CODE_LANE`, `EDITOR_ASSIST`, `GOOGLE_OAUTH_CLIENT_ID`,
-`MCP_AUTHORIZATION_SERVERS`, `MP_RELAY_URL`, `REMIX_DEBUG`,
+`CANONICAL_HOST`, `CODE_LANE`, `DREAMS_ENABLED`, `DREAM_IMAGE_MODEL`, `DREAM_TIMEOUT_MS`,
+`EDITOR_ASSIST`, `GLOBAL_DAILY_DREAM_CAP`, `GOOGLE_OAUTH_CLIENT_ID`,
+`MCP_AUTHORIZATION_SERVERS`, `MP_RELAY_URL`, `NEXT_IDEAS_TIMEOUT_MS`, `REMIX_DEBUG`,
 `TRANSLATE_BUILD_LOG`, `VAPID_*`, `VERTEX_MODEL`, `VERTEX_REGION`, `ZONE_HOST_URL`, and
 the sweep audiences.
+
+`infra/check-env-manifest.mjs` asserts that both deploy paths thread exactly the names in
+[`infra/env-manifest.json`](../../infra/env-manifest.json); CI runs it, so a lever added to
+one path and not the other fails the build rather than going quietly missing. It cannot see
+a `process.env` read that is absent from all three — adding one still means adding it here.
+
+**Concept proposals (NP-1v) are five of those levers**, and unlike the `*_TIMEOUT_MS` keys
+below they really are deployable:
+
+| Variable                 | Effect                                                                                                                                                                | Default                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `DREAMS_ENABLED`         | The whole feature. `true` turns it on; anything else, including unset, means no concept cards are drawn or posted.                                                    | `false`                  |
+| `GLOBAL_DAILY_DREAM_CAP` | Image-model frames the platform will pay for per UTC day, across all games. Both frames of a card are taken together or not at all, so an odd remainder buys nothing. | `200`                    |
+| `DREAM_IMAGE_MODEL`      | Which image model draws the frames.                                                                                                                                   | `gemini-3.1-flash-image` |
+| `DREAM_TIMEOUT_MS`       | Deadline for one image call.                                                                                                                                          | `60000`                  |
+| `NEXT_IDEAS_TIMEOUT_MS`  | Deadline for the call that proposes the two directions.                                                                                                               | `8000`                   |
+
+**`proposal shots may be orphaned; delete only if no card references them`** is the one
+concept-proposal log that needs a human. The job writes three shots before the posting
+transaction decides, and deletes them again if the card is refused or a write fails part-way.
+This error means that cleanup did not happen: either the delete failed its retries, or the
+job could not read back whether the card had posted — usually the same Firestore outage in
+both cases. The rows carry a reserved label, so they are hidden from the media strip and
+counted in no quota, and nothing sweeps them later.
+
+**Check before deleting.** The ids are candidates, not confirmed orphans: when the read
+failed, the job could not tell whether its card landed. Open the job's thread, or read
+`submissions/{jobId}` and look at `dreamRun.postedAt`. A card on the thread means those
+frames are live and deleting them leaves it showing broken images — the one outcome worse
+than leaving the rows. With no card, delete the ids the log names under
+`submissions/{jobId}/shots`. Each is up to 600KB, so this is storage, not correctness.
+
+Pausing concept art during an incident does **not** need a redeploy, and should not wait for
+one: `dreamsPaused` on the creation-limits document is the runtime lever, and the spend brake
+pulls it on its own as the `dreams` lane (see `PAUSEABLE` in
+[`apps/api/src/platform/spend-brake.ts`](../../apps/api/src/platform/spend-brake.ts), pulled
+from 100% of budget). `DREAMS_ENABLED=false` is the slower, durable off switch, for turning
+the feature off across restarts rather than for stopping spend now.
 
 `SEED_DISPATCH` is **removed**: the variable is gone from `infra/deploy-api.sh` and
 `.github/workflows/deploy.yml`, and nothing reads it. Round 0's kill switch moved to a

@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES, MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
+import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
@@ -24,7 +25,11 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import type { BuildShot } from '../store/records/build-log.js';
+import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
+import { carriesPixels, imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
+import { DREAM_FRAME_SHOT_LABEL, isDreamShotLabel, MAX_PROPOSAL_FRAME_BYTES } from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -120,6 +125,7 @@ const MAX_SHOT_LABEL = 120;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const ShotUploadUrlInputSchema = z.object({
+  purpose: z.enum(['screenshot', 'concept']).optional(),
   label: z
     .string()
     .trim()
@@ -453,6 +459,8 @@ export interface AgentChannelOptions {
    * and the creator's next poll shows the update rather than a stale snapshot.
    */
   onEvent?: (jobId: number) => void;
+  // Operator switch for concept proposals; absent means off.
+  dreamingEnabled?: () => Promise<boolean>;
   onBuilderHandoffAcknowledged?: (input: {
     jobId: number;
     acknowledgedAt: string;
@@ -555,7 +563,17 @@ type RejectionReason =
   // Same budget over the job's whole life, across reopens.
   | 'job_delivery_cap'
   // The platform's daily gate-build allowance is spent; staged sources survive.
-  | 'gate_capacity';
+  | 'gate_capacity'
+  // A concept frame outlived the delivery its URL was issued for.
+  | 'stale_delivery'
+  // No green capture yet, so a proposal drawn now could not be posted.
+  | 'no_capture'
+  // This delivery already carries a proposal, whoever drew it.
+  | 'already_proposed'
+  // A concept frame whose aspect ratio does not match the gate capture.
+  | 'frame_shape'
+  // A concept frame that measures fine and carries no pixels to draw.
+  | 'frame_blank';
 
 const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
 
@@ -1062,9 +1080,52 @@ export async function registerAgentChannelRoutes(
         });
       }
 
+      // Refuse here, not at suggest_next_round: by then the agent has already paid for
+      // two image-model frames and we have stored them for a card nobody will see.
+      const conceptVersion = record.previewVersion ?? record.deliveredVersion;
+      if (parsed.data.purpose === 'concept') {
+        // Final answers first; `no_capture` only sends the agent away.
+        if (!(await (options.dreamingEnabled ?? (async () => false))())) {
+          return reply.send({ accepted: false, rejected: 'proposals_off', ...(await channelState(jobId, record)) });
+        }
+        // Uncached: a mute from another instance must not buy two frames.
+        if (await store!.readProposalsMutedAt(record.ownerUid)) {
+          return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
+        }
+        // Without a green capture the card can never post, and the agent would learn that
+        // only after paying for two frames.
+        if (!conceptVersion || !(await conceptCapture(record))) {
+          return reply.send({ accepted: false, rejected: 'no_capture', ...(await channelState(jobId, record)) });
+        }
+        // The shared predicate: a lapsed claim is reclaimable, so mint again.
+        if (dreamClaimHolds(record.dreamRun, conceptVersion, new Date().toISOString(), record.roundGeneration ?? 1)) {
+          return reply.send({ accepted: false, rejected: 'already_proposed', ...(await channelState(jobId, record)) });
+        }
+        // A card needs both frames; room for one buys nothing.
+        const drawn = await store!.countDeliveryShots(jobId, {
+          label: DREAM_FRAME_SHOT_LABEL,
+          deliveryVersion: conceptVersion,
+          roundGeneration: record.roundGeneration ?? 1,
+        });
+        // Past the pair, a URL only invites a wasted frame.
+        if (drawn >= PROPOSAL_OPTIONS) {
+          return reply.send({ accepted: false, rejected: 'too_many_shots', ...(await channelState(jobId, record)) });
+        }
+        const needed = PROPOSAL_OPTIONS - drawn;
+        if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) + needed > maxShotsPerBuild) {
+          return reply.send({ accepted: false, rejected: 'too_many_shots', ...(await channelState(jobId, record)) });
+        }
+      }
+
       const labelRaw = parsed.data.label ?? parsed.data.caption;
-      const label = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
+      const asked = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
+      // Reserved captions leave the media strip and the shot count; purpose earns one.
+      if (parsed.data.purpose !== 'concept' && isDreamShotLabel(asked)) {
+        return reply.status(400).send({ error: `"${asked}" is a reserved caption` });
+      }
+      const label = parsed.data.purpose === 'concept' ? DREAM_FRAME_SHOT_LABEL : asked;
       const generation = record.roundGeneration ?? 1;
+      const mintedFor = parsed.data.purpose === 'concept' ? conceptVersion : undefined;
       const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
       // One clock read: advertised expiresAt must match the signed exp.
       const issuedAt = now();
@@ -1073,6 +1134,7 @@ export async function registerAgentChannelRoutes(
         roundGeneration: generation,
         kind: 'screenshot',
         ...(label ? { label } : {}),
+        ...(mintedFor ? { version: mintedFor } : {}),
         now: issuedAt,
         ttlSeconds,
       });
@@ -1084,7 +1146,7 @@ export async function registerAgentChannelRoutes(
         expiresAt,
         expiresInSeconds: ttlSeconds,
         upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
-        maxBytes: MAX_AGENT_SHOT_BYTES,
+        maxBytes: parsed.data.purpose === 'concept' ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES,
         ...(await channelState(jobId, record)),
       });
     },
@@ -1111,7 +1173,9 @@ export async function registerAgentChannelRoutes(
       if (isRateLimited(shotsByBuild, jobId, now(), maxShotsPerWindow)) {
         return reject('rate_limited');
       }
-      if ((await store!.countBuildShots(jobId)) >= maxShotsPerBuild) {
+      const concept = upload.label === DREAM_FRAME_SHOT_LABEL;
+      // Ownership, not caption: every upload is the agent's, only drawn frames are ours.
+      if (!concept && (await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 
@@ -1126,8 +1190,9 @@ export async function registerAgentChannelRoutes(
       if (!bytes || bytes.length === 0) {
         return reply.status(400).send({ error: 'png body is required' });
       }
-      if (bytes.length > MAX_AGENT_SHOT_BYTES) {
-        return reply.status(413).send({ error: 'screenshot is too large' });
+      const maxBytes = concept ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES;
+      if (bytes.length > maxBytes) {
+        return reply.status(413).send({ error: concept ? 'concept frame is too large' : 'screenshot is too large' });
       }
       if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
         return reply.status(400).send({ error: 'not a PNG' });
@@ -1136,11 +1201,47 @@ export async function registerAgentChannelRoutes(
       const label = upload.label
         ? sanitizeCreatorText(upload.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
         : '';
+      // Generation takes minutes; the delivery it was drawn on must still be current.
+      const conceptVersion = upload.version;
+      if (concept && conceptVersion !== (record.previewVersion ?? record.deliveredVersion)) {
+        return reject('stale_delivery');
+      }
+      if (concept) {
+        // A reshaped frame repainted the HUD, and a stored one still spends a slot.
+        const capture = await conceptCapture(record);
+        const frameSize = imageSize(bytes);
+        if (!capture || !frameSize || !sameAspectRatio(frameSize, capture)) return reject('frame_shape');
+        // A header measures fine and draws nothing; the card is permanent.
+        if (!carriesPixels(bytes)) return reject('frame_blank');
+      }
 
-      const stored = await store!.appendBuildShot(jobId, {
-        data: bytes.toString('base64'),
-        ...(label ? { label } : {}),
-      });
+      const body64 = bytes.toString('base64');
+      let stored: BuildShot;
+      if (concept) {
+        // A minted URL promises a slot; the write is the cap.
+        const outcome = await store!.appendDeliveryShot(
+          jobId,
+          {
+            label: DREAM_FRAME_SHOT_LABEL,
+            deliveryVersion: conceptVersion ?? '',
+            roundGeneration: upload.roundGeneration,
+            max: PROPOSAL_OPTIONS,
+            // One URL, one document; a retry rewrites its own frame.
+            id: `concept-${upload.nonce}`,
+          },
+          {
+            data: body64,
+            label: DREAM_FRAME_SHOT_LABEL,
+            roundGeneration: upload.roundGeneration,
+            deliveryVersion: conceptVersion ?? '',
+          },
+        );
+        // Two answers, not one: ask for a new URL, or stop asking.
+        if (!outcome.ok) return reject(outcome.refused);
+        stored = outcome.shot;
+      } else {
+        stored = await store!.appendBuildShot(jobId, { data: body64, ...(label ? { label } : {}) });
+      }
       options.onEvent?.(jobId);
 
       return reply.send({
@@ -2243,7 +2344,29 @@ export async function registerAgentChannelRoutes(
     },
   );
 
+  // The gate capture, read whole: the proposal refuses one the manifest allows.
+  async function conceptCapture(record: SubmissionRecord): Promise<ImageSize | null> {
+    const version = record.previewVersion ?? record.deliveredVersion;
+    if (!record.slug || !version || !options.gamesStore) return null;
+    const manifest = await options.gamesStore.getManifest(record.slug, version).catch(() => null);
+    const path = gateFrameOf(manifest);
+    if (!path) return null;
+    const source = await options.gamesStore.getDerivedArtifact(record.slug, version, path).catch(() => null);
+    if (!source || source.length === 0 || source.length > MAX_SHOT_BYTES || !isPng(source)) return null;
+    return imageSize(source);
+  }
+
   registerAgentChannelBriefRoutes(app, { resolveBuild, store });
+
+  registerAgentChannelProposalRoutes(app, {
+    resolveBuild,
+    store,
+    gamesStore: options.gamesStore,
+    dreamingEnabled: options.dreamingEnabled ?? (async () => false),
+    stopReason,
+    channelState,
+    ...(options.onEvent ? { onPosted: options.onEvent } : {}),
+  });
 
   registerAgentChannelSeedRoutes(app, {
     resolveBuild,

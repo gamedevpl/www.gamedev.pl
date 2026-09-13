@@ -5,6 +5,7 @@ import {
   clearNotifications,
   fetchNotifications,
   fetchNotificationPreferences,
+  onNotificationPreferencesChanged,
   markNotificationsRead,
   updateNotificationPreferences,
   type AppNotification,
@@ -149,6 +150,21 @@ export function NotificationBell() {
     }
   }, [prefs]);
 
+  // A card can mute proposals; the bell must hear it.
+  useEffect(() => onNotificationPreferencesChanged((next) => setPrefs(next)), []);
+
+  const toggleProposals = useCallback(async () => {
+    if (!prefs) return;
+    setPrefsBusy(true);
+    try {
+      setPrefs(await updateNotificationPreferences({ proposals: prefs.proposals === false }));
+    } catch {
+      // Same as above: the switch shows what the server last confirmed.
+    } finally {
+      setPrefsBusy(false);
+    }
+  }, [prefs]);
+
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -264,6 +280,18 @@ export function NotificationBell() {
                   ? t('notifications.prefs.digestOn', { defaultValue: 'Weekly summary on' })
                   : t('notifications.prefs.digestOff', { defaultValue: 'Weekly summary off' })}
               </button>
+              {prefs.proposals !== undefined ? (
+                <button
+                  type="button"
+                  className={prefs.proposals ? 'notif-push-toggle is-on' : 'notif-push-toggle'}
+                  onClick={() => void toggleProposals()}
+                  disabled={prefsBusy}
+                >
+                  {prefs.proposals
+                    ? t('notifications.prefs.proposalsOn', { defaultValue: 'Concept proposals on' })
+                    : t('notifications.prefs.proposalsOff', { defaultValue: 'Concept proposals off' })}
+                </button>
+              ) : null}
             </div>
           )}
 

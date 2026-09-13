@@ -67,6 +67,11 @@ export const STUDIO_STEPS = [
   'gate_verdict',
   'round_opened',
   'workspace_checkout',
+  // NP-1v: the visual decision proposal's three exits, plus its arrival.
+  'proposal_shown',
+  'proposal_picked',
+  'proposal_postponed',
+  'proposal_muted',
 ] as const;
 export type StudioStep = (typeof STUDIO_STEPS)[number];
 

@@ -124,6 +124,8 @@ export type {
   StoredBuildEvent,
   StoredCreatorRevision,
   SubmissionPublishedResponse,
+  CreatorProposal,
+  CreatorProposalOption,
   SubmissionStatusResponse,
   SubmissionStatusResponseBase,
 } from './submission-status.js';

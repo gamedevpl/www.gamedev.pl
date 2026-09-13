@@ -1,4 +1,5 @@
 import { CliFunnelBlock } from './CliFunnelBlock.js';
+import { ProposalFunnelBlock } from './ProposalFunnelBlock.js';
 import { type VisitFunnel, type VisitsResponse } from './healthApi.js';
 
 /**
@@ -566,6 +567,7 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
         </div>
 
         <CliFunnelBlock funnel={funnel} />
+        <ProposalFunnelBlock funnel={funnel} />
 
         {funnel.completion?.requests ? (
           <div className="funnel-block">
