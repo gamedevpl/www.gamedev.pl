@@ -57,6 +57,7 @@ import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { InMemoryAccessTokensStore } from './slices/access-tokens.js';
 import { InMemoryAccessStore } from './slices/access.js';
 import { InMemoryAgentKeysStore } from './slices/agent-keys.js';
+import { InMemoryGameAdmissionStore } from './slices/game-admission.js';
 import { InMemoryBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
 import {
   InMemoryBuildMediaStore,
@@ -127,6 +128,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private contributionStore = new InMemoryContributionStore();
   private accessTokensStore = new InMemoryAccessTokensStore();
   private agentKeysStore = new InMemoryAgentKeysStore();
+  private gameAdmissionStore = new InMemoryGameAdmissionStore();
   private oauthStore = new InMemoryOAuthStore();
   private cliChatStore = new InMemoryCliChatStore();
 
@@ -205,8 +207,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
     await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
-    for (const [slug, record] of [...this.agentKeysStore.gameAgentKeys]) {
-      if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
+    for (const [slug, record] of [...this.gameAdmissionStore.gameAgentKeys]) {
+      if (record.ownerUid === uid) this.gameAdmissionStore.gameAgentKeys.delete(slug);
     }
     this.agentKeysStore.creatorAgentKeys.delete(uid);
     this.cliChatStore.chats.delete(uid);
@@ -1347,23 +1349,23 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null> {
-    return this.agentKeysStore.getGameAgentKey(slug);
+    return this.gameAdmissionStore.getGameAgentKey(slug);
   }
 
   async ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    return this.agentKeysStore.ensureGameAgentKey(slug, ownerUid, at);
+    return this.gameAdmissionStore.ensureGameAgentKey(slug, ownerUid, at);
   }
 
   async rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    return this.agentKeysStore.rotateGameAgentKey(slug, ownerUid, at);
+    return this.gameAdmissionStore.rotateGameAgentKey(slug, ownerUid, at);
   }
 
   async beginAgentOpenRound(slug: string, at: string): Promise<boolean> {
-    return this.agentKeysStore.beginAgentOpenRound(slug, at);
+    return this.gameAdmissionStore.beginAgentOpenRound(slug, at);
   }
 
   async finishAgentOpenRound(slug: string, at: string): Promise<void> {
-    return this.agentKeysStore.finishAgentOpenRound(slug, at);
+    return this.gameAdmissionStore.finishAgentOpenRound(slug, at);
   }
 
   async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
