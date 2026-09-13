@@ -202,3 +202,40 @@ describe('leaving room for the stand-in', () => {
     expect(budgets.reduce((sum, budget) => sum + budget, 0)).toBeLessThanOrEqual(1000);
   });
 });
+
+// A stand-in that 404s takes budget and hides the cause.
+describe('an unreachable stand-in', () => {
+  it('costs the real attempts more than a third of the budget', async () => {
+    const budgets: number[] = [];
+    const attempt = async (_model: string | undefined, timeoutMs: number) => {
+      budgets.push(timeoutMs);
+      throw new Error('503 UNAVAILABLE');
+    };
+
+    await callWithVertexResilience({ attempt, timeoutMs: 20_000, retryDelayMs: 0, fallbackModel: 'absent-model' })
+      .catch(() => undefined);
+    const withStandIn = budgets.splice(0).slice(0, 2).reduce((a, b) => a + b, 0);
+
+    await callWithVertexResilience({ attempt, timeoutMs: 20_000, retryDelayMs: 0 }).catch(() => undefined);
+    const withoutStandIn = budgets.reduce((a, b) => a + b, 0);
+
+    expect(withStandIn).toBeLessThan(withoutStandIn);
+  });
+
+  it('replaces a retryable cause with the stand-in 404', async () => {
+    const attempt = async (model: string | undefined) => {
+      if (model) throw new Error('404 Publisher model not found');
+      throw new Error('503 UNAVAILABLE');
+    };
+
+    const err = await callWithVertexResilience({
+      attempt,
+      timeoutMs: 1_000,
+      retryDelayMs: 0,
+      fallbackModel: 'absent-model',
+    }).catch((error: unknown) => error);
+
+    expect(String(err)).toContain('404');
+    expect(isRetryableVertexError(err)).toBe(false);
+  });
+});
