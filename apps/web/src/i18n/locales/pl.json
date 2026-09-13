@@ -225,7 +225,17 @@
     "howToPlayTouch": "Dotyk",
     "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych",
     "howToPlayOther": "Sterowanie",
-    "aboutGame": "O tej grze"
+    "aboutGame": "O tej grze",
+    "agent": {
+      "title": "Tryb agenta",
+      "menu": "Tryb agenta",
+      "waiting": "czekam na grę…",
+      "close": "Zamknij tryb agenta",
+      "run": "Uruchom",
+      "guide": "Jak to działa (dla agentów)",
+      "inputLabel": "Komenda agenta",
+      "shotAlt": "Klatka gry w obecnym stanie, uchwycona przy zatrzymanym czasie"
+    }
   },
   "catalog": {
     "title": "Gry",

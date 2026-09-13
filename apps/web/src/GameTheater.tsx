@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { gamePageHandle, isPlatformAuthor, type CatalogEditor, type CatalogTouch } from './catalog.js';
+import { AgentPlayPanel } from './AgentPlayPanel.js';
+import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
 import { GameFrame } from './GameFrame.js';
 import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
@@ -171,6 +173,10 @@ export function GameTheater({
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  // Agent play mode, per tab; see docs/agent-play-mode.md.
+  const agentModeKey = reportSlug ?? 'draft';
+  const [agentOpen, setAgentOpen] = useState(() => agentModeRequested() || isAgentModeEnabled(agentModeKey));
+  useEffect(() => setAgentModeEnabled(agentModeKey, agentOpen), [agentModeKey, agentOpen]);
   const [playerEngaged, setPlayerEngaged] = useState(false);
   const [chromeIdle, setChromeIdle] = useState(false);
   const [chromeFocused, setChromeFocused] = useState(false);
@@ -728,6 +734,19 @@ export function GameTheater({
                 </button>
                 <div className="theater-more-panel" role="menu">
                   {howToPlayControl('theater-menu-item howto-menu', 'more')}
+                  <button
+                    type="button"
+                    className="theater-menu-item"
+                    role="menuitem"
+                    aria-pressed={agentOpen}
+                    onClick={() => {
+                      setMoreOpen(false);
+                      setAgentOpen((open) => !open);
+                    }}
+                  >
+                    <PixelIcon name="gamepad" size={13} />
+                    <span className="btn-label">{t('player.agent.menu')}</span>
+                  </button>
                   {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
@@ -848,6 +867,7 @@ export function GameTheater({
           <PixelIcon name="close" size={16} />
         </button>
       ) : null}
+      <AgentPlayPanel open={agentOpen} frameRef={frameRef} onClose={() => setAgentOpen(false)} />
       <HowToPlayPanel
         open={howToOpen}
         rows={controlRows}

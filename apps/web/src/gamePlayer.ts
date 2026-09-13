@@ -1,6 +1,7 @@
 import type { Locale } from '@gamedevpl/contract';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
+import { AGENT_BRIDGE } from './agentPlayBridge.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 
@@ -290,16 +291,21 @@ const BRIDGE = `(function(){
       aliveFrames:lastAlive
     });
   }
-  function setPaused(next){
-    if(next===paused){if(next)sendSnapshot('pause');return;}
+  // options.veil:false freezes without the dimming overlay, and options.snapshot:false
+  // without the PNG round trip — agent play mode pauses on every command, and both would
+  // otherwise show up in the screenshots it takes and in its per-command cost.
+  function setPaused(next,options){
+    var veil=!(options&&options.veil===false);
+    var wantSnapshot=!(options&&options.snapshot===false);
+    if(next===paused){if(next&&wantSnapshot)sendSnapshot('pause');return;}
     paused=next;
     if(paused){
       // Snapshot first — then veil — so the overlay never lands in the PNG.
-      var png=capturePng();
+      var png=wantSnapshot?capturePng():null;
       document.dispatchEvent(new CustomEvent('gdpl-pause'));
-      showOverlay();
+      if(veil)showOverlay();
       suspendAudio(true);
-      sendSnapshot('pause',png);
+      if(wantSnapshot)sendSnapshot('pause',png);
     }else{
       hideOverlay();
       suspendAudio(false);
@@ -331,6 +337,7 @@ const BRIDGE = `(function(){
     else if(m.type==='capture'){sendSnapshot('capture');}
     else if(m.type==='snapshotState'){sendStateSnapshot();}
     else if(m.type==='restoreState'){applyStateRestore(m.data);}
+    else if(typeof m.type==='string'&&m.type.indexOf('agent:')===0){handleAgentMessage(m);}
   });
   var lastActivity=0;
   function reportActivity(){
@@ -390,6 +397,7 @@ const BRIDGE = `(function(){
     setTimeout(function(){sendMeta();sendControls();},400);
   }
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
+${AGENT_BRIDGE}
 })();`;
 
 // Hide in-game chrome; theater owns title and sound.

@@ -225,7 +225,17 @@
     "howToPlayTouch": "Touch",
     "howToPlayTouchPad": "On-screen pad on touch screens",
     "howToPlayOther": "Control",
-    "aboutGame": "About this game"
+    "aboutGame": "About this game",
+    "agent": {
+      "title": "Agent mode",
+      "menu": "Agent mode",
+      "waiting": "waiting for the game…",
+      "close": "Close agent mode",
+      "run": "Run",
+      "guide": "How this works (for agents)",
+      "inputLabel": "Agent command",
+      "shotAlt": "The game frame as it stands, captured with time stopped"
+    }
   },
   "catalog": {
     "title": "Games",
