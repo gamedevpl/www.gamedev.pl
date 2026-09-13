@@ -1,9 +1,9 @@
 // Stand-in models. See docs/content-safety-plan.md.
 
-// Peers of gemini-3.8-flash on Vertex; cheaper models are refused.
-const VERTEX_PEERS = new Set(['gemini-3.8-flash', 'claude-sonnet-5', 'claude-opus-5']);
+// Only what Vertex serves us; Claude arrives via the seed providers.
+const VERTEX_PEERS = new Set(['gemini-3.8-flash']);
 
-// No default: this project cannot reach the Claude peers.
+// No default: a stand-in is a third attempt, someone is waiting.
 export function resolveRefineFallbackModel(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const configured = env.REFINE_FALLBACK_MODEL?.trim();
   if (!configured) return undefined;

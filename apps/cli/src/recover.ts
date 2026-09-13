@@ -13,6 +13,22 @@ import { findCheckout, localGameFiles, writeBase, fetchLatestTree, initializeChe
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { PickChoice } from './workshop.js';
 
+// The canonical name lives in SPEC.md, not the manifest.
+function titleText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (!value || typeof value !== 'object') return '';
+  const localized = value as Record<string, unknown>;
+  const picked = [localized.en, ...Object.values(localized)].find((entry) => typeof entry === 'string');
+  return typeof picked === 'string' ? picked.trim() : '';
+}
+
+// The route takes a uuid, so looking uuid-shaped is not enough.
+const RECOVERY_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Mirrors the bounds the recovery route enforces.
+const TITLE_MIN = 3;
+const TITLE_MAX = 120;
+
 export type RecoveryResult = { token: string; slug: string; root: string };
 
 export async function recoverCheckout(
@@ -48,7 +64,12 @@ function readPending(path: string): PendingRecovery {
     parsed = null;
   }
   const record = (parsed && typeof parsed === 'object' ? parsed : {}) as Partial<PendingRecovery>;
-  if (typeof record.slug !== 'string' || typeof record.key !== 'string' || typeof record.origin !== 'string')
+  if (
+    typeof record.slug !== 'string' ||
+    typeof record.origin !== 'string' ||
+    typeof record.key !== 'string' ||
+    !RECOVERY_KEY.test(record.key)
+  )
     throw new CliError(
       `A pending recovery is unreadable: ${path} — local files are unchanged.`,
       EXIT_REFUSED,
@@ -104,7 +125,7 @@ async function performRecovery(input: {
   let pending: PendingRecovery | undefined;
   if (existsSync(pendingPath)) {
     pending = readPending(pendingPath);
-    if (pending?.slug !== slug || pending?.origin !== input.api.origin || !/^[0-9a-f-]{36}$/.test(pending?.key ?? ''))
+    if (pending?.slug !== slug || pending?.origin !== input.api.origin)
       throw new CliError('A different recovery is pending. Resume it before changing the destination.', EXIT_REFUSED);
   }
   if (status.kind === 'occupied') {
@@ -122,11 +143,16 @@ async function performRecovery(input: {
   const files = localGameFiles(checkout.root, checkout.slug);
   const spec = files.find((f) => f.path === 'SPEC.md')?.content;
   if (!spec) throw new CliError('Recovery needs SPEC.md in the game directory.', EXIT_INPUT);
-  let metadata: { title?: string } = {};
+  let metadata: { title?: unknown } = {};
   const game = files.find((f) => f.path === 'GAME.json');
-  if (game) metadata = parseJsonObject(game.content, 'GAME.json') as { title?: string };
-  const title = metadata.title ?? spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1];
+  if (game) metadata = parseJsonObject(game.content, 'GAME.json');
+  const title = titleText(spec.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]) || titleText(metadata.title);
   if (!title) throw new CliError('Set the title in GAME.json or SPEC.md before recovery.', EXIT_INPUT);
+  if (title.length < TITLE_MIN || title.length > TITLE_MAX)
+    throw new CliError(
+      `The title must be ${TITLE_MIN} to ${TITLE_MAX} characters. Fix it in GAME.json or SPEC.md.`,
+      EXIT_INPUT,
+    );
   const concept = spec.slice(0, 4000);
   if (concept.trim().length < 30)
     throw new CliError('SPEC.md needs a game description of at least 30 characters.', EXIT_INPUT);

@@ -370,3 +370,25 @@ it('flag on: the canonical new owner is recognized, though the claim itself is a
   expect(recovered.statusCode).toBe(409);
   expect(recovered.json().error).toBe('recovery_changed');
 });
+
+it('names the field it refused instead of only saying the request is invalid', async () => {
+  const f = await fixture();
+  const res = await f.app.inject({
+    method: 'POST',
+    url: '/api/me/studio/recover',
+    payload: { ...payload(), title: { en: 'Sky Game' } },
+  });
+  expect(res.statusCode).toBe(400);
+  expect(res.json().message).toContain('title');
+});
+it('reports a length bound without echoing the value it refused', async () => {
+  const f = await fixture();
+  const res = await f.app.inject({
+    method: 'POST',
+    url: '/api/me/studio/recover',
+    payload: { ...payload(), concept: 'too short to survive' },
+  });
+  expect(res.statusCode).toBe(400);
+  expect(res.json().message).toContain('concept is shorter than 30');
+  expect(res.json().message).not.toContain('too short to survive');
+});
