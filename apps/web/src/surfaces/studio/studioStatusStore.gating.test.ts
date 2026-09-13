@@ -95,8 +95,8 @@ describe('status poll gating', () => {
     await vi.advanceTimersByTimeAsync(31 * 60_000);
     await fetchesOver(2 * 60_000);
 
+    // No visibilitychange here: interaction alone has to lift the slow timer.
     noteStudioInteraction();
-    document.dispatchEvent(new Event('visibilitychange'));
     expect(await fetchesOver(ACTIVE_MS * 3)).toBeGreaterThanOrEqual(2);
     stop();
   });

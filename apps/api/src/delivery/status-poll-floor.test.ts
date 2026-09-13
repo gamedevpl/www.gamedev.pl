@@ -10,16 +10,15 @@ describe('statusPollFloorMs', () => {
     expect(statusPollFloorMs({ terminal: false, dispatched: true, msSinceMovement: 60 * 60_000 })).toBe(2_000);
   });
 
-  it('widens as the round goes quiet, and stops at the cache TTL', () => {
+  it('widens once, and never past ten seconds', () => {
     const floor = (minutes: number) =>
       statusPollFloorMs({ terminal: false, dispatched: false, msSinceMovement: minutes * 60_000 });
     expect(floor(0)).toBe(3_000);
     expect(floor(1)).toBe(3_000);
     expect(floor(5)).toBe(10_000);
-    expect(floor(20)).toBe(30_000);
-    expect(floor(120)).toBe(60_000);
-    // Beyond the 60s status cache the answer can legitimately change.
-    expect(floor(60 * 24)).toBe(60_000);
+    // An agent can rejoin a round quiet for a day.
+    expect(floor(20)).toBe(10_000);
+    expect(floor(60 * 24)).toBe(10_000);
   });
 
   it('never slows the live feed on an unusable age', () => {

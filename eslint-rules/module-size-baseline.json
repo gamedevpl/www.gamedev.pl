@@ -906,7 +906,7 @@
     "apps/web/src/surfaces/studio/StudioStageCard.tsx": 93,
     "apps/web/src/surfaces/studio/studioStatusPoll.ts": 37,
     "apps/web/src/surfaces/studio/studioStatusStore.test.ts": 476,
-    "apps/web/src/surfaces/studio/studioStatusStore.ts": 226,
+    "apps/web/src/surfaces/studio/studioStatusStore.ts": 230,
     "apps/web/src/surfaces/studio/StudioStrip.test.tsx": 146,
     "apps/web/src/surfaces/studio/StudioStrip.tsx": 298,
     "apps/web/src/surfaces/studio/StudioStripOverflowMenu.tsx": 190,

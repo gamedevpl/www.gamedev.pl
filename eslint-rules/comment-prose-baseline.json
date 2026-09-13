@@ -175,7 +175,7 @@
     "apps/api/src/delivery/source-delivery.ts": 59,
     "apps/api/src/delivery/staged-preview.test.ts": 593,
     "apps/api/src/delivery/staged-preview.ts": 1876,
-    "apps/api/src/delivery/status-poll-floor.ts": 61,
+    "apps/api/src/delivery/status-poll-floor.ts": 173,
     "apps/api/src/delivery/ts-any-scan.ts": 752,
     "apps/api/src/erase-verification-workflow.test.ts": 335,
     "apps/api/src/firestore-indexes.test.ts": 504,

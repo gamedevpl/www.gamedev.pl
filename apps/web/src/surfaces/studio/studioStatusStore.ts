@@ -1,5 +1,5 @@
 import { getSubmissionStatus, type SubmissionApiError, type SubmissionStatus } from '../../submissionApi.js';
-import { gatedPollDelayMs } from './pollGating.js';
+import { gatedPollDelayMs, idleFloorMs } from './pollGating.js';
 
 // One shared poll per (token, locale); each subscriber sets its own cadence.
 export interface StudioStatusSubscriber {
@@ -38,7 +38,11 @@ let attentionWired = false;
  * cannot see, and so tests can drive the idle gate without synthesising events.
  */
 export function noteStudioInteraction(): void {
-  lastInteractionAt = Date.now();
+  const at = Date.now();
+  // A slow timer is already scheduled; the reset needs it recomputed.
+  const wasThrottled = idleFloorMs(at - lastInteractionAt) > 0;
+  lastInteractionAt = at;
+  if (wasThrottled) rescheduleAll();
 }
 
 function rescheduleAll(): void {

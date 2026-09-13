@@ -99,7 +99,13 @@ causes and each needs a different signal:
 | --- | --- | --- |
 | Hidden | `document.hidden` | stops; catches up on `visibilitychange` |
 | Idle | no `pointerdown`/`keydown` | 10s after 2 min, 30s after 10, 60s after 30 |
-| Server floor | `pollAfterMs` in the status | never polls faster, however the bundle feels |
+| Server floor | `pollAfterMs` in the status | 3s while moving, 10s once quiet |
+
+**The two client gates may be aggressive; the server floor may not.** Both client gates are
+conditioned on nobody looking, and interaction lifts them at once, so a minute of staleness
+costs a creator nothing. The server floor applies to every client, including a tab someone
+is watching right now, so it is sized by what can still happen rather than by how long
+nothing has.
 
 **Visibility alone does not catch a creator who walked away**, which is why the idle gate
 exists: a forgotten tab stays focused, and `document.hidden` reports it as watched. Equally,
@@ -107,15 +113,30 @@ idleness is never *inferred from an absence of observation* — where there is n
 to listen to, the idle gate does not apply at all, or a non-browser consumer would throttle
 itself to a minute with nothing able to reset it.
 
-**The server floor is where the policy belongs.** `statusPollFloorMs` derives it from how
-long the round has been still, capped at the 60s status-cache TTL because beyond that the
-answer can legitimately change, and floored at 2s for `dispatched`, whose cache is 2s. A
-cadence compiled into a bundle can only change on a deploy that every open tab must reload
-to receive; a number in the response reaches the next poll.
+**The server floor is where the policy belongs.** A cadence compiled into a bundle can only
+change on a deploy that every open tab must reload to receive; a number in the response
+reaches the next poll.
+
+Sizing it against the 60s status-cache TTL was the first attempt and was wrong, which is
+worth recording because the reasoning is seductive: a poll faster than the TTL can only
+re-read an identical cached body, so the TTL looks like a free ceiling. **A cache TTL bounds
+how stale the server's own copy may be; it says nothing about the answer.** `onEvent` busts
+that cache the moment an agent acts, and a quiet self round is precisely the one an agent
+rejoins — `start` pulses Studio so "agent stopped" cannot sit beside live progress, and
+every stage refreshes the heartbeat (`.claude/skills/byoca-mcp/SKILL.md`). A minute-long
+floor would have restored a lingering-state bug that skill records as already fixed. The
+widening therefore stops at **10s**, and `dispatched` keeps 2s to match its own cache.
 
 None of the three delays the creator: their own actions invalidate the cache and call
 `pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
 never the first read — a mount still answers the page once.
+
+**Resetting the idle clock is not the same as lifting the gate.** Recording a fresh
+interaction leaves the slow timer that is already scheduled, so a creator who typed just
+after a poll waited out the old sixty seconds anyway. `noteStudioInteraction` reschedules
+whenever the floor it just lifted was non-zero — and only then, so ordinary typing does not
+churn timers. The test for this originally dispatched `visibilitychange` alongside the
+interaction, which reached `rescheduleAll` by the other path and hid the bug completely.
 
 
 ### The per-user half is the only part that grows with visitors

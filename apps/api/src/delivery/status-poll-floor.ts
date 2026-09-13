@@ -1,21 +1,30 @@
 // How soon a status poll could possibly see something new.
 
-// The status response is cached for 60s and dropped by any write that changes the
-// answer, so a poll faster than the floor below can only re-read an identical body.
-// The creator's own actions do not wait on this: they invalidate the cache and the
-// client pokes its poll immediately, which is why a coarse floor is safe here.
+/**
+ * This floor applies to every client, including a tab a creator is watching right now,
+ * so it has to be sized by what can still happen — not by how long nothing has.
+ *
+ * The first version capped it at the 60s status-cache TTL, reasoning that a faster poll
+ * could only re-read an identical cached body. That was the wrong constraint. A cache TTL
+ * bounds how stale the server's own copy may be; it says nothing about the answer, and
+ * `onEvent` busts the cache the moment an agent acts. A quiet self round is exactly the
+ * one an agent rejoins: `start` pulses Studio so "agent stopped" cannot sit next to live
+ * progress, and every stage refreshes the heartbeat. A minute-long floor would have put
+ * that lingering state back, which is the failure `.claude/skills/byoca-mcp/SKILL.md`
+ * records as already fixed.
+ *
+ * So the widening stops at ten seconds. Deeper savings belong on the client, where the
+ * gate can be conditioned on nobody looking and snap back on the first keypress.
+ */
 
+// Nothing has moved recently, but an agent can rejoin at any moment.
+const QUIET_MS = 10_000;
 const MOVING_MS = 3_000;
-const SETTLING_MS = 10_000;
-const QUIET_MS = 30_000;
-const DORMANT_MS = 60_000;
 
 // Session boot re-observes Agent Tasks on a 2s cache.
 const DISPATCHED_MS = 2_000;
 
-const SETTLING_AFTER_MS = 2 * 60_000;
-const QUIET_AFTER_MS = 10 * 60_000;
-const DORMANT_AFTER_MS = 30 * 60_000;
+const QUIET_AFTER_MS = 2 * 60_000;
 
 export interface StatusPollFloorInput {
   // Published or abandoned: the client stops polling on its own.
@@ -32,10 +41,7 @@ export function statusPollFloorMs(input: StatusPollFloorInput): number | undefin
   const since = input.msSinceMovement;
   // An unknown or nonsensical age must never slow the live feed down.
   if (!Number.isFinite(since) || since < 0) return MOVING_MS;
-  if (since < SETTLING_AFTER_MS) return MOVING_MS;
-  if (since < QUIET_AFTER_MS) return SETTLING_MS;
-  if (since < DORMANT_AFTER_MS) return QUIET_MS;
-  return DORMANT_MS;
+  return since < QUIET_AFTER_MS ? MOVING_MS : QUIET_MS;
 }
 
 // The newest timestamp that counts as this round moving.
