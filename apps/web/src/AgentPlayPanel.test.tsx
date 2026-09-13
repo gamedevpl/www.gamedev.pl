@@ -33,7 +33,7 @@ async function receive(message: Posted): Promise<void> {
 }
 
 function typeAndRun(text: string): Promise<void> {
-  const input = container.querySelector('.agent-play-input') as HTMLTextAreaElement;
+  const input = container.querySelector('.agent-play-command-input') as HTMLTextAreaElement;
   const run = container.querySelector('.agent-play-run') as HTMLButtonElement;
   return act(async () => {
     // Native setter, so React's tracked value changes and onChange fires.

@@ -234,7 +234,9 @@
       "run": "Run",
       "guide": "How this works (for agents)",
       "inputLabel": "Agent command",
-      "shotAlt": "The game frame as it stands, captured with time stopped"
+      "shotAlt": "The game frame as it stands, captured with time stopped",
+      "planLabel": "Agent plan",
+      "runPlan": "Run plan"
     }
   },
   "catalog": {

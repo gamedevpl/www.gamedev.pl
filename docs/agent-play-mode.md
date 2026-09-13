@@ -1,12 +1,10 @@
 # Agent play mode — the design
 
-> ⚠️ **Read "The shape is under revision" below before extending this.** The per-command
-> interface shipped here is the right plumbing under the wrong primary interaction.
->
-> Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, the
-> panel and the entry points are built and tested; the games-repo half (hidden fields in
-> the document, sound as text) is not, and no telemetry is emitted yet. Strategy, options and the decisions
-> this queues up live in the private ops repo (`agent-play-mode-research.md`).
+> Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, the plan
+> runner, the filmstrip, the panel and the entry points are built and tested. The
+> games-repo half (hidden fields in the document, sound as text) is not, and no telemetry
+> is emitted — reviewer traffic deliberately leaves no trace. Strategy and the decisions
+> behind all of this live in the private ops repo (`agent-play-mode-research.md`).
 
 ## The problem
 
@@ -23,9 +21,9 @@ reduced to guessing from stills.
 
 ## The shape
 
-A theater overlay that turns the running game into a turn-based text game with a picture
-attached. Opened from the player's overflow menu, or default-on with `?agent=1` — the link
-an agent is handed. Four rules carry the design:
+A theater overlay a reviewer opens from the player's overflow menu, or with `?agent=1`.
+It works at two altitudes: **submit a plan and read the evidence** for playing, and a
+command box for finding your feet first. Four rules carry the design:
 
 1. **Time belongs to the agent.** Entering the mode pauses the game; `step 5` advances five
    frames, `press right 12` holds a key across twelve, `play 500` runs live for half a
@@ -45,6 +43,8 @@ an agent is handed. Four rules carry the design:
 | Piece                          | File                                          | Role                                                                                             |
 | ------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Grammar, formatting, redaction | `apps/web/src/agentPlay.ts`                   | Pure and typed; parses a line into a command, formats state, hides declared fields               |
+| The plan language              | `apps/web/src/agentPlan.ts`                   | Parses and bounds a `CAPTURE.json`-shaped plan; evaluates its conditions                         |
+| The runner                     | `apps/web/src/agentPlanRunner.ts`             | Drives the plan over the bridge, collects trace, checks and captures                             |
 | In-frame executor              | `packages/contract/src/agent-play-bridge.ts`  | A source fragment concatenated into the player bridge; runs the verbs against `__GAME_HARNESS__` |
 | Host state                     | `apps/web/src/useAgentPlay.ts`                | Sends commands, validates what comes back, folds in the game's play signals                      |
 | The panel                      | `apps/web/src/AgentPlayPanel.tsx`             | The rail an agent reads and types into                                                           |
@@ -121,29 +121,39 @@ and has been in every published game since long before this mode existed. That i
 acceptable here only because nothing scored or recorded comes out of this surface — the
 gate and that decision hold each other up.
 
-## The shape is under revision
+## The unit is an attempt, not a keypress
 
-Reviewed the same day it was built, and two defects stand. Recorded here so nobody
-extends the wrong half.
+One command per model turn cannot play a real-time game: the play window is 120 seconds,
+catalog games run at 30fps, so one attempt is roughly 3600 frames. Nor is the page's text
+generic enough to carry a review on its own — of the 123 games in the games repo, 118
+report a `snapshot()` and all 123 have a how-to-play legend and pixels, but only 34 author
+a `snapshot.observation` and only 4 register `ui` affordances. Both facts point the same
+way, and the games repo's own review programme already went there: it replaced an
+interactive loop with replayed `CAPTURE.json` plans.
 
-**It is not generic enough.** Counted across the 123 games in the games repo: 118 report a
-`snapshot()`, all 123 carry a how-to-play legend and canvas pixels — but only 34 author a
-`snapshot.observation`, and only 4 register `ui` affordances. So on a typical game the
-panel's two richest blocks are empty. Closing that per game is the trap, not the fix. The
-universally available channels are the snapshot, the legend and **the pixels**, and this
-spike treats pixels as an afterthought rather than as the main way a generic game is seen.
+**So the runner is the main surface.** A reviewer submits a plan in the games repo's
+existing language — `press`, `tap`, `keyDown` / `keyUp`, `click`, `move`, `drag`, `wait`,
+`repeat`, `assert`, `waitFor`, `capture` — and the page runs it over the bridge at full
+speed with nothing waiting on a model. What comes back is an outcome (`completed`,
+`failed`, `exhausted`, `aborted`), the frame budget it spent, every check it made with the
+frame it made it at, a trace of state per action, and the captured frames as a filmstrip.
 
-**It puts the model in the frame loop.** One command per model turn cannot play a
-real-time game: the play window is 120 seconds, catalog games run at 30 fps, so one
-attempt is roughly 3600 frames. The games repo's own review programme already moved from
-an interactive loop to replayed `CAPTURE.json` plans for exactly this reason.
+`seed` and `film` are accepted and ignored: no record comes from this surface, so a run
+needs neither determinism nor a film window.
 
-**Where it goes.** The unit should be an _attempt_, not a keypress: the agent submits a
-plan in the games repo's existing script language (`press`, `click`, `drag`, `repeat`,
-`assert`, `waitFor`, `capture`), the page runs it at full speed over this bridge, and
-answers with a trace plus the captured frames as a filmstrip. Everything in this document
-below stays true — the bridge is exactly the `PlanDriver` such a runner needs — but the
-command box becomes the exploration mode rather than the way anyone plays.
+**The filmstrip is how a generic game is seen.** A plan that names `capture` moments gets
+those; a plan that names none gets an evenly spaced strip plus a final frame. That is the
+only channel that works on the 89 games which describe nothing in text, and it is what a
+human reviewer looks at anyway.
+
+**A plan that does not win is a result, not an error.** `waitFor never came true` and
+`the plan ran out of its N frames` are outcomes a reviewer quotes, which is the whole
+point of a review-only surface.
+
+Measured against `cavern-of-words` in Chromium: a five-action plan with a `waitFor`, two
+captures and an assert completed in 23 stepped frames and 212ms of wall clock, and moved
+the game from its intro into a different room. Stepping cost scales with a game's draw
+cost, so a heavy 3D game is slower per frame.
 
 ## Not built yet
 

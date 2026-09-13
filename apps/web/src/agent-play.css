@@ -178,3 +178,37 @@
     border-top: 1px solid var(--panel-border);
   }
 }
+
+/* The filmstrip: how a run is seen on the 89 games that describe nothing in text. */
+.agent-play-strip {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.agent-play-strip figure {
+  margin: 0;
+  flex: 0 0 auto;
+  width: 160px;
+}
+
+.agent-play-strip img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.agent-play-strip figcaption {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.agent-play-plan {
+  min-height: 140px;
+}

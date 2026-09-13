@@ -234,7 +234,9 @@
       "run": "Uruchom",
       "guide": "Jak to działa (dla agentów)",
       "inputLabel": "Komenda agenta",
-      "shotAlt": "Klatka gry w obecnym stanie, uchwycona przy zatrzymanym czasie"
+      "shotAlt": "Klatka gry w obecnym stanie, uchwycona przy zatrzymanym czasie",
+      "planLabel": "Plan agenta",
+      "runPlan": "Uruchom plan"
     }
   },
   "catalog": {
