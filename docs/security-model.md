@@ -131,7 +131,9 @@ consent and device pages, the CLI page — additionally carry:
 
 - `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` on HTML
   documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
-  without a trailing slash).
+  without a trailing slash). A percent-encoded hyphen (`/play/unicorn%2Dsnap`) is still
+  a play permalink: the matcher decodes the path before testing. Malformed percent-encoding
+  is denied, not treated as play.
   Those allow any parent (`frame-ancestors *`) and omit `X-Frame-Options` — `DENY` would
   still block a host CSP allows. The SPA never loads the game in that frame: it shows an
   interstitial (open in a new window, or `target="_top"`) so a third-party page cannot
