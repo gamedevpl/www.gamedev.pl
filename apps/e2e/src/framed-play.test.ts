@@ -3,6 +3,10 @@ import type { Browser, Page } from 'playwright-core';
 import { BASE_URL, browserPrerequisite, launchSiteBrowser } from './browser.js';
 
 // Hosts iframe /play/<slug>; the card must show, never the theater.
+
+// Reserved by RFC 2606; intercepted below, never resolved.
+const HOST_URL = 'https://e2e-host.invalid/';
+
 const prereq = browserPrerequisite();
 if (!prereq.ok) {
   console.warn(`[e2e] SKIPPED framed-play: ${prereq.reason}`);
@@ -26,9 +30,15 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
 
   it('shows the interstitial inside an iframe, never the theater', async () => {
     const page = await hostPage();
-    await page.setContent(
-      `<!doctype html><iframe src="${BASE_URL}/play/unicorn-snap" title="play" style="width:100%;height:100vh;border:0"></iframe>`,
+    // setContent leaves about:blank, which frame-ancestors * refuses.
+    await page.route(HOST_URL, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: `<!doctype html><iframe src="${BASE_URL}/play/unicorn-snap" title="play" style="width:100%;height:100vh;border:0"></iframe>`,
+      }),
     );
+    await page.goto(HOST_URL);
     const frame = page.frameLocator('iframe');
     await expect.poll(() => frame.locator('.framed-play').count(), { timeout: 20_000 }).toBe(1);
     expect(await frame.locator('.stage').count()).toBe(0);
