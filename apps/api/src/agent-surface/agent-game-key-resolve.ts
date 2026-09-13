@@ -34,19 +34,18 @@ export type ResolveGameKeyForOpenRoundResult =
     }
   | { ok: false; reason: string };
 
-// A transferred slug's older rounds still carry the former owner's uid; once the flag
-// is on and the caller is the canonical owner, widen the search to the whole slug.
+// Flag on + canonical owner: the whole slug, not just their own past rounds.
 async function widenIfTransferred(
   store: Store,
   slug: string,
   creatorUid: string,
   env: NodeJS.ProcessEnv,
 ): Promise<SubmissionRecord[]> {
-  const bySlug = await store.listSubmissionsBySlug(slug);
-  if (!gameAccessAuthoritative(env)) return bySlug.filter((job) => job.ownerUid === creatorUid);
-  if (bySlug.some((job) => job.ownerUid === creatorUid)) return bySlug.filter((job) => job.ownerUid === creatorUid);
+  if (!gameAccessAuthoritative(env)) {
+    return (await store.listSubmissionsBySlug(slug)).filter((job) => job.ownerUid === creatorUid);
+  }
   if (!(await creatorOwnsSlug(store, slug, creatorUid, env))) return [];
-  return bySlug;
+  return store.listSubmissionsBySlug(slug);
 }
 
 /** Newest active build round for this slug owned by the creator, or null. */

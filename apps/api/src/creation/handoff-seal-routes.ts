@@ -30,6 +30,7 @@ export interface HandoffSealRoutesOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     preserveRoundBudget?: boolean;
+    ownerUid?: string;
     transition?: { by: JobTransition['by']; reason: string };
   }) => Promise<ResumeOutcome>;
   gateTrigger:
@@ -104,11 +105,10 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
           : parsedBody.data.stopActiveSelfAgent === true;
 
       const currentBuilder = builderOf(record);
+      // The caller, not record.ownerUid, which a transfer leaves stale.
+      const callerUid = request.user!.uid;
       if (requestedBuilder === 'platform' && managedAvailabilityGate) {
-        const availability = await managedAvailabilityGate.peek(
-          record.ownerUid,
-          new Date(now()).toISOString().slice(0, 10),
-        );
+        const availability = await managedAvailabilityGate.peek(callerUid, new Date(now()).toISOString().slice(0, 10));
         if (!availability.available) {
           return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason });
         }
@@ -121,6 +121,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
           log: request.log,
           builder: requestedBuilder,
           preserveRoundBudget: true,
+          ownerUid: callerUid,
           transition: {
             by: 'creator',
             reason: requestedBuilder === 'self' ? 'platform_builder_handoff_retry' : 'self_builder_handoff_retry',
@@ -215,6 +216,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
         log: request.log,
         builder: requestedBuilder,
         preserveRoundBudget: true,
+        ownerUid: callerUid,
         transition: {
           by: 'creator',
           reason: requestedBuilder === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',

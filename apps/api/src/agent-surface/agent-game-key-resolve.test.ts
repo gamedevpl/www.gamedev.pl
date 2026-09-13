@@ -319,6 +319,20 @@ describe('findActiveRoundForSlug / findDraftJobForSlug widen after transfer', ()
     expect(found?.jobId).toBe(1);
   });
 
+  it('flag on: an active round under the former owner is found even when the new owner has their own older round', async () => {
+    const store = new InMemoryStore();
+    // The new owner's own unrelated round on this slug, so the naive "has own
+    // rounds" fast path would wrongly stop widening before it finds job 2.
+    await store.createSubmission(1, newOwnerUid, 'Comet Courier');
+    await store.setSubmissionSlug(1, slug);
+    await store.setSubmissionAbandoned(1, new Date(now).toISOString());
+    await seedActiveSelfRound(store, 2, 'self');
+    transferTo(store, slug, newOwnerUid);
+
+    const found = await findActiveRoundForSlug(store, slug, newOwnerUid, ON);
+    expect(found?.jobId).toBe(2);
+  });
+
   it('flag on: a stranger with no canonical claim still finds nothing', async () => {
     const store = new InMemoryStore();
     await seedActiveSelfRound(store, 1, 'self');
