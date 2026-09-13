@@ -10,7 +10,7 @@ import {
   pathInside,
   readBase,
   writeBase,
-  unreconciledMessage,
+  syncRefuse,
   type SyncResult,
   type TreeFile,
 } from './checkout-sync.js';
@@ -211,11 +211,8 @@ export async function pullGame(input: {
     writeBase(input.dest, tree.version, tree.files);
     return { version: tree.version, sync, kept };
   }
-  throw new CliError(
-    unreconciledMessage(sync),
-    EXIT_REFUSED,
-    sync.kind === 'local_only' ? cliUsage('submit') : cliUsage('checkout', '<slug>'),
-  );
+  const refused = syncRefuse(sync, 'pull');
+  throw new CliError(refused.message, EXIT_REFUSED, refused.next);
 }
 
 export async function diffGame(input: { api: ApiClient; slug: string; dest: string }): Promise<SyncResult> {

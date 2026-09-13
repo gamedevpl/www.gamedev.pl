@@ -117,31 +117,31 @@ export function formatSyncLines(sync: SyncResult): string[] {
 export function syncRefuse(sync: SyncResult, op: 'pull' | 'submit'): { message: string; next: string } {
   if (sync.kind === 'legacy') {
     return {
-      message:
-        'this checkout has no base version — copy games/<slug> aside, then check the game out again so pull cannot guess',
+      message: `this checkout has no base version — ${cliUsage('diff')} shows what differs; copy games/<slug> aside, then check the game out again so pull cannot guess`,
       next: cliUsage('checkout', '<slug>'),
     };
   }
   if (sync.kind === 'conflict') {
+    const alsoLost = sync.local.length ? ` It discards ${sync.local.join(', ')} as well.` : '';
     return {
-      message: `conflict on ${sync.conflict.join(', ')} — copy those files aside, ${cliUsage('pull')} for the platform copy, then merge. pull will not overwrite them`,
-      next: cliUsage('pull'),
+      message: `conflict on ${sync.conflict.join(', ')} — ${cliUsage('diff')} shows both sides. Plain pull refuses while they disagree: copy the whole games/<slug> aside, then ${cliUsage('pull', '--force')} replaces it with the platform copy for you to merge yours back into.${alsoLost}`,
+      next: cliUsage('diff'),
     };
   }
   if (op === 'pull' && (sync.kind === 'local_only' || sync.kind === 'both')) {
     return {
-      message: `local edits would be overwritten (${sync.local.join(', ')}) — deliver them, or copy them aside before pull`,
+      message: `local edits would be overwritten (${sync.local.join(', ')}) — ${cliUsage('submit')} delivers them first, or copy them aside and ${cliUsage('pull', '--force')} to discard them`,
       next: cliUsage('submit'),
     };
   }
   if (op === 'submit' && sync.kind === 'platform_only') {
     return {
-      message: `platform is ahead (${sync.platform.join(', ')}) — pull those files first`,
+      message: `platform is ahead (${sync.platform.join(', ')}) — ${cliUsage('pull')} brings those files down, and keeps anything you changed`,
       next: cliUsage('pull'),
     };
   }
   return {
-    message: `working copy is ${sync.kind.replaceAll('_', ' ')} versus ${sync.version}`,
+    message: `working copy is ${sync.kind.replaceAll('_', ' ')} versus ${sync.version} — ${cliUsage('diff')} shows the detail`,
     next: op === 'pull' ? cliUsage('submit') : cliUsage('pull'),
   };
 }

@@ -17,6 +17,7 @@ import {
 } from './checkout.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
+import { CliError } from './exit-codes.js';
 
 describe('checkout', () => {
   it('always inits git with a gamedevpl:// remote', async () => {
@@ -295,4 +296,30 @@ it('uses an empty synchronization base for a game without deliveries', async () 
     fetch: async () => Response.json({ versions: [] }),
   });
   await expect(fetchLatestTree(api, 'fresh')).resolves.toEqual({ version: 'undelivered', files: [] });
+});
+
+it('refuses a conflicting pull with advice that matches the refusal', async () => {
+  const dest = mkdtempSync(join(tmpdir(), 'pull-conflict-'));
+  writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
+  writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+  writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'B');
+  const api = createApi({
+    origin: 'https://www.gamedev.pl',
+    store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+    fetch: async (url) =>
+      String(url).endsWith('/versions')
+        ? new Response(
+            JSON.stringify({ versions: [{ version: 'v2', createdAt: '2026-09-13', sourceFiles: ['game.ts'] }] }),
+            { status: 200 },
+          )
+        : new Response(JSON.stringify({ version: 'v2', files: [{ path: 'game.ts', content: 'C' }] }), { status: 200 }),
+  });
+  const caught = await pullGame({ api, slug: 'ghost-roads', dest }).catch((error: unknown) => error);
+  expect(caught).toBeInstanceOf(CliError);
+  const refused = caught as CliError;
+  expect(refused.message).toContain('conflict on game.ts');
+  // The old next sent a conflict to checkout, unprompted.
+  expect(refused.next).toBe('gamedevpl diff');
+  expect(refused.next).not.toContain('checkout');
+  expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('B');
 });
