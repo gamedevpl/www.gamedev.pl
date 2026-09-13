@@ -195,6 +195,7 @@ describe('status watch', () => {
     const hostile = {
       ...carded,
       progress: {
+        ...carded.progress,
         revisions: [
           {
             proposal: {
@@ -207,6 +208,8 @@ describe('status watch', () => {
         ],
       },
     };
+    // Assert the card is named at all, or a hidden card would pass as stripped.
+    expect(formatStatusEvent(hostile)).toContain('red');
     expect(formatStatusEvent(hostile)).not.toContain('\u001b');
   });
 
