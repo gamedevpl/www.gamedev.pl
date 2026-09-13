@@ -32,11 +32,12 @@ async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled
     req.user = { uid: 'owner' } as typeof req.user;
   });
   const dispatch = vi.fn(async () => {});
+  const moderate = vi.fn(async () => ({ allowed: true as const }));
   const { createGame: realCreate } = createGameCreator({
     store,
     githubClient: {} as GitHubClient,
     submissionTokenSecret: 'secret',
-    contentChecker: { check: async () => ({ allowed: true }), checkFields: async () => ({ allowed: true }) },
+    contentChecker: { check: async () => ({ allowed: true }), checkFields: moderate },
     creationGate: null,
     managedAvailabilityGate: null,
     now: Date.now,
@@ -58,7 +59,7 @@ async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled
     checkUserAccess: () => true,
     isSlugPublished: async () => false,
   });
-  return { store, app, createGame, dispatch };
+  return { store, app, createGame, dispatch, moderate };
 }
 const payload = () => ({
   slug: 'sky',
@@ -290,3 +291,19 @@ it.each(['admin', 'foo-', 'foo--bar'])(
     expect(begin).not.toHaveBeenCalled();
   },
 );
+
+it('reserves a missing recovery slug against normal creation during moderation', async () => {
+  const f = await fixture();
+  const p = { ...payload(), slug: 'missing' };
+  const quota = vi.spyOn(f.store, 'checkAndIncrementQuota');
+  f.moderate.mockImplementationOnce(async () => {
+    const competing = await f.store.allocateJobId();
+    await f.store.createSubmission(competing, 'other', 'Missing');
+    expect(await f.store.claimSubmissionSlug(competing, 'missing', null)).toBe(false);
+    return { allowed: true };
+  });
+  const result = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: p });
+  expect(result.statusCode).toBe(200);
+  expect((await f.store.getSubmissionBySlug('missing'))?.ownerUid).toBe('owner');
+  expect(quota).toHaveBeenCalledTimes(1);
+});

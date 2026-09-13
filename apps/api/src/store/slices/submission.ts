@@ -1,3 +1,4 @@
+import { permitsRecoveryClaim } from './recovery-admission.js';
 import { bindSubmissionSlug } from './bind-submission-slug.js';
 import type { LocalActivity } from '@gamedevpl/contract';
 import { claimManualRoundSlug } from './manual-round-claim.js';
@@ -14,7 +15,7 @@ export interface SubmissionStore {
     jobId: number,
     slug: string,
     sourceJobId: number | null,
-    recovery?: { key: string; spec: string; locale: string },
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
   ): Promise<boolean>;
   setLocalActivity(jobId: number, activity: LocalActivity, start: boolean): Promise<boolean>;
   createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
@@ -159,12 +160,13 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     jobId: number,
     slug: string,
     sourceJobId: number | null,
-    recovery?: { key: string; spec: string; locale: string },
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
   ): Promise<boolean> {
     return this.db.runTransaction(async (tx) => {
       const target = await tx.get(this.ref(jobId));
       const rows = await tx.get(this.db.collection('submissions').where('slug', '==', slug));
       const game = await tx.get(this.db.collection('games').doc(slug));
+      if (!permitsRecoveryClaim(game.data()?.recoveryAdmission, recovery?.admissionNonce)) return false;
       const publication = game.data()?.publication;
       const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
       if (publication && !(sourceJobId !== null && archived)) return false;
@@ -217,7 +219,6 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    // Last write wins -- the newest delivery is worth previewing.
     await this.ref(jobId).set({ deliveredVersion: version, previewVersion: version }, { merge: true });
   }
 
@@ -226,7 +227,6 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {
-    // Transactional -- a lost increment grants an unowed agent session.
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);

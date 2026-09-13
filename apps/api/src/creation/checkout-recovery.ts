@@ -97,6 +97,7 @@ export function registerCheckoutRecovery(
             slug,
             sourceJobId: status.kind === 'canceled' || status.kind === 'archived' ? status.holder.jobId : null,
             key,
+            admissionNonce: nonce,
           },
           log: request.log,
         });

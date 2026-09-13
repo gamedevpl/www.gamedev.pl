@@ -1,3 +1,4 @@
+import { permitsRecoveryClaim } from './recovery-admission.js';
 import { canClaimManualRound } from './manual-round-claim.js';
 import { assertRecoveryBinding } from './bind-submission-slug.js';
 import type { PublicationStore } from './publication.js';
@@ -83,9 +84,10 @@ export class InMemorySubmissionStore implements SubmissionStore {
     jobId: number,
     slug: string,
     sourceJobId: number | null,
-    recovery?: { key: string; spec: string; locale: string },
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
   ): Promise<boolean> {
     const publication = await this.publication?.getPublication(slug);
+    if (!permitsRecoveryClaim(this.recoveryAdmissions.get(slug), recovery?.admissionNonce)) return false;
     const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
     if (publication && !(sourceJobId !== null && archived)) return false;
     const target = this.submissions.get(jobId);
@@ -133,7 +135,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
     const holder = [...this.submissions.values()]
       .filter((r) => r.slug === slug)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
-    assertRecoveryBinding(jobId, holder);
+    assertRecoveryBinding(jobId, holder, this.recoveryAdmissions.get(slug));
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, slug });
   }

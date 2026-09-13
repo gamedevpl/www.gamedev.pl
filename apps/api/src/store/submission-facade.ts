@@ -21,7 +21,7 @@ export abstract class SubmissionFacade {
     jobId: number,
     slug: string,
     sourceJobId: number | null,
-    recovery?: { key: string; spec: string; locale: string },
+    recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
   ): Promise<boolean> {
     return this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
   }

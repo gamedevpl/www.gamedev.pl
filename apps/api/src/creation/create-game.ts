@@ -87,7 +87,7 @@ export function createGameCreator(deps: CreateGameDeps): {
     uid: string;
     ip: string;
     payload: unknown;
-    recovery?: { slug: string; sourceJobId: number | null; key: string };
+    recovery?: { slug: string; sourceJobId: number | null; key: string; admissionNonce?: string };
     acceptLanguage?: string;
     openedBy?: 'creator' | 'agent';
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
@@ -116,7 +116,7 @@ export function createGameCreator(deps: CreateGameDeps): {
     uid: string;
     ip: string;
     payload: unknown;
-    recovery?: { slug: string; sourceJobId: number | null; key: string };
+    recovery?: { slug: string; sourceJobId: number | null; key: string; admissionNonce?: string };
     acceptLanguage?: string;
 
     openedBy?: 'creator' | 'agent';
@@ -209,6 +209,7 @@ export function createGameCreator(deps: CreateGameDeps): {
         if (
           !(await store.claimSubmissionSlug(jobId, wanted, input.recovery.sourceJobId, {
             key: input.recovery.key,
+            admissionNonce: input.recovery.admissionNonce,
             spec: sanitizedConcept,
             locale: creatorLocale,
           }))
@@ -287,7 +288,7 @@ export interface CreateGameRouteDeps {
     uid: string;
     ip: string;
     payload: unknown;
-    recovery?: { slug: string; sourceJobId: number | null; key: string };
+    recovery?: { slug: string; sourceJobId: number | null; key: string; admissionNonce?: string };
     acceptLanguage?: string;
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }) => Promise<CreateGameResult>;
