@@ -9,6 +9,8 @@ export type { DispatchStore, TransitionGuard };
 import type { SubmissionStore } from '../store/slices/submission.js';
 export type { SubmissionStore };
 import type { SubmissionQueryStore } from '../store/slices/submission-queries.js';
+import type { ShelfStoreSlice } from '../store/slices/shelf.js';
+export type { ShelfStoreSlice };
 export type { SubmissionQueryStore };
 import type { BuildLogStore } from '../store/slices/build-log.js';
 export type { BuildLogStore };
@@ -235,6 +237,7 @@ export interface Store
     DispatchStore,
     SubmissionStore,
     SubmissionQueryStore,
+    ShelfStoreSlice,
     BuildLogStore,
     BuildMediaStore,
     PublicationStore,

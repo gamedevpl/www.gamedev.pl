@@ -92,6 +92,7 @@ const FILE_BUCKET = {
   digest: 'platform',
   'agent-session': 'platform',
   'sweep-cadence': 'platform',
+  'shelf-rebuild-pass': 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
@@ -297,6 +298,8 @@ const FILE_BUCKET = {
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
+  'shelf-shadow': 'creation',
+  'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
 
   // agent-surface: channel + MCP + kit

@@ -25,6 +25,7 @@ export function registerReadMeterLog(app: FastifyInstance): void {
         fsCommits: tally.commits,
         fsTransactions: tally.transactions,
         fsPaths: topReadPaths(tally),
+        ...tally.notes,
       },
       'firestore reads',
     );

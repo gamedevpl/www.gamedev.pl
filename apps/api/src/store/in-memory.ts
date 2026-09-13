@@ -1,4 +1,7 @@
 import { SubmissionFacade } from './submission-facade.js';
+import { InMemoryShelfStore } from './slices/shelf.js';
+import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
+import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -107,6 +110,11 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
+  private shelves = new Map<string, ShelfDocument>();
+  protected shelfStore = new InMemoryShelfStore(
+    this.shelves,
+    (ownerUid) => [...this.submissions.values()].filter((record) => record.ownerUid === ownerUid).length,
+  );
   private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
     this.quotaStore.getCreationLimits(),
   );
@@ -277,8 +285,37 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.identityStore.readProposalsMutedAt(uid);
   }
 
+  // Constructed with `this`: the mirror rebuilds from this store's own reads.
+  protected shelfMirror: ShelfMirror = createShelfMirror({ store: this, now: () => Date.now() });
+
+  async getShelf(ownerUid: string): Promise<ShelfDocument | null> {
+    return this.shelfStore.getShelf(ownerUid);
+  }
+
+  async putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void> {
+    return this.shelfStore.putShelf(ownerUid, shelf);
+  }
+
+  async deleteShelf(ownerUid: string): Promise<void> {
+    return this.shelfStore.deleteShelf(ownerUid);
+  }
+
+  async countSubmissionsByOwner(ownerUid: string): Promise<number> {
+    return this.shelfStore.countSubmissionsByOwner(ownerUid);
+  }
+
+  async listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]> {
+    return this.shelfStore.listStaleShelfOwners(builtBefore, limit);
+  }
+
+  async rebuildShelf(ownerUid: string): Promise<void> {
+    await this.shelfMirror.rebuild(ownerUid);
+  }
+
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
-    return this.submissionStore.createSubmission(jobId, ownerUid, title);
+    const record = await this.submissionStore.createSubmission(jobId, ownerUid, title);
+    await this.shelfMirror.rebuild(ownerUid);
+    return record;
   }
 
   async getSubmission(jobId: number): Promise<SubmissionRecord | null> {
@@ -286,15 +323,19 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
-    return this.submissionStore.setSubmissionNotifiedStatus(jobId, status);
+    await this.submissionStore.setSubmissionNotifiedStatus(jobId, status);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
-    return this.submissionStore.setSubmissionLastStatus(jobId, status);
+    await this.submissionStore.setSubmissionLastStatus(jobId, status);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
-    return this.dispatchStore.recordJobTransition(jobId, transition, guard);
+    const moved = await this.dispatchStore.recordJobTransition(jobId, transition, guard);
+    if (moved) await this.shelfMirror.afterJobWrite(jobId);
+    return moved;
   }
 
   async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
@@ -482,11 +523,13 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   }
 
   async setSubmissionPublishedAt(jobId: number, at: string): Promise<void> {
-    return this.submissionStore.setSubmissionPublishedAt(jobId, at);
+    await this.submissionStore.setSubmissionPublishedAt(jobId, at);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
-    return this.submissionStore.setSubmissionAbandoned(jobId, at);
+    await this.submissionStore.setSubmissionAbandoned(jobId, at);
+    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {

@@ -211,6 +211,8 @@ describe('POST /api/internal/notify-sweep', () => {
       stalledCauses: {},
       healthResolved: 0,
       unhealthy: 0,
+      shelvesRebuilt: 0,
+      shelvesFailed: 0,
     });
 
     const list = await store.listNotifications('g:owner');
@@ -237,6 +239,8 @@ describe('POST /api/internal/notify-sweep', () => {
       stalledCauses: {},
       healthResolved: 0,
       unhealthy: 0,
+      shelvesRebuilt: 0,
+      shelvesFailed: 0,
     });
     await app.close();
   });

@@ -2,6 +2,9 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 
 type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'>;
 
+// Judged before the deep-link merge adds its record.
+export type ShelfRecordsObserver = (records: SubmissionRecord[]) => Promise<void>;
+
 function jobIdFromToken(token: string): number | null {
   try {
     const [raw] = Buffer.from(token, 'base64url').toString('utf8').split('.');
@@ -31,8 +34,10 @@ export async function loadShelfRecords(
   ownerUid: string,
   requested: string | undefined,
   mintStatusToken: (jobId: number) => string,
+  observe?: ShelfRecordsObserver,
 ): Promise<SubmissionRecord[]> {
   const records = await store.listSubmissionsByOwner(ownerUid);
+  if (observe) await observe(records);
   if (!requested) return records;
   const known = records.some((record) => record.slug === requested || mintStatusToken(record.jobId) === requested);
   if (known) return records;

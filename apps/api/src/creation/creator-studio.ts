@@ -5,6 +5,7 @@ import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
+import { recordShelfShadow } from './shelf-shadow.js';
 import { loadShelfRecords } from './studio-shelf-records.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
@@ -160,7 +161,9 @@ export async function registerCreatorStudioRoutes(
     }
 
     const mint = options.mintStatusToken;
-    const records = await loadShelfRecords(store, request.user!.uid, parsed.data.game, mint);
+    const records = await loadShelfRecords(store, request.user!.uid, parsed.data.game, mint, (owned) =>
+      recordShelfShadow({ store, log: request.log }, request.user!.uid, owned).then(() => undefined),
+    );
     const collapsed = collapseJobsToOwnerGames(records, 'shelf');
     const total = collapsed.length;
     const truncated = total > MAX_OWNER_GAMES;
