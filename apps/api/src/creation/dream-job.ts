@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
@@ -216,20 +217,25 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       }
     };
     try {
+      // Named before the write; a lost response still leaves an id.
+      const sourceId = randomUUID();
+      written.push(sourceId);
       const sourceShot = await store.appendBuildShot(jobId, {
+        id: sourceId,
         data: sourcePng,
         mediaType: 'image/png',
         label: DREAM_SOURCE_SHOT_LABEL,
       });
-      written.push(sourceShot.id);
       const options: CreatorProposalOption[] = [];
       for (const { frame, idea } of dreamed) {
+        const frameId = randomUUID();
+        written.push(frameId);
         const shot = await store.appendBuildShot(jobId, {
+          id: frameId,
           data: frame.data,
           mediaType: frame.mediaType,
           label: DREAM_FRAME_SHOT_LABEL,
         });
-        written.push(shot.id);
         options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
       }
       const proposal: CreatorProposal = {

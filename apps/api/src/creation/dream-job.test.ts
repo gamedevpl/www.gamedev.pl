@@ -301,9 +301,26 @@ describe('createDreamJob', () => {
 
     expect(await run()).toBe('failed');
     const orphaned = errors.find((entry) => entry.message.includes('orphaned'));
-    // Two shots landed before the third failed; name both ids.
-    expect((orphaned?.context as { shots?: string[] })?.shots).toHaveLength(2);
+    // The third id counts: its write may have landed anyway.
+    expect((orphaned?.context as { shots?: string[] })?.shots).toHaveLength(3);
     expect(await store.countBuildShots(7)).toBe(2);
+  });
+
+  it('deletes a shot whose write answered with an error after committing', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const append = store.appendBuildShot.bind(store);
+    let writes = 0;
+    store.appendBuildShot = async (jobId, shot) => {
+      writes += 1;
+      // The row lands, then the response is lost on the way back.
+      const stored = await append(jobId, shot);
+      if (writes === 2) throw new Error('connection reset');
+      return stored;
+    };
+
+    expect(await run()).toBe('failed');
+    // Both rows committed, so both must be gone.
+    expect(await store.countBuildShots(7)).toBe(0);
   });
 
   it('keeps the shots of a card that posted', async () => {

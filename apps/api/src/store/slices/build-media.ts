@@ -20,10 +20,10 @@ function keeps(excludeLabels: readonly string[] | undefined) {
 }
 
 export interface BuildMediaStore {
-  // Stores a screenshot the agent pushed straight to us, before any commit.
+  // Stores a screenshot the agent pushed; `id` names it before the write.
   appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot>;
 
   // A build's pushed screenshots, newest first; bytes omitted here.
@@ -59,9 +59,13 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 
   async appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const record: BuildShot = {
+      ...shot,
+      id: shot.id ?? randomUUID(),
+      createdAt: shot.createdAt ?? new Date().toISOString(),
+    };
     const existing = this.buildShots.get(jobId) ?? [];
     existing.push(record);
     this.buildShots.set(jobId, existing);
@@ -154,9 +158,13 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const record: BuildShot = {
+      ...shot,
+      id: shot.id ?? randomUUID(),
+      createdAt: shot.createdAt ?? new Date().toISOString(),
+    };
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await this.shotsCollection(jobId).doc(record.id).set(document);
     return record;
