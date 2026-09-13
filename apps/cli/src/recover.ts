@@ -189,13 +189,7 @@ async function performRecovery(input: {
     }
     writeFileSync(join(output, '.gamedev-slug'), slug + '\n');
     writeBase(output, pending.base.version, pending.base.files);
-    markRecoveryReady(
-      output,
-      slug,
-      pending.session,
-      pending.base.version,
-      imported.map((file) => file.path),
-    );
+    markRecoveryReady(output, slug, pending.session, pending.base.version, pending.paths);
     if (temporary) {
       initializeCheckoutGit(output, slug);
       writeFileSync(join(output, '.gamedev-import-key'), pending.key);

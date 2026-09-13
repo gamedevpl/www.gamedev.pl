@@ -16,7 +16,13 @@ it('does not dispatch a stale improvement after recovery claims the archived gam
     takedownReason: 'deleted by creator',
   });
   const app = Fastify();
-  const routes = await registerSubmissionRoutes(app, { store, submissionTokenSecret: 'test-secret' });
+  const quota = vi.fn(async () => true);
+  const managedSpend = vi.fn(async () => ({ available: true as const }));
+  const routes = await registerSubmissionRoutes(app, {
+    store,
+    submissionTokenSecret: 'test-secret',
+    managedAvailabilityGate: { peek: managedSpend, checkAndSpend: managedSpend, resolveVendor: async () => undefined },
+  });
   const original = store.claimManualRoundSlug.bind(store);
   let recoveredJob = 0;
   const claim = vi.spyOn(store, 'claimManualRoundSlug').mockImplementationOnce(async (...args) => {
@@ -37,13 +43,16 @@ it('does not dispatch a stale improvement after recovery claims the archived gam
         jobId: 10,
         text: 'Improve the sky',
         locale: 'en',
-        builder: 'self',
+        builder: 'platform',
+        beforeDispatch: quota,
         log: app.log,
       }),
     ).toBeNull();
     const lost = await store.getSubmission(claim.mock.calls[0]![0]);
     expect(lost?.state).toBe('abandoned');
     expect(lost?.dispatch).toBeUndefined();
+    expect(quota).not.toHaveBeenCalled();
+    expect(managedSpend).not.toHaveBeenCalled();
     expect((await store.listQueuedSubmissions()).map((row) => row.jobId)).not.toContain(lost!.jobId);
     expect((await store.getSubmissionBySlug('sky-dodge'))?.jobId).toBe(recoveredJob);
   } finally {

@@ -10,6 +10,7 @@ import { isRecoveryReady } from './recovery-state.js';
 it.each([
   ['missing', 'none'],
   ['missing', 'retry'],
+  ['missing', 'retry_removed'],
   ['missing', 'lost_delivery'],
   ['missing', 'delete'],
   ['missing', 'retry_delete'],
@@ -65,7 +66,7 @@ it.each([
           if (puts > 300) return new Response('{}', { status: 429 });
           const file = JSON.parse(String(init?.body));
           staged.set(file.path, file.content);
-          if (change === 'retry' && puts === 170) throw new Error('response lost');
+          if (['retry', 'retry_removed'].includes(change) && puts === 170) throw new Error('response lost');
           body = { accepted: true };
         } else if (url.endsWith('/stage/delete')) {
           const path = JSON.parse(String(init?.body)).path;
@@ -82,11 +83,18 @@ it.each([
         return new Response(JSON.stringify(body));
       },
     });
-    if (change === 'retry')
+    if (['retry', 'retry_removed'].includes(change))
       await expect(recoverCheckout({ api, cwd, yes: true, write: () => {} })).rejects.toThrow('response lost');
+    if (change === 'retry_removed') {
+      rmSync(join(cwd, 'games/sky/file1.ts'));
+      files.splice(
+        files.findIndex((file) => file.path === 'file1.ts'),
+        1,
+      );
+    }
     await recoverCheckout({ api, cwd, yes: true, write: () => {} });
     expect(isRecoveryReady(cwd, 'sky')).toBe(true);
-    changed = !['none', 'retry', 'delete', 'retry_delete', 'lost_delivery'].includes(change);
+    changed = !['none', 'retry', 'delete', 'retry_delete', 'lost_delivery', 'retry_removed'].includes(change);
     if (change === 'delete') {
       rmSync(join(cwd, 'games/sky/file1.ts'));
       files.splice(

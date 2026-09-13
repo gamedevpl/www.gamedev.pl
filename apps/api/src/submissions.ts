@@ -1,3 +1,4 @@
+import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
 import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -355,6 +356,7 @@ export interface SubmissionRoutesHandle {
     requestedBy?: CreatorMessageOrigin;
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
+    beforeDispatch?: () => Promise<boolean>;
   }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
   /**
    * Drops the cached status response for a job, so the next poll reflects a write that
@@ -785,94 +787,93 @@ export async function registerSubmissionRoutes(
      * authorized creator after a slug transfer so quota and Studio stay aligned.
      */
     ownerUid?: string;
+    beforeDispatch?: () => Promise<boolean>;
   }): Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.jobId);
-    // Without a slug there is no game to improve, and dispatching would quietly
-    // commission a brand-new one against a creator's improvement request.
     if (!source?.slug) return null;
-    const holder = await store.getSubmissionBySlug(source.slug);
-    if (!holder) return null;
+    const slug = source.slug;
+    return withImprovementAdmission(store, slug, now, async () => {
+      const holder = await store.getSubmissionBySlug(slug);
+      if (!holder) return null;
 
-    // Resolve against the *source* game before the new job exists. `dispatchBuild`
-    // would otherwise ask `builderOf` on a blank record and always pick `platform`.
-    const builder = input.builder ?? builderOf(source);
+      // Resolve against the *source* game before the new job exists. `dispatchBuild`
+      // would otherwise ask `builderOf` on a blank record and always pick `platform`.
+      const builder = input.builder ?? builderOf(source);
 
-    if (builder === 'platform' && managedAvailabilityGate) {
-      const ownerUid = input.ownerUid ?? source.ownerUid;
-      const dateStr = new Date(now()).toISOString().slice(0, 10);
-      const availability = await managedAvailabilityGate.checkAndSpend(ownerUid, dateStr);
-      if (!availability.available) return { route: 'unavailable', reason: availability.reason };
-    }
-
-    const jobId = await store.allocateJobId();
-    await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
-    await store.setSubmissionLocale(jobId, input.locale);
-    // The change request is this round's brief, so persist it. `dispatchBuild` below
-    // carries the same text into a platform backend's prompt, but a self round has no
-    // backend to read it: the creator's own agent calls get_brief, which serves the
-    // stored brief and nothing else. Without this an agent-opened improvement round
-    // starts with an empty spec and no idea what the creator asked for.
-    // No requestedBy means an autonomous suggestion sweep wrote `text`, not the creator.
-    await store.setSubmissionBrief(jobId, {
-      spec: input.text,
-      qa: [],
-      ...(input.requestedBy ? {} : { specIsSystemGenerated: true }),
-    });
-    // Open the new job's thread with the request that started it. Written already
-    // delivered: the brief below carries the same words to the agent, and a pending
-    // note would read as a second, newer instruction to act on.
-    if (input.requestedBy) {
-      try {
-        const relayed = await relayedMessageLocalization(input.requestedBy, input.text);
-        await store.appendCreatorMessage(jobId, relayed.text, {
-          origin: input.requestedBy,
-          delivered: true,
-          ...(relayed.textLocalized && relayed.locale
-            ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
-            : {}),
-        });
-      } catch (seedError) {
-        // Best effort. The request still reaches the agent as the brief, so a failure
-        // here costs the creator the echo, not the round.
-        input.log.error({ err: seedError, jobId }, 'failed to seed the improvement thread');
-      }
-    }
-    await store.recordJobTransition(jobId, {
-      to: 'queued',
-      at: new Date(now()).toISOString(),
-      by: input.openedBy === 'agent' ? 'agent' : 'creator',
-      reason: input.openedBy === 'agent' ? 'agent_open_round' : 'improvement_requested',
-    });
-
-    if (!(await store.claimManualRoundSlug(jobId, source.slug, holder.jobId))) {
-      const at = new Date(now()).toISOString();
-      await store.recordJobTransition(jobId, {
-        to: 'abandoned',
-        at,
-        by: 'reconciler',
-        reason: 'improvement_claim_lost',
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
+      await store.setSubmissionLocale(jobId, input.locale);
+      // Self agents read this persisted brief through get_brief.
+      // No requestedBy means an autonomous suggestion sweep wrote `text`, not the creator.
+      await store.setSubmissionBrief(jobId, {
+        spec: input.text,
+        qa: [],
+        ...(input.requestedBy ? {} : { specIsSystemGenerated: true }),
       });
-      await store.setSubmissionAbandoned(jobId, at);
-      return null;
-    }
+      // Seed the thread once; the brief already delivers this request.
+      if (input.requestedBy) {
+        try {
+          const relayed = await relayedMessageLocalization(input.requestedBy, input.text);
+          await store.appendCreatorMessage(jobId, relayed.text, {
+            origin: input.requestedBy,
+            delivered: true,
+            ...(relayed.textLocalized && relayed.locale
+              ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
+              : {}),
+          });
+        } catch (seedError) {
+          // Best effort. The request still reaches the agent as the brief, so a failure
+          // here costs the creator the echo, not the round.
+          input.log.error({ err: seedError, jobId }, 'failed to seed the improvement thread');
+        }
+      }
+      await store.recordJobTransition(jobId, {
+        to: 'queued',
+        at: new Date(now()).toISOString(),
+        by: input.openedBy === 'agent' ? 'agent' : 'creator',
+        reason: input.openedBy === 'agent' ? 'agent_open_round' : 'improvement_requested',
+      });
 
-    const dispatched = await dispatchBuild({
-      jobId,
-      // The brief is both the spec and the change request: `feedback` selects the
-      // "revise, do not rebuild" prompt, and `spec` is what a backend without that
-      // distinction would read.
-      spec: input.text,
-      feedback: input.text,
-      slug: source.slug,
-      locale: input.locale,
-      log: input.log,
-      builder,
+      try {
+        if (
+          !(await store.claimManualRoundSlug(jobId, slug, holder.jobId)) ||
+          (input.beforeDispatch && !(await input.beforeDispatch()))
+        ) {
+          await abandonImprovement(store, jobId, now);
+          return null;
+        }
+        if (builder === 'platform' && managedAvailabilityGate) {
+          const ownerUid = input.ownerUid ?? source.ownerUid;
+          const dateStr = new Date(now()).toISOString().slice(0, 10);
+          const availability = await managedAvailabilityGate.checkAndSpend(ownerUid, dateStr);
+          if (!availability.available) {
+            await abandonImprovement(store, jobId, now);
+            return { route: 'unavailable' as const, reason: availability.reason };
+          }
+        }
+      } catch (error) {
+        await abandonImprovement(store, jobId, now);
+        throw error;
+      }
+
+      const dispatched = await dispatchBuild({
+        jobId,
+        // The brief is both the spec and the change request: `feedback` selects the
+        // "revise, do not rebuild" prompt, and `spec` is what a backend without that
+        // distinction would read.
+        spec: input.text,
+        feedback: input.text,
+        slug,
+        locale: input.locale,
+        log: input.log,
+        builder,
+      });
+      // The job exists either way. A failed dispatch leaves it `queued`, which the operator
+      // queue already reports as `not_dispatched` — a visible stall rather than a silently
+      // dead request.
+      return dispatched ? { route: 'job' as const, jobId } : null;
     });
-    // The job exists either way. A failed dispatch leaves it `queued`, which the operator
-    // queue already reports as `not_dispatched` — a visible stall rather than a silently
-    // dead request.
-    return dispatched ? { route: 'job', jobId } : null;
   }
 
   /**

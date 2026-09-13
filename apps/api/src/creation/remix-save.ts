@@ -13,7 +13,7 @@ import {
 import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import { mintGameSlug } from '../platform/slug.js';
-import { settleSlugClaim } from '../platform/slug-ownership.js';
+import { claimAvailableSlug } from '../platform/atomic-slug-claim.js';
 import type { Store } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
@@ -283,10 +283,9 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     const wanted = await mintGameSlug(wantedTitle, (candidate) => isSlugTaken(input.store, candidate));
     const jobId = await input.store.allocateJobId();
     await input.store.createSubmission(jobId, input.uid, wantedTitle);
-    await input.store.setSubmissionSlug(jobId, wanted);
 
-    const slug = await settleSlugClaim(input.store, jobId, wanted, wantedTitle, (candidate, except) =>
-      isSlugTaken(input.store, candidate, except),
+    const slug = await claimAvailableSlug(input.store, jobId, wanted, wantedTitle, (candidate) =>
+      isSlugTaken(input.store, candidate),
     );
     if (!slug) {
       await input.store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
