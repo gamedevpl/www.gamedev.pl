@@ -487,6 +487,12 @@ that: caching it past the roll would keep sending visitors to the previous windo
 still valid, but a cache entry nobody else shares, which is the churn anchoring exists to
 remove.
 
+`mediaRedirectPlan` derives the signing instant and that max-age from **one** clock sample,
+and the route has no second one to reach for. Two samples straddling a roll would hand out
+the old window's URL with the new window's full-day max-age — pinning a URL nobody else
+shares in every cache that sees it, for a day. That is the worst outcome available here,
+so the invariant is structural rather than a rule to remember.
+
 **Video is deliberately left unanchored** and keeps its 30-minute TTL and half-life
 redirect. It is the largest object we hand out and a live link is pullable by anyone; an
 anchored video URL would be both longer-lived and shareable, which is the opposite of

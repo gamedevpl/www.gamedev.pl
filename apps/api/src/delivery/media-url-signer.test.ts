@@ -7,6 +7,7 @@ import {
   MEDIA_URL_TTL_SECONDS,
   MEDIA_VIDEO_URL_TTL_SECONDS,
   mediaRedirectMaxAgeSeconds,
+  mediaRedirectPlan,
   mediaUrlPolicy,
   anchorStart,
 } from './media-url-signer.js';
@@ -146,49 +147,61 @@ describe('anchored image URLs', () => {
       now: clock,
       store: {
         objectExists: async () => true,
-        // Mirrors what the real signer does: the instant is the whole signature.
+        // Mirrors the real signer: the instant is the whole signature.
         signReadUrl: async (name: string, ttl?: number, signedAtMs?: number) => `url:${name}:${ttl}:${signedAtMs}`,
       },
     });
   }
 
-  const policy = mediaUrlPolicy('opening.png');
-  const windowStart = anchorStart(NOW, policy.anchorSeconds);
+  const windowStart = anchorStart(NOW, MEDIA_URL_ANCHOR_SECONDS);
+  const planAt = (atMs: number) => mediaRedirectPlan('opening.png', atMs);
+  const mintAt = (atMs: number) => {
+    const plan = planAt(atMs);
+    return instanceAt(() => atMs).urlFor('m/opening.png', plan.ttlSeconds, plan.signedAtMs);
+  };
 
   it('hands the same URL to a visitor 9 hours later on a different instance', async () => {
-    const early = await instanceAt(() => windowStart + 60_000).urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds);
-    const late = await instanceAt(() => windowStart + 9 * 3_600_000).urlFor(
-      'm/opening.png',
-      policy.ttlSeconds,
-      policy.anchorSeconds,
-    );
-
-    expect(late).toBe(early);
+    expect(await mintAt(windowStart + 9 * 3_600_000)).toBe(await mintAt(windowStart + 60_000));
   });
 
   it('hands a different URL once the window rolls', async () => {
-    const before = await instanceAt(() => windowStart + 1_000).urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds);
-    const after = await instanceAt(() => windowStart + policy.anchorSeconds * 1000 + 1_000).urlFor(
-      'm/opening.png',
-      policy.ttlSeconds,
-      policy.anchorSeconds,
-    );
+    const rolled = windowStart + MEDIA_URL_ANCHOR_SECONDS * 1000 + 1_000;
 
-    expect(after).not.toBe(before);
+    expect(await mintAt(rolled)).not.toBe(await mintAt(windowStart + 1_000));
   });
 
   // Stale redirects still point at the previous window's URL.
   it('signs for longer than one window, so a roll never strands a cached redirect', () => {
+    const policy = mediaUrlPolicy('opening.png');
+
     expect(policy.ttlSeconds).toBeGreaterThanOrEqual(2 * policy.anchorSeconds);
   });
 
   it('re-signs across a roll even on one long-lived instance', async () => {
     let clock = windowStart + 1_000;
     const signer = instanceAt(() => clock);
-    const before = await signer.urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds);
-    clock += policy.anchorSeconds * 1000;
+    const before = await signer.urlFor('m/opening.png', planAt(clock).ttlSeconds, planAt(clock).signedAtMs);
+    clock += MEDIA_URL_ANCHOR_SECONDS * 1000;
 
-    expect(await signer.urlFor('m/opening.png', policy.ttlSeconds, policy.anchorSeconds)).not.toBe(before);
+    expect(await signer.urlFor('m/opening.png', planAt(clock).ttlSeconds, planAt(clock).signedAtMs)).not.toBe(before);
+  });
+});
+
+// A roll between two reads would cache a private URL.
+describe('the redirect plan', () => {
+  it('derives the URL and its max-age from one instant', () => {
+    const lastSecond = anchorStart(NOW, MEDIA_URL_ANCHOR_SECONDS) + MEDIA_URL_ANCHOR_SECONDS * 1000 - 1_000;
+    const plan = mediaRedirectPlan('opening.png', lastSecond);
+
+    expect(plan.signedAtMs).toBe(anchorStart(lastSecond, MEDIA_URL_ANCHOR_SECONDS));
+    expect(plan.maxAgeSeconds).toBe(1);
+  });
+
+  it('leaves video unpinned, so it keeps minting fresh URLs', () => {
+    const plan = mediaRedirectPlan('gameplay.mp4', NOW);
+
+    expect(plan.signedAtMs).toBeUndefined();
+    expect(plan.maxAgeSeconds).toBe(MEDIA_VIDEO_URL_TTL_SECONDS / 2);
   });
 });
 
@@ -210,11 +223,11 @@ describe('video URLs', () => {
         signReadUrl: async (name: string, ttl?: number, signedAtMs?: number) => `url:${name}:${signedAtMs ?? clock}`,
       },
     });
-    const policy = mediaUrlPolicy('gameplay.mp4');
-    const first = await signer.urlFor('m/gameplay.mp4', policy.ttlSeconds, policy.anchorSeconds);
-    clock += (policy.ttlSeconds * 1000) / 2 + 1_000;
+    const plan = mediaRedirectPlan('gameplay.mp4', clock);
+    const first = await signer.urlFor('m/gameplay.mp4', plan.ttlSeconds, plan.signedAtMs);
+    clock += (plan.ttlSeconds * 1000) / 2 + 1_000;
 
-    expect(await signer.urlFor('m/gameplay.mp4', policy.ttlSeconds, policy.anchorSeconds)).not.toBe(first);
+    expect(await signer.urlFor('m/gameplay.mp4', plan.ttlSeconds, plan.signedAtMs)).not.toBe(first);
   });
 });
 
