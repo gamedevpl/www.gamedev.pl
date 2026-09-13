@@ -12,7 +12,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   for (const app of apps.splice(0)) await app.close();
 });
-async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled') {
+async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled', reqUid = 'owner') {
   const store = new InMemoryStore();
   await store.createSubmission(1, owner, 'Sky Game');
   await store.setSubmissionSlug(1, 'sky');
@@ -29,7 +29,7 @@ async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled
   apps.push(app);
   await app.register(rateLimit, { global: false });
   app.addHook('preHandler', async (req) => {
-    req.user = { uid: 'owner' } as typeof req.user;
+    req.user = { uid: reqUid } as typeof req.user;
   });
   const dispatch = vi.fn(async () => {});
   const moderate = vi.fn(async () => ({ allowed: true as const }));
@@ -337,4 +337,36 @@ it.each(['success', 'refusal'])('preserves recovery %s when admission cleanup fa
     expect(response.statusCode).toBe(429);
     expect(response.json().error).toBe('quota exceeded');
   }
+});
+
+// No transfer API yet (GO-02); overwrite the auto-created record directly.
+function transferTo(store: InMemoryStore, slug: string, uid: string): void {
+  const gameAccessStore = (store as unknown as { gameAccessStore: { access: Map<string, { ownerUid: string }> } })
+    .gameAccessStore;
+  const record = gameAccessStore.access.get(slug);
+  if (!record) throw new Error(`transferTo: no GameAccess record for ${slug} yet`);
+  gameAccessStore.access.set(slug, { ...record, ownerUid: uid });
+}
+
+it('flag off: the canonical new owner is still refused, matching the historical rule', async () => {
+  const f = await fixture('former-owner', 'canceled', 'new-owner');
+  transferTo(f.store, 'sky', 'new-owner');
+
+  const status = await f.app.inject('/api/me/studio/games/sky/recovery');
+  expect(status.json()).toEqual({ kind: 'occupied' });
+});
+
+it('flag on: the canonical new owner is recognized, though the claim itself is a deeper GO-02 gap', async () => {
+  vi.stubEnv('GAME_ACCESS_AUTHORITATIVE', 'true');
+  const f = await fixture('former-owner', 'canceled', 'new-owner');
+  transferTo(f.store, 'sky', 'new-owner');
+
+  // Now recognized as canonical — used to read 'occupied' (test above).
+  const status = await f.app.inject('/api/me/studio/games/sky/recovery');
+  expect(status.json()).toEqual({ kind: 'canceled' });
+
+  // The claim itself still compares raw ownerUid — a deeper GO-02 gap.
+  const recovered = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+  expect(recovered.statusCode).toBe(409);
+  expect(recovered.json().error).toBe('recovery_changed');
 });
