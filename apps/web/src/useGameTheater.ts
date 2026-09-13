@@ -75,7 +75,7 @@ export function useGameTheater({
       return;
     }
 
-    if (route.view !== 'play') return;
+    if (route.view !== 'play' || window.parent !== window) return;
     const entry = catalogEntries.find((game) => game.slug === route.slug);
     // Wait so unknown slugs do not flash a 404 theater.
     if (catalogStatus !== 'ready' || !entry) return;

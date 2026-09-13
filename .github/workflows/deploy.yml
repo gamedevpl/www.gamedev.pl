@@ -181,7 +181,10 @@ jobs:
           TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
           VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          MEDIA_DAILY_MINTS_PER_INSTANCE: ${{ vars.MEDIA_DAILY_MINTS_PER_INSTANCE }}
+          MEDIA_DAILY_MINTS_PER_IP: ${{ vars.MEDIA_DAILY_MINTS_PER_IP }}
           MODERATION_FALLBACK_MODEL: ${{ vars.MODERATION_FALLBACK_MODEL }}
+          REFINE_FALLBACK_MODEL: ${{ vars.REFINE_FALLBACK_MODEL }}
           MODERATION_FALLBACK_PROVIDER: ${{ vars.MODERATION_FALLBACK_PROVIDER }}
           VERTEX_MODEL: ${{ vars.VERTEX_MODEL }}
           VERTEX_REGION: ${{ vars.VERTEX_REGION }}
@@ -458,7 +461,8 @@ jobs:
           # an unrelated deploy. An emergency lever that quietly reverts is worse than no
           # lever, because the operator believes the incident is over.
           for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL \
-            MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER; do
+            MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER \
+            MEDIA_DAILY_MINTS_PER_IP MEDIA_DAILY_MINTS_PER_INSTANCE REFINE_FALLBACK_MODEL; do
             VERTEX_VAL="${!VERTEX_VAR}"
             if [ -n "$VERTEX_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"

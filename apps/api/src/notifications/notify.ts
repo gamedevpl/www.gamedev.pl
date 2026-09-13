@@ -348,6 +348,41 @@ const WAITLIST_ALERT_LINK = '/admin/waitlist';
 
 const REVIEW_SWEEP_LINK = '/review';
 
+// Reports land on the queue where the takedown lives.
+const MODERATION_FLAG_LINK = '/admin/moderation';
+
+// One report is actionable alone, so it pages.
+export async function emitModerationFlag(
+  deps: EmitDeps & { adminUids: Iterable<string> },
+  event: { flagId: string; slug: string; reason: string },
+): Promise<{ created: number }> {
+  const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+  const type: OperatorNotificationType = 'operator.moderation_flag';
+  const id = `op-flag-${event.flagId}`;
+  let created = 0;
+
+  for (const uid of deps.adminUids) {
+    const result = await createNotification(deps, uid, {
+      id,
+      type,
+      createdAt,
+      titleKey: `notifications.${type}.title`,
+      bodyKey: `notifications.${type}.body`,
+      params: { title: event.slug, detail: event.reason },
+      link: MODERATION_FLAG_LINK,
+    });
+    if (!result.created) continue;
+    created += 1;
+    await sendOperatorEmail(deps, uid, id, type, MODERATION_FLAG_LINK, {
+      title: event.slug,
+      detail: event.reason,
+    });
+    await maybePush(deps, uid, result.notification);
+  }
+
+  return { created };
+}
+
 // Fan out review-sweep alerts to every reviewer.
 export async function emitReviewSweep(
   deps: EmitDeps & { reviewerUids: Iterable<string> },

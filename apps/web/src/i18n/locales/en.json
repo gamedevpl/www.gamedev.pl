@@ -84,6 +84,10 @@
       "review_sweep": {
         "title": "A review sweep is ready",
         "body": "“{{title}}” has games waiting on the review desk."
+      },
+      "moderation_flag": {
+        "title": "A reviewer reported a game",
+        "body": "“{{title}}” was reported as {{detail}}. One report is enough to act on."
       }
     },
     "game": {
@@ -139,8 +143,8 @@
     "smartPlayBtn": "Play now",
     "smartRemixBtn": "Remix with AI",
     "smartMatchHint": "Looking for something else? Add more details above to build a new game.",
-    "smartNoMatchTitle": "Describe your game idea: \"{{query}}\"",
-    "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
+    "smartNoMatchTitle": "We'll build this",
+    "smartNoMatchSub": "A coding agent writes it, a human reviews it, then anyone can play.",
     "smartSearching": "Searching catalog…",
     "smartBuildBtn": "Build this game",
     "orBuildOwnGame": "or build your own game",
@@ -1188,6 +1192,12 @@
       "over_other": "He ate {{count}} snacks",
       "again": "Again"
     }
+  },
+  "framedPlay": {
+    "headline": "Open this game in a new window",
+    "sub": "This page was opened inside another site. Play it on gamedev.pl instead — same game, full screen.",
+    "openNew": "Open in a new window",
+    "openHere": "Open here"
   },
   "betaInvite": {
     "headline": "You've been invited to the closed beta.",

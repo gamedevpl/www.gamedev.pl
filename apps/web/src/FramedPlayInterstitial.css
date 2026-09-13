@@ -1,0 +1,14 @@
+.framed-play a.beta-splash__waitlist-btn {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.framed-play__open-top {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.framed-play__open-top:hover,
+.framed-play__open-top:focus-visible {
+  color: var(--text);
+}

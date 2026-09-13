@@ -39,7 +39,7 @@ export async function registerSelfBuildConnectRoutes(
       if (!submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       if (!store) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
@@ -138,7 +138,7 @@ export async function registerSelfBuildConnectRoutes(
     '/api/submissions/:id/agent-key',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       return reply.status(410).send({
         error: 'per_game_keys_retired',
         reason: 'Reconnect this coding agent from Studio using OAuth or the creator-wide key.',
@@ -150,7 +150,7 @@ export async function registerSelfBuildConnectRoutes(
     '/api/submissions/:id/agent-key/rotate',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       return reply.status(410).send({
         error: 'per_game_keys_retired',
         reason: 'Reconnect this coding agent from Studio using OAuth or the creator-wide key.',

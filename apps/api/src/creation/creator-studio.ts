@@ -5,6 +5,7 @@ import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
+import { loadShelfRecords } from './studio-shelf-records.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
@@ -148,7 +149,7 @@ export async function registerCreatorStudioRoutes(
    * re-minted so a fresh device recovers access.
    */
   app.get('/api/me/studio', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     if (!options.mintStatusToken) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -158,7 +159,8 @@ export async function registerCreatorStudioRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const mint = options.mintStatusToken;
+    const records = await loadShelfRecords(store, request.user!.uid, parsed.data.game, mint);
     const collapsed = collapseJobsToOwnerGames(records, 'shelf');
     const total = collapsed.length;
     const truncated = total > MAX_OWNER_GAMES;
@@ -237,7 +239,7 @@ export async function registerCreatorStudioRoutes(
    * stay out of the scorecard.
    */
   app.get('/api/me/studio/health', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
 
     const parsed = QuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -288,7 +290,7 @@ export async function registerCreatorStudioRoutes(
    * nothing.
    */
   app.get('/api/me/studio/scorecards', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
 
     const records = await store.listSubmissionsByOwner(request.user!.uid);
     const { games: published, truncated, total } = pageOwnerGames(records, 'published');
@@ -319,7 +321,7 @@ export async function registerCreatorStudioRoutes(
 
   // List build history for an owned game.
   app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/builds', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     if (!options.gamesStore?.listVersions) {
       return reply.status(503).send({ error: 'games store is not configured' });
     }
@@ -385,7 +387,7 @@ export async function registerCreatorStudioRoutes(
     // hour — and bounded against a loop.
     { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       if (!options.gamesStore || !options.objectStore) {
         return reply.status(503).send({ error: 'workspace checkout is not configured on this deployment' });
       }

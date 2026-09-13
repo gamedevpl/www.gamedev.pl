@@ -15,7 +15,30 @@ export interface LoadShedControls {
   keepsVisitTelemetry(visitId: string): Promise<boolean>;
   // True while an operator has party hosting closed.
   refusesNewRooms(): Promise<boolean>;
+  // True while preview video is withheld: the largest object we serve.
+  refusesVideo(): Promise<boolean>;
+  // True while every image request is answered with the smallest baked variant.
+  servesLeanMedia(): Promise<boolean>;
+  // True while the site is closed to visitors without a session.
+  refusesAnonymous(): Promise<boolean>;
 }
+
+// One read, so two questions cost one document.
+interface ShedState {
+  sampleRate: number | null;
+  partyPaused: boolean;
+  videoPaused: boolean;
+  mediaLean: boolean;
+  anonymousPaused: boolean;
+}
+
+const SHEDS_NOTHING: ShedState = {
+  sampleRate: null,
+  partyPaused: false,
+  videoPaused: false,
+  mediaLean: false,
+  anonymousPaused: false,
+};
 
 // FNV-1a: one visit lands in the same bucket on every flush.
 function visitFraction(visitId: string): number {
@@ -41,16 +64,19 @@ export function createLoadShedControls(options: LoadShedOptions): LoadShedContro
   const ttlMs = options.ttlMs ?? DEFAULT_LOAD_SHED_TTL_MS;
   const logWarn = options.logWarn ?? (() => {});
 
-  let cache: { sampleRate: number | null; partyPaused: boolean; expiresAt: number } | null = null;
+  let cache: (ShedState & { expiresAt: number }) | null = null;
 
-  // Fails open on purpose: an unreadable document must not close party mode.
-  async function read(): Promise<{ sampleRate: number | null; partyPaused: boolean }> {
+  // Fails open: every rung here defaults to serving.
+  async function read(): Promise<ShedState> {
     if (cache && cache.expiresAt > now()) return cache;
     try {
       const stored = await store.getCreationLimits();
-      const value = {
+      const value: ShedState = {
         sampleRate: stored?.telemetrySampleRate ?? null,
         partyPaused: stored?.partyPaused === true,
+        videoPaused: stored?.videoPaused === true,
+        mediaLean: stored?.mediaLean === true,
+        anonymousPaused: stored?.anonymousPaused === true,
       };
       cache = { ...value, expiresAt: now() + ttlMs };
       return value;
@@ -61,10 +87,9 @@ export function createLoadShedControls(options: LoadShedOptions): LoadShedContro
         logWarn({ err: error }, 'load-shedding config unreadable; using the last known values');
         return cache;
       }
-      const fallback = { sampleRate: null, partyPaused: false };
-      cache = { ...fallback, expiresAt: now() + ttlMs };
+      cache = { ...SHEDS_NOTHING, expiresAt: now() + ttlMs };
       logWarn({ err: error }, 'load-shedding config unreadable and never read; shedding nothing');
-      return fallback;
+      return SHEDS_NOTHING;
     }
   }
 
@@ -75,6 +100,18 @@ export function createLoadShedControls(options: LoadShedOptions): LoadShedContro
 
     async refusesNewRooms() {
       return (await read()).partyPaused;
+    },
+
+    async refusesVideo() {
+      return (await read()).videoPaused;
+    },
+
+    async servesLeanMedia() {
+      return (await read()).mediaLean;
+    },
+
+    async refusesAnonymous() {
+      return (await read()).anonymousPaused;
     },
   };
 }

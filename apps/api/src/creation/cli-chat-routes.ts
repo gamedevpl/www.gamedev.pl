@@ -78,7 +78,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
     { config: { rateLimit: { max: maxPerWindow, timeWindow: windowMs } } },
     async (request, reply) => {
       if (!cliSurfaceEnabled()) return notFound(reply);
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       if (!store) return reply.status(503).send({ error: 'chat is unavailable' });
 
       const parsed = ChatBodySchema.safeParse(request.body);

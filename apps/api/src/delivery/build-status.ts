@@ -54,8 +54,16 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
+  // Past the window, a count is asked before the page.
+  const eventsProbeWindowMs = 60_000;
   const maxEventsShown = 20;
-  const eventsCache = new Map<number, { expiresAt: number; value: BuildEvent[] }>();
+  interface CachedEvents {
+    expiresAt: number;
+    probeUntil: number;
+    total: number;
+    value: BuildEvent[];
+  }
+  const eventsCache = new Map<number, CachedEvents>();
 
   async function loadBuildEvents(jobId: number): Promise<BuildEvent[]> {
     if (!store) return [];
@@ -64,8 +72,25 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    // Append-only, so one count answers whether it moved.
+    let counted: number | undefined;
+    if (cached && cached.probeUntil > currentTime) {
+      counted = await store.countBuildEvents(jobId);
+      if (counted === cached.total) {
+        cached.expiresAt = currentTime + eventsCacheTtlMs;
+        return cached.value;
+      }
+    }
     const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
-    eventsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    // A page under the cap is the whole collection.
+    const total = value.length < maxEventsShown ? value.length : (counted ?? (await store.countBuildEvents(jobId)));
+    eventsCache.set(jobId, {
+      value,
+      total,
+      expiresAt: currentTime + eventsCacheTtlMs,
+      // Re-armed by a full read only, so a quiet watch refreshes.
+      probeUntil: currentTime + eventsProbeWindowMs,
+    });
     return value;
   }
 

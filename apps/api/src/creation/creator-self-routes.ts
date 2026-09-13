@@ -24,7 +24,7 @@ export async function registerCreatorSelfRoutes(
   // What's left of today's allowance — never increments, just reads.
   app.get('/api/me/quota', async (request, reply) => {
     if (!checkUserAccess(request, reply)) {
-      return;
+      return reply;
     }
     const dateStr = new Date(now()).toISOString().slice(0, 10);
     if (!store) {
@@ -56,7 +56,7 @@ export async function registerCreatorSelfRoutes(
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
     if (!checkUserAccess(request, reply)) {
-      return;
+      return reply;
     }
     if (!store) {
       return reply.send({ submissions: [] });
@@ -86,7 +86,7 @@ export async function registerCreatorSelfRoutes(
   // The header badge's number only -- reads open rounds, not the shelf.
   app.get('/api/submissions/mine/active-count', async (request, reply) => {
     if (!checkUserAccess(request, reply)) {
-      return;
+      return reply;
     }
     if (!store) {
       return reply.send({ active: 0 });

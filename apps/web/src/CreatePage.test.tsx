@@ -112,4 +112,55 @@ describe('CreatePage', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('does not suggest existing catalog games from the composer', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const fetchSpy = vi.fn(async (input: RequestInfo) => {
+      const url = String(input);
+      if (url.includes('/api/catalog/search')) {
+        return new Response(JSON.stringify({ match: { slug: 'sky-dodge', title: 'Sky Dodge' }, score: 0.99 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const catalogEntries = [makeEntry({ slug: 'sky-dodge', title: 'Sky Dodge', genre: 'Arcade' })];
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CreatePage, {
+          initialPrompt: 'Sky Dodge',
+          retryKey: 'match',
+          catalogEntries,
+          onPlayGame: vi.fn(),
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          onPlatformBuilderAvailability: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(container.querySelector('.play-match-btn')).toBeNull();
+    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes('/api/catalog/search'))).toBe(false);
+    expect(container.textContent).toContain('Sky Dodge');
+
+    await act(async () => root.unmount());
+  });
 });

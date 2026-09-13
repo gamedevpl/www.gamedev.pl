@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { latestAgentActivityAt } from '../../agentActivity.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { playPath } from '../../core/router.js';
+import { interceptPlayPermalink } from './playPermalink.js';
 import { StudioBuildBar } from './StudioBuildBar.js';
 import { StudioStripOverflowMenu } from './StudioStripOverflowMenu.js';
 import { formatRelativeTime } from '../../relativeTime.js';
@@ -11,8 +12,6 @@ import type { StagePosture } from './StudioStage.js';
 import { recordCodeStep } from '../../visitTelemetry.js';
 import './studio-strip.css';
 import './studio-chat-rail.css';
-
-// Always over the stage: a workroom, so no auto-hide (B1).
 
 const HEARTBEAT_STATES = new Set<SubmissionStatus['status']>(['queued', 'building', 'in_review', 'publishing']);
 
@@ -43,13 +42,9 @@ export type StudioStripProps = {
   canClaim: boolean;
   onClaim: () => void;
   shareSlot?: ReactNode;
-  /** Opens the build in the full site `GameTheater` (fullscreen, share, report) — see
-   * studio-game-first-implementation-plan.md's follow-up: the stage's own play posture
-   * is Studio's lighter theater, and this is the way to the site's fuller one. */
   onOpenTheater?: () => void;
-  // ≤800px (shelfIsDrawer): fold secondary actions behind a ⋯ menu.
+  onPlayPermalink?: (slug: string) => void;
   isCompact?: boolean;
-  // Replaces the global header's back arrow, hidden below 800px.
   onExit?: () => void;
   isChromeIdle?: boolean;
 };
@@ -80,6 +75,7 @@ export function StudioStrip({
   onClaim,
   shareSlot,
   onOpenTheater,
+  onPlayPermalink,
   isCompact = false,
   onExit,
   isChromeIdle = false,
@@ -131,7 +127,11 @@ export function StudioStrip({
       <div className="studio-strip-title-block">
         <h2 className="studio-strip-title">
           {slug ? (
-            <a href={playPath(slug)} className="studio-strip-title-link">
+            <a
+              href={playPath(slug)}
+              className="studio-strip-title-link"
+              onClick={(event) => interceptPlayPermalink(event, slug, onPlayPermalink)}
+            >
               {title}
             </a>
           ) : (

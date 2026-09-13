@@ -580,7 +580,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/games/:slug/remix',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const params = StartSchema.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid game id' });
       const loaded = await loadSources(params.data.slug);
@@ -630,7 +630,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
   );
 
   app.get('/api/remixes/:id', { config: { rateLimit: { max: 30, timeWindow: 60_000 } } }, async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const found = await takeSession(request);
     if (!found) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
     const { session, rehydrated } = found;
@@ -660,7 +660,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/assist',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.assistant || !assistEnabled() || !session.definition?.params) {
@@ -763,7 +763,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           : clientGone ||
             ((reply.raw.destroyed || reply.raw.socket?.destroyed === true) && !reply.raw.writableFinished);
 
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.codeLane || !codeLaneEnabled()) {
@@ -969,7 +969,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/undo',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const previous = session.history.pop();
@@ -1027,7 +1027,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/propose',
     { config: { rateLimit: { max: 5, timeWindow: 60 * 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       if (!options.store || !options.gamesStore) return reply.status(503).send({ error: 'store_unavailable' });
@@ -1164,7 +1164,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/share',
     { config: { rateLimit: { max: 10, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const session = await getSession(request);
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = ShareSchema.safeParse(request.body);
@@ -1227,7 +1227,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     '/api/remixes/:id/save',
     { config: { rateLimit: { max: 5, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       if (!options.store || !options.gamesStore || !options.submissionTokenSecret) {
         return reply.status(503).send({ error: 'saving is not configured', reason: 'not_configured' });
       }

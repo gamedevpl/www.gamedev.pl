@@ -83,7 +83,7 @@ describe('surviving a moment of no capacity', () => {
     expect(attempts).toBe(1);
   });
 
-  it('hands each attempt what the shared budget has left', async () => {
+  it('hands each attempt a share of the budget, never more than remains', async () => {
     const budgets: number[] = [];
     await expect(
       callWithVertexResilience({
@@ -99,8 +99,7 @@ describe('surviving a moment of no capacity', () => {
     ).rejects.toThrow();
 
     expect(budgets).toHaveLength(3);
-    expect(budgets[1]).toBeLessThan(budgets[0]!);
-    expect(budgets[2]).toBeLessThan(budgets[1]!);
+    expect(budgets.every((budget) => budget > 0 && budget < 300)).toBe(true);
   });
 
   it('stops attempting once the budget is spent', async () => {
@@ -150,6 +149,56 @@ describe('the budget after sleeping', () => {
       }),
     ).rejects.toThrow(/429/);
 
-    expect(attempts).toEqual([30]);
+    // 60% without a stand-in; the retry delay outlives the rest.
+    expect(attempts).toEqual([18]);
+  });
+});
+
+// The stand-in exists for a primary that stalls to its deadline.
+describe('leaving room for the stand-in', () => {
+  it('reaches the fallback even when every primary attempt burns its whole share', async () => {
+    const tried: (string | undefined)[] = [];
+    let clock = 0;
+    await callWithVertexResilience({
+      timeoutMs: 1000,
+      retryDelayMs: 0,
+      fallbackModel: 'stand-in',
+      now: () => clock,
+      sleepImpl: async (ms) => {
+        clock += ms;
+      },
+      attempt: async (model, timeoutMs) => {
+        tried.push(model);
+        clock += timeoutMs;
+        if (model === undefined) throw Object.assign(new Error('stalled'), { name: 'AbortError' });
+        return 'ok';
+      },
+    });
+
+    expect(tried).toEqual([undefined, undefined, 'stand-in']);
+  });
+
+  it('never hands one attempt the whole budget when a stand-in is configured', async () => {
+    const budgets: number[] = [];
+    let clock = 0;
+    await expect(
+      callWithVertexResilience({
+        timeoutMs: 1000,
+        retryDelayMs: 0,
+        fallbackModel: 'stand-in',
+        now: () => clock,
+        sleepImpl: async (ms) => {
+          clock += ms;
+        },
+        attempt: async (_model, timeoutMs) => {
+          budgets.push(timeoutMs);
+          clock += timeoutMs;
+          throw new Error('429 Resource exhausted');
+        },
+      }),
+    ).rejects.toThrow();
+
+    expect(budgets.every((budget) => budget < 1000)).toBe(true);
+    expect(budgets.reduce((sum, budget) => sum + budget, 0)).toBeLessThanOrEqual(1000);
   });
 });

@@ -27,6 +27,7 @@ type HeroPromptSectionProps = {
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
   // Click-to-fill prompt starters; unused on home, /create shows a few.
   exampleChips?: string[];
+  enableCatalogMatch?: boolean;
 };
 
 export type VisualAttachment = {
@@ -75,6 +76,7 @@ export function HeroPromptSection({
   onSubmitSpec,
   onPlatformBuilderAvailability,
   exampleChips,
+  enableCatalogMatch = true,
 }: HeroPromptSectionProps) {
   const { t, i18n } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
@@ -212,14 +214,17 @@ export function HeroPromptSection({
         ? t('submit.submitting')
         : null;
 
-  const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const localMatchedGame = useMemo(
+    () => (enableCatalogMatch ? findMatchingGame(promptText, catalogEntries) : null),
+    [promptText, catalogEntries, enableCatalogMatch],
+  );
   const [vectorMatch, setVectorMatch] = useState<{ query: string; match: CatalogEntry | null }>({
     query: '',
     match: null,
   });
 
   const trimmedPrompt = promptText.trim();
-  const needsVectorSearch = trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
+  const needsVectorSearch = enableCatalogMatch && trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
   const isSearching = needsVectorSearch && vectorMatch.query !== trimmedPrompt;
   const rawVectorGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
 
@@ -567,13 +572,7 @@ export function HeroPromptSection({
                   tabIndex={-1}
                   aria-hidden="true"
                 >
-                  <img
-                    src={matchedPoster}
-                    alt=""
-                    className="matched-thumb"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  <img src={matchedPoster} alt="" className="matched-thumb" loading="lazy" decoding="async" />
                 </a>
               ) : null}
               <div className="matched-info">
@@ -635,9 +634,7 @@ export function HeroPromptSection({
             <div className="smart-intent-card searching-card" role="status" aria-live="polite">
               <span className="searching-spinner" aria-hidden="true" />
               <div className="searching-info">
-                <span className="smart-badge searching-badge">
-                  {t('hero.smartSearching')}
-                </span>
+                <span className="smart-badge searching-badge">{t('hero.smartSearching')}</span>
                 <p className="searching-sub">"{promptText.trim()}"</p>
               </div>
             </div>
@@ -645,7 +642,7 @@ export function HeroPromptSection({
             <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
-                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
+                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle')}
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>

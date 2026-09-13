@@ -50,6 +50,7 @@ export type NotificationType =
   | 'operator.waitlist_joined'
   // Operator started a review sweep; notify reviewers.
   | 'operator.review_sweep'
+  | 'operator.moderation_flag'
   /**
    * A proposal is waiting on this creator — somebody proposed a change to one of their
    * games and it passed our gate.

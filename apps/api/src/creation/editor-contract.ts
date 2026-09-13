@@ -128,7 +128,14 @@ export interface PathItemSpec {
   properties: Record<string, PropertySpec>;
 }
 
-export type CollectionItemSpec = TilemapItemSpec | EntitiesItemSpec | PathItemSpec;
+export interface LayeredItemSpec {
+  widget: 'layered';
+  layers: Record<string, EditorLayerSpec>;
+  constraints: EditorLayerConstraint[];
+  properties: Record<string, PropertySpec>;
+}
+
+export type CollectionItemSpec = TilemapItemSpec | EntitiesItemSpec | PathItemSpec | LayeredItemSpec;
 
 export interface CollectionSpec {
   widget: 'collection';
@@ -137,7 +144,7 @@ export interface CollectionSpec {
   min: number;
   max: number;
   item: CollectionItemSpec;
-  defaults: Array<TilemapItemContent | EntityItemContent | PathItemContent>;
+  defaults: Array<TilemapItemContent | EntityItemContent | PathItemContent | LayeredItemContent>;
 }
 
 export interface TilemapLayerSpec extends TilemapItemSpec {
@@ -177,12 +184,19 @@ export interface PathItemContent {
   points: PathPoint[];
 }
 
+export interface LayeredItemContent {
+  properties: Record<string, unknown>;
+  layers: EditorLayersContent;
+}
+
 export type EditorLayerContent = TilemapItemContent | EntityItemContent[];
 export type EditorLayersContent = Record<string, EditorLayerContent>;
 
 export type EditorContentDocument = Record<
   string,
-  Array<TilemapItemContent | EntityItemContent | PathItemContent> | Record<string, ParamValue> | EditorLayersContent
+  | Array<TilemapItemContent | EntityItemContent | PathItemContent | LayeredItemContent>
+  | Record<string, ParamValue>
+  | EditorLayersContent
 >;
 
 export type EditorVersion = 1 | 2;
@@ -566,22 +580,65 @@ function validatePathSpec(owner: string, raw: unknown, errors: string[]): PathIt
   };
 }
 
+// Per-level stack; top-level `layers` is one board per game.
+function validateLayeredSpec(owner: string, raw: Record<string, unknown>, errors: string[]): LayeredItemSpec | null {
+  if (!isPlainObject(raw.layers)) {
+    errors.push(`${owner}: "layers" must be an object of layer declarations`);
+    return null;
+  }
+  const keys = Object.keys(raw.layers);
+  if (keys.length === 0 || keys.length > MAX_LAYERS) {
+    errors.push(`${owner}: needs 1-${MAX_LAYERS} layers`);
+    return null;
+  }
+  const layers: Record<string, EditorLayerSpec> = {};
+  for (const key of keys) {
+    if (!KEY_PATTERN.test(key)) {
+      errors.push(`${owner} layer key "${key}" must be lowerCamelCase, 1-24 characters`);
+      continue;
+    }
+    const layer = validateLayerSpec(`${owner}.${key}`, (raw.layers as Record<string, unknown>)[key], errors);
+    if (layer) layers[key] = layer;
+  }
+  checkLayerGrids(owner, layers, errors);
+  return {
+    widget: 'layered',
+    layers,
+    constraints: validateLayerConstraints(raw.constraints, layers, errors, owner),
+    properties: validateProperties(owner, raw.properties ?? {}, errors),
+  };
+}
+
 function validateCollectionItemSpec(owner: string, raw: unknown, errors: string[]): CollectionItemSpec | null {
   if (isPlainObject(raw) && raw.widget === 'entities') return validateEntitiesSpec(owner, raw, errors);
   if (isPlainObject(raw) && raw.widget === 'tilemap') return validateTilemapSpec(owner, raw, errors);
   if (isPlainObject(raw) && raw.widget === 'path') return validatePathSpec(owner, raw, errors);
+  if (isPlainObject(raw) && raw.widget === 'layered') return validateLayeredSpec(owner, raw, errors);
   errors.push(
-    `${owner}: unknown item widget "${String(isPlainObject(raw) ? raw.widget : undefined)}" (vocabulary: tilemap, entities, path)`,
+    `${owner}: unknown item widget "${String(isPlainObject(raw) ? raw.widget : undefined)}" (vocabulary: tilemap, entities, path, layered)`,
   );
   return null;
 }
 
-function validateLayerSpec(key: string, raw: unknown, errors: string[]): EditorLayerSpec | null {
-  const owner = `layers.${key}`;
+// Stacked tilemaps share one grid, so bounds and budget must agree.
+function checkLayerGrids(owner: string, layers: Record<string, EditorLayerSpec>, errors: string[]): void {
+  const tilemaps = Object.values(layers).filter((layer): layer is TilemapLayerSpec => layer.widget === 'tilemap');
+  const grids = tilemaps.map((layer) => JSON.stringify(layer.grid));
+  if (grids.some((grid) => grid !== grids[0])) {
+    errors.push(`${owner} tilemap layers must share the same grid bounds`);
+  }
+  const cells = tilemaps.reduce((total, layer) => total + layer.grid.maxCols * layer.grid.maxRows, 0);
+  if (cells > MAX_LAYER_TOTAL_CELLS) {
+    errors.push(`${owner} tilemap layers exceed the shared ${MAX_LAYER_TOTAL_CELLS}-cell budget`);
+  }
+}
+
+function validateLayerSpec(owner: string, raw: unknown, errors: string[]): EditorLayerSpec | null {
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: must be an object`);
     return null;
   }
+  const key = owner.slice(owner.lastIndexOf('.') + 1);
   const label = raw.label === undefined ? { en: key, pl: key } : raw.label;
   if (!isLabel(label)) {
     errors.push(`${owner}: "label" needs non-empty "en" and "pl" values (max 32 chars)`);
@@ -618,10 +675,11 @@ function validateLayerConstraints(
   raw: unknown,
   layers: Record<string, EditorLayerSpec>,
   errors: string[],
+  scope = 'layers',
 ): EditorLayerConstraint[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw) || raw.length > MAX_CONSTRAINTS) {
-    errors.push(`layers constraints must be an array of at most ${MAX_CONSTRAINTS} rules`);
+    errors.push(`${scope} constraints must be an array of at most ${MAX_CONSTRAINTS} rules`);
     return [];
   }
   const refs = (value: unknown, owner: string): LayerTileRef[] | null => {
@@ -650,7 +708,7 @@ function validateLayerConstraints(
   };
   const result: EditorLayerConstraint[] = [];
   for (const [index, rule] of raw.entries()) {
-    const owner = `layers constraints[${index}]`;
+    const owner = `${scope} constraints[${index}]`;
     if (!isPlainObject(rule) || !isPlainObject(rule.reachable)) {
       errors.push(`${owner}: only "reachable" cross-layer rules are supported`);
       continue;
@@ -810,24 +868,16 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
       errors.push(`EDITOR.json layer key "${key}" must be lowerCamelCase, 1-24 characters`);
       continue;
     }
-    const layer = validateLayerSpec(key, (parsed.layers as Record<string, unknown>)[key], errors);
+    const layer = validateLayerSpec(`layers.${key}`, (parsed.layers as Record<string, unknown>)[key], errors);
     if (layer) layers[key] = layer;
   }
-  const tilemapGrids = Object.values(layers)
-    .filter((layer): layer is TilemapLayerSpec => layer.widget === 'tilemap')
-    .map((layer) => JSON.stringify(layer.grid));
-  if (tilemapGrids.some((grid) => grid !== tilemapGrids[0])) {
-    errors.push('EDITOR.json tilemap layers must share the same grid bounds');
-  }
-  const layerCellBudget = Object.values(layers)
-    .filter((layer): layer is TilemapLayerSpec => layer.widget === 'tilemap')
-    .reduce((total, layer) => total + layer.grid.maxCols * layer.grid.maxRows, 0);
-  if (layerCellBudget > MAX_LAYER_TOTAL_CELLS) {
-    errors.push(`EDITOR.json tilemap layers exceed the shared ${MAX_LAYER_TOTAL_CELLS}-cell budget`);
-  }
+  checkLayerGrids('EDITOR.json', layers, errors);
   const constraints = validateLayerConstraints(parsed.constraints, layers, errors);
   if (parsed.constraints !== undefined && parsed.version !== 2) {
     errors.push('EDITOR.json cross-layer constraints require version 2');
+  }
+  if (parsed.version === 1 && Object.values(content).some((spec) => spec.item.widget === 'layered')) {
+    errors.push('EDITOR.json layered collection items require version 2');
   }
 
   if (errors.length > 0) return { definition: null, errors };
@@ -998,9 +1048,55 @@ function validatePathItemContent(spec: PathItemSpec, item: unknown, where: strin
   return errors;
 }
 
+// Declared property values, checked the same way whatever widget owns them.
+function propertyValueErrors(specs: Record<string, PropertySpec>, properties: unknown, where: string): string[] {
+  if (!isPlainObject(properties)) return [`${where}: "properties" must be an object`];
+  const errors: string[] = [];
+  for (const name of Object.keys(properties)) {
+    if (!(name in specs)) errors.push(`${where}: undeclared property "${name}"`);
+  }
+  for (const [name, spec] of Object.entries(specs)) {
+    const value = properties[name];
+    if (value === undefined) {
+      errors.push(`${where}: missing property "${name}"`);
+      continue;
+    }
+    const problem = valueProblem(spec, value);
+    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
+  }
+  return errors;
+}
+
+// Each item owns a stack, so its rules are checked per item.
+function validateLayeredItemContent(spec: LayeredItemSpec, item: unknown, where: string): string[] {
+  if (!isPlainObject(item)) return [`${where}: must be an object`];
+  const errors: string[] = [];
+  const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== LAYERS_KEY);
+  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
+  errors.push(...propertyValueErrors(spec.properties, item.properties, where));
+
+  const layers = item[LAYERS_KEY];
+  if (!isPlainObject(layers)) return [...errors, `${where}: "layers" must be an object of layer values`];
+  for (const key of Object.keys(layers)) {
+    if (!(key in spec.layers)) errors.push(`${where}: undeclared layer "${key}"`);
+  }
+  for (const [key, layerSpec] of Object.entries(spec.layers)) {
+    if (layers[key] === undefined) {
+      errors.push(`${where}: missing layer "${key}"`);
+      continue;
+    }
+    errors.push(...validateLayerContent(layerSpec, layers[key], `${where}.${key}`));
+  }
+  for (const [index, rule] of spec.constraints.entries()) {
+    errors.push(...validateLayerReachable(rule.reachable, spec.layers, layers, `${where} constraints[${index}]`));
+  }
+  return errors;
+}
+
 function validateItemContent(spec: CollectionItemSpec, item: unknown, where: string): string[] {
   if (spec.widget === 'entities') return validateEntityItemContent(spec, item, where);
   if (spec.widget === 'path') return validatePathItemContent(spec, item, where);
+  if (spec.widget === 'layered') return validateLayeredItemContent(spec, item, where);
   const errors: string[] = [];
   if (!isPlainObject(item)) return [`${where}: must be an object`];
   const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== 'rows');
@@ -1332,10 +1428,27 @@ export function generateEditorContentModule(definition: EditorDefinition, conten
       lines.push(`  ${name}: ${propertyTsType(propertySpec)};`);
     }
     lines.push('}', '');
+    if (spec.item.widget === 'layered') {
+      const fields: string[] = [];
+      for (const [layerKey, layerSpec] of Object.entries(spec.item.layers)) {
+        const layerType = `${itemType}${typeName(layerKey)}Layer`;
+        lines.push(`export interface ${layerType}${layerSpec.widget === 'entities' ? 'Item' : ''} {`);
+        lines.push('  properties: {');
+        for (const [name, propertySpec] of Object.entries(layerSpec.properties)) {
+          lines.push(`    ${name}: ${propertyTsType(propertySpec)};`);
+        }
+        lines.push('  };');
+        if (layerSpec.widget === 'tilemap') lines.push('  rows: string[];');
+        lines.push('}', '');
+        fields.push(`  ${layerKey}: ${layerType}${layerSpec.widget === 'entities' ? 'Item[]' : ''};`);
+      }
+      lines.push(`export interface ${itemType}Layers {`, ...fields, '}', '');
+    }
     lines.push(`export interface ${itemType} {`);
     lines.push(`  properties: ${itemType}Properties;`);
     if (spec.item.widget === 'tilemap') lines.push('  rows: string[];');
     if (spec.item.widget === 'path') lines.push('  points: Array<{ x: number; y: number }>;');
+    if (spec.item.widget === 'layered') lines.push(`  layers: ${itemType}Layers;`);
     lines.push('}', '');
     contentFields.push(`  ${key}: ${itemType}[];`);
   }

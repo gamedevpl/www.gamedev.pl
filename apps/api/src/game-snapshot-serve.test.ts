@@ -91,7 +91,8 @@ async function createApp(params: {
   githubClient: GitHubClient;
   snapshotReader?: GameSnapshotReader | null;
   store?: InMemoryStore;
-  mediaUrlSigner?: { urlFor(object: string): Promise<string | null> } | null;
+  mediaUrlSigner?: { urlFor(object: string, ttlSeconds?: number): Promise<string | null> } | null;
+  mintBudget?: { perIpPerDay: number; perInstancePerDay: number };
 }): Promise<FastifyInstance> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -105,6 +106,7 @@ async function createApp(params: {
       githubClient: params.githubClient,
       snapshotReader: params.snapshotReader ?? null,
       mediaUrlSigner: params.mediaUrlSigner ?? null,
+      mintBudget: params.mintBudget,
     },
   });
 }
@@ -561,6 +563,59 @@ describe('serving media straight from Cloud Storage', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.rawPayload.toString()).toBe('baked-bytes');
+    await app.close();
+  });
+});
+
+// The per-minute limiter stopped bounding bytes once links outlived requests.
+describe('the daily ceiling on handing out signed URLs', () => {
+  const withMedia = { ...catalogEntry('bubble-pop'), media: { screenshots: [{ file: 'opening.png' }] } };
+
+  it('refuses once an address has had its day of URLs', async () => {
+    const { githubClient } = createGithubStub([withMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+      mintBudget: { perIpPerDay: 1, perInstancePerDay: 100 },
+    });
+
+    const first = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+    const second = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(first.statusCode).toBe(302);
+    expect(second.statusCode).toBe(429);
+    // Serving bytes would cost more than the redirect it replaced.
+    expect(second.rawPayload.toString()).toContain('too many game requests');
+    await app.close();
+  });
+
+  it('gives a video a shorter link than a screenshot', async () => {
+    const withVideo = { ...catalogEntry('bubble-pop'), media: { screenshots: [], video: 'gameplay.mp4' } };
+    const { githubClient } = createGithubStub([withVideo]);
+    const snapshot = createSnapshotStub({
+      catalog: [withVideo],
+      media: { 'bubble-pop/gameplay.mp4': Buffer.from('mp4'), 'bubble-pop/opening.png': Buffer.from('png') },
+    });
+    const ttls: number[] = [];
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: {
+        urlFor: async (object, ttlSeconds) => {
+          ttls.push(ttlSeconds!);
+          return `https://signed/${object}`;
+        },
+      },
+    });
+
+    await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/gameplay.mp4' });
+
+    expect(ttls[0]).toBe(30 * 60);
     await app.close();
   });
 });

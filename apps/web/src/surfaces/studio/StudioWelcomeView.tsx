@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { InteractiveMascot, type MascotEmotion } from '../../Mascot.js';
 import { PixelIcon } from '../../PixelIcon.js';
-import { studioPath } from '../../core/router.js';
+import { welcomeHandoffHref } from './welcomeHandoff.js';
 import { BuildProgressChecklist } from '../../BuildProgressChecklist.js';
 import { isStudioOnboarded, markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
 import { pollDelayMs } from './studioStatusPoll.js';
@@ -232,8 +232,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const openStudio = () => {
     markStudioOnboarded();
     recordCreateStep('handoff_enter_studio', 'platform');
-    const address = status?.slug ?? game;
-    onOpenStudio(`${studioPath(address)}?from=handoff`);
+    onOpenStudio(welcomeHandoffHref(token ?? status?.slug ?? game, isReady));
   };
 
   const progress = welcomeProgressMessage(status, t);

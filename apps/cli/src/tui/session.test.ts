@@ -117,4 +117,20 @@ describe('tui session', () => {
     session.deleteLast();
     expect(session.get().draft).toBe('hi');
   });
+
+  it('moves through code points and edits at the cursor', () => {
+    const session = createTuiSession('');
+    void session.prompt();
+    session.setDraft('a😀c');
+    session.moveDraftCursor(-1);
+    session.insertDraft('b');
+    expect(session.get()).toMatchObject({ draft: 'a😀bc', draftCursor: 3 });
+    session.deleteLast();
+    expect(session.get()).toMatchObject({ draft: 'a😀c', draftCursor: 2 });
+    session.moveDraftCursor(-20);
+    session.deleteLast();
+    expect(session.get()).toMatchObject({ draft: 'a😀c', draftCursor: 0 });
+    session.moveDraftCursor(20);
+    expect(session.get().draftCursor).toBe(3);
+  });
 });

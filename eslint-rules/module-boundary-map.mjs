@@ -86,6 +86,8 @@ const FILE_BUCKET = {
   'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
   digest: 'platform',
+  'agent-session': 'platform',
+  'sweep-cadence': 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
@@ -146,6 +148,13 @@ const FILE_BUCKET = {
   // Job vocabulary and its transition table, read by eight buckets. Its only
   // domain import is type-only, so nothing follows it at runtime.
   'job-state': 'platform',
+  // Daily ceiling on signed media URLs. Pure counters, no relative imports.
+  'media-mint-budget': 'platform',
+  'serving-brake': 'platform',
+  'public-play': 'platform',
+  'api-compression': 'platform',
+  // Which model may stand in for which. No relative imports at all.
+  'vertex-fallback-models': 'platform',
   // Retry/fallback loop around a Vertex call. No relative imports at all.
   'vertex-resilience': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
@@ -271,6 +280,7 @@ const FILE_BUCKET = {
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
+  'studio-shelf-records': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
@@ -397,6 +407,7 @@ const FILE_BUCKET = {
   'game-snapshot-publish': 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
+  'affinity-cache': 'catalog',
   recommend: 'catalog',
   recommendations: 'catalog',
   'published-slugs': 'catalog',
@@ -476,6 +487,7 @@ const FILE_BUCKET = {
   'unsubscribe-token': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+  'uncollected-feedback': 'notifications',
   'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,

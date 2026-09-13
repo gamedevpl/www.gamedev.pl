@@ -181,6 +181,9 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
       partyPaused: patch.partyPaused ?? this.creationLimits?.partyPaused ?? false,
+      videoPaused: patch.videoPaused ?? this.creationLimits?.videoPaused ?? false,
+      mediaLean: patch.mediaLean ?? this.creationLimits?.mediaLean ?? false,
+      anonymousPaused: patch.anonymousPaused ?? this.creationLimits?.anonymousPaused ?? false,
       telemetrySampleRate:
         patch.telemetrySampleRate !== undefined
           ? patch.telemetrySampleRate
@@ -325,6 +328,9 @@ export class FirestoreQuotaStore implements QuotaStore {
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
       partyPaused: data?.partyPaused === true,
+      videoPaused: data?.videoPaused === true,
+      mediaLean: data?.mediaLean === true,
+      anonymousPaused: data?.anonymousPaused === true,
       telemetrySampleRate: readSampleRate(data?.telemetrySampleRate),
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
@@ -385,6 +391,9 @@ export class FirestoreQuotaStore implements QuotaStore {
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
         partyPaused: patch.partyPaused ?? existing.partyPaused ?? false,
+        videoPaused: patch.videoPaused ?? existing.videoPaused ?? false,
+        mediaLean: patch.mediaLean ?? existing.mediaLean ?? false,
+        anonymousPaused: patch.anonymousPaused ?? existing.anonymousPaused ?? false,
         telemetrySampleRate:
           patch.telemetrySampleRate !== undefined ? patch.telemetrySampleRate : (existing.telemetrySampleRate ?? null),
         seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',

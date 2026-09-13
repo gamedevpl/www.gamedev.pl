@@ -410,7 +410,7 @@ describe('surviving a moment of no capacity', () => {
   });
 
   // Wall clock cannot tell one shared deadline from three separate ones.
-  it('gives each attempt only what the budget has left', async () => {
+  it('gives each attempt a share of the budget, not the whole of it', async () => {
     const budgets: (number | undefined)[] = [];
     const checker = new VertexChecker({
       timeoutMs: 300,
@@ -426,9 +426,8 @@ describe('surviving a moment of no capacity', () => {
     await checker.check('A cozy farming game');
 
     expect(budgets).toHaveLength(3);
-    expect(budgets[0]).toBeLessThanOrEqual(300);
-    expect(budgets[1]).toBeLessThan(budgets[0]!);
-    expect(budgets[2]).toBeLessThan(budgets[1]!);
+    // A stalling first attempt must not leave the stand-in with nothing.
+    expect(budgets.every((budget) => budget! > 0 && budget! < 300)).toBe(true);
   });
 
   it('stops attempting once the budget is spent', async () => {

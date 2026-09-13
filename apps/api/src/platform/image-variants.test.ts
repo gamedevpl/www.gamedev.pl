@@ -84,7 +84,7 @@ describe('downscalePng', () => {
   });
 
   it('guards the width allowlist the route validates against', () => {
-    expect(VARIANT_WIDTHS).toEqual([96, 640]);
+    expect(VARIANT_WIDTHS).toEqual([96, 160, 320, 640]);
     expect(isVariantWidth(96)).toBe(true);
     expect(isVariantWidth(97)).toBe(false);
   });

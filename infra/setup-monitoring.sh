@@ -1007,6 +1007,88 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
 }
 EOF
 
+# A32 — the games bucket is shipping bytes at a rate nothing here explains.
+#
+# Media moved off the origin to signed Cloud Storage URLs on 2026-09-11, which took those
+# bytes off the Hosting meter — and out of every view that was watching it. A signed URL
+# is pullable by anyone holding it until it expires, so the per-request limiter bounds how
+# many links are handed out, never how much is pulled through them. This is the only thing
+# left that sees the bill forming.
+#
+# 120 MB/hour sustained over an hour is ~2.9 GB/day, roughly 24x a normal closed-beta day
+# (52 MB on 2026-09-10) and about $0.35/day of egress. Low enough to catch a scraper in
+# the first hour, high enough that a genuinely busy launch day does not page anyone.
+cat > "${POLICY_DIR}/a32.json" <<EOF
+{
+  "displayName": "A32 Games bucket egress abnormally high",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sent bytes sustained over an hour",
+    "conditionThreshold": {
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\"",
+      "aggregations": [{
+        "alignmentPeriod": "3600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM",
+        "groupByFields": ["resource.label.bucket_name"]
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 125829120,
+      "duration": "3600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Cloud Storage is serving far more than this project's traffic explains. Since 2026-09-11 game media is answered as a 302 to a signed URL, so these bytes leave the bucket directly and appear on no Hosting counter. Triage: group the metric by resource.label.bucket_name to see whether it is the snapshot bucket (catalog games) or the store bucket (games made on the platform). Then check whether mints match: jsonPayload.msg=\"media URL budget exhausted\" in the Cloud Run log says the daily ceiling is already refusing someone, and its absence means one or a few links are being pulled hard rather than many being handed out. Levers: MEDIA_DAILY_MINTS_PER_IP and MEDIA_DAILY_MINTS_PER_INSTANCE (both deploy paths; counted per process, so the service-wide effect is that number times the warm instances), and the video TTL in media-url-signer.ts. See docs/deployment.md 'Media egress'.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A33 -- the snapshot bucket alone, at a rate that is worth degrading the catalog over.
+#
+# A32 pages a human about any bucket. This one exists to be acted on automatically, so it
+# is scoped to the one bucket whose bytes the video and media rungs can actually reduce:
+# catalog media leaves from here. The store bucket is deliberately excluded -- its traffic
+# is dominated by the coding agent reading kit files (measured 8 GB/day in closed beta,
+# 71 of the last 72 hours over A32's own threshold), and no serving rung reduces that.
+#
+# 2 GiB/hour is ~48 GB/day, about $5.80/day of egress and roughly 20x the snapshot
+# bucket's observed peak (94 MB/h over 2026-09-10..12). Below that a busy day is just a
+# busy day; above it, serving 96px images beats paying. Sustained over an hour, so the
+# brake reacts in about two -- slow for an alert, fast for something a budget would take
+# days to notice.
+cat > "${POLICY_DIR}/a33.json" <<EOF
+{
+  "displayName": "A33 Snapshot bucket egress spiking",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "snapshot bucket sent bytes sustained over an hour",
+    "conditionThreshold": {
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name=\"${PROJECT_ID}-games-snapshots\"",
+      "aggregations": [{
+        "alignmentPeriod": "3600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 2147483648,
+      "duration": "3600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Catalog media is leaving the snapshot bucket fast enough to be worth degrading the catalog over. The spend brake pulls the video and media rungs on this policy (infra/setup-spend-brake.sh), so preview video stops and every image is served at its baked 96px width until an operator clears the flags at /admin/limits. That is the intended response, not a malfunction. Check whether it was a spike worth having (visit telemetry, the Cloud Run request count) or a scraper (one IP pulling many objects: jsonPayload.msg=\"media URL budget exhausted\" means the per-IP ceiling is already refusing someone). This policy deliberately ignores the store bucket, whose traffic is the coding agent rather than visitors; A32 still pages a human about every bucket. See docs/runbooks/launch-day.md.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do

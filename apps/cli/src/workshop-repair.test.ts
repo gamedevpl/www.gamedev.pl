@@ -1,10 +1,20 @@
-import { expect, it } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, expect, it } from 'vitest';
 import { loadAdapters } from './adapters.js';
 import { runLocalBuild, type Workshop } from './workshop.js';
+const roots: string[] = [];
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 const spec = loadAdapters().adapters.find((row) => row.name === 'codex')!;
 function workshop(over: Partial<Workshop>): Workshop {
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-repair-'));
+  roots.push(root);
+  mkdirSync(join(root, 'games/game'), { recursive: true });
   return {
-    root: '/checkout',
+    root,
     slug: 'game',
     token: '',
     env: {},
@@ -24,8 +34,9 @@ it('repairs editor validation in the same workspace and keeps ownership through 
     onLocalTask: (agent) => local.push(agent),
     runAdapter: async (input) => {
       expect(input.spec).toMatchObject(spec);
-      expect(input.cwd).toBe('/checkout/games/game');
+      expect(input.cwd).toBe(join(ws.root, 'games/game'));
       prompts.push(input.prompt);
+      writeFileSync(join(input.cwd, 'game.ts'), String(prompts.length));
       return { code: 0 };
     },
     run: (_cmd, args) => {
@@ -49,6 +60,7 @@ it('stops the repair loop on cancellation and releases local ownership', async (
     onLocalTask: (agent) => local.push(agent),
     runAdapter: async (input) => {
       calls += 1;
+      writeFileSync(join(input.cwd, 'game.ts'), String(calls));
       if (calls === 2) ws.abort.current?.abort();
       expect(input.abort).toBe(ws.abort.current?.signal);
       return { code: 0 };

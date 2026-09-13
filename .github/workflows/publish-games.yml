@@ -4,9 +4,16 @@ name: Publish games snapshot
 # pre-assembled documents instead of rebuilding each game from GitHub + esbuild on
 # the request path (apps/api/src/game-snapshot.ts).
 #
-# The games repo dispatches its exact SHA and gate scope after a main push. This
-# workflow validates that checkout before baking its snapshot; a failed gate
-# leaves the previous snapshot pointer untouched.
+# The games repo dispatches its exact SHA after a main push. This workflow
+# re-classifies that SHA (tools/gate-scope.mjs --event push --base <last-published>)
+# so a one-game merge runs the scoped gate (~8–10 min) instead of check:pr over the
+# catalog (~40 min). The base is the live snapshot's commitSha, not HEAD's parent:
+# cancel-in-progress would otherwise let a game-only follow-up skip an earlier
+# unvalidated runtime change. Opt-in GameKit modules reverse-index to GAME.json consumers
+# (static + those slugs). A named universal helper (drawGrid / draw.grid) is
+# static on callers; an unidentifiable or catalog-wide surface (draw.rect)
+# stays full.
+# A failed gate leaves the previous snapshot pointer untouched.
 #
 # Nothing needs to be redeployed afterwards. Running instances re-read the pointer
 # on its short TTL, so a publish becomes visible on its own within about a minute.
@@ -69,6 +76,13 @@ jobs:
       slugs: ${{ github.event.client_payload.slugs || '' }}
       need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
       narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
+      # Merge dispatches re-classify against current.json's commitSha (the
+      # last SHA that actually published). Payload mode is unused when
+      # classify_push=1; compare/pointer failure is full, not a payload
+      # fallback. games-validate keeps its payload (including WebKit) and
+      # does not publish. Schedule / workflow_dispatch keep the full catalog
+      # seal.
+      classify_push: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'games-published' && '1' || '0' }}
       # github.event.schedule is the cron string that fired this run (empty on
       # dispatch / workflow_dispatch). Match the Sunday cron above, not
       # event_name == 'schedule' — the daily 04:23 cron is also a schedule.

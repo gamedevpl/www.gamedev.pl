@@ -54,9 +54,7 @@ async function renderStrip(props: Partial<StudioStripProps> = {}) {
 afterEach(async () => {
   while (hosts.length) {
     const cleanup = hosts.pop()!;
-    await act(async () => {
-      cleanup();
-    });
+    await act(async () => cleanup());
   }
 });
 
@@ -72,12 +70,13 @@ describe('StudioStrip layout structure', () => {
   } as unknown as SubmissionStatus;
 
   it('renders title as a link to /play/:slug when slug is present', async () => {
-    const host = await renderStrip({ slug: 'my-game', title: 'My Game' });
+    const onPlayPermalink = vi.fn();
+    const host = await renderStrip({ slug: 'my-game', title: 'My Game', onPlayPermalink });
     const link = host.querySelector<HTMLAnchorElement>('.studio-strip-title a');
-
-    expect(link).toBeTruthy();
     expect(link?.getAttribute('href')).toBe('/play/my-game');
     expect(link?.textContent).toBe('My Game');
+    await act(async () => link?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })));
+    expect(onPlayPermalink).toHaveBeenCalledWith('my-game');
   });
 
   it('renders title as text without link when slug is not present', async () => {
@@ -129,8 +128,6 @@ describe('StudioStrip layout structure', () => {
       lastAgentSignalAt: new Date().toISOString(),
     } as unknown as SubmissionStatus;
     const host = await renderStrip({ status: firstRoundStatus, onOpenBuild });
-
-    // No build has ever landed yet — the bar has nothing to show.
     expect(host.querySelector('.studio-build-bar')).toBeNull();
 
     const button = host.querySelector<HTMLButtonElement>('.studio-strip-phase-button');

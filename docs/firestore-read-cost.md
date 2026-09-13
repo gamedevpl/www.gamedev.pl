@@ -28,6 +28,7 @@ Two corollaries, both of which have been got wrong here:
 | `/api/catalog` enrichment  | —     | 10 min | writing an enrichment (`catalog-enricher.ts`)                                               |
 | store catalog + media      | —     | 10 min | publishing a game (`catalog-routes.ts`)                                                     |
 | notify sweep health scan   | 2 min | 10 min | recording a verdict (`notify-sweep-routes.ts`)                                              |
+| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`) |
 | `/api/review/status` badge | 2 min | 10 min | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
 | `/api/notifications` bell  | 1 min | 5 min  | creating, reading or clearing a notification (`notification-cache.ts`)                      |
 | Studio connect guide       | 10 s  | —      | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
@@ -71,12 +72,131 @@ Two things bound it:
 The general rule this leaves: **a poll's cost is its cadence times its cheapest possible
 answer, and "nothing to show" is the answer it will give most of the time.**
 
+### The per-user half is the only part that grows with visitors
+
+The shared windows above make the frightening numbers flat: `/api/catalog` costs 293 reads
+cold and **1** warm, six refreshes an hour whether one person visits or ten thousand. They
+scale with catalog size, not traffic. What no shared window covers is the part keyed by the
+reader, and on 2026-09-12 there was exactly one: `/api/recommendations` read
+`users/{uid}/playAffinity` on every home load, one document per game that player had ever
+opened — 21 and 85 rows in two sampled requests. That cost is **doubly** linear, visitors
+times their own history, so ten thousand home loads a day by returning players is about
+230K reads, roughly what the whole service did that day.
+
+It now has a **60-second window per uid**, dropped the moment that player records a play.
+Sixty seconds rather than the bell's five minutes because the last-played shelf is visible:
+same-instance invalidation makes your own play immediate, and cross-instance staleness is
+bounded at a minute. Cold misses share one in-flight read, so a burst of tabs is still one
+query, and a play landing mid-read discards the answer rather than sealing it in.
+
+The rule this leaves for any new surface: **ask which half of the request is shared and which
+is keyed by the reader.** Only the second half multiplies by traffic, and it is never the half
+that looks expensive in a per-request ranking.
+
+## The other half of the floor: our own sweeps
+
+A browser poll needs a tab open. `notify-sweep` needs nothing — Cloud Scheduler posts to it
+every two minutes, forever, and on 2026-09-12 it was **a third of an otherwise idle hour's
+reads**: 34 active submissions re-derived 720 times a day, each derivation a pending-message
+query plus a reconcile plus a status read, and 33 operator alerts re-emitted on top. The run
+took 14 seconds of wall clock. Nothing in that work changed anything: the same 34 records had
+been motionless for days, and all 33 alerts had been delivered long ago.
+
+Two rules came out of it, and they generalise to any scheduled sweep here.
+
+1. **A record's recheck interval is a function of how long it has been still.** `sweep-cadence.ts`
+   holds a per-job next-due stamp: moving within the hour means every run, still for an hour
+   means every ten minutes, still for a day means hourly. Two properties matter more than the
+   numbers. A job this process has **never** derived is always due, so a cold start and every
+   test derive everything — the cadence can only ever *defer a repeat*, never skip a first look.
+   And **anything with a clock running on it stays hot**: an uncollected creator message, an
+   observed transition, or a status that just changed all reset the record to every-run, because
+   the alert those feed is the one thing a widened cadence could make late. A deferral is also
+   **void the moment the record moves**: the stamp remembers the activity time it was granted
+   against, and a newer one on the already-read record makes the job due again, so nothing that
+   changed can sit unseen for an hour. The schedule is process-local on purpose: it is an
+   optimisation, and losing it on a deploy costs one full run.
+
+2. **An emit that is idempotent by id should stop asking.** Re-emitting an existing operator
+   alert cost a document read *and* a transaction commit per alert per run, which is how ~908
+   commits an hour sat behind ~1,157 document writes a day: read-only transactions, committing
+   nothing. `notify-sweep-routes.ts` now remembers the ids it has seen already present and skips
+   them (`alertsSkipped` in the response and the log), and `createNotification` inserts with
+   `create()` — the atomic insert — instead of reading inside a transaction to decide.
+
+The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
+scheduler's own logs rather than inferred from a read count.
+
+It also carries `stalledCauses`, which is not about cost. `feedback_undelivered` exists to say
+"the relay failed", and on 2026-09-12 it was firing on six rounds of which only two fit that
+description: two were parked on an operator's publish decision since August, one had received a
+message fourteen hours after its agent ended, and one had never had an agent connect. An alert
+that cannot distinguish those is a true statement nobody can act on. The kind still fires — a
+permanent false alarm is bad, silence is worse — but every stalled job now reports *why* nothing
+collected it (`uncollected-feedback.ts`), which is the difference between re-dispatching a round,
+publishing it, and closing it. `agentEndedAt` alone does **not** mean the agent left — it is also
+set when an agent submits without calling `end`, and `isAgentSessionEnded` (platform/) is the one
+place that rule lives, shared with `shouldSteerFeedbackViaInbox` so the two cannot drift. The
+cause goes in the log and the response rather than the notification body, because notifications
+are create-only: adding `{{detail}}` to the body would render an empty slot in every alert
+already emitted.
+
 ## Measuring
 
 ```bash
 infra/read-cost-report.sh        # trailing day, split by type
 infra/read-cost-report.sh 7d     # a full working week
 ```
+
+### Per request, from the service's own logs
+
+The type split says *which half of this document* a regression belongs in. It does not say
+which route or which collection, and until 2026-09-12 that attribution was archaeology:
+correlate a per-minute read count against a request log and guess. `store/read-meter.ts`
+removes the guessing. It patches the Firestore client's read entry points once
+(`DocumentReference.get`, `Query.get`, `AggregateQuery.get`, `Firestore.getAll`,
+`Transaction.get`/`getAll`, `WriteBatch.commit`, `runTransaction`) and tallies them into an
+`AsyncLocalStorage` scope opened per request, so every response that touched Firestore logs
+one line:
+
+```
+{"msg":"firestore reads","route":"/api/review/status","fsReads":4,"fsMissing":1,
+ "fsCalls":3,"fsCommits":0,"fsTransactions":0,"fsPaths":{"users/*":2,"submissions":2}}
+```
+
+`fsPaths` keys are **shapes, not paths** — document ids are masked to `*`, a collection-group
+query is `group:<id>`, an aggregate is `count:<shape>` — so one key aggregates every read of
+that shape.
+
+**It counts what Firestore bills, not what came back**, and the three rules there are the
+whole reason the tally can be trusted as a cost attribution:
+
+- an **absent document** counts in both `fsReads` and `fsMissing`;
+- a **query that matched nothing** still counts one read — the minimum charge. This is not a
+  rounding detail: `listPendingCreatorMessages` returns empty on nearly every sweep run, so
+  counting it as zero would have hidden 34 reads a run in exactly the job being investigated;
+- an **aggregate** counts one read per 1000 index entries matched, minimum one, so a `count()`
+  over 2,500 rows is three reads rather than one.
+
+A read that *throws* is not tallied — the meter records after the await. So a swallowed
+`PERMISSION_DENIED` (about 850/day as of 2026-09-12, logged nowhere, cost nothing) stays
+invisible here; it shows only in `api/request_count` split by `response_code`.
+
+The two questions this answers that nothing else did:
+
+```bash
+# Which route is the floor? Sum reads per route over an idle hour.
+gcloud logging read 'resource.labels.service_name=gamedev-app
+  AND jsonPayload.msg="firestore reads"' --project gamedevpl --freshness=1h \
+  --format='value(jsonPayload.route,jsonPayload.fsReads)' |
+  awk '{r[$1]+=$2} END {for (k in r) print r[k], k}' | sort -rn
+
+# What does one poll cost, per shape?
+gcloud logging read 'jsonPayload.msg="firestore reads"
+  AND jsonPayload.route="/api/review/status"' --project gamedevpl --limit 5 \
+  --format='value(jsonPayload.fsReads,jsonPayload.fsPaths)'
+```
+
 
 The split by `metric.label.type` (QUERY / LOOKUP / NOT_FOUND) is the whole point, and it
 decides which half of this document the next fix belongs in. QUERY is a collection scan —
@@ -86,6 +206,26 @@ count with no cadence means browser tabs, not Cloud Scheduler — check the requ
 the route before going looking for a job.
 
 ## Alerting
+
+### The floor as measured on 2026-09-12
+
+Before the sweep fixes above, a full idle hour (09-11 13:00-19:00Z, no traffic) sat at a flat
+**12.4-12.9K reads/hour** — about 300K/day with nobody using the site, six times the free tier
+from nothing. The split of one such hour: QUERY ~9,300, LOOKUP ~2,390, NOT_FOUND ~780, from
+~6,160 Firestore calls against ~500 HTTP requests, on a single instance. Two reads per call and
+a dozen calls per request: the bill was never one fat scan, it was thousands of tiny gets.
+
+Reading the same hour per minute shows a clean two-minute sawtooth — odd minutes ~72
+`BatchGetDocuments` / 47 `RunQuery` / 22 `Commit`, even minutes ~35 / 22 / 8 — which is how
+`notify-sweep` was identified as a third of the floor without reading any code. Whole days over
+the same week ran 445K-835K reads, and writes 1.1K-28K (2026-09-07 hit 22.6K creates, over the
+20K/day free write quota for that day alone).
+
+One spike is not a regression: the nightly scorecard sweep adds **~22K QUERY in the 04:00Z
+hour** (31.7K against a 9.4K baseline), almost all of it one shape —
+`COLLECTION /telemetry/*/playEvents LIMIT 5000`, 28 executions for a 28-day window, 23,472
+reads. That is the one scan on this list whose reads buy something durable: the scorecards the
+whole agent loop reasons about. It is 3% of the day and is left alone deliberately.
 
 `infra/setup-monitoring.sh` defines **A30**, read rate sustained over ten minutes, as the
 twin of A29 for writes. It is a ceiling over the floor the caches leave, calibrated to
@@ -106,3 +246,33 @@ calibrated against a floor the badge fix above removes; **re-derive them togethe
 full working week of post-fix numbers rather than from an estimate — `read-cost-report.sh`
 is what that measurement looks like, and the type split belongs in the PR that moves a
 threshold.
+
+**The deploy gate has no voice of its own.** `Deploy to Cloud Run` triggers on `workflow_run`
+of CI and is gated on that run concluding success, so a red master skips every deploy while
+each merged pull request still reads green. On 2026-09-12 master was red from a direct push
+and two merges deployed nothing; production served the previous revision for over an hour with
+nothing reporting it. `infra/check-deploy-freshness.mjs` (run every half hour by
+`.github/workflows/deploy-watchdog.yml`) now asks whether master's newest settled commit has a
+*successful* deploy run, and opens one issue when it does not.
+
+Four answers, because three of them are not "fine": **deployed** (0) closes the issue,
+**not deployed** (1) opens or comments on it, **too early to judge** (3) touches nothing, and
+**the check itself broke** (2) fails the workflow loudly rather than reporting a production
+incident that may not exist. The distinction between 0 and 3 is the one that matters: a
+watchdog that treats "still deploying" as health closes its own incident thirty seconds after
+raising it.
+
+Three rules the first draft got wrong, all three found in review:
+
+- **Judge only the newest settled CI run.** Scanning backwards for the newest run *older than
+  the grace window* picks a superseded red commit while the green one that fixed it is still
+  building — so the alarm stays on through the recovery it is supposed to notice ending.
+- **Look for a deploy before judging CI.** `deploy.yml` also accepts `workflow_dispatch`, with
+  no CI gate, so a manual deploy of a red-CI commit is a real deploy and must read as one.
+- **A pending deploy expires.** Any in-flight run counted as health meant a queued or hung
+  deploy looked fine for as long as it hung; past `DEPLOY_TIMEOUT_MINUTES` it is a stall.
+
+**Owed after the sweep fixes land.** A30 and A31 are calibrated against the pre-fix floor
+described above. Give the change a full working week in production, then re-derive both from
+`infra/read-cost-report.sh 7d` and the per-route sums from the read meter, and put the type
+split in the PR that moves either threshold. Do not move them from the estimate.

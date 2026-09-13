@@ -49,6 +49,14 @@ describe('spend brake payload reading', () => {
       incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
       policyName: 'zł130 Monthly Budget Alert',
     });
+    // 125% spent: the catalog gets uglier, not absent.
+    expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.25 }).lanes).toEqual([
+      'managed',
+      'seeding',
+      'gate',
+      'video',
+      'media',
+    ]);
     // 150% spent: everything, including the lanes that cost pennies.
     expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.5 }).lanes).toEqual([
       'creation',
@@ -59,7 +67,25 @@ describe('spend brake payload reading', () => {
       'gate',
       'seeding',
       'managed',
+      'video',
+      'media',
+      'anonymous',
     ]);
+  });
+
+  it('closes the site to visitors only at the top of the ladder', () => {
+    const over = (ratio: number) =>
+      lanesFromNotification({ budgetDisplayName: 'Total monthly', alertThresholdExceeded: ratio }).lanes;
+    expect(over(1)).not.toContain('anonymous');
+    expect(over(1.25)).not.toContain('anonymous');
+    expect(over(1.5)).toContain('anonymous');
+  });
+
+  it('lets an egress budget name the bandwidth lanes and nothing else', () => {
+    // The separator a GCP label can carry.
+    expect(
+      lanesFromNotification({ budgetDisplayName: 'GCS egress lanes=video_media', alertThresholdExceeded: 1 }).lanes,
+    ).toEqual(['video', 'media']);
   });
 
   it('lets a per-service budget name its own lanes instead of the ladder', () => {

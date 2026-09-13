@@ -379,6 +379,34 @@ a Google-own peer yet.
 `GET /api/diagnostics/proxy` reports `resolvedIp`, `clientIp` and `peerIsGoogleEdge` side
 by side, so the three can be compared through either path after a change.
 
+## Bandwidth
+
+Two decisions about bytes, both measured rather than assumed.
+
+**API responses are compressed; static assets are not.** The shell ships build-time
+`.br`/`.gz` siblings so `fastifyStatic` spends no CPU per request. `/api/*` bodies are
+generated, so there is nothing to precompute, and the arithmetic runs the other way:
+
+| body | plain | brotli q4 | CPU |
+| --- | --- | --- | --- |
+| `/api/catalog` | 92 KB | 16 KB | 0.9 ms |
+| a game document | 1.0 MB | 309 KB | 18.8 ms |
+
+18.8 ms of one vCPU costs about $0.00000045. Delivering the 711 KB it saves costs about
+$0.000107 — roughly 200x more. The ratio widens with traffic, because CPU here is charged
+per request and egress per byte. Quality 4 rather than brotli's default 11: at 11 a
+megabyte costs seconds. Media is excluded, being compressed already.
+
+**Screenshot variants are baked, not resized per request.** `VARIANT_WIDTHS` must hold
+every width `catalogMediaUrl` asks for; a width that is not baked is not a smaller image,
+it is the original. That drifted once and nothing failed — the grid drew ~90px thumbnails
+out of full 640x400 screenshots, 113 KB each — so
+[`image-variants-asked.test.ts`](../apps/api/src/platform/image-variants-asked.test.ts)
+reads the widths out of the web sources and fails when the two lists disagree.
+
+Under a bandwidth incident the spend brake pulls three serving rungs. See
+[the launch-day runbook](./runbooks/launch-day.md).
+
 ## Media egress
 
 Hosting rewrites `**` to Cloud Run, so **every byte the origin returns is billed as
@@ -393,6 +421,18 @@ snapshot object (probing that it exists — a redirect cannot fall through the w
 inline read can), signs a six-hour V4 URL with the runtime service account
 ([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
 and answers **302** to `storage.googleapis.com`.
+
+**Ceilings that still mean something.** `MEDIA_DAILY_MINTS_PER_IP` (5 000) and
+`MEDIA_DAILY_MINTS_PER_INSTANCE` (2 000 000) cap how many signed URLs a day are handed out;
+past either, the route answers 429 rather than serving the bytes itself, because doing
+that would cost more than the redirect it replaced. Both are counted **in each process**:
+coordinating them would mean a Firestore write per media request, and Cloud Run runs at
+most four app instances, so treat them as a blunt circuit breaker whose service-wide
+effect is the number times however many instances are warm — not an accountant. Video
+links live 30 minutes rather than six hours — a capture is ~662 KB against a ~60 KB
+screenshot, and a link is pullable by anyone holding it for as long as it lives. **A32**
+watches `storage.googleapis.com/network/sent_bytes_count` on the buckets, which is the
+only view left of the bill forming.
 
 **What the limiter still caps, and what it stops capping.** The catalog lookup, the media
 allow-list and the 400/min per-IP budget all run before a URL is minted, so they bound

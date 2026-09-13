@@ -8,6 +8,22 @@ import { glyphs } from '../renderer.js';
 import { CLI_VERSION } from '../update.js';
 import type { TuiSession, TuiState } from './session.js';
 
+export function draftViewport(draft: string, cursor: number, width: number) {
+  const chars = [...draft];
+  const room = Math.max(1, width - 3);
+  const leftRoom = Math.floor(room / 2);
+  let start = Math.max(0, cursor - leftRoom);
+  let end = Math.min(chars.length, start + room);
+  if (end === chars.length) start = Math.max(0, end - room);
+  if (start === 0) end = Math.min(chars.length, room);
+  return {
+    before: chars.slice(start, cursor).join(''),
+    after: chars.slice(cursor, end).join(''),
+    hiddenBefore: start > 0,
+    hiddenAfter: end < chars.length,
+  };
+}
+
 export function ReplApp({
   session,
   color,
@@ -59,6 +75,14 @@ export function ReplApp({
       }
       return;
     }
+    if (key.leftArrow) {
+      session.moveDraftCursor(-1);
+      return;
+    }
+    if (key.rightArrow) {
+      session.moveDraftCursor(1);
+      return;
+    }
     if (key.upArrow) {
       session.historyPrev();
       return;
@@ -75,24 +99,28 @@ export function ReplApp({
       session.deleteLast();
       return;
     }
-    if (!key.ctrl && !key.meta && input) session.setDraft(state.draft + input);
+    if (!key.ctrl && !key.meta && input) session.insertDraft(input);
   });
 
   const border = color ? 'round' : 'single';
   const accent = color ? 'cyan' : undefined;
   const prompt = glyphs(color).prompt;
-  const choiceCount = Math.min(state.choices.length, Math.max(1, rows - 10));
+  const choiceWidth = Math.max(1, Math.min(stdout.columns || 80, 110) - 4);
+  const selectedRows = Math.max(1, Math.ceil(((state.choices[state.pickIndex]?.length ?? 0) + 5) / choiceWidth));
+  const choiceCount = Math.min(state.choices.length, Math.max(1, rows - 10 - (selectedRows - 1)));
   const choiceStart = Math.max(
     0,
     Math.min(state.pickIndex - Math.floor(choiceCount / 2), state.choices.length - choiceCount),
   );
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
-  const panelRows = suggestionRows + (state.mode === 'pick' ? choiceCount + 3 : state.mode === 'busy' ? 2 : 3);
+  const panelRows =
+    suggestionRows + (state.mode === 'pick' ? choiceCount + selectedRows + 2 : state.mode === 'busy' ? 2 : 3);
   const live = state.localTask
     ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
     : state.live;
   const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
+  const draft = draftViewport(state.draft, state.draftCursor, Math.min(stdout.columns || 80, 110) - 5);
   return (
     <Box flexDirection="column" width={Math.min(stdout.columns || 80, 110)}>
       <Static items={state.lines.slice(historyOffset)} style={{ width: Math.min(stdout.columns || 80, 110) }}>
@@ -126,7 +154,7 @@ export function ReplApp({
                 const index = choiceStart + offset;
                 return (
                   <Text
-                    wrap="truncate-end"
+                    wrap={index === state.pickIndex ? 'wrap' : 'truncate-end'}
                     bold={index === state.pickIndex}
                     key={`pick:${index}:${choice}`}
                     color={index === state.pickIndex ? accent : undefined}
@@ -142,7 +170,15 @@ export function ReplApp({
               <Text color={accent} bold>
                 {prompt}
               </Text>{' '}
-              {state.draft ? `${state.draft}█` : <Text dimColor>What would you like to do? /help</Text>}
+              {state.draft ? (
+                <>
+                  {draft.hiddenBefore ? '…' : ''}
+                  {draft.before}█{draft.after}
+                  {draft.hiddenAfter ? '…' : ''}
+                </>
+              ) : (
+                <Text dimColor>What would you like to do? /help</Text>
+              )}
             </Text>
           )}
         </Box>
@@ -161,7 +197,7 @@ export function ReplApp({
           : state.mode === 'prompt'
             ? completion.suggestions.length
               ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
-              : 'Enter send · / commands · Tab fill · ↑↓ history'
+              : 'Enter send · / commands · Tab fill · ←→ cursor · ↑↓ history'
             : 'Working — input paused'}
       </Text>
       <Text dimColor wrap="truncate-end">

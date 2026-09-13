@@ -153,3 +153,50 @@ describe('load-shedding controls', () => {
     expect(reads).toBe(2);
   });
 });
+
+describe('bandwidth rungs', () => {
+  it('serves everything when the document says nothing about them', async () => {
+    const controls = createLoadShedControls({ store: storeReturning({ partyPaused: true }) });
+    expect(await controls.refusesVideo()).toBe(false);
+    expect(await controls.servesLeanMedia()).toBe(false);
+    expect(await controls.refusesAnonymous()).toBe(false);
+  });
+
+  it('reads each rung independently', async () => {
+    const controls = createLoadShedControls({ store: storeReturning({ videoPaused: true }) });
+    expect(await controls.refusesVideo()).toBe(true);
+    expect(await controls.servesLeanMedia()).toBe(false);
+    expect(await controls.refusesAnonymous()).toBe(false);
+  });
+
+  it('closes the site to visitors only when the last rung is pulled', async () => {
+    const controls = createLoadShedControls({ store: storeReturning({ anonymousPaused: true }) });
+    expect(await controls.refusesAnonymous()).toBe(true);
+  });
+
+  it('keeps serving when the document cannot be read', async () => {
+    const controls = createLoadShedControls({
+      store: {
+        async getCreationLimits(): Promise<never> {
+          throw new Error('firestore is unreachable');
+        },
+      },
+    });
+    expect(await controls.refusesVideo()).toBe(false);
+    expect(await controls.servesLeanMedia()).toBe(false);
+    expect(await controls.refusesAnonymous()).toBe(false);
+  });
+
+  it('answers several rungs from one read', async () => {
+    let reads = 0;
+    const controls = createLoadShedControls({
+      store: storeReturning({ videoPaused: true, mediaLean: true }, () => {
+        reads += 1;
+      }),
+    });
+    await controls.refusesVideo();
+    await controls.servesLeanMedia();
+    await controls.refusesAnonymous();
+    expect(reads).toBe(1);
+  });
+});

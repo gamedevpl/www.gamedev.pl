@@ -446,6 +446,11 @@ const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: st
     lead: 'has games waiting on the review desk.',
     cta: 'Open the review desk',
   },
+  'operator.moderation_flag': {
+    subject: 'A reviewer reported a game',
+    lead: 'was reported by a reviewer. One report is enough to act on.',
+    cta: 'Open the reports queue',
+  },
 };
 
 export function operatorPushContent(type: OperatorNotificationType, title: string): { title: string; body: string } {

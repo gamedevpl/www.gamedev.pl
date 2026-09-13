@@ -1,0 +1,75 @@
+# Why this exists: docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
+name: Deploy watchdog
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: deploy-watchdog
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: 'Deploy watchdog: master is not deployed'
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      # 0 deployed, 1 not deployed, 2 the check broke, 3 too early to judge.
+      - id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          node infra/check-deploy-freshness.mjs > verdict.txt 2>&1
+          verdict=$?
+          set -e
+          cat verdict.txt
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          # Its own failure must never read as a production incident.
+          if [ "$verdict" -eq 2 ]; then
+            echo '::error::deploy watchdog could not reach the GitHub API'
+            exit 1
+          fi
+
+      - id: issue
+        if: steps.check.outputs.verdict == '1' || steps.check.outputs.verdict == '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          number="$(gh issue list --state open --search "$ISSUE_TITLE in:title" --limit 100 \
+            --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - if: steps.check.outputs.verdict == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING: ${{ steps.issue.outputs.number }}
+        run: |
+          body="$(printf 'Master has not reached production. The verdict below says which of the causes it is.\n\n```\n%s\n```\n\nRun: %s/%s/actions/runs/%s\n' \
+            "$(cat verdict.txt)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$body"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$body" --assignee gtanczyk
+          fi
+
+      # Closed only on a definite yes, never on "too early to judge".
+      - if: steps.check.outputs.verdict == '0' && steps.issue.outputs.number != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING: ${{ steps.issue.outputs.number }}
+        run: |
+          gh issue close "$EXISTING" --comment "$(printf 'Master is deployed again.\n\n```\n%s\n```\n' "$(cat verdict.txt)")"

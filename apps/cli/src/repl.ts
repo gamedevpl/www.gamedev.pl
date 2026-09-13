@@ -276,7 +276,12 @@ export async function handleReplLine(input: {
       if (result.kind === 'proposal') {
         if (!input.pick) return { next: 'continue', conversationId: result.conversationId };
         const env = input.env ?? process.env;
-        const choice = await chooseExecution({ env, pick: input.pick, telemetry: input.telemetry });
+        const choice = await chooseExecution({
+          env,
+          pick: input.pick,
+          write: input.write,
+          telemetry: input.telemetry,
+        });
         if (!choice) return { next: 'continue', conversationId: result.conversationId };
         input.telemetry?.record('build_requested');
         const created = await input.api.request<{ token: string; slug: string }>('POST', '/api/submissions', {
@@ -362,6 +367,7 @@ export async function handleReplLine(input: {
           (await chooseExecution({
             env,
             pick: input.pick,
+            write: input.write,
             workshop: input.workshop,
             telemetry: input.telemetry,
           }));

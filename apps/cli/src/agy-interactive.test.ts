@@ -1,7 +1,14 @@
-import { expect, it, vi } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, expect, it, vi } from 'vitest';
 import { agyConversation, interactiveArgs } from './agy-interactive.js';
 import { loadAdapters } from './adapters.js';
 import { runLocalBuild, type Workshop } from './workshop.js';
+const roots: string[] = [];
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 const spec = loadAdapters().adapters.find((a) => a.name === 'agy')!;
 const id = '12345678-1234-1234-1234-123456789abc';
 it('resumes the specific conversation with sandbox and without permission bypass or print mode', () => {
@@ -24,16 +31,20 @@ it('resumes the specific conversation with sandbox and without permission bypass
 });
 for (const outcome of ['success', 'decline', 'failure', 'unattended'] as const) {
   it(`handles interactive permission fallback: ${outcome}`, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'gdpl-agy-edit-'));
+    roots.push(root);
+    mkdirSync(join(root, 'games/game'), { recursive: true });
     const verify = vi.fn(() => ({ status: 0 }));
     const interactiveRun = vi.fn(async (input) => {
       expect(input.conversation).toBe(id);
-      expect(input.cwd).toBe('/checkout/games/game');
+      expect(input.cwd).toBe(join(root, 'games/game'));
       expect(input.prompt).toContain('make game');
+      writeFileSync(join(input.cwd, 'game.ts'), 'edited');
       return { code: outcome === 'failure' ? 1 : 0 };
     });
     const ws: Workshop = {
       slug: 'game',
-      root: '/checkout',
+      root,
       token: '',
       env: {},
       adapters: [spec],

@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
+import { createSweepCadence } from '../platform/sweep-cadence.js';
+import { isSweepActive } from '../platform/sweep-scope.js';
 import { lastRoundActivityAt, quietRoundDays, shouldAutoAbandonQuietRound } from '../platform/quiet-round.js';
 import { closeJob, type CloseJobDeps } from '../creation/close-job.js';
 import { shouldAutoAbandonSelfRound, type JobTransition } from '../creation/job-state.js';
@@ -14,6 +16,7 @@ import type { SubmissionStatus, SubmissionStatusResponse } from '../platform/sub
 import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import { uncollectedFeedbackCause, type UncollectedFeedbackCause } from './uncollected-feedback.js';
 
 // Max wait for a handoff ack before the sweep forces it.
 const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
@@ -63,6 +66,16 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     buildNotifyDeps,
   } = deps;
 
+  const cadence = createSweepCadence();
+
+  // An alert id is stable, so a remembered hit is final.
+  const alertsAlreadyEmitted = new Set<string>();
+  const MAX_REMEMBERED_ALERTS = 2_000;
+  function rememberAlert(id: string): void {
+    if (alertsAlreadyEmitted.size >= MAX_REMEMBERED_ALERTS) alertsAlreadyEmitted.clear();
+    alertsAlreadyEmitted.add(id);
+  }
+
   // Scanning games every two minutes was most of the day's reads.
   const publicationsTtlMs = 10 * 60_000;
   let publicationsCache: { expiresAt: number; value: PublicationRecord[] } | null = null;
@@ -93,9 +106,12 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       const closeDeps: CloseJobDeps = { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache };
       let closed = 0;
       const closedIds = new Set<number>();
-      // Every open round, notified or not: told-about drafts are the lingering ones.
-      for (const record of await store.listOpenRounds()) {
+      // Active rounds are a subset of open ones: one read.
+      const openRounds = await store.listOpenRounds();
+      const activityByJob = new Map<number, number>();
+      for (const record of openRounds) {
         const activityAt = lastRoundActivityAt(record);
+        activityByJob.set(record.jobId, activityAt);
         const reason = shouldAutoAbandonSelfRound({
           builder: builderOf(record),
           lastAgentSignalAt: record.lastAgentSignalAt,
@@ -129,19 +145,29 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           if (!result.closed) continue;
           closed += 1;
           closedIds.add(record.jobId);
+          cadence.forget(record.jobId);
           request.log.warn({ jobId: record.jobId, state: record.state, reason }, 'open round closed by the sweep');
         } catch (closeError) {
           request.log.error({ err: closeError, jobId: record.jobId, reason }, 'round close failed');
         }
       }
 
-      const active = (await store.listActiveSubmissions()).filter((record) => !closedIds.has(record.jobId));
+      const active = openRounds.filter((record) => isSweepActive(record) && !closedIds.has(record.jobId));
       let emitted = 0;
+      let deferred = 0;
       const stalledIssues: number[] = [];
+      const stalledCauses: Record<string, UncollectedFeedbackCause> = {};
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
       const pendingFeedback = new Map<number, string>();
       for (const record of active) {
         try {
+          // A motionless record cannot change between runs; derive it less often.
+          const activityAt = activityByJob.get(record.jobId) ?? lastRoundActivityAt(record);
+          if (!cadence.isDue({ jobId: record.jobId, now: now(), lastActivityAt: activityAt })) {
+            deferred += 1;
+            continue;
+          }
+
           // Stale handoff ack: outgoing agent may be gone.
           if (
             record.builderHandoff &&
@@ -164,9 +190,9 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             pendingFeedback.set(record.jobId, oldest.createdAt);
             if (now() - Date.parse(oldest.createdAt) > FEEDBACK_STALL_MS) {
               stalledIssues.push(record.jobId);
+              stalledCauses[String(record.jobId)] = uncollectedFeedbackCause(record);
             }
           }
-
           // Same derivation the status poll uses, so sweep and page cannot disagree.
           const observed = (await reconcileNativeJob(record)) ?? (await reconcileGateVerdict(record, true));
           const current = observed
@@ -187,6 +213,14 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           const statusToken = mintToken(record.jobId, submissionTokenSecret);
           const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
           if (result.emitted) emitted += 1;
+
+          // Uncollected feedback or a fresh move keeps the record on every run.
+          cadence.reschedule({
+            jobId: record.jobId,
+            now: now(),
+            lastActivityAt: activityAt,
+            hot: pending.length > 0 || Boolean(observed) || record.lastStatus !== status.status,
+          });
         } catch (sweepError) {
           // One bad submission (deleted issue, GitHub hiccup) must not abort the sweep.
           request.log.error({ err: sweepError, jobId: record.jobId }, 'sweep item failed');
@@ -198,11 +232,17 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       let alerted = 0;
       const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
       // Seeding degradation stays out; the admin summary badge carries it instead.
+      let alertsSkipped = 0;
       if (adminUids && adminUids.size > 0) {
         for (const alert of alerts) {
+          if (alertsAlreadyEmitted.has(alert.id)) {
+            alertsSkipped += 1;
+            continue;
+          }
           try {
             const { created } = await emitOperatorAlert({ ...buildNotifyDeps(), adminUids }, alert);
             alerted += created;
+            if (created === 0) rememberAlert(alert.id);
           } catch (alertError) {
             request.log.error({ err: alertError, alert: alert.id }, 'operator alert emit failed');
           }
@@ -281,12 +321,15 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       sweepLog(
         {
           scanned: active.length,
+          deferred,
           closed,
           emitted,
           alerts: alerts.length,
           alerted,
+          alertsSkipped,
           stalled: stalledIssues.length,
           stalledIssues,
+          stalledCauses,
           healthResolved,
           unhealthy,
         },
@@ -296,11 +339,14 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       );
       return reply.send({
         scanned: active.length,
+        deferred,
         closed,
         emitted,
+        alertsSkipped,
         alerts: alerts.length,
         alerted,
         stalled: stalledIssues.length,
+        stalledCauses,
         healthResolved,
         unhealthy,
       });
