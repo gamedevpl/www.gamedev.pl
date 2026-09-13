@@ -99,7 +99,7 @@ Neither half of that split covers a query keyed by _whose_ data it is. `submissi
 by `ownerUid` alone in four places that wanted a single game — `resolveOwnedRecord`,
 `resolveRoundBaseVersion`, the staged-preview base lookup and the draft-preview fallback. Each
 paid for the owner's entire shelf to answer a question about one slug. Measured on 2026-09-12
-the shelf distribution was 154/9/8/5/4/4 rounds per owner across 186 submissions and 7 owners,
+the shelf distribution was 154/9/8/5/4/4/2 rounds per owner across 186 submissions and 7 owners,
 so the expensive case was one account, and the median was five.
 
 That shape does not scale with traffic and it does not scale with the catalog. It scales with
