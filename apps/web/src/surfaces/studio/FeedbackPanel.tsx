@@ -15,6 +15,9 @@ import { CompactFeedbackComposer } from './CompactFeedbackComposer.js';
 import './status-feedback.css';
 import './status-composer.css';
 
+// Text seeded into the composer; a picked frame rides along.
+export type ComposerDraft = { text: string; seq: number; attachment?: { name: string; url: string } };
+
 export type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 
 const SENT_RECEIPT_MS = 4500;
@@ -74,7 +77,7 @@ export function FeedbackPanel({
 
   // Only fires when published; a draft revision stays on this thread.
   onPublishedImprove?: (token: string) => void;
-  draft?: { text: string; seq: number } | null;
+  draft?: ComposerDraft | null;
   onDraftConsumed?: () => void;
 }) {
   const { t } = useTranslation();
@@ -90,8 +93,10 @@ export function FeedbackPanel({
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const sending = state === 'sending';
+  // The pick that seeded the box, so a newer one survives.
+  const seededSeq = useRef<number | undefined>(undefined);
   const attachmentsApi = useComposerAttachments(sending);
-  const { attachments, pendingAttachmentReads, resetAttachments } = attachmentsApi;
+  const { attachments, pendingAttachmentReads, dropAttachments, resetAttachments } = attachmentsApi;
 
   useEffect(() => {
     setBuilder(initialBuilder);
@@ -99,9 +104,12 @@ export function FeedbackPanel({
 
   useEffect(() => {
     if (!draft) return;
+    seededSeq.current = draft.seq;
     setText(draft.text);
+    const attachment = draft.attachment;
     onDraftConsumed?.();
     inputRef.current?.focus();
+    if (attachment) attachmentsApi.addAttachmentFromUrl(attachment.name, attachment.url, { replaces: 'proposal' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.seq]);
 
@@ -173,6 +181,9 @@ export function FeedbackPanel({
     const message = requestedText.trim();
     if (message.length < 10 || state === 'sending' || pendingAttachmentReads > 0) return;
     setState('sending');
+    const seqAtSend = seededSeq.current;
+    // What this send carries; a pick mid-flight must not resend them.
+    const sentIds = attachments.map((item) => item.id);
     setError(null);
     setNotice(null);
     // Shows Sending for the whole round trip — never abort the fetch.
@@ -221,10 +232,16 @@ export function FeedbackPanel({
         recordStudioStep('builder_chosen', roundBuilder);
       }
       setState('sent');
-      setText('');
-      resetAttachments();
-      // Reset to CSS height — not the sent message's grown size.
-      if (inputRef.current) inputRef.current.style.height = '';
+      // A pick landed mid-send; clearing would eat that draft.
+      if (seededSeq.current === seqAtSend) {
+        setText('');
+        resetAttachments();
+        // Reset to CSS height — not the sent message's grown size.
+        if (inputRef.current) inputRef.current.style.height = '';
+      } else {
+        // The pick's frame stays; what this send carried does not.
+        dropAttachments(sentIds);
+      }
       // Echoes locally now; the next status poll picks up the real state.
       onSent(message);
       // Moves onto the new thread last, after the receipt and echo commit.

@@ -1,3 +1,4 @@
+import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
@@ -120,7 +121,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildShots(jobId, { limit: maxShotsShown });
+    const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
     shotsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }

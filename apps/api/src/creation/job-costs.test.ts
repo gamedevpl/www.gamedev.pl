@@ -14,6 +14,10 @@ function gateRun(at: string): JobCostEntry {
   return { kind: 'gate_run', at, by: 'cloud-build', ref: 'build-1' };
 }
 
+function concept(at: string, model: string): JobCostEntry {
+  return { kind: 'concept', at, by: model };
+}
+
 function record(overrides: Partial<SubmissionRecord> & { jobId: number }): SubmissionRecord {
   return {
     ownerUid: 'g:1',
@@ -94,6 +98,27 @@ describe('buildCostReport', () => {
 
     expect(report.jobs[0].gateRuns).toBe(1);
     expect(report.jobs[0].usd).toBeUndefined();
+    expect(report.unmeasuredJobs).toBe(0);
+  });
+
+  it('counts concept calls so a dream-heavy job is not read as cheap', () => {
+    // These rows carry no price, so without a count the job would look like it spent
+    // nothing while it made three Vertex requests. `unmeasuredJobs` cannot say it:
+    // the ledger is not empty, which is exactly what that number means.
+    const report = buildCostReport([
+      record({
+        jobId: 1,
+        costs: [
+          concept(ago(9 * MINUTE), 'gemini-3.7-flash'),
+          concept(ago(8 * MINUTE), 'gemini-3.1-flash-image'),
+          concept(ago(8 * MINUTE), 'gemini-3.1-flash-image'),
+        ],
+      }),
+    ]);
+
+    expect(report.jobs[0].conceptCalls).toBe(3);
+    expect(report.jobs[0].usd).toBeUndefined();
+    expect(report.totals.conceptCalls).toBe(3);
     expect(report.unmeasuredJobs).toBe(0);
   });
 

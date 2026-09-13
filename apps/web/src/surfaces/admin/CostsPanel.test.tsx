@@ -30,6 +30,7 @@ function job(overrides: Partial<JobCostSummary> = {}): JobCostSummary {
     sessions: 2,
     credits: 2,
     gateRuns: 1,
+    conceptCalls: 0,
     usd: 0.02,
     elapsedMs: 2 * HOUR,
     published: true,
@@ -41,7 +42,7 @@ function job(overrides: Partial<JobCostSummary> = {}): JobCostSummary {
 function report(overrides: Partial<CostReport> = {}): CostReport {
   return {
     jobs: [job()],
-    totals: { jobs: 1, sessions: 2, credits: 2, gateRuns: 1, published: 1, usd: 0.02 },
+    totals: { jobs: 1, sessions: 2, credits: 2, gateRuns: 1, conceptCalls: 0, published: 1, usd: 0.02 },
     creditsPerPublishedGame: 2,
     usdPerPublishedGame: 0.02,
     medianTimeToPublishMs: 2 * HOUR,
@@ -86,11 +87,32 @@ describe('CostsPanel', () => {
     await act(async () => root.unmount());
   });
 
+  it('shows concept calls, so a job that only drew proposals is not read as free', async () => {
+    mocked.fetchCostReport.mockResolvedValue(
+      report({
+        jobs: [job({ sessions: 0, credits: 0, gateRuns: 0, conceptCalls: 3, usd: undefined, published: false })],
+        totals: { jobs: 1, sessions: 0, credits: 0, gateRuns: 0, conceptCalls: 3, published: 0 },
+        creditsPerPublishedGame: null,
+        usdPerPublishedGame: null,
+      }),
+    );
+
+    const { container, root } = await render();
+
+    const cells = [...(container.querySelector('tbody tr')?.querySelectorAll('td') ?? [])].map((td) => td.textContent);
+    expect(cells).toContain('3');
+    expect(container.textContent).toContain('3 concept calls');
+    // The money column stays a dash: counted is not priced.
+    expect(cells[cells.length - 1]).toBe('—');
+
+    await act(async () => root.unmount());
+  });
+
   it('shows what the failure rate costs, as a share of the whole', async () => {
     mocked.fetchCostReport.mockResolvedValue(
       report({
         jobs: [job(), job({ jobId: 1_000_002, published: false, state: 'failed', credits: 2, sessions: 2, usd: 0.02 })],
-        totals: { jobs: 2, sessions: 4, credits: 4, gateRuns: 1, published: 1, usd: 0.04 },
+        totals: { jobs: 2, sessions: 4, credits: 4, gateRuns: 1, conceptCalls: 0, published: 1, usd: 0.04 },
         creditsPerPublishedGame: 4,
         usdPerPublishedGame: 0.04,
         creditsOnUnpublished: 2,
@@ -139,7 +161,7 @@ describe('CostsPanel', () => {
     mocked.fetchCostReport.mockResolvedValue(
       report({
         jobs: [job({ sessions: 0, credits: 0, gateRuns: 1, usd: undefined })],
-        totals: { jobs: 1, sessions: 0, credits: 0, gateRuns: 1, published: 1 },
+        totals: { jobs: 1, sessions: 0, credits: 0, gateRuns: 1, conceptCalls: 0, published: 1 },
         usdPerPublishedGame: null,
       }),
     );
@@ -169,7 +191,7 @@ describe('CostsPanel', () => {
     mocked.fetchCostReport.mockResolvedValue(
       report({
         jobs: [job({ published: false, state: 'building' })],
-        totals: { jobs: 1, sessions: 2, credits: 2, gateRuns: 0, published: 0, usd: 0.02 },
+        totals: { jobs: 1, sessions: 2, credits: 2, gateRuns: 0, conceptCalls: 0, published: 0, usd: 0.02 },
         creditsPerPublishedGame: null,
         usdPerPublishedGame: null,
         medianTimeToPublishMs: null,

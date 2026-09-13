@@ -54,7 +54,9 @@
     },
     "prefs": {
       "digestOn": "Cotygodniowe podsumowanie włączone",
-      "digestOff": "Cotygodniowe podsumowanie wyłączone"
+      "digestOff": "Cotygodniowe podsumowanie wyłączone",
+      "proposalsOn": "Propozycje konceptów włączone",
+      "proposalsOff": "Propozycje konceptów wyłączone"
     },
     "operator": {
       "review_ready": {
@@ -973,6 +975,19 @@
     "previewError": "Nie udało się teraz wczytać podglądu. Spróbuj ponownie za chwilę.",
     "previewGateFailed": "Podgląd nie przeszedł automatycznych testów, więc tej wersji nie można jeszcze uruchomić. Wyślij uwagi, aby rozpocząć poprawki.",
     "previewGateDetails": "Pokaż raport testów",
+    "proposal": {
+      "kicker": "Koncept",
+      "aiLabel": "Koncept AI",
+      "open": "Zobacz oba pomysły",
+      "title": "Dwa kierunki na następną rundę",
+      "intro": "Obrazki koncepcyjne wygenerowane przez AI z ostatniego zrzutu — to nie są zrzuty ekranu z gry. Wybierz jeden, a prośba trafi do okna wiadomości razem z obrazkiem.",
+      "current": "Twoja gra teraz",
+      "pick": "Zbuduj to",
+      "notNow": "Nie teraz",
+      "askLess": "Nie podpowiadaj mi tego",
+      "muted": "OK — koniec z propozycjami konceptów. Włączysz je z powrotem w ustawieniach powiadomień.",
+      "close": "Zamknij"
+    },
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",
       "caption": "Tak wygląda teraz Twoja gra",
@@ -1161,6 +1176,10 @@
       "sending": "Wysyłam…",
       "sent": "Wysłano do publikacji — trwa pełny sprawdzian.",
       "error": "Nie udało się wysłać do publikacji. Spróbuj za chwilę."
+    },
+    "composer": {
+      "attachmentFull": "Kompozytor jest pełny — usuń obrazek, żeby dołączyć „{{name}}\".",
+      "attachmentFailed": "Nie udało się wczytać „{{name}}\" — wyślij bez niej albo wybierz ponownie."
     }
   },
   "suggestions": {

@@ -276,3 +276,206 @@ describeStoreContract('creation limits', (makeStore) => {
     expect(limits?.telemetrySampleRate).toBeNull();
   });
 });
+
+// The claim is checked where the row is written.
+describeStoreContract('proposal posting', (makeStore) => {
+  const proposal = { sourceRef: 'shot-a', version: 'v1', options: [] };
+
+  const claim = { version: 'v1', claimedAt: '2026-09-07T12:00:00.000Z' };
+
+  async function claimed(store: Store): Promise<void> {
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(11, 'v1');
+    await store.claimDreamRun(11, claim.version, claim.claimedAt);
+  }
+
+  it('drops concept cards before the window, not after', async () => {
+    const store = makeStore();
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.appendCreatorMessage(11, 'make it blue');
+    await store.appendCreatorMessage(11, 'and add sound');
+    for (const id of ['a', 'b', 'c']) {
+      await store.appendCreatorMessage(11, `card ${id}`, { origin: 'studio', delivered: true, proposal });
+    }
+
+    // Filtered after the slice, a window this size would hold only cards.
+    const kept = await store.listCreatorMessages(11, { limit: 2, excludeProposals: true });
+    expect(kept.map((message) => message.text).sort()).toEqual(['and add sound', 'make it blue']);
+  });
+
+  it('posts while the claim still names the version', async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).not.toBeNull();
+    expect(await store.listCreatorMessages(11)).toHaveLength(1);
+  });
+
+  it('refuses a muted owner inside the posting transaction', async () => {
+    // The mute can land while the shots are written.
+    const store = makeStore();
+    await claimed(store);
+    await store.upsertUser({ uid: 'g:owner' });
+    await store.setProposalsMuted('g:owner', '2026-09-07T12:30:00.000Z');
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+
+  it('marks the claim posted, so it can never be retaken', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' });
+
+    // A card is on the thread, so the delivery is finished.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+    expect(await store.appendProposalMessage(11, claim, 'Again.', { proposal, ownerUid: 'g:owner' })).toBeNull();
+  });
+
+  it('records the posted version where a newer claim cannot erase it', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', {
+      proposal,
+      ownerUid: 'g:owner',
+      roundGeneration: 1,
+      blocked: () => false,
+    });
+
+    // A newer delivery takes the claim, and `postedAt` goes with it.
+    await store.setSubmissionPreviewVersion(11, 'v2');
+    await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z', 1);
+
+    const live = await store.getSubmission(11);
+    expect(live?.dreamRun?.postedAt).toBeUndefined();
+    expect(live?.proposalPostedAttempts).toEqual([`v1:${claim.claimedAt}`]);
+  });
+
+  it('names the attempt, so a retake for the same version answers only for itself', async () => {
+    const store = makeStore();
+    await claimed(store);
+    // The first attempt outlives its TTL; a second takes the claim.
+    const retaken = { version: 'v1', claimedAt: '2026-09-07T12:20:00.000Z' };
+    await store.claimDreamRun(11, retaken.version, retaken.claimedAt, 1);
+    await store.appendProposalMessage(11, retaken, 'Two directions.', {
+      proposal,
+      ownerUid: 'g:owner',
+      roundGeneration: 1,
+      blocked: () => false,
+    });
+
+    const attempts = (await store.getSubmission(11))?.proposalPostedAttempts;
+    expect(attempts).toEqual([`v1:${retaken.claimedAt}`]);
+    // The first attempt's shots are still its own to clean up.
+    expect(attempts).not.toContain(`v1:${claim.claimedAt}`);
+  });
+
+  it('leaves a finished run finished, however it ended', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.finishDreamRun(11, claim, '2026-09-07T12:00:10.000Z');
+
+    // A run that answered `no_frames` must not be paid twice.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+  });
+
+  it("starts a new version from a clean claim, not the last one's leftovers", async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' });
+    await store.setSubmissionPreviewVersion(11, 'v2');
+
+    expect(await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z')).toBe(true);
+    // A kept `postedAt` from v1 would refuse v2's own card.
+    const v2 = { version: 'v2', claimedAt: '2026-09-07T13:00:00.000Z' };
+    expect(await store.appendProposalMessage(11, v2, 'Two more.', { proposal, ownerUid: 'g:owner' })).not.toBeNull();
+    expect((await store.getSubmission(11))?.dreamRun?.endedAt).toBeUndefined();
+  });
+
+  it('ignores a worker whose lease already expired', async () => {
+    const store = makeStore();
+    await claimed(store);
+    // The replacement takes the version an hour later.
+    await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z');
+
+    await store.finishDreamRun(11, claim, '2026-09-07T13:00:05.000Z');
+    expect(await store.appendProposalMessage(11, claim, 'Late.', { proposal, ownerUid: 'g:owner' })).toBeNull();
+
+    // The replacement is still recoverable, and still the one that may post.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z')).toBe(true);
+  });
+
+  it('lets a claim that never posted be retaken once its worker is gone', async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z')).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(true);
+  });
+
+  it('refuses once a newer delivery took the claim', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.setSubmissionPreviewVersion(11, 'v2');
+    await store.claimDreamRun(11, 'v2', '2026-09-07T12:01:00.000Z');
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+});
+
+// The strip filters after the read; a crowd must not empty it.
+describeStoreContract('media strip paging', (makeStore) => {
+  // Explicit timestamps; same-millisecond appends would not order.
+  const shot = (label: string, minute: number) => ({
+    data: 'AAA=',
+    mediaType: 'image/png' as const,
+    label,
+    createdAt: new Date(Date.UTC(2026, 8, 7, 12, minute)).toISOString(),
+  });
+
+  it('reaches past two deliveries of proposal shots to the real one', async () => {
+    const store = makeStore();
+    await store.appendBuildShot(12, shot('Opening', 0));
+    // Two deliveries of proposal shots, all newer than the real one.
+    for (let index = 0; index < 6; index += 1) await store.appendBuildShot(12, shot('AI concept', index + 1));
+
+    const strip = await store.listBuildShots(12, { limit: 1, excludeLabels: ['AI concept'] });
+
+    expect(strip.map((item) => item.label)).toEqual(['Opening']);
+  });
+});
+
+describeStoreContract('shot deletion', (makeStore) => {
+  const shot = (label: string) => ({ data: 'AAA=', mediaType: 'image/png' as const, label });
+
+  it('removes exactly the ids it was given', async () => {
+    const store = makeStore();
+    const keep = await store.appendBuildShot(13, shot('Opening'));
+    const source = await store.appendBuildShot(13, shot('Gate capture'));
+    const frame = await store.appendBuildShot(13, shot('AI concept'));
+
+    await store.deleteBuildShots(13, [source.id, frame.id]);
+
+    expect(await store.countBuildShots(13)).toBe(1);
+    expect(await store.getBuildShot(13, keep.id)).not.toBeNull();
+    expect(await store.getBuildShot(13, source.id)).toBeNull();
+    expect(await store.getBuildShot(13, frame.id)).toBeNull();
+  });
+
+  it('is a no-op for an empty list and for ids that are already gone', async () => {
+    const store = makeStore();
+    const only = await store.appendBuildShot(13, shot('Opening'));
+
+    await store.deleteBuildShots(13, []);
+    await store.deleteBuildShots(13, ['never-written']);
+
+    expect(await store.getBuildShot(13, only.id)).not.toBeNull();
+  });
+});

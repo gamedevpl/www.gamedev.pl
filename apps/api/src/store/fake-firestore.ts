@@ -26,6 +26,14 @@ class UndefinedValueError extends Error {
 // Stored raw, a counter read back undefined and its test passed anyway.
 
 // Detected structurally: importing the real FieldValue would pull in the client.
+function isPlainMap(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && value!.constructor === Object;
+}
+
+function isDeleteSentinel(value: unknown): boolean {
+  return Boolean(value) && (value as { constructor?: { name?: string } }).constructor?.name === 'DeleteTransform';
+}
+
 function resolveFieldValues(data: Record<string, unknown>, previous: Record<string, unknown>): Record<string, unknown> {
   const resolved: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
@@ -38,6 +46,31 @@ function resolveFieldValues(data: Record<string, unknown>, previous: Record<stri
     resolved[key] = (typeof before === 'number' ? before : 0) + delta;
   }
   return resolved;
+}
+
+// `{ merge: true }` merges nested maps; a shallow spread would hide real bugs.
+function mergeInto(previous: Record<string, unknown>, data: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...previous };
+  for (const [key, value] of Object.entries(resolveFieldValues(data, previous))) {
+    if (isDeleteSentinel(value)) {
+      delete merged[key];
+      continue;
+    }
+    const before = merged[key];
+    // Recurse on any map, so a delete sentinel is always honoured.
+    merged[key] = isPlainMap(value) ? mergeInto(isPlainMap(before) ? before : {}, value) : value;
+  }
+  return merged;
+}
+
+// A write without merge replaces the document, sentinels and all.
+function replaceWith(data: Record<string, unknown>): Record<string, unknown> {
+  const written: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (isDeleteSentinel(value)) continue;
+    written[key] = isPlainMap(value) ? replaceWith(value) : value;
+  }
+  return written;
 }
 
 function incrementDelta(value: unknown): number | null {
@@ -116,8 +149,11 @@ export function fakeFirestore() {
           rejectNestedArrays(data);
         },
         apply: () => {
-          const previous = options?.merge ? (docs.get(docKey) ?? {}) : {};
-          docs.set(docKey, { ...previous, ...resolveFieldValues(data, docs.get(docKey) ?? {}) });
+          const previous = docs.get(docKey) ?? {};
+          docs.set(
+            docKey,
+            options?.merge ? mergeInto(previous, data) : replaceWith(resolveFieldValues(data, previous)),
+          );
         },
       }),
       // Unlike set, the real client refuses a create over an existing document --
@@ -268,7 +304,13 @@ export function fakeFirestore() {
       // Matched by id -- unique within any single flat collection queried here.
       startAfter: (cursor: { id: string }) => makeQuery(paths, filter, { ...opts, afterId: cursor.id }),
       limit: (n: number) => makeQuery(paths, filter, { ...opts, max: n }),
-      count: () => ({ get: async () => ({ data: () => ({ count: rows().length }) }) }),
+      count: () => ({
+        get: async () => {
+          // Materialised at `get()`, as the real client does.
+          const total = rows().length;
+          return { data: () => ({ count: total }) };
+        },
+      }),
       get: async () => {
         const found = rows();
         return {

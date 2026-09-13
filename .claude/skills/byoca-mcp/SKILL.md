@@ -759,6 +759,45 @@ screenshots and the ffmpeg encode, keeping only the named marks.
 - No video on the preview lane, ever: nothing renders an inlined mp4, and the encode is
   the expensive half.
 
+### Concept proposals share the shots collection (NP-1v)
+
+After a green preview, the platform may post the creator two AI-generated concept frames
+plus the real capture they were drawn from (`creation/dream-job.ts`). All three are stored
+as ordinary build shots, under the reserved labels in `platform/dream-shots.ts` — the same
+collection `get_reference_images`, the brief's `referenceImages`, the round card and the
+creator's media strip all read from.
+
+That collection is read newest-first with a small window, so proposal frames crowd out
+whatever a caller actually wanted. Every read that is not about proposals therefore passes
+`excludeLabels: DREAM_SHOT_LABELS`:
+
+- **`get_reference_images` and the brief** (`agent-channel-brief.ts`) — without it, four
+  proposals fill the 12-shot window and an external agent sees `referenceImages: []`
+  exactly when the creator has just picked a concept and attached its frame. That frame is
+  the whole point of the feature for a BYOCA round: the creator's pick arrives as ordinary
+  inbox text plus a reference image, and nothing else tells the agent what was chosen.
+- **The round card** (`mcp-round-card-tools.ts`) — the card shows the build's own latest
+  frame. Concept art is not a picture of the game, and the field is typed `png` while a
+  generated frame is JPEG.
+- **The creator's media strip** (`delivery/build-status.ts`) — proposals render on their
+  own studio turn, not as build media.
+- **The agent's screenshot quota** (`countBuildShots` in `agent-channel.ts`) — proposal
+  frames are the platform's, and must not spend the agent's `maxShotsPerBuild` allowance.
+
+`listBuildShots` / `countBuildShots` take `excludeLabels`, and both filter **after** the
+read, so both have to be self-correcting. `listBuildShots` pages with a cursor until
+`limit` shots survive the filter or the collection is exhausted; `countBuildShots` reads
+one projected snapshot and counts in memory. Neither uses a count read to size a second
+query, and that is deliberate: two aggregates with a proposal write between them
+disagree, which used to shorten the media strip and — subtracting a fresher excluded
+count from a staler total — let a build past `maxShotsPerBuild`. When adding a reader of
+this collection, decide which side of that line it is on: a plain `listBuildShots(jobId)`
+means "including concept art", which is almost never what a caller wants.
+
+Nothing about the proposal itself is builder-specific: it hangs off the preview-gate
+verdict (`onPreviewGateGreen`), which a BYOCA `mode=preview` delivery reaches the same way
+a managed one does, and the HUD rectangles come from the delivered `CAPTURE.json`.
+
 ### `end` is required after submit (not optional etiquette)
 
 ChatGPT-class agents usually **submit and stop**. Soft `call_end` alone was not

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchNotifications, markNotificationsRead } from './notificationsApi.js';
+import {
+  fetchNotifications,
+  markNotificationsRead,
+  onNotificationPreferencesChanged,
+  updateNotificationPreferences,
+} from './notificationsApi.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -48,5 +53,22 @@ describe('markNotificationsRead', () => {
     await markNotificationsRead(['a', 'b']);
     const [, init] = spy.mock.calls[0];
     expect(JSON.parse(init?.body as string)).toEqual({ ids: ['a', 'b'] });
+  });
+});
+
+describe('notification preference changes', () => {
+  it('tells every reader what the server stored', async () => {
+    // The bell and the studio's proposal card hold the same switch.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () => new Response(JSON.stringify({ digest: true, email: true, proposals: false }), { status: 200 }),
+    );
+    const seen: Array<boolean | undefined> = [];
+    const stop = onNotificationPreferencesChanged((prefs) => seen.push(prefs.proposals));
+
+    await updateNotificationPreferences({ proposals: false });
+    stop();
+    await updateNotificationPreferences({ proposals: false });
+
+    expect(seen).toEqual([false]);
   });
 });

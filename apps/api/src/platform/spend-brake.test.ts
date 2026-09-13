@@ -43,9 +43,9 @@ describe('spend brake payload reading', () => {
       incidentId: 'budget:zł130 Monthly Budget Alert:forecast:1.2',
       policyName: 'zł130 Monthly Budget Alert',
     });
-    // Spent over: plus round 0 (Vertex) and the gate (Cloud Build).
+    // Spent over: plus round 0, concept art and the gate.
     expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
-      lanes: ['managed', 'seeding', 'gate'],
+      lanes: ['managed', 'seeding', 'dreams', 'gate'],
       incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
       policyName: 'zł130 Monthly Budget Alert',
     });
@@ -53,6 +53,7 @@ describe('spend brake payload reading', () => {
     expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.25 }).lanes).toEqual([
       'managed',
       'seeding',
+      'dreams',
       'gate',
       'video',
       'media',
@@ -66,6 +67,7 @@ describe('spend brake payload reading', () => {
       'search',
       'gate',
       'seeding',
+      'dreams',
       'managed',
       'video',
       'media',
@@ -231,12 +233,13 @@ describe('POST /api/internal/spend-brake', () => {
 
     const first = await tick();
     expect(first.statusCode).toBe(200);
-    expect(first.json().paused).toEqual(['managed', 'seeding', 'gate']);
+    expect(first.json().paused).toEqual(['managed', 'seeding', 'dreams', 'gate']);
     const limits = await store.getCreationLimits();
-    // Agent, round 0 and gate stop; creation and cheap lanes stay open.
+    // Agent, round 0, concept art and gate stop; cheap lanes stay open.
     expect(limits).toMatchObject({
       managedBuilderMode: 'off',
       seedingMode: 'off',
+      dreamsPaused: true,
       gatePaused: true,
       updatedBy: 'alert:budget:zł130 Monthly Budget Alert:spent:1',
       handledBrakeIncidents: ['budget:zł130 Monthly Budget Alert:spent:1'],

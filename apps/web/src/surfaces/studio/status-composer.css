@@ -207,6 +207,13 @@
   padding: 2px 0 6px;
 }
 
+.status-composer-attachment-blocked {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .status-composer-attachment-chip {
   position: relative;
   width: 40px;

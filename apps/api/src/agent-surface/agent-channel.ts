@@ -25,6 +25,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
+import { DREAM_SHOT_LABELS, isDreamShotLabel } from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -1064,6 +1065,11 @@ export async function registerAgentChannelRoutes(
 
       const labelRaw = parsed.data.label ?? parsed.data.caption;
       const label = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
+      // Reserved captions are excluded from the shot count and the media strip, so an
+      // agent that could set one would have an unbounded, invisible store.
+      if (isDreamShotLabel(label)) {
+        return reply.status(400).send({ error: `"${label}" is a reserved caption` });
+      }
       const generation = record.roundGeneration ?? 1;
       const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
       // One clock read: advertised expiresAt must match the signed exp.
@@ -1111,7 +1117,8 @@ export async function registerAgentChannelRoutes(
       if (isRateLimited(shotsByBuild, jobId, now(), maxShotsPerWindow)) {
         return reject('rate_limited');
       }
-      if ((await store!.countBuildShots(jobId)) >= maxShotsPerBuild) {
+      // Proposal frames are the platform's, never the agent's quota.
+      if ((await store!.countBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })) >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 

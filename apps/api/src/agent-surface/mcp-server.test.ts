@@ -10,6 +10,7 @@ import {
   STALE_AGENT_TOKEN_REASON,
 } from '../platform/agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
+import { DREAM_FRAME_SHOT_LABEL } from '../platform/dream-shots.js';
 import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
@@ -3668,5 +3669,30 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
       { 'mcp-session-id': sessionId },
     );
     expect(read.json().result?.contents?.[0]?.mimeType).toBe(UI_MIME);
+  });
+
+  // NP-1v: the round card is the build's own frames; AI concept art is not one of them.
+  it('keeps a concept frame off the round card', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const build = await store.appendBuildShot(ISSUE, {
+      data: 'YnVpbGQ=',
+      label: 'Gameplay',
+      createdAt: '2026-09-08T10:00:00.000Z',
+    });
+    await store.appendBuildShot(ISSUE, {
+      data: 'Y29uY2VwdA==',
+      label: DREAM_FRAME_SHOT_LABEL,
+      createdAt: '2026-09-08T10:01:00.000Z',
+    });
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const shown = await callTool(app, 'show_round', { sessionKey }, { 'mcp-session-id': sessionId });
+
+    expect(shown.isError).toBe(false);
+    expect((shown.structured as { shot?: { id?: string } }).shot?.id).toBe(build.id);
   });
 });

@@ -3,21 +3,40 @@ import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
 import { byNewestFirst } from './build-log.js';
 
+export interface BuildShotCountOptions {
+  // Platform-written captions to leave out of agent-facing counts.
+  excludeLabels?: readonly string[];
+}
+
+// One read covers the common case; a crowd costs another.
+const SHOT_PAGE_SIZE = 24;
+
+export interface BuildShotListOptions extends BuildShotCountOptions {
+  limit?: number;
+}
+
+function keeps(excludeLabels: readonly string[] | undefined) {
+  return (shot: { label?: string }) => !excludeLabels?.includes(shot.label ?? '');
+}
+
 export interface BuildMediaStore {
-  // Stores a screenshot the agent pushed straight to us, before any commit.
+  // Stores a screenshot the agent pushed; `id` names it before the write.
   appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot>;
 
   // A build's pushed screenshots, newest first; bytes omitted here.
-  listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]>;
+  listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]>;
 
   // One pushed screenshot, bytes included -- the read behind serving it.
   getBuildShot(jobId: number, id: string): Promise<BuildShot | null>;
 
   // How many screenshots a build has pushed -- bounds a runaway agent.
-  countBuildShots(jobId: number): Promise<number>;
+  countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number>;
+
+  // Drops shots by id; a card that never posted leaves none.
+  deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
 
   appendBuildPreview(
     jobId: number,
@@ -40,17 +59,22 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 
   async appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const record: BuildShot = {
+      ...shot,
+      id: shot.id ?? randomUUID(),
+      createdAt: shot.createdAt ?? new Date().toISOString(),
+    };
     const existing = this.buildShots.get(jobId) ?? [];
     existing.push(record);
     this.buildShots.set(jobId, existing);
     return { ...record };
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     return [...(this.buildShots.get(jobId) ?? [])]
+      .filter(keeps(opts?.excludeLabels))
       .sort(byNewestFirst)
       .slice(0, opts?.limit ?? 12)
       .map(({ data: _data, ...summary }) => ({ ...summary }));
@@ -61,8 +85,8 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return found ? { ...found } : null;
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    return this.buildShots.get(jobId)?.length ?? 0;
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    return (this.buildShots.get(jobId) ?? []).filter(keeps(opts?.excludeLabels)).length;
   }
 
   async appendBuildPreview(
@@ -106,6 +130,12 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return this.buildPreviews.get(jobId)?.length ?? 0;
   }
 
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
+    const kept = (this.buildShots.get(jobId) ?? []).filter((shot) => !ids.includes(shot.id));
+    this.buildShots.set(jobId, kept);
+  }
+
   async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {
     const existing = this.buildPreviews.get(jobId) ?? [];
     if (existing.length <= keep) return 0;
@@ -128,22 +158,37 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async appendBuildShot(
     jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
+    const record: BuildShot = {
+      ...shot,
+      id: shot.id ?? randomUUID(),
+      createdAt: shot.createdAt ?? new Date().toISOString(),
+    };
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await this.shotsCollection(jobId).doc(record.id).set(document);
     return record;
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
-    // `select()` keeps bytes off the polled status response.
-    const snap = await this.shotsCollection(jobId)
-      .select('id', 'label', 'labelLocalized', 'locale', 'createdAt')
-      .orderBy('createdAt', 'desc')
-      .limit(opts?.limit ?? 12)
-      .get();
-    return snap.docs.map((doc) => doc.data() as BuildShotSummary).sort(byNewestFirst);
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
+    const limit = opts?.limit ?? 12;
+    const page = Math.max(limit, SHOT_PAGE_SIZE);
+    const kept: BuildShotSummary[] = [];
+    let after: { id: string } | undefined;
+    // Until `limit` survive the filter, or the collection runs out.
+    while (kept.length < limit) {
+      // `select()` keeps bytes off the polled status response.
+      const base = this.shotsCollection(jobId)
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .orderBy('createdAt', 'desc')
+        .limit(page);
+      const snap = await (after ? base.startAfter(after) : base).get();
+      if (snap.empty) break;
+      after = snap.docs[snap.docs.length - 1];
+      kept.push(...snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(keeps(opts?.excludeLabels)));
+      if (snap.docs.length < page) break;
+    }
+    return kept.sort(byNewestFirst).slice(0, limit);
   }
 
   async getBuildShot(jobId: number, id: string): Promise<BuildShot | null> {
@@ -151,9 +196,10 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     return doc.exists ? (doc.data() as BuildShot) : null;
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    const snap = await this.shotsCollection(jobId).count().get();
-    return snap.data().count;
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    // One snapshot: two aggregates can straddle a proposal write and disagree.
+    const snap = await this.shotsCollection(jobId).select('label').get();
+    return snap.docs.map((doc) => doc.data() as { label?: string }).filter(keeps(opts?.excludeLabels)).length;
   }
 
   async appendBuildPreview(
@@ -188,6 +234,17 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async countBuildPreviews(jobId: number): Promise<number> {
     const snap = await this.previewsCollection(jobId).count().get();
     return snap.data().count;
+  }
+
+  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
+    if (!ids.length) return;
+    // Chunked -- a Firestore batch caps at 500 ops.
+    const BATCH_LIMIT = 500;
+    for (let start = 0; start < ids.length; start += BATCH_LIMIT) {
+      const batch = this.db.batch();
+      for (const id of ids.slice(start, start + BATCH_LIMIT)) batch.delete(this.shotsCollection(jobId).doc(id));
+      await batch.commit();
+    }
   }
 
   async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {
