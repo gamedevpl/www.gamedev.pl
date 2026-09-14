@@ -107,7 +107,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
   protected gameAccessStore = new InMemoryGameAccessStore((uid) => this.identityStore.users.has(uid));
-  protected gameTransferStore = new InMemoryGameTransferStore();
+  protected gameTransferStore = new InMemoryGameTransferStore((uid) => this.gameAccessStore.erasedAt.has(uid));
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);

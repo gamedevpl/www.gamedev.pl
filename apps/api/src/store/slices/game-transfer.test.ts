@@ -68,6 +68,17 @@ describe('game transfer store slice', () => {
     expect(await store.getActiveGameTransfer('nowhere', AT)).toBeNull();
   });
 
+  it('refuses to create an invitation naming an already-erased sender or recipient', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.upsertUser({ uid: 'g:mallory' });
+    await store.deleteAccountIdentity('g:ada', AT);
+
+    expect(await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, LATER)).toBe('ineligible');
+    expect(await store.createGameTransferInvitation('lake', 'g:mallory', 'g:ada', 1, LATER)).toBe('ineligible');
+  });
+
   it('account erasure scrubs every invitation naming the erased uid', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });

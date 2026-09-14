@@ -199,6 +199,8 @@ export class InMemoryIdentityStore implements IdentityStore {
       handleChangedAt: existing?.handleChangedAt,
       deletionRequestedAt: existing?.deletionRequestedAt,
       deletionScheduledFor: existing?.deletionScheduledFor,
+      // Never set by sign-in either; dropping it here orphaned the reservation.
+      recipientCode: existing?.recipientCode,
     };
 
     this.users.set(userData.uid, updated);

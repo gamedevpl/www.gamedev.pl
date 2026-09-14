@@ -10,14 +10,14 @@ export interface GameTransferStore {
   // Status is materialized against `at`; a stale pending row reads as expired.
   getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null>;
 
-  // 'busy' when a pending invitation already covers this slug.
+  // 'busy': already pending. 'ineligible': a party's erasure has begun.
   createGameTransferInvitation(
     slug: string,
     senderUid: string,
     recipientUid: string,
     accessRevision: number,
     at: string,
-  ): Promise<GameTransferInvitation | 'busy'>;
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible'>;
 
   // Null when nothing pending, or the caller did not send it.
   cancelGameTransferInvitation(slug: string, senderUid: string, at: string): Promise<GameTransferInvitation | null>;
@@ -35,6 +35,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
   // Not private -- deleteAccountIdentity reaches across this on erasure.
   transfers = new Map<string, GameTransferInvitation>();
 
+  constructor(private isErased: (uid: string) => boolean = () => false) {}
+
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
     const existing = this.transfers.get(slug);
     if (!existing) return null;
@@ -47,7 +49,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
-  ): Promise<GameTransferInvitation | 'busy'> {
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible'> {
+    if (this.isErased(senderUid) || this.isErased(recipientUid)) return 'ineligible';
     if (isPending(this.transfers.get(slug) ?? null, at)) return 'busy';
     const invite = newTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
     this.transfers.set(slug, invite);
@@ -90,6 +93,11 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     return this.db.collection('gameTransfers').doc(slug);
   }
 
+  // Same fence collection gameAccessStore writes on erasure.
+  private erasureFence(uid: string) {
+    return this.db.collection('erasedAccounts').doc(uid);
+  }
+
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
     const snap = await this.doc(slug).get();
     if (!snap.exists) return null;
@@ -103,10 +111,15 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
-  ): Promise<GameTransferInvitation | 'busy'> {
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible'> {
     const ref = this.doc(slug);
     return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
+      const [snap, senderFence, recipientFence] = await Promise.all([
+        tx.get(ref),
+        tx.get(this.erasureFence(senderUid)),
+        tx.get(this.erasureFence(recipientUid)),
+      ]);
+      if (senderFence.exists || recipientFence.exists) return 'ineligible';
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
       if (isPending(existing, at)) return 'busy';
       const invite = newTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
@@ -147,16 +160,32 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     });
   }
 
-  // Bounded rather than ordered by expiresAt -- avoids a composite index.
-  private static readonly LIST_LIMIT = 200;
+  // A plain `.limit()` can return only stale rows, hiding an active one.
+
+  // Pages by document-snapshot cursor instead -- no composite index needed.
+  private static readonly PAGE_SIZE = 200;
+  private static readonly SCAN_CAP = 2_000;
 
   async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {
-    const snap = await this.db
-      .collection('gameTransfers')
-      .where('recipientUid', '==', uid)
-      .where('status', '==', 'pending')
-      .limit(FirestoreGameTransferStore.LIST_LIMIT)
-      .get();
-    return snap.docs.map((doc) => doc.data() as GameTransferInvitation).filter((t) => isPending(t, at));
+    const base = this.db.collection('gameTransfers').where('recipientUid', '==', uid).where('status', '==', 'pending');
+
+    const active: GameTransferInvitation[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    let scanned = 0;
+    for (;;) {
+      const page = cursor
+        ? base.startAfter(cursor).limit(FirestoreGameTransferStore.PAGE_SIZE)
+        : base.limit(FirestoreGameTransferStore.PAGE_SIZE);
+      const snap = await page.get();
+      if (snap.empty) break;
+      for (const doc of snap.docs) {
+        const invite = doc.data() as GameTransferInvitation;
+        if (isPending(invite, at)) active.push(invite);
+      }
+      scanned += snap.size;
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.size < FirestoreGameTransferStore.PAGE_SIZE || scanned >= FirestoreGameTransferStore.SCAN_CAP) break;
+    }
+    return active;
   }
 }

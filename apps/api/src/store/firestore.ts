@@ -203,7 +203,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
     // Fence first: every access writer reads it transactionally and refuses after this.
     await this.gameAccessStore.beginAccountErasure(uid, at);
-    const user = await this.getUser(uid);
+    // Uncached: another instance's cache can hold a pre-rotation code for 30s.
+    const userSnap = await this.db.collection('users').doc(uid).get();
+    const user = userSnap.exists ? (userSnap.data() as User) : null;
     const submissions = await this.db.collection('submissions').where('ownerUid', '==', uid).get();
     const owned = submissions.docs.map((doc) => ({ doc, record: doc.data() as SubmissionRecord }));
     const publishedSlugs = owned

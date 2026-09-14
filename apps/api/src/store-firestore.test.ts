@@ -891,4 +891,55 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     expect(await store.getUserByRecipientCode(code!)).toBeNull();
     expect(await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z')).toBeNull();
   });
+
+  it('retires a code another instance minted after this instance cached the user', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.getUser('g:grace'); // primes this instance's 30s user cache with no code
+
+    // Another instance rotates the code without this one ever hearing about it.
+    docs.set(key('users', 'g:grace'), { ...docs.get(key('users', 'g:grace')), recipientCode: 'rc_fromOtherInstance' });
+    docs.set(key('recipientCodes', 'rc_fromOtherInstance'), { uid: 'g:grace', createdAt: '2026-01-01T00:00:00.000Z' });
+
+    await store.deleteAccountIdentity('g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getUserByRecipientCode('rc_fromOtherInstance')).toBeNull();
+  });
+
+  it('refuses to create an invitation naming an already-erased participant', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.deleteAccountIdentity('g:grace', '2026-01-01T00:00:00.000Z');
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('ineligible');
+  });
+});
+
+/**
+ * A `.limit()` applied before the in-memory expiry filter can return a page of nothing
+ * but stale rows and hide a genuinely active invitation behind them. Pending status is
+ * never rewritten on expiry, so a recipient can accumulate many stale rows this way.
+ */
+describe('FirestoreStore.listPendingGameTransfersForRecipient', () => {
+  it('pages past more stale invitations than fit in one page to find the active one', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:grace' });
+
+    for (let i = 0; i < 250; i += 1) {
+      await store.upsertUser({ uid: `g:owner-${i}` });
+      await store.createGameTransferInvitation(`stale-${i}`, `g:owner-${i}`, 'g:grace', 1, '2020-01-01T00:00:00.000Z');
+    }
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+
+    const pending = await store.listPendingGameTransfersForRecipient('g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(pending.map((t) => t.slug)).toEqual(['sky']);
+  });
 });
