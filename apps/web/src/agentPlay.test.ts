@@ -7,6 +7,7 @@ import {
   formatAffordances,
   formatObservation,
   formatSnapshotText,
+  mergeAgentLog,
   parseAgentCommand,
   redactSnapshot,
 } from './agentPlay.js';
@@ -172,5 +173,32 @@ describe('agentModeRequested', () => {
     expect(agentModeRequested('?via=home&agent=true')).toBe(true);
     expect(agentModeRequested('?agent=0')).toBe(false);
     expect(agentModeRequested('')).toBe(false);
+  });
+});
+
+describe('mergeAgentLog', () => {
+  const line = (frame: number, kind: string, detail: string) => ({ frame, kind, detail });
+
+  it('keeps sound visible when host signals would have filled the tail', () => {
+    // Sound lives only in the bridge log; appending put signals last.
+    const bridge = [line(28, 'sfx', 'jump'), line(29, 'music', 'theme')];
+    const signals = Array.from({ length: 30 }, (_, index) => line(index, 'score', String(index)));
+
+    const merged = mergeAgentLog(bridge, signals, 20);
+
+    expect(merged).toHaveLength(20);
+    expect(merged.filter((entry) => entry.kind === 'sfx' || entry.kind === 'music')).toEqual(bridge);
+    // What drops is the oldest, not a whole stream.
+    expect([...bridge, ...signals].slice(-20).some((entry) => entry.kind === 'sfx')).toBe(false);
+  });
+
+  it('interleaves by frame without reordering either stream', () => {
+    const merged = mergeAgentLog(
+      [line(1, 'sfx', 'a'), line(1, 'sfx', 'b'), line(5, 'sfx', 'c')],
+      [line(0, 'progress', 'start'), line(3, 'score', '7')],
+      20,
+    );
+
+    expect(merged.map((entry) => `${entry.frame}:${entry.detail}`)).toEqual(['0:start', '1:a', '1:b', '3:7', '5:c']);
   });
 });
