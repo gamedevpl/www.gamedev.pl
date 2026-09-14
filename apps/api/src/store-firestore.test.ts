@@ -937,6 +937,35 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     expect(await store.getActiveGameTransfer('sky', '2026-01-03T00:00:00.000Z')).toBeNull();
   });
 
+  it('deletes the recipient code in the same batch as the user, not a later one', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    const code = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    // Pad past the 450-op batch cap so cleanup spans two commits.
+    for (let i = 0; i < 445; i++) {
+      docs.set(key('submissions', `job-${i}`), { ownerUid: 'g:ada' });
+    }
+
+    // The second batch.commit() fails, after the first has already applied.
+    let batches = 0;
+    const flaky = {
+      ...db,
+      batch: () => {
+        batches += 1;
+        const real = db.batch();
+        return batches === 2 ? { ...real, commit: () => Promise.reject(new Error('transient')) } : real;
+      },
+    };
+    const flakyStore = new FirestoreStore(flaky as typeof db);
+
+    await expect(flakyStore.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z')).rejects.toThrow('transient');
+
+    expect(docs.get(key('users', 'g:ada'))).toBeUndefined();
+    expect(docs.get(key('recipientCodes', code!))).toBeUndefined();
+  });
+
   it('retires a code another instance minted after this instance cached the user', async () => {
     const { db, docs, key } = fakeFirestore();
     const store = new FirestoreStore(db);

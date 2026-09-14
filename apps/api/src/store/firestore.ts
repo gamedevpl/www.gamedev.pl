@@ -303,14 +303,15 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     deleteRefs.set(`waitlist/${uid}`, this.db.collection('waitlist').doc(uid));
     deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
     deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
-    deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
-    deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
+    // Before users/{uid}: a chunk split must never leave this behind it.
     if (user?.recipientCode) {
       deleteRefs.set(
         `recipientCodes/${user.recipientCode}`,
         this.db.collection('recipientCodes').doc(user.recipientCode),
       );
     }
+    deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
+    deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
 
     const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
     for (const { doc, record } of owned) {
