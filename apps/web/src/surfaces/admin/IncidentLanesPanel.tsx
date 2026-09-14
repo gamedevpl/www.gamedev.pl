@@ -5,7 +5,6 @@ const LANES = [
   { key: 'editingPaused', label: 'editing' },
   { key: 'chatPaused', label: 'chat' },
   { key: 'searchPaused', label: 'search' },
-  { key: 'gatePaused', label: 'gate runs' },
   { key: 'dreamsPaused', label: 'concept art' },
   { key: 'partyPaused', label: 'party hosting' },
   { key: 'videoPaused', label: 'preview video' },

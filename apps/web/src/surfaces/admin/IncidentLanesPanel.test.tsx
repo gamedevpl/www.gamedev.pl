@@ -17,6 +17,7 @@ function effective(overrides: Partial<CreationLimits['effective']> = {}): Creati
     managedAgentVendor: { stored: null, effective: null, available: false, configuredVendors: [], defaultVendor: null },
     tabCompletePaused: false,
     globalDailyTabCompleteTokenCap: 2_000_000,
+    globalDailyGateRunCap: 400,
     seedingMode: 'auto',
     seedProvider: {
       stored: null,
@@ -55,10 +56,11 @@ describe('IncidentLanesPanel', () => {
       onToggle,
     });
 
-    // The brake pauses these four; the console used to show only creation.
+    // The brake pauses these; the console used to show only creation. Gate runs got its
+    // own numeric section (cap + today's usage) once that cap existed, same as creation
+    // and tab completion before it.
     expect(button(container, 'Pause editing')).toBeTruthy();
     expect(button(container, 'Pause chat')).toBeTruthy();
-    expect(button(container, 'Pause gate runs')).toBeTruthy();
     expect(container.querySelector('.health-summary')?.textContent).toBe('Paused: search.');
 
     await act(async () => button(container, 'Resume search').click());

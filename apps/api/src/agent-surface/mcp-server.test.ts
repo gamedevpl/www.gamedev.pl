@@ -3081,6 +3081,103 @@ declare const GameKit: { defineGame(): unknown };
       expect(media?.description).toMatch(/video|mp4/i);
     });
   });
+
+  describe('share_draft', () => {
+    function stubShareGamesStore(gate: { green: boolean } | null): GamesStore {
+      return {
+        getManifest: async () =>
+          gate
+            ? { deliveryMode: 'preview', previewGate: { green: gate.green, ranAt: '2026-08-01T12:00:00.000Z' } }
+            : null,
+      } as unknown as GamesStore;
+    }
+
+    it('shares the draft once its preview gate is green', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, stubShareGamesStore({ green: true }));
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(shared.isError).toBe(false);
+      expect(shared.structured).toMatchObject({ shared: true, slug: 'comet-courier' });
+      expect((shared.structured as { playUrl?: string }).playUrl).toContain('/play/comet-courier');
+
+      const record = await store.getSubmission(ISSUE);
+      expect(record?.draftSharedAt).toBeTruthy();
+    });
+
+    it('refuses to share while the gate has not returned a green verdict', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      app = await createApp(store, stubShareGamesStore({ green: false }));
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(shared.isError).toBe(true);
+      expect((shared.structured as { reason?: string }).reason).toBe('gate_red');
+
+      const record = await store.getSubmission(ISSUE);
+      expect(record?.draftSharedAt).toBeFalsy();
+    });
+
+    it('refuses to share a draft with nothing delivered yet', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store, stubShareGamesStore(null));
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(shared.isError).toBe(true);
+      expect((shared.structured as { reason?: string }).reason).toBe('nothing_delivered');
+    });
+
+    it('unshares a previously shared draft', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      await store.setDraftShared(ISSUE, '2026-08-01T00:00:00.000Z');
+      app = await createApp(store, stubShareGamesStore({ green: true }));
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const unshared = await callTool(
+        app,
+        'share_draft',
+        { sessionKey, shared: false },
+        { 'mcp-session-id': sessionId },
+      );
+      expect(unshared.isError).toBe(false);
+      expect(unshared.structured).toMatchObject({ shared: false });
+
+      const record = await store.getSubmission(ISSUE);
+      expect(record?.draftSharedAt).toBeFalsy();
+    });
+
+    it('is advertised as a non-destructive write, not a read', async () => {
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store);
+      const sessionId = await initialize(app);
+
+      const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+      const tools = listed.json().result.tools as Array<{
+        name: string;
+        annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+      }>;
+      const tool = tools.find((t) => t.name === 'share_draft');
+      expect(tool?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    });
+  });
 });
 
 describe('MCP Apps views (SEP-1865, Phase 0)', () => {

@@ -22,6 +22,7 @@ import { createKitFileTools } from './mcp-kit-file-tools.js';
 import { createInboxTools } from './mcp-inbox-tools.js';
 import { createSeedTools } from './mcp-seed-tools.js';
 import { createRoundCardTools } from './mcp-round-card-tools.js';
+import { createShareDraftTools } from './mcp-share-draft-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
@@ -187,6 +188,13 @@ export interface McpServerOptions {
    * mitigation). Absent Origin is allowed — coding agents are not browsers.
    */
   allowedOrigins?: string[];
+  /**
+   * Decides whether this draft's version is fit to share: green gate, something actually
+   * delivered, not moderation-pulled. Injected from submissions (which owns the games
+   * store) so `share_draft` and Studio's own share toggle enforce the identical rule
+   * rather than a second copy of it drifting in agent-surface.
+   */
+  refuseShare?: (record: SubmissionRecord) => Promise<{ error: string; message: string } | null>;
   startImprovementRound?: (input: {
     jobId: number;
     text: string;
@@ -1315,6 +1323,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createSourceSubmitTools({ resolveAuth, injectChannel, store }),
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
+    ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
     ...createConceptTools({ resolveAuth, injectChannel }),
 

@@ -36,6 +36,18 @@ export async function refuseUngatedShare(input: {
   return verdict.green ? null : 'gate_red';
 }
 
+// refuseUngatedShare plus its wire message, so every caller reports refusals the same way
+// without reaching into delivery's own SHARE_REFUSAL_MESSAGES table itself.
+export async function refuseShareOf(input: {
+  gamesStore?: GamesStore;
+  slug?: string;
+  version?: string;
+  moderationBlockedAt?: string;
+}): Promise<{ error: ShareRefusal; message: string } | null> {
+  const refusal = await refuseUngatedShare(input);
+  return refusal ? { error: refusal, message: SHARE_REFUSAL_MESSAGES[refusal] } : null;
+}
+
 export interface SharedDraftGate {
   isGreen(slug: string, version: string): Promise<boolean>;
   forget(slug: string): void;

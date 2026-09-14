@@ -106,6 +106,7 @@ export interface CreationLimitsEffective extends PauseableLanes {
   };
   tabCompletePaused: boolean;
   globalDailyTabCompleteTokenCap: number;
+  globalDailyGateRunCap: number;
   telemetrySampleRate?: number | null;
   seedingMode: SeedingMode;
   seedProvider: {
@@ -128,6 +129,7 @@ export interface CreationLimits {
         managedDailyUserCap?: number | null;
         tabCompletePaused?: boolean;
         globalDailyTabCompleteTokenCap?: number | null;
+        globalDailyGateRunCap?: number | null;
         seedingMode?: SeedingMode;
         seedProviderOverride?: string | null;
         updatedAt?: string;
@@ -135,7 +137,13 @@ export interface CreationLimits {
       } & PauseableLanes)
     | null;
   effective: CreationLimitsEffective;
-  today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
+  today: {
+    dateStr: string;
+    submissions: number;
+    managedBuilds: number;
+    tabCompleteTokens: number;
+    gateRuns: number;
+  };
   propagationMs: number;
 }
 
@@ -163,6 +171,7 @@ export async function setCreationLimits(
     managedDailyUserCap?: number | null;
     tabCompletePaused?: boolean;
     globalDailyTabCompleteTokenCap?: number | null;
+    globalDailyGateRunCap?: number | null;
     seedingMode?: SeedingMode;
     seedProviderOverride?: string | null;
   } & PauseableLanes,

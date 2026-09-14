@@ -39,6 +39,7 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
       },
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
+      globalDailyGateRunCap: 400,
       seedingMode: 'auto',
       seedProvider: {
         stored: null,
@@ -48,7 +49,7 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
         defaultProvider: 'vertex',
       },
     },
-    today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3, tabCompleteTokens: 0 },
+    today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3, tabCompleteTokens: 0, gateRuns: 0 },
     propagationMs: 60_000,
     ...overrides,
   };
@@ -118,6 +119,7 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          globalDailyGateRunCap: 400,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -178,6 +180,7 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          globalDailyGateRunCap: 400,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -207,6 +210,7 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          globalDailyGateRunCap: 400,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -256,6 +260,7 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          globalDailyGateRunCap: 400,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -392,6 +397,89 @@ describe('CreationLimitsPanel', () => {
 
     expect(mocked.setCreationLimits).toHaveBeenCalledWith({ seedProviderOverride: 'anthropic' });
     expect(container.textContent).toContain('Overridden to anthropic (no redeploy needed).');
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows today’s gate-run usage against the shared daily cap', async () => {
+    // gate_capacity is one global ceiling on Cloud Build minutes, not a per-creator quota
+    // — before this section existed, an operator had no way to see how close a day was
+    // to it, only a blunt pause switch with no numbers.
+    mocked.fetchCreationLimits.mockResolvedValue(limits({ today: { ...limits().today, gateRuns: 137 } }));
+
+    const { container, root } = await render();
+
+    const gateSection = Array.from(container.querySelectorAll('section')).find((section) =>
+      section.textContent?.startsWith('Gate runs'),
+    );
+    if (!gateSection) throw new Error('gate runs section not found');
+    expect(gateSection.textContent).toContain('137 of 400 used today');
+    expect(gateSection.textContent).toContain('Gate runs are open');
+
+    await act(async () => root.unmount());
+  });
+
+  it('pauses gate runs from their own section', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(limits());
+    mocked.setCreationLimits.mockResolvedValue(
+      limits({ stored: { gatePaused: true }, effective: { ...limits().effective, gatePaused: true } }),
+    );
+
+    const { container, root } = await render();
+    await act(async () => {
+      button(container, 'Pause gate runs').click();
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ gatePaused: true });
+    const gateSection = Array.from(container.querySelectorAll('section')).find((section) =>
+      section.textContent?.startsWith('Gate runs'),
+    );
+    expect(gateSection?.textContent).toContain('Gate runs are paused');
+    expect(button(container, 'Resume gate runs')).toBeTruthy();
+
+    await act(async () => root.unmount());
+  });
+
+  it('sets and clears the gate-run cap', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(limits());
+    mocked.setCreationLimits.mockResolvedValue(
+      limits({
+        stored: { globalDailyGateRunCap: 800 },
+        effective: { ...limits().effective, globalDailyGateRunCap: 800 },
+      }),
+    );
+
+    const { container, root } = await render();
+    const gateSection = Array.from(container.querySelectorAll('section')).find((section) =>
+      section.textContent?.startsWith('Gate runs'),
+    );
+    if (!gateSection) throw new Error('gate runs section not found');
+    const input = gateSection.querySelector('input');
+    if (!input) throw new Error('gate cap input not found');
+    const gateButton = (label: string): HTMLButtonElement => {
+      const found = Array.from(gateSection.querySelectorAll('button')).find((el) => el.textContent === label);
+      if (!found) throw new Error(`no button "${label}" in the gate runs section`);
+      return found as HTMLButtonElement;
+    };
+
+    await act(async () => {
+      // Setting .value directly bypasses React's tracked setter, so onChange never
+      // fires — go through the native prototype setter the way a real keystroke would.
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, '800');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      gateButton('Set cap').click();
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ globalDailyGateRunCap: 800 });
+
+    mocked.setCreationLimits.mockResolvedValue(limits());
+    await act(async () => {
+      gateButton('Use the deployed default').click();
+    });
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ globalDailyGateRunCap: null });
 
     await act(async () => root.unmount());
   });
