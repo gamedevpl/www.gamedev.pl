@@ -91,6 +91,7 @@ export function useAgentPlay(frameRef: MutableRefObject<HTMLIFrameElement | null
   const [history, setHistory] = useState<AgentHistoryEntry[]>([]);
   const [signals, setSignals] = useState<AgentLogEntry[]>([]);
   const nextEntry = useRef(1);
+  const lastLoadId = useRef<unknown>(undefined);
 
   useEffect(() => {
     if (!active) {
@@ -107,6 +108,11 @@ export function useAgentPlay(frameRef: MutableRefObject<HTMLIFrameElement | null
       if (event.source !== null && event.source !== frameRef.current?.contentWindow) return;
       const data = event.data as Record<string, unknown> | null;
       if (!data || data.source !== 'gdpl-player') return;
+      // A changed loadId is a new document, whose frames start over.
+      if (data.loadId !== lastLoadId.current) {
+        lastLoadId.current = data.loadId;
+        setSignals([]);
+      }
 
       if (data.type === 'agent:hello') {
         const controls = (data.controls ?? {}) as Record<string, unknown>;
