@@ -92,6 +92,7 @@ export async function registerGameTransferRoutes(
       const result = await store.createGameTransferInvitation(slug, uid, recipient.uid, access.accessRevision, at);
       if (result === 'busy') return reply.status(409).send({ error: 'busy' });
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
+      if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
       return reply.send({ transfer: toSummary(result) });
     },
   );

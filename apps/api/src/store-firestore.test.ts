@@ -900,6 +900,7 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     await store.upsertUser({ uid: 'g:ada' });
     await store.upsertUser({ uid: 'g:grace' });
     const code = await store.ensureRecipientCode('g:grace', '2026-01-01T00:00:00.000Z');
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
 
     await store.deleteAccountIdentity('g:grace', '2026-01-02T00:00:00.000Z');
@@ -934,9 +935,21 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
 
     expect(result).toBe('ineligible');
   });
+
+  it('refuses to create when ownership settled to someone else after the caller read it', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    // A settlement lands between the route's resolveGameAccess read and this call.
+    await store.recordSettledOwner('sky', 'g:grace', 2, '2026-01-01T00:00:00.000Z', '2026-01-01T12:00:00.000Z');
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:mallory', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('stale_owner');
+  });
 });
 
-// A stale-only page can hide an active invite; status is never rewritten on expiry.
+// A stale-only page can hide an active invite.
 describe('FirestoreStore.listPendingGameTransfersForRecipient', () => {
   it('pages past more stale invitations than fit in one page to find the active one', async () => {
     const { db } = fakeFirestore();
@@ -945,9 +958,16 @@ describe('FirestoreStore.listPendingGameTransfersForRecipient', () => {
 
     for (let i = 0; i < 250; i += 1) {
       await store.upsertUser({ uid: `g:owner-${i}` });
+      await store.ensureGameAccess(
+        `stale-${i}`,
+        `g:owner-${i}`,
+        '2020-01-01T00:00:00.000Z',
+        '2020-01-01T00:00:00.000Z',
+      );
       await store.createGameTransferInvitation(`stale-${i}`, `g:owner-${i}`, 'g:grace', 1, '2020-01-01T00:00:00.000Z');
     }
     await store.upsertUser({ uid: 'g:ada' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
 
     const pending = await store.listPendingGameTransfersForRecipient('g:grace', '2026-01-02T00:00:00.000Z');

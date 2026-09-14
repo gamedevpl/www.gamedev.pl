@@ -1,4 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
+import type { GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
   isPending,
@@ -10,14 +11,14 @@ export interface GameTransferStore {
   // Status is materialized against `at`; a stale pending row reads as expired.
   getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null>;
 
-  // 'busy': already pending. 'ineligible': a party's erasure has begun.
+  // 'busy'/'ineligible'/'stale_owner': pending, an erased party, a stale owner.
   createGameTransferInvitation(
     slug: string,
     senderUid: string,
     recipientUid: string,
     accessRevision: number,
     at: string,
-  ): Promise<GameTransferInvitation | 'busy' | 'ineligible'>;
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'>;
 
   // Null when nothing pending, or the caller did not send it.
   cancelGameTransferInvitation(slug: string, senderUid: string, at: string): Promise<GameTransferInvitation | null>;
@@ -35,7 +36,10 @@ export class InMemoryGameTransferStore implements GameTransferStore {
   // Not private -- deleteAccountIdentity reaches across this on erasure.
   transfers = new Map<string, GameTransferInvitation>();
 
-  constructor(private isErased: (uid: string) => boolean = () => false) {}
+  constructor(
+    private isErased: (uid: string) => boolean = () => false,
+    private isCurrentOwner: (slug: string, senderUid: string, accessRevision: number) => boolean = () => true,
+  ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
     const existing = this.transfers.get(slug);
@@ -49,8 +53,9 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
-  ): Promise<GameTransferInvitation | 'busy' | 'ineligible'> {
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
     if (this.isErased(senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if (!this.isCurrentOwner(slug, senderUid, accessRevision)) return 'stale_owner';
     if (isPending(this.transfers.get(slug) ?? null, at)) return 'busy';
     const invite = newTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
     this.transfers.set(slug, invite);
@@ -111,15 +116,26 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
-  ): Promise<GameTransferInvitation | 'busy' | 'ineligible'> {
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
     const ref = this.doc(slug);
+    const accessRef = this.db.collection('gameAccess').doc(slug);
     return this.db.runTransaction(async (tx) => {
-      const [snap, senderFence, recipientFence] = await Promise.all([
+      const [snap, senderFence, recipientFence, accessSnap] = await Promise.all([
         tx.get(ref),
         tx.get(this.erasureFence(senderUid)),
         tx.get(this.erasureFence(recipientUid)),
+        tx.get(accessRef),
       ]);
       if (senderFence.exists || recipientFence.exists) return 'ineligible';
+
+      // No record yet means derived ownership, which resolveGameAccess reports as revision 0.
+      if (accessSnap.exists) {
+        const access = accessSnap.data() as GameAccessRecord;
+        if (access.ownerUid !== senderUid || access.accessRevision !== accessRevision) return 'stale_owner';
+      } else if (accessRevision !== 0) {
+        return 'stale_owner';
+      }
+
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
       if (isPending(existing, at)) return 'busy';
       const invite = newTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
@@ -163,15 +179,15 @@ export class FirestoreGameTransferStore implements GameTransferStore {
   // A plain `.limit()` can return only stale rows, hiding an active one.
 
   // Pages by document-snapshot cursor instead -- no composite index needed.
+
+  // No cap: a partial scan can silently drop a real invitation.
   private static readonly PAGE_SIZE = 200;
-  private static readonly SCAN_CAP = 2_000;
 
   async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {
     const base = this.db.collection('gameTransfers').where('recipientUid', '==', uid).where('status', '==', 'pending');
 
     const active: GameTransferInvitation[] = [];
     let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
-    let scanned = 0;
     for (;;) {
       const page = cursor
         ? base.startAfter(cursor).limit(FirestoreGameTransferStore.PAGE_SIZE)
@@ -182,9 +198,8 @@ export class FirestoreGameTransferStore implements GameTransferStore {
         const invite = doc.data() as GameTransferInvitation;
         if (isPending(invite, at)) active.push(invite);
       }
-      scanned += snap.size;
       cursor = snap.docs[snap.docs.length - 1];
-      if (snap.size < FirestoreGameTransferStore.PAGE_SIZE || scanned >= FirestoreGameTransferStore.SCAN_CAP) break;
+      if (snap.size < FirestoreGameTransferStore.PAGE_SIZE) break;
     }
     return active;
   }
