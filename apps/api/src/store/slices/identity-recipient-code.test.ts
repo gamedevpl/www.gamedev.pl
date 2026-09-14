@@ -58,8 +58,7 @@ describe('recipient code store slice', () => {
   });
 
   it('refuses to mint or rotate a code once erasure has begun, even before cleanup runs', async () => {
-    // beginAccountErasure alone, not the full sweep: the user document is
-    // still there, so this exercises the fence check, not just "no user".
+    // Not the full sweep: the user still exists, testing the fence alone.
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });
     await store.beginAccountErasure('g:ada', '2026-01-01T00:00:00.000Z');
