@@ -2,6 +2,7 @@
 
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { GameTransferInvitation, Store } from '../platform/store.js';
+import { isPending } from '../store/records/game-transfer.js';
 
 // Wider than a plausible client poll, matching the bell's window.
 export const TRANSFER_INBOX_WINDOW_MS = 5 * 60_000;
@@ -40,7 +41,8 @@ export async function readIncomingTransfersCached(
 ): Promise<GameTransferInvitation[]> {
   const cache = cacheFor(store);
   const hit = cache.entries.get(uid);
-  if (hit && hit.expiresAt > now()) return hit.rows;
+  // Rows are cached against an earlier `at`; one may have expired since.
+  if (hit && hit.expiresAt > now()) return hit.rows.filter((row) => isPending(row, at));
   const generation = cache.generation;
   const rows = await store.listPendingGameTransfersForRecipient(uid, at);
   // A write landed mid-read, so these rows are already stale.

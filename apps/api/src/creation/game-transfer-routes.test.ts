@@ -293,4 +293,34 @@ describe('game transfer routes', () => {
     });
     expect(incoming.json().transfers).toHaveLength(0);
   });
+
+  it('drops the cached inbox entry when the sender is erased mid-window', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    // Populates grace's cache with the pending invite, inside its window.
+    const before = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(before.json().transfers).toHaveLength(1);
+
+    // The sender's account is erased, which scrubs the invitation naming them.
+    await store.deleteAccountIdentity('g:ada', AT);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(after.json().transfers).toHaveLength(0);
+  });
 });

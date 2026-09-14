@@ -149,6 +149,27 @@ describe('game transfer store slice', () => {
     expect(await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT)).toBe('ineligible');
   });
 
+  it('refuses to create when the recipient rotated the submitted code after it was looked up', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    const oldCode = (await store.ensureRecipientCode('g:grace', AT))!;
+    // Rotation lands between the route's code lookup and this call.
+    await store.rotateRecipientCode('g:grace', AT);
+
+    expect(await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT, oldCode)).toBe('ineligible');
+  });
+
+  it('accepts a code that still resolves to the recipient at commit time', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    const code = (await store.ensureRecipientCode('g:grace', AT))!;
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT, code);
+    expect(result).not.toBe('ineligible');
+  });
+
   it('a pending invitation from a superseded owner does not block the new owner', async () => {
     const store = new InMemoryStore();
     await ownedGame(store, 'sky', 'g:ada');

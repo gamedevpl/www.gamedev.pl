@@ -154,8 +154,16 @@ export abstract class SubmissionFacade {
     recipientUid: string,
     accessRevision: number,
     at: string,
+    recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
-    return this.gameTransferStore.createGameTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
+    return this.gameTransferStore.createGameTransferInvitation(
+      slug,
+      senderUid,
+      recipientUid,
+      accessRevision,
+      at,
+      recipientCode,
+    );
   }
 
   async cancelGameTransferInvitation(

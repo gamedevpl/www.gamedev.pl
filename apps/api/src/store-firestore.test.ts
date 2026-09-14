@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore } from './platform/store.js';
 import { lastRoundActivityAt } from './platform/quiet-round.js';
 import { fakeFirestore } from './store/fake-firestore.js';
+import { readIncomingTransfersCached } from './creation/transfer-inbox-cache.js';
 
 /**
  * Firestore-shaped tests for `FirestoreStore`.
@@ -909,6 +910,21 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     expect(await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z')).toBeNull();
   });
 
+  it("drops the recipient's cached inbox entry when the sender is erased mid-window", async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+    const clock = () => Date.now();
+    expect(await readIncomingTransfersCached(store, 'g:grace', '2026-01-01T00:00:00.000Z', clock)).toHaveLength(1);
+
+    await store.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z');
+
+    expect(await readIncomingTransfersCached(store, 'g:grace', '2026-01-02T00:00:00.000Z', clock)).toHaveLength(0);
+  });
+
   it('leaves the account retryable if transfer cleanup fails before the user is deleted', async () => {
     const { db, docs, key } = fakeFirestore();
     const store = new FirestoreStore(db);
@@ -1015,6 +1031,28 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
 
     const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('ineligible');
+  });
+
+  it('refuses to create when the recipient rotated the submitted code after it was looked up', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    const oldCode = (await store.ensureRecipientCode('g:grace', '2026-01-01T00:00:00.000Z'))!;
+    // Rotation lands between the route's code lookup and this call.
+    await store.rotateRecipientCode('g:grace', '2026-01-01T00:00:00.000Z');
+
+    const result = await store.createGameTransferInvitation(
+      'sky',
+      'g:ada',
+      'g:grace',
+      1,
+      '2026-01-02T00:00:00.000Z',
+      oldCode,
+    );
 
     expect(result).toBe('ineligible');
   });

@@ -1,6 +1,7 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
+import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
@@ -115,6 +116,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (uid) => this.gameAccessStore.erasedAt.has(uid),
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
     (uid) => this.identityStore.users.get(uid) ?? null,
+    (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
@@ -204,7 +206,11 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     }
     if (user?.recipientCode) this.identityStore.recipientCodes.delete(user.recipientCode);
     for (const [slug, transfer] of [...this.gameTransferStore.transfers]) {
-      if (transfer.senderUid === uid || transfer.recipientUid === uid) this.gameTransferStore.transfers.delete(slug);
+      if (transfer.senderUid === uid || transfer.recipientUid === uid) {
+        this.gameTransferStore.transfers.delete(slug);
+        // The recipient's cached inbox must drop this erased row too.
+        invalidateTransferInboxCache(this, transfer.recipientUid);
+      }
     }
     for (const [key, counters] of [...this.quotaStore.usage]) {
       void counters;

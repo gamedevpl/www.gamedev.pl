@@ -18,6 +18,7 @@ export interface GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
+    recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'>;
 
   // Null when nothing pending, or the caller did not send it.
@@ -51,6 +52,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private isErased: (uid: string) => boolean = () => false,
     private getGameAccess: (slug: string) => GameAccessRecord | null = () => null,
     private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string } | null = () => null,
+    private getRecipientCodeOwner: (code: string) => string | null = () => null,
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -65,9 +67,11 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
+    recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
     if (this.isErased(senderUid) || this.isErased(recipientUid)) return 'ineligible';
     if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
+    if (recipientCode !== undefined && this.getRecipientCodeOwner(recipientCode) !== recipientUid) return 'ineligible';
     const access = this.getGameAccess(slug);
     if (!access || !ownerMatches(access, senderUid, accessRevision)) return 'stale_owner';
 
@@ -135,17 +139,20 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     recipientUid: string,
     accessRevision: number,
     at: string,
+    recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
     const ref = this.doc(slug);
     const accessRef = this.db.collection('gameAccess').doc(slug);
     const recipientRef = this.db.collection('users').doc(recipientUid);
+    const codeRef = recipientCode !== undefined ? this.db.collection('recipientCodes').doc(recipientCode) : null;
     return this.db.runTransaction(async (tx) => {
-      const [snap, senderFence, recipientFence, accessSnap, recipientSnap] = await Promise.all([
+      const [snap, senderFence, recipientFence, accessSnap, recipientSnap, codeSnap] = await Promise.all([
         tx.get(ref),
         tx.get(this.erasureFence(senderUid)),
         tx.get(this.erasureFence(recipientUid)),
         tx.get(accessRef),
         tx.get(recipientRef),
+        codeRef ? tx.get(codeRef) : Promise.resolve(null),
       ]);
       if (senderFence.exists || recipientFence.exists) return 'ineligible';
 
@@ -154,6 +161,11 @@ export class FirestoreGameTransferStore implements GameTransferStore {
         ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
         : null;
       if (!recipientEligible(recipient)) return 'ineligible';
+
+      // A rotation between lookup and commit revokes the code.
+      if (codeSnap && (!codeSnap.exists || (codeSnap.data() as { uid: string }).uid !== recipientUid)) {
+        return 'ineligible';
+      }
 
       const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;
       if (!access || !ownerMatches(access, senderUid, accessRevision)) return 'stale_owner';
