@@ -7,6 +7,8 @@ import { isCanonicalSlug } from '../platform/slug-policy.js';
 import type { GameTransferInvitation } from '../platform/store.js';
 import type { Store } from '../platform/store.js';
 
+// Never the counterparty's raw uid -- a stable login identifier.
+
 // GO-02 transfer: initiate, cancel, inspect, list-incoming, reject.
 
 // Acceptance is a later PR -- it needs the idle-only commit protocol.
@@ -21,8 +23,8 @@ export interface GameTransferRoutesOptions {
 export interface TransferSummary {
   slug: string;
   status: GameTransferInvitation['status'];
-  senderUid: string;
-  recipientUid: string;
+  you: 'sender' | 'recipient';
+  counterparty: { profileName: string };
   createdAt: string;
   expiresAt: string;
 }
@@ -46,12 +48,20 @@ function requireUser(
   return true;
 }
 
-function toSummary(invite: GameTransferInvitation): TransferSummary {
+// No handle claimed yet is exactly the case recipient codes exist for.
+async function describeParticipant(store: Store, uid: string): Promise<string> {
+  const user = await store.getUser(uid);
+  return user?.profileName?.trim() || user?.handle || 'a creator';
+}
+
+async function toSummary(store: Store, invite: GameTransferInvitation, viewerUid: string): Promise<TransferSummary> {
+  const isSender = invite.senderUid === viewerUid;
+  const counterpartyUid = isSender ? invite.recipientUid : invite.senderUid;
   return {
     slug: invite.slug,
     status: invite.status,
-    senderUid: invite.senderUid,
-    recipientUid: invite.recipientUid,
+    you: isSender ? 'sender' : 'recipient',
+    counterparty: { profileName: await describeParticipant(store, counterpartyUid) },
     createdAt: invite.createdAt,
     expiresAt: invite.expiresAt,
   };
@@ -93,7 +103,7 @@ export async function registerGameTransferRoutes(
       if (result === 'busy') return reply.status(409).send({ error: 'busy' });
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
-      return reply.send({ transfer: toSummary(result) });
+      return reply.send({ transfer: await toSummary(store, result, uid) });
     },
   );
 
@@ -109,7 +119,7 @@ export async function registerGameTransferRoutes(
       const at = new Date(now()).toISOString();
       const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at);
       if (!result) return reply.status(404).send({ error: 'not_found' });
-      return reply.send({ transfer: toSummary(result) });
+      return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
   );
 
@@ -128,7 +138,7 @@ export async function registerGameTransferRoutes(
 
       // A non-participant gets the same shape a truly empty slug would.
       const visible = invite && (invite.senderUid === uid || invite.recipientUid === uid) ? invite : null;
-      return reply.send({ transfer: visible ? toSummary(visible) : null });
+      return reply.send({ transfer: visible ? await toSummary(store, visible, uid) : null });
     },
   );
 
@@ -139,8 +149,9 @@ export async function registerGameTransferRoutes(
       if (!requireUser(request, reply)) return reply;
       if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const at = new Date(now()).toISOString();
-      const invites = await store.listPendingGameTransfersForRecipient(request.user!.uid, at);
-      return reply.send({ transfers: invites.map(toSummary) });
+      const uid = request.user!.uid;
+      const invites = await store.listPendingGameTransfersForRecipient(uid, at);
+      return reply.send({ transfers: await Promise.all(invites.map((invite) => toSummary(store, invite, uid))) });
     },
   );
 
@@ -156,7 +167,7 @@ export async function registerGameTransferRoutes(
       const at = new Date(now()).toISOString();
       const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at);
       if (!result) return reply.status(404).send({ error: 'not_found' });
-      return reply.send({ transfer: toSummary(result) });
+      return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
   );
 }

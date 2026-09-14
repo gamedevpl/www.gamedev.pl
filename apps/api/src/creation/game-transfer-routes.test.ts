@@ -77,7 +77,23 @@ describe('game transfer routes', () => {
       payload: { recipientCode: code },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().transfer).toMatchObject({ slug: 'sky', status: 'pending', recipientUid: 'g:grace' });
+    expect(res.json().transfer).toMatchObject({ slug: 'sky', status: 'pending', you: 'sender' });
+    expect(res.json().transfer.counterparty).toEqual({ profileName: 'a creator' });
+  });
+
+  it('never exposes either participant’s raw uid to the other', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+    const body = JSON.stringify(res.json());
+    expect(body).not.toContain('g:ada');
+    expect(body).not.toContain('g:grace');
   });
 
   it('a non-owner cannot initiate', async () => {
