@@ -6,6 +6,7 @@ import { isRecipientCodeShape } from '../platform/recipient-code.js';
 import { isCanonicalSlug } from '../platform/slug-policy.js';
 import type { GameTransferInvitation } from '../platform/store.js';
 import type { Store } from '../platform/store.js';
+import { invalidateTransferInboxCache, readIncomingTransfersCached } from './transfer-inbox-cache.js';
 
 // Never the counterparty's raw uid -- a stable login identifier.
 
@@ -103,6 +104,7 @@ export async function registerGameTransferRoutes(
       if (result === 'busy') return reply.status(409).send({ error: 'busy' });
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
+      invalidateTransferInboxCache(store, recipient.uid);
       return reply.send({ transfer: await toSummary(store, result, uid) });
     },
   );
@@ -119,6 +121,7 @@ export async function registerGameTransferRoutes(
       const at = new Date(now()).toISOString();
       const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at);
       if (!result) return reply.status(404).send({ error: 'not_found' });
+      invalidateTransferInboxCache(store, result.recipientUid);
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
   );
@@ -150,7 +153,7 @@ export async function registerGameTransferRoutes(
       if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const at = new Date(now()).toISOString();
       const uid = request.user!.uid;
-      const invites = await store.listPendingGameTransfersForRecipient(uid, at);
+      const invites = await readIncomingTransfersCached(store, uid, at);
       return reply.send({ transfers: await Promise.all(invites.map((invite) => toSummary(store, invite, uid))) });
     },
   );
@@ -167,6 +170,7 @@ export async function registerGameTransferRoutes(
       const at = new Date(now()).toISOString();
       const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at);
       if (!result) return reply.status(404).send({ error: 'not_found' });
+      invalidateTransferInboxCache(store, result.recipientUid);
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
   );

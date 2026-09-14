@@ -223,6 +223,51 @@ describe('game transfer routes', () => {
     expect(cancelAgain.statusCode).toBe(404);
   });
 
+  it('caches the incoming-transfer inbox across polls within its window, and drops it on reject', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+    const listSpy = vi.spyOn(store, 'listPendingGameTransfersForRecipient');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(first.json().transfers).toHaveLength(1);
+    expect(listSpy).toHaveBeenCalledTimes(1);
+
+    // A second poll within the window must not repeat the collection scan.
+    const second = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(second.json().transfers).toHaveLength(1);
+    expect(listSpy).toHaveBeenCalledTimes(1);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/reject',
+      headers: { cookie: authCookie('g:grace') },
+    });
+
+    // The reject must invalidate the cache, not just the store.
+    const third = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(third.json().transfers).toHaveLength(0);
+    expect(listSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('the recipient can reject a pending invitation', async () => {
     const { store, code } = await ownedGameWithRecipientCode();
     const app = await appWith(store);
