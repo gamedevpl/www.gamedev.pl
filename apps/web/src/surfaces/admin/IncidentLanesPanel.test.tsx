@@ -56,9 +56,7 @@ describe('IncidentLanesPanel', () => {
       onToggle,
     });
 
-    // The brake pauses these; the console used to show only creation. Gate runs got its
-    // own numeric section (cap + today's usage) once that cap existed, same as creation
-    // and tab completion before it.
+    // Gate runs moved to its own numeric section, like creation did.
     expect(button(container, 'Pause editing')).toBeTruthy();
     expect(button(container, 'Pause chat')).toBeTruthy();
     expect(container.querySelector('.health-summary')?.textContent).toBe('Paused: search.');

@@ -28,8 +28,7 @@ export interface ShareDraftToolsDeps {
     options?: { allowTerminalReceipt?: boolean },
   ) => Promise<AuthedRoundJob | ToolResult>;
   store: Store | undefined;
-  // Delivery's own share-gate rule, injected from submissions.ts — agent-surface has no
-  // business importing delivery's games store to re-derive it.
+  // Injected from submissions.ts — agent-surface avoids importing delivery.
   refuseShare: ((record: SubmissionRecord) => Promise<{ error: string; message: string } | null>) | undefined;
   now: () => number;
 }
@@ -52,8 +51,7 @@ const SHARE_DRAFT_OUTPUT_SCHEMA: Record<string, unknown> = {
   required: ['shared', 'slug'],
 };
 
-// Lets the agent do what Studio's own share toggle does — no web login required,
-// since this round's own credentials already prove ownership of the draft.
+// Lets an agent do what Studio's share toggle does, no login.
 export function createShareDraftTools(deps: ShareDraftToolsDeps): Record<string, ShareDraftToolEntry> {
   const { resolveAuth, store, refuseShare, now } = deps;
 

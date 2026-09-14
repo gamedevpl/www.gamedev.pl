@@ -402,9 +402,7 @@ describe('CreationLimitsPanel', () => {
   });
 
   it('shows today’s gate-run usage against the shared daily cap', async () => {
-    // gate_capacity is one global ceiling on Cloud Build minutes, not a per-creator quota
-    // — before this section existed, an operator had no way to see how close a day was
-    // to it, only a blunt pause switch with no numbers.
+    // Before this section, the panel had no usage number at all.
     mocked.fetchCreationLimits.mockResolvedValue(limits({ today: { ...limits().today, gateRuns: 137 } }));
 
     const { container, root } = await render();
@@ -463,8 +461,7 @@ describe('CreationLimitsPanel', () => {
     };
 
     await act(async () => {
-      // Setting .value directly bypasses React's tracked setter, so onChange never
-      // fires — go through the native prototype setter the way a real keystroke would.
+      // Native setter, or React's onChange never fires.
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       setter?.call(input, '800');
       input.dispatchEvent(new Event('input', { bubbles: true }));

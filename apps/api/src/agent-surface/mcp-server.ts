@@ -188,12 +188,7 @@ export interface McpServerOptions {
    * mitigation). Absent Origin is allowed — coding agents are not browsers.
    */
   allowedOrigins?: string[];
-  /**
-   * Decides whether this draft's version is fit to share: green gate, something actually
-   * delivered, not moderation-pulled. Injected from submissions (which owns the games
-   * store) so `share_draft` and Studio's own share toggle enforce the identical rule
-   * rather than a second copy of it drifting in agent-surface.
-   */
+  // Green-gate share rule, injected so Studio and share_draft agree.
   refuseShare?: (record: SubmissionRecord) => Promise<{ error: string; message: string } | null>;
   startImprovementRound?: (input: {
     jobId: number;

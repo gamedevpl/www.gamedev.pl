@@ -36,8 +36,7 @@ export async function refuseUngatedShare(input: {
   return verdict.green ? null : 'gate_red';
 }
 
-// refuseUngatedShare plus its wire message, so every caller reports refusals the same way
-// without reaching into delivery's own SHARE_REFUSAL_MESSAGES table itself.
+// refuseUngatedShare plus its wire message, in one call.
 export async function refuseShareOf(input: {
   gamesStore?: GamesStore;
   slug?: string;
