@@ -130,35 +130,43 @@ describe('recordShelfShadow', () => {
   });
 
   // A purely-reading account would stay 'absent' forever without this.
-  it('backfills on absent without making the read wait for it', async () => {
-    const warnings: object[] = [];
+  it('waits for the backfill on absent, since unawaited work can be lost', async () => {
     let rebuildOwner: string | undefined;
     let resolveRebuild!: (value: boolean) => void;
     const rebuildDone = new Promise<boolean>((resolve) => {
       resolveRebuild = resolve;
     });
+    let settled = false;
 
-    const result = await recordShelfShadow(
+    const pending = recordShelfShadow(
       {
         store: {
           getShelf: async () => null,
           countSubmissionsByOwner: async () => 1,
           rebuildShelf: async (ownerUid: string) => {
             rebuildOwner = ownerUid;
-            // Would hang the outer await if this were awaited.
             return rebuildDone;
           },
         },
-        log: { warn: (context) => warnings.push(context) },
+        log: { warn: () => {} },
       },
       'g:owner',
       source,
-    );
+    ).then((result) => {
+      settled = true;
+      return result;
+    });
 
-    expect(result?.verdict).toBe('absent');
+    // The rebuild has started, but recordShelfShadow must still be waiting on it.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(rebuildOwner).toBe('g:owner');
+    expect(settled).toBe(false);
+
     resolveRebuild(true);
-    await rebuildDone;
+    const result = await pending;
+    expect(settled).toBe(true);
+    expect(result?.verdict).toBe('absent');
   });
 
   it('does not backfill a shelf that already exists, agreeing or not', async () => {
@@ -199,7 +207,7 @@ describe('recordShelfShadow', () => {
     expect(rebuildCalled).toBe(false);
   });
 
-  it('reports a failed backfill instead of leaving it silent', async () => {
+  it('reports a rebuild that throws, though the real stores never do', async () => {
     const messages: string[] = [];
     await recordShelfShadow(
       {
@@ -216,8 +224,25 @@ describe('recordShelfShadow', () => {
       source,
     );
 
-    // Flushes past the fire-and-forget rejection.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(messages).toContain('shelf lazy backfill failed');
+    expect(messages).toContain('shelf lazy backfill errored');
+  });
+
+  it('reports a rebuild that resolves false, which is how a real store actually fails', async () => {
+    // The mirror answers false on failure; it never rejects.
+    const messages: string[] = [];
+    await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => null,
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => false,
+        },
+        log: { warn: (_context, message) => messages.push(message ?? '') },
+      },
+      'g:owner',
+      source,
+    );
+
+    expect(messages).toContain('shelf lazy backfill wrote nothing');
   });
 });

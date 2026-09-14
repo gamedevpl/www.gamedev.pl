@@ -163,10 +163,8 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await store.getShelf('g:owner')).toBeNull();
 
       const records = await store.listSubmissionsByOwner('g:owner');
-      const warnings: unknown[] = [];
-      await recordShelfShadow({ store, log: { warn: (context) => warnings.push(context) } }, 'g:owner', records);
-      // Fire-and-forget; give its microtask a turn.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // Awaited: recordShelfShadow must not resolve before the backfill lands.
+      await recordShelfShadow({ store, log: { warn: () => {} } }, 'g:owner', records);
 
       expect(await agrees(store, 'g:owner')).toBe('match');
     });

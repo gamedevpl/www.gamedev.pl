@@ -274,14 +274,28 @@ all dated before the deploy, polling `/api/submissions/mine` on a steady cadence
 `verdict: absent` on every single request with no way to stop on its own.
 
 The fix is a lazy backfill: `recordShelfShadow` reads `verdict === 'absent'` as "nobody has
-ever built this," not just "check again later," and fires `store.rebuildShelf(ownerUid)` —
-unawaited, so the read it is shadowing never waits on a write, and coalesced by the mirror the
-same way a burst of concurrent polls already is. One rebuild, once, per account that was ever
-idle since the mirror shipped; every read after that sees a real document and stops triggering
-anything. This means `absent` in the shadow log is not itself a red flag — it is the marker for
-an account about to self-heal on its own next poll, and the 09-20 checkpoint should read the
-weekly mismatch count split by verdict, not as one number: only `version` / `truncated` /
-`count` / `collapse` mean the document and source actually disagreed.
+ever built this," not just "check again later," and calls `store.rebuildShelf(ownerUid)` —
+**awaited**, coalesced by the mirror the same way a burst of concurrent polls already is. The
+first version of this fired it unawaited, reasoning that the read it shadows should never wait
+on a write. Wrong on this deployment: Cloud Run runs with `--cpu-throttling`
+(`infra/deploy-api.sh`), so work left running after the response ships can be suspended
+mid-flight, and the failure is silent — the next poll just reports `absent` again, as if
+nothing had tried. `submissions.ts` already documents the same trap for a different seam. The
+backfill is cheap and one-time per account, so paying its latency once is the right trade
+against losing it.
+
+A second thing the first version got wrong, caught in the same review: the mirror **answers
+false on failure rather than rejecting** (`createShelfMirror` swallows its own errors), so a
+bare `.catch()` never fired for the real failure mode — only a contrived test store that threw
+made it fire at all. `backfillAbsentShelf` now checks the resolved boolean, not just the
+rejection.
+
+One rebuild, once, per account that was ever idle since the mirror shipped; every read after
+that sees a real document and stops triggering anything. This means `absent` in the shadow log
+is not itself a red flag — it is the marker for an account about to self-heal on its next read.
+The 09-20 checkpoint should read the weekly mismatch count split by verdict, not as one number:
+only `version` / `truncated` / `count` / `collapse` mean the document and source actually
+disagreed.
 
 `listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
 Firestore intersects the two single-field indexes and no composite index is configured —
