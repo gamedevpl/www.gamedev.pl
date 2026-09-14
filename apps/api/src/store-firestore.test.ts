@@ -947,6 +947,27 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
 
     expect(result).toBe('stale_owner');
   });
+
+  it('a pending invitation from a superseded owner does not block the new owner', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:mallory', 1, '2026-01-01T00:00:00.000Z');
+
+    await store.recordSettledOwner('sky', 'g:grace', 2, '2026-01-01T00:00:00.000Z', '2026-01-01T12:00:00.000Z');
+
+    const fresh = await store.createGameTransferInvitation(
+      'sky',
+      'g:grace',
+      'g:someone-else',
+      2,
+      '2026-01-02T00:00:00.000Z',
+    );
+
+    expect(fresh).not.toBe('busy');
+    if (typeof fresh === 'string') throw new Error('unreachable');
+    expect(fresh.senderUid).toBe('g:grace');
+  });
 });
 
 // A stale-only page can hide an active invite.

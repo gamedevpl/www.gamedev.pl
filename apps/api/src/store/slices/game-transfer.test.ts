@@ -129,4 +129,18 @@ describe('game transfer store slice', () => {
     expect(await store.createGameTransferInvitation('nowhere', 'g:ada', 'g:mallory', 1, AT)).toBe('stale_owner');
     expect(await store.createGameTransferInvitation('nowhere', 'g:ada', 'g:mallory', 0, AT)).not.toBe('stale_owner');
   });
+
+  it('a pending invitation from a superseded owner does not block the new owner', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:mallory', 1, AT);
+
+    // Ownership settles to grace before the old invitation would expire.
+    await store.recordSettledOwner('sky', 'g:grace', 2, AT, LATER);
+
+    const fresh = await store.createGameTransferInvitation('sky', 'g:grace', 'g:someone-else', 2, LATER);
+    expect(fresh).not.toBe('busy');
+    if (typeof fresh === 'string') throw new Error('unreachable');
+    expect(fresh.senderUid).toBe('g:grace');
+  });
 });
