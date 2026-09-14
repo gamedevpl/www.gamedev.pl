@@ -21,8 +21,7 @@ import type { CatalogGameEntry } from './github-client.js';
  *   current.json                              → the pointer (small, mutable)
  *   snapshots/<id>/catalog.json               → CatalogGameEntry[]
  *   snapshots/<id>/games/<slug>.json          → { slug, title, html }
- *   snapshots/<id>/media/<slug>/<filename>    → screenshot / video bytes
- *   snapshots/<id>/media/<slug>/w<width>/<f>  → downscaled screenshot (see image-variants)
+ *   snapshots/<id>/media/<slug>[/w<width>]/<f>  → screenshot (.png beside .webp), video
  *
  * Snapshot prefixes are immutable and content-addressed by publish; only
  * `current.json` is ever overwritten. Three things fall out of that:
@@ -130,7 +129,7 @@ export function mediaObject(snapshotId: string, slug: string, filename: string, 
 }
 
 export function mediaContentType(filename: string): string {
-  return filename.endsWith('.mp4') ? 'video/mp4' : 'image/png';
+  return filename.endsWith('.mp4') ? 'video/mp4' : filename.endsWith('.webp') ? 'image/webp' : 'image/png';
 }
 
 /**
@@ -152,7 +151,7 @@ export function generateSnapshotId(now: Date, random: () => number = Math.random
 
 /** Rejects anything that could escape its prefix or forge an object path. */
 const SAFE_SLUG = /^[a-z0-9][a-z0-9-]*$/;
-const SAFE_MEDIA_FILENAME = /^[a-z0-9][a-z0-9-]*\.(?:png|mp4)$/;
+const SAFE_MEDIA_FILENAME = /^[a-z0-9][a-z0-9-]*\.(?:png|webp|mp4)$/;
 const SAFE_SNAPSHOT_ID = /^[0-9A-Za-z-]+$/;
 
 function assertSafeSlug(slug: string): void {
