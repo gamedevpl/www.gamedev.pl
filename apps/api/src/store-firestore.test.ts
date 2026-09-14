@@ -909,6 +909,34 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     expect(await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z')).toBeNull();
   });
 
+  it('leaves the account retryable if transfer cleanup fails before the user is deleted', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+
+    // Call 2, not 1: eraseMemberFromAllGameAccess's own transaction runs first.
+    let calls = 0;
+    const flaky = {
+      ...db,
+      runTransaction: (fn: (tx: unknown) => Promise<unknown>) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('transient'));
+        return db.runTransaction(fn);
+      },
+    };
+    const flakyStore = new FirestoreStore(flaky as typeof db);
+
+    await expect(flakyStore.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z')).rejects.toThrow('transient');
+    expect(docs.get(key('users', 'g:ada'))).toBeDefined();
+
+    await store.deleteAccountIdentity('g:ada', '2026-01-03T00:00:00.000Z');
+    expect(docs.get(key('users', 'g:ada'))).toBeUndefined();
+    expect(await store.getActiveGameTransfer('sky', '2026-01-03T00:00:00.000Z')).toBeNull();
+  });
+
   it('retires a code another instance minted after this instance cached the user', async () => {
     const { db, docs, key } = fakeFirestore();
     const store = new FirestoreStore(db);

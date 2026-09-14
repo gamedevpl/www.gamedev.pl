@@ -335,13 +335,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     }
     for (const ref of deleteRefs.values()) writes.push((batch) => batch.delete(ref));
 
-    // Stay under Firestore's 500-op batch cap.
-    const BATCH_SIZE = 450;
-    for (let start = 0; start < writes.length; start += BATCH_SIZE) {
-      const batch = this.db.batch();
-      for (const write of writes.slice(start, start + BATCH_SIZE)) write(batch);
-      await batch.commit();
-    }
+    // Before the batch, so a failure here leaves users/{uid} retryable.
 
     // Slug-keyed docs can be overwritten before this runs; re-check, don't blind-delete.
     const transferSlugs = new Set([...transfersSent.docs, ...transfersReceived.docs].map((doc) => doc.id));
@@ -353,6 +347,14 @@ export class FirestoreStore extends SubmissionFacade implements Store {
         const invite = snap.data() as { senderUid?: string; recipientUid?: string };
         if (invite.senderUid === uid || invite.recipientUid === uid) tx.delete(ref);
       });
+    }
+
+    // Stay under Firestore's 500-op batch cap.
+    const BATCH_SIZE = 450;
+    for (let start = 0; start < writes.length; start += BATCH_SIZE) {
+      const batch = this.db.batch();
+      for (const write of writes.slice(start, start + BATCH_SIZE)) write(batch);
+      await batch.commit();
     }
     // The read above seeded the session window; an erased account must not survive it.
     this.identityStore.forgetUser(uid);
