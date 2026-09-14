@@ -23,6 +23,10 @@ export type { CatalogEnrichmentRecord };
 import type { GameAccessStore } from '../store/slices/game-access.js';
 export type { GameAccessStore };
 import type { GameAccessRecord, GameAccessRole } from '../store/records/game-access.js';
+import type { GameTransferStore } from '../store/slices/game-transfer.js';
+export type { GameTransferStore };
+import type { GameTransferInvitation, GameTransferStatus } from '../store/records/game-transfer.js';
+export type { GameTransferInvitation, GameTransferStatus };
 export type { GameAccessRecord, GameAccessRole };
 
 /**
@@ -262,6 +266,7 @@ export interface Store
     GameAdmissionStore,
     CatalogEnrichmentStore,
     GameAccessStore,
+    GameTransferStore,
     OAuthStore,
     CliChatStore {}
 

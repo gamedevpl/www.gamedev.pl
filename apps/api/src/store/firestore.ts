@@ -79,6 +79,7 @@ import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGameAccessStore } from './slices/game-access.js';
+import { FirestoreGameTransferStore } from './slices/game-transfer.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
@@ -124,6 +125,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private contributionStore: FirestoreContributionStore;
   private publicationStore: FirestorePublicationStore;
   protected gameAccessStore: FirestoreGameAccessStore;
+  protected gameTransferStore: FirestoreGameTransferStore;
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
@@ -158,6 +160,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.contributionStore = new FirestoreContributionStore(this.db);
     this.publicationStore = new FirestorePublicationStore(this.db);
     this.gameAccessStore = new FirestoreGameAccessStore(this.db);
+    this.gameTransferStore = new FirestoreGameTransferStore(this.db);
     this.roundsStore = new FirestoreRoundsStore(this.db);
     this.roundBudgetStore = new FirestoreRoundBudgetStore(this.db);
     this.dispatchStore = new FirestoreDispatchStore(this.db);

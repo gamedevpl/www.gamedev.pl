@@ -1,11 +1,14 @@
 import type { SubmissionStore } from './slices/submission.js';
 import type { GameAccessStore } from './slices/game-access.js';
 import type { GameAccessRecord } from './records/game-access.js';
+import type { GameTransferStore } from './slices/game-transfer.js';
+import type { GameTransferInvitation } from './records/game-transfer.js';
 import type { SubmissionQueryStore } from './slices/submission-queries.js';
 import type { ShelfMirror } from '../creation/shelf-mirror.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
+  protected abstract gameTransferStore: GameTransferStore;
   protected abstract submissionQueryStore: SubmissionQueryStore;
 
   // Mirrors the owner's rounds; see creation/shelf-mirror.ts.
@@ -139,5 +142,39 @@ export abstract class SubmissionFacade {
 
   async listGameAccessByMember(uid: string): Promise<GameAccessRecord[]> {
     return this.gameAccessStore.listGameAccessByMember(uid);
+  }
+
+  async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
+    return this.gameTransferStore.getActiveGameTransfer(slug, at);
+  }
+
+  async createGameTransferInvitation(
+    slug: string,
+    senderUid: string,
+    recipientUid: string,
+    accessRevision: number,
+    at: string,
+  ): Promise<GameTransferInvitation | 'busy'> {
+    return this.gameTransferStore.createGameTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
+  }
+
+  async cancelGameTransferInvitation(
+    slug: string,
+    senderUid: string,
+    at: string,
+  ): Promise<GameTransferInvitation | null> {
+    return this.gameTransferStore.cancelGameTransferInvitation(slug, senderUid, at);
+  }
+
+  async rejectGameTransferInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+  ): Promise<GameTransferInvitation | null> {
+    return this.gameTransferStore.rejectGameTransferInvitation(slug, recipientUid, at);
+  }
+
+  async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {
+    return this.gameTransferStore.listPendingGameTransfersForRecipient(uid, at);
   }
 }
