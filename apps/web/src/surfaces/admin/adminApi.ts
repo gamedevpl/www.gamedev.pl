@@ -359,6 +359,8 @@ export interface JobCostSummary {
   conceptCalls: number;
   tokens?: { input: number; output: number };
   usd?: number;
+  // Upper bound: cache reads hid inside the input count.
+  usdBounded?: boolean;
   elapsedMs: number;
   published: boolean;
   createdAt: string;
@@ -382,6 +384,9 @@ export interface CostReport {
   creditsOnUnpublished: number;
   usdOnUnpublished: number;
   unmeasuredJobs: number;
+  // Tokens billed with no published rate: counted, not priced.
+  unpricedModels: string[];
+  priceTableVersion: string;
 }
 
 export async function fetchCostReport(): Promise<CostReport | null> {

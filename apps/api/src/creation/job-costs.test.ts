@@ -210,4 +210,61 @@ describe('buildCostReport', () => {
     expect(report.jobs[0].elapsedMs).toBe(60 * MINUTE);
     expect(report.medianTimeToPublishMs).toBe(60 * MINUTE);
   });
+
+  it('prices token rows at the published rate for the model that billed them', () => {
+    const report = buildCostReport([
+      record({
+        jobId: 1,
+        costs: [
+          {
+            kind: 'seed',
+            at: ago(10 * MINUTE),
+            by: 'claude-sonnet-5',
+            tokens: { input: 1_000_000, output: 100_000 },
+          },
+        ],
+      }),
+    ]);
+
+    // $3 of input plus $1.50 of output.
+    expect(report.jobs[0].usd).toBe(4.5);
+    expect(report.jobs[0].usdBounded).toBe(true);
+    expect(report.unpricedModels).toEqual([]);
+  });
+
+  it('names a model it cannot price instead of counting its spending as nothing', () => {
+    const report = buildCostReport([
+      record({
+        jobId: 1,
+        costs: [
+          { kind: 'seed', at: ago(10 * MINUTE), by: 'gemini-3.8-flash', tokens: { input: 900_000, output: 9_000 } },
+        ],
+      }),
+    ]);
+
+    expect(report.jobs[0].usd).toBeUndefined();
+    expect(report.unpricedModels).toEqual(['gemini-3.8-flash']);
+  });
+
+  it('does not bill a credit-billed session twice when it also carries tokens', () => {
+    // Credits are already money; pricing tokens too would double it.
+    const report = buildCostReport([
+      record({
+        jobId: 1,
+        costs: [
+          {
+            kind: 'agent_session',
+            at: ago(10 * MINUTE),
+            by: 'copilot',
+            ref: 'task-1',
+            credits: 100,
+            creditsMeasured: true,
+            tokens: { input: 1_000_000, output: 1_000_000, model: 'claude-sonnet-5' },
+          },
+        ],
+      }),
+    ]);
+
+    expect(report.jobs[0].usd).toBe(1);
+  });
 });

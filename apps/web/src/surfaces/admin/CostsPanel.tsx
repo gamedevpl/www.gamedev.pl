@@ -11,10 +11,9 @@ import { fetchCostReport, type CostReport, type JobCostSummary } from './adminAp
  * A cost-per-game that quietly excluded failures would be the most flattering number
  * available and the least useful one: the failure rate is most of what a build costs.
  *
- * Money is real here, not a placeholder: GitHub fixes a credit at $0.01, so converting
- * one to the other estimates nothing. Tokens stay dashes because Copilot reports none,
- * and the gate's Cloud Build minutes are the one piece of spending still missing — named
- * in the footnote rather than silently folded into a total that would then be wrong.
+ * Money is converted, not estimated: credits and tokens both have published rates. What
+ * has no rate is named in the footnote rather than guessed, so a figure here can be a
+ * floor, and a `≤` marks the one that is a bound instead.
  */
 
 function duration(ms: number): string {
@@ -48,7 +47,9 @@ function JobRow({ job }: { job: JobCostSummary }) {
       <td>{job.conceptCalls}</td>
       <td>{duration(job.elapsedMs)}</td>
       <td>{job.tokens ? `${job.tokens.input + job.tokens.output}` : '—'}</td>
-      <td>{job.usd === undefined ? '—' : money(job.usd)}</td>
+      <td title={job.usdBounded ? 'Upper bound: cache reads are folded into this session’s input count' : undefined}>
+        {job.usd === undefined ? '—' : `${job.usdBounded ? '≤' : ''}${money(job.usd)}`}
+      </td>
     </tr>
   );
 }
@@ -164,13 +165,22 @@ export function CostsPanel() {
         </div>
       )}
 
+      {report.unpricedModels.length > 0 && (
+        <p className="health-note">
+          Counted, not priced: <strong>{report.unpricedModels.join(', ')}</strong> billed tokens in this window with no
+          published rate in the price table, so none of that spending is in the figures above. Until a rate lands for
+          {report.unpricedModels.length === 1 ? ' it' : ' them'}, treat every number on this page as a floor.
+        </p>
+      )}
+
       <p className="health-note">
         One credit is one premium request — what an agent session costs, charged whether or not the session delivers
-        anything — and GitHub prices a credit at a flat $0.01, so the money here is converted, not estimated. Three
-        things are still missing from it: the gate&rsquo;s Cloud Build minutes, which nothing reports back yet; tokens,
-        which the Copilot backend does not expose at all; and the concept calls a proposal makes, counted here but not
-        priced because the client drops the usage envelope those calls return. All three would only push these figures
-        up. Gate runs carry their Cloud Build id, so a line on the bill can be traced back to the game that caused it.
+        anything — and GitHub prices a credit at a flat $0.01, while token spending is converted at the billing
+        model&rsquo;s published per-million rate (price table {report.priceTableVersion}). Neither is estimated. What is
+        still missing: the gate&rsquo;s Cloud Build minutes, which nothing reports back yet; the concept calls a
+        proposal makes, counted here but not priced because the client drops the usage envelope those calls return; and
+        any model listed above as unpriced. All of them would only push these figures up. Gate runs carry their Cloud
+        Build id, so a line on the bill can be traced back to the game that caused it.
       </p>
     </section>
   );

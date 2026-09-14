@@ -237,6 +237,7 @@ const FILE_BUCKET = {
   'seed-pipeline': 'creation',
   'creator-self-routes': 'creation',
   'job-costs': 'creation',
+  'token-prices': 'creation',
   'job-admin-routes': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',

@@ -5,7 +5,9 @@
 > repository checkout, the build channel's shell-based upload — is retired; every managed
 > round now runs the same MCP-only, no-checkout contract `buildPrompt` produces. All four
 > run through the managed lifecycle and record their native usage units. Production
-> cutover remains gated by the MP-04 owner approval described in the migration brief.
+> cutover has happened — managed dispatch serves live platform builds. Which vendor is
+> serving them is a deploy-time value (`MANAGED_AGENT_VENDOR`, or the runtime override
+> below) and is deliberately not recorded in this repo; read the env on the revision.
 >
 > OpenAI is wired for side-by-side evaluation, not as the default: `MANAGED_AGENT_VENDOR`
 > stays on its existing value after deploy, and a fresh dispatch reaches OpenAI only

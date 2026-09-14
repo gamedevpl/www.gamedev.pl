@@ -20,6 +20,7 @@
 // with no ledger reads as unmeasured, not as free.
 
 import { resolveJobState, type JobState } from './job-state.js';
+import { modelOf, priceTokens, TOKEN_PRICE_TABLE_VERSION } from './token-prices.js';
 import type { JobCostEntry, SubmissionRecord } from '../platform/store.js';
 
 /**
@@ -76,15 +77,16 @@ export interface JobCostSummary {
   /** Present only when some backend actually reported tokens. */
   tokens?: { input: number; output: number };
   /**
-   * What this job cost, in money: credits at the fixed rate plus anything a service
-   * priced directly.
+   * Credits and tokens at published rates, plus anything a service priced directly.
    *
-   * Absent when no *priced* spending was recorded — which is not the same as no ledger.
-   * A gate run is booked as an entry with neither credits nor dollars, because Cloud
-   * Build minutes are billed and nothing reads the price back, so a job can have a
-   * ledger and still have nothing to report here.
+   * Absent when no *priced* spending was recorded, which is not the same as no ledger:
+   * gate runs are unpriced, and so is a token row whose model has no rate.
+   * `unpricedModels` names what the silence hides.
    */
   usd?: number;
+
+  // An upper bound, not a measurement: cache reads hid inside an input count.
+  usdBounded?: boolean;
   /** Creation to the last thing that happened to it. */
   elapsedMs: number;
   /** Whether the spending bought a game anybody can play. */
@@ -132,6 +134,12 @@ export interface CostReport {
    * read as "cheap".
    */
   unmeasuredJobs: number;
+
+  // Models that billed tokens with no rate; without this, unpriced reads as cheap.
+  unpricedModels: string[];
+
+  // Which rate table produced the dollars above.
+  priceTableVersion: string;
 }
 
 function median(values: number[]): number | null {
@@ -155,7 +163,32 @@ function lastActivityAt(record: SubmissionRecord): number {
   return stamps.length > 0 ? Math.max(...stamps) : Date.parse(record.createdAt);
 }
 
-function summarize(record: SubmissionRecord): JobCostSummary {
+// A credit row is skipped: converted above already, so pricing it twice would double it.
+function priceTokenEntries(entries: readonly JobCostEntry[]): {
+  usd: number;
+  bounded: boolean;
+  unpriced: string[];
+} {
+  let usd = 0;
+  let bounded = false;
+  const unpriced: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.tokens || entry.credits !== undefined) continue;
+    const priced = priceTokens(entry.tokens, entry.by);
+    if (!priced) {
+      const model = modelOf(entry.tokens, entry.by);
+      if (model) unpriced.push(model);
+      continue;
+    }
+    usd += priced.usd;
+    if (!priced.pricedExactly) bounded = true;
+  }
+
+  return { usd, bounded, unpriced };
+}
+
+function summarize(record: SubmissionRecord): { summary: JobCostSummary; unpriced: string[] } {
   const entries: JobCostEntry[] = record.costs ?? [];
   const state = resolveJobState(record);
   const tokens = entries.reduce(
@@ -164,12 +197,11 @@ function summarize(record: SubmissionRecord): JobCostSummary {
     { input: 0, output: 0 },
   );
   const credits = entries.reduce((sum, entry) => sum + (entry.credits ?? 0), 0);
-  // Credits converted, plus anything a service priced in dollars directly. The two are
-  // added rather than treated as alternatives: they are different spending, not two
-  // measurements of the same spending.
-  const usd = cents(credits * USD_PER_CREDIT + entries.reduce((sum, entry) => sum + (entry.usd ?? 0), 0));
+  const priced = priceTokenEntries(entries);
+  // Added, not alternatives: three kinds of spending, not three measurements of one.
+  const usd = cents(credits * USD_PER_CREDIT + priced.usd + entries.reduce((sum, entry) => sum + (entry.usd ?? 0), 0));
 
-  return {
+  const summary: JobCostSummary = {
     jobId: record.jobId,
     title: record.title,
     ...(record.slug ? { slug: record.slug } : {}),
@@ -186,14 +218,21 @@ function summarize(record: SubmissionRecord): JobCostSummary {
     // was recorded, which still includes a job whose only entries are unpriced gate runs.
     ...(tokens.input + tokens.output > 0 ? { tokens } : {}),
     ...(usd > 0 ? { usd } : {}),
+    ...(usd > 0 && priced.bounded ? { usdBounded: true } : {}),
     elapsedMs: Math.max(0, lastActivityAt(record) - Date.parse(record.createdAt)),
     published: state === 'published' || Boolean(record.publishedAt),
     createdAt: record.createdAt,
   };
+
+  return { summary, unpriced: priced.unpriced };
 }
 
 export function buildCostReport(records: SubmissionRecord[]): CostReport {
-  const jobs = records.map(summarize).sort((a, b) => b.credits - a.credits || b.elapsedMs - a.elapsedMs);
+  const summaries = records.map(summarize);
+  const jobs = summaries
+    .map((entry) => entry.summary)
+    .sort((a, b) => b.credits - a.credits || b.elapsedMs - a.elapsedMs);
+  const unpricedModels = [...new Set(summaries.flatMap((entry) => entry.unpriced))].sort();
 
   const totals: CostTotals = {
     jobs: jobs.length,
@@ -226,5 +265,7 @@ export function buildCostReport(records: SubmissionRecord[]): CostReport {
     creditsOnUnpublished: unpublished.reduce((sum, job) => sum + job.credits, 0),
     usdOnUnpublished: cents(unpublished.reduce((sum, job) => sum + (job.usd ?? 0), 0)),
     unmeasuredJobs: records.filter((record) => (record.costs ?? []).length === 0).length,
+    unpricedModels,
+    priceTableVersion: TOKEN_PRICE_TABLE_VERSION,
   };
 }

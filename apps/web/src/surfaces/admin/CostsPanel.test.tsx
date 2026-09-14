@@ -49,6 +49,8 @@ function report(overrides: Partial<CostReport> = {}): CostReport {
     creditsOnUnpublished: 0,
     usdOnUnpublished: 0,
     unmeasuredJobs: 0,
+    unpricedModels: [],
+    priceTableVersion: '2026-09-14',
     ...overrides,
   };
 }
@@ -138,6 +140,29 @@ describe('CostsPanel', () => {
 
     const cells = Array.from(container.querySelectorAll('tbody td')).map((cell) => cell.textContent);
     expect(cells.slice(-2)).toEqual(['—', '$0.02']);
+
+    await act(async () => root.unmount());
+  });
+
+  it('names the models that spent tokens with no rate, so a cheap window is not read as cheap', async () => {
+    // Absent spending looks exactly like thrift.
+    mocked.fetchCostReport.mockResolvedValue(report({ unpricedModels: ['gemini-3.8-flash'] }));
+
+    const { container, root } = await render();
+
+    expect(container.textContent).toContain('gemini-3.8-flash');
+    expect(container.textContent).toContain('as a floor');
+
+    await act(async () => root.unmount());
+  });
+
+  it('marks money that is an upper bound rather than reporting it as measured', async () => {
+    mocked.fetchCostReport.mockResolvedValue(report({ jobs: [job({ usd: 1.24, usdBounded: true })] }));
+
+    const { container, root } = await render();
+
+    const cells = Array.from(container.querySelectorAll('tbody td')).map((cell) => cell.textContent);
+    expect(cells[cells.length - 1]).toBe('≤$1.24');
 
     await act(async () => root.unmount());
   });
