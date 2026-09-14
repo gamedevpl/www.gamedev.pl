@@ -17,11 +17,12 @@ export async function ensureRecipientCodeInMemory(
   codes: Map<string, RecipientCodeRecord>,
   uid: string,
   at: string,
+  isErased: (uid: string) => boolean = () => false,
 ): Promise<string | null> {
   const user = users.get(uid);
   if (!user) return null;
   if (user.recipientCode) return user.recipientCode;
-  return rotateRecipientCodeInMemory(users, codes, uid, at);
+  return rotateRecipientCodeInMemory(users, codes, uid, at, isErased);
 }
 
 // Mints a fresh code and retires the old one.
@@ -30,9 +31,10 @@ export async function rotateRecipientCodeInMemory(
   codes: Map<string, RecipientCodeRecord>,
   uid: string,
   at: string,
+  isErased: (uid: string) => boolean = () => false,
 ): Promise<string | null> {
   const user = users.get(uid);
-  if (!user) return null;
+  if (!user || isErased(uid)) return null;
 
   let code = generateRecipientCode();
   for (let attempt = 1; codes.has(code) && attempt < MAX_ATTEMPTS; attempt += 1) code = generateRecipientCode();
@@ -65,8 +67,11 @@ export async function ensureRecipientCodeFirestore(db: Firestore, uid: string, a
     const candidate = generateRecipientCode();
     try {
       return await db.runTransaction(async (tx) => {
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists) return null;
+        const [userSnap, fenceSnap] = await Promise.all([
+          tx.get(userRef),
+          tx.get(db.collection('erasedAccounts').doc(uid)),
+        ]);
+        if (!userSnap.exists || fenceSnap.exists) return null;
         const existing = (userSnap.data() as User).recipientCode;
         if (existing) return existing;
 
@@ -92,9 +97,13 @@ export async function rotateRecipientCodeFirestore(db: Firestore, uid: string, a
     const code = generateRecipientCode();
     try {
       return await db.runTransaction(async (tx) => {
-        // Both reads before any write: Firestore transactions require that ordering.
-        const [userSnap, codeSnap] = await Promise.all([tx.get(userRef), tx.get(codes.doc(code))]);
-        if (!userSnap.exists) return null;
+        // All reads before any write: Firestore transactions require that ordering.
+        const [userSnap, codeSnap, fenceSnap] = await Promise.all([
+          tx.get(userRef),
+          tx.get(codes.doc(code)),
+          tx.get(db.collection('erasedAccounts').doc(uid)),
+        ]);
+        if (!userSnap.exists || fenceSnap.exists) return null;
         if (codeSnap.exists) throw new Error('recipient code collision');
         const user = userSnap.data() as User;
         const oldRef = user.recipientCode ? codes.doc(user.recipientCode) : null;

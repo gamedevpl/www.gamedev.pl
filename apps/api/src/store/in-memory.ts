@@ -103,10 +103,14 @@ import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore extends SubmissionFacade implements Store {
-  private identityStore = new InMemoryIdentityStore();
+  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore((uid) =>
+    this.gameAccessStore.erasedAt.has(uid),
+  );
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
-  protected gameAccessStore = new InMemoryGameAccessStore((uid) => this.identityStore.users.has(uid));
+  protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore((uid) =>
+    this.identityStore.users.has(uid),
+  );
   protected gameTransferStore = new InMemoryGameTransferStore((uid) => this.gameAccessStore.erasedAt.has(uid));
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);

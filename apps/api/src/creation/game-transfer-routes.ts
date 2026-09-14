@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { gameAccessAuthoritative } from '../platform/game-access-cutover.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isRecipientCodeShape } from '../platform/recipient-code.js';
+import { isCanonicalSlug } from '../platform/slug-policy.js';
 import type { GameTransferInvitation } from '../platform/store.js';
 import type { Store } from '../platform/store.js';
 
@@ -27,6 +28,8 @@ export interface TransferSummary {
 }
 
 const TransferBody = z.object({ recipientCode: z.string().min(1).max(64) });
+
+const SlugParams = z.object({ slug: z.string().max(61).refine(isCanonicalSlug) });
 
 function requireUser(
   request: { user?: { uid: string; tier?: string } | null },
@@ -67,7 +70,9 @@ export async function registerGameTransferRoutes(
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
       if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
-      const { slug } = request.params as { slug: string };
+      const params = SlugParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
+      const { slug } = params.data;
       const body = TransferBody.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
 
@@ -97,7 +102,9 @@ export async function registerGameTransferRoutes(
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
       if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
-      const { slug } = request.params as { slug: string };
+      const params = SlugParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
+      const { slug } = params.data;
       const at = new Date(now()).toISOString();
       const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at);
       if (!result) return reply.status(404).send({ error: 'not_found' });
@@ -111,7 +118,9 @@ export async function registerGameTransferRoutes(
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
       if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
-      const { slug } = request.params as { slug: string };
+      const params = SlugParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
+      const { slug } = params.data;
       const at = new Date(now()).toISOString();
       const invite = await store.getActiveGameTransfer(slug, at);
       const uid = request.user!.uid;
@@ -127,7 +136,7 @@ export async function registerGameTransferRoutes(
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      if (!gameAccessAuthoritative()) return reply.send({ transfers: [] });
+      if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const at = new Date(now()).toISOString();
       const invites = await store.listPendingGameTransfersForRecipient(request.user!.uid, at);
       return reply.send({ transfers: invites.map(toSummary) });
@@ -140,7 +149,9 @@ export async function registerGameTransferRoutes(
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
       if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
-      const { slug } = request.params as { slug: string };
+      const params = SlugParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
+      const { slug } = params.data;
       const at = new Date(now()).toISOString();
       const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at);
       if (!result) return reply.status(404).send({ error: 'not_found' });

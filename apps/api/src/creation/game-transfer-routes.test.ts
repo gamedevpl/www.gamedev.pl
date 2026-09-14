@@ -45,6 +45,25 @@ describe('game transfer routes', () => {
       payload: { recipientCode: 'rc_whatever' },
     });
     expect(res.statusCode).toBe(404);
+
+    const incoming = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(incoming.statusCode).toBe(404);
+  });
+
+  it('a malformed slug is refused before it reaches the store', async () => {
+    const { store } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio/games/Bad_Slug/transfer',
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('the owner initiates a transfer by recipient code', async () => {

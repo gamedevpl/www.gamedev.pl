@@ -875,6 +875,16 @@ describe('FirestoreStore.ensureRecipientCode', () => {
     expect(second).toBe(first);
     expect((await store.getUserByRecipientCode(first!))?.uid).toBe('g:ada');
   });
+
+  it('refuses to mint or rotate once the erasure fence is set, before cleanup runs', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.beginAccountErasure('g:ada', '2026-01-01T00:00:00.000Z');
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
+    expect(await store.rotateRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
+  });
 });
 
 describe('FirestoreStore.deleteAccountIdentity', () => {

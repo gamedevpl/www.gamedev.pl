@@ -57,6 +57,17 @@ describe('recipient code store slice', () => {
     expect((await store.getUserByRecipientCode(code!))?.uid).toBe('g:ada');
   });
 
+  it('refuses to mint or rotate a code once erasure has begun, even before cleanup runs', async () => {
+    // beginAccountErasure alone, not the full sweep: the user document is
+    // still there, so this exercises the fence check, not just "no user".
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.beginAccountErasure('g:ada', '2026-01-01T00:00:00.000Z');
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
+    expect(await store.rotateRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
+  });
+
   it('account erasure retires the recipient code', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });
