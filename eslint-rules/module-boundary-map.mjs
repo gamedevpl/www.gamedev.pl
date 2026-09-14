@@ -321,6 +321,7 @@ const FILE_BUCKET = {
   'mcp-inbox-tools': 'agent-surface',
   'mcp-seed-tools': 'agent-surface',
   'mcp-round-card-tools': 'agent-surface',
+  'mcp-share-draft-tools': 'agent-surface',
   'mcp-gate-media-tools': 'agent-surface',
   'mcp-proposal-tools': 'agent-surface',
   'mcp-source-stage-tools': 'agent-surface',

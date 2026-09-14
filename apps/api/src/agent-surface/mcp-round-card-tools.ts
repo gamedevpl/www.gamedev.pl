@@ -94,7 +94,7 @@ const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
 };
 
 // canonicalAppBaseUrl, not WEB_ORIGIN, so the Play link stays allowlisted.
-function playUrlFor(slug: string | null | undefined): string | null {
+export function playUrlFor(slug: string | null | undefined): string | null {
   if (!slug) return null;
   return `${canonicalAppBaseUrl()}/play/${encodeURIComponent(slug)}`;
 }

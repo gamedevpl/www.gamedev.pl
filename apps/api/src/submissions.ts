@@ -34,7 +34,7 @@ import {
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerModerationFlagRoutes } from './community/moderation-flags.js';
 import { emitModerationFlag } from './notifications/notify.js';
-import { refuseUngatedShare, sharedDraftVersion, SHARE_REFUSAL_MESSAGES } from './delivery/draft-share-gate.js';
+import { refuseShareOf, sharedDraftVersion } from './delivery/draft-share-gate.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
@@ -313,6 +313,7 @@ export interface AgentSurfaceSeams {
     | 'contentChecker'
     | 'dailyImprovementQuota'
     | 'dailyFeedbackQuota'
+    | 'refuseShare'
   >;
 }
 
@@ -1251,17 +1252,19 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     ensureSubmissionSlug,
   });
+  // Shared by the creator's own share toggle (Studio) and the MCP tool (an agent acting
+  // on the creator's behalf) — one place decides what a shared link needs to be true.
+  const refuseShare = (record: SubmissionRecord) =>
+    refuseShareOf({
+      gamesStore: options.agentChannel?.gamesStore,
+      slug: record.slug,
+      version: sharedDraftVersion(record),
+      ...(record.moderationBlockedAt ? { moderationBlockedAt: record.moderationBlockedAt } : {}),
+    });
+
   await registerDraftLifecycleRoutes(app, {
     store,
-    refuseShare: async (record) => {
-      const refusal = await refuseUngatedShare({
-        gamesStore: options.agentChannel?.gamesStore,
-        slug: record.slug,
-        version: sharedDraftVersion(record),
-        ...(record.moderationBlockedAt ? { moderationBlockedAt: record.moderationBlockedAt } : {}),
-      });
-      return refusal ? { error: refusal, message: SHARE_REFUSAL_MESSAGES[refusal] } : null;
-    },
+    refuseShare,
     now,
     submissionTokenSecret,
     githubClient,
@@ -1859,6 +1862,7 @@ export async function registerSubmissionRoutes(
       contentChecker,
       dailyImprovementQuota,
       dailyFeedbackQuota,
+      refuseShare,
     },
   };
 

@@ -770,6 +770,32 @@ Read-only: repeating the call returns the same data (or newer data of the same s
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Frames are supplied by this server; the gameplay recording is a short-lived signed URL for our own storage bucket.
 ```
 
+## `share_draft`
+
+**Read Only: False**
+
+```
+Flips whether this unpublished draft's play link is public, so it changes server state.
+```
+
+**Destructive: False**
+
+```
+Additive: sharing opens an existing link to visitors who did not already have owner access; unsharing closes it again. No game, source file or delivery is modified or removed either way.
+```
+
+**Idempotent: True**
+
+```
+Calling it again with the same shared value leaves the draft in the same shared or unshared state.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
 ## `get_round_status`
 
 **Read Only: True**
