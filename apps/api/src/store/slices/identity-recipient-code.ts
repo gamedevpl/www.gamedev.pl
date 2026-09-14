@@ -20,7 +20,7 @@ export async function ensureRecipientCodeInMemory(
   isErased: (uid: string) => boolean = () => false,
 ): Promise<string | null> {
   const user = users.get(uid);
-  if (!user) return null;
+  if (!user || isErased(uid)) return null;
   if (user.recipientCode) return user.recipientCode;
   return rotateRecipientCodeInMemory(users, codes, uid, at, isErased);
 }

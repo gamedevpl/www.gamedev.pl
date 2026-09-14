@@ -67,6 +67,16 @@ describe('recipient code store slice', () => {
     expect(await store.rotateRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
   });
 
+  it('stops returning an existing code once erasure begins, before cleanup removes it', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    await store.beginAccountErasure('g:ada', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-01-03T00:00:00.000Z')).toBeNull();
+  });
+
   it('account erasure retires the recipient code', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });
