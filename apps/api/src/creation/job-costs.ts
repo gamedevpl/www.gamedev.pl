@@ -12,9 +12,9 @@
 // The unit problem is narrower than it looks. Copilot bills AI credits per session
 // (`session.usage.amount`, nano-credits) and exposes no token counts, so tokens stay
 // absent — but a credit is not a proxy for money, it *is* money in another unit, and
-// converting it estimates nothing. What remains genuinely unpriced is Cloud Build
-// minutes behind the gate, which is a smaller and nameable hole rather than the whole
-// money column.
+// converting it estimates nothing. Tokens convert the same way, at published rates.
+// What stays unpriced is Cloud Build minutes and any model with no rate — nameable
+// holes, reported as such, rather than the whole money column.
 //
 // Where absence is still the truth, this module reports absence rather than zero: a job
 // with no ledger reads as unmeasured, not as free.
