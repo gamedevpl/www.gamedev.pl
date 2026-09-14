@@ -3140,6 +3140,25 @@ declare const GameKit: { defineGame(): unknown };
       expect((shared.structured as { reason?: string }).reason).toBe('nothing_delivered');
     });
 
+    it('refuses to share a round whose slug is already published', async () => {
+      // Published always wins at /play/<slug>.
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+      await store.setSubmissionPublishedAt(ISSUE, '2026-08-01T00:00:00.000Z');
+      app = await createApp(store, stubShareGamesStore({ green: true }));
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(shared.isError).toBe(true);
+      expect((shared.structured as { reason?: string }).reason).toBe('already_published');
+
+      const record = await store.getSubmission(ISSUE);
+      expect(record?.draftSharedAt).toBeFalsy();
+    });
+
     it('unshares a previously shared draft', async () => {
       const store = new InMemoryStore();
       await seedJob(store);

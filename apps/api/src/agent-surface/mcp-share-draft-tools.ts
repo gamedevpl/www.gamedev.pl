@@ -45,7 +45,8 @@ const SHARE_DRAFT_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     shared: { type: 'boolean' },
-    slug: { type: 'string' },
+    // Null when the round has no slug yet.
+    slug: { type: ['string', 'null'] },
     playUrl: { type: ['string', 'null'] },
   },
   required: ['shared', 'slug'],
@@ -63,8 +64,10 @@ export function createShareDraftTools(deps: ShareDraftToolsDeps): Record<string,
         "Toggle this unpublished draft's public link. Unshared, /play/<slug> is only playable by the signed-in " +
         'owner — anyone else, including the creator on a device they are not logged into, hits a sign-in wall. ' +
         'Sharing (the default when shared is omitted) opens that link to anyone who has it, once the latest ' +
-        'delivery has a green preview or publish gate; a red or pending gate refuses the share. Pass ' +
-        'shared:false to take a previously shared link private again.',
+        'delivery has a green preview or publish gate; a red or pending gate refuses the share. Refused for a ' +
+        'slug that is already published — /play/<slug> always serves the published copy there, so sharing this ' +
+        'round would change nothing a visitor sees; publish it instead. Pass shared:false to take a previously ' +
+        'shared link private again.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -84,6 +87,14 @@ export function createShareDraftTools(deps: ShareDraftToolsDeps): Record<string,
         if (shared) {
           if (!record.slug) {
             return toolErr('this game has no address yet — deliver a build before sharing it');
+          }
+          // Already published means /play/<slug> ignores any share grant.
+          if (await store.getPublishedSubmissionBySlug(record.slug)) {
+            return toolErr(
+              'this slug is already published — a shared link here would not change what visitors see; ' +
+                'publish this round to update the live game instead',
+              { reason: 'already_published' },
+            );
           }
           const refusal = await refuseShare(record);
           if (refusal) return toolErr(refusal.message, { reason: refusal.error });
