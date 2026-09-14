@@ -10,6 +10,8 @@ import type { SubmissionRecord } from '../store/records/submission.js';
 export interface ShelfShadowStore {
   getShelf(ownerUid: string): Promise<ShelfDocument | null>;
   countSubmissionsByOwner(ownerUid: string): Promise<number>;
+  // Coalesced per owner by the mirror; see the 'absent' backfill below.
+  rebuildShelf(ownerUid: string): Promise<boolean>;
 }
 
 // Absent and stale are reported too, not hidden.
@@ -77,10 +79,19 @@ export async function recordShelfShadow(
       noteReadTally('shelfMismatch', true);
       deps.log.warn({ ownerUid, ...result }, 'shelf shadow mismatch');
     }
+    // Absent is unreachable by write-through or the hourly pass alike.
+    if (result.verdict === 'absent') backfillAbsentShelf(deps, ownerUid);
     return result;
   } catch (error) {
     noteReadTally('shelfShadow', 'error');
     deps.log.warn({ ownerUid, err: error }, 'shelf shadow check failed');
     return null;
   }
+}
+
+// Never awaited: the read this shadows must not wait on a write.
+function backfillAbsentShelf(deps: ShelfShadowDeps, ownerUid: string): void {
+  void deps.store.rebuildShelf(ownerUid).catch((error: unknown) => {
+    deps.log.warn({ ownerUid, err: error }, 'shelf lazy backfill failed');
+  });
 }

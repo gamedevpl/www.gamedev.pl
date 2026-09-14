@@ -23,15 +23,15 @@ Two corollaries, both of which have been got wrong here:
 
 ## Where the windows are
 
-| Surface                    | Poll  | Window | Dropped by                                                                                  |
-| -------------------------- | ----- | ------ | ------------------------------------------------------------------------------------------- |
-| `/api/catalog` enrichment  | —     | 10 min | writing an enrichment (`catalog-enricher.ts`)                                               |
-| store catalog + media      | —     | 10 min | publishing a game (`catalog-routes.ts`)                                                     |
-| notify sweep health scan   | 2 min | 10 min | recording a verdict (`notify-sweep-routes.ts`)                                              |
-| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`) |
-| `/api/review/status` badge | 2 min | 10 min | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
-| `/api/notifications` bell  | 1 min | 5 min  | creating, reading or clearing a notification (`notification-cache.ts`)                      |
-| Studio connect guide       | 10 s  | —      | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
+| Surface                     | Poll  | Window                   | Dropped by                                                                                  |
+| --------------------------- | ----- | ------------------------ | ------------------------------------------------------------------------------------------- |
+| `/api/catalog` enrichment   | —     | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                               |
+| store catalog + media       | —     | 10 min                   | publishing a game (`catalog-routes.ts`)                                                     |
+| notify sweep health scan    | 2 min | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                              |
+| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                          |
+| `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
+| `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
+| Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -95,11 +95,11 @@ So `pollDelayMs` answers how fast a round wants to be watched, and `pollGating.t
 how fast anyone actually is. Three gates, because "nobody is watching" has three distinct
 causes and each needs a different signal:
 
-| Gate | Signal | Effect |
-| --- | --- | --- |
-| Hidden | `document.hidden` | stops; catches up on `visibilitychange` |
-| Idle | no `pointerdown`/`keydown` | 10s after 2 min, 30s after 10, 60s after 30 |
-| Server floor | `pollAfterMs` in the status | 3s while moving, 10s once quiet |
+| Gate         | Signal                      | Effect                                      |
+| ------------ | --------------------------- | ------------------------------------------- |
+| Hidden       | `document.hidden`           | stops; catches up on `visibilitychange`     |
+| Idle         | no `pointerdown`/`keydown`  | 10s after 2 min, 30s after 10, 60s after 30 |
+| Server floor | `pollAfterMs` in the status | 3s while moving, 10s once quiet             |
 
 **The two client gates may be aggressive; the server floor may not.** Both client gates are
 conditioned on nobody looking, and interaction lifts them at once, so a minute of staleness
@@ -109,7 +109,7 @@ nothing has.
 
 **Visibility alone does not catch a creator who walked away**, which is why the idle gate
 exists: a forgotten tab stays focused, and `document.hidden` reports it as watched. Equally,
-idleness is never *inferred from an absence of observation* — where there is no `document`
+idleness is never _inferred from an absence of observation_ — where there is no `document`
 to listen to, the idle gate does not apply at all, or a non-browser consumer would throttle
 itself to a minute with nothing able to reset it.
 
@@ -152,7 +152,6 @@ after a poll waited out the old sixty seconds anyway. `noteStudioInteraction` re
 whenever the floor it just lifted was non-zero — and only then, so ordinary typing does not
 churn timers. The test for this originally dispatched `visibilitychange` alongside the
 interaction, which reached `rescheduleAll` by the other path and hid the bug completely.
-
 
 ### The per-user half is the only part that grows with visitors
 
@@ -213,24 +212,25 @@ write directly — and submissions carry no `updatedAt`:
    document from `listSubmissionsByOwner`. A rebuild rather than a patch of one entry, so it
    is correct by construction and there is no drift arithmetic to get wrong. Because the
    document is in Firestore, **every instance sees it** — unlike the per-instance windows
-   above. "Every writer" includes the two *atomic* slug claims, which write the slug
+   above. "Every writer" includes the two _atomic_ slug claims, which write the slug
    themselves rather than through the plain setter, and `setDraftShared`.
 
    Coalescing concurrent rebuilds is not enough: a write landing after a running rebuild has
    read source but before it writes would be waited on and then lost, so the mirror requeues
    one more pass instead of joining a snapshot that is already behind. Same invariant as the
-   sweep cadence — *void the deferral when the record moves*.
+   sweep cadence — _void the deferral when the record moves_.
+
 2. **A count on read.** The document stores `sourceCount`; the reader spends one `count()`
    aggregate and rebuilds on disagreement. This catches a create or a reassignment without
    knowing who wrote. It cannot catch an in-place field update, which is why there is a third
    layer.
 3. **A bounded pass, never once-ever.** `runShelfRebuildPass` rebuilds shelves older than an
-   hour, ten per run, riding `notify-sweep`. It reports failures by *inspecting the rebuild's
-   answer*, because the mirror swallows its own errors — a `try`/`catch` around it can never
+   hour, ten per run, riding `notify-sweep`. It reports failures by _inspecting the rebuild's
+   answer_, because the mirror swallows its own errors — a `try`/`catch` around it can never
    fire, so the first version reported `shelvesFailed: 0` however many shelves went unwritten,
    certifying a repair layer that had done nothing. Listing failures are caught too: this is
    derived state riding a notification job, and a throw here would turn a completed sweep into
-   a 500 and a scheduler retry. The marker is *when the last pass ran*, never
+   a 500 and a scheduler retry. The marker is _when the last pass ran_, never
    that one happened — a rollback puts code in front of traffic that writes rounds without
    knowing the document exists, so a once-ever marker would retire the only thing that
    notices it. Same lesson as `open-round-backfill.ts`.
@@ -264,6 +264,25 @@ The shadow week is what settles it: sum `route=/api/submissions/mine` against th
 in the meter before flipping anything. If write amplification exceeds the read it saves, the
 right answer is to keep source as the reader and delete the document.
 
+**A fourth gap, found live, not in review: an idle account cannot be reached by either
+mechanism.** Write-through needs a write to fire; the hourly pass needs an existing document
+whose `builtAt` has aged past the cutoff. An account whose last shelf-relevant activity
+predates the mirror shipping, and who only polls afterward, has neither — there is no write to
+hook, and no row for `listStaleShelfOwners`'s `builtAt <` query to match, because Firestore
+cannot return a document that was never created. Confirmed against a live account: five rounds
+all dated before the deploy, polling `/api/submissions/mine` on a steady cadence, reporting
+`verdict: absent` on every single request with no way to stop on its own.
+
+The fix is a lazy backfill: `recordShelfShadow` reads `verdict === 'absent'` as "nobody has
+ever built this," not just "check again later," and fires `store.rebuildShelf(ownerUid)` —
+unawaited, so the read it is shadowing never waits on a write, and coalesced by the mirror the
+same way a burst of concurrent polls already is. One rebuild, once, per account that was ever
+idle since the mirror shipped; every read after that sees a real document and stops triggering
+anything. This means `absent` in the shadow log is not itself a red flag — it is the marker for
+an account about to self-heal on its own next poll, and the 09-20 checkpoint should read the
+weekly mismatch count split by verdict, not as one number: only `version` / `truncated` /
+`count` / `collapse` mean the document and source actually disagreed.
+
 `listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
 Firestore intersects the two single-field indexes and no composite index is configured —
 the same trick `listOpenRoundsByOwner` already used. The wide `listSubmissionsByOwner` stays
@@ -294,7 +313,7 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
    holds a per-job next-due stamp: moving within the hour means every run, still for an hour
    means every ten minutes, still for a day means hourly. Two properties matter more than the
    numbers. A job this process has **never** derived is always due, so a cold start and every
-   test derive everything — the cadence can only ever *defer a repeat*, never skip a first look.
+   test derive everything — the cadence can only ever _defer a repeat_, never skip a first look.
    And **anything with a clock running on it stays hot**: an uncollected creator message, an
    observed transition, or a status that just changed all reset the record to every-run, because
    the alert those feed is the one thing a widened cadence could make late. A deferral is also
@@ -304,7 +323,7 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
    optimisation, and losing it on a deploy costs one full run.
 
 2. **An emit that is idempotent by id should stop asking.** Re-emitting an existing operator
-   alert cost a document read *and* a transaction commit per alert per run, which is how ~908
+   alert cost a document read _and_ a transaction commit per alert per run, which is how ~908
    commits an hour sat behind ~1,157 document writes a day: read-only transactions, committing
    nothing. `notify-sweep-routes.ts` now remembers the ids it has seen already present and skips
    them (`alertsSkipped` in the response and the log), and `createNotification` inserts with
@@ -318,7 +337,7 @@ It also carries `stalledCauses`, which is not about cost. `feedback_undelivered`
 description: two were parked on an operator's publish decision since August, one had received a
 message fourteen hours after its agent ended, and one had never had an agent connect. An alert
 that cannot distinguish those is a true statement nobody can act on. The kind still fires — a
-permanent false alarm is bad, silence is worse — but every stalled job now reports *why* nothing
+permanent false alarm is bad, silence is worse — but every stalled job now reports _why_ nothing
 collected it (`uncollected-feedback.ts`), which is the difference between re-dispatching a round,
 publishing it, and closing it. `agentEndedAt` alone does **not** mean the agent left — it is also
 set when an agent submits without calling `end`, and `isAgentSessionEnded` (platform/) is the one
@@ -336,7 +355,7 @@ infra/read-cost-report.sh 7d     # a full working week
 
 ### Per request, from the service's own logs
 
-The type split says *which half of this document* a regression belongs in. It does not say
+The type split says _which half of this document_ a regression belongs in. It does not say
 which route or which collection, and until 2026-09-12 that attribution was archaeology:
 correlate a per-minute read count against a request log and guess. `store/read-meter.ts`
 removes the guessing. It patches the Firestore client's read entry points once
@@ -364,7 +383,7 @@ whole reason the tally can be trusted as a cost attribution:
 - an **aggregate** counts one read per 1000 index entries matched, minimum one, so a `count()`
   over 2,500 rows is three reads rather than one.
 
-A read that *throws* is not tallied — the meter records after the await. So a swallowed
+A read that _throws_ is not tallied — the meter records after the await. So a swallowed
 `PERMISSION_DENIED` (about 850/day as of 2026-09-12, logged nowhere, cost nothing) stays
 invisible here; it shows only in `api/request_count` split by `response_code`.
 
@@ -382,7 +401,6 @@ gcloud logging read 'jsonPayload.msg="firestore reads"
   AND jsonPayload.route="/api/review/status"' --project gamedevpl --limit 5 \
   --format='value(jsonPayload.fsReads,jsonPayload.fsPaths)'
 ```
-
 
 The split by `metric.label.type` (QUERY / LOOKUP / NOT_FOUND) is the whole point, and it
 decides which half of this document the next fix belongs in. QUERY is a collection scan —
@@ -439,7 +457,7 @@ each merged pull request still reads green. On 2026-09-12 master was red from a 
 and two merges deployed nothing; production served the previous revision for over an hour with
 nothing reporting it. `infra/check-deploy-freshness.mjs` (run every half hour by
 `.github/workflows/deploy-watchdog.yml`) now asks whether master's newest settled commit has a
-*successful* deploy run, and opens one issue when it does not.
+_successful_ deploy run, and opens one issue when it does not.
 
 Four answers, because three of them are not "fine": **deployed** (0) closes the issue,
 **not deployed** (1) opens or comments on it, **too early to judge** (3) touches nothing, and
@@ -450,8 +468,8 @@ raising it.
 
 Three rules the first draft got wrong, all three found in review:
 
-- **Judge only the newest settled CI run.** Scanning backwards for the newest run *older than
-  the grace window* picks a superseded red commit while the green one that fixed it is still
+- **Judge only the newest settled CI run.** Scanning backwards for the newest run _older than
+  the grace window_ picks a superseded red commit while the green one that fixed it is still
   building — so the alarm stays on through the recovery it is supposed to notice ending.
 - **Look for a deploy before judging CI.** `deploy.yml` also accepts `workflow_dispatch`, with
   no CI gate, so a manual deploy of a red-CI commit is a real deploy and must read as one.
