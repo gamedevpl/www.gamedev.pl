@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { gameAccessAuthoritative } from '../platform/game-access-cutover.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
+import { isRecipientCodeShape } from '../platform/recipient-code.js';
 import type { GameTransferInvitation } from '../platform/store.js';
 import type { Store } from '../platform/store.js';
 
@@ -74,6 +75,7 @@ export async function registerGameTransferRoutes(
       const access = await resolveGameAccess(store, slug);
       if (!ownsGame(access, uid)) return reply.status(403).send({ error: 'not_owner' });
 
+      if (!isRecipientCodeShape(body.data.recipientCode)) return reply.status(400).send({ error: 'invalid_code' });
       const recipient = await store.getUserByRecipientCode(body.data.recipientCode);
       if (!recipient) return reply.status(400).send({ error: 'invalid_code' });
       if (recipient.uid === uid) return reply.status(400).send({ error: 'cannot_transfer_to_self' });

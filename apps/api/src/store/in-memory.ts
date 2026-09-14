@@ -194,6 +194,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     for (const [key, reservation] of [...this.identityStore.handles]) {
       if (reservation.uid === uid || reservation.previousUid === uid) this.identityStore.handles.delete(key);
     }
+    if (user?.recipientCode) this.identityStore.recipientCodes.delete(user.recipientCode);
+    for (const [slug, transfer] of [...this.gameTransferStore.transfers]) {
+      if (transfer.senderUid === uid || transfer.recipientUid === uid) this.gameTransferStore.transfers.delete(slug);
+    }
     for (const [key, counters] of [...this.quotaStore.usage]) {
       void counters;
       if (key.startsWith(`${uid}:`)) this.quotaStore.usage.delete(key);

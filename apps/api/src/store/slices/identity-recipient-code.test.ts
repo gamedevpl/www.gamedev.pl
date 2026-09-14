@@ -44,4 +44,14 @@ describe('recipient code store slice', () => {
     const store = new InMemoryStore();
     expect(await store.getUserByRecipientCode('rc_does-not-exist')).toBeNull();
   });
+
+  it('account erasure retires the recipient code', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    const code = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    await store.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getUserByRecipientCode(code!)).toBeNull();
+  });
 });

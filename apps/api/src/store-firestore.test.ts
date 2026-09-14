@@ -856,3 +856,39 @@ describe('FirestoreStore.countBuildShots', () => {
     expect(await store.countBuildShots(41, { excludeLabels: ['AI concept'] })).toBe(4);
   });
 });
+
+/**
+ * A first-time `ensureRecipientCode` must check for an existing code inside the same
+ * transaction that mints one, not before it starts. A plain read-then-rotate let two
+ * racing callers both mint: the second overwrote the first's code, so the caller who
+ * got it back first held one that had already stopped resolving.
+ */
+describe('FirestoreStore.ensureRecipientCode', () => {
+  it('does not mint a second code once one already exists', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    const first = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    const second = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:01.000Z');
+
+    expect(second).toBe(first);
+    expect((await store.getUserByRecipientCode(first!))?.uid).toBe('g:ada');
+  });
+});
+
+describe('FirestoreStore.deleteAccountIdentity', () => {
+  it('retires the recipient code and scrubs transfer invitations naming the uid', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    const code = await store.ensureRecipientCode('g:grace', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+
+    await store.deleteAccountIdentity('g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getUserByRecipientCode(code!)).toBeNull();
+    expect(await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z')).toBeNull();
+  });
+});

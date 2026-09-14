@@ -237,6 +237,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       waitlistByEmail,
       betaInvitesCreated,
       betaInvitesClaimed,
+      transfersSent,
+      transfersReceived,
     ] = await Promise.all([
       this.db.collection('accessTokens').where('uid', '==', uid).get(),
       this.db.collection('gameAgentKeys').where('ownerUid', '==', uid).get(),
@@ -257,6 +259,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       email ? this.db.collection('waitlist').where('email', '==', email).get() : Promise.resolve(null),
       this.db.collection('betaInvites').where('createdByUid', '==', uid).get(),
       this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
+      this.db.collection('gameTransfers').where('senderUid', '==', uid).get(),
+      this.db.collection('gameTransfers').where('recipientUid', '==', uid).get(),
     ]);
 
     // After the fence, so a record created mid-erasure is either refused or seen here.
@@ -294,11 +298,19 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     if (waitlistByEmail) addDeletes(waitlistByEmail.docs);
     addDeletes(betaInvitesCreated.docs);
     addDeletes(betaInvitesClaimed.docs);
+    addDeletes(transfersSent.docs);
+    addDeletes(transfersReceived.docs);
     deleteRefs.set(`waitlist/${uid}`, this.db.collection('waitlist').doc(uid));
     deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
     deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
     deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
     deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
+    if (user?.recipientCode) {
+      deleteRefs.set(
+        `recipientCodes/${user.recipientCode}`,
+        this.db.collection('recipientCodes').doc(user.recipientCode),
+      );
+    }
 
     const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
     for (const { doc, record } of owned) {

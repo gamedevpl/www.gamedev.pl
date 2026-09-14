@@ -55,12 +55,32 @@ export function getUserByRecipientCodeInMemory(
   return user ? { ...user } : null;
 }
 
+// Checks for an existing code inside the transaction to avoid a clobber.
 export async function ensureRecipientCodeFirestore(db: Firestore, uid: string, at: string): Promise<string | null> {
-  const snap = await db.collection('users').doc(uid).get();
-  if (!snap.exists) return null;
-  const existing = (snap.data() as User).recipientCode;
-  if (existing) return existing;
-  return rotateRecipientCodeFirestore(db, uid, at);
+  const codes = db.collection('recipientCodes');
+  const userRef = db.collection('users').doc(uid);
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const candidate = generateRecipientCode();
+    try {
+      return await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) return null;
+        const existing = (userSnap.data() as User).recipientCode;
+        if (existing) return existing;
+
+        const codeSnap = await tx.get(codes.doc(candidate));
+        if (codeSnap.exists) throw new Error('recipient code collision');
+        tx.set(codes.doc(candidate), { uid, createdAt: at } satisfies RecipientCodeRecord);
+        tx.set(userRef, stripUndefined({ recipientCode: candidate }), { merge: true });
+        return candidate;
+      });
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('recipient code generation exhausted retries');
 }
 
 export async function rotateRecipientCodeFirestore(db: Firestore, uid: string, at: string): Promise<string | null> {

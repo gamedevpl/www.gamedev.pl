@@ -32,7 +32,8 @@ export interface GameTransferStore {
 const clone = (invite: GameTransferInvitation): GameTransferInvitation => ({ ...invite });
 
 export class InMemoryGameTransferStore implements GameTransferStore {
-  private transfers = new Map<string, GameTransferInvitation>();
+  // Not private -- deleteAccountIdentity reaches across this on erasure.
+  transfers = new Map<string, GameTransferInvitation>();
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
     const existing = this.transfers.get(slug);
@@ -146,11 +147,15 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     });
   }
 
+  // Bounded rather than ordered by expiresAt -- avoids a composite index.
+  private static readonly LIST_LIMIT = 200;
+
   async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {
     const snap = await this.db
       .collection('gameTransfers')
       .where('recipientUid', '==', uid)
       .where('status', '==', 'pending')
+      .limit(FirestoreGameTransferStore.LIST_LIMIT)
       .get();
     return snap.docs.map((doc) => doc.data() as GameTransferInvitation).filter((t) => isPending(t, at));
   }

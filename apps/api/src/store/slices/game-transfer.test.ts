@@ -67,4 +67,16 @@ describe('game transfer store slice', () => {
     const store = new InMemoryStore();
     expect(await store.getActiveGameTransfer('nowhere', AT)).toBeNull();
   });
+
+  it('account erasure scrubs every invitation naming the erased uid', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    await store.deleteAccountIdentity('g:grace', LATER);
+
+    expect(await store.getActiveGameTransfer('sky', LATER)).toBeNull();
+    expect(await store.listPendingGameTransfersForRecipient('g:grace', LATER)).toEqual([]);
+  });
 });

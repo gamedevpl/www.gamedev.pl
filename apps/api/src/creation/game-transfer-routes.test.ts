@@ -75,6 +75,20 @@ describe('game transfer routes', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('a malformed recipient code is refused before it reaches the store', async () => {
+    const { store } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: 'not/a/valid/code' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('invalid_code');
+  });
+
   it('an unknown recipient code is refused', async () => {
     const { store } = await ownedGameWithRecipientCode();
     const app = await appWith(store);
