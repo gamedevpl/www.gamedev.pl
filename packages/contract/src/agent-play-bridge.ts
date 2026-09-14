@@ -12,6 +12,7 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   var capturePng=host.capturePng,legendRows=host.legendRows,kitRows=host.kitRows;
   var largestCanvas=host.largestCanvas;
   var agentOn=false,agentFps=60,agentTilt=null,agentLog=[],agentLiveTimer=0,agentStatusSeen='';
+  var agentAudioCursor=0;
   var AGENT_LOG_CAP=60,AGENT_UI_CAP=80;
   function agentHarness(){return window.__GAME_HARNESS__;}
   function agentCanvas(){return el('game')||largestCanvas();}
@@ -57,7 +58,27 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     var rows=legendRows();
     return {rows:rows,kit:kitRows(),hint:text(document.querySelector('.hint'))};
   }
+  // Sound the game asked for, read from harness.signals — the agent has no speakers.
+  // The log is capped and drops its oldest, so a stale cursor loses events, never repeats them.
+  var AGENT_AUDIO_KINDS={sfx:1,loop:1,music:1};
+  function agentDrainAudio(){
+    var h=agentHarness(),signals=h&&h.signals;
+    if(!signals||typeof signals.length!=='number')return;
+    var i=agentAudioCursor>signals.length?signals.length:agentAudioCursor;
+    for(;i<signals.length;i++){
+      var entry=signals[i];
+      if(!entry||typeof entry.name!=='string'||!entry.name)continue;
+      if(!Object.prototype.hasOwnProperty.call(AGENT_AUDIO_KINDS,entry.type))continue;
+      var count=Number(entry.count);
+      agentNote(entry.type,entry.name
+        +(count>1?' x'+count:'')
+        +(entry.stopped?' (stopped)':'')
+        +(entry.missing?' (missing)':''));
+    }
+    agentAudioCursor=signals.length;
+  }
   function agentState(reason,id){
+    agentDrainAudio();
     post({
       type:'agent:state',
       reason:reason||'look',

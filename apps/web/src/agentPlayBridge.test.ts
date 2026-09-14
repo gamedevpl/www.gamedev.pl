@@ -38,6 +38,7 @@ function mountGameDocument() {
 type FakeHarness = {
   frame: number;
   metadata: Record<string, unknown>;
+  signals: Array<Record<string, unknown>>;
   steps: number;
   step: (dt?: number, options?: { present?: boolean }) => Record<string, unknown>;
   restart: () => boolean;
@@ -51,6 +52,7 @@ function installHarness(): FakeHarness {
   const harness: FakeHarness = {
     frame: 0,
     metadata: { state: 'playing', score: 0, observation: '{"room":"cellar"}' },
+    signals: [],
     steps: 0,
     step(_dt, _options) {
       harness.steps += 1;
@@ -108,6 +110,34 @@ describe('the agent bridge, running for real', () => {
     harness.steps = 0;
     harness.frame = 0;
     harness.metadata = { state: 'playing', score: 0, observation: '{"room":"cellar"}' };
+  });
+
+  it('reports the sound the game played, which is the only way an agent hears it', async () => {
+    send({ type: 'agent:enable' });
+    await settle();
+
+    harness.signals.push(
+      { source: 'gdpl-player', frame: 1, type: 'music', name: 'ocean-drift' },
+      { source: 'gdpl-player', frame: 2, type: 'progress', label: 'round-start' },
+      { source: 'gdpl-player', frame: 2, type: 'sfx', name: 'dig', count: 3 },
+      { source: 'gdpl-player', frame: 3, type: 'sfx', name: 'ghost', missing: true },
+    );
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    const heard = log.filter((entry) => ['sfx', 'loop', 'music'].includes(entry.kind));
+    expect(heard.map((entry) => `${entry.kind}:${entry.detail}`)).toEqual([
+      'music:ocean-drift',
+      'sfx:dig x3',
+      'sfx:ghost (missing)',
+    ]);
+
+    // Read once, not once per state asked for.
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    const again = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(again.filter((entry) => entry.detail === 'dig x3')).toHaveLength(1);
   });
 
   it('introduces the game and its controls when the host enables agent mode', async () => {

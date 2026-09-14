@@ -2,8 +2,8 @@
 
 > Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, policy
 > scripts, the plan runner, the filmstrip, the panel and the entry points are built and
-> tested. The
-> games-repo half (hidden fields in the document, sound as text) is not. Reviewer traffic
+> tested, and so is the games-repo half: hidden fields ride in the assembled document and
+> sound is readable text. Reviewer traffic
 > leaves no trace: an agent-capable session is kept out of the play funnel. Strategy and the decisions
 > behind all of this live in the private ops repo (`agent-play-mode-research.md`).
 
@@ -80,6 +80,16 @@ telemetry. Agent mode folds them into its log, so the game's own landmark events
 frame-stamped without a single change in the games repo. The same goes for `#game-status`,
 GameKit's `aria-live` line: the one text channel a published game already writes to.
 
+### Hearing the game
+
+An agent has no audio track, so a game whose only feedback is a sound is unreviewable to
+it. GameKit now records every `play`, `loop`, `playMusic` and `stopMusic` into
+`harness.signals` — locally, reported to nobody — and the bridge reads them from inside
+the frame into the same log, as `sfx`, `loop` and `music` lines. Repeats inside a frame
+collapse into a count, and a call for a sound the bundle does not carry is marked
+`(missing)`, which is a finding rather than a silence. The cursor into that log only moves
+forward: a sound reported twice would read as a sound heard twice.
+
 ## Invariants this must not break
 
 - **The sandbox stays exactly as it is.** `sandbox="allow-scripts allow-pointer-lock"`, no
@@ -92,9 +102,10 @@ GameKit's `aria-live` line: the one text channel a published game already writes
 - **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
   the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
   answer never reaches the host at all. Redacting only at render would have put it on the
-  wire and into React state first. The list does not travel with the assembled document
-  yet, so the page reports `hiddenFields: null` and the panel says so out loud — a visible
-  gap rather than a silent one.
+  wire and into React state first. `assembleGame` writes the list into the document ahead
+  of the kit and the game, so the frame knows what is secret before anything can ask. A
+  game that declares none still reports `hiddenFields: null`, and the panel says so out
+  loud — a visible gap rather than a silent one.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
@@ -230,9 +241,6 @@ cost, so a heavy 3D game is slower per frame.
 
 ## Not built yet
 
-- **The games-repo half.** Carrying `hiddenFields` into the assembled document, and
-  emitting `sfx` / `music` events so sound becomes readable text. Until then a game with a
-  hidden answer can leak it here, and an agent still cannot judge audio feedback.
 - **Telemetry.** No event is emitted in this mode. How an agent-driven play should be
   counted — and kept out of person-shaped metrics — is an open decision, not an oversight.
 - **WebMCP registration.** The same command list could be registered as page tools for
