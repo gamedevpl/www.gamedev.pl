@@ -9,20 +9,26 @@ export const WEBP_QUALITY = 80;
 
 type Encoder = (image: RgbaImage, options: { quality: number }) => Promise<ArrayBuffer>;
 
+// TypeScript resolves this subpath to `any`; naming the shape restores checking.
+interface WebpEncodeModule {
+  default: Encoder;
+  init(options: { wasmBinary: Buffer }): Promise<unknown>;
+}
+
 let encoder: Promise<Encoder | null> | null = null;
 
 async function loadEncoder(): Promise<Encoder | null> {
   try {
-    const [{ default: encode, init }, { simd }] = await Promise.all([
-      import('@jsquash/webp/encode.js'),
+    const [module, { simd }] = await Promise.all([
+      import('@jsquash/webp/encode.js') as Promise<WebpEncodeModule>,
       import('wasm-feature-detect'),
     ]);
     // Same check the glue uses, so the binary matches it.
     const file = (await simd()) ? 'webp_enc_simd.wasm' : 'webp_enc.wasm';
     const require = createRequire(import.meta.url);
     const wasmBinary = await readFile(require.resolve(`@jsquash/webp/codec/enc/${file}`));
-    await init({ wasmBinary });
-    return encode as Encoder;
+    await module.init({ wasmBinary });
+    return module.default;
   } catch {
     return null;
   }
