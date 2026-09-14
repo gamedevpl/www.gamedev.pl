@@ -287,6 +287,18 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.identityStore.readProposalsMutedAt(uid);
   }
 
+  async ensureRecipientCode(uid: string, at: string): Promise<string | null> {
+    return this.identityStore.ensureRecipientCode(uid, at);
+  }
+
+  async rotateRecipientCode(uid: string, at: string): Promise<string | null> {
+    return this.identityStore.rotateRecipientCode(uid, at);
+  }
+
+  async getUserByRecipientCode(code: string): Promise<User | null> {
+    return this.identityStore.getUserByRecipientCode(code);
+  }
+
   // Constructed with `this`: the mirror rebuilds from this store's own reads.
   protected shelfMirror: ShelfMirror = createShelfMirror({ store: this, now: () => Date.now() });
 
