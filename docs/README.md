@@ -73,7 +73,7 @@ survives only in this repo's early history.
 | [`agent-play-mode.md`](./agent-play-mode.md)                       | Agent play mode — stepped time and the games-repo text grammar on the play page, so browser agents can play |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                                  |
 | [`recommendations.md`](./recommendations.md)                       | ✅ Home catalog sort from scorecards + signed-in play affinity                                              |
-| [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation               |
+| [`runbooks/` (ops repo)](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/README.md)                     | ➡️ **Moved 2026-09-15** to the private ops repo — incident procedures and the alert catalog                 |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                                |
 | [`comment-prose-debt.md`](./comment-prose-debt.md)                 | ✅ Comment seal: // one-liners ≤12 words; per-file baseline ratchet (`npm run comment-prose`)               |
 | [`module-size-debt.md`](./module-size-debt.md)                     | ✅ No file may grow past its baseline; new files cap at 500 lines (`npm run module-size`)                   |

@@ -246,7 +246,7 @@ const CreationLimitsPatchShape = z.object({
   dreamsPaused: z.boolean().optional(),
   globalDailyDreamCap: z.number().int().min(0).max(100_000).nullable().optional(),
   globalDailySeedCap: z.number().int().min(0).max(100_000).nullable().optional(),
-  // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
+  // Load-shedding rungs 2 and 3; see runbooks/launch-day.md.
   telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
   partyPaused: z.boolean().optional(),
   // Bandwidth rungs; listed so an operator can clear them.

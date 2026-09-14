@@ -144,7 +144,7 @@ this is the half of its mitigation that reads the artifact.
   Rollout note on slice 2 for why an issue was the wrong medium. It is a DSA art. 16
   `mailto:` on the play page ([`ReportGameButton.tsx`](../apps/web/src/ReportGameButton.tsx)),
   pre-filled with what a notice must contain to oblige us to act. Handling a report is
-  [`moderation-burst.md`](./runbooks/moderation-burst.md) Part 2; unpublishing is still a
+  [`moderation-burst.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/moderation-burst.md) Part 2; unpublishing is still a
   merge plus a green bake, and **verifying the bake is the step that actually removes the
   game** — published play is served from the snapshot, so a merge alone leaves it playable.
 - **Kill switch that already exists**: removing the game dir from `main` (or
@@ -275,7 +275,7 @@ reopen it, and neither is in scope today:
    - **Moderation metrics — built.** Every rejection now emits one structured line from
      [`moderation-metrics.ts`](../apps/api/src/platform/moderation-metrics.ts), carrying surface,
      category and uid, and never the rejected text. A log-based metric backs alert **A14**
-     ([`moderation-burst.md`](./runbooks/moderation-burst.md)).
+     ([`moderation-burst.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/moderation-burst.md)).
 
    Two decisions inside the metrics worth not relitigating. **The text is not logged**: it is
    the abusive content itself, and writing it into Cloud Logging would give user-authored

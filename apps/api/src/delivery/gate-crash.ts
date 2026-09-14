@@ -1,4 +1,4 @@
-// Rationale and ordering: docs/runbooks/README.md (A28).
+// Rationale and ordering: runbooks/README.md (A28).
 
 import { GoogleAuth } from 'google-auth-library';
 

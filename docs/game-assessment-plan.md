@@ -56,7 +56,7 @@ Mirror the operator console:
 
 Same shape as `ADMIN_UIDS` — a **GitHub repository variable**, not a Firestore CLI like
 `beta:approve`. Hand-editing Cloud Run env is wiped on the next deploy
-([runbooks/README.md](./runbooks/README.md) — "Runtime levers").
+([runbooks/README.md](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/README.md) — "Runtime levers").
 
 1. Colleague must already be on the closed beta (waitlist approved / allowlist).
 2. Find their uid (`g:<google-sub>`):

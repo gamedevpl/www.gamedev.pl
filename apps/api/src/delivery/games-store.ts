@@ -964,7 +964,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // were never stored.
       //
       // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
-      // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code
+      // reassignment, seconds, no rebuild — runbooks/rollback-deploy.md) runs code
       // that only reads `issueNumber`. Drop once that revision is no longer a rollback
       // target. Kept off the returned/typed `manifest` on purpose — only the stored bytes
       // carry it.

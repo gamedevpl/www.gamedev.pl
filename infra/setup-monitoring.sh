@@ -209,7 +209,7 @@ cat > "${POLICY_DIR}/a1.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "https://${HOST}${HEALTH_PATH} (service ${SERVICE}) is failing from most probers. Triage: docs/runbooks/site-down-triage.md",
+    "content": "https://${HOST}${HEALTH_PATH} (service ${SERVICE}) is failing from most probers. Triage: ops repo runbooks/site-down-triage.md",
     "mimeType": "text/markdown"
   }
 }
@@ -241,7 +241,7 @@ cat > "${POLICY_DIR}/a2.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Sustained 5xx from ${SERVICE}. Most likely: a bad deploy, the snapshot bucket unreachable (published play now 503s rather than falling back), or Firestore. Triage: docs/runbooks/site-down-triage.md",
+    "content": "Sustained 5xx from ${SERVICE}. Most likely: a bad deploy, the snapshot bucket unreachable (published play now 503s rather than falling back), or Firestore. Triage: ops repo runbooks/site-down-triage.md",
     "mimeType": "text/markdown"
   }
 }
@@ -467,7 +467,7 @@ cat > "${POLICY_DIR}/a4.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "604800s" },
   "documentation": {
-    "content": "The Firestore export has not succeeded for 23h30m — backups are stale or stopped. The workflow waits for the export operation, so a SUCCEEDED execution means objects were written, not merely requested. Check: gcloud workflows executions list --workflow=firestore-export --location europe-central2. Procedure: docs/runbooks/restore-firestore.md",
+    "content": "The Firestore export has not succeeded for 23h30m — backups are stale or stopped. The workflow waits for the export operation, so a SUCCEEDED execution means objects were written, not merely requested. Check: gcloud workflows executions list --workflow=firestore-export --location europe-central2. Procedure: ops repo runbooks/restore-firestore.md",
     "mimeType": "text/markdown"
   }
 }
@@ -504,7 +504,7 @@ cat > "${POLICY_DIR}/a6.json" <<EOF
     "autoClose": "86400s"
   },
   "documentation": {
-    "content": "${WORLD_SERVICE} refused a join it should have accepted. Players are silently playing alone and the site looks healthy. The logged error is the diagnosis — the wire reason never says. Triage: docs/runbooks/zones-down-triage.md",
+    "content": "${WORLD_SERVICE} refused a join it should have accepted. Players are silently playing alone and the site looks healthy. The logged error is the diagnosis — the wire reason never says. Triage: ops repo runbooks/zones-down-triage.md",
     "mimeType": "text/markdown"
   }
 }
@@ -543,7 +543,7 @@ cat > "${POLICY_DIR}/a7.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Sustained 5xx from ${WORLD_SERVICE}. Most likely a bad image or a refusal to start — the host exits rather than downgrade when the isolate cage is unavailable, which is intended. Triage: docs/runbooks/zones-down-triage.md",
+    "content": "Sustained 5xx from ${WORLD_SERVICE}. Most likely a bad image or a refusal to start — the host exits rather than downgrade when the isolate cage is unavailable, which is intended. Triage: ops repo runbooks/zones-down-triage.md",
     "mimeType": "text/markdown"
   }
 }
@@ -594,7 +594,7 @@ cat > "${POLICY_DIR}/a14.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Content moderation is rejecting far more than organic traffic explains — someone is probing the walls, or a checker regression is rejecting valid input. Both matter and they look identical from here, so check which: Logs Explorer, jsonPayload.msg=\"moderation rejected\", group by jsonPayload.moderation.uid and .category. One uid across many categories is a person testing limits; many uids in one category is a false-positive regression in the deny-list. Triage: docs/runbooks/moderation-burst.md",
+    "content": "Content moderation is rejecting far more than organic traffic explains — someone is probing the walls, or a checker regression is rejecting valid input. Both matter and they look identical from here, so check which: Logs Explorer, jsonPayload.msg=\"moderation rejected\", group by jsonPayload.moderation.uid and .category. One uid across many categories is a person testing limits; many uids in one category is a false-positive regression in the deny-list. Triage: ops repo runbooks/moderation-burst.md",
     "mimeType": "text/markdown"
   }
 }
@@ -1118,7 +1118,7 @@ cat > "${POLICY_DIR}/a33.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Catalog media is leaving the snapshot bucket fast enough to be worth degrading the catalog over. The spend brake pulls the video and media rungs on this policy (infra/setup-spend-brake.sh), so preview video stops and every image is served at its baked 96px width until an operator clears the flags at /admin/limits. That is the intended response, not a malfunction. Check whether it was a spike worth having (visit telemetry, the Cloud Run request count) or a scraper (one IP pulling many objects: jsonPayload.msg=\"media URL budget exhausted\" means the per-IP ceiling is already refusing someone). This policy deliberately ignores the store bucket, whose traffic is the coding agent rather than visitors; A32 still pages a human about every bucket. See docs/runbooks/launch-day.md.",
+    "content": "Catalog media is leaving the snapshot bucket fast enough to be worth degrading the catalog over. The spend brake pulls the video and media rungs on this policy (infra/setup-spend-brake.sh), so preview video stops and every image is served at its baked 96px width until an operator clears the flags at /admin/limits. That is the intended response, not a malfunction. Check whether it was a spike worth having (visit telemetry, the Cloud Run request count) or a scraper (one IP pulling many objects: jsonPayload.msg=\"media URL budget exhausted\" means the per-IP ceiling is already refusing someone). This policy deliberately ignores the store bucket, whose traffic is the coding agent rather than visitors; A32 still pages a human about every bucket. See ops repo runbooks/launch-day.md.",
     "mimeType": "text/markdown"
   }
 }

@@ -57,7 +57,7 @@ export function sampleKeepsVisit(visitId: string, rate: number | null | undefine
   return visitFraction(visitId) < rate;
 }
 
-// The ladder's rungs; see docs/runbooks/launch-day.md.
+// The ladder's rungs; see runbooks/launch-day.md.
 export function createLoadShedControls(options: LoadShedOptions): LoadShedControls {
   const { store } = options;
   const now = options.now ?? Date.now;

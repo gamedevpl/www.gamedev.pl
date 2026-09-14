@@ -22,7 +22,7 @@ project, which agent tooling can read but not write.
 | `setup-runtime-sa.sh`       | The three Cloud Run runtime identities and their resource-level grants; prints the project-level ones | Called by `setup-gcp.sh`; run directly after adding a secret or bucket. `PRUNE_DEFAULT_COMPUTE=1` after the soak |
 | `setup-account-deletion.sh` | Account-deletion Scheduler job, OIDC caller SA                                                        | Called by `setup-gcp.sh`; run directly to reconcile only this job                                                |
 | `setup-sweeps.sh`           | The five internal sweep Scheduler jobs (notify, scorecard, suggestion, digest, health)                | Once, then to reconcile a schedule. Takes job names to do a subset                                               |
-| `setup-backups.sh`          | Firestore PITR + daily export to GCS, export SA and its IAM                                           | Once. **Then drill the restore** — see `docs/runbooks/restore-firestore.md`                                      |
+| `setup-backups.sh`          | Firestore PITR + daily export to GCS, export SA and its IAM                                           | Once. **Then drill the restore** — see ops repo `runbooks/restore-firestore.md`                                      |
 | `setup-monitoring.sh`       | Per-service uptime check + A1/A2, project-wide A3/A4 and A6/A7, email channel                         | **Once per service** (`SERVICE=…`), per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget)            |
 | `deploy-api.sh`             | Manual deploy of the app service                                                                      | Rarely — CI deploys on merge to `master`                                                                         |
 | `deploy-world.sh`           | Zone host: image **and** its env/secrets                                                              | For env or secret changes. CI advances the image alone when the world's inputs change                            |
@@ -52,7 +52,7 @@ host, which the script names directly) are project-wide, so they are created onl
 `gamedev-world` is the one service you must **not** onboard this way, and the script
 refuses it: A6/A7 already watch it, deliberately without an uptime check, because probing
 a scale-to-zero service every five minutes keeps an instance warm around the clock (see
-`docs/runbooks/README.md`).
+the ops repo's `runbooks/README.md`).
 
 ## Prerequisites (Owner-Run Setup)
 

@@ -17,7 +17,7 @@ function hostHeaders() {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
 
-// Ladder rung 3; see docs/runbooks/launch-day.md.
+// Ladder rung 3; see runbooks/launch-day.md.
 describe('party hosting pause', () => {
   it('opens rooms normally when nothing is paused', async () => {
     const app = await appWithLimits(false);

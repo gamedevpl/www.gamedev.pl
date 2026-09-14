@@ -279,7 +279,7 @@ it means the snapshot did not refresh.
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
 Do it before the traffic rather than during it — it takes a new revision, which drops every
-live party room — and follow [`runbooks/launch-day.md`](./runbooks/launch-day.md), which
+live party room — and follow [`runbooks/launch-day.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/launch-day.md), which
 carries the service-level objectives and the load-shedding ladder.
 
 ### Promotional game links during closed beta
@@ -405,7 +405,7 @@ out of full 640x400 screenshots, 113 KB each — so
 reads the widths out of the web sources and fails when the two lists disagree.
 
 Under a bandwidth incident the spend brake pulls three serving rungs. See
-[the launch-day runbook](./runbooks/launch-day.md).
+[the launch-day runbook](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/launch-day.md).
 
 ## Media egress
 

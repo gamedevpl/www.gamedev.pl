@@ -7,7 +7,7 @@
 
 [`agent-access-tokens.md`](./agent-access-tokens.md) solves authenticating to the _product_.
 This solves the other half: reading the _infrastructure_. Every runbook in
-[`runbooks/`](./runbooks/README.md) is a sequence of `gcloud` commands, and until now only
+[`runbooks/`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/README.md) is a sequence of `gcloud` commands, and until now only
 the owner could run them. An agent asked "why is the site 5xx-ing" could read the code and
 guess, but could not look at a single log line — so triage was gated on a human being awake.
 
@@ -37,7 +37,7 @@ state rather than user data.
 from that grant on 2026-09-08: it holds creator sources and unpublished work under
 public-access prevention, so "already served publicly" was never true of it.
 
-That covers most of [`site-down-triage.md`](./runbooks/site-down-triage.md): revision
+That covers most of [`site-down-triage.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/site-down-triage.md): revision
 history, service config, error logs, latency metrics, build history, and the published
 games snapshot.
 
@@ -55,7 +55,7 @@ fourteen probed permissions.
 | `gs://gamedevpl-firestore-backups` | Full Firestore exports. Bucket-scoped grants elsewhere exist precisely so this one is reachable by nothing that an agent holds.                         |
 | Every write, everywhere            | No `*.update`, `*.create`, `*.delete`, or `setIamPolicy` on any service.                                                                                |
 
-**Two [`site-down-triage.md`](./runbooks/site-down-triage.md) steps are closed to this
+**Two [`site-down-triage.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/site-down-triage.md) steps are closed to this
 credential, and that is expected — not a symptom.** During an outage, do not read either as
 evidence of breakage:
 

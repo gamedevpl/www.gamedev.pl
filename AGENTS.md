@@ -53,7 +53,8 @@ in agent sandboxes, so use `node infra/gcp-read.mjs` (`whoami`, `logs`, `service
 backup bucket. A 403 is therefore a boundary, not a bug — run `whoami` to tell the two apart,
 and escalate rather than route around it. See
 [`docs/agent-gcp-access.md`](docs/agent-gcp-access.md) and the incident procedures in
-[`docs/runbooks/`](docs/runbooks/README.md).
+[the private ops repo](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/README.md)
+(`runbooks/`; agents without access to that repo should escalate rather than guess).
 
 ## Layout changes: check the states that coexist with the one you built
 
