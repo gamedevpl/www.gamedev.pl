@@ -300,8 +300,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     if (waitlistByEmail) addDeletes(waitlistByEmail.docs);
     addDeletes(betaInvitesCreated.docs);
     addDeletes(betaInvitesClaimed.docs);
-    addDeletes(transfersSent.docs);
-    addDeletes(transfersReceived.docs);
     deleteRefs.set(`waitlist/${uid}`, this.db.collection('waitlist').doc(uid));
     deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
     deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
@@ -343,6 +341,18 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       const batch = this.db.batch();
       for (const write of writes.slice(start, start + BATCH_SIZE)) write(batch);
       await batch.commit();
+    }
+
+    // Slug-keyed docs can be overwritten before this runs; re-check, don't blind-delete.
+    const transferSlugs = new Set([...transfersSent.docs, ...transfersReceived.docs].map((doc) => doc.id));
+    for (const slug of transferSlugs) {
+      const ref = this.db.collection('gameTransfers').doc(slug);
+      await this.db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const invite = snap.data() as { senderUid?: string; recipientUid?: string };
+        if (invite.senderUid === uid || invite.recipientUid === uid) tx.delete(ref);
+      });
     }
     // The read above seeded the session window; an erased account must not survive it.
     this.identityStore.forgetUser(uid);
