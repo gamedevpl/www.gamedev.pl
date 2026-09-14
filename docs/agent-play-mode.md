@@ -84,8 +84,10 @@ GameKit's `aria-live` line: the one text channel a published game already writes
 
 An agent has no audio track, so a game whose only feedback is a sound is unreviewable to
 it. GameKit now records every `play`, `loop`, `playMusic` and `stopMusic` into
-`harness.signals` — locally, reported to nobody — and the bridge reads them from inside
-the frame into the same log, as `sfx`, `loop` and `music` lines. Repeats inside a frame
+`harness.audio` — its own log, locally, reported to nobody — and the bridge reads them
+from inside the frame into the same log, as `sfx`, `loop` and `music` lines. Its own log
+rather than the existing `signals` array, because a sound-heavy run would otherwise evict
+the `progress` landmarks that playtest tooling reads. Repeats inside a frame
 collapse into a count, and a call for a sound the bundle does not carry is marked
 `(missing)`, which is a finding rather than a silence. Each line keeps the frame the sound
 happened on, not the frame the drain ran on — otherwise a `step 60` would file sixty
@@ -95,7 +97,7 @@ caused what.
 The cursor is the entry's own sequence number, never its index. The signal log is capped
 and drops its oldest entries to make room, so once it is full its length stops changing —
 an index cursor parked at that length sits at the end forever and the session goes deaf
-after the first 400 signals. A sequence is monotonic across the page, so a rotation drops
+after the first 400 sounds. A sequence is monotonic across the page, so a rotation drops
 a prefix and nothing else. Losing what fell out is the right way round: a sound reported
 twice would read as a sound heard twice.
 

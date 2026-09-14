@@ -12,7 +12,7 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   var capturePng=host.capturePng,legendRows=host.legendRows,kitRows=host.kitRows;
   var largestCanvas=host.largestCanvas;
   var agentOn=false,agentFps=60,agentTilt=null,agentLog=[],agentLiveTimer=0,agentStatusSeen='';
-  var agentAudioIndex=0,agentAudioSeq=0;
+  var agentAudioSeq=0;
   var AGENT_LOG_CAP=60,AGENT_UI_CAP=80;
   function agentHarness(){return window.__GAME_HARNESS__;}
   function agentCanvas(){return el('game')||largestCanvas();}
@@ -60,10 +60,10 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     var rows=legendRows();
     return {rows:rows,kit:kitRows(),hint:text(document.querySelector('.hint'))};
   }
-  // Sound the game asked for, read from harness.signals — the agent has no speakers.
+  // Sound the game asked for, read from harness.audio — the agent has no speakers.
+  // Its own log, so a noisy game cannot evict a progress landmark from signals.
   // Cursor is the entry's own seq, never its index: the log is capped and drops its
   // oldest, so once full its length stops moving and an index cursor would go deaf.
-  // A kit too old to stamp seq falls back to the index, which is what it had before.
   var AGENT_AUDIO_KINDS={sfx:1,loop:1,music:1};
   function agentNoteAudio(entry){
     if(!entry||typeof entry.name!=='string'||!entry.name)return;
@@ -76,18 +76,11 @@ export const AGENT_PLAY_BRIDGE = `(function(){
       Number(entry.frame));
   }
   function agentDrainAudio(){
-    var h=agentHarness(),signals=h&&h.signals,i,entry,seq;
-    if(!signals||typeof signals.length!=='number')return;
-    var last=signals[signals.length-1];
-    if(last&&typeof last.seq!=='number'){
-      i=agentAudioIndex>signals.length?signals.length:agentAudioIndex;
-      for(;i<signals.length;i++)agentNoteAudio(signals[i]);
-      agentAudioIndex=signals.length;
-      return;
-    }
+    var h=agentHarness(),log=h&&h.audio,i,entry,seq;
+    if(!log||typeof log.length!=='number')return;
     var highest=agentAudioSeq;
-    for(i=0;i<signals.length;i++){
-      entry=signals[i];
+    for(i=0;i<log.length;i++){
+      entry=log[i];
       seq=entry&&typeof entry.seq==='number'?entry.seq:-1;
       if(seq<=agentAudioSeq)continue;
       if(seq>highest)highest=seq;

@@ -38,7 +38,7 @@ function mountGameDocument() {
 type FakeHarness = {
   frame: number;
   metadata: Record<string, unknown>;
-  signals: Array<Record<string, unknown>>;
+  audio: Array<Record<string, unknown>>;
   steps: number;
   step: (dt?: number, options?: { present?: boolean }) => Record<string, unknown>;
   restart: () => boolean;
@@ -52,7 +52,7 @@ function installHarness(): FakeHarness {
   const harness: FakeHarness = {
     frame: 0,
     metadata: { state: 'playing', score: 0, observation: '{"room":"cellar"}' },
-    signals: [],
+    audio: [],
     steps: 0,
     step(_dt, _options) {
       harness.steps += 1;
@@ -110,14 +110,14 @@ describe('the agent bridge, running for real', () => {
     harness.steps = 0;
     harness.frame = 0;
     harness.metadata = { state: 'playing', score: 0, observation: '{"room":"cellar"}' };
-    harness.signals.length = 0;
+    harness.audio.length = 0;
   });
 
   it('reports the sound the game played, which is the only way an agent hears it', async () => {
     send({ type: 'agent:enable' });
     await settle();
 
-    harness.signals.push(
+    harness.audio.push(
       { source: 'gdpl-player', frame: 1, seq: 1, type: 'music', name: 'ocean-drift' },
       { source: 'gdpl-player', frame: 2, seq: 2, type: 'progress', label: 'round-start' },
       { source: 'gdpl-player', frame: 2, seq: 3, type: 'sfx', name: 'dig', count: 3 },
@@ -153,14 +153,14 @@ describe('the agent bridge, running for real', () => {
     // At the cap, length stops moving; an index cursor goes deaf.
     let seq = 1;
     const push = (name: string) =>
-      harness.signals.push({ source: 'gdpl-player', frame: 1, seq: seq++, type: 'sfx', name });
+      harness.audio.push({ source: 'gdpl-player', frame: 1, seq: seq++, type: 'sfx', name });
     for (let turn = 0; turn < 400; turn++) push(`filler-${turn}`);
-    harness.signals.splice(0, harness.signals.length - 400);
+    harness.audio.splice(0, harness.audio.length - 400);
     send({ type: 'agent:command', command: { kind: 'look' } });
     await settle();
 
     push('after-the-rotation');
-    harness.signals.splice(0, harness.signals.length - 400);
+    harness.audio.splice(0, harness.audio.length - 400);
     send({ type: 'agent:command', command: { kind: 'look' } });
     await settle();
 
