@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore } from './platform/store.js';
 import { lastRoundActivityAt } from './platform/quiet-round.js';
 import { fakeFirestore } from './store/fake-firestore.js';
+import { readIncomingTransfersCached } from './creation/transfer-inbox-cache.js';
 
 /**
  * Firestore-shaped tests for `FirestoreStore`.
@@ -854,5 +855,264 @@ describe('FirestoreStore.countBuildShots', () => {
 
     // Four agent shots exist; three proposals appear mid-count and must not subtract.
     expect(await store.countBuildShots(41, { excludeLabels: ['AI concept'] })).toBe(4);
+  });
+});
+
+// Checks for an existing code inside the mint transaction, not before it.
+describe('FirestoreStore.ensureRecipientCode', () => {
+  it('does not mint a second code once one already exists', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    const first = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    const second = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:01.000Z');
+
+    expect(second).toBe(first);
+    expect((await store.getUserByRecipientCode(first!))?.uid).toBe('g:ada');
+  });
+
+  it('refuses to mint or rotate once the erasure fence is set, before cleanup runs', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.beginAccountErasure('g:ada', '2026-01-01T00:00:00.000Z');
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
+    expect(await store.rotateRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
+  });
+
+  it('stops returning an existing code once erasure begins, before cleanup removes it', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    await store.beginAccountErasure('g:ada', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-01-03T00:00:00.000Z')).toBeNull();
+  });
+});
+
+describe('FirestoreStore.deleteAccountIdentity', () => {
+  it('retires the recipient code and scrubs transfer invitations naming the uid', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    const code = await store.ensureRecipientCode('g:grace', '2026-01-01T00:00:00.000Z');
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+
+    await store.deleteAccountIdentity('g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getUserByRecipientCode(code!)).toBeNull();
+    expect(await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z')).toBeNull();
+  });
+
+  it("drops the recipient's cached inbox entry when the sender is erased mid-window", async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+    const clock = () => Date.now();
+    expect(await readIncomingTransfersCached(store, 'g:grace', '2026-01-01T00:00:00.000Z', clock)).toHaveLength(1);
+
+    await store.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z');
+
+    expect(await readIncomingTransfersCached(store, 'g:grace', '2026-01-02T00:00:00.000Z', clock)).toHaveLength(0);
+  });
+
+  it('leaves the account retryable if transfer cleanup fails before the user is deleted', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+
+    // Call 2, not 1: eraseMemberFromAllGameAccess's own transaction runs first.
+    let calls = 0;
+    const flaky = {
+      ...db,
+      runTransaction: (fn: (tx: unknown) => Promise<unknown>) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('transient'));
+        return db.runTransaction(fn);
+      },
+    };
+    const flakyStore = new FirestoreStore(flaky as typeof db);
+
+    await expect(flakyStore.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z')).rejects.toThrow('transient');
+    expect(docs.get(key('users', 'g:ada'))).toBeDefined();
+
+    await store.deleteAccountIdentity('g:ada', '2026-01-03T00:00:00.000Z');
+    expect(docs.get(key('users', 'g:ada'))).toBeUndefined();
+    expect(await store.getActiveGameTransfer('sky', '2026-01-03T00:00:00.000Z')).toBeNull();
+  });
+
+  it('deletes the recipient code in the same batch as the user, not a later one', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    const code = await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    // Pad past the 450-op batch cap so cleanup spans two commits.
+    for (let i = 0; i < 445; i++) {
+      docs.set(key('submissions', `job-${i}`), { ownerUid: 'g:ada' });
+    }
+
+    // The second batch.commit() fails, after the first has already applied.
+    let batches = 0;
+    const flaky = {
+      ...db,
+      batch: () => {
+        batches += 1;
+        const real = db.batch();
+        return batches === 2 ? { ...real, commit: () => Promise.reject(new Error('transient')) } : real;
+      },
+    };
+    const flakyStore = new FirestoreStore(flaky as typeof db);
+
+    await expect(flakyStore.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z')).rejects.toThrow('transient');
+
+    expect(docs.get(key('users', 'g:ada'))).toBeUndefined();
+    expect(docs.get(key('recipientCodes', code!))).toBeUndefined();
+  });
+
+  it('retires a code another instance minted after this instance cached the user', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.getUser('g:grace'); // primes this instance's 30s user cache with no code
+
+    // Another instance rotates the code without this one ever hearing about it.
+    docs.set(key('users', 'g:grace'), { ...docs.get(key('users', 'g:grace')), recipientCode: 'rc_fromOtherInstance' });
+    docs.set(key('recipientCodes', 'rc_fromOtherInstance'), { uid: 'g:grace', createdAt: '2026-01-01T00:00:00.000Z' });
+
+    await store.deleteAccountIdentity('g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getUserByRecipientCode('rc_fromOtherInstance')).toBeNull();
+  });
+
+  it('refuses to create an invitation naming an already-erased participant', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.deleteAccountIdentity('g:grace', '2026-01-01T00:00:00.000Z');
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('ineligible');
+  });
+
+  it('refuses to create when ownership settled to someone else after the caller read it', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    // A settlement lands between the route's resolveGameAccess read and this call.
+    await store.recordSettledOwner('sky', 'g:grace', 2, '2026-01-01T00:00:00.000Z', '2026-01-01T12:00:00.000Z');
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:mallory', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('stale_owner');
+  });
+
+  it('refuses to create when the recipient was blocked after the route looked them up', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    // A block lands between the route's code lookup and this call.
+    await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('ineligible');
+  });
+
+  it('refuses to create when the recipient rotated the submitted code after it was looked up', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    const oldCode = (await store.ensureRecipientCode('g:grace', '2026-01-01T00:00:00.000Z'))!;
+    // Rotation lands between the route's code lookup and this call.
+    await store.rotateRecipientCode('g:grace', '2026-01-01T00:00:00.000Z');
+
+    const result = await store.createGameTransferInvitation(
+      'sky',
+      'g:ada',
+      'g:grace',
+      1,
+      '2026-01-02T00:00:00.000Z',
+      oldCode,
+    );
+
+    expect(result).toBe('ineligible');
+  });
+
+  it('refuses to create when there is no canonical access record yet, even at revision 0', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 0, '2026-01-01T00:00:00.000Z');
+
+    expect(result).toBe('stale_owner');
+  });
+
+  it('a pending invitation from a superseded owner does not block the new owner', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:mallory', 1, '2026-01-01T00:00:00.000Z');
+
+    await store.recordSettledOwner('sky', 'g:grace', 2, '2026-01-01T00:00:00.000Z', '2026-01-01T12:00:00.000Z');
+
+    const fresh = await store.createGameTransferInvitation(
+      'sky',
+      'g:grace',
+      'g:someone-else',
+      2,
+      '2026-01-02T00:00:00.000Z',
+    );
+
+    expect(fresh).not.toBe('busy');
+    if (typeof fresh === 'string') throw new Error('unreachable');
+    expect(fresh.senderUid).toBe('g:grace');
+  });
+});
+
+// A stale-only page can hide an active invite.
+describe('FirestoreStore.listPendingGameTransfersForRecipient', () => {
+  it('pages past more stale invitations than fit in one page to find the active one', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:grace' });
+
+    for (let i = 0; i < 250; i += 1) {
+      await store.upsertUser({ uid: `g:owner-${i}` });
+      await store.ensureGameAccess(
+        `stale-${i}`,
+        `g:owner-${i}`,
+        '2020-01-01T00:00:00.000Z',
+        '2020-01-01T00:00:00.000Z',
+      );
+      await store.createGameTransferInvitation(`stale-${i}`, `g:owner-${i}`, 'g:grace', 1, '2020-01-01T00:00:00.000Z');
+    }
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-01T00:00:00.000Z');
+
+    const pending = await store.listPendingGameTransfersForRecipient('g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(pending.map((t) => t.slug)).toEqual(['sky']);
   });
 });

@@ -3,6 +3,15 @@ import type { AvatarMode } from '../../platform/creator-profile.js';
 import { stripUndefined } from '../firestore-util.js';
 import type { User, HandleRecord, ClaimHandleResult } from '../records/identity.js';
 import { claimHandleInMemory, claimHandleFirestore } from './identity-claim-handle.js';
+import {
+  ensureRecipientCodeInMemory,
+  rotateRecipientCodeInMemory,
+  getUserByRecipientCodeInMemory,
+  ensureRecipientCodeFirestore,
+  rotateRecipientCodeFirestore,
+  getUserByRecipientCodeFirestore,
+  type RecipientCodeRecord,
+} from './identity-recipient-code.js';
 
 export interface IdentityStore {
   getUser(uid: string): Promise<User | null>;
@@ -50,12 +59,24 @@ export interface IdentityStore {
 
   // Never cached: a delayed opt-out still spends the creator's money.
   readProposalsMutedAt(uid: string): Promise<string | null>;
+
+  // Idempotent; null only when uid has no account.
+  ensureRecipientCode(uid: string, at: string): Promise<string | null>;
+
+  // Mints a fresh code; the old one stops resolving.
+  rotateRecipientCode(uid: string, at: string): Promise<string | null>;
+
+  // Null when nothing wears this code, including a rotated-away one.
+  getUserByRecipientCode(code: string): Promise<User | null>;
 }
 
 export class InMemoryIdentityStore implements IdentityStore {
   // Not private -- deleteAccountIdentity reaches across these (documented exception, see PR).
   users = new Map<string, User>();
   handles = new Map<string, HandleRecord>();
+  recipientCodes = new Map<string, RecipientCodeRecord>();
+
+  constructor(private isErased: (uid: string) => boolean = () => false) {}
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -180,6 +201,8 @@ export class InMemoryIdentityStore implements IdentityStore {
       handleChangedAt: existing?.handleChangedAt,
       deletionRequestedAt: existing?.deletionRequestedAt,
       deletionScheduledFor: existing?.deletionScheduledFor,
+      // Never set by sign-in either; dropping it here orphaned the reservation.
+      recipientCode: existing?.recipientCode,
     };
 
     this.users.set(userData.uid, updated);
@@ -203,6 +226,18 @@ export class InMemoryIdentityStore implements IdentityStore {
 
   async readProposalsMutedAt(uid: string): Promise<string | null> {
     return this.users.get(uid)?.proposalsMutedAt ?? null;
+  }
+
+  async ensureRecipientCode(uid: string, at: string): Promise<string | null> {
+    return ensureRecipientCodeInMemory(this.users, this.recipientCodes, uid, at, this.isErased);
+  }
+
+  async rotateRecipientCode(uid: string, at: string): Promise<string | null> {
+    return rotateRecipientCodeInMemory(this.users, this.recipientCodes, uid, at, this.isErased);
+  }
+
+  async getUserByRecipientCode(code: string): Promise<User | null> {
+    return getUserByRecipientCodeInMemory(this.users, this.recipientCodes, code);
   }
 }
 
@@ -443,5 +478,21 @@ export class FirestoreIdentityStore implements IdentityStore {
   async readProposalsMutedAt(uid: string): Promise<string | null> {
     const snap = await this.db.collection('users').doc(uid).get();
     return (snap.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt ?? null;
+  }
+
+  async ensureRecipientCode(uid: string, at: string): Promise<string | null> {
+    const code = await ensureRecipientCodeFirestore(this.db, uid, at);
+    if (code) this.forgetUser(uid);
+    return code;
+  }
+
+  async rotateRecipientCode(uid: string, at: string): Promise<string | null> {
+    const code = await rotateRecipientCodeFirestore(this.db, uid, at);
+    if (code) this.forgetUser(uid);
+    return code;
+  }
+
+  async getUserByRecipientCode(code: string): Promise<User | null> {
+    return getUserByRecipientCodeFirestore(this.db, code);
   }
 }

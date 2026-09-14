@@ -55,6 +55,8 @@ export interface User {
   deletionRequestedAt?: string;
   /** Earliest instant at which the cleanup sweep may permanently erase the account. */
   deletionScheduledFor?: string;
+  // Opaque transfer/invite code (GO-02); minted lazily, not at sign-in.
+  recipientCode?: string;
 }
 
 /** Reservation row for a lowercase handle → owning uid. */
