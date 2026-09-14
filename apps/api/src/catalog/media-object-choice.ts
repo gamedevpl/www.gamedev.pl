@@ -8,14 +8,15 @@ export async function chooseMediaObject(
   filename: string,
   width?: number,
 ): Promise<string | null> {
-  if (!reader.getMediaObjectName) return null;
-  const webp = filename.endsWith('.png') ? webpObjectName(filename) : null;
+  const probe = reader.getMediaObjectName;
+  if (!probe) return null;
+  const names = filename.endsWith('.png') ? [webpObjectName(filename), filename] : [filename];
 
+  // Formats together, widths in order: two round trips, never four.
   for (const w of width === undefined ? [undefined] : [width, undefined]) {
-    for (const name of webp ? [webp, filename] : [filename]) {
-      const object = await reader.getMediaObjectName(slug, name, w);
-      if (object) return object;
-    }
+    const found = await Promise.all(names.map((name) => probe.call(reader, slug, name, w)));
+    const hit = found.find((object) => object !== null);
+    if (hit) return hit;
   }
 
   return null;

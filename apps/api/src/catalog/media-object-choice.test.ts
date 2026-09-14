@@ -55,6 +55,30 @@ describe('which baked copy the redirect points at', () => {
     expect(getMediaObjectName.mock.calls.map(([, name]) => name)).toEqual(['gameplay.mp4']);
   });
 
+  // Each probe is a GCS metadata call when cold.
+  it('never costs more than two round trips', async () => {
+    const { reader, getMediaObjectName } = readerHolding('g/opening.png');
+    const order: number[] = [];
+    getMediaObjectName.mockImplementation(async (slug: string, name: string, w?: number) => {
+      order.push(order.length);
+      return w === undefined && name === 'opening.png' ? at('g/opening.png') : null;
+    });
+
+    await chooseMediaObject(reader, 'g', 'opening.png', 640);
+    const widths = getMediaObjectName.mock.calls.map(([, , w]) => w);
+
+    // Both formats at 640, then both at the original.
+    expect(widths).toEqual([640, 640, undefined, undefined]);
+  });
+
+  it('stops after the first wave when that width has a copy', async () => {
+    const { reader, getMediaObjectName } = readerHolding('g/w320/opening.webp', 'g/opening.png');
+
+    await chooseMediaObject(reader, 'g', 'opening.png', 320);
+
+    expect(getMediaObjectName.mock.calls.map(([, , w]) => w)).toEqual([320, 320]);
+  });
+
   it('is null when the snapshot holds nothing for that file', async () => {
     const { reader } = readerHolding();
 

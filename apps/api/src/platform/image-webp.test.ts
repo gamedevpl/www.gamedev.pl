@@ -1,7 +1,7 @@
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { decodePng, downscaleRgba } from './image-rgba.js';
-import { encodeWebp, webpObjectName } from './image-webp.js';
+import { decodeWebp, encodeWebp, webpObjectName } from './image-webp.js';
 
 // Gradients plus noise, like a procedurally drawn screenshot.
 function screenshot(width: number, height: number): Buffer {
@@ -27,6 +27,33 @@ describe('webpObjectName', () => {
   // The catalog validates .png; the swap happens after, on the object name.
   it('is case insensitive about the extension it replaces', () => {
     expect(webpObjectName('a/opening.PNG')).toBe('a/opening.webp');
+  });
+});
+
+// Half transparent: every catalog screenshot carries alpha.
+function withAlpha(width: number, height: number): Buffer {
+  const png = new PNG({ width, height });
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) << 2;
+      png.data[i] = 200;
+      png.data[i + 1] = 40;
+      png.data[i + 2] = 40;
+      png.data[i + 3] = x < width / 2 ? 0 : 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+// An opaque fixture cannot show that alpha survives.
+describe('the alpha channel', () => {
+  it('survives the encode', async () => {
+    const encoded = (await encodeWebp(decodePng(withAlpha(32, 32))!))!;
+    const back = (await decodeWebp(encoded))!;
+
+    expect(back.width).toBe(32);
+    expect(back.data[3]).toBe(0);
+    expect(back.data[(32 * 4 - 1) * 4 + 3]).toBe(255);
   });
 });
 
