@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.15.2 — 2026-09-13
+
 ### Fixed
 
 - Say how to clear a refused `pull` or `push` — which command to run, and what `--force` would discard (#1336).
