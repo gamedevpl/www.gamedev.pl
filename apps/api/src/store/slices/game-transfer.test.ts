@@ -124,10 +124,29 @@ describe('game transfer store slice', () => {
     expect(stale).toBe('stale_owner');
   });
 
-  it('a game with no canonical record yet only accepts revision 0', async () => {
+  it('a game with no canonical record yet refuses every revision, including 0', async () => {
     const store = new InMemoryStore();
     expect(await store.createGameTransferInvitation('nowhere', 'g:ada', 'g:mallory', 1, AT)).toBe('stale_owner');
-    expect(await store.createGameTransferInvitation('nowhere', 'g:ada', 'g:mallory', 0, AT)).not.toBe('stale_owner');
+    expect(await store.createGameTransferInvitation('nowhere', 'g:ada', 'g:mallory', 0, AT)).toBe('stale_owner');
+  });
+
+  it('refuses to create when the recipient became blocked after the route looked them up', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    // A block lands between the route's lookup and this call.
+    await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
+
+    expect(await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT)).toBe('ineligible');
+  });
+
+  it('refuses to create when the recipient became deletion-scheduled after the route looked them up', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.scheduleAccountDeletion('g:grace', AT, LATER);
+
+    expect(await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT)).toBe('ineligible');
   });
 
   it('a pending invitation from a superseded owner does not block the new owner', async () => {

@@ -976,6 +976,31 @@ describe('FirestoreStore.deleteAccountIdentity', () => {
     expect(result).toBe('stale_owner');
   });
 
+  it('refuses to create when the recipient was blocked after the route looked them up', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAccess('sky', 'g:ada', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    // A block lands between the route's code lookup and this call.
+    await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, '2026-01-02T00:00:00.000Z');
+
+    expect(result).toBe('ineligible');
+  });
+
+  it('refuses to create when there is no canonical access record yet, even at revision 0', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 0, '2026-01-01T00:00:00.000Z');
+
+    expect(result).toBe('stale_owner');
+  });
+
   it('a pending invitation from a superseded owner does not block the new owner', async () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);

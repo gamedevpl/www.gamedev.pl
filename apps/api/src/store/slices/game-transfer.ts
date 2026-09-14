@@ -32,10 +32,15 @@ export interface GameTransferStore {
 
 const clone = (invite: GameTransferInvitation): GameTransferInvitation => ({ ...invite });
 
-// No record: only revision 0 (derived ownership) counts as current.
-function ownerMatches(access: GameAccessRecord | null, uid: string, revision: number): boolean {
-  if (access) return access.ownerUid === uid && access.accessRevision === revision;
-  return revision === 0;
+// No canonical record: never current, whatever revision was sent.
+function ownerMatches(access: GameAccessRecord, uid: string, revision: number): boolean {
+  return access.ownerUid === uid && access.accessRevision === revision;
+}
+
+// Recheck eligibility at commit time; erasure races are fenced separately.
+function recipientEligible(recipient: { tier: string; deletionScheduledFor?: string } | null): boolean {
+  if (!recipient) return true;
+  return recipient.tier !== 'blocked' && !recipient.deletionScheduledFor;
 }
 
 export class InMemoryGameTransferStore implements GameTransferStore {
@@ -45,6 +50,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
   constructor(
     private isErased: (uid: string) => boolean = () => false,
     private getGameAccess: (slug: string) => GameAccessRecord | null = () => null,
+    private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string } | null = () => null,
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -61,8 +67,9 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     at: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
     if (this.isErased(senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
     const access = this.getGameAccess(slug);
-    if (!ownerMatches(access, senderUid, accessRevision)) return 'stale_owner';
+    if (!access || !ownerMatches(access, senderUid, accessRevision)) return 'stale_owner';
 
     // A pending row from a superseded owner does not block this one.
     const existing = this.transfers.get(slug) ?? null;
@@ -131,17 +138,25 @@ export class FirestoreGameTransferStore implements GameTransferStore {
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
     const ref = this.doc(slug);
     const accessRef = this.db.collection('gameAccess').doc(slug);
+    const recipientRef = this.db.collection('users').doc(recipientUid);
     return this.db.runTransaction(async (tx) => {
-      const [snap, senderFence, recipientFence, accessSnap] = await Promise.all([
+      const [snap, senderFence, recipientFence, accessSnap, recipientSnap] = await Promise.all([
         tx.get(ref),
         tx.get(this.erasureFence(senderUid)),
         tx.get(this.erasureFence(recipientUid)),
         tx.get(accessRef),
+        tx.get(recipientRef),
       ]);
       if (senderFence.exists || recipientFence.exists) return 'ineligible';
 
+      // Re-read at commit time, not the route's earlier code lookup.
+      const recipient = recipientSnap.exists
+        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
+        : null;
+      if (!recipientEligible(recipient)) return 'ineligible';
+
       const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;
-      if (!ownerMatches(access, senderUid, accessRevision)) return 'stale_owner';
+      if (!access || !ownerMatches(access, senderUid, accessRevision)) return 'stale_owner';
 
       // A pending row from a superseded owner does not block this one.
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
