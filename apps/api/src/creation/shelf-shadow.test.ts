@@ -30,7 +30,10 @@ describe('judgeShelfShadow', () => {
   });
 
   it('catches a same-count difference the count guard cannot see', () => {
-    const drifted = buildShelfDocument([record(1, { slug: 'sky', title: 'Renamed' }), record(2, { slug: 'dunes' })], at);
+    const drifted = buildShelfDocument(
+      [record(1, { slug: 'sky', title: 'Renamed' }), record(2, { slug: 'dunes' })],
+      at,
+    );
 
     expect(judgeShelfShadow(drifted, source, 2).verdict).toBe('collapse');
   });
@@ -75,7 +78,7 @@ describe('recordShelfShadow', () => {
     const warnings: object[] = [];
     const result = await recordShelfShadow(
       {
-        store: { getShelf: async () => null, countSubmissionsByOwner: async () => 1 },
+        store: { getShelf: async () => null, countSubmissionsByOwner: async () => 1, rebuildShelf: async () => true },
         log: { warn: (context) => warnings.push(context) },
       },
       'g:owner',
@@ -90,7 +93,11 @@ describe('recordShelfShadow', () => {
     const warnings: object[] = [];
     const result = await recordShelfShadow(
       {
-        store: { getShelf: async () => buildShelfDocument(source, at), countSubmissionsByOwner: async () => 1 },
+        store: {
+          getShelf: async () => buildShelfDocument(source, at),
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => true,
+        },
         log: { warn: (context) => warnings.push(context) },
       },
       'g:owner',
@@ -110,6 +117,7 @@ describe('recordShelfShadow', () => {
             throw new Error('firestore is having a day');
           },
           countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => true,
         },
         log: { warn: (context) => warnings.push(context) },
       },
@@ -119,5 +127,122 @@ describe('recordShelfShadow', () => {
 
     expect(result).toBeNull();
     expect(warnings).toHaveLength(1);
+  });
+
+  // A purely-reading account would stay 'absent' forever without this.
+  it('waits for the backfill on absent, since unawaited work can be lost', async () => {
+    let rebuildOwner: string | undefined;
+    let resolveRebuild!: (value: boolean) => void;
+    const rebuildDone = new Promise<boolean>((resolve) => {
+      resolveRebuild = resolve;
+    });
+    let settled = false;
+
+    const pending = recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => null,
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async (ownerUid: string) => {
+            rebuildOwner = ownerUid;
+            return rebuildDone;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    ).then((result) => {
+      settled = true;
+      return result;
+    });
+
+    // The rebuild has started, but recordShelfShadow must still be waiting on it.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(rebuildOwner).toBe('g:owner');
+    expect(settled).toBe(false);
+
+    resolveRebuild(true);
+    const result = await pending;
+    expect(settled).toBe(true);
+    expect(result?.verdict).toBe('absent');
+  });
+
+  it('does not backfill a shelf that already exists, agreeing or not', async () => {
+    let rebuildCalled = false;
+    await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => buildShelfDocument(source, at),
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    );
+    expect(rebuildCalled).toBe(false);
+
+    await recordShelfShadow(
+      {
+        store: {
+          // count disagrees with the shelf, so the verdict is 'count', not 'absent'.
+          getShelf: async () => buildShelfDocument(source, at),
+          countSubmissionsByOwner: async () => 99,
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    );
+    expect(rebuildCalled).toBe(false);
+  });
+
+  it('reports a rebuild that throws, though the real stores never do', async () => {
+    const messages: string[] = [];
+    await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => null,
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => {
+            throw new Error('write refused');
+          },
+        },
+        log: { warn: (_context, message) => messages.push(message ?? '') },
+      },
+      'g:owner',
+      source,
+    );
+
+    expect(messages).toContain('shelf lazy backfill errored');
+  });
+
+  it('reports a rebuild that resolves false, which is how a real store actually fails', async () => {
+    // The mirror answers false on failure; it never rejects.
+    const messages: string[] = [];
+    await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => null,
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => false,
+        },
+        log: { warn: (_context, message) => messages.push(message ?? '') },
+      },
+      'g:owner',
+      source,
+    );
+
+    expect(messages).toContain('shelf lazy backfill wrote nothing');
   });
 });

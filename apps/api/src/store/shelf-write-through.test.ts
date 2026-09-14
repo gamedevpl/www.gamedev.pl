@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
-import { judgeShelfShadow } from '../creation/shelf-shadow.js';
+import { judgeShelfShadow, recordShelfShadow } from '../creation/shelf-shadow.js';
 
 // Both stores: the write-through spans facade and class.
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -152,6 +152,21 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.deleteShelf('g:owner');
 
       expect(await store.getShelf('g:owner')).toBeNull();
+    });
+
+    // The idle-account case: no write to hook, no row to find.
+    it('backfills an account whose rounds predate the mirror, on its first read', async () => {
+      const store = makeStore();
+      await store.createSubmission(1, 'g:owner', 'Pre-existing');
+      // Simulates a round from before the mirror shipped.
+      await store.deleteShelf('g:owner');
+      expect(await store.getShelf('g:owner')).toBeNull();
+
+      const records = await store.listSubmissionsByOwner('g:owner');
+      // Awaited: recordShelfShadow must not resolve before the backfill lands.
+      await recordShelfShadow({ store, log: { warn: () => {} } }, 'g:owner', records);
+
+      expect(await agrees(store, 'g:owner')).toBe('match');
     });
   });
 }
