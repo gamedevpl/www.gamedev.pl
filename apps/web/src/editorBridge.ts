@@ -130,9 +130,13 @@ export function useEditorDraftBridge(
     [frameRef],
   );
 
+  // The draft outlives a rebuild; only another game replaces it.
   useEffect(() => {
     lastContentRef.current = null;
     lastSelectionRef.current = null;
+  }, [slug]);
+
+  useEffect(() => {
     controllerHelloRef.current = false;
     controllerStoodDownRef.current = false;
     checksSeenRef.current = false;

@@ -222,6 +222,24 @@ describe('controller bridge boundary', () => {
     expect(latestController?.status).toBe('ready');
   });
 
+  it("answers a replacement build's hello with the newest draft, not the saved one", async () => {
+    studioApi.fetchGameEditor.mockResolvedValue({
+      definition: { version: 2, controller: true, content: {} },
+      draft: { content: { levels: ['saved'] } },
+    });
+    mount();
+    connect();
+    await act(async () => void (await Promise.resolve()));
+
+    act(() => pushRef.current?.({ levels: ['unsaved edit'] } as unknown as EditorContentDoc));
+    loadDocument('build-2');
+    posted.length = 0;
+
+    send(frame({ t: 'editor:hello', controller: true }));
+    const content = posted.find((message) => message.t === 'editor:content');
+    expect(content?.content).toEqual({ levels: ['unsaved edit'] });
+  });
+
   it('stands a controller down when it stops answering for the content it was sent', () => {
     vi.useFakeTimers();
     try {
