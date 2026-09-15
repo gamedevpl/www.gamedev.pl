@@ -77,6 +77,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private getRecipientCodeOwner: (code: string) => string | null = () => null,
     private writeGameAccess: (slug: string, record: GameAccessRecord) => void = () => {},
     private hasActiveBuildRound: (slug: string) => boolean = () => false,
+    // A held lease means a round could still open under the sender.
+    private hasActiveCheckoutRecovery: (slug: string, now: number) => Promise<boolean> = () => Promise.resolve(false),
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -125,8 +127,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     const access = this.getGameAccess(slug);
     if (!access || !ownerMatches(access, existing.senderUid, existing.accessRevision)) return 'stale_owner';
 
-    // Idle only: a live build/write must finish before ownership can move.
-    if (this.hasActiveBuildRound(slug)) return 'busy';
+    // Idle only: a live build/write or opening round blocks this.
+    if (this.hasActiveBuildRound(slug) || (await this.hasActiveCheckoutRecovery(slug, Date.parse(at)))) return 'busy';
 
     this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
     const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
@@ -237,6 +239,7 @@ export class FirestoreGameTransferStore implements GameTransferStore {
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
     const ref = this.doc(slug);
     const accessRef = this.db.collection('gameAccess').doc(slug);
+    const gameRef = this.db.collection('games').doc(slug);
     const activeQuery = this.db.collection('submissions').where('slug', '==', slug);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -245,12 +248,13 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (existing.status === 'accepted') return existing;
       if (!isPending(existing, at)) return null;
 
-      const [senderFence, recipientFence, recipientSnap, accessSnap, activeSnap] = await Promise.all([
+      const [senderFence, recipientFence, recipientSnap, accessSnap, activeSnap, gameSnap] = await Promise.all([
         tx.get(this.erasureFence(existing.senderUid)),
         tx.get(this.erasureFence(recipientUid)),
         tx.get(this.db.collection('users').doc(recipientUid)),
         tx.get(accessRef),
         tx.get(activeQuery),
+        tx.get(gameRef),
       ]);
       if (senderFence.exists || recipientFence.exists) return 'ineligible';
 
@@ -262,10 +266,11 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;
       if (!access || !ownerMatches(access, existing.senderUid, existing.accessRevision)) return 'stale_owner';
 
-      // Idle only: a live build/write must finish before ownership can move.
-      const busy = activeSnap.docs.some((doc) =>
-        isActiveBuildRound(doc.data() as { state?: JobState; transitions?: JobTransition[] }),
-      );
+      // Idle only: a live build/write or opening round blocks this.
+      const busy =
+        activeSnap.docs.some((doc) =>
+          isActiveBuildRound(doc.data() as { state?: JobState; transitions?: JobTransition[] }),
+        ) || (gameSnap.data()?.recoveryAdmission?.until ?? 0) > Date.parse(at);
       if (busy) return 'busy';
 
       tx.set(accessRef, transferredAccess(access, recipientUid, at));

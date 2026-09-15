@@ -86,6 +86,9 @@ export class InMemorySubmissionStore implements SubmissionStore {
   async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
     if (this.recoveryAdmissions.get(slug)?.nonce === nonce) this.recoveryAdmissions.delete(slug);
   }
+  async hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean> {
+    return (this.recoveryAdmissions.get(slug)?.until ?? 0) > now;
+  }
   async claimSubmissionSlug(
     jobId: number,
     slug: string,

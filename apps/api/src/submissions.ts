@@ -1,4 +1,5 @@
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
+import { ownsGame, resolveGameAccess } from './platform/game-access-resolve.js';
 import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -812,6 +813,15 @@ export async function registerSubmissionRoutes(
     return withImprovementAdmission(store, slug, now, async (admissionNonce) => {
       const holder = await store.getSubmissionBySlug(slug);
       if (!holder) return null;
+
+      // Recheck ownership: a transfer may have landed while this lease was pending.
+      const expectedOwnerUid = input.ownerUid ?? source.ownerUid;
+      const access = await resolveGameAccess(store, slug);
+      if (access.source === 'canonical' && !ownsGame(access, expectedOwnerUid)) {
+        throw Object.assign(new Error('Ownership of this game changed. Refresh before continuing.'), {
+          statusCode: 409,
+        });
+      }
 
       // Resolve against the *source* game before the new job exists. `dispatchBuild`
       // would otherwise ask `builderOf` on a blank record and always pick `platform`.

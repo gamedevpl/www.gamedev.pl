@@ -1172,6 +1172,24 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-09T00:00:00.000Z');
     expect(result).toBeNull();
   });
+
+  it('leaves ownership unchanged while a round is still opening (no submission yet)', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await pendingInvite(store);
+    // The sender holds the round-opening lease with no submission yet.
+    await store.beginCheckoutRecovery('sky', 'nonce-1', Date.parse('2026-01-02T00:00:00.000Z'));
+
+    const busy = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    expect(busy).toBe('busy');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
+
+    await store.finishCheckoutRecovery('sky', 'nonce-1');
+    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    if (typeof result === 'string' || result === null) throw new Error('unreachable');
+    expect(result.status).toBe('accepted');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');
+  });
 });
 
 // A stale-only page can hide an active invite.

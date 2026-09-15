@@ -17,8 +17,9 @@ import {
 } from '../platform/creator-profile.js';
 import type { CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
-import type { Store } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 
 /**
  * Creator profiles — claim a handle, edit the public page, publish gate data.
@@ -246,6 +247,32 @@ export async function registerCreatorProfileRoutes(
   });
 }
 
+// A transfer leaves the sender's old submissions' ownerUid untouched.
+async function reconcilePublishedOwnership(
+  store: Store,
+  ownerUid: string,
+  records: SubmissionRecord[],
+): Promise<SubmissionRecord[]> {
+  const stillOwned = await Promise.all(
+    records.map(async (record) => {
+      if (!record.slug) return true;
+      const access = await resolveGameAccess(store, record.slug);
+      return access.source !== 'canonical' || ownsGame(access, ownerUid);
+    }),
+  );
+  const kept = records.filter((_, i) => stillOwned[i]);
+  const keptSlugs = new Set(kept.map((r) => r.slug).filter((slug): slug is string => Boolean(slug)));
+
+  const memberAccess = await store.listGameAccessByMember(ownerUid);
+  const transferredIn = await Promise.all(
+    memberAccess
+      .filter((access) => access.ownerUid === ownerUid && !keptSlugs.has(access.slug))
+      .map((access) => store.getSubmissionBySlug(access.slug)),
+  );
+
+  return [...kept, ...transferredIn.filter((r): r is SubmissionRecord => r !== null)];
+}
+
 async function listCreatorPublishedGames(
   store: Store,
   gamesStore: GamesStore | null,
@@ -254,7 +281,8 @@ async function listCreatorPublishedGames(
   ownerUid: string,
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {
-  const records = await store.listSubmissionsByOwner(ownerUid, { limit: 100 });
+  const owned = await store.listSubmissionsByOwner(ownerUid, { limit: 100 });
+  const records = await reconcilePublishedOwnership(store, ownerUid, owned);
   // An improvement is a new job on an existing slug. When it publishes, both the
   // original and the revise tip carry `publishedAt`, so listing every published
   // record would put the same game on the profile twice. One card per slug —

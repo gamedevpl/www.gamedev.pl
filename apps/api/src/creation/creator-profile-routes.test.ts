@@ -219,6 +219,28 @@ describe('creator profile routes', () => {
     });
   });
 
+  it('moves a published game to the recipient’s public profile after a transfer', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.claimHandle('g:sender', 'sender', at);
+    await store.claimHandle('g:recipient', 'recipient', at);
+    await store.createSubmission(42, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(42, 'sky-dodge');
+    await store.setSubmissionPublishedAt(42, at);
+    await store.setPublication({ slug: 'sky-dodge', state: 'published', currentVersion: 'v1', publishedAt: at });
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+    const app = await appWith(store);
+
+    const senderPage = await app.inject({ method: 'GET', url: '/api/creators/sender' });
+    expect(senderPage.json().games.map((game: { slug: string }) => game.slug)).not.toContain('sky-dodge');
+
+    const recipientPage = await app.inject({ method: 'GET', url: '/api/creators/recipient' });
+    expect(recipientPage.json().games).toEqual([expect.objectContaining({ slug: 'sky-dodge' })]);
+  });
+
   it('reports availability and refuses reserved handles', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:a' });

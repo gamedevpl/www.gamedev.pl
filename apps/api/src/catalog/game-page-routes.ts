@@ -8,8 +8,9 @@ import {
 } from '../platform/creator-profile.js';
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
-import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
+import type { Store } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
 
 /**
@@ -114,9 +115,10 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
     if (!repoEntry && !storePublished) return null;
     if (repoEntry && !isPublishedEntry(repoEntry) && !storePublished) return null;
 
-    const submission = await store.getSubmissionBySlug(slug);
-    const erased = submission?.ownerUid === DELETED_ACCOUNT_UID;
-    const owner = submission && !erased ? await store.getUser(submission.ownerUid) : null;
+    // Canonical access, not the publishing submission's stale ownerUid.
+    const access = await resolveGameAccess(store, slug);
+    const erased = access.owner.kind === 'platform' && access.owner.reason === 'owner_deleted';
+    const owner = access.owner.kind === 'creator' ? await store.getUser(access.owner.uid) : null;
     const creator = owner ? toPublicCreatorProfile(owner) : null;
 
     let specMd: string | null = null;

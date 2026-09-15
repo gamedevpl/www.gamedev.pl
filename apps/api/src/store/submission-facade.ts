@@ -30,6 +30,9 @@ export abstract class SubmissionFacade {
   async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
     return this.submissionStore.finishCheckoutRecovery(slug, nonce);
   }
+  async hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean> {
+    return this.submissionStore.hasActiveCheckoutRecovery(slug, now);
+  }
   async setLocalActivity(
     jobId: number,
     activity: import('@gamedevpl/contract').LocalActivity,

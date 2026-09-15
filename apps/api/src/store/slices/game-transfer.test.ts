@@ -265,4 +265,23 @@ describe('acceptGameTransferInvitation', () => {
 
     expect(await store.acceptGameTransferInvitation('sky', 'g:grace', AFTER_EXPIRY)).toBeNull();
   });
+
+  it('leaves ownership unchanged while a round is still opening (no submission yet)', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+    // The sender holds the round-opening lease with no submission yet.
+    await store.beginCheckoutRecovery('sky', 'nonce-1', Date.parse(LATER));
+
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('busy');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
+
+    // Once the lease is released, acceptance succeeds.
+    await store.finishCheckoutRecovery('sky', 'nonce-1');
+    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    if (typeof result === 'string' || result === null) throw new Error('unreachable');
+    expect(result.status).toBe('accepted');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');
+  });
 });

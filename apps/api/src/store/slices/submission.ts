@@ -11,6 +11,9 @@ export interface SubmissionStore {
   claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number, admissionNonce?: string): Promise<boolean>;
   beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
   finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
+
+  // True while beginCheckoutRecovery's lease is still held for slug.
+  hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean>;
   claimSubmissionSlug(
     jobId: number,
     slug: string,
@@ -155,6 +158,10 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       const snap = await tx.get(ref);
       if (snap.data()?.recoveryAdmission?.nonce === nonce) tx.update(ref, { recoveryAdmission: FieldValue.delete() });
     });
+  }
+  async hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean> {
+    const snap = await this.db.collection('games').doc(slug).get();
+    return (snap.data()?.recoveryAdmission?.until ?? 0) > now;
   }
   async claimSubmissionSlug(
     jobId: number,

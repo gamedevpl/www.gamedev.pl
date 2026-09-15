@@ -46,4 +46,23 @@ describe('loadShelfRecords', () => {
     const records = await loadShelfRecords(store, 'g:creator', 'not-a-token', mint);
     expect(records).toEqual([]);
   });
+
+  it('shows a transferred-in game and hides one transferred away', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    // Transferred away: the submission still says g:sender, but access has moved.
+    await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+
+    const senderShelf = await loadShelfRecords(store, 'g:sender', undefined, mint);
+    expect(senderShelf.map((row) => row.slug)).not.toContain('sky-dodge');
+
+    const recipientShelf = await loadShelfRecords(store, 'g:recipient', undefined, mint);
+    expect(recipientShelf.map((row) => row.slug)).toContain('sky-dodge');
+  });
 });
