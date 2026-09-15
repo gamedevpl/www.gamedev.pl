@@ -342,6 +342,26 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records a transfer step and rejects one outside the enum', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'transfer_step', step: 'offer_accepted', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    const stored = (await store.listVisitEvents(today()))[0];
+    expect(stored).toMatchObject({ type: 'transfer_step', step: 'offer_accepted' });
+    // The slug and the counterparty must never reach this stream.
+    expect(Object.keys(stored)).not.toContain('slug');
+
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'transfer_step', step: 'offer_ignored', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('records invite steps and rejects an unknown invite outcome', async () => {
     const ok = await post(app, {
       visitId,

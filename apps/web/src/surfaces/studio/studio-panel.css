@@ -297,19 +297,3 @@
   flex-wrap: wrap;
   gap: 0.4rem;
 }
-
-.studio-transfer-code {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.studio-transfer-code code {
-  letter-spacing: 0.12em;
-}
-
-.studio-transfer-code-label {
-  color: #94a3b8;
-  font-size: 0.8rem;
-}

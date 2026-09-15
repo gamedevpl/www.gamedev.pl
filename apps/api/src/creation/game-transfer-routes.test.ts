@@ -18,8 +18,8 @@ describe('game transfer routes', () => {
     while (apps.length) await apps.pop()!.close();
   });
 
-  async function appWith(store: InMemoryStore) {
-    const app = await buildApp({ store, sessionSecret });
+  async function appWith(store: InMemoryStore, gameTransferRoutes = {}) {
+    const app = await buildApp({ store, sessionSecret, gameTransferRoutes });
     apps.push(app);
     return app;
   }
@@ -57,7 +57,61 @@ describe('game transfer routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().transfer).toMatchObject({ slug: 'sky', status: 'pending', you: 'sender' });
-    expect(res.json().transfer.counterparty).toEqual({ profileName: 'a creator' });
+    // Null, not an English placeholder the client cannot translate.
+    expect(res.json().transfer.counterparty).toEqual({ profileName: null });
+  });
+
+  it('names a counterparty who has one', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    await store.updateCreatorProfile('g:grace', { profileName: 'Grace Hopper' });
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    expect(res.json().transfer.counterparty.profileName).toBe('Grace Hopper');
+  });
+
+  it('tells the recipient an invitation is waiting', async () => {
+    // Otherwise only someone who opens Studio ever knows.
+    const { store, code } = await ownedGameWithRecipientCode();
+    const offered: Array<{ uid: string; slug: string; gameTitle: string; invitedAt: string }> = [];
+    const app = await appWith(store, { notifyTransferOffered: async (event) => void offered.push(event) });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    expect(offered).toHaveLength(1);
+    expect(offered[0]).toMatchObject({ uid: 'g:grace', slug: 'sky', gameTitle: 'sky' });
+    // Keyed to this invitation, so a later one still lands.
+    expect(offered[0].invitedAt).toEqual(expect.any(String));
+  });
+
+  it('keeps the invitation when telling the recipient fails', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store, {
+      notifyTransferOffered: async () => {
+        throw new Error('mailer down');
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().transfer.status).toBe('pending');
   });
 
   it('never exposes either participant’s raw uid to the other', async () => {

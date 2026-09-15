@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
+import { recordTransferStep } from '../../visitTelemetry.js';
 import {
   fetchIncomingTransfers,
-  fetchRecipientCode,
   respondToTransfer,
-  rotateRecipientCode,
   type TransferApiError,
   type TransferSummary,
 } from '../../transferApi.js';
 
-// Account-level: an offered game is not yours to select yet.
+// Offers only; the code moved to account settings.
 
 // Answering an invitation can refuse for reasons of its own.
 const RESPOND_REFUSALS: Record<string, string> = {
@@ -20,47 +19,42 @@ const RESPOND_REFUSALS: Record<string, string> = {
   not_found: 'studioShelf.transfer.errors.gone',
 };
 
-export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string) => void }): JSX.Element | null {
+export function StudioTransferInbox({
+  onAccepted,
+  visible = true,
+  onOffersPresent,
+}: {
+  onAccepted?: (slug: string) => void;
+  // False while the shelf is collapsed or off-canvas.
+  visible?: boolean;
+  onOffersPresent?: () => void;
+}): JSX.Element | null {
   const { t } = useTranslation();
-  const [code, setCode] = useState<string | null>(null);
   const [incoming, setIncoming] = useState<TransferSummary[]>([]);
-  const [revealed, setRevealed] = useState(false);
   const [busySlug, setBusySlug] = useState<string | null>(null);
-  const [rotating, setRotating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreachable, setUnreachable] = useState(false);
 
   const load = useCallback(async () => {
-    // A missing code must not hide an invitation.
-    const [codeResult, incomingResult] = await Promise.allSettled([fetchRecipientCode(), fetchIncomingTransfers()]);
-    if (codeResult.status === 'fulfilled') setCode(codeResult.value);
-    if (incomingResult.status === 'fulfilled') setIncoming(incomingResult.value);
-    // A failed read is not an empty inbox.
-    setUnreachable(incomingResult.status === 'rejected');
+    try {
+      setIncoming(await fetchIncomingTransfers());
+      // A failed read is not an empty inbox.
+      setUnreachable(false);
+    } catch {
+      setUnreachable(true);
+    }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function rotate(): Promise<void> {
-    setRotating(true);
-    setError(null);
-    try {
-      setCode(await rotateRecipientCode());
-      setRevealed(true);
-    } catch {
-      setError(t('studioShelf.transfer.errors.rotate'));
-    } finally {
-      setRotating(false);
-    }
-  }
-
   async function respond(slug: string, decision: 'accept' | 'reject'): Promise<void> {
     setBusySlug(slug);
     setError(null);
     try {
       await respondToTransfer(slug, decision);
+      recordTransferStep(decision === 'accept' ? 'offer_accepted' : 'offer_declined');
       setIncoming((current) => current.filter((invite) => invite.slug !== slug));
       // Not on the shelf until the caller refetches.
       if (decision === 'accept') onAccepted?.(slug);
@@ -75,8 +69,23 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
   }
 
   const pending = incoming.filter((invite) => invite.status === 'pending');
-  // Nothing to say without an invitation, code or failure.
-  if (pending.length === 0 && !code && !unreachable) return null;
+  // An unseen invitation is what the notification exists to fix.
+  const offered = pending.length > 0;
+  // Decided once, on arrival; a later collapse is the reader's.
+  const announced = useRef(false);
+  useEffect(() => {
+    if (!offered || announced.current) return;
+    announced.current = true;
+    if (!visible) onOffersPresent?.();
+  }, [offered, visible, onOffersPresent]);
+
+  // Shown means shown; a hidden render inflates the denominator.
+  useEffect(() => {
+    if (offered && visible) recordTransferStep('offer_shown');
+  }, [offered, visible]);
+
+  // Nothing to say without an invitation or a failure to report.
+  if (pending.length === 0 && !unreachable) return null;
 
   return (
     <section
@@ -92,7 +101,7 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
                 <PixelIcon name="handover" size={14} />
                 <span>
                   {t('studioShelf.transfer.offer', {
-                    name: invite.counterparty.profileName,
+                    name: invite.counterparty.profileName ?? t('studioShelf.transfer.someone'),
                     slug: invite.slug,
                   })}
                 </span>
@@ -120,25 +129,6 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
             </li>
           ))}
         </ul>
-      ) : null}
-
-      {code ? (
-        <div className="studio-transfer-code">
-          <span className="studio-transfer-code-label">{t('studioShelf.transfer.yourCode')}</span>
-          <code data-testid="studio-recipient-code">{revealed ? code : '••••••••'}</code>
-          <button type="button" className="link-btn" onClick={() => setRevealed((shown) => !shown)}>
-            {revealed ? t('studioShelf.transfer.hide') : t('studioShelf.transfer.reveal')}
-          </button>
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => void rotate()}
-            disabled={rotating}
-            data-testid="studio-recipient-code-rotate"
-          >
-            {rotating ? t('studioShelf.transfer.rotating') : t('studioShelf.transfer.rotate')}
-          </button>
-        </div>
       ) : null}
 
       {unreachable ? (

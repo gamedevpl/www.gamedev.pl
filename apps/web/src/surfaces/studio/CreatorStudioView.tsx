@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../AuthContext.js';
 import { AuthModal } from '../../AuthModal.js';
@@ -397,6 +397,13 @@ export function CreatorStudioView({
   // Long shelf auto-compacts; short shelf compacts only if manually collapsed.
   const compactShelf = Boolean(activeGame) && (showShelfTools || shelfCollapsedByUser);
   const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
+  // A waiting invitation opens the shelf once: the notification's link lands here.
+  const offerOpenedShelf = useRef(false);
+  const openShelfForOffer = useCallback(() => {
+    if (offerOpenedShelf.current) return;
+    offerOpenedShelf.current = true;
+    setShelfOpen(true);
+  }, []);
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
   // link worked and the game vanished.
@@ -636,8 +643,13 @@ export function CreatorStudioView({
     );
   }
 
+  // Collapsed rail or off-canvas drawer: mounted, but nobody can read it.
+  const inboxVisible = shelfOpen || !(compactShelf || (Boolean(activeGame) && shelfIsDrawer));
+
   const transferInbox = (
     <StudioTransferInbox
+      visible={inboxVisible}
+      onOffersPresent={openShelfForOffer}
       onAccepted={async (slug) => {
         // Named, so a game below the shelf ceiling still comes back.
         try {
