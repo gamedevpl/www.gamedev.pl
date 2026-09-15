@@ -133,18 +133,22 @@
 }
 
 .create-step-scene.is-qa::before {
-  left: 14%;
-  top: 32%;
-  width: 42%;
-  background: rgba(148, 163, 184, 0.28);
+  left: 18%;
+  top: 28%;
+  width: 34%;
+  height: 15px;
+  border-radius: 3px 10px 10px 10px;
+  background: rgba(148, 163, 184, 0.4);
 }
 
 .create-step-scene.is-qa::after {
-  left: 14%;
-  top: 56%;
-  width: 28%;
-  border-radius: 9px 3px 3px 9px;
-  background: rgba(0, 228, 172, 0.38);
+  left: auto;
+  right: 18%;
+  top: 54%;
+  width: 30%;
+  height: 15px;
+  border-radius: 10px 3px 10px 10px;
+  background: rgba(0, 228, 172, 0.5);
 }
 
 .create-step-scene.is-code {
@@ -154,25 +158,25 @@
 .create-step-scene.is-code::before {
   content: '';
   position: absolute;
-  left: 16%;
-  right: 16%;
-  top: 30%;
-  height: 2.1rem;
+  left: 20%;
+  right: 20%;
+  top: 28%;
+  height: 2.35rem;
   background:
-    linear-gradient(90deg, var(--turquoise) 0 7px, rgba(148, 163, 184, 0.38) 7px 52%, transparent 52%) 0 0 / 100% 5px
+    linear-gradient(90deg, var(--turquoise) 0 8px, rgba(148, 163, 184, 0.5) 8px 58%, transparent 58%) 0 0 / 100% 6px
       no-repeat,
-    linear-gradient(90deg, var(--accent-blue) 0 11px, rgba(148, 163, 184, 0.28) 11px 74%, transparent 74%) 0 10px / 100%
-      5px no-repeat,
-    linear-gradient(90deg, rgba(148, 163, 184, 0.22) 0 36%, transparent 36%) 0 20px / 100% 5px no-repeat;
+    linear-gradient(90deg, var(--accent-blue) 0 12px, rgba(148, 163, 184, 0.38) 12px 70%, transparent 70%) 0 11px / 100%
+      6px no-repeat,
+    linear-gradient(90deg, rgba(148, 163, 184, 0.3) 0 40%, transparent 40%) 0 22px / 100% 6px no-repeat;
 }
 
 .create-step-scene.is-code::after {
   content: '';
   position: absolute;
-  left: calc(16% + 7.4rem);
-  top: calc(30% + 18px);
-  width: 5px;
-  height: 11px;
+  left: 62%;
+  top: calc(28% + 10px);
+  width: 6px;
+  height: 12px;
   background: var(--turquoise);
   animation: create-caret 1.05s steps(2) infinite;
 }
@@ -184,11 +188,12 @@
 .create-step-scene.is-play::before {
   content: '';
   position: absolute;
-  width: 5.6rem;
-  height: 3.15rem;
-  border: 2px solid rgba(0, 228, 172, 0.38);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.28);
+  width: 6.4rem;
+  height: 3.35rem;
+  border: 2px solid rgba(0, 228, 172, 0.55);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 18px rgba(0, 228, 172, 0.12);
 }
 
 .create-step-scene.is-play svg {
@@ -203,13 +208,13 @@
 .create-step-scene.is-live::before {
   content: '';
   position: absolute;
-  top: 1.05rem;
-  right: 28%;
-  width: 8px;
-  height: 8px;
+  top: calc(50% - 18px);
+  left: calc(50% + 12px);
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--turquoise);
-  box-shadow: 0 0 8px var(--turquoise-glow);
+  box-shadow: 0 0 0 0 var(--turquoise-glow);
   animation: create-live-pulse 1.8s ease-in-out infinite;
 }
 
@@ -419,11 +424,11 @@
   0%,
   100% {
     opacity: 1;
-    transform: scale(1);
+    box-shadow: 0 0 0 0 var(--turquoise-glow);
   }
   50% {
-    opacity: 0.45;
-    transform: scale(0.75);
+    opacity: 0.55;
+    box-shadow: 0 0 0 6px transparent;
   }
 }
 
