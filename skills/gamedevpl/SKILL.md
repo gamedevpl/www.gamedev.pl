@@ -57,9 +57,9 @@ often enough to name up front:
    `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150
    may need `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')`
-   inside the same render callback (or `getContext('webgl', {preserveDrawingBuffer:
-true})`; after compositing the default buffer is gone) —
-   `page.screenshot()`/CDP compositor also works. Keep PNG ≤700 KB, then
+   inside the same render callback (set `preserveDrawingBuffer:true` when creating
+   the GL context, not at capture time; after compositing the default buffer is
+   gone) — `page.screenshot()`/CDP compositor also works. Keep PNG ≤700 KB, then
    `screenshot_upload_url` and `curl --upload-file <png> "$url"`. A black/blank
    frame means those WebGL flags were missing or the drawing buffer was already
    discarded. If SwiftShader is unavailable, `GAME_CAPTURE_GFX=canvas2d` or

@@ -37,8 +37,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --enable-webgl
 --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150 may need
      `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')` inside
-     the same render callback (or `preserveDrawingBuffer:true`; after compositing
-     the default buffer is gone) — `page.screenshot()`/CDP compositor also works.
+     the same render callback (set `preserveDrawingBuffer:true` when creating the
+     GL context, not at capture time; after compositing the default buffer is
+     gone) — `page.screenshot()`/CDP compositor also works.
      Keep PNG ≤700 KB, then `screenshot_upload_url` + `curl --upload-file <png>
 "$url"`. A black frame means those WebGL flags were missing or the drawing
      buffer was discarded. Fallback: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d`
@@ -780,8 +781,9 @@ screenshots and the ffmpeg encode, keeping only the named marks.
 Agents that _do_ have a shell still fail this if they launch plain headless Chrome:
 WebGL canvases come back black without Angle/SwiftShader flags (games-repo
 `tools/lib/webgl-gate.ts` / `tools/capture.ts`). Never add `--disable-gpu`. Capture
-`canvas.toDataURL('image/png')` inside the same render callback (or
-`preserveDrawingBuffer:true`; after compositing the default buffer is gone),
+`canvas.toDataURL('image/png')` inside the same render callback (set
+`preserveDrawingBuffer:true` when creating the GL context, not at capture
+time; after compositing the default buffer is gone),
 keep PNG ≤700 KB, then `screenshot_upload_url` + `curl --upload-file`.
 `page.screenshot()` / CDP compositor also works — that is the gate's path.
 Fallback when SwiftShader is unavailable: `GAME_CAPTURE_GFX=canvas2d` /

@@ -78,8 +78,9 @@ preview verdict is already available — the gate already launches Chromium with
 Local agents that _do_ have a shell must pass
 `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`) and capture
-`canvas.toDataURL` inside the same render callback (or
-`preserveDrawingBuffer:true`); `page.screenshot()`/CDP compositor also works.
+`canvas.toDataURL` inside the same render callback (set
+`preserveDrawingBuffer:true` when creating the GL context, not at capture
+time); `page.screenshot()`/CDP compositor also works.
 A black frame means those flags were missing or the drawing buffer was discarded.
 
 Hosted-agent output is still external contributor output, so it is still worth verifying

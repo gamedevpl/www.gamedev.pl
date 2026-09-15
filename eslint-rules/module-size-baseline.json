@@ -86,7 +86,7 @@
     "apps/api/src/agent-surface/mcp-presence.ts": 150,
     "apps/api/src/agent-surface/mcp-server-discovery.test.ts": 132,
     "apps/api/src/agent-surface/mcp-server-discovery.ts": 96,
-    "apps/api/src/agent-surface/mcp-server.test.ts": 3868,
+    "apps/api/src/agent-surface/mcp-server.test.ts": 3870,
     "apps/api/src/agent-surface/mcp-server.ts": 1744,
     "apps/api/src/agent-surface/mcp-session-key.test.ts": 69,
     "apps/api/src/agent-surface/mcp-session-key.ts": 173,
