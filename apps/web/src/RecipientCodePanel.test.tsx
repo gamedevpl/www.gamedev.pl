@@ -77,4 +77,37 @@ describe('RecipientCodePanel', () => {
     expect(host.querySelector('[data-testid="recipient-code-error"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
+
+  it('will not let a rotation start before the first read settles', async () => {
+    // Closed at the source: there is nothing to click yet.
+    let releaseLoad: (value: unknown) => void = () => {};
+    const slowLoad = new Promise((resolve) => {
+      releaseLoad = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        await slowLoad;
+        return { ok: true, json: async () => ({ code: 'OLD-CODE' }) };
+      }),
+    );
+
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(RecipientCodePanel));
+    });
+
+    const rotate = host.querySelector<HTMLButtonElement>('[data-testid="studio-recipient-code-rotate"]');
+    expect(rotate?.disabled).toBe(true);
+
+    await act(async () => {
+      releaseLoad(null);
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="studio-recipient-code-rotate"]')?.disabled).toBe(false);
+    await act(async () => root.unmount());
+  });
 });

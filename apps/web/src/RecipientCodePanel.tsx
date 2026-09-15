@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchRecipientCode, rotateRecipientCode } from './transferApi.js';
 import './RecipientCodePanel.css';
@@ -12,12 +12,23 @@ export function RecipientCodePanel(): JSX.Element {
   const [rotating, setRotating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A slow read must not reinstate a replaced code.
+  const issued = useRef(0);
+  const [loading, setLoading] = useState(true);
+
   const load = useCallback(async () => {
+    const ticket = (issued.current += 1);
+    setLoading(true);
     try {
-      setCode(await fetchRecipientCode());
+      const fetched = await fetchRecipientCode();
+      if (issued.current !== ticket) return;
+      setCode(fetched);
       setError(null);
     } catch {
+      if (issued.current !== ticket) return;
       setError(t('studioShelf.transfer.errors.code'));
+    } finally {
+      if (issued.current === ticket) setLoading(false);
     }
   }, [t]);
 
@@ -26,15 +37,21 @@ export function RecipientCodePanel(): JSX.Element {
   }, [load]);
 
   async function rotate(): Promise<void> {
+    const ticket = (issued.current += 1);
     setRotating(true);
     setError(null);
     try {
-      setCode(await rotateRecipientCode());
+      const rotated = await rotateRecipientCode();
+      if (issued.current !== ticket) return;
+      setCode(rotated);
       setRevealed(true);
     } catch {
-      setError(t('studioShelf.transfer.errors.rotate'));
+      if (issued.current === ticket) setError(t('studioShelf.transfer.errors.rotate'));
     } finally {
-      setRotating(false);
+      if (issued.current === ticket) {
+        setRotating(false);
+        setLoading(false);
+      }
     }
   }
 
@@ -57,7 +74,7 @@ export function RecipientCodePanel(): JSX.Element {
           type="button"
           className="link-btn"
           onClick={() => void rotate()}
-          disabled={rotating}
+          disabled={rotating || loading}
           data-testid="studio-recipient-code-rotate"
         >
           {rotating ? t('studioShelf.transfer.rotating') : t('studioShelf.transfer.rotate')}
