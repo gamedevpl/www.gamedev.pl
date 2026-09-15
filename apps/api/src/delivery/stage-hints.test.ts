@@ -57,15 +57,15 @@ function fakeGamesStore(staged: Record<string, string>, delivered: Record<string
   } as unknown as GamesStore;
 }
 
-type BaseStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwnerAndSlug'>;
+type BaseStore = Pick<Store, 'getPublication' | 'listSubmissionsBySlug'>;
 
-// Siblings: this owner's other rounds on the slug, newest first.
+// Siblings: the slug's other rounds, newest first, whoever built them.
 function fakeBaseStore(siblings: SubmissionRecord[] = []): BaseStore {
   return {
     async getPublication() {
       return null;
     },
-    async listSubmissionsByOwnerAndSlug() {
+    async listSubmissionsBySlug() {
       return siblings;
     },
   };

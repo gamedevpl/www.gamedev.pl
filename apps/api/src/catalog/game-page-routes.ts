@@ -8,8 +8,9 @@ import {
 } from '../platform/creator-profile.js';
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
-import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
+import type { Store } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
 
 /**
@@ -78,7 +79,15 @@ export function extractSpecDescription(specMd: string | null): string | null {
   return paragraph.length > 0 ? paragraph.join(' ') : null;
 }
 
-export async function registerGamePageRoutes(app: FastifyInstance, options: GamePageRoutesOptions): Promise<void> {
+export interface GamePageRoutesHandle {
+  // Drops the cached page for `slug`, e.g. after a transfer.
+  invalidateGameCache: (slug: string) => void;
+}
+
+export async function registerGamePageRoutes(
+  app: FastifyInstance,
+  options: GamePageRoutesOptions,
+): Promise<GamePageRoutesHandle> {
   const { store, gamesStore, getRepoPublishedCatalogEntry, githubClient } = options;
   const publishedRef = options.publishedRef ?? 'main';
   const now = options.now ?? Date.now;
@@ -114,10 +123,13 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
     if (!repoEntry && !storePublished) return null;
     if (repoEntry && !isPublishedEntry(repoEntry) && !storePublished) return null;
 
-    const submission = await store.getSubmissionBySlug(slug);
-    const erased = submission?.ownerUid === DELETED_ACCOUNT_UID;
-    const owner = submission && !erased ? await store.getUser(submission.ownerUid) : null;
+    // Canonical access, not the publishing submission's stale ownerUid.
+    const access = await resolveGameAccess(store, slug);
+    const erased = access.owner.kind === 'platform' && access.owner.reason === 'owner_deleted';
+    const owner = access.owner.kind === 'creator' ? await store.getUser(access.owner.uid) : null;
     const creator = owner ? toPublicCreatorProfile(owner) : null;
+    // An owner with no handle must not inherit the old attribution.
+    const noAttribution = erased || (access.source === 'canonical' && access.owner.kind === 'creator' && !creator);
 
     let specMd: string | null = null;
     let entry: CatalogGameEntry | null = repoEntry;
@@ -142,19 +154,23 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
 
     if (!entry) return null;
 
-    const resolvedHandle = erased ? PLATFORM_HANDLE : (creator?.handle ?? entry.creatorHandle ?? PLATFORM_HANDLE);
+    const resolvedHandle = noAttribution
+      ? PLATFORM_HANDLE
+      : (creator?.handle ?? entry.creatorHandle ?? PLATFORM_HANDLE);
     const platformAuthored = resolvedHandle === PLATFORM_HANDLE;
 
     return {
       entry: {
         ...entry,
         status: 'published',
-        submittedBy: erased ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
+        submittedBy: noAttribution ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
         creatorHandle: resolvedHandle,
       },
-      creator: erased ? null : creator,
+      creator,
       platformAuthored,
       description: extractSpecDescription(specMd),
     };
   }
+
+  return { invalidateGameCache: (slug) => cache.delete(slug) };
 }

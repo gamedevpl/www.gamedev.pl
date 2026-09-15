@@ -12,7 +12,7 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   var capturePng=host.capturePng,legendRows=host.legendRows,kitRows=host.kitRows;
   var largestCanvas=host.largestCanvas;
   var agentOn=false,agentFps=60,agentTilt=null,agentLog=[],agentLiveTimer=0,agentStatusSeen='';
-  var agentAudioSeq=0;
+  var agentAudioSeq=0,agentAudioCount=0;
   var AGENT_LOG_CAP=60,AGENT_UI_CAP=80;
   function agentHarness(){return window.__GAME_HARNESS__;}
   function agentCanvas(){return el('game')||largestCanvas();}
@@ -64,11 +64,12 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   // Its own log, so a noisy game cannot evict a progress landmark from signals.
   // Cursor is the entry's own seq, never its index: the log is capped and drops its
   // oldest, so once full its length stops moving and an index cursor would go deaf.
+  // The cursor also carries how much of that entry was reported: repeats of one name
+  // in one frame keep growing the newest entry, so a read one can still grow.
   var AGENT_AUDIO_KINDS={sfx:1,loop:1,music:1};
-  function agentNoteAudio(entry){
+  function agentNoteAudio(entry,count){
     if(!entry||typeof entry.name!=='string'||!entry.name)return;
     if(!Object.prototype.hasOwnProperty.call(AGENT_AUDIO_KINDS,entry.type))return;
-    var count=Number(entry.count);
     agentNote(entry.type,entry.name
       +(count>1?' x'+count:'')
       +(entry.stopped?' (stopped)':'')
@@ -76,17 +77,23 @@ export const AGENT_PLAY_BRIDGE = `(function(){
       Number(entry.frame));
   }
   function agentDrainAudio(){
-    var h=agentHarness(),log=h&&h.audio,i,entry,seq;
+    var h=agentHarness(),log=h&&h.audio,i,entry,seq,total,fresh;
     if(!log||typeof log.length!=='number')return;
-    var highest=agentAudioSeq;
+    var highest=agentAudioSeq,reported=agentAudioCount;
     for(i=0;i<log.length;i++){
       entry=log[i];
       seq=entry&&typeof entry.seq==='number'?entry.seq:-1;
-      if(seq<=agentAudioSeq)continue;
-      if(seq>highest)highest=seq;
-      agentNoteAudio(entry);
+      if(seq<agentAudioSeq)continue;
+      total=Number(entry.count);
+      if(!(total>1))total=1;
+      fresh=seq===agentAudioSeq?total-agentAudioCount:total;
+      if(fresh<=0)continue;
+      if(seq>highest){highest=seq;reported=total;}
+      else if(seq===highest)reported=total;
+      agentNoteAudio(entry,fresh);
     }
     agentAudioSeq=highest;
+    agentAudioCount=reported;
   }
   function agentState(reason,id){
     agentDrainAudio();

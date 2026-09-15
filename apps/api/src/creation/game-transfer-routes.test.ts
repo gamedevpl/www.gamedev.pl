@@ -1,7 +1,9 @@
+import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { InMemoryStore } from '../platform/store.js';
+import { registerGameTransferRoutes } from './game-transfer-routes.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const AT = '2026-01-01T00:00:00.000Z';
@@ -14,7 +16,6 @@ describe('game transfer routes', () => {
   const apps: Array<{ close: () => Promise<void> }> = [];
   afterEach(async () => {
     while (apps.length) await apps.pop()!.close();
-    vi.unstubAllEnvs();
   });
 
   async function appWith(store: InMemoryStore) {
@@ -24,7 +25,6 @@ describe('game transfer routes', () => {
   }
 
   async function ownedGameWithRecipientCode() {
-    vi.stubEnv('GAME_ACCESS_AUTHORITATIVE', 'true');
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });
     await store.upsertUser({ uid: 'g:grace' });
@@ -32,27 +32,6 @@ describe('game transfer routes', () => {
     const code = (await store.ensureRecipientCode('g:grace', AT))!;
     return { store, code };
   }
-
-  it('404s every route while the flag is off', async () => {
-    const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:ada' });
-    const app = await appWith(store);
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/me/studio/games/sky/transfer',
-      headers: { cookie: authCookie('g:ada') },
-      payload: { recipientCode: 'rc_whatever' },
-    });
-    expect(res.statusCode).toBe(404);
-
-    const incoming = await app.inject({
-      method: 'GET',
-      url: '/api/me/transfers/incoming',
-      headers: { cookie: authCookie('g:ada') },
-    });
-    expect(incoming.statusCode).toBe(404);
-  });
 
   it('a malformed slug is refused before it reaches the store', async () => {
     const { store } = await ownedGameWithRecipientCode();
@@ -139,7 +118,6 @@ describe('game transfer routes', () => {
   });
 
   it('cannot transfer to yourself', async () => {
-    vi.stubEnv('GAME_ACCESS_AUTHORITATIVE', 'true');
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });
     await store.ensureGameAccess('sky', 'g:ada', AT, AT);
@@ -322,5 +300,86 @@ describe('game transfer routes', () => {
       headers: { cookie: authCookie('g:grace') },
     });
     expect(after.json().transfers).toHaveLength(0);
+  });
+
+  it('the recipient can accept a pending invitation, moving canonical ownership', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const accept = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(accept.statusCode).toBe(200);
+    expect(accept.json().transfer).toMatchObject({ slug: 'sky', status: 'accepted', you: 'recipient' });
+
+    const access = await store.getGameAccess('sky');
+    expect(access?.ownerUid).toBe('g:grace');
+
+    // Accepting also drops the recipient's own cached inbox entry.
+    const incoming = await app.inject({
+      method: 'GET',
+      url: '/api/me/transfers/incoming',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(incoming.json().transfers).toHaveLength(0);
+  });
+
+  it('accepting busts the catalog/game-play caches for the transferred slug', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = Fastify();
+    app.addHook('preHandler', async (req) => {
+      const cookie = req.headers.cookie as string | undefined;
+      const token = cookie?.split(`${SESSION_COOKIE_NAME}=`)[1];
+      req.user = token ? ({ uid: readSessionToken(token, sessionSecret).uid } as typeof req.user) : null;
+    });
+    const invalidatePublishedGameCaches = vi.fn();
+    await registerGameTransferRoutes(app, { store, invalidatePublishedGameCaches });
+    try {
+      await app.inject({
+        method: 'POST',
+        url: '/api/me/studio/games/sky/transfer',
+        headers: { cookie: authCookie('g:ada') },
+        payload: { recipientCode: code },
+      });
+      expect(invalidatePublishedGameCaches).not.toHaveBeenCalled();
+
+      const accept = await app.inject({
+        method: 'POST',
+        url: '/api/me/transfers/sky/accept',
+        headers: { cookie: authCookie('g:grace') },
+      });
+      expect(accept.statusCode).toBe(200);
+      expect(invalidatePublishedGameCaches).toHaveBeenCalledWith('sky');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('the sender cannot accept their own invitation', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const accept = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(accept.statusCode).toBe(404);
   });
 });

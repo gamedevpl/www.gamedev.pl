@@ -223,6 +223,94 @@ describe('proposal routes', () => {
     expect(adopted?.state).toBe('ready_for_review');
   });
 
+  it('routes a pre-transfer proposal to the new owner, not the stale targetOwnerUid', async () => {
+    const store = new InMemoryStore();
+    const gamesStore = fakeGamesStore();
+    await seed(store);
+    const proposal = await seedProposal(store, gamesStore);
+    const RECIPIENT = 'g:nowy';
+    await store.upsertUser({ uid: RECIPIENT });
+    const at = new Date(NOW).toISOString();
+    await store.recordSettledOwner(SLUG, RECIPIENT, 999, at, at);
+    const app = await appWith(store, gamesStore);
+
+    // Surfaces despite the stale targetOwnerUid.
+    const reviews = await app.inject({ method: 'GET', url: '/api/me/reviews', headers: { cookie: cookie(RECIPIENT) } });
+    expect(reviews.json().proposals.map((p: { id: string }) => p.id)).toContain(proposal.id);
+
+    // The former owner no longer has it.
+    const staleReviews = await app.inject({
+      method: 'GET',
+      url: '/api/me/reviews',
+      headers: { cookie: cookie(OWNER) },
+    });
+    expect(staleReviews.json().proposals.map((p: { id: string }) => p.id)).not.toContain(proposal.id);
+
+    const accept = await app.inject({
+      method: 'POST',
+      url: `/api/proposals/${proposal.id}/accept`,
+      headers: { cookie: cookie(RECIPIENT) },
+    });
+    expect(accept.statusCode).toBe(200);
+
+    // The stale owner can no longer decide it either.
+    const staleAccept = await app.inject({
+      method: 'POST',
+      url: `/api/proposals/${proposal.id}/accept`,
+      headers: { cookie: cookie(OWNER) },
+    });
+    expect(staleAccept.statusCode).not.toBe(200);
+  });
+
+  it('stops the stale owner reading a pre-transfer proposal (even though targetOwnerUid still names them)', async () => {
+    const store = new InMemoryStore();
+    const gamesStore = fakeGamesStore();
+    await seed(store);
+    const proposal = await seedProposal(store, gamesStore);
+    const RECIPIENT = 'g:nowy';
+    await store.upsertUser({ uid: RECIPIENT });
+    const at = new Date(NOW).toISOString();
+    await store.recordSettledOwner(SLUG, RECIPIENT, 999, at, at);
+    const app = await appWith(store, gamesStore);
+
+    // /diff shares the same canSeeAsReviewer check, exercised here at the id route.
+    const url = `/api/proposals/${proposal.id}`;
+    const stale = await app.inject({ method: 'GET', url, headers: { cookie: cookie(OWNER) } });
+    expect(stale.statusCode).toBe(404);
+    const fresh = await app.inject({ method: 'GET', url, headers: { cookie: cookie(RECIPIENT) } });
+    expect(fresh.statusCode).toBe(200);
+  });
+
+  it('multiple pre-transfer proposals on one slug all reach the new owner', async () => {
+    const store = new InMemoryStore();
+    const gamesStore = fakeGamesStore();
+    await seed(store);
+    const first = await seedProposal(store, gamesStore);
+    const deps = { store, gamesStore: gamesStore as unknown as GamesStore, now: () => NOW };
+    const opened = await openProposal(deps, {
+      targetSlug: SLUG,
+      proposerUid: PROPOSER,
+      title: 'A second pass',
+      description: 'Grip felt fine, but corners still lose too much speed on exit.',
+      base: { kind: 'store', version: 'base-1' },
+      files: [{ path: 'game.ts', content: 'export const grip = 0.9;' }],
+    });
+    if (!opened.ok) throw new Error(`setup failed: ${opened.error}`);
+    gamesStore.setGate(SLUG, opened.proposal.version!, true);
+    const second = await reconcileProposalGate(deps, opened.proposal.id);
+    if (!second) throw new Error('gate reconciliation failed');
+    const RECIPIENT = 'g:nowy';
+    await store.upsertUser({ uid: RECIPIENT });
+    const at = new Date(NOW).toISOString();
+    await store.recordSettledOwner(SLUG, RECIPIENT, 999, at, at);
+    const app = await appWith(store, gamesStore);
+
+    const reviews = await app.inject({ method: 'GET', url: '/api/me/reviews', headers: { cookie: cookie(RECIPIENT) } });
+    const ids = reviews.json().proposals.map((p: { id: string }) => p.id);
+    expect(ids).toContain(first.id);
+    expect(ids).toContain(second.id);
+  });
+
   it('refuses an accept from anybody but the owner', async () => {
     const store = new InMemoryStore();
     const gamesStore = fakeGamesStore();

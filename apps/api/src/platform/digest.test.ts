@@ -143,6 +143,21 @@ describe('runDigestSweep', () => {
     expect(notification.link).toBe('/studio');
   });
 
+  it('reaches the new owner after a transfer, not the game’s publisher', async () => {
+    await played('brick-storm', 12, 3);
+    await store.upsertUser({ uid: 'g:bob' });
+    const at = '2026-07-03T00:00:00.000Z';
+    await store.ensureGameAccess('brick-storm', 'g:alice', at, at);
+    await store.recordSettledOwner('brick-storm', 'g:bob', 999, at, at);
+
+    const result = await runDigestSweep({ store, now });
+
+    expect(result.sent).toBe(1);
+    expect(await store.listNotifications('g:alice')).toEqual([]);
+    const [notification] = await store.listNotifications('g:bob');
+    expect(notification.type).toBe('creator.digest');
+  });
+
   it('sends nothing to a creator whose games nobody played', async () => {
     await played('brick-storm', 0);
 

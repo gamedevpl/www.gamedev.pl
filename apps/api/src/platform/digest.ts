@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { emitDigestNotification, type EmitDeps } from '../notifications/notify.js';
 import { BOT_UID_PREFIX, type Scorecard, type Store } from './store.js';
+import { resolveGameAccess } from './game-access-resolve.js';
 
 /**
  * The weekly creator digest (docs/improvement-loop-plan.md IL-2).
@@ -208,13 +209,17 @@ export async function runDigestSweep(deps: DigestSweepDeps): Promise<DigestSweep
     // predates the submission flow. Unpublished and abandoned games are not theirs to hear
     // about either: a draft's numbers belong on the status page.
     if (!submission?.publishedAt || submission.abandonedAt) continue;
+    // Canonical, not the submission's stale ownerUid.
+    const access = await resolveGameAccess(store, card.slug);
+    if (access.owner.kind !== 'creator') continue;
+    const ownerUid = access.owner.uid;
     // Automation accounts are excluded for the same reason the creator metrics exclude
     // them: a digest addressed to a test harness is noise with a delivery cost.
-    if (submission.ownerUid.startsWith(BOT_UID_PREFIX)) continue;
+    if (ownerUid.startsWith(BOT_UID_PREFIX)) continue;
 
-    const owned = cardsByOwner.get(submission.ownerUid) ?? [];
+    const owned = cardsByOwner.get(ownerUid) ?? [];
     owned.push(card);
-    cardsByOwner.set(submission.ownerUid, owned);
+    cardsByOwner.set(ownerUid, owned);
   }
 
   let sent = 0;

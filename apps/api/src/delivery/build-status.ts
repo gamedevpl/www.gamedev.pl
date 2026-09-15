@@ -1,10 +1,11 @@
 import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
-import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
+import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-state.js';
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
+import { creatorOwnsSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -57,7 +58,13 @@ export interface BuildStatusOptions {
 }
 
 export interface BuildStatusAssembler {
-  attachBuildEvents(status: SubmissionStatusResponse, jobId: number, locale: string): Promise<SubmissionStatusResponse>;
+  attachBuildEvents(
+    status: SubmissionStatusResponse,
+    jobId: number,
+    locale: string,
+    // Who is asking: prior rounds are private.
+    viewerUid?: string,
+  ): Promise<SubmissionStatusResponse>;
   // Drops the cached channel events for a job that just received one.
   invalidateEvents(jobId: number): void;
 }
@@ -218,21 +225,22 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   }
 
   // Older jobs on the same slug and creator — capped transcripts only.
-  async function loadPriorRounds(record: SubmissionRecord, locale: string): Promise<PriorRoundHistory[]> {
+  async function loadPriorRounds(
+    record: SubmissionRecord,
+    locale: string,
+    viewerUid?: string,
+  ): Promise<PriorRoundHistory[]> {
     if (!store || !record.slug) return [];
+    // Earlier rounds carry private chat, and a status token names no one.
+    if (!viewerUid || !(await creatorOwnsSlug(store, record.slug, viewerUid))) return [];
     const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
     if (cached && cached.expiresAt > currentTime) return cached.value;
 
-    // Only jobs started before this one — no later rounds as "earlier".
+    // Started before this one, whoever built them: the slug's own history.
     const siblings = (await store.listSubmissionsBySlug(record.slug))
-      .filter(
-        (sibling) =>
-          sibling.jobId !== record.jobId &&
-          sibling.ownerUid === record.ownerUid &&
-          sibling.createdAt < record.createdAt,
-      )
+      .filter((sibling) => startedBefore(sibling, record))
       .slice(0, maxPriorRounds)
       .reverse();
 
@@ -290,6 +298,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     status: SubmissionStatusResponse,
     jobId: number,
     locale: string,
+    viewerUid?: string,
   ): Promise<SubmissionStatusResponse> {
     const [loadedEvents, media, playable, record] = await Promise.all([
       loadBuildEvents(jobId),
@@ -298,16 +307,23 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
+    // State is a receipt the token carries; what was said is not.
+    const viewerOwns = Boolean(store && record && viewerUid && (await ownsSubmissionOrSlug(store, record, viewerUid)));
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
       ...status,
-      ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
-      ...(media.length > 0 ? { media } : {}),
-      ...(playable.length > 0 ? { playable } : {}),
+      ...(viewerOwns && events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
+      ...(viewerOwns && media.length > 0 ? { media } : {}),
+      ...(viewerOwns && playable.length > 0 ? { playable } : {}),
       // Resolved here, not in nativeJobStatus, so the cache stays language-neutral.
       ...(status.progress
-        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
+        ? {
+            progress: {
+              ...status.progress,
+              revisions: viewerOwns ? localizeRevisions(status.progress.revisions, locale) : [],
+            },
+          }
         : {}),
     };
     if (!record) return next;
@@ -364,7 +380,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
     // Soft: sibling history must not 500 the live thread poll.
     try {
-      const priorRounds = await loadPriorRounds(record, locale);
+      const priorRounds = await loadPriorRounds(record, locale, viewerUid);
       if (priorRounds.length > 0) next.priorRounds = priorRounds;
       else delete next.priorRounds;
     } catch {

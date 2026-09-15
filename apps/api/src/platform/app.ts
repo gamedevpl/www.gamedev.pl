@@ -18,6 +18,7 @@ import { isPublicPlayRequest, parsePublicPlaySlugs } from './public-play.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
+import { decideEditorialClearance } from '../community/editorial-clearance.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
 import { registerGateVerdictRoutes } from '../delivery/gate-verdict-routes.js';
@@ -806,6 +807,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         log: { error: (context, message) => app.log.error(context, message) },
       })(event);
     },
+    // Policy at composition root, not a route invariant.
+    editorialClearance: store
+      ? async (slug) => decideEditorialClearance(await store.listGameAssessmentsBySlug(slug), slug)
+      : undefined,
   });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
@@ -1000,18 +1005,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // GO-02 groundwork: lets a creator find/rotate their own recipient code.
   await registerRecipientCodeRoutes(app, { store });
 
-  // GO-02: transfer invitation initiate/cancel/inspect/reject. Inert unless
-  // GAME_ACCESS_AUTHORITATIVE is on; acceptance itself lands in a later PR.
-  await registerGameTransferRoutes(app, { store });
-
   // The game page at `/:handle/:slug` — one aggregate read per game.
-  await registerGamePageRoutes(app, {
+  const gamePageRoute = await registerGamePageRoutes(app, {
     store,
     gamesStore,
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
     githubClient: submissionSeams.githubClient ?? undefined,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     ...options.gamePageRoutes,
+  });
+
+  // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
+  await registerGameTransferRoutes(app, {
+    store,
+    invalidatePublishedGameCaches: (slug) => {
+      submissionSeams.invalidatePublishedGameCaches(slug);
+      gamePageRoute.invalidateGameCache(slug);
+    },
   });
 
   // Following a game: a subscription rather than a bookmark. The count is public,

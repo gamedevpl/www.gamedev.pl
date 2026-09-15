@@ -372,6 +372,24 @@ describe('the shelf the CLI chat hands the agent', () => {
     await app.close();
   });
 
+  it('reflects a transfer: drops the sender’s slug, includes the recipient’s', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.createSubmission(1, 'g:test-user', 'Wojna robakow');
+    await store.setSubmissionSlug(1, 'wojna-robakow');
+    await store.ensureGameAccess('wojna-robakow', 'g:test-user', at, at);
+    await store.recordSettledOwner('wojna-robakow', 'g:recipient', 999, at, at);
+
+    const { agent, seen } = capturingAgent();
+    const { app, authHeaders: headers } = await createApp({ store, intakeAgent: agent });
+    const res = await chat(app, headers, { text: 'what are my games?' });
+    expect(res.statusCode).toBe(200);
+    expect(seen[0]?.games ?? []).toEqual([]);
+    await app.close();
+  });
+
   it('sends an empty list for a creator with no games, not a missing one', async () => {
     const { agent, seen } = capturingAgent();
     const { app, authHeaders: headers } = await createApp({ intakeAgent: agent });

@@ -115,6 +115,26 @@
   line-height: 1.45;
 }
 
+.admin-job-confirm-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  color: var(--muted, #94a3b8);
+  font-size: 0.82rem;
+}
+
+.admin-job-confirm-reason textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+}
+
 .admin-job-confirm-actions {
   display: flex;
   justify-content: flex-end;

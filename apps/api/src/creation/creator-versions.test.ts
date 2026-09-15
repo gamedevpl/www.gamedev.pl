@@ -92,7 +92,8 @@ describe('owner version history (CL-29a)', () => {
     expect(stolen.statusCode).toBe(404);
   });
 
-  it('404s the former owner after the slug transfers', async () => {
+  it('a later submission naming the same slug does not silently move ownership', async () => {
+    // A stray same-slug submission must not read as a transfer.
     await store.upsertUser({ uid: 'g:other' });
     await store.createSubmission(99, 'g:other', 'Taken');
     await store.setSubmissionSlug(99, SLUG);
@@ -106,18 +107,18 @@ describe('owner version history (CL-29a)', () => {
         agentChannel: { gamesStore: stubGamesStore() },
       },
     });
-    const former = await app.inject({
+    const original = await app.inject({
       method: 'GET',
       url: `/api/me/studio/games/${SLUG}/versions`,
       headers: sessionHeaders('g:creator'),
     });
-    expect(former.statusCode).toBe(404);
-    const current = await app.inject({
+    expect(original.statusCode).toBe(200);
+    const stranger = await app.inject({
       method: 'GET',
       url: `/api/me/studio/games/${SLUG}/versions`,
       headers: sessionHeaders('g:other'),
     });
-    expect(current.statusCode).toBe(200);
+    expect(stranger.statusCode).toBe(404);
   });
 
   it('refuses version reads from a blocked owner', async () => {

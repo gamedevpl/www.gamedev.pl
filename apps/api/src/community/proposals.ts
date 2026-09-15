@@ -403,6 +403,13 @@ export async function acceptProposal(
 
   const version = record.version;
   const adopt = async (admissionNonce?: string): Promise<DecisionResult> => {
+    // Ownership can move between resolveReviewer's check and this lease's acquisition.
+    if (input.reviewer === 'creator') {
+      const owner = await resolveOwnerOfRecord(deps.store, record.targetSlug);
+      if (owner.kind !== 'creator' || owner.uid !== input.byUid) {
+        return { ok: false, status: 409, error: 'stale_owner' };
+      }
+    }
     // Recheck the live base after admission and before adopting the manifest.
     const publication = await deps.store.getPublication(record.targetSlug);
     const stale =

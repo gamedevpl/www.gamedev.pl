@@ -49,7 +49,8 @@ it.each([10, 11])('Firestore permits expected round %s after cancellation releas
 it('keeps ownership, moderation and active recovery fences after abandoned history', () => {
   expect(canClaimManualRound(target, [published, canceled], 10)).toBe(true);
   expect(canClaimManualRound(target, [canceled], 11)).toBe(true);
-  expect(canClaimManualRound({ ...target, ownerUid: 'foreign' }, [published, canceled], 10)).toBe(false);
+  // Fine with a new owner: the caller already verified canonical ownership.
+  expect(canClaimManualRound({ ...target, ownerUid: 'new-owner' }, [published, canceled], 10)).toBe(true);
   expect(canClaimManualRound(target, [published, { ...canceled, moderationBlockedAt: '2026-01-03' }], 10)).toBe(false);
   expect(canClaimManualRound(target, [published, { ...canceled, state: 'queued', recoveryKey: 'active' }], 10)).toBe(
     false,

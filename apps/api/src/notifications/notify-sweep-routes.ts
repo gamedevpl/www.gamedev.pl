@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 import { runShelfRebuildPass } from '../platform/shelf-rebuild-pass.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
 import { createSweepCadence } from '../platform/sweep-cadence.js';
@@ -281,9 +282,11 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
 
             // Notified-at is written after both emits, so failures retry next sweep.
             const submission = manifest ? await store.getSubmission(manifest.jobId) : null;
-            if (submission) {
+            // The game's owner now, not whoever's job last published it.
+            const healthUid = await currentOwnerUid(store, publication.slug, submission?.ownerUid);
+            if (submission && healthUid) {
               await emitSubmissionNotification(buildNotifyDeps(), {
-                uid: submission.ownerUid,
+                uid: healthUid,
                 type: 'submission.game_health',
                 jobId: submission.jobId,
                 gameTitle: submission.title,
@@ -298,7 +301,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
                   kind: 'game_unhealthy',
                   jobId: manifest?.jobId ?? 0,
                   title: submission?.title ?? publication.slug,
-                  ownerUid: submission?.ownerUid ?? '',
+                  ownerUid: healthUid ?? '',
                   slug: publication.slug,
                   since: health.ranAt,
                 },
