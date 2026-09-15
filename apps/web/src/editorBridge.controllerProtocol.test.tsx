@@ -9,13 +9,18 @@ vi.mock('./studioApi', () => studioApi);
 vi.mock('./visitTelemetry', () => ({ recordEditorStep: vi.fn() }));
 
 import { useEditorDraftBridge, type EditorControllerState } from './editorBridge.js';
+import type { EditorContentDoc } from './studioApi.js';
 
 let latestController: EditorControllerState | null = null;
 
 type HarnessProps = { frameRef: MutableRefObject<HTMLIFrameElement | null>; active?: boolean };
 
+const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: null };
+
 function Harness({ frameRef, active = true }: HarnessProps) {
-  latestController = useEditorDraftBridge(frameRef, active, 'controller-fixture', true).controller;
+  const bridge = useEditorDraftBridge(frameRef, active, 'controller-fixture', true);
+  latestController = bridge.controller;
+  pushRef.current = bridge.push;
   return null;
 }
 
@@ -183,15 +188,31 @@ describe('controller bridge boundary', () => {
     expect(posted.some((message) => message.t === 'editor:content')).toBe(true);
   });
 
-  it('lets the creator retry by leaving the playtest, which the game cannot do for itself', () => {
+  it('stays stood down when Edit is reopened, because the same frame is still live', () => {
     mount();
     connect();
     act(() => latestController!.useFallback('the game refused this content change'));
 
+    // The iframe is not replaced, so this is no fresh handshake.
     setActive(false);
     setActive(true);
     send(frame({ t: 'editor:hello', controller: true }));
     send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Second chance' } }));
-    expect(latestController?.status).toBe('ready');
+    send(frame({ t: 'editor:change', id: 'change-3', patch: { path: ['a'], value: 1 } }));
+    expect(latestController?.status).toBe('failed');
+    expect(latestController?.pendingChange).toBeNull();
+  });
+
+  it('marks the last verdict stale as soon as content the game has not seen is pushed', () => {
+    mount();
+    connect();
+    send(frame({ t: 'editor:check', ok: true, problems: [] }));
+    expect(latestController?.checksFresh).toBe(true);
+
+    act(() => latestController && pushRef.current?.({ levels: [] }));
+    expect(latestController?.checksFresh).toBe(false);
+
+    send(frame({ t: 'editor:check', ok: true, problems: [] }));
+    expect(latestController?.checksFresh).toBe(true);
   });
 });

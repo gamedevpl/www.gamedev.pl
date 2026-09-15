@@ -36,6 +36,8 @@ export type EditorControllerState = {
   pendingChange: EditorControllerChange | null;
   uiRequest: EditorUiRequest | null;
   checks: { ok: boolean; problems: string[] } | null;
+  // False while pushed content still awaits the game's verdict.
+  checksFresh: boolean;
   canvasBox: EditorCanvasBox | null;
   sendEvent: (event: Record<string, unknown>) => void;
   sendSelection: (selection: EditorControllerSelection | null) => void;
@@ -96,6 +98,7 @@ export function useEditorDraftBridge(
   const [pendingChange, setPendingChange] = useState<EditorControllerChange | null>(null);
   const [uiRequest, setUiRequest] = useState<EditorUiRequest | null>(null);
   const [controllerChecks, setControllerChecks] = useState<{ ok: boolean; problems: string[] } | null>(null);
+  const [checksFresh, setChecksFresh] = useState(true);
   const [canvasBox, setCanvasBox] = useState<EditorControllerState['canvasBox']>(null);
   const controllerStatusRef = useRef(controllerStatus);
   controllerStatusRef.current = controllerStatus;
@@ -116,6 +119,7 @@ export function useEditorDraftBridge(
     setPendingChange(null);
     setUiRequest(null);
     setControllerChecks(null);
+    setChecksFresh(true);
     setCanvasBox(null);
   }, [slug]);
 
@@ -204,6 +208,7 @@ export function useEditorDraftBridge(
         setUiRequest({ id: data.id, spec: data.spec });
       } else if (data.t === 'editor:check') {
         setControllerChecks({ ok: data.ok, problems: data.problems });
+        setChecksFresh(true);
       } else if (data.t === 'editor:ack' && !data.ok && controllerStatusRef.current !== null) {
         failController(data.error ?? 'The game refused this content change.');
       } else if (data.t === 'editor:controller-error') {
@@ -233,8 +238,6 @@ export function useEditorDraftBridge(
       disposed = true;
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
       window.removeEventListener('message', onMessage);
-      // The creator retries by leaving playtest; the game cannot.
-      controllerStoodDownRef.current = false;
     };
   }, [frameRef, active, slug, editable]);
 
@@ -242,6 +245,8 @@ export function useEditorDraftBridge(
     (content, selection) => {
       lastContentRef.current = content;
       if (selection !== undefined) lastSelectionRef.current = selection;
+      // Unseen content; the last verdict is about older content.
+      setChecksFresh(false);
       frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, lastSelectionRef.current), '*');
     },
     [frameRef],
@@ -263,6 +268,7 @@ export function useEditorDraftBridge(
       pendingChange,
       uiRequest,
       checks: controllerChecks,
+      checksFresh,
       canvasBox,
       sendEvent: (event) => send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:event', event }),
       sendSelection: (selection) => {
@@ -291,6 +297,7 @@ export function useEditorDraftBridge(
     };
   }, [
     canvasBox,
+    checksFresh,
     controllerChecks,
     controllerReason,
     controllerSelection,

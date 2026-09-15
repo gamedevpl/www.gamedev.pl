@@ -81,6 +81,7 @@ function controllerState(overrides: Partial<EditorControllerState> = {}): Editor
     pendingChange: null,
     uiRequest: null,
     checks: null,
+    checksFresh: true,
     canvasBox: null,
     sendEvent: vi.fn(),
     sendSelection: vi.fn(),
@@ -131,6 +132,39 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     // The controller is still live, so it still refuses.
     expect(publishButton().disabled).toBe(true);
     expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
+  });
+
+  it('holds Publish after a standard edit until the game has answered for it', async () => {
+    await renderWithController(controllerState({ checks: { ok: true, problems: [] } }));
+    await act(async () => container.querySelector<HTMLButtonElement>('.editor-surface-switch')!.click());
+    expect(publishButton().disabled).toBe(false);
+
+    const slider = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(slider, '150');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Unseen edit, so the green verdict is about older content.
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: true, problems: [] }, checksFresh: false })}
+          onOpenPlaytest={vi.fn()}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(publishButton().disabled).toBe(true);
+    expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
+  });
+
+  it('never holds Publish for a game that reports no checks at all', async () => {
+    await renderWithController(controllerState({ checks: null, checksFresh: false }));
+    expect(publishButton().disabled).toBe(false);
   });
 
   it('refuses a controller patch while the creator is on the standard editor', async () => {

@@ -68,6 +68,7 @@ function controllerState(overrides: Partial<EditorControllerState> = {}): Editor
     pendingChange: null,
     uiRequest: null,
     checks: null,
+    checksFresh: true,
     canvasBox: null,
     sendEvent: vi.fn(),
     sendSelection: vi.fn(),

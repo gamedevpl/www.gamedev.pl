@@ -139,9 +139,14 @@ export function EditorPanel(props: {
   const controllerLive = Boolean(props.controller?.status === 'ready' && !controllerDisabled && props.controller.view);
   const controllerActive = controllerLive && !standardPreferred;
   const lastControllerChangeRef = useRef<string | null>(null);
+  // A verdict about older content is no verdict about this one.
+  const checksBlock =
+    controllerLive && props.controller?.checks !== null
+      ? props.controller?.checks?.ok === false || !props.controller?.checksFresh
+      : false;
   // Read at publish time, so a late verdict still counts.
-  const liveChecksRef = useRef<boolean>(true);
-  liveChecksRef.current = !controllerLive || props.controller?.checks?.ok !== false;
+  const checksBlockRef = useRef(false);
+  checksBlockRef.current = checksBlock;
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
     content,
@@ -493,7 +498,7 @@ export function EditorPanel(props: {
     if (saveState === 'dirty') {
       if (!(await saveNow())) return;
     }
-    if (!liveChecksRef.current) {
+    if (checksBlockRef.current) {
       setPublish({ kind: 'idle' });
       return;
     }
@@ -597,7 +602,7 @@ export function EditorPanel(props: {
         }),
         ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
         // A live controller's checks gate Publish whichever surface is shown.
-        ...(controllerLive && props.controller?.checks?.ok === false ? [t('studioPanel.editor.checksFromGame')] : []),
+        ...(checksBlock ? [t('studioPanel.editor.checksFromGame')] : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
