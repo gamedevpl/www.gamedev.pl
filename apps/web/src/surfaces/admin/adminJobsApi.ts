@@ -45,13 +45,6 @@ export async function fetchJobQueue(): Promise<JobQueueResponse | null> {
   return (await response.json()) as JobQueueResponse;
 }
 
-export interface PublishResult {
-  ok: true;
-  slug: string;
-  version: string;
-  publishedAt: string;
-}
-
 /**
  * Why a publish was refused, in the API's own vocabulary.
  *
@@ -60,63 +53,13 @@ export interface PublishResult {
  * `nothing_delivered` is "this build never uploaded anything". A single "could not
  * publish" would collapse three different next steps into one shrug.
  */
-export type PublishRefusal =
-  | 'gate_red'
-  | 'not_gated'
-  | 'nothing_delivered'
-  | 'profile_required'
-  | 'store_unavailable'
-  | 'editorial_cut'
-  | 'editorial_pending'
-  | 'reason_required'
-  | 'reason_too_long'
-  | 'unknown';
-
-export interface EditorialCounts {
-  reviewers: number;
-  keep: number;
-  cut: number;
-  skip: number;
-  weakOrBad: Record<string, number>;
-}
-
-export type PublishOutcome = PublishResult | { refused: PublishRefusal; editorial?: EditorialCounts };
-
-export async function publishJob(
-  jobId: number,
-  body?: { override?: boolean; overrideReason?: string },
-): Promise<PublishOutcome> {
-  const response = await fetch(`/api/admin/jobs/${jobId}/publish`, {
-    method: 'POST',
-    credentials: 'include',
-    ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
-  });
-  if (response.ok) return (await response.json()) as PublishResult;
-  const payload = (await response.json().catch(() => ({}))) as Partial<EditorialCounts> & { error?: string };
-  const known: PublishRefusal[] = [
-    'gate_red',
-    'not_gated',
-    'nothing_delivered',
-    'profile_required',
-    'store_unavailable',
-    'editorial_cut',
-    'editorial_pending',
-    'reason_required',
-    'reason_too_long',
-  ];
-  const refused = known.find((code) => code === payload.error) ?? 'unknown';
-  const editorial =
-    typeof payload.reviewers === 'number'
-      ? {
-          reviewers: payload.reviewers,
-          keep: payload.keep ?? 0,
-          cut: payload.cut ?? 0,
-          skip: payload.skip ?? 0,
-          weakOrBad: payload.weakOrBad ?? {},
-        }
-      : undefined;
-  return { refused, editorial };
-}
+export {
+  publishJob,
+  type EditorialCounts,
+  type PublishOutcome,
+  type PublishRefusal,
+  type PublishResult,
+} from './adminPublishApi.js';
 
 export interface CancelResult {
   ok: true;
