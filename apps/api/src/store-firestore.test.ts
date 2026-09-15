@@ -1111,6 +1111,20 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     expect(access).toMatchObject({ ownerUid: 'g:grace', accessRevision: 2 });
   });
 
+  it('retires the sender’s agent key lock so the recipient can open self-build rounds', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await pendingInvite(store);
+    await store.ensureGameAgentKey('sky', 'g:ada', '2026-01-01T00:00:00.000Z');
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getGameAgentKey('sky')).toBeNull();
+    expect(await store.ensureGameAgentKey('sky', 'g:grace', '2026-01-02T00:00:00.000Z')).toMatchObject({
+      ownerUid: 'g:grace',
+    });
+  });
+
   it('is idempotent: accepting twice returns the same accepted invitation', async () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);

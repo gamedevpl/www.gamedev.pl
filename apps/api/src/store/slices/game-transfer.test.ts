@@ -200,6 +200,20 @@ describe('acceptGameTransferInvitation', () => {
     expect(access).toMatchObject({ ownerUid: 'g:grace', accessRevision: 2 });
   });
 
+  it('retires the sender’s agent key lock so the recipient can open self-build rounds', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.ensureGameAgentKey('sky', 'g:ada', AT);
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+
+    expect(await store.getGameAgentKey('sky')).toBeNull();
+    // The next open_round issues a fresh key instead of being locked out.
+    expect(await store.ensureGameAgentKey('sky', 'g:grace', LATER)).toMatchObject({ ownerUid: 'g:grace' });
+  });
+
   it('is idempotent: accepting twice returns the same accepted invitation', async () => {
     const store = new InMemoryStore();
     await ownedGame(store, 'sky', 'g:ada');

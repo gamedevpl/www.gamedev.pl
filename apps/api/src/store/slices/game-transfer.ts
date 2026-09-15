@@ -79,6 +79,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private hasActiveBuildRound: (slug: string) => boolean = () => false,
     // A held lease means a round could still open under the sender.
     private hasActiveCheckoutRecovery: (slug: string, now: number) => Promise<boolean> = () => Promise.resolve(false),
+    // Stale sender lock: retire it for a fresh one next time.
+    private retireGameAgentKey: (slug: string) => void = () => {},
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -131,6 +133,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     if (this.hasActiveBuildRound(slug) || (await this.hasActiveCheckoutRecovery(slug, Date.parse(at)))) return 'busy';
 
     this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
+    this.retireGameAgentKey(slug);
     const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
     this.transfers.set(slug, accepted);
     return clone(accepted);
@@ -240,6 +243,7 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     const ref = this.doc(slug);
     const accessRef = this.db.collection('gameAccess').doc(slug);
     const gameRef = this.db.collection('games').doc(slug);
+    const agentKeyRef = this.db.collection('gameAgentKeys').doc(slug);
     const activeQuery = this.db.collection('submissions').where('slug', '==', slug);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -248,14 +252,16 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (existing.status === 'accepted') return existing;
       if (!isPending(existing, at)) return null;
 
-      const [senderFence, recipientFence, recipientSnap, accessSnap, activeSnap, gameSnap] = await Promise.all([
-        tx.get(this.erasureFence(existing.senderUid)),
-        tx.get(this.erasureFence(recipientUid)),
-        tx.get(this.db.collection('users').doc(recipientUid)),
-        tx.get(accessRef),
-        tx.get(activeQuery),
-        tx.get(gameRef),
-      ]);
+      const [senderFence, recipientFence, recipientSnap, accessSnap, activeSnap, gameSnap, agentKeySnap] =
+        await Promise.all([
+          tx.get(this.erasureFence(existing.senderUid)),
+          tx.get(this.erasureFence(recipientUid)),
+          tx.get(this.db.collection('users').doc(recipientUid)),
+          tx.get(accessRef),
+          tx.get(activeQuery),
+          tx.get(gameRef),
+          tx.get(agentKeyRef),
+        ]);
       if (senderFence.exists || recipientFence.exists) return 'ineligible';
 
       const recipient = recipientSnap.exists
@@ -274,6 +280,8 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (busy) return 'busy';
 
       tx.set(accessRef, transferredAccess(access, recipientUid, at));
+      // Stale sender lock: retire it for a fresh one next time.
+      if (agentKeySnap.exists) tx.delete(agentKeyRef);
       const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
       tx.set(ref, accepted);
       return accepted;

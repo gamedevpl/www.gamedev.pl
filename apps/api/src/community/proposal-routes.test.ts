@@ -223,6 +223,45 @@ describe('proposal routes', () => {
     expect(adopted?.state).toBe('ready_for_review');
   });
 
+  it('routes a pre-transfer proposal to the new owner, not the stale targetOwnerUid', async () => {
+    const store = new InMemoryStore();
+    const gamesStore = fakeGamesStore();
+    await seed(store);
+    const proposal = await seedProposal(store, gamesStore);
+    const RECIPIENT = 'g:nowy';
+    await store.upsertUser({ uid: RECIPIENT });
+    const at = new Date(NOW).toISOString();
+    await store.recordSettledOwner(SLUG, RECIPIENT, 999, at, at);
+    const app = await appWith(store, gamesStore);
+
+    // Surfaces despite the stale targetOwnerUid.
+    const reviews = await app.inject({ method: 'GET', url: '/api/me/reviews', headers: { cookie: cookie(RECIPIENT) } });
+    expect(reviews.json().proposals.map((p: { id: string }) => p.id)).toContain(proposal.id);
+
+    // The former owner no longer has it.
+    const staleReviews = await app.inject({
+      method: 'GET',
+      url: '/api/me/reviews',
+      headers: { cookie: cookie(OWNER) },
+    });
+    expect(staleReviews.json().proposals.map((p: { id: string }) => p.id)).not.toContain(proposal.id);
+
+    const accept = await app.inject({
+      method: 'POST',
+      url: `/api/proposals/${proposal.id}/accept`,
+      headers: { cookie: cookie(RECIPIENT) },
+    });
+    expect(accept.statusCode).toBe(200);
+
+    // The stale owner can no longer decide it either.
+    const staleAccept = await app.inject({
+      method: 'POST',
+      url: `/api/proposals/${proposal.id}/accept`,
+      headers: { cookie: cookie(OWNER) },
+    });
+    expect(staleAccept.statusCode).not.toBe(200);
+  });
+
   it('refuses an accept from anybody but the owner', async () => {
     const store = new InMemoryStore();
     const gamesStore = fakeGamesStore();
