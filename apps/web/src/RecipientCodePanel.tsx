@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchRecipientCode, rotateRecipientCode } from './transferApi.js';
+import './RecipientCodePanel.css';
 
 // Beside the other credentials, not permanently on the shelf.
 
@@ -40,8 +41,8 @@ export function RecipientCodePanel(): JSX.Element {
   return (
     <section className="recipient-code" aria-label={t('studioShelf.transfer.yourCode')} data-testid="recipient-code">
       <p className="studio-rail-credentials-hint">{t('studioShelf.transfer.codeHint')}</p>
-      <div className="studio-transfer-code">
-        <span className="studio-transfer-code-label">{t('studioShelf.transfer.yourCode')}</span>
+      <div className="recipient-code-row">
+        <span className="recipient-code-label">{t('studioShelf.transfer.yourCode')}</span>
         <code data-testid="studio-recipient-code">{revealed && code ? code : '••••••••'}</code>
         <button
           type="button"
