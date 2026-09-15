@@ -89,4 +89,19 @@ describe('type check', () => {
     const result = typeCheckGame({ 'game/model.ts': MODEL, 'index.html': '<!doctype html>' }, KIT);
     expect(result.ok).toBe(true);
   });
+
+  it('resolves EDITOR.ts against shared/editor-def.ts from the kit', () => {
+    const editor = `import { defineEditor } from '../../shared/editor-def.ts';
+export default defineEditor(1);
+`;
+    expect(
+      typeCheckGame({ 'EDITOR.ts': editor }, KIT, {
+        'shared/editor-def.ts': 'export function defineEditor(value: number) { return value; }\n',
+      }).ok,
+    ).toBe(true);
+    const missing = typeCheckGame({ 'EDITOR.ts': editor }, KIT);
+    expect(missing.ok).toBe(false);
+    if (missing.ok) return;
+    expect(missing.errors[0]).toMatch(/editor-def/);
+  });
 });

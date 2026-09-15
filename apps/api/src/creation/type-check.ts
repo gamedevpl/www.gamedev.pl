@@ -70,13 +70,11 @@ const libCache = new Map<string, ts.SourceFile | undefined>();
 
 export type TypeCheckResult = { ok: true } | { ok: false; errors: string[] };
 
-/**
- * @param sources game-relative path → source, exactly as the lane splices them.
- * @param kitDeclaration `shared/game-kit.d.ts`. Without it every `GameKit` call
- *   is an error, so a missing kit means the check cannot run rather than that
- *   the game is broken — the caller gets `ok` and the build proceeds unchecked.
- */
-export function typeCheckGame(sources: Record<string, string>, kitDeclaration: string | null): TypeCheckResult {
+export function typeCheckGame(
+  sources: Record<string, string>,
+  kitDeclaration: string | null,
+  kitShared: Record<string, string> = {},
+): TypeCheckResult {
   if (!kitDeclaration) return { ok: true };
 
   const files = new Map<string, string>();
@@ -85,6 +83,7 @@ export function typeCheckGame(sources: Record<string, string>, kitDeclaration: s
     if (relative.endsWith('.ts')) files.set(`${ROOT}/${relative}`, source);
   }
   const roots = [...files.keys()];
+  for (const [rel, source] of Object.entries(kitShared)) files.set(`/${rel}`, source);
 
   const host: ts.CompilerHost = {
     fileExists: (name) => files.has(name) || ts.sys.fileExists(name),
@@ -104,10 +103,10 @@ export function typeCheckGame(sources: Record<string, string>, kitDeclaration: s
     getCanonicalFileName: (name) => name,
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => '\n',
-    // Directory questions are only asked about the virtual tree; answering them
-    // from the real filesystem would let resolution wander out of it.
-    directoryExists: (dir) => dir.startsWith(ROOT) || ts.sys.directoryExists(dir),
-    getDirectories: (dir) => (dir.startsWith(ROOT) ? [] : ts.sys.getDirectories(dir)),
+    // Keep resolution inside the virtual tree, including /shared kit modules.
+    directoryExists: (dir) =>
+      dir.startsWith(ROOT) || dir === '/shared' || dir.startsWith('/shared/') || ts.sys.directoryExists(dir),
+    getDirectories: (dir) => (dir.startsWith(ROOT) || dir.startsWith('/shared') ? [] : ts.sys.getDirectories(dir)),
   };
 
   let program: ts.Program;

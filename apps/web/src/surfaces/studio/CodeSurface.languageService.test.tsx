@@ -134,10 +134,12 @@ describe('CodeSurface language-service degradation (GA-06)', () => {
     expect(mockedLanguageService.createCodeSurfaceLanguageService).toHaveBeenCalledWith(
       { 'game.ts': 'export const boot = () => {};' },
       null,
+      {},
     );
     // GAME.json isn't .ts — the vfs must not be seeded.
     expect(mockedLanguageService.createCodeSurfaceLanguageService).not.toHaveBeenCalledWith(
       expect.objectContaining({ 'GAME.json': expect.anything() }),
+      expect.anything(),
       expect.anything(),
     );
   });
@@ -168,6 +170,7 @@ describe('CodeSurface language-service degradation (GA-06)', () => {
     expect(mockedLanguageService.createCodeSurfaceLanguageService).toHaveBeenCalledWith(
       { 'game.ts': 'export const boot = () => {};' },
       'declare const x: 1;',
+      {},
     );
     // vfs roots paths at "/"; facet path must match the worker's seed.
     expect(lastEditorProps?.languageService).toEqual({ worker, path: '/game.ts' });
@@ -252,6 +255,7 @@ describe('CodeSurface goto-definition (GA-09)', () => {
     mockedApi.fetchCodeSurfaceKitDeclaration.mockResolvedValue({
       engineRef: 'v1',
       declaration: 'interface GameKitGameContext {\n  gfx: unknown;\n}\n',
+      files: { 'shared/editor-def.ts': 'export function defineEditor() {}\n' },
     });
     mockedLanguageService.createCodeSurfaceLanguageService.mockResolvedValue({
       worker: {} as never,
@@ -304,6 +308,27 @@ describe('CodeSurface goto-definition (GA-09)', () => {
     expect(dialog?.textContent).toContain('GameKitGameContext');
     expect(container.querySelector('.is-jump-target')).not.toBeNull();
     // Still on game.ts — the kit hop leaves it alone.
+    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game.ts');
+  });
+
+  it('opens a read-only kit viewer for a jump into shared/editor-def.ts', async () => {
+    await render();
+
+    expect(mockedLanguageService.createCodeSurfaceLanguageService).toHaveBeenCalledWith(
+      expect.objectContaining({ 'game.ts': expect.any(String) }),
+      expect.any(String),
+      { 'shared/editor-def.ts': 'export function defineEditor() {}\n' },
+    );
+
+    await act(async () => {
+      lastEditorProps?.onGotoDefinition?.('/shared/editor-def.ts', 0, 14);
+      await Promise.resolve();
+    });
+
+    const dialog = container.querySelector('.code-surface-kit-viewer');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('shared/editor-def.ts');
+    expect(dialog?.textContent).toContain('defineEditor');
     expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game.ts');
   });
 
