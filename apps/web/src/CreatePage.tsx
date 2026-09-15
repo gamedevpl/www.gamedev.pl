@@ -91,7 +91,7 @@ export function CreatePage({
                 </span>
                 <div className="create-step-card">
                   <div className={`create-step-scene is-${scene}`} aria-hidden="true">
-                    <Mascot emotion={pose.emotion} look={pose.look} size={56} />
+                    <Mascot emotion={pose.emotion} look={pose.look} size={72} />
                   </div>
                   <div className="create-step-body">
                     <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>

@@ -6245,7 +6245,7 @@ button.builder-mode-selector:disabled {
 }
 
 .mascot__think-arm {
-  transform-origin: 56px 48px;
+  transform-origin: 62px 50px;
 }
 
 .mascot:not(.mascot--static).mascot--thinking .mascot__think-arm {

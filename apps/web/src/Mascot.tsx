@@ -525,17 +525,25 @@ export function Mascot({
 
         {showThinkArm ? (
           <g className="mascot__think-arm" aria-hidden="true">
-            <path d="M58 50 Q70 38 50 23" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" />
+            <path d="M62 50 Q46 38 36 24" fill="none" stroke="#0d1520" strokeWidth="5.4" strokeLinecap="round" />
+            <path d="M62 50 Q46 38 36 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
             <ellipse
               className="mascot__think-fist"
-              cx="46.5"
-              cy="19.5"
-              rx="5.4"
-              ry="4.5"
+              cx="35"
+              cy="21"
+              rx="7.2"
+              ry="6"
               fill="#0d1520"
               stroke="currentColor"
+              strokeWidth="2"
+              transform="rotate(-18 35 21)"
+            />
+            <path
+              d="M31 17.5 L29.5 12.2 M35 16.6 L34.2 11.2 M38.6 17.2 L38.2 12.4"
+              fill="none"
+              stroke="currentColor"
               strokeWidth="1.8"
-              transform="rotate(-30 46.5 19.5)"
+              strokeLinecap="round"
             />
           </g>
         ) : null}
