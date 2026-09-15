@@ -556,14 +556,22 @@ and bounced. A player who finished a game at 00:00:10 would turn one completed s
 into two, one of them a bounce — halving the finish rate and the median play time on a
 number an agent acts on.
 
-So the rollup recognizes it. A session with no open whose first event lands within
-`CONTINUATION_GRACE_MS` of the partition start is a **continuation**: its seconds, ticks
-and outcomes still count, but it is not a visit, it did not bounce, and its ending is
-carried as `continuationEndings` for the merge to credit to the day that did count it as
-a session. The grace window is wide enough for a late flush and narrow enough that a
-session whose open was simply dropped at two in the afternoon is still the session it is.
-A test asserts the merged row for the finished-after-midnight case is **identical** to a
-whole-window scan.
+So the rollup joins it rather than tolerating it. A session with no open whose first
+event lands within `CONTINUATION_GRACE_MS` of the partition start is a **continuation**:
+it is dropped from its own day entirely, and absorbed whole by the day that opened it.
+That costs nothing extra to read, because the walk runs newest first and the sweep is
+already scanning the next partition when it builds the previous one — a day is only
+sealed on a run where its successor was scanned, which is what makes the join always
+available.
+
+The result is that a session is summarized in exactly one place, with all its play time,
+its score, its labels, its zone rungs and its ending, so every session-derived number
+matches a whole-window scan rather than approximating it. Tests assert `toEqual` against
+that scan for the seam cases, not a tolerance.
+
+The grace window is what keeps it honest in the other direction: wide enough for a late
+flush, narrow enough that a session whose open was simply dropped at two in the afternoon
+is still counted as the session it is.
 
 Same day, same logs: `/api/me/studio/health` was running 1,500–2,000 reads a minute for the
 same structural reason, one telemetry query per (day, slug) with no window at all. It is in

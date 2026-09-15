@@ -1,6 +1,11 @@
 // One day of play events, rolled into one document.
 
-import { summarizeGameHealthDetailed, type GameHealth, type GameHealthDetail } from './telemetry-health.js';
+import {
+  isContinuation,
+  summarizeGameHealthDetailed,
+  type GameHealth,
+  type GameHealthDetail,
+} from './telemetry-health.js';
 import type { TelemetryEvent } from './store.js';
 
 // Bump when the shape changes, or when the summarizer's counting does.
@@ -56,9 +61,6 @@ export interface DailyGameAggregate extends DailyCounters {
   // Deeper than the reported top-N, so the window reranks.
   errorTally: { message: string; count: number }[];
   labelTally: { label: string; sessions: number }[];
-
-  // Endings owed to a session opened the day before.
-  continuationEndings: number;
 }
 
 export interface DailyTelemetryAggregate {
@@ -109,7 +111,6 @@ function toGameAggregate(detail: GameHealthDetail, perMetric: number, tallyRows:
     bestScores: downsample(samples.bestScores, perMetric),
     errorTally: samples.errorTally.slice(0, tallyRows),
     labelTally: samples.labelTally.slice(0, tallyRows),
-    continuationEndings: samples.continuationEndings,
   };
 }
 
@@ -163,13 +164,47 @@ export function fitWithinDocument(ranked: GameHealthDetail[]): {
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function partitionStartMs(date: string): number {
+  return Date.parse(`${date}T00:00:00.000Z`);
+}
+
+// The tail this day's sessions left in the next partition.
+
+// The walk runs newest first, so that scan is already in hand.
+export function tailFromNextDay(
+  events: TelemetryEvent[],
+  nextDayEvents: readonly TelemetryEvent[],
+  date: string,
+): TelemetryEvent[] {
+  if (nextDayEvents.length === 0) return [];
+  const nextStart = partitionStartMs(date) + DAY_MS;
+  const ours = new Set(events.map((event) => event.sessionId));
+
+  const bySession = new Map<string, TelemetryEvent[]>();
+  for (const event of nextDayEvents) {
+    if (!ours.has(event.sessionId)) continue;
+    const bucket = bySession.get(event.sessionId);
+    if (bucket) bucket.push(event);
+    else bySession.set(event.sessionId, [event]);
+  }
+
+  const carried: TelemetryEvent[] = [];
+  for (const sessionEvents of bySession.values()) {
+    if (isContinuation(sessionEvents, nextStart)) carried.push(...sessionEvents);
+  }
+  return carried;
+}
+
 export function buildDailyAggregate(
   date: string,
   events: TelemetryEvent[],
-  meta: { computedAt: string; sealed: boolean; truncated: boolean },
+  meta: { computedAt: string; sealed: boolean; truncated: boolean; nextDayEvents?: readonly TelemetryEvent[] },
 ): DailyTelemetryAggregate {
-  // The partition start is what makes a tail recognizable.
-  const rows = summarizeGameHealthDetailed(events, { partitionStartMs: Date.parse(`${date}T00:00:00.000Z`) });
+  // A session that ran past midnight is whole here, or nowhere.
+  const whole = [...events, ...tailFromNextDay(events, meta.nextDayEvents ?? [], date)];
+  const rows = summarizeGameHealthDetailed(whole, { partitionStartMs: partitionStartMs(date) });
   const ranked = [...rows].sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
   const { games, gamesTruncated, tallyTruncated } = fitWithinDocument(ranked);
   return {
@@ -250,8 +285,7 @@ function mergeGame(days: DailyGameAggregate[]): GameHealth {
   const won = sum((day) => day.outcomes.won);
   const lost = sum((day) => day.outcomes.lost);
   const decided = won + lost;
-  // One finish, credited to the day that counted the session.
-  const sessionsWithEnding = sum((day) => day.sessionsWithEnding + (day.continuationEndings ?? 0));
+  const sessionsWithEnding = sum((day) => day.sessionsWithEnding);
   const zoneAdmitted = sum((day) => day.zoneAdmitted);
   const zoneJoined = sum((day) => day.zoneJoined);
 
@@ -286,9 +320,7 @@ function mergeGame(days: DailyGameAggregate[]): GameHealth {
   };
 }
 
-// A session crossing UTC midnight leaves a tail in the second partition.
-
-// The tail is not a session, so the merge sees one.
+// Each day already holds its sessions whole, so this is only summing.
 export function mergeDailyAggregates(days: DailyTelemetryAggregate[]): GameHealth[] {
   const bySlug = new Map<string, DailyGameAggregate[]>();
   for (const day of days) {
@@ -347,6 +379,8 @@ export async function readDailyWindow(
   let remaining = budget.total;
   let rescanned = 0;
   let reused = 0;
+  // The newest day comes first, so its events are still in hand.
+  let nextDayEvents: TelemetryEvent[] = [];
 
   for (const dateStr of requested) {
     const stored = await reader.get(dateStr);
@@ -356,6 +390,10 @@ export async function readDailyWindow(
       // Games dropped, or tallies shortened, make every count a floor too.
       if (stored.truncated || stored.gamesTruncated || stored.tallyTruncated) truncated = true;
       reused += 1;
+      // A sealed day yields no events, so no tail to pass back.
+
+      // Only reachable on a partial version migration.
+      nextDayEvents = [];
       continue;
     }
 
@@ -376,7 +414,9 @@ export async function readDailyWindow(
       // Sealed even when truncated: a rescan reads the same page.
       sealed: dateStr < meta.sealedBefore,
       truncated: dayTruncated,
+      nextDayEvents,
     });
+    nextDayEvents = events;
     if (aggregate.gamesTruncated || aggregate.tallyTruncated) truncated = true;
     days.push(aggregate);
     scanned.push(dateStr);

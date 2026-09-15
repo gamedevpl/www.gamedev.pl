@@ -122,6 +122,7 @@ const FILE_BUCKET = {
   'telemetry-health': 'platform',
   'telemetry-daily': 'platform',
   'telemetry-daily.test': 'platform',
+  'telemetry-daily-window.test': 'platform',
   'delivery-metrics': 'platform',
   // Pure vocabulary and formatting for a creator's public identity -- read by every
   // surface that renders a byline, not creation-domain business logic.

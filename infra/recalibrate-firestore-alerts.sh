@@ -296,8 +296,14 @@ node -e '
     return rows;
   })();
 
-  const find = (prefix, duration) =>
-    (deployed ?? []).find((row) => row.policy.startsWith(prefix) && (!duration || row.duration === duration));
+  // A disabled policy cannot alert, so it is no basis for saying one fired. It is
+  // still worth saying out loud that a ceiling is switched off.
+  const match = (prefix, duration) =>
+    (deployed ?? []).filter((row) => row.policy.startsWith(prefix) && (!duration || row.duration === duration));
+  const find = (prefix, duration) => match(prefix, duration).find((row) => row.enabled);
+  const disabled = [...new Set((deployed ?? []).filter((row) => !row.enabled).map((row) => row.policy))].filter(
+    (name) => name.startsWith("A29") || name.startsWith("A30") || name.startsWith("A31"),
+  );
 
   const breaches = [];
 
@@ -305,7 +311,8 @@ node -e '
   // threshold means the policy fired, and a fired policy is a finding, not an input.
   const compare = (name, measured, unit, row, note) => {
     if (!row) {
-      console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   (no deployed condition found)`);
+      const why = match(name.split(" ")[0]).length > 0 ? "disabled" : "no deployed condition found";
+      console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   (${why})`);
       return;
     }
     const share = row.value === 0 ? Infinity : measured / row.value;
@@ -314,14 +321,14 @@ node -e '
       verdict = `BREACH -- deployed ${fmt(row.value)} crossed`;
       breaches.push(name);
     }
-    const off = row.enabled ? "" : "  [policy disabled]";
-    console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   ${verdict}${off}${note ?? ""}`);
+    console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   ${verdict}${note ?? ""}`);
   };
 
   // Its own row: the threshold alone is not the condition, the duration is half of it.
   const driftRow = (row) => {
     if (!row) {
-      console.log(`  ${"A30 drift".padEnd(20)} median ${fmt(a30Median)} /s   (no deployed condition found)`);
+      const why = match("A30", "10800s").length > 0 ? "disabled" : "no deployed condition found";
+      console.log(`  ${"A30 drift".padEnd(20)} median ${fmt(a30Median)} /s   (${why})`);
       return;
     }
     const needed = Number(String(row.duration).replace("s", "")) || 0;
@@ -346,6 +353,9 @@ node -e '
     compare("A30 spike", a30Max, "/s ", find("A30", "600s"));
     driftRow(find("A30", "10800s"));
     compare("A31 daily total", a31Max, "   ", find("A31"));
+  }
+  if (disabled.length > 0) {
+    console.log(`  !! switched off, so nothing is watching: ${disabled.join(", ")}.`);
   }
   console.log("");
 

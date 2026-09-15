@@ -47,7 +47,7 @@ const MAX_PROGRESS_LABELS = 8;
 const MAX_TRACKED_LABELS_PER_SESSION = 20;
 
 // The midnight seam: docs/firestore-read-cost.md.
-const CONTINUATION_GRACE_MS = 15 * 60_000;
+export const CONTINUATION_GRACE_MS = 15 * 60_000;
 
 export interface SummarizeOptions {
   partitionStartMs?: number;
@@ -110,18 +110,25 @@ function median(values: number[]): number | null {
  * in time order and Firestore returns documents in id order.
  */
 export interface GameHealthDetail extends GameHealth {
-  // What the medians were taken over, plus deeper tallies.
   samples: {
     playSeconds: number[];
     fps: number[];
     bestScores: number[];
     errorTally: { message: string; count: number }[];
     labelTally: { label: string; sessions: number }[];
-    continuationEndings: number;
   };
 }
 
 // The tallies are handed over whole; the rollup owns the cut.
+
+// No open, and starting as the partition does: yesterday's.
+export function isContinuation(sessionEvents: TelemetryEvent[], partitionStartMs?: number): boolean {
+  if (partitionStartMs === undefined || sessionEvents.length === 0) return false;
+  if (sessionEvents.some((event) => event.type === 'game_opened')) return false;
+  const firstAtMs = Math.min(...sessionEvents.map((event) => Date.parse(event.at)).filter(Number.isFinite));
+  if (!Number.isFinite(firstAtMs)) return false;
+  return firstAtMs - partitionStartMs <= CONTINUATION_GRACE_MS;
+}
 
 export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
   return summarizeGameHealthDetailed(events).map(({ samples: _samples, ...row }) => row);
@@ -164,6 +171,8 @@ export function summarizeGameHealthDetailed(
       const ordered = [...unordered].sort(
         (a, b) => (a.msSinceOpen ?? 0) - (b.msSinceOpen ?? 0) || a.at.localeCompare(b.at),
       );
+      // Skipped whole: the day that opened it absorbs it.
+      if (isContinuation(ordered, options.partitionStartMs)) continue;
       const state: SessionState = {
         opened: ordered.some((event) => event.type === 'game_opened'),
         firstAtMs: Date.parse(ordered[0].at),
@@ -259,16 +268,7 @@ export function summarizeGameHealthDetailed(
     }
 
     const all = [...sessions.values()];
-    // A tail is not a visit, and did not bounce.
-    const isContinuation = (state: SessionState) =>
-      options.partitionStartMs !== undefined &&
-      !state.opened &&
-      Number.isFinite(state.firstAtMs) &&
-      state.firstAtMs - options.partitionStartMs <= CONTINUATION_GRACE_MS;
-    const sessionStates = all.filter((state) => !isContinuation(state));
-    const continuations = all.filter(isContinuation);
-    const continuationEndings = continuations.filter((state) => state.reachedEnd).length;
-    const carriedPlaySeconds = continuations.reduce((sum, state) => sum + state.playSeconds, 0);
+    const sessionStates = all;
 
     for (const state of sessionStates) {
       for (const label of state.labels) labelSessions.set(label, (labelSessions.get(label) ?? 0) + 1);
@@ -309,7 +309,7 @@ export function summarizeGameHealthDetailed(
       bounces: playPerSession.filter((seconds) => seconds === 0).length,
       closes: sessionStates.filter((state) => state.closed).length,
       medianPlaySeconds: median(playPerSession) ?? 0,
-      totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0) + carriedPlaySeconds,
+      totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0),
       errors,
       errorSamples: errorTally.slice(0, MAX_ERROR_SAMPLES),
       aliveTicks,
@@ -336,7 +336,6 @@ export function summarizeGameHealthDetailed(
         bestScores,
         errorTally,
         labelTally,
-        continuationEndings,
       },
     });
   }
