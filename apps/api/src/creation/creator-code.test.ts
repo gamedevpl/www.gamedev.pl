@@ -354,6 +354,30 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const listed = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(listed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
       }));
+
+    it('refuses to open a manual round once canonical ownership moved mid-request', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const at = '2026-01-01T00:00:00.000Z';
+        await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
+
+        const originalBegin = store.beginCheckoutRecovery.bind(store);
+        vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+          // Ownership moves between the route's own ownership check and this lease.
+          await store.recordSettledOwner('sky-dodge', 'g:other', 999, at, at);
+          return originalBegin(...args);
+        });
+
+        const res = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(res.statusCode).toBe(409);
+        // No stray round was opened for the now-stale caller.
+        expect(await store.listSubmissionsBySlug('sky-dodge')).toHaveLength(1);
+      }));
   });
 
   describe('POST /api/me/studio/games/:slug/sources/stage/delete', () => {

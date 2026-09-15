@@ -5,6 +5,7 @@ import { recordShelfShadow } from './shelf-shadow.js';
 import { mintToken } from '../platform/submission-token.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { Store } from '../platform/store.js';
+import { reconcileTransferredOwnership } from './studio-shelf-records.js';
 
 export interface CreatorSelfRoutesOptions {
   store?: Store;
@@ -63,7 +64,8 @@ export async function registerCreatorSelfRoutes(
       return reply.send({ submissions: [] });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const owned = await store.listSubmissionsByOwner(request.user!.uid);
+    const records = await reconcileTransferredOwnership(store, request.user!.uid, owned);
     // Shadow only: source still answers, the document is judged against it.
     await recordShelfShadow({ store, log: request.log }, request.user!.uid, records);
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');

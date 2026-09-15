@@ -267,10 +267,17 @@ async function reconcilePublishedOwnership(
   const transferredIn = await Promise.all(
     memberAccess
       .filter((access) => access.ownerUid === ownerUid && !keptSlugs.has(access.slug))
-      .map((access) => store.getSubmissionBySlug(access.slug)),
+      .map((access) => publishedSubmissionForSlug(store, access.slug)),
   );
 
   return [...kept, ...transferredIn.filter((r): r is SubmissionRecord => r !== null)];
+}
+
+// The newest round may be unpublished while an older sibling is live.
+async function publishedSubmissionForSlug(store: Store, slug: string): Promise<SubmissionRecord | null> {
+  const published = (await store.listSubmissionsBySlug(slug)).filter((r) => r.publishedAt && !r.abandonedAt);
+  published.sort((a, b) => b.publishedAt!.localeCompare(a.publishedAt!));
+  return published[0] ?? null;
 }
 
 async function listCreatorPublishedGames(

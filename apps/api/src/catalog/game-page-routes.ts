@@ -120,6 +120,8 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
     const erased = access.owner.kind === 'platform' && access.owner.reason === 'owner_deleted';
     const owner = access.owner.kind === 'creator' ? await store.getUser(access.owner.uid) : null;
     const creator = owner ? toPublicCreatorProfile(owner) : null;
+    // An owner with no handle must not inherit the old attribution.
+    const noAttribution = erased || (access.source === 'canonical' && access.owner.kind === 'creator' && !creator);
 
     let specMd: string | null = null;
     let entry: CatalogGameEntry | null = repoEntry;
@@ -144,17 +146,19 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
 
     if (!entry) return null;
 
-    const resolvedHandle = erased ? PLATFORM_HANDLE : (creator?.handle ?? entry.creatorHandle ?? PLATFORM_HANDLE);
+    const resolvedHandle = noAttribution
+      ? PLATFORM_HANDLE
+      : (creator?.handle ?? entry.creatorHandle ?? PLATFORM_HANDLE);
     const platformAuthored = resolvedHandle === PLATFORM_HANDLE;
 
     return {
       entry: {
         ...entry,
         status: 'published',
-        submittedBy: erased ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
+        submittedBy: noAttribution ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
         creatorHandle: resolvedHandle,
       },
-      creator: erased ? null : creator,
+      creator,
       platformAuthored,
       description: extractSpecDescription(specMd),
     };

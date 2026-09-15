@@ -241,6 +241,28 @@ describe('creator profile routes', () => {
     expect(recipientPage.json().games).toEqual([expect.objectContaining({ slug: 'sky-dodge' })]);
   });
 
+  it('still shows a transferred game whose newest round is unpublished', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.claimHandle('g:sender', 'sender', at);
+    await store.claimHandle('g:recipient', 'recipient', at);
+    await store.createSubmission(42, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(42, 'sky-dodge');
+    await store.setSubmissionPublishedAt(42, at);
+    await store.setPublication({ slug: 'sky-dodge', state: 'published', currentVersion: 'v1', publishedAt: at });
+    // A newer unpublished round: getSubmissionBySlug would return this one.
+    await store.createSubmission(43, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(43, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+    const app = await appWith(store);
+
+    const recipientPage = await app.inject({ method: 'GET', url: '/api/creators/recipient' });
+    expect(recipientPage.json().games).toEqual([expect.objectContaining({ slug: 'sky-dodge' })]);
+  });
+
   it('reports availability and refuses reserved handles', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:a' });

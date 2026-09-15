@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { registerCreatorTakeover } from './creator-takeover.js';
+import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   assembleGameHtml,
   CredentialLeakError,
@@ -211,29 +213,47 @@ export async function registerCreatorCodeRoutes(
     slug: string,
     ownerUid: string,
   ): Promise<SubmissionRecord> {
-    const jobId = await store.allocateJobId();
-    await store.createSubmission(jobId, ownerUid, source.title);
-    await store.setSubmissionLocale(jobId, source.locale ?? 'en');
-    await store.recordJobTransition(jobId, {
-      to: 'queued',
-      at: new Date().toISOString(),
-      by: 'creator',
-      reason: 'code_surface_opened',
-    });
-    // Carry the version forward — else its first write sees no base.
-    const baseVersion = await resolveRoundBaseVersion(store, source, slug);
-    if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
-    if (!(await store.claimManualRoundSlug(jobId, slug, source.jobId))) {
-      await store.recordJobTransition(jobId, {
-        to: 'abandoned',
-        at: new Date().toISOString(),
-        by: 'system',
-        reason: 'manual_round_claim_lost',
+    // Same admission fence acceptGameTransferInvitation checks against.
+    const nonce = randomUUID();
+    if (!(await store.beginCheckoutRecovery(slug, nonce, Date.now()))) {
+      throw Object.assign(new Error('A round is already opening for this game. Refresh before continuing.'), {
+        statusCode: 409,
       });
-      await store.setSubmissionAbandoned(jobId, new Date().toISOString());
-      throw Object.assign(new Error('The game round changed. Refresh before editing.'), { statusCode: 409 });
     }
-    return (await store.getSubmission(jobId)) ?? { ...source, ownerUid, jobId, roundGeneration: undefined };
+    try {
+      const access = await resolveGameAccess(store, slug);
+      if (access.source === 'canonical' && !ownsGame(access, ownerUid)) {
+        throw Object.assign(new Error('Ownership of this game changed. Refresh before continuing.'), {
+          statusCode: 409,
+        });
+      }
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, ownerUid, source.title);
+      await store.setSubmissionLocale(jobId, source.locale ?? 'en');
+      await store.recordJobTransition(jobId, {
+        to: 'queued',
+        at: new Date().toISOString(),
+        by: 'creator',
+        reason: 'code_surface_opened',
+      });
+      // Carry the version forward — else its first write sees no base.
+      const baseVersion = await resolveRoundBaseVersion(store, source, slug);
+      if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
+      if (!(await store.claimManualRoundSlug(jobId, slug, source.jobId, nonce))) {
+        await store.recordJobTransition(jobId, {
+          to: 'abandoned',
+          at: new Date().toISOString(),
+          by: 'system',
+          reason: 'manual_round_claim_lost',
+        });
+        await store.setSubmissionAbandoned(jobId, new Date().toISOString());
+        throw Object.assign(new Error('The game round changed. Refresh before editing.'), { statusCode: 409 });
+      }
+      return (await store.getSubmission(jobId)) ?? { ...source, ownerUid, jobId, roundGeneration: undefined };
+    } finally {
+      // The lease expires; cleanup must not replace the action's outcome.
+      await store.finishCheckoutRecovery(slug, nonce).catch(() => {});
+    }
   }
 
   /** Owner-resolved round + version, or the exact reply already sent on failure. */

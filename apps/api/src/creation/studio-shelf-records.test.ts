@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import { mintToken } from '../platform/submission-token.js';
-import { loadShelfRecords } from './studio-shelf-records.js';
+import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
 
 const SECRET = 'shelf-test-secret';
 const mint = (jobId: number) => mintToken(jobId, SECRET);
@@ -64,5 +64,27 @@ describe('loadShelfRecords', () => {
 
     const recipientShelf = await loadShelfRecords(store, 'g:recipient', undefined, mint);
     expect(recipientShelf.map((row) => row.slug)).toContain('sky-dodge');
+  });
+});
+
+// Shared by the health, scorecards, and /api/submissions/mine routes too.
+describe('reconcileTransferredOwnership', () => {
+  it('reconciles ownership the same way for every owner-scoped read', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+
+    const senderOwned = await store.listSubmissionsByOwner('g:sender');
+    const senderRecords = await reconcileTransferredOwnership(store, 'g:sender', senderOwned);
+    expect(senderRecords.map((r) => r.slug)).not.toContain('sky-dodge');
+
+    const recipientOwned = await store.listSubmissionsByOwner('g:recipient');
+    const recipientRecords = await reconcileTransferredOwnership(store, 'g:recipient', recipientOwned);
+    expect(recipientRecords.map((r) => r.slug)).toContain('sky-dodge');
   });
 });

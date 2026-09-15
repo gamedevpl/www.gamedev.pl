@@ -1,7 +1,7 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { ownsGame, resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
 
-type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'> &
+export type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'> &
   GameAccessResolveStore &
   Pick<Store, 'listGameAccessByMember'>;
 
@@ -32,7 +32,7 @@ async function lookupRequested(
 }
 
 // listSubmissionsByOwner alone drifts after a transfer -- reconcile it.
-async function reconcileTransferredOwnership(
+export async function reconcileTransferredOwnership(
   store: ShelfStore,
   ownerUid: string,
   records: SubmissionRecord[],

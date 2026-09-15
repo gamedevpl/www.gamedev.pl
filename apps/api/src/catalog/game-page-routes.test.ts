@@ -211,6 +211,29 @@ describe('game page routes', () => {
     expect(body.creator).toMatchObject({ handle: 'newowner' });
     expect(body.entry).toMatchObject({ submittedBy: 'newowner', creatorHandle: 'newowner' });
   });
+
+  it('falls back to the platform byline when the new owner has no claimed handle yet', async () => {
+    const store = new InMemoryStore();
+    await publishStoreGame(store);
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.ensureGameAccess('neon-courier', 'g:creator', '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+    await store.recordSettledOwner(
+      'neon-courier',
+      'g:recipient',
+      999,
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+    const app = await appWith(store, storeGamesStore());
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/neon-courier/page' });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    // Never the old owner's ('nightshift') attribution baked into the catalog entry.
+    expect(body.entry).toMatchObject({ submittedBy: 'gamedev-platform', creatorHandle: 'gamedevpl' });
+    expect(body.creator).toBeNull();
+  });
 });
 
 describe('game page helpers', () => {
