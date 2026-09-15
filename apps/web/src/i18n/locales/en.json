@@ -852,7 +852,7 @@
       "loading": "Checking…",
       "codeLabel": "Recipient code",
       "codePlaceholder": "Their code",
-      "codeHint": "Ask the other creator for the code shown on their Studio shelf.",
+      "codeHint": "Ask the other creator for the code in their account settings.",
       "send": "Send invitation",
       "sending": "Sending…",
       "pending": "Waiting for {{name}} to accept.",

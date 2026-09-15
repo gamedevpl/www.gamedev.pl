@@ -862,7 +862,7 @@
       "loading": "Sprawdzam…",
       "codeLabel": "Kod odbiorcy",
       "codePlaceholder": "Jego kod",
-      "codeHint": "Poproś drugiego twórcę o kod z jego półki w Studio.",
+      "codeHint": "Poproś drugiego twórcę o kod z jego ustawień konta.",
       "send": "Wyślij zaproszenie",
       "sending": "Wysyłam…",
       "pending": "Czekam, aż {{name}} przyjmie.",
