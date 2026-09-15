@@ -639,7 +639,10 @@ export function EditorPanel(props: {
             onClick={() => {
               recordEditorStep('previewed');
               if (saveState === 'dirty') {
-                void saveNow().then(() => props.onOpenPlaytest());
+                // Leaving unmounts the panel, so an unsaved edit would be gone.
+                void saveNow().then((saved) => {
+                  if (saved) props.onOpenPlaytest();
+                });
                 return;
               }
               props.onOpenPlaytest();

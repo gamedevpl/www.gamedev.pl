@@ -203,6 +203,48 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
   });
 });
 
+describe('a failed draft save must not take the creator away from their edit', () => {
+  it('stays in the editor when the flush before a playtest is rejected', async () => {
+    const rejected = Object.assign(new Error('draft does not fit'), {
+      status: 422,
+      problems: ['needs exactly 1 goal'],
+    });
+    putEditorDraft.mockRejectedValue(rejected);
+    const onOpenPlaytest = vi.fn();
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: true, problems: [] } })}
+          onOpenPlaytest={onOpenPlaytest}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const slider = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(slider, '150');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const tryDraft = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes(i18n.t('studioPanel.editor.tryDraft')),
+    )!;
+    await act(async () => {
+      tryDraft.click();
+      await Promise.resolve();
+    });
+
+    // Navigating unmounts the panel, so this would have discarded the edit.
+    expect(putEditorDraft).toHaveBeenCalled();
+    expect(onOpenPlaytest).not.toHaveBeenCalled();
+  });
+});
+
 describe('EK2-29 — a verdict that lands mid-publish still counts', () => {
   it('drops the publish when the game turns its checks red while the save is in flight', async () => {
     let releaseSave: (value: { revision: number; updatedAt: string }) => void = () => {};
