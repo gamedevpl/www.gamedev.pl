@@ -170,6 +170,50 @@ describe('mergeDraft', () => {
   });
 });
 
+describe('a root layer the delivery added after the draft was saved', () => {
+  const layered: EditorDefinition = {
+    version: 1,
+    content: {},
+    layers: {
+      terrain: {
+        widget: 'tilemap',
+        label,
+        grid: { minCols: 1, maxCols: 4, minRows: 1, maxRows: 4 },
+        tiles: [{ key: 'floor', char: '.', label }],
+        properties: {},
+        constraints: [],
+      },
+      fog: {
+        widget: 'tilemap',
+        label,
+        grid: { minCols: 1, maxCols: 4, minRows: 1, maxRows: 4 },
+        tiles: [{ key: 'clear', char: ' ', label }],
+        properties: {},
+        constraints: [],
+      },
+    },
+  };
+
+  it('survives the draft replacing the layers section, and is reported unsaved', () => {
+    const loaded: GameEditorState = {
+      version: '5',
+      definition: layered,
+      content: { layers: { terrain: { properties: {}, rows: ['.'] }, fog: { properties: {}, rows: [' '] } } },
+      draft: {
+        content: { layers: { terrain: { properties: {}, rows: ['..'] } } },
+        revision: 6,
+        updatedAt: '',
+      },
+    };
+    const merged = mergeDraft(loaded);
+    expect(merged.content.layers).toEqual({
+      terrain: { properties: {}, rows: ['..'] },
+      fog: { properties: {}, rows: [' '] },
+    });
+    expect(merged.unsaved).toBe(true);
+  });
+});
+
 describe('differsFromStored', () => {
   it('is false for the same document', () => {
     const stored = { boards: [{ properties: { name: 'a', speed: 6 } }] };

@@ -7,7 +7,6 @@ import type {
   EditorLabel,
   EditorLayerSpec,
   EditorLayersDoc,
-  EditorParamValue,
   EditorPathSpec,
   EditorTilemapSpec,
   GameEditorState,
@@ -24,11 +23,12 @@ export function useLabel(): (label: EditorLabel) => string {
 export function mergeDraft(loaded: GameEditorState): { content: EditorContentDoc; unsaved: boolean } {
   if (!loaded.draft) return { content: loaded.content, unsaved: false };
   const merged: EditorContentDoc = { ...loaded.content, ...loaded.draft.content };
-  if (loaded.definition.params) {
-    merged.params = {
-      ...((loaded.content.params ?? {}) as Record<string, EditorParamValue>),
-      ...((loaded.draft.content.params ?? {}) as Record<string, EditorParamValue>),
-    };
+  // params and layers are the reserved sections, merged key by key.
+  for (const key of ['params', 'layers'] as const) {
+    if (!loaded.definition[key]) continue;
+    const shipped = (loaded.content[key] ?? {}) as Record<string, unknown>;
+    const saved = (loaded.draft.content[key] ?? {}) as Record<string, unknown>;
+    merged[key] = { ...shipped, ...saved } as EditorContentDoc[string];
   }
   const content = fillDeclaredValues(loaded.definition, merged);
   return { content, unsaved: differsFromStored(loaded.draft.content, content) };
