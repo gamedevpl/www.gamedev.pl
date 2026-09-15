@@ -23,6 +23,7 @@ import type { ChatOrchestration } from './chat-orchestration.js';
 import { loadRecentChatTurns } from './chat-turns-history.js';
 import { FeedbackRequestSchema, TurnRequestSchema } from './feedback-request.js';
 import { detectStall, type JobTransition } from './job-state.js';
+import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import { withImprovementAdmission } from './improvement-admission.js';
 import type { ResumeOutcome } from './resume-build.js';
 
@@ -51,6 +52,7 @@ export interface FeedbackRoutesOptions {
     feedbackQueueFailed?: boolean;
     builder?: BuilderKind;
     preserveRoundBudget?: boolean;
+    ownerUid?: string;
     transition?: { by: JobTransition['by']; reason: string };
   }) => Promise<ResumeOutcome>;
 }
@@ -317,6 +319,8 @@ export async function handleCreatorFeedback(
       ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
       ...(builderChanging ? { preserveRoundBudget: true } : {}),
       ...(!queued ? { feedbackQueueFailed: true } : {}),
+      // Charged to the caller, not the historical row's owner.
+      ownerUid: request.user!.uid,
       transition: {
         by: 'creator',
         reason: handoffReason,
@@ -324,14 +328,29 @@ export async function handleCreatorFeedback(
     });
   // Fenced against a concurrent transfer only when reopening a closed round.
   let outcome: ResumeOutcome;
+  let staleOwner = false;
   if (store && record?.slug && !isActiveBuildRound(record)) {
+    const slug = record.slug;
     try {
-      outcome = await withImprovementAdmission(store, record.slug, now, reopen);
+      outcome = await withImprovementAdmission(store, slug, now, async () => {
+        // Under the lease: a transfer may have committed first.
+        const access = await resolveGameAccess(store, slug);
+        if (access.source === 'canonical' && !ownsGame(access, request.user!.uid)) {
+          staleOwner = true;
+          return { started: false, reason: 'dispatch_failed' } as ResumeOutcome;
+        }
+        return reopen();
+      });
     } catch {
       outcome = { started: false, reason: 'dispatch_failed' };
     }
   } else {
     outcome = await reopen();
+  }
+  if (staleOwner) {
+    return reply
+      .status(409)
+      .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
   }
 
   if (outcome.started) await appendStudioAck();

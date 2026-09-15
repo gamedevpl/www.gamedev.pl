@@ -1284,6 +1284,55 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('refuses to reopen a closed round for an owner the transfer already replaced', async () => {
+    // Transfer commits before the lease: only a recheck under it catches this.
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.jobId, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    const at = new Date().toISOString();
+    const access = await store.ensureGameAccess(job.slug!, 'g:test-user', at, at);
+    await store.createGameTransferInvitation(job.slug!, 'g:test-user', 'g:recipient', access!.accessRevision, at);
+    expect(await store.acceptGameTransferInvitation(job.slug!, 'g:recipient', at)).toMatchObject({
+      status: 'accepted',
+    });
+    const briefsBefore = briefs.length;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    // The status token still verifies; canonical ownership refuses.
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('stale_owner');
+    expect(briefs).toHaveLength(briefsBefore);
+    expect((await store.getSubmission(job.jobId))?.state).toBe('ready_for_review');
+
+    await app.close();
+  });
+
   // ready_for_review isn't inbox-steered, so a failed queue write still dispatches.
   it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 77 });

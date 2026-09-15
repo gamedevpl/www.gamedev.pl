@@ -917,6 +917,8 @@ export async function registerSubmissionRoutes(
     locale: string;
     log: { error: (context: object, message: string) => void };
     openedBy?: 'creator' | 'agent';
+    // The caller: rechecked under the lease, and charged for the round.
+    ownerUid?: string;
   }): Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }> {
     if (!store) return { ok: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.jobId);
@@ -948,6 +950,13 @@ export async function registerSubmissionRoutes(
     const reopen = async (): Promise<
       { ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }
     > => {
+      // Under the lease: a transfer may have committed first.
+      if (record.slug && input.ownerUid) {
+        const access = await resolveGameAccess(store, record.slug);
+        if (access.source === 'canonical' && !ownsGame(access, input.ownerUid)) {
+          return { ok: false, reason: 'stale_owner' };
+        }
+      }
       try {
         // Record who typed this. An agent calling `continue_draft` writes its own summary
         // of a conversation held somewhere else — usually in English, whatever the creator
@@ -973,6 +982,8 @@ export async function registerSubmissionRoutes(
         // deliveredVersion misses platform rounds; dispatch presence is the real "never ran" signal.
         ...(record.dispatch?.refs?.length ? {} : { undelivered: true }),
         builder: 'self',
+        // Charged to the caller, not the historical row's owner, after a transfer.
+        ...(input.ownerUid ? { ownerUid: input.ownerUid } : {}),
         transition: {
           by: input.openedBy === 'agent' ? 'agent' : 'creator',
           reason: 'continue_draft',

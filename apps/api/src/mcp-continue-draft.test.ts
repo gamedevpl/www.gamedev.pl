@@ -187,6 +187,30 @@ describe('MCP continue_draft', () => {
     }
   });
 
+  it('refuses to reopen for a creator the transfer already replaced', async () => {
+    // Refused at key resolution: the slug is no longer on this account.
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    await store.upsertUser({ uid: 'g:recipient' });
+    const at = '2026-08-01T12:00:00.000Z';
+    const access = await store.ensureGameAccess(SLUG, OWNER, at, at);
+    await store.createGameTransferInvitation(SLUG, OWNER, 'g:recipient', access!.accessRevision, at);
+    expect(await store.acceptGameTransferInvitation(SLUG, 'g:recipient', at)).toMatchObject({ status: 'accepted' });
+    const headers = await creatorHeaders(store);
+    app = await createApp(store);
+
+    const { structured, isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Make the paddle wider and add a second ball.' },
+      headers,
+    );
+
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((await store.getSubmission(DRAFT_ISSUE))?.state).toBe('ready_for_review');
+  });
+
   it('reopens as self even when the closed round was platform-built and never set deliveredVersion', async () => {
     // A platform round reaches ready_for_review without ever setting deliveredVersion.
     const store = new InMemoryStore();
