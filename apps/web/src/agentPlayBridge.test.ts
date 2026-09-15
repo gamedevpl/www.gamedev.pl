@@ -38,6 +38,7 @@ function mountGameDocument() {
 type FakeHarness = {
   frame: number;
   metadata: Record<string, unknown>;
+  audio: Array<Record<string, unknown>>;
   steps: number;
   step: (dt?: number, options?: { present?: boolean }) => Record<string, unknown>;
   restart: () => boolean;
@@ -51,6 +52,7 @@ function installHarness(): FakeHarness {
   const harness: FakeHarness = {
     frame: 0,
     metadata: { state: 'playing', score: 0, observation: '{"room":"cellar"}' },
+    audio: [],
     steps: 0,
     step(_dt, _options) {
       harness.steps += 1;
@@ -108,6 +110,62 @@ describe('the agent bridge, running for real', () => {
     harness.steps = 0;
     harness.frame = 0;
     harness.metadata = { state: 'playing', score: 0, observation: '{"room":"cellar"}' };
+    harness.audio.length = 0;
+  });
+
+  it('reports the sound the game played, which is the only way an agent hears it', async () => {
+    send({ type: 'agent:enable' });
+    await settle();
+
+    harness.audio.push(
+      { source: 'gdpl-player', frame: 1, seq: 1, type: 'music', name: 'ocean-drift' },
+      { source: 'gdpl-player', frame: 2, seq: 2, type: 'progress', label: 'round-start' },
+      { source: 'gdpl-player', frame: 2, seq: 3, type: 'sfx', name: 'dig', count: 3 },
+      { source: 'gdpl-player', frame: 3, seq: 4, type: 'sfx', name: 'ghost', missing: true },
+    );
+    harness.frame = 60;
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string; frame: number }>;
+    const heard = log.filter((entry) => ['sfx', 'loop', 'music'].includes(entry.kind));
+    expect(heard.map((entry) => `${entry.kind}:${entry.detail}`)).toEqual([
+      'music:ocean-drift',
+      'sfx:dig x3',
+      'sfx:ghost (missing)',
+    ]);
+    // The frame it happened on, not the frame the drain ran on.
+    expect(heard.map((entry) => entry.frame)).toEqual([1, 2, 3]);
+
+    // Read once, not once per state asked for.
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    const again = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(again.filter((entry) => entry.detail === 'dig x3')).toHaveLength(1);
+  });
+
+  it('keeps hearing the game after the signal log has rotated', async () => {
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    // At the cap, length stops moving; an index cursor goes deaf.
+    let seq = 1;
+    const push = (name: string) =>
+      harness.audio.push({ source: 'gdpl-player', frame: 1, seq: seq++, type: 'sfx', name });
+    for (let turn = 0; turn < 400; turn++) push(`filler-${turn}`);
+    harness.audio.splice(0, harness.audio.length - 400);
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    push('after-the-rotation');
+    harness.audio.splice(0, harness.audio.length - 400);
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ detail: string }>;
+    expect(log.some((entry) => entry.detail === 'after-the-rotation')).toBe(true);
   });
 
   it('introduces the game and its controls when the host enables agent mode', async () => {
