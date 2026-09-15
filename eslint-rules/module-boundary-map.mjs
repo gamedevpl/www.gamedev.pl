@@ -250,6 +250,7 @@ const FILE_BUCKET = {
   'quota-gate': 'creation',
   builder: 'creation',
   'typecheck-preflight': 'creation',
+  'language-kit-sources': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
   'checkout-recovery': 'creation',
