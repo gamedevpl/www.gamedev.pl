@@ -664,6 +664,9 @@ describe('emitTransferOfferedNotification', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe('grace@example.com');
     expect(`${sent[0].subject} ${sent[0].html}`).toContain('Sky Dodge');
+    // Do not claim they submitted a game; they may not have.
+    expect(sent[0].text).not.toContain('you submitted a game');
+    expect(sent[0].text).toContain('handing you a game');
     expect((await store.listNotifications('g:grace'))[0].emailedAt).not.toBeNull();
   });
 

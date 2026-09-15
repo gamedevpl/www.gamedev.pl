@@ -216,6 +216,12 @@ const unsubscribeLine: Record<Locale, string> = {
   pl: 'Otrzymujesz tę wiadomość, ponieważ zgłosiłeś grę na gamedev.pl. Wypisz się:',
 };
 
+// A recipient may never have submitted anything.
+const transferUnsubscribeLine: Record<Locale, string> = {
+  en: 'You are receiving this because someone is handing you a game on gamedev.pl. Unsubscribe:',
+  pl: 'Otrzymujesz tę wiadomość, ponieważ ktoś przekazuje ci grę na gamedev.pl. Wypisz się:',
+};
+
 /**
  * Short push-notification copy for a submission event. Reuses the same bilingual
  * strings as the email so the two channels stay consistent — the OS notification
@@ -270,7 +276,7 @@ export function transferNotificationMessage(
   type: TransferNotificationType,
   params: NotificationEmailParams,
 ): EmailMessage {
-  return renderNotificationEmail(to, locale, transferCopy[type][locale], params);
+  return renderNotificationEmail(to, locale, transferCopy[type][locale], params, transferUnsubscribeLine[locale]);
 }
 
 export function proposalPushContent(
@@ -306,6 +312,7 @@ function renderNotificationEmail(
   locale: Locale,
   copy: { subject: string; lead: string; cta: string },
   params: NotificationEmailParams,
+  reason: string = unsubscribeLine[locale],
 ): EmailMessage {
   const title = params.title;
   const actionUrl = escapeHtml(params.actionUrl);
@@ -316,13 +323,13 @@ function renderNotificationEmail(
     '',
     `${copy.cta}: ${params.actionUrl}`,
     '',
-    `${unsubscribeLine[locale]} ${params.unsubscribeUrl}`,
+    `${reason} ${params.unsubscribeUrl}`,
   ].join('\n');
 
   const html = [
     `<p>“${escapeHtml(title)}” ${escapeHtml(copy.lead)}</p>`,
     `<p><a href="${actionUrl}">${escapeHtml(copy.cta)}</a></p>`,
-    `<p style="color:#888;font-size:12px">${escapeHtml(unsubscribeLine[locale])} <a href="${unsub}">${escapeHtml(
+    `<p style="color:#888;font-size:12px">${escapeHtml(reason)} <a href="${unsub}">${escapeHtml(
       params.unsubscribeUrl,
     )}</a></p>`,
   ].join('\n');
