@@ -90,12 +90,12 @@ export function CreatePage({
                   <span className="create-step-n">{String(index + 1).padStart(2, '0')}</span>
                 </span>
                 <div className="create-step-card">
-                  <div className={`create-step-scene is-${scene}`} aria-hidden="true">
-                    <Mascot emotion={pose.emotion} look={pose.look} size={72} />
-                  </div>
                   <div className="create-step-body">
                     <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
                     <p className="create-step-detail">{t(`create.${key}Detail`)}</p>
+                  </div>
+                  <div className={`create-step-scene is-${scene}`} aria-hidden="true">
+                    <Mascot emotion={pose.emotion} look={pose.look} size={48} />
                   </div>
                 </div>
               </li>

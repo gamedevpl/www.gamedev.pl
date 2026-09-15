@@ -86,8 +86,13 @@
 }
 
 .create-step-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.55rem;
   min-width: 0;
   margin: 0 0 0.85rem;
+  padding: 0.8rem 0.9rem 0.85rem;
   border-radius: 10px;
   border: 1px solid var(--panel-border);
   background: var(--panel-card);
@@ -112,12 +117,16 @@
 
 .create-step-scene {
   position: relative;
-  height: 6.8rem;
+  box-sizing: border-box;
+  width: 4.7rem;
+  height: 4.7rem;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  border-radius: 9px;
   color: var(--turquoise);
+  background: #141b21;
 }
 
 .create-step-scene .mascot {
@@ -126,11 +135,7 @@
 }
 
 .create-step-scene.is-qa {
-  background: radial-gradient(ellipse at 78% 18%, rgba(0, 228, 172, 0.16), transparent 48%), #141b21;
-}
-
-.create-step-scene.is-qa .mascot {
-  margin: 0.55rem 1.7rem 0 0;
+  background: radial-gradient(ellipse at 78% 18%, rgba(0, 228, 172, 0.2), transparent 52%), #141b21;
 }
 
 .create-step-scene.is-qa::before,
@@ -141,81 +146,80 @@
 
 .create-step-scene.is-qa::before {
   content: '';
-  top: 0.4rem;
-  right: 16%;
-  width: 1.55rem;
-  height: 1.55rem;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 0.95rem;
+  height: 0.95rem;
   border-radius: 50%;
   background: rgba(0, 228, 172, 0.42);
   box-shadow:
-    -0.7rem 0.85rem 0 -0.38rem rgba(0, 228, 172, 0.28),
-    -1.15rem 1.45rem 0 -0.55rem rgba(0, 228, 172, 0.2);
+    -0.42rem 0.5rem 0 -0.22rem rgba(0, 228, 172, 0.28),
+    -0.7rem 0.88rem 0 -0.34rem rgba(0, 228, 172, 0.2);
 }
 
 .create-step-scene.is-qa::after {
   content: '?';
-  top: 0.55rem;
-  right: calc(16% + 0.42rem);
+  top: 0.34rem;
+  right: 0.48rem;
   color: var(--turquoise);
-  font-size: 0.95rem;
+  font-size: 0.62rem;
   font-weight: 800;
   line-height: 1;
 }
 
 .create-step-scene.is-code {
-  background: radial-gradient(ellipse at 18% 85%, rgba(56, 189, 248, 0.14), transparent 50%), #141b21;
+  background: radial-gradient(ellipse at 18% 85%, rgba(56, 189, 248, 0.16), transparent 52%), #141b21;
 }
 
 .create-step-scene.is-code::before {
   content: '';
   position: absolute;
-  bottom: 0.55rem;
-  width: 3.5rem;
-  height: 0.85rem;
-  border-radius: 3px;
-  background: repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.5) 0 5px, transparent 5px 8px);
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.28);
+  bottom: 0.32rem;
+  width: 2.35rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.5) 0 4px, transparent 4px 6px);
+  box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.28);
 }
 
 .create-step-scene.is-code::after {
   content: 'brrr';
   position: absolute;
-  top: 0.45rem;
-  right: 12%;
+  top: 0.22rem;
+  right: 0.28rem;
   color: var(--accent-blue);
-  font-size: 0.72rem;
+  font-size: 0.48rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   animation: create-brrr 0.12s steps(2) infinite;
 }
 
 .create-step-scene.is-play {
-  background: radial-gradient(ellipse at 50% 110%, rgba(0, 228, 172, 0.16), transparent 55%), #141b21;
+  background: radial-gradient(ellipse at 50% 110%, rgba(0, 228, 172, 0.18), transparent 55%), #141b21;
 }
 
 .create-step-scene.is-play::before {
   content: '';
   position: absolute;
-  width: 6.6rem;
-  height: 4.2rem;
+  inset: 0.38rem;
   border: 2px solid rgba(0, 228, 172, 0.55);
-  border-radius: 7px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 0 18px rgba(0, 228, 172, 0.12);
+  box-shadow: 0 0 12px rgba(0, 228, 172, 0.12);
 }
 
 .create-step-scene.is-live {
-  background: radial-gradient(ellipse at 50% 0%, rgba(0, 228, 172, 0.16), transparent 50%), #141b21;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0, 228, 172, 0.18), transparent 52%), #141b21;
 }
 
 .create-step-scene.is-live::before {
   content: '';
   position: absolute;
-  top: 0.55rem;
-  right: 0.85rem;
-  width: 10px;
-  height: 10px;
+  top: 0.32rem;
+  right: 0.32rem;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--turquoise);
   box-shadow: 0 0 0 0 var(--turquoise-glow);
@@ -223,7 +227,8 @@
 }
 
 .create-step-body {
-  padding: 0.85rem 1rem 1rem;
+  min-width: 0;
+  padding: 0;
 }
 
 .create-step-title {

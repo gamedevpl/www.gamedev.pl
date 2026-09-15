@@ -92,6 +92,7 @@ describe('CreatePage', () => {
     const steps = container.querySelectorAll('.create-step');
     expect(steps).toHaveLength(4);
     expect(container.querySelectorAll('.create-step-scene')).toHaveLength(4);
+    expect(container.querySelector('.create-step-body + .create-step-scene')).not.toBeNull();
     expect(container.querySelector('.create-step-scene.is-qa .mascot--thinking')).not.toBeNull();
     expect(container.querySelector('.create-step-scene.is-code .mascot--busy')).not.toBeNull();
     expect(container.querySelector('.create-step-scene.is-play .mascot--excited')).not.toBeNull();
