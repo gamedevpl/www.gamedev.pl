@@ -1,5 +1,6 @@
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
+import { isSettledAgentState } from '../platform/agent-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   builderLabelFromRecord,
@@ -188,6 +189,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           await store.setJobCostCredits(record.jobId, lastRef, observation.sessionCredits);
         } catch (error) {
           log.error({ err: error, jobId: record.jobId }, 'could not reconcile agent session cost');
+        }
+      }
+      // Stamped once, by whichever poll first sees the session settled.
+      if (isSettledAgentState(observation.state)) {
+        try {
+          await store.setJobCostFinished(record.jobId, lastRef, new Date(now()).toISOString(), observation.state);
+        } catch (error) {
+          log.error({ err: error, jobId: record.jobId }, 'could not record when an agent session finished');
         }
       }
       // Persist vendor state even when the job does not move.

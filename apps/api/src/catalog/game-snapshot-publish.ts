@@ -1,5 +1,5 @@
 import { isPublishedEntry, type GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml } from '../platform/assemble.js';
+import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import { generateSnapshotId, type GameSnapshotWriter, type SnapshotPointer } from './game-snapshot.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import { bakeMediaCopies } from './bake-media.js';
@@ -128,13 +128,7 @@ async function bakeGame(args: {
     throw new Error('game sources not found on ref');
   }
 
-  const project: GameProject = {
-    title: sources.title ?? entry.title ?? entry.slug,
-    description: '',
-    html: sources.indexHtml,
-    js: sources.gameJs,
-    css: sources.styleCss,
-  };
+  const project: GameProject = projectFromSources(sources, sources.title ?? entry.title ?? entry.slug);
 
   // restrictNetwork mirrors the play route exactly: published games are
   // self-contained by repo policy, so they are locked to their own inline assets.

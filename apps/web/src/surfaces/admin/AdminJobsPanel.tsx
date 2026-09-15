@@ -1,10 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import './admin-jobs-queue.css';
 import { AdminConfirmDialog } from './AdminConfirmDialog.js';
+import { AdminEditorialOverrideDialog } from './AdminEditorialOverrideDialog.js';
 import { AdminJobPreviewModal } from './AdminJobPreviewModal.js';
 import { JobRow, PublishedGames } from './AdminJobsQueue.js';
-import { cancelConfirmCopy, publishConfirmCopy } from './adminJobConfirm.js';
-import { cancelJob, fetchJobQueue, publishJob, type JobQueueEntry, type JobQueueResponse } from './adminJobsApi.js';
+import {
+  cancelConfirmCopy,
+  isEditorialRefusal,
+  publishConfirmCopy,
+  publishRefusalCopy,
+  type EditorialRefusal,
+} from './adminJobConfirm.js';
+import {
+  cancelJob,
+  fetchJobQueue,
+  publishJob,
+  type EditorialCounts,
+  type JobQueueEntry,
+  type JobQueueResponse,
+} from './adminJobsApi.js';
+
+type BatchEditorialHold = {
+  job: JobQueueEntry;
+  refused: EditorialRefusal;
+  editorial?: EditorialCounts;
+};
 
 type FilterKind = 'ready' | 'stalled' | 'in_flight' | 'all';
 
@@ -29,6 +49,7 @@ export function AdminJobsPanel() {
     kind: 'publish' | 'cancel';
     targets: JobQueueEntry[];
   } | null>(null);
+  const [batchHolds, setBatchHolds] = useState<BatchEditorialHold[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -194,26 +215,56 @@ export function AdminJobsPanel() {
       const publishable = targets.filter((j) => j.state === 'ready_for_review');
       if (publishable.length === 0) return;
       setPendingBatch(null);
+      setBatchHolds([]);
       setBatchProgress({ running: true, current: 0, total: publishable.length, success: 0, failed: 0 });
 
       let success = 0;
       let failed = 0;
+      const holds: BatchEditorialHold[] = [];
       for (let i = 0; i < publishable.length; i++) {
         const item = publishable[i];
         setBatchProgress({ running: true, current: i + 1, total: publishable.length, success, failed });
         try {
           const res = await publishJob(item.jobId);
-          if ('refused' in res) failed++;
-          else success++;
+          if ('refused' in res) {
+            if (isEditorialRefusal(res.refused)) {
+              holds.push({ job: item, refused: res.refused, editorial: res.editorial });
+            }
+            failed++;
+          } else success++;
         } catch {
           failed++;
         }
       }
+      setBatchHolds(holds);
       setBatchProgress({ running: false, current: publishable.length, total: publishable.length, success, failed });
       setSelectedIssues(new Set());
       void load();
     },
     [load],
+  );
+
+  const onOverrideBatchHold = useCallback(
+    async (reason: string) => {
+      const hold = batchHolds[0];
+      if (!hold || batchProgress?.running) return;
+      setBatchProgress((prev) => (prev ? { ...prev, running: true } : prev));
+      try {
+        const res = await publishJob(hold.job.jobId, { override: true, overrideReason: reason });
+        if ('refused' in res) {
+          setBatchProgress((prev) => (prev ? { ...prev, running: false } : prev));
+          return;
+        }
+        setBatchHolds((prev) => prev.slice(1));
+        setBatchProgress((prev) =>
+          prev ? { ...prev, running: false, success: prev.success + 1, failed: Math.max(0, prev.failed - 1) } : prev,
+        );
+        void load();
+      } catch {
+        setBatchProgress((prev) => (prev ? { ...prev, running: false } : prev));
+      }
+    },
+    [batchHolds, batchProgress?.running, load],
   );
 
   const onBatchCancel = useCallback(
@@ -324,10 +375,23 @@ export function AdminJobsPanel() {
           <div className="admin-batch-progress-text">
             {batchProgress.running
               ? `Processing: ${batchProgress.current} / ${batchProgress.total}…`
-              : `Batch completed: ${batchProgress.success} succeeded, ${batchProgress.failed} failed.`}
+              : `Batch completed: ${batchProgress.success} succeeded, ${batchProgress.failed} failed.${
+                  batchHolds.length > 0
+                    ? ` ${batchHolds
+                        .map((hold) => `${hold.job.title}: ${publishRefusalCopy(hold.refused, hold.editorial)}`)
+                        .join(' · ')}`
+                    : ''
+                }`}
           </div>
           {!batchProgress.running && (
-            <button type="button" className="admin-batch-dismiss" onClick={() => setBatchProgress(null)}>
+            <button
+              type="button"
+              className="admin-batch-dismiss"
+              onClick={() => {
+                setBatchProgress(null);
+                setBatchHolds([]);
+              }}
+            >
               Dismiss
             </button>
           )}
@@ -503,6 +567,18 @@ export function AdminJobsPanel() {
             }}
           />
         )
+      ) : null}
+
+      {batchHolds[0] ? (
+        <AdminEditorialOverrideDialog
+          refused={batchHolds[0].refused}
+          editorial={batchHolds[0].editorial}
+          busy={Boolean(batchProgress?.running)}
+          onConfirm={(reason) => void onOverrideBatchHold(reason)}
+          onDismiss={() => {
+            if (!batchProgress?.running) setBatchHolds((prev) => prev.slice(1));
+          }}
+        />
       ) : null}
 
       {previewTarget && (

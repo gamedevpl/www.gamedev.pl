@@ -13,6 +13,8 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { isPublishableMode } from '../platform/publication-state.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { loadJobPreview } from './job-admin-preview.js';
+import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
 
 /**
  * The operator's view of the build queue.
@@ -129,6 +131,8 @@ export async function registerJobAdminRoutes(
      * a deployment without it publishes exactly as before, silently.
      */
     notifyFollowers?: (event: { slug: string; version: string; gameTitle: string; ownerUid: string }) => Promise<void>;
+    // Policy at composition root, not a route invariant.
+    editorialClearance?: (slug: string) => Promise<EditorialPublishCounts>;
   },
 ): Promise<void> {
   const { store, adminUids, gamesStore } = options;
@@ -160,102 +164,113 @@ export async function registerJobAdminRoutes(
    * record; the manifest is what the gate actually wrote. Publishing is the one action
    * where the difference could put an unverified game in front of players.
    */
-  app.post<{ Params: { jobId: string } }>('/api/admin/jobs/:jobId/publish', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) {
-      return reply.code(404).send({ error: 'not_found' });
-    }
-    if (!store || !gamesStore) {
-      return reply.code(503).send({ error: 'store_unavailable' });
-    }
-
-    const jobId = Number(request.params.jobId);
-    if (!Number.isInteger(jobId)) {
-      return reply.code(400).send({ error: 'invalid_job' });
-    }
-
-    const record = await store.getSubmission(jobId);
-    if (!record) return reply.code(404).send({ error: 'not_found' });
-    if (!record.slug || !record.deliveredVersion) {
-      return reply.code(409).send({ error: 'nothing_delivered' });
-    }
-
-    // Creator-owned games need a publishable profile: the canonical owner's.
-    const publishOwner = (await resolveGameAccess(store, record.slug)).owner;
-    if (publishOwner.kind === 'creator') {
-      const owner = await store.getUser(publishOwner.uid);
-      if (!hasPublishableProfile(owner)) {
-        return reply.code(409).send({ error: 'profile_required' });
+  app.post<{ Params: { jobId: string }; Body: { override?: boolean; overrideReason?: string } }>(
+    '/api/admin/jobs/:jobId/publish',
+    async (request, reply) => {
+      if (!isAdminSession(request, adminUids)) {
+        return reply.code(404).send({ error: 'not_found' });
       }
-    }
-
-    const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
-    if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
-    if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
-    // A proposal is somebody else's change to this game, and a green gate on one says
-    // only that it runs. It becomes publishable when the game's owner accepts it, which
-    // rewrites the mode — so a version still in proposal mode has not been accepted, and
-    // publishing it here would route around the one consent this feature depends on.
-    // Read off the manifest rather than from the proposal registry deliberately: this
-    // refusal must hold even for a caller who never heard of proposals.
-    if (!isPublishableMode(manifest.deliveryMode)) {
-      return reply.code(409).send({ error: 'not_publishable' });
-    }
-
-    const at = new Date(now()).toISOString();
-    // Through `publishing` rather than straight to `published`: the intermediate state is
-    // what a job is in while this is happening, and skipping it would leave no record
-    // that it ever was — which is the state a failed publish has to fall back from.
-    await store.recordJobTransition(jobId, { to: 'publishing', at, by: 'operator', reason: 'approved' });
-    await store.setPublication({
-      slug: record.slug,
-      state: 'published',
-      currentVersion: record.deliveredVersion,
-      publishedAt: at,
-    });
-    await store.recordJobTransition(jobId, { to: 'published', at, by: 'operator', reason: 'published' });
-    await store.setSubmissionPublishedAt(jobId, at);
-    // The creator rail reads `lastStatus`, not `state`. Writing it here is what stops a
-    // published game from also rendering as an in-progress "yours" card: the notify
-    // sweep that normally keeps `lastStatus` current only walks *active* submissions,
-    // and a terminal job is one sweep away from falling out of that set. `lastNotifiedStatus`
-    // is left alone so the next sweep can still emit the published notification.
-    await store.setSubmissionLastStatus(jobId, 'published');
-
-    // Supersede earlier rounds for this slug on publish.
-    const activeRecords = await store.listActiveSubmissions();
-    for (const other of activeRecords) {
-      if (other.slug === record.slug && other.jobId !== jobId) {
-        await store.recordJobTransition(other.jobId, {
-          to: 'abandoned',
-          at,
-          by: 'system',
-          reason: 'superseded_by_publish',
-        });
-        await store.setSubmissionAbandoned(other.jobId, at);
-        await store.setSubmissionLastStatus(other.jobId, 'abandoned');
+      if (!store || !gamesStore) {
+        return reply.code(503).send({ error: 'store_unavailable' });
       }
-    }
 
-    // Tell the people who follow this game that it moved. Best-effort and after the
-    // publish has already happened: a notification that fails must never leave a game
-    // half-published, and the creator's own `submission.published` note comes from the
-    // sweep on its own path. The owner is skipped — they would get two.
-    if (options.notifyFollowers) {
-      try {
-        await options.notifyFollowers({
-          slug: record.slug,
-          version: record.deliveredVersion,
-          gameTitle: record.title,
-          // Skipped as "already knows": that is the owner now, not the old row's.
-          ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
-        });
-      } catch (error) {
-        request.log.error({ err: error, slug: record.slug }, 'follower notification fan-out failed after publish');
+      const jobId = Number(request.params.jobId);
+      if (!Number.isInteger(jobId)) {
+        return reply.code(400).send({ error: 'invalid_job' });
       }
-    }
 
-    return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
-  });
+      const record = await store.getSubmission(jobId);
+      if (!record) return reply.code(404).send({ error: 'not_found' });
+      if (!record.slug || !record.deliveredVersion) {
+        return reply.code(409).send({ error: 'nothing_delivered' });
+      }
+
+      // Creator-owned games need a publishable profile: the canonical owner's.
+      const publishOwner = (await resolveGameAccess(store, record.slug)).owner;
+      if (publishOwner.kind === 'creator') {
+        const owner = await store.getUser(publishOwner.uid);
+        if (!hasPublishableProfile(owner)) {
+          return reply.code(409).send({ error: 'profile_required' });
+        }
+      }
+
+      const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
+      if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
+      if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
+      // A proposal is somebody else's change to this game, and a green gate on one says
+      // only that it runs. It becomes publishable when the game's owner accepts it, which
+      // rewrites the mode — so a version still in proposal mode has not been accepted, and
+      // publishing it here would route around the one consent this feature depends on.
+      // Read off the manifest rather than from the proposal registry deliberately: this
+      // refusal must hold even for a caller who never heard of proposals.
+      if (!isPublishableMode(manifest.deliveryMode)) {
+        return reply.code(409).send({ error: 'not_publishable' });
+      }
+
+      const clearance = await resolveEditorialPublish({
+        editorialClearance: options.editorialClearance,
+        ownerUid: record.ownerUid,
+        slug: record.slug,
+        body: request.body,
+      });
+      if ('status' in clearance) return reply.code(clearance.status).send(clearance.body);
+
+      const at = new Date(now()).toISOString();
+      // Through `publishing` rather than straight to `published`: the intermediate state is
+      // what a job is in while this is happening, and skipping it would leave no record
+      // that it ever was — which is the state a failed publish has to fall back from.
+      await store.recordJobTransition(jobId, { to: 'publishing', at, by: 'operator', reason: clearance.reason });
+      await store.setPublication({
+        slug: record.slug,
+        state: 'published',
+        currentVersion: record.deliveredVersion,
+        publishedAt: at,
+      });
+      await store.recordJobTransition(jobId, { to: 'published', at, by: 'operator', reason: 'published' });
+      await store.setSubmissionPublishedAt(jobId, at);
+      // The creator rail reads `lastStatus`, not `state`. Writing it here is what stops a
+      // published game from also rendering as an in-progress "yours" card: the notify
+      // sweep that normally keeps `lastStatus` current only walks *active* submissions,
+      // and a terminal job is one sweep away from falling out of that set. `lastNotifiedStatus`
+      // is left alone so the next sweep can still emit the published notification.
+      await store.setSubmissionLastStatus(jobId, 'published');
+
+      // Supersede earlier rounds for this slug on publish.
+      const activeRecords = await store.listActiveSubmissions();
+      for (const other of activeRecords) {
+        if (other.slug === record.slug && other.jobId !== jobId) {
+          await store.recordJobTransition(other.jobId, {
+            to: 'abandoned',
+            at,
+            by: 'system',
+            reason: 'superseded_by_publish',
+          });
+          await store.setSubmissionAbandoned(other.jobId, at);
+          await store.setSubmissionLastStatus(other.jobId, 'abandoned');
+        }
+      }
+
+      // Tell the people who follow this game that it moved. Best-effort and after the
+      // publish has already happened: a notification that fails must never leave a game
+      // half-published, and the creator's own `submission.published` note comes from the
+      // sweep on its own path. The owner is skipped — they would get two.
+      if (options.notifyFollowers) {
+        try {
+          await options.notifyFollowers({
+            slug: record.slug,
+            version: record.deliveredVersion,
+            gameTitle: record.title,
+            // Skipped as "already knows": that is the owner now, not the old row's.
+            ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
+          });
+        } catch (error) {
+          request.log.error({ err: error, slug: record.slug }, 'follower notification fan-out failed after publish');
+        }
+      }
+
+      return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
+    },
+  );
 
   // Sandboxed game preview for operator review before publishing.
   app.get<{ Params: { jobId: string } }>('/api/admin/jobs/:jobId/preview', async (request, reply) => {
@@ -265,31 +280,7 @@ export async function registerJobAdminRoutes(
     if (!store || !gamesStore) {
       return reply.code(503).send({ error: 'store_unavailable' });
     }
-
-    const jobId = Number(request.params.jobId);
-    if (!Number.isInteger(jobId)) {
-      return reply.code(400).send({ error: 'invalid_job' });
-    }
-
-    const record = await store.getSubmission(jobId);
-    if (!record) return reply.code(404).send({ error: 'not_found' });
-    const { slug } = record;
-    const playableVersion = record.previewVersion ?? record.deliveredVersion;
-    if (!slug || !playableVersion) {
-      return reply.code(409).send({ error: 'no_preview_available' });
-    }
-
-    let bundle = await gamesStore.getDerivedArtifact(slug, playableVersion, 'bundle.html');
-    bundle ??= await gamesStore.getDerivedArtifact(slug, playableVersion, 'preview.html');
-    if (!bundle) {
-      return reply.code(404).send({ error: 'bundle_not_found' });
-    }
-
-    return reply.send({
-      slug,
-      title: record.title || slug,
-      version: playableVersion,
-      html: bundle.toString('utf8'),
-    });
+    const preview = await loadJobPreview(store, gamesStore, request.params.jobId);
+    return reply.code(preview.status).send(preview.body);
   });
 }

@@ -5,6 +5,7 @@ import { registerCreatorTakeover } from './creator-takeover.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   assembleGameHtml,
+  projectFromSources,
   CredentialLeakError,
   EmptyProjectError,
   ProjectTooLargeError,
@@ -926,16 +927,7 @@ export async function registerCreatorCodeRoutes(
         if (!sources) {
           return reply.status(409).send({ error: 'incomplete', message: 'sources do not compile yet' });
         }
-        const html = assembleGameHtml(
-          {
-            title: sources.title ?? slug,
-            description: '',
-            html: sources.indexHtml,
-            js: sources.gameJs,
-            css: sources.styleCss,
-          },
-          { restrictNetwork: true },
-        );
+        const html = assembleGameHtml(projectFromSources(sources, sources.title ?? slug), { restrictNetwork: true });
         return reply.send({ html, engineRef, timings: sources.timings });
       } catch (error) {
         if (
