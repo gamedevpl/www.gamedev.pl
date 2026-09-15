@@ -365,6 +365,8 @@ already emitted.
 ```bash
 infra/read-cost-report.sh        # trailing day, split by type
 infra/read-cost-report.sh 7d     # a full working week
+
+infra/recalibrate-firestore-alerts.sh      # A29/A30/A31, in each condition's own shape
 ```
 
 ### Per request, from the service's own logs
