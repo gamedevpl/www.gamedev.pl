@@ -224,7 +224,22 @@ node -e '
   // The A30 drift condition fires on three contiguous hours above its threshold, so a
   // median over the whole window answers a different question: a four-hour incident in
   // an otherwise quiet week leaves the median low while the live condition fires.
-  const longestRunSeconds = (threshold) => {
+  // The conditions are all COMPARISON_GT today, so a measurement exactly equal to
+  // the threshold has not crossed it. Read the operator rather than assume one.
+  const crosses = (measured, row) => {
+    switch (row.comparison) {
+      case "COMPARISON_GE":
+        return measured >= row.value;
+      case "COMPARISON_LT":
+        return measured < row.value;
+      case "COMPARISON_LE":
+        return measured <= row.value;
+      default:
+        return measured > row.value;
+    }
+  };
+
+  const longestRunSeconds = (row) => {
     let series;
     try {
       series = JSON.parse(fs.readFileSync(a30SeriesPath, "utf8")).series ?? [];
@@ -240,7 +255,7 @@ node -e '
       // are not adjacent in time. Two bursts either side of a quiet gap are two runs.
       const contiguous = previous !== null && at - previous <= ALIGNMENT_SECONDS * 1000;
       previous = at;
-      if (Number(value) <= threshold) {
+      if (!crosses(Number(value), row)) {
         run = 0;
         continue;
       }
@@ -273,6 +288,7 @@ node -e '
           policy: policy.displayName ?? "",
           duration: threshold.duration ?? "",
           value: Number(threshold.thresholdValue ?? 0),
+          comparison: threshold.comparison ?? "COMPARISON_GT",
           enabled: policy.enabled !== false,
         });
       }
@@ -294,7 +310,7 @@ node -e '
     }
     const share = row.value === 0 ? Infinity : measured / row.value;
     let verdict = `${Math.round(share * 100)}% of ${fmt(row.value)}`;
-    if (measured >= row.value) {
+    if (crosses(measured, row)) {
       verdict = `BREACH -- deployed ${fmt(row.value)} crossed`;
       breaches.push(name);
     }
@@ -309,7 +325,7 @@ node -e '
       return;
     }
     const needed = Number(String(row.duration).replace("s", "")) || 0;
-    const run = longestRunSeconds(row.value);
+    const run = longestRunSeconds(row);
     if (run === null) {
       console.log(`  ${"A30 drift".padEnd(20)} median ${fmt(a30Median)} /s   (series unavailable)`);
       return;
