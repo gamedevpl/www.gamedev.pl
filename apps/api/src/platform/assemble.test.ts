@@ -79,11 +79,20 @@ describe('hidden fields in the assembled document', () => {
     }
   });
 
-  it('keeps a field name from closing the script tag it sits in', () => {
-    // Only identifier-shaped names survive.
-    const html = assembleGameHtml(project({ hiddenFields: ['</script><script>alert(1)', 'safe'] }));
+  it('keeps every declared name, including ones no identifier rule would allow', () => {
+    // Dropping one would leave it unredacted.
+    const html = assembleGameHtml(project({ hiddenFields: ['target-word', 'round.answer', 'oddIndex'] }));
 
-    expect(html).toContain('Object.freeze(["safe"]);');
-    expect(html).not.toContain('alert(1)');
+    expect(html).toContain('Object.freeze(["target-word","round.answer","oddIndex"]);');
+  });
+
+  it('escapes a name that would otherwise close the script tag it sits in', () => {
+    const html = assembleGameHtml(project({ hiddenFields: ['</script><script>alert(1)'] }));
+
+    // The raw tag never reaches the markup; the value still decodes.
+    expect(html).not.toContain('</script><script>alert(1)');
+    expect(html).toContain('\\u003c/script>\\u003cscript>alert(1)');
+    const declared = /__GAME_AGENT_HIDDEN__=Object\.freeze\((\[.*?\])\);/.exec(html)?.[1];
+    expect(JSON.parse(declared!.replace(/\\u003c/g, '<'))).toEqual(['</script><script>alert(1)']);
   });
 });

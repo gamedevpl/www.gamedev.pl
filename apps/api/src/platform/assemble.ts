@@ -108,14 +108,19 @@ ${project.html}
 </html>`;
 }
 
-// Identifiers only: JSON.stringify leaves `/`, closing the tag.
-const HIDDEN_FIELD_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+// Escape `<` rather than drop the name: dropping leaves it unredacted.
+function scriptSafeJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
 
 function agentHiddenFieldsJs(hiddenFields: readonly string[] | undefined): string {
   if (!hiddenFields || hiddenFields.length === 0) return '';
-  const names = hiddenFields.filter((field) => typeof field === 'string' && HIDDEN_FIELD_NAME.test(field));
+  const names = hiddenFields.filter((field) => typeof field === 'string' && field.length > 0);
   if (names.length === 0) return '';
-  return `window.__GAME_AGENT_HIDDEN__=Object.freeze(${JSON.stringify(names)});`;
+  return `window.__GAME_AGENT_HIDDEN__=Object.freeze(${scriptSafeJson(names)});`;
 }
 
 function escapeHtml(value: string): string {
