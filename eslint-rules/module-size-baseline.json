@@ -426,7 +426,7 @@
     "apps/api/src/platform/tar.test.ts": 245,
     "apps/api/src/platform/tar.ts": 338,
     "apps/api/src/platform/telemetry-health.test.ts": 482,
-    "apps/api/src/platform/telemetry-health.ts": 374,
+    "apps/api/src/platform/telemetry-health.ts": 386,
     "apps/api/src/platform/theme-css-generator.ts": 32,
     "apps/api/src/platform/translate.test.ts": 170,
     "apps/api/src/platform/translate.ts": 272,

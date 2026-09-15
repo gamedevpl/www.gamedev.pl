@@ -8,13 +8,21 @@ import type { TelemetryEvent } from './store.js';
 // A stored day at the wrong version is ignored, never merged.
 export const DAILY_AGGREGATE_VERSION = 1;
 
-// Values kept per metric per game per day.
+// Values kept per metric per game on a quiet day.
 
 // Under this, the merged median is exact.
 export const MAX_SAMPLES_PER_METRIC = 128;
 
-// A day doc stays well inside the document ceiling.
-export const MAX_GAMES_PER_DAY = 100;
+// Sample values the whole day document may carry, across every game.
+
+// A busy day spends it on more games, not deeper samples.
+export const MAX_SAMPLE_VALUES_PER_DAY = 18_000;
+
+// The floor the per-game budget never drops below.
+const MIN_SAMPLES_PER_METRIC = 16;
+
+// A ceiling on games, well past any day this catalog has had.
+export const MAX_GAMES_PER_DAY = 400;
 
 export interface SampleSet {
   // The day's real value count, which is their weight.
@@ -23,10 +31,18 @@ export interface SampleSet {
   values: number[];
 }
 
-export interface DailyGameAggregate extends Omit<GameHealth, 'medianPlaySeconds' | 'medianFps' | 'medianBestScore'> {
+type DailyCounters = Omit<
+  GameHealth,
+  'medianPlaySeconds' | 'medianFps' | 'medianBestScore' | 'errorSamples' | 'progressLabels'
+>;
+
+export interface DailyGameAggregate extends DailyCounters {
   playSeconds: SampleSet;
   fps: SampleSet;
   bestScores: SampleSet;
+  // Deeper than the reported top-N, so the window reranks.
+  errorTally: { message: string; count: number }[];
+  labelTally: { label: string; sessions: number }[];
 }
 
 export interface DailyTelemetryAggregate {
@@ -38,6 +54,8 @@ export interface DailyTelemetryAggregate {
   // The day's scan hit its budget; counts are floors.
   truncated: boolean;
   // More games played that day than a single document holds.
+
+  // Folded into the sweep's own truncated flag, never reported alone.
   gamesTruncated: boolean;
   games: DailyGameAggregate[];
 }
@@ -53,14 +71,33 @@ export function downsample(values: number[], max: number = MAX_SAMPLES_PER_METRI
   return { count: sorted.length, values: picked };
 }
 
-function toGameAggregate(detail: GameHealthDetail): DailyGameAggregate {
-  const { samples, medianPlaySeconds: _p, medianFps: _f, medianBestScore: _b, ...row } = detail;
+function toGameAggregate(detail: GameHealthDetail, perMetric: number): DailyGameAggregate {
+  const {
+    samples,
+    medianPlaySeconds: _p,
+    medianFps: _f,
+    medianBestScore: _b,
+    errorSamples: _e,
+    progressLabels: _l,
+    ...row
+  } = detail;
   return {
     ...row,
-    playSeconds: downsample(samples.playSeconds),
-    fps: downsample(samples.fps),
-    bestScores: downsample(samples.bestScores),
+    playSeconds: downsample(samples.playSeconds, perMetric),
+    fps: downsample(samples.fps, perMetric),
+    bestScores: downsample(samples.bestScores, perMetric),
+    errorTally: samples.errorTally,
+    labelTally: samples.labelTally,
   };
+}
+
+// Deep for a few games, shallower for a whole catalog.
+
+// Dropping a game is worse than estimating its median slightly less finely.
+export function samplesPerMetric(games: number): number {
+  if (games <= 0) return MAX_SAMPLES_PER_METRIC;
+  const share = Math.floor(MAX_SAMPLE_VALUES_PER_DAY / (3 * games));
+  return Math.max(MIN_SAMPLES_PER_METRIC, Math.min(MAX_SAMPLES_PER_METRIC, share));
 }
 
 export function buildDailyAggregate(
@@ -69,15 +106,17 @@ export function buildDailyAggregate(
   meta: { computedAt: string; sealed: boolean; truncated: boolean },
 ): DailyTelemetryAggregate {
   const rows = summarizeGameHealthDetailed(events);
-  const kept = [...rows].sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
+  const ranked = [...rows].sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
+  const kept = ranked.slice(0, MAX_GAMES_PER_DAY);
+  const perMetric = samplesPerMetric(kept.length);
   return {
     date,
     version: DAILY_AGGREGATE_VERSION,
     computedAt: meta.computedAt,
     sealed: meta.sealed,
     truncated: meta.truncated,
-    gamesTruncated: kept.length > MAX_GAMES_PER_DAY,
-    games: kept.slice(0, MAX_GAMES_PER_DAY).map(toGameAggregate),
+    gamesTruncated: ranked.length > MAX_GAMES_PER_DAY,
+    games: kept.map((detail) => toGameAggregate(detail, perMetric)),
   };
 }
 
@@ -132,12 +171,12 @@ function mergeGame(days: DailyGameAggregate[]): GameHealth {
 
   const errorCounts = new Map<string, number>();
   for (const day of days) {
-    for (const sample of day.errorSamples)
+    for (const sample of day.errorTally)
       errorCounts.set(sample.message, (errorCounts.get(sample.message) ?? 0) + sample.count);
   }
   const labelCounts = new Map<string, number>();
   for (const day of days) {
-    for (const label of day.progressLabels)
+    for (const label of day.labelTally)
       labelCounts.set(label.label, (labelCounts.get(label.label) ?? 0) + label.sessions);
   }
 
@@ -249,7 +288,8 @@ export async function readDailyWindow(
     if (stored?.sealed && stored.version === DAILY_AGGREGATE_VERSION) {
       days.push(stored);
       scanned.push(dateStr);
-      if (stored.truncated) truncated = true;
+      // Games dropped for size make every count a floor too.
+      if (stored.truncated || stored.gamesTruncated) truncated = true;
       reused += 1;
       continue;
     }
@@ -272,6 +312,7 @@ export async function readDailyWindow(
       sealed: dateStr < meta.sealedBefore,
       truncated: dayTruncated,
     });
+    if (aggregate.gamesTruncated) truncated = true;
     days.push(aggregate);
     scanned.push(dateStr);
     try {

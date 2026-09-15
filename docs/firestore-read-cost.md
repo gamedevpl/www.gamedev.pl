@@ -538,6 +538,15 @@ Two properties make that safe to do to a number an agent acts on:
   values, plus the count they stand for. Merging takes the weighted median, which reduces to
   the plain median when no day was downsampled. `telemetry-daily.test.ts` asserts the merged
   rows equal a straight scan over the same events.
+- **The sample budget is spent on games, not on depth.** A day document has a fixed total
+  (`MAX_SAMPLE_VALUES_PER_DAY`) shared across every game that played, so a catalog-wide day
+  shortens each game's sample set instead of dropping the quiet games off the end. Past the
+  hard `MAX_GAMES_PER_DAY` ceiling the day sets `gamesTruncated`, which the sweep folds into
+  `window.truncated` — a dropped game is never reported as a complete window.
+- **The top lists are reranked, not inherited.** The rollup stores `MAX_TALLY_ROWS` errors
+  and labels per day, well past the five and eight a scorecard reports, so an error that
+  ranks sixth every single day still wins the 28-day window. Merging the reported top-N of
+  each day would have lost it.
 
 The one real difference is the seam. A session that crosses UTC midnight is counted in both
 its partitions, where a single 28-day scan used to stitch it back together. Events are

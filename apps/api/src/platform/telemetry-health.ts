@@ -101,9 +101,18 @@ function median(values: number[]): number | null {
  * in time order and Firestore returns documents in id order.
  */
 export interface GameHealthDetail extends GameHealth {
-  // What the three medians were taken over.
-  samples: { playSeconds: number[]; fps: number[]; bestScores: number[] };
+  // What the medians were taken over, plus deeper tallies.
+  samples: {
+    playSeconds: number[];
+    fps: number[];
+    bestScores: number[];
+    errorTally: { message: string; count: number }[];
+    labelTally: { label: string; sessions: number }[];
+  };
 }
+
+// Kept per day, against the 5 and 8 that are reported.
+export const MAX_TALLY_ROWS = 32;
 
 export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
   return summarizeGameHealthDetailed(events).map(({ samples: _samples, ...row }) => row);
@@ -262,6 +271,15 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
       if (state.gfxBackend) gfxBackends[state.gfxBackend] += 1;
     }
 
+    const errorTally = [...errorCounts.entries()]
+      .map(([message, count]) => ({ message, count }))
+      .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message))
+      .slice(0, MAX_TALLY_ROWS);
+    const labelTally = [...labelSessions.entries()]
+      .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
+      .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
+      .slice(0, MAX_TALLY_ROWS);
+
     rows.push({
       slug,
       sessions: sessions.size,
@@ -270,10 +288,7 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
       medianPlaySeconds: median(playPerSession) ?? 0,
       totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0),
       errors,
-      errorSamples: [...errorCounts.entries()]
-        .map(([message, count]) => ({ message, count }))
-        .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message))
-        .slice(0, MAX_ERROR_SAMPLES),
+      errorSamples: errorTally.slice(0, MAX_ERROR_SAMPLES),
       aliveTicks,
       stalledTicks,
       stallRate: aliveTicks === 0 ? 0 : stalledTicks / aliveTicks,
@@ -290,12 +305,9 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
       finishRate: sessions.size === 0 ? 0 : sessionsWithEnding / sessions.size,
       winRate: decided === 0 ? null : outcomes.won / decided,
       medianBestScore: median(bestScores),
-      progressLabels: [...labelSessions.entries()]
-        .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
-        .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
-        .slice(0, MAX_PROGRESS_LABELS),
+      progressLabels: labelTally.slice(0, MAX_PROGRESS_LABELS),
       gfxBackends,
-      samples: { playSeconds: playPerSession, fps: fpsSamples, bestScores },
+      samples: { playSeconds: playPerSession, fps: fpsSamples, bestScores, errorTally, labelTally },
     });
   }
 

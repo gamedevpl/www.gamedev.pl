@@ -72,7 +72,7 @@ START_TIME="$(started_at)"
 TMP_ALL="$(mktemp)"
 TMP_PAGE="$(mktemp)"
 TMP_POLICIES="$(mktemp)"
-trap 'rm -f "$TMP_ALL" "$TMP_PAGE" "$TMP_POLICIES"' EXIT
+trap 'rm -f "$TMP_ALL" "$TMP_ALL.stats" "$TMP_PAGE" "$TMP_POLICIES" "${TMP_A30:-}"' EXIT
 
 urlencode() {
   node -e 'console.log(encodeURIComponent(process.argv[1]))' "$1"
@@ -169,7 +169,13 @@ summarize() {
     const worst = ranked.slice(0, 3).map(([when, value]) => `${when} ${fmt(value)}`);
     console.log(`  worst: ${worst.join("   ")}`);
     // Handed to the shell so the derivations below read one measurement, not two.
-    fs.writeFileSync(`${path}.stats`, JSON.stringify({ median: at(0.5), p95: at(0.95), max: totals.at(-1) }));
+    // The series goes with them in time order: a condition with a duration is not
+    // answered by any single statistic over the window.
+    const ordered = [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    fs.writeFileSync(
+      `${path}.stats`,
+      JSON.stringify({ median: at(0.5), p95: at(0.95), max: totals.at(-1), series: ordered }),
+    );
   ' "$TMP_ALL" "$label" "$unit"
 }
 
@@ -194,6 +200,9 @@ fetch_series "firestore.googleapis.com/document/read_count" ALIGN_RATE 600s "met
 summarize "type" "reads/s"
 A30_MAX="$(stat max)"
 A30_MEDIAN="$(stat median)"
+# The A30 series has to outlive A31's fetch, which overwrites the stats file.
+TMP_A30="$(mktemp)"
+cp "$TMP_ALL.stats" "$TMP_A30"
 echo
 echo "A31 -- document reads, ALIGN_DELTA/86400s (one bucket per day)"
 fetch_series "firestore.googleapis.com/document/read_count" ALIGN_DELTA 86400s "metric.label.type"
@@ -209,6 +218,29 @@ node -e '
   const fs = require("fs");
   const [a29Max, a30Max, a30Median, a31Max] = process.argv.slice(1, 5).map(Number);
   const policiesPath = process.argv[5];
+  const a30SeriesPath = process.argv[6];
+  const ALIGNMENT_SECONDS = 600;
+
+  // The A30 drift condition fires on three contiguous hours above its threshold, so a
+  // median over the whole window answers a different question: a four-hour incident in
+  // an otherwise quiet week leaves the median low while the live condition fires.
+  const longestRunSeconds = (threshold) => {
+    let series;
+    try {
+      series = JSON.parse(fs.readFileSync(a30SeriesPath, "utf8")).series ?? [];
+    } catch {
+      return null;
+    }
+    let best = 0;
+    let run = 0;
+    for (const [, value] of series) {
+      run = Number(value) > threshold ? run + 1 : 0;
+      if (run > best) best = run;
+    }
+    return best * ALIGNMENT_SECONDS;
+  };
+
+  const asHours = (seconds) => `${(seconds / 3600).toFixed(1)}h`;
   const round = (v, step) => Math.ceil(v / step) * step;
   const fmt = (v) => v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
@@ -260,6 +292,24 @@ node -e '
     console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   ${verdict}${off}${note ?? ""}`);
   };
 
+  // Its own row: the threshold alone is not the condition, the duration is half of it.
+  const driftRow = (row) => {
+    if (!row) {
+      console.log(`  ${"A30 drift".padEnd(20)} median ${fmt(a30Median)} /s   (no deployed condition found)`);
+      return;
+    }
+    const needed = Number(String(row.duration).replace("s", "")) || 0;
+    const run = longestRunSeconds(row.value);
+    if (run === null) {
+      console.log(`  ${"A30 drift".padEnd(20)} median ${fmt(a30Median)} /s   (series unavailable)`);
+      return;
+    }
+    const shape = `${asHours(run)} above ${fmt(row.value)}, condition needs ${asHours(needed)}`;
+    const verdict = run >= needed ? `BREACH -- ${shape}` : `longest run ${shape}`;
+    if (run >= needed) breaches.push("A30 drift");
+    console.log(`  ${"A30 drift".padEnd(20)} median ${fmt(a30Median)} /s   ${verdict}`);
+  };
+
   if (deployed === null) {
     console.log("Deployed thresholds: could not be read (monitoring.alertPolicies.list).");
     console.log("The derivations below still hold; the regression guard is skipped.");
@@ -268,13 +318,14 @@ node -e '
     console.log("");
     compare("A29 write rate", a29Max, "/s ", find("A29"));
     compare("A30 spike", a30Max, "/s ", find("A30", "600s"));
-    compare("A30 drift", a30Median, "/s ", find("A30", "10800s"), "  (median of 600s buckets)");
+    driftRow(find("A30", "10800s"));
     compare("A31 daily total", a31Max, "   ", find("A31"));
   }
   console.log("");
 
   if (breaches.length > 0) {
-    console.log(`!! ${breaches.join(", ")} already cross a deployed threshold in this window.`);
+    const verb = breaches.length === 1 ? "crosses" : "cross";
+    console.log(`!! ${breaches.join(", ")} already ${verb} a deployed threshold in this window.`);
     console.log("   Find the writer before touching anything below. A threshold moved up to");
     console.log("   fit what it just measured is no longer a ceiling, and the next runaway");
     console.log("   passes under it silently.");
@@ -325,4 +376,4 @@ node -e '
   console.log("Then: edit the CALIBRATION comments and thresholdValue in");
   console.log("infra/setup-monitoring.sh (A29, A30, A31), carrying the measured figures");
   console.log("above, and re-run that script. Record the numbers in the PR.");
-' "$A29_MAX" "$A30_MAX" "$A30_MEDIAN" "$A31_MAX" "$TMP_POLICIES"
+' "$A29_MAX" "$A30_MAX" "$A30_MEDIAN" "$A31_MAX" "$TMP_POLICIES" "$TMP_A30"

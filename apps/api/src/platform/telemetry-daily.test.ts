@@ -4,7 +4,10 @@ import {
   DAILY_AGGREGATE_VERSION,
   downsample,
   mergeDailyAggregates,
+  MAX_GAMES_PER_DAY,
+  MAX_SAMPLE_VALUES_PER_DAY,
   readDailyWindow,
+  samplesPerMetric,
   sealedBefore,
   weightedMedian,
   type DailyTelemetryAggregate,
@@ -146,29 +149,123 @@ describe('mergeDailyAggregates', () => {
     expect(merged[0]?.totalPlaySeconds).toBe(direct[0]?.totalPlaySeconds);
   });
 
+  it('reranks errors across the window instead of inheriting each day’s top five', () => {
+    const slug = 'sky-dodge';
+    const days: DailyTelemetryAggregate[] = [];
+    for (let day = 0; day < 6; day++) {
+      const events: TelemetryEvent[] = [];
+      const date = `2026-09-0${day + 1}`;
+      // Five one-off errors outrank the recurring one every single day.
+      for (let one = 0; one < 5; one++) {
+        for (let repeat = 0; repeat < 3; repeat++) {
+          events.push({
+            slug,
+            sessionId: `d${day}-o${one}-${repeat}`,
+            type: 'error',
+            at: at(date, one),
+            msSinceOpen: 1_000,
+            message: `one-off ${day}-${one}`,
+          });
+        }
+      }
+      events.push({
+        slug,
+        sessionId: `d${day}-r`,
+        type: 'error',
+        at: at(date, 30),
+        msSinceOpen: 1_000,
+        message: 'the recurring one',
+      });
+      events.push({
+        slug,
+        sessionId: `d${day}-r2`,
+        type: 'error',
+        at: at(date, 31),
+        msSinceOpen: 1_000,
+        message: 'the recurring one',
+      });
+      days.push(buildDailyAggregate(date, events, { computedAt: 'now', sealed: true, truncated: false }));
+    }
+
+    const merged = mergeDailyAggregates(days);
+
+    expect(merged[0]?.errorSamples[0]).toEqual({ message: 'the recurring one', count: 12 });
+  });
+
   it('is empty for a window with no play at all', () => {
     expect(mergeDailyAggregates([])).toEqual([]);
   });
 });
 
 describe('buildDailyAggregate', () => {
-  it('drops the least played games past the per-document ceiling', () => {
+  function manyGames(count: number): TelemetryEvent[] {
     const events: TelemetryEvent[] = [];
-    for (let index = 0; index < 120; index++) {
+    for (let index = 0; index < count; index++) {
       const plays = index < 5 ? 3 : 1;
       for (let play = 0; play < plays; play++) {
         events.push(...session('2026-09-13', `game-${index}`, `g${index}-${play}`, { seconds: 5, frames: [60] }));
       }
     }
-    const aggregate = buildDailyAggregate('2026-09-13', events, {
-      computedAt: 'now',
-      sealed: true,
-      truncated: false,
-    });
+    return events;
+  }
 
-    expect(aggregate.games).toHaveLength(100);
+  const meta = { computedAt: 'now', sealed: true, truncated: false };
+
+  it('keeps a day far wider than the catalog rather than dropping games', () => {
+    const aggregate = buildDailyAggregate('2026-09-13', manyGames(150), meta);
+
+    expect(aggregate.games).toHaveLength(150);
+    expect(aggregate.gamesTruncated).toBe(false);
+  });
+
+  it('spends its sample budget on more games, not deeper samples', () => {
+    const aggregate = buildDailyAggregate('2026-09-13', manyGames(150), meta);
+    const values = aggregate.games.reduce(
+      (sum, game) => sum + game.playSeconds.values.length + game.fps.values.length + game.bestScores.values.length,
+      0,
+    );
+
+    expect(values).toBeLessThanOrEqual(MAX_SAMPLE_VALUES_PER_DAY);
+  });
+
+  it('says so, past the hard ceiling on games', () => {
+    const aggregate = buildDailyAggregate('2026-09-13', manyGames(MAX_GAMES_PER_DAY + 5), meta);
+
+    expect(aggregate.games).toHaveLength(MAX_GAMES_PER_DAY);
     expect(aggregate.gamesTruncated).toBe(true);
     expect(aggregate.games[0]?.sessions).toBe(3);
+  });
+
+  it('keeps errors and labels deeper than the window reports them', () => {
+    const events: TelemetryEvent[] = [];
+    for (let index = 0; index < 12; index++) {
+      events.push({
+        slug: 'sky-dodge',
+        sessionId: `e${index}`,
+        type: 'error',
+        at: at('2026-09-13', index),
+        msSinceOpen: 1_000,
+        message: `boom ${index}`,
+      });
+    }
+    const aggregate = buildDailyAggregate('2026-09-13', events, meta);
+
+    expect(aggregate.games[0]?.errorTally.length).toBeGreaterThan(5);
+  });
+});
+
+describe('samplesPerMetric', () => {
+  it('is the full depth for a handful of games', () => {
+    expect(samplesPerMetric(10)).toBe(128);
+  });
+
+  it('shrinks rather than dropping a game on a catalog-wide day', () => {
+    expect(samplesPerMetric(400)).toBeLessThan(128);
+    expect(samplesPerMetric(400)).toBeGreaterThanOrEqual(16);
+  });
+
+  it('never drops below the floor', () => {
+    expect(samplesPerMetric(100_000)).toBe(16);
   });
 });
 
@@ -240,6 +337,19 @@ describe('readDailyWindow', () => {
 
     expect(window.rescanned).toBe(2);
     expect(stored.get('2026-09-12')?.version).toBe(DAILY_AGGREGATE_VERSION);
+  });
+
+  it('marks the window truncated when a day dropped games for size', async () => {
+    const day = '2026-09-13';
+    const stored = new Map<string, DailyTelemetryAggregate>();
+    const byDay = new Map<string, TelemetryEvent[]>();
+    const window = await readDailyWindow([day], budget, reader(stored, byDay), meta);
+    stored.set(day, { ...window.days[0], sealed: true, gamesTruncated: true });
+
+    const second = await readDailyWindow([day], budget, reader(stored, byDay), meta);
+
+    expect(second.reused).toBe(1);
+    expect(second.truncated).toBe(true);
   });
 
   it('narrows the window rather than overrunning the budget', async () => {
