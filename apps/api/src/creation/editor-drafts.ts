@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { draftShapeProblems } from './editor-draft-shape.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   EDITOR_CONTENT_FILE,
@@ -322,7 +323,13 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         return reply.status(413).send({ error: 'draft is too large' });
       }
 
-      // A draft is work in progress; Publish enforces the L4 rules.
+      // Shape and bounds block; the level's own rules wait for Publish.
+      const shapeProblems = draftShapeProblems(resolved.definition, body.data.content);
+      if (shapeProblems.length > 0) {
+        return reply
+          .status(422)
+          .send({ error: "draft does not fit this game's content schema", problems: shapeProblems.slice(0, 20) });
+      }
 
       // Declared text is shown to players once published, so it is moderated at
       // the same point every other creator text is: on the write.

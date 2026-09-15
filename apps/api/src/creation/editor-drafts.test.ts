@@ -360,16 +360,40 @@ describe('editor draft routes', () => {
     expect(publish.json().problems.some((p: string) => p.includes('exactly 1 "start"'))).toBe(true);
   });
 
-  it('saves a draft carrying a hole where an item will go, without crashing on it', async () => {
+  it('still refuses a hole where an item belongs — shape is not work in progress', async () => {
     const { app } = await createApp();
     const response = await app.inject({
       method: 'PUT',
       url: '/api/me/games/garden-gather/editor/draft',
       headers: authHeaders('g:alice'),
-      // Moderation walks declared text fields; a null item must not throw there.
       payload: { content: { gardens: [null] } },
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(422);
+  });
+
+  it('still refuses text past its declared bound, which moderation would be billed for', async () => {
+    const { app } = await createApp();
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: { gardens: [{ properties: { name: 'x'.repeat(5000) }, rows: ['########', '#..@..*#', '########'] }] },
+      },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().problems.some((p: string) => p.includes('characters'))).toBe(true);
+  });
+
+  it('still refuses a row wider than the declared grid', async () => {
+    const { app } = await createApp();
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: { gardens: [{ properties: { name: 'Wide' }, rows: ['#'.repeat(500)] }] } },
+    });
+    expect(response.statusCode).toBe(422);
   });
 
   it('409s a stale baseRevision so a second tab warns instead of clobbering', async () => {

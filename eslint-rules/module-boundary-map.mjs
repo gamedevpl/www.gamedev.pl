@@ -258,6 +258,7 @@ const FILE_BUCKET = {
   'tab-complete': 'creation',
   'editor-assist': 'creation',
   'editor-contract': 'creation',
+  'editor-draft-shape': 'creation',
   'editor-drafts': 'creation',
   remix: 'creation',
   'remix-save': 'creation',

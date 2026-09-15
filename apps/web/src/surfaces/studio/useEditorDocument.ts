@@ -22,6 +22,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   const revisionRef = useRef(revision);
   revisionRef.current = revision;
   const timerRef = useRef<number | null>(null);
+  const inFlightRef = useRef<Promise<boolean> | null>(null);
   const pastRef = useRef<EditorContentDoc[]>([]);
   const futureRef = useRef<EditorContentDoc[]>([]);
 
@@ -64,8 +65,8 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
     [refreshHistory],
   );
 
-  const saveNow = useCallback(
-    async (overwrite = false): Promise<boolean> => {
+  const writeDraft = useCallback(
+    async (overwrite: boolean): Promise<boolean> => {
       setSaveState('saving');
       setSaveProblems([]);
       try {
@@ -87,6 +88,22 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
       }
     },
     [slug],
+  );
+
+  // One write at a time, or a flush 409s against the autosave.
+  const saveNow = useCallback(
+    async (overwrite = false): Promise<boolean> => {
+      const running = inFlightRef.current;
+      if (running && !(await running)) return false;
+      const attempt = writeDraft(overwrite);
+      inFlightRef.current = attempt;
+      try {
+        return await attempt;
+      } finally {
+        if (inFlightRef.current === attempt) inFlightRef.current = null;
+      }
+    },
+    [writeDraft],
   );
 
   const scheduleSave = useCallback(() => {

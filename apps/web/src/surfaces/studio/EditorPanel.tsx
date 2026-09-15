@@ -637,15 +637,17 @@ export function EditorPanel(props: {
             // the debounce timer, so a click inside that window would have sent the
             // creator to a playtest of the draft *before* their last edit.
             onClick={() => {
-              recordEditorStep('previewed');
-              if (saveState === 'dirty') {
-                // Leaving unmounts the panel, so an unsaved edit would be gone.
-                void saveNow().then((saved) => {
-                  if (saved) props.onOpenPlaytest();
-                });
+              // Leaving unmounts the panel, so anything not on the server is gone.
+              if (saveState === 'clean' || saveState === 'saved') {
+                recordEditorStep('previewed');
+                props.onOpenPlaytest();
                 return;
               }
-              props.onOpenPlaytest();
+              void saveNow().then((saved) => {
+                if (!saved) return;
+                recordEditorStep('previewed');
+                props.onOpenPlaytest();
+              });
             }}
           >
             <PixelIcon name="play" size={12} /> {t('studioPanel.editor.tryDraft')}
