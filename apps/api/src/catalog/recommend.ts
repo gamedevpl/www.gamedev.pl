@@ -21,6 +21,7 @@ import type { RecommendReason } from '@gamedevpl/contract';
 export interface RecommendGame {
   slug: string;
   genre: string;
+  effort?: number;
 }
 
 export interface RecommendScorecardSignals {
@@ -64,7 +65,7 @@ export const CONTINUE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 const MAX_LIMIT = 500;
 const MAX_CONTINUE = 2;
-
+const EFFORT_SCORE_SCALE = 100;
 export function normalizeGenre(genre: string): string {
   return genre.trim().toLowerCase();
 }
@@ -149,7 +150,7 @@ export function rankRecommendations(input: RankRecommendationsInput): RankedReco
     const genreBoost = genreKey ? (weights.get(genreKey) ?? 0) * 2 : 0;
     // Lightly demote already-played games so the grid surfaces new ones after continues.
     const replayPenalty = playedSet.has(game.slug) && !continueSet.has(game.slug) ? 4 : 0;
-    const score = base + genreBoost - replayPenalty;
+    const score = base + genreBoost - replayPenalty + (game.effort ?? 0) * EFFORT_SCORE_SCALE;
 
     let reason: RecommendReason = 'popular';
     if (hasPersonalSignal && genreBoost > 0) {
@@ -167,7 +168,8 @@ export function rankRecommendations(input: RankRecommendationsInput): RankedReco
     ...continueSlugs.map((slug) => ({
       slug,
       reason: 'continue' as const,
-      score: communityScore(input.scorecards.get(slug)) + 100,
+      score:
+        communityScore(input.scorecards.get(slug)) + 100 + (gamesBySlug.get(slug)?.effort ?? 0) * EFFORT_SCORE_SCALE,
     })),
     ...discovery,
   ];
