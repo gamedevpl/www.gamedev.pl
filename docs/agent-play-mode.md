@@ -2,8 +2,9 @@
 
 > Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, policy
 > scripts, the plan runner, the filmstrip, the panel and the entry points are built and
-> tested. The
-> games-repo half (hidden fields in the document, sound as text) is not. Reviewer traffic
+> tested, and so is sound as readable text. Hidden fields ride in the games repo's own
+> assembly but not yet in the documents this site serves — see "Not built yet".
+> Reviewer traffic
 > leaves no trace: an agent-capable session is kept out of the play funnel. Strategy and the decisions
 > behind all of this live in the private ops repo (`agent-play-mode-research.md`).
 
@@ -80,6 +81,27 @@ telemetry. Agent mode folds them into its log, so the game's own landmark events
 frame-stamped without a single change in the games repo. The same goes for `#game-status`,
 GameKit's `aria-live` line: the one text channel a published game already writes to.
 
+### Hearing the game
+
+An agent has no audio track, so a game whose only feedback is a sound is unreviewable to
+it. GameKit now records every `play`, `loop`, `playMusic` and `stopMusic` into
+`harness.audio` — its own log, locally, reported to nobody — and the bridge reads them
+from inside the frame into the same log, as `sfx`, `loop` and `music` lines. Its own log
+rather than the existing `signals` array, because a sound-heavy run would otherwise evict
+the `progress` landmarks that playtest tooling reads. Repeats inside a frame
+collapse into a count, and a call for a sound the bundle does not carry is marked
+`(missing)`, which is a finding rather than a silence. Each line keeps the frame the sound
+happened on, not the frame the drain ran on — otherwise a `step 60` would file sixty
+frames of sound under frame 60 and the log would be useless for finding which input
+caused what.
+
+The cursor is the entry's own sequence number, never its index. The signal log is capped
+and drops its oldest entries to make room, so once it is full its length stops changing —
+an index cursor parked at that length sits at the end forever and the session goes deaf
+after the first 400 sounds. A sequence is monotonic across the page, so a rotation drops
+a prefix and nothing else. Losing what fell out is the right way round: a sound reported
+twice would read as a sound heard twice.
+
 ## Invariants this must not break
 
 - **The sandbox stays exactly as it is.** `sandbox="allow-scripts allow-pointer-lock"`, no
@@ -92,9 +114,10 @@ GameKit's `aria-live` line: the one text channel a published game already writes
 - **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
   the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
   answer never reaches the host at all. Redacting only at render would have put it on the
-  wire and into React state first. The list does not travel with the assembled document
-  yet, so the page reports `hiddenFields: null` and the panel says so out loud — a visible
-  gap rather than a silent one.
+  wire and into React state first. The frame learns the list from
+  `window.__GAME_AGENT_HIDDEN__` — which nothing on this site sets yet, so every document
+  reports `hiddenFields: null` and the panel says so out loud. A visible gap rather than a
+  silent one.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
@@ -230,9 +253,16 @@ cost, so a heavy 3D game is slower per frame.
 
 ## Not built yet
 
-- **The games-repo half.** Carrying `hiddenFields` into the assembled document, and
-  emitting `sfx` / `music` events so sound becomes readable text. Until then a game with a
-  hidden answer can leak it here, and an agent still cannot judge audio feedback.
+- **Hidden fields in the documents this site serves.** The games repo's `assembleGame`
+  writes `window.__GAME_AGENT_HIDDEN__` from `AGENT.json.hiddenFields`, which covers its
+  own standalone builds and its sandbox. This site does not use that assembler: it reads a
+  game's sources itself (`getGameSources` — `index.html`, `game.ts`, `style.css`,
+  `SPEC.md`, `GAME.json`, and never `AGENT.json`) and builds the document with
+  `assembleGameHtml`. So the global is never set here, and a game with a hidden answer
+  still sends it in its snapshot. Closing this means carrying `AGENT.json` through the
+  catalog read, the project shape and the store lane — worth doing, and more than this
+  change should reach into.
+
 - **Telemetry.** No event is emitted in this mode. How an agent-driven play should be
   counted — and kept out of person-shaped metrics — is an open decision, not an oversight.
 - **WebMCP registration.** The same command list could be registered as page tools for

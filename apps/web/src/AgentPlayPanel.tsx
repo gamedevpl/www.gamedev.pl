@@ -11,6 +11,7 @@ import {
   formatAffordances,
   formatObservation,
   formatSnapshotText,
+  mergeAgentLog,
 } from './agentPlay.js';
 import { parseAgentPlan, PlanError } from './agentPlan.js';
 import { runAgentPlan, type PlanRunResult } from './agentPlanRunner.js';
@@ -24,6 +25,9 @@ type AgentPlayPanelProps = {
   frameRef: MutableRefObject<HTMLIFrameElement | null>;
   onClose: () => void;
 };
+
+// How many log lines the panel shows, across both streams.
+const MERGED_LOG_CAP = 20;
 
 // Quick verbs, so a human can drive without learning the grammar.
 const QUICK_COMMANDS = ['look', 'step 1', 'step 10', 'play 500', 'screenshot'] as const;
@@ -140,7 +144,7 @@ export function AgentPlayPanel({ open, frameRef, onClose }: AgentPlayPanelProps)
   const { observation, ...numbers } = snapshot;
   const observationText = formatObservation(observation);
   const stateText = formatSnapshotText(state?.frame ?? 0, numbers, state?.hiddenFields ?? null);
-  const merged = [...(state?.log ?? []), ...signals].slice(-20);
+  const merged = mergeAgentLog(state?.log ?? [], signals, MERGED_LOG_CAP);
 
   return (
     <aside className="agent-play" role="dialog" aria-label={t('player.agent.title')}>
