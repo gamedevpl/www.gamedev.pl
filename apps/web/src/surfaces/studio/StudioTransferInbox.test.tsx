@@ -33,10 +33,13 @@ async function mount(onAccepted?: (slug: string) => void, props: Record<string, 
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(StudioTransferInbox, { onAccepted, ...props }));
-  });
-  return { host, root };
+  const render = async (next: Record<string, unknown> = {}) => {
+    await act(async () => {
+      root.render(createElement(StudioTransferInbox, { onAccepted, ...props, ...next }));
+    });
+  };
+  await render();
+  return { host, root, render };
 }
 
 function click(host: HTMLElement, testid: string) {
@@ -233,6 +236,19 @@ describe('StudioTransferInbox', () => {
     vi.stubGlobal('fetch', routed([OFFER]));
     const onOffersPresent = vi.fn();
     const { root } = await mount(undefined, { visible: true, onOffersPresent });
+
+    expect(onOffersPresent).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it('does not reopen a shelf the reader just collapsed', async () => {
+    // Collapsing flips visible to false; that is not an arrival.
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const onOffersPresent = vi.fn();
+    const { root, render } = await mount(undefined, { visible: true, onOffersPresent });
+
+    expect(onOffersPresent).not.toHaveBeenCalled();
+    await render({ visible: false });
 
     expect(onOffersPresent).not.toHaveBeenCalled();
     await act(async () => root.unmount());

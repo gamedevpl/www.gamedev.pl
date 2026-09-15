@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { recordTransferStep } from '../../visitTelemetry.js';
@@ -71,9 +71,12 @@ export function StudioTransferInbox({
   const pending = incoming.filter((invite) => invite.status === 'pending');
   // An unseen invitation is what the notification exists to fix.
   const offered = pending.length > 0;
+  // Decided once, on arrival; a later collapse is the reader's.
+  const announced = useRef(false);
   useEffect(() => {
-    // Only when hidden; forcing an open shelf costs a click.
-    if (offered && !visible) onOffersPresent?.();
+    if (!offered || announced.current) return;
+    announced.current = true;
+    if (!visible) onOffersPresent?.();
   }, [offered, visible, onOffersPresent]);
 
   // Shown means shown; a hidden render inflates the denominator.
