@@ -289,6 +289,28 @@ describe('controller bridge boundary', () => {
     }
   });
 
+  it('learns a declared validator even when a push already cached the draft', async () => {
+    studioApi.fetchGameEditor.mockResolvedValue({
+      definition: { version: 2, controller: true, validate: true, content: {} },
+      draft: null,
+    });
+    vi.useFakeTimers();
+    try {
+      mount();
+      // A push before hello is what makes the draft fetch skippable.
+      act(() => pushRef.current?.({ levels: [] } as unknown as EditorContentDoc));
+      send(frame({ t: 'editor:hello', controller: true }));
+      send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Ready' } }));
+      await act(async () => void (await Promise.resolve()));
+
+      act(() => void vi.advanceTimersByTime(3000));
+      expect(latestController?.status).toBe('failed');
+      expect(latestController?.reason).toContain('stopped answering');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('drops the check watchdog when the creator leaves, so silence cannot fail it later', () => {
     vi.useFakeTimers();
     try {

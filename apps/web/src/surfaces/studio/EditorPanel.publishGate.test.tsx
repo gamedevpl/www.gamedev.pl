@@ -167,6 +167,14 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     expect(publishButton().disabled).toBe(false);
   });
 
+  it('holds Publish for a declared validator that is still connecting', async () => {
+    fetchGameEditor.mockResolvedValue({ ...editorState, definition: { ...definition, validate: true } });
+    await renderWithController(controllerState({ status: 'connecting', view: null, checks: null }));
+
+    // The watchdog window is not a window to publish unvalidated content in.
+    expect(publishButton().disabled).toBe(true);
+  });
+
   it('holds Publish for a declared validator that has not answered yet', async () => {
     fetchGameEditor.mockResolvedValue({ ...editorState, definition: { ...definition, validate: true } });
     await renderWithController(controllerState({ checks: null }));

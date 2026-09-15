@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
+import { fetchGameEditor, type EditorContentDoc, type GameEditorState } from './studioApi.js';
 import { recordEditorStep } from './visitTelemetry.js';
 import {
   BRIDGE_NAMESPACE,
@@ -184,18 +184,20 @@ export function useEditorDraftBridge(
     let disposed = false;
     let controllerExpected = false;
     /** One fetch per playtest session; a hello after the first reuses it. */
-    let draftPromise: Promise<EditorContentDoc | null> | null = null;
+    let statePromise: Promise<GameEditorState | null> | null = null;
 
-    function loadDraft(): Promise<EditorContentDoc | null> {
-      draftPromise ??= fetchGameEditor(slug as string)
+    function loadState(): Promise<GameEditorState | null> {
+      statePromise ??= fetchGameEditor(slug as string)
         .then((state) => {
           controllerExpected = state.definition.controller === true;
           validateDeclaredRef.current = state.definition.validate === true;
           if (controllerExpected && !controllerHelloRef.current) expectController();
-          return state.draft?.content ?? null;
+          // The view may be up already, and a verdict is owed.
+          if (!disposed && controllerViewRef.current !== null) armCheckWatchdog();
+          return state;
         })
         .catch(() => null);
-      return draftPromise;
+      return statePromise;
     }
 
     function post(content: EditorContentDoc, selection: EditorSelection | null) {
@@ -275,12 +277,15 @@ export function useEditorDraftBridge(
 
       if (data.t !== 'editor:hello') return;
 
+      // The definition is needed either way; the draft is skippable.
+      const pending = loadState();
       // A push already sent fresher content than the fetch would — that wins.
       if (lastContentRef.current !== null) {
         post(lastContentRef.current, lastSelectionRef.current);
         return;
       }
-      void loadDraft().then((content) => {
+      void pending.then((state) => {
+        const content = state?.draft?.content ?? null;
         if (disposed || content === null) return;
         lastContentRef.current = content;
         post(content, lastSelectionRef.current);
