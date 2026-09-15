@@ -6,6 +6,7 @@ import { mintToken } from './platform/submission-token.js';
 import type { AgentBackend } from './agent-surface/agent-backend.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { GamesStore } from './delivery/games-store.js';
+import { currentOwnerUid } from './platform/game-access-resolve.js';
 import { InMemoryStore } from './platform/store.js';
 
 // The transfer walked end to end, from both sides, and back again.
@@ -275,6 +276,55 @@ describe('after a transfer, the recipient has the whole game', () => {
     expect(mine.json().suggestions.map((s: { slug: string }) => s.slug)).toEqual(['comet-courier']);
     const theirs = await app.inject({ method: 'GET', url: '/api/me/suggestions', headers: session(SENDER) });
     expect(theirs.json().suggestions).toEqual([]);
+  });
+});
+
+describe('after a transfer, preferences and counters follow the owner', () => {
+  it('obeys the new owner’s mute, not the one the sender set', async () => {
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    const app = await createApp(store);
+    // Opposite settings, so whichever one is read is unambiguous.
+    await store.setProposalsMuted(SENDER, null);
+    await store.setProposalsMuted(RECIPIENT, at);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    // The posting transaction re-reads the mute against this uid.
+    const record = (await store.getSubmission(jobId))!;
+    const ownerNow = await currentOwnerUid(store, record.slug!, record.ownerUid);
+    expect(ownerNow).toBe(RECIPIENT);
+    const claim = { version: 'v1', claimedAt: at };
+    await store.claimDreamRun(jobId, 'v1', at, record.roundGeneration ?? 1);
+    const posted = await store.appendProposalMessage(jobId, claim, 'A concept for you.', {
+      proposal: { sourceRef: 'shot-1', version: 'v1', options: [], builder: 'self' },
+      ownerUid: ownerNow!,
+      roundGeneration: record.roundGeneration ?? 1,
+      blocked: () => false,
+    });
+    expect(posted).toMatchObject({ posted: null, refusedBy: 'muted' });
+  });
+
+  it('stops counting the sender’s round as their own work in flight', async () => {
+    const store = new InMemoryStore();
+    const { at } = await gameWithHistory(store);
+    const app = await createApp(store);
+
+    const before = await app.inject({
+      method: 'GET',
+      url: '/api/submissions/mine/active-count',
+      headers: session(SENDER),
+    });
+    expect(before.json().active).toBe(1);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/submissions/mine/active-count',
+      headers: session(SENDER),
+    });
+    expect(after.json().active).toBe(0);
   });
 });
 

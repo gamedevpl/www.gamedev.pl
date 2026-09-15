@@ -7,7 +7,7 @@ import {
   playSignalWinsOverEditorial,
   routeEditorialAggregate,
 } from './editorial-suggestions.js';
-import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 import { isReviewableCreatorDraft } from './review.js';
 import { routeScorecard, type Suggestion, type SuggestionClass } from './suggestions.js';
 import {
@@ -249,8 +249,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
       }
 
       // The owner now: the publishing job names whoever built it.
-      const cardOwner = (await resolveGameAccess(store, card.slug)).owner;
-      const cardOwnerUid = cardOwner.kind === 'creator' ? cardOwner.uid : submission.ownerUid;
+      const cardOwnerUid = (await currentOwnerUid(store, card.slug, submission.ownerUid)) ?? submission.ownerUid;
       const fresh: SuggestionRecord = {
         id: suggestionId(card.slug, routed.class, routed.computedFrom),
         slug: card.slug,

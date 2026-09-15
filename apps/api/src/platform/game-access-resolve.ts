@@ -65,6 +65,16 @@ export async function resolveGameAccess(store: GameOwnerLookup, slug: string): P
   };
 }
 
+// Who owns `slug` now; `fallback` covers games with no creator.
+export async function currentOwnerUid(
+  store: GameOwnerLookup,
+  slug: string,
+  fallback: string | undefined,
+): Promise<string | undefined> {
+  const owner = (await resolveGameAccess(store, slug)).owner;
+  return owner.kind === 'creator' ? owner.uid : fallback;
+}
+
 // Editors are resolved but never admitted here: roles are GO-03.
 export function ownsGame(access: ResolvedGameAccess, uid: string): boolean {
   return access.owner.kind === 'creator' && access.owner.uid === uid;
