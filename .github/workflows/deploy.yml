@@ -876,7 +876,7 @@ jobs:
         # from the zone-core and contract versions the app was built against. That drift
         # is invisible by construction — a zone that refuses admission drops the player
         # into solo play while /health stays green and every page returns 200
-        # (docs/runbooks/zones-down-triage.md), and the browser gate cannot see it either.
+        # (ops repo runbooks/zones-down-triage.md), and the browser gate cannot see it either.
         #
         # Deliberately NOT rebuilt on every deploy. apps/world/Dockerfile states the
         # reason: the world deploys on its own cadence so that shipping a CSS change does
@@ -987,7 +987,7 @@ jobs:
             fi
             # Not caused by this deploy, and zones failing does not stop the site serving
             # games — so it warns rather than blocking every app release behind it.
-            echo "::warning::Zone host health returned ${STATUS_CODE}; it was not updated by this deploy. See docs/runbooks/zones-down-triage.md."
+            echo "::warning::Zone host health returned ${STATUS_CODE}; it was not updated by this deploy. See ops repo runbooks/zones-down-triage.md."
           else
             echo "Zone host healthy at ${ZONE_URL}"
           fi

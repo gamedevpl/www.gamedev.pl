@@ -1,6 +1,7 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
+import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
@@ -79,6 +80,7 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
+import { InMemoryGameTransferStore } from './slices/game-transfer.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
@@ -102,10 +104,20 @@ import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore extends SubmissionFacade implements Store {
-  private identityStore = new InMemoryIdentityStore();
+  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore((uid) =>
+    this.gameAccessStore.erasedAt.has(uid),
+  );
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
-  protected gameAccessStore = new InMemoryGameAccessStore((uid) => this.identityStore.users.has(uid));
+  protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore((uid) =>
+    this.identityStore.users.has(uid),
+  );
+  protected gameTransferStore = new InMemoryGameTransferStore(
+    (uid) => this.gameAccessStore.erasedAt.has(uid),
+    (slug) => this.gameAccessStore.access.get(slug) ?? null,
+    (uid) => this.identityStore.users.get(uid) ?? null,
+    (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
+  );
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
@@ -191,6 +203,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
     for (const [key, reservation] of [...this.identityStore.handles]) {
       if (reservation.uid === uid || reservation.previousUid === uid) this.identityStore.handles.delete(key);
+    }
+    if (user?.recipientCode) this.identityStore.recipientCodes.delete(user.recipientCode);
+    for (const [slug, transfer] of [...this.gameTransferStore.transfers]) {
+      if (transfer.senderUid === uid || transfer.recipientUid === uid) {
+        this.gameTransferStore.transfers.delete(slug);
+        // The recipient's cached inbox must drop this erased row too.
+        invalidateTransferInboxCache(this, transfer.recipientUid);
+      }
     }
     for (const [key, counters] of [...this.quotaStore.usage]) {
       void counters;
@@ -285,6 +305,18 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async readProposalsMutedAt(uid: string): Promise<string | null> {
     return this.identityStore.readProposalsMutedAt(uid);
+  }
+
+  async ensureRecipientCode(uid: string, at: string): Promise<string | null> {
+    return this.identityStore.ensureRecipientCode(uid, at);
+  }
+
+  async rotateRecipientCode(uid: string, at: string): Promise<string | null> {
+    return this.identityStore.rotateRecipientCode(uid, at);
+  }
+
+  async getUserByRecipientCode(code: string): Promise<User | null> {
+    return this.identityStore.getUserByRecipientCode(code);
   }
 
   // Constructed with `this`: the mirror rebuilds from this store's own reads.

@@ -236,7 +236,7 @@ function report(args, base, elapsedSeconds, started) {
         `| \`${row.step}\` | ${row.count} | ${row.failed} | ${row.p50} | ${row.p95} | ${row.p99} | ${row.statuses} |`,
     ),
     '',
-    'Read it against the objectives in `docs/runbooks/launch-day.md`: catalog p95 under',
+    'Read it against the objectives in ops repo `runbooks/launch-day.md`: catalog p95 under',
     '1.5s warm, and no step failing outside its own rate limiter.',
     ...(playBudgetExceeded(args)
       ? [

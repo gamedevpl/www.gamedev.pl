@@ -33,7 +33,7 @@ describe('FirestoreStore / legacy gating normalization', () => {
 // Regression coverage for the rollback-safety dual-write (item 5, jobId rename).
 
 // A production rollback swaps traffic to the previous revision in seconds, no rebuild
-// (docs/runbooks/rollback-deploy.md) — that revision's code only reads `issueNumber`.
+// (runbooks/rollback-deploy.md) — that revision's code only reads `issueNumber`.
 
 describe('FirestoreStore / rollback-safety dual-write', () => {
   it('writes issueNumber alongside jobId on a new submission', async () => {

@@ -112,7 +112,7 @@ removal of the broad one is the step that needs the drain.
 
 The same asymmetry applies in reverse. A **rollback** to a revision from before this
 change puts the old trigger back, and its builds carry no capability, so they need the
-direct write this revocation removed. `docs/runbooks/rollback-deploy.md` carries the one
+direct write this revocation removed. The ops repo's `runbooks/rollback-deploy.md` carries the one
 command that restores it and the note to take it away again afterwards.
 
 ### Running the gate by hand

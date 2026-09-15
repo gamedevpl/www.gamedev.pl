@@ -1,6 +1,7 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
+import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
@@ -79,6 +80,7 @@ import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGameAccessStore } from './slices/game-access.js';
+import { FirestoreGameTransferStore } from './slices/game-transfer.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
@@ -124,6 +126,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private contributionStore: FirestoreContributionStore;
   private publicationStore: FirestorePublicationStore;
   protected gameAccessStore: FirestoreGameAccessStore;
+  protected gameTransferStore: FirestoreGameTransferStore;
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
@@ -158,6 +161,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.contributionStore = new FirestoreContributionStore(this.db);
     this.publicationStore = new FirestorePublicationStore(this.db);
     this.gameAccessStore = new FirestoreGameAccessStore(this.db);
+    this.gameTransferStore = new FirestoreGameTransferStore(this.db);
     this.roundsStore = new FirestoreRoundsStore(this.db);
     this.roundBudgetStore = new FirestoreRoundBudgetStore(this.db);
     this.dispatchStore = new FirestoreDispatchStore(this.db);
@@ -200,7 +204,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
     // Fence first: every access writer reads it transactionally and refuses after this.
     await this.gameAccessStore.beginAccountErasure(uid, at);
-    const user = await this.getUser(uid);
+    // Uncached: another instance's cache can hold a pre-rotation code for 30s.
+    const userSnap = await this.db.collection('users').doc(uid).get();
+    const user = userSnap.exists ? (userSnap.data() as User) : null;
     const submissions = await this.db.collection('submissions').where('ownerUid', '==', uid).get();
     const owned = submissions.docs.map((doc) => ({ doc, record: doc.data() as SubmissionRecord }));
     const publishedSlugs = owned
@@ -234,6 +240,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       waitlistByEmail,
       betaInvitesCreated,
       betaInvitesClaimed,
+      transfersSent,
+      transfersReceived,
     ] = await Promise.all([
       this.db.collection('accessTokens').where('uid', '==', uid).get(),
       this.db.collection('gameAgentKeys').where('ownerUid', '==', uid).get(),
@@ -254,6 +262,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       email ? this.db.collection('waitlist').where('email', '==', email).get() : Promise.resolve(null),
       this.db.collection('betaInvites').where('createdByUid', '==', uid).get(),
       this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
+      this.db.collection('gameTransfers').where('senderUid', '==', uid).get(),
+      this.db.collection('gameTransfers').where('recipientUid', '==', uid).get(),
     ]);
 
     // After the fence, so a record created mid-erasure is either refused or seen here.
@@ -294,6 +304,13 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     deleteRefs.set(`waitlist/${uid}`, this.db.collection('waitlist').doc(uid));
     deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
     deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
+    // Before users/{uid}: a chunk split must never leave this behind it.
+    if (user?.recipientCode) {
+      deleteRefs.set(
+        `recipientCodes/${user.recipientCode}`,
+        this.db.collection('recipientCodes').doc(user.recipientCode),
+      );
+    }
     deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
     deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
 
@@ -319,6 +336,26 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       writes.push((batch) => batch.set(doc.ref, { ownerUid: FieldValue.delete() }, { merge: true }));
     }
     for (const ref of deleteRefs.values()) writes.push((batch) => batch.delete(ref));
+
+    // Before the batch, so a failure here leaves users/{uid} retryable.
+
+    // Slug-keyed docs can be overwritten before this runs; re-check, don't blind-delete.
+    const transferSlugs = new Set([...transfersSent.docs, ...transfersReceived.docs].map((doc) => doc.id));
+    // The recipient's cached inbox must drop this erased row too.
+    const affectedRecipients = new Set<string>();
+    for (const slug of transferSlugs) {
+      const ref = this.db.collection('gameTransfers').doc(slug);
+      await this.db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const invite = snap.data() as { senderUid?: string; recipientUid?: string };
+        if (invite.senderUid === uid || invite.recipientUid === uid) {
+          tx.delete(ref);
+          if (invite.recipientUid) affectedRecipients.add(invite.recipientUid);
+        }
+      });
+    }
+    for (const recipientUid of affectedRecipients) invalidateTransferInboxCache(this, recipientUid);
 
     // Stay under Firestore's 500-op batch cap.
     const BATCH_SIZE = 450;
@@ -367,6 +404,18 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async readProposalsMutedAt(uid: string): Promise<string | null> {
     return this.identityStore.readProposalsMutedAt(uid);
+  }
+
+  async ensureRecipientCode(uid: string, at: string): Promise<string | null> {
+    return this.identityStore.ensureRecipientCode(uid, at);
+  }
+
+  async rotateRecipientCode(uid: string, at: string): Promise<string | null> {
+    return this.identityStore.rotateRecipientCode(uid, at);
+  }
+
+  async getUserByRecipientCode(code: string): Promise<User | null> {
+    return this.identityStore.getUserByRecipientCode(code);
   }
 
   // Constructed with `this`: the mirror rebuilds from this store's own reads.

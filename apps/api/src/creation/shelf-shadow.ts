@@ -10,6 +10,8 @@ import type { SubmissionRecord } from '../store/records/submission.js';
 export interface ShelfShadowStore {
   getShelf(ownerUid: string): Promise<ShelfDocument | null>;
   countSubmissionsByOwner(ownerUid: string): Promise<number>;
+  // Coalesced per owner by the mirror; see the 'absent' backfill below.
+  rebuildShelf(ownerUid: string): Promise<boolean>;
 }
 
 // Absent and stale are reported too, not hidden.
@@ -77,10 +79,25 @@ export async function recordShelfShadow(
       noteReadTally('shelfMismatch', true);
       deps.log.warn({ ownerUid, ...result }, 'shelf shadow mismatch');
     }
+    // Absent is unreachable by write-through or the hourly pass alike.
+    if (result.verdict === 'absent') await backfillAbsentShelf(deps, ownerUid);
     return result;
   } catch (error) {
     noteReadTally('shelfShadow', 'error');
     deps.log.warn({ ownerUid, err: error }, 'shelf shadow check failed');
     return null;
   }
+}
+
+// Awaited: unawaited work here can be suspended after the response ships.
+
+// A lost repair is silent -- the next poll just says 'absent' again.
+
+// The mirror answers false on failure rather than rejecting; check both.
+async function backfillAbsentShelf(deps: ShelfShadowDeps, ownerUid: string): Promise<void> {
+  const backfilled = await deps.store.rebuildShelf(ownerUid).catch((error: unknown) => {
+    deps.log.warn({ ownerUid, err: error }, 'shelf lazy backfill errored');
+    return false;
+  });
+  if (!backfilled) deps.log.warn({ ownerUid }, 'shelf lazy backfill wrote nothing');
 }

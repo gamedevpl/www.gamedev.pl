@@ -12,12 +12,15 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   var capturePng=host.capturePng,legendRows=host.legendRows,kitRows=host.kitRows;
   var largestCanvas=host.largestCanvas;
   var agentOn=false,agentFps=60,agentTilt=null,agentLog=[],agentLiveTimer=0,agentStatusSeen='';
+  var agentAudioSeq=0;
   var AGENT_LOG_CAP=60,AGENT_UI_CAP=80;
   function agentHarness(){return window.__GAME_HARNESS__;}
   function agentCanvas(){return el('game')||largestCanvas();}
   function agentFrameNo(){var h=agentHarness();return h&&typeof h.frame==='number'?h.frame:0;}
-  function agentNote(kind,detail){
-    agentLog.push({frame:agentFrameNo(),kind:String(kind),detail:String(detail==null?'':detail).slice(0,160)});
+  // frame is optional: a replayed signal carries the frame it happened on, not now.
+  function agentNote(kind,detail,frame){
+    var at=typeof frame==='number'&&isFinite(frame)?frame:agentFrameNo();
+    agentLog.push({frame:at,kind:String(kind),detail:String(detail==null?'':detail).slice(0,160)});
     if(agentLog.length>AGENT_LOG_CAP)agentLog.splice(0,agentLog.length-AGENT_LOG_CAP);
   }
   // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
@@ -57,7 +60,36 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     var rows=legendRows();
     return {rows:rows,kit:kitRows(),hint:text(document.querySelector('.hint'))};
   }
+  // Sound the game asked for, read from harness.audio — the agent has no speakers.
+  // Its own log, so a noisy game cannot evict a progress landmark from signals.
+  // Cursor is the entry's own seq, never its index: the log is capped and drops its
+  // oldest, so once full its length stops moving and an index cursor would go deaf.
+  var AGENT_AUDIO_KINDS={sfx:1,loop:1,music:1};
+  function agentNoteAudio(entry){
+    if(!entry||typeof entry.name!=='string'||!entry.name)return;
+    if(!Object.prototype.hasOwnProperty.call(AGENT_AUDIO_KINDS,entry.type))return;
+    var count=Number(entry.count);
+    agentNote(entry.type,entry.name
+      +(count>1?' x'+count:'')
+      +(entry.stopped?' (stopped)':'')
+      +(entry.missing?' (missing)':''),
+      Number(entry.frame));
+  }
+  function agentDrainAudio(){
+    var h=agentHarness(),log=h&&h.audio,i,entry,seq;
+    if(!log||typeof log.length!=='number')return;
+    var highest=agentAudioSeq;
+    for(i=0;i<log.length;i++){
+      entry=log[i];
+      seq=entry&&typeof entry.seq==='number'?entry.seq:-1;
+      if(seq<=agentAudioSeq)continue;
+      if(seq>highest)highest=seq;
+      agentNoteAudio(entry);
+    }
+    agentAudioSeq=highest;
+  }
   function agentState(reason,id){
+    agentDrainAudio();
     post({
       type:'agent:state',
       reason:reason||'look',

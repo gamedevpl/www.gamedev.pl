@@ -87,6 +87,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `suggest_next_round`       | Offer two concept directions            | destructive |
 | `show_round`               | Show the creator a live round card      | read        |
 | `show_media`               | Show the creator the gate's screenshots | read        |
+| `share_draft`              | Share or unshare this draft's play link | write       |
 | `read_inbox`               | Read creator messages                   | read        |
 | `ack_inbox`                | Acknowledge creator messages            | destructive |
 | `get_transcript`           | Read the creator conversation           | read        |

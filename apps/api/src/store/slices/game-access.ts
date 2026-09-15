@@ -69,7 +69,8 @@ export class InMemoryGameAccessStore implements GameAccessStore {
   // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
   access = new Map<string, GameAccessRecord>();
 
-  private erasedAt = new Map<string, string>();
+  // Not private -- InMemoryGameTransferStore fences new invitations against this.
+  erasedAt = new Map<string, string>();
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
     this.erasedAt.set(uid, at);

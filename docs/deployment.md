@@ -279,7 +279,7 @@ it means the snapshot did not refresh.
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
 Do it before the traffic rather than during it — it takes a new revision, which drops every
-live party room — and follow [`runbooks/launch-day.md`](./runbooks/launch-day.md), which
+live party room — and follow [`runbooks/launch-day.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/launch-day.md), which
 carries the service-level objectives and the load-shedding ladder.
 
 ### Promotional game links during closed beta
@@ -405,7 +405,7 @@ out of full 640x400 screenshots, 113 KB each — so
 reads the widths out of the web sources and fails when the two lists disagree.
 
 Under a bandwidth incident the spend brake pulls three serving rungs. See
-[the launch-day runbook](./runbooks/launch-day.md).
+[the launch-day runbook](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/runbooks/launch-day.md).
 
 ## Media egress
 
@@ -465,6 +465,47 @@ the way an inline read does.
 `roles/iam.serviceAccountTokenCreator` grant costs money, not pictures. That fallback is
 the reason a switch was not worth its own variable: the failure mode it would guard
 against is already handled in code, per request, without anyone having to notice.
+
+### WebP beside the PNG
+
+Catalog screenshots are baked in both formats. Measured on five published games, at every
+baked width:
+
+| game | PNG | WebP q80 | |
+| --- | ---: | ---: | ---: |
+| airtime | 76 791 | 22 104 | 3.5x |
+| ashenmere-online | 259 157 | 42 838 | 6.0x |
+| global-thermonuclear-strategy | 261 407 | 36 236 | 7.2x |
+| unicorn-snap | 573 133 | 54 850 | 10.4x |
+| rainbow-surfer | 316 040 | 20 182 | 15.7x |
+| **all five** | **1 486 528** | **176 210** | **8.4x** |
+
+Screenshots of procedurally drawn games are large flat areas and gradients, which is close
+to the worst case for PNG and close to the best for WebP. Quality 80 is visually
+indistinguishable on real screenshots and the alpha channel survives; q90 costs about 50%
+more bytes for no visible gain.
+
+**Why this and not a CDN.** Media is roughly 70% of the serving bill, and this moves it to
+about 21% — which at the traffic where it matters is a larger saving than offloading to R2,
+without a second vendor, a dual write, or dismantling the spend brake. It raises the
+~$50/month ceiling from roughly 8 600 to 22 600 visits a day.
+
+**No content negotiation.** Vite builds this app for `baseline-widely-available`, which is
+Safari 16 and up; WebP has been supported since Safari 14. Every browser that can run the
+app can read the format, so there is no `Accept` branch and no `Vary` to get wrong. Nothing
+else consumes these URLs either — the site serves no `og:image` or `twitter:image`.
+
+**Both formats are written anyway.** `media-object-choice.ts` prefers the asked-for width
+first and WebP within it, falling through to whatever an older snapshot happens to hold.
+Snapshots baked before WebP have no `.webp` object and keep serving; snapshots baked before
+variants have no `w<width>/` prefix and keep serving. So this needed no flag day and no
+backfill, and dropping WebP again is a change in that one file rather than a re-bake.
+
+The codec (`@jsquash/webp`) is WebAssembly, not a native addon — no node-gyp, no
+per-platform prebuilds, identical wherever the bake runs, which is the objection
+`image-variants.ts` raises against a native encoder. It is imported lazily, so the serving
+image never loads it; only the publish job encodes. Cost to the bake is about 50 ms per
+screenshot.
 
 ### Anchored image URLs
 

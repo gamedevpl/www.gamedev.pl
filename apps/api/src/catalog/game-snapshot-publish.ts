@@ -1,13 +1,8 @@
 import { isPublishedEntry, type GameProject } from '@gamedevpl/contract';
 import { assembleGameHtml } from '../platform/assemble.js';
-import {
-  generateSnapshotId,
-  mediaContentType,
-  type GameSnapshotWriter,
-  type SnapshotPointer,
-} from './game-snapshot.js';
+import { generateSnapshotId, type GameSnapshotWriter, type SnapshotPointer } from './game-snapshot.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
-import { downscalePng, VARIANT_WIDTHS } from '../platform/image-variants.js';
+import { bakeMediaCopies } from './bake-media.js';
 
 /**
  * Bakes every published game into the snapshot bucket.
@@ -160,33 +155,13 @@ async function bakeGame(args: {
       // filename until a later bake catches up.
       continue;
     }
-    const body = Buffer.from(bytes);
-    await writer.putMedia(snapshotId, entry.slug, filename, {
-      body,
-      contentType: mediaContentType(filename),
+    mediaFiles += await bakeMediaCopies({
+      writer,
+      snapshotId,
+      slug: entry.slug,
+      filename,
+      body: Buffer.from(bytes),
     });
-    mediaFiles += 1;
-
-    // Size variants for screenshots. The arcade shows the same file at ~48 CSS px in
-    // the moment strip and a few hundred as a card poster; serving the original for
-    // both means decoding a full screenshot for every near-fold poster (and again for
-    // each moment thumb after engage), and a PNG cannot be decoded partially. A
-    // variant that cannot be produced is simply not written — the media route falls
-    // back to the original, which is what every snapshot baked before this contains.
-    if (filename.endsWith('.png')) {
-      for (const width of VARIANT_WIDTHS) {
-        const scaled = downscalePng(body, width);
-        if (!scaled) continue;
-        await writer.putMedia(
-          snapshotId,
-          entry.slug,
-          filename,
-          { body: scaled, contentType: mediaContentType(filename) },
-          width,
-        );
-        mediaFiles += 1;
-      }
-    }
   }
 
   return { mediaFiles };

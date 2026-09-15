@@ -40,6 +40,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const [managedCapDraft, setManagedCapDraft] = useState('');
   const [managedUserCapDraft, setManagedUserCapDraft] = useState('');
   const [tabCapDraft, setTabCapDraft] = useState('');
+  const [gateCapDraft, setGateCapDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -55,6 +56,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         response.effective.managedDailyUserCap === null ? '' : String(response.effective.managedDailyUserCap),
       );
       setTabCapDraft(String(response.effective.globalDailyTabCompleteTokenCap));
+      setGateCapDraft(String(response.effective.globalDailyGateRunCap));
       setState('ready');
     } catch {
       setState('error');
@@ -76,6 +78,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         managedDailyUserCap?: number | null;
         tabCompletePaused?: boolean;
         globalDailyTabCompleteTokenCap?: number | null;
+        gatePaused?: boolean;
+        globalDailyGateRunCap?: number | null;
         seedingMode?: SeedingMode;
         seedProviderOverride?: string | null;
       },
@@ -95,6 +99,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
           result.effective.managedDailyUserCap === null ? '' : String(result.effective.managedDailyUserCap),
         );
         setTabCapDraft(String(result.effective.globalDailyTabCompleteTokenCap));
+        setGateCapDraft(String(result.effective.globalDailyGateRunCap));
         // The change lands in Firestore, and instances read it through a cache — so say
         // when it will be everywhere rather than implying it already is.
         setMessage(`in force everywhere within ${relative(result.propagationMs)}`);
@@ -124,6 +129,9 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
 
   const parsedTabCap = Number(tabCapDraft);
   const tabCapValid = Number.isInteger(parsedTabCap) && parsedTabCap >= 0;
+
+  const parsedGateCap = Number(gateCapDraft);
+  const gateCapValid = Number.isInteger(parsedGateCap) && parsedGateCap >= 0;
 
   const managedStatusLine = !effective.hasPlatformBackend
     ? 'Not configured in this environment (reads as "coming soon" regardless of the switch below).'
@@ -405,6 +413,58 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
 
         <p className="health-note">
           Also requires the `TAB_COMPLETE` deploy flag. Reaches every instance within {relative(limits.propagationMs)}.
+        </p>
+      </section>
+
+      <section className="admin-limits">
+        <h2 className="health-section-title">Gate runs (Cloud Build)</h2>
+        <p className="health-summary">
+          {effective.gatePaused ? 'Gate runs are paused.' : 'Gate runs are open.'} {today.gateRuns} of{' '}
+          {effective.globalDailyGateRunCap} used today ({today.dateStr}).
+        </p>
+
+        <div className="admin-limits-controls">
+          <button
+            type="button"
+            className={effective.gatePaused ? 'admin-limits-resume' : 'admin-limits-pause'}
+            disabled={busy}
+            onClick={() => void apply({ gatePaused: !effective.gatePaused })}
+          >
+            {effective.gatePaused ? 'Resume gate runs' : 'Pause gate runs'}
+          </button>
+
+          <label className="admin-limits-cap">
+            Daily cap
+            <input
+              type="number"
+              min={0}
+              value={gateCapDraft}
+              disabled={busy}
+              onChange={(event) => setGateCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !gateCapValid || parsedGateCap === effective.globalDailyGateRunCap}
+            onClick={() => void apply({ globalDailyGateRunCap: parsedGateCap })}
+          >
+            Set cap
+          </button>
+          <button
+            type="button"
+            disabled={busy || stored?.globalDailyGateRunCap === undefined || stored?.globalDailyGateRunCap === null}
+            onClick={() => void apply({ globalDailyGateRunCap: null })}
+          >
+            Use the deployed default
+          </button>
+        </div>
+
+        {message && <p className="admin-limits-message">{message}</p>}
+
+        <p className="health-note">
+          Each run is a 30-minute Cloud Build job, so this is the ceiling on build minutes spent across every creator's
+          preview and publish deliveries, not a per-creator quota. Reaches every instance within{' '}
+          {relative(limits.propagationMs)}.
         </p>
       </section>
 

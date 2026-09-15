@@ -88,9 +88,9 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       roundGeneration: 1,
       roundStartedAt: createdAt,
     };
-    // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
-    // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code that
-    // only reads `issueNumber`. Drop once that revision is no longer a rollback target.
+    // Dual-write the pre-rename key too: a rollback to the previous revision
+    // (runbooks/rollback-deploy.md) runs code that only reads `issueNumber`.
+    // Drop once that revision is no longer a rollback target.
     await this.ref(jobId).set({ ...record, issueNumber: jobId, openRound: true });
     return record;
   }

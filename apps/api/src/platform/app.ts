@@ -29,6 +29,8 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from '../creation/creator-profile-routes.js';
+import { registerRecipientCodeRoutes } from '../creation/recipient-code-routes.js';
+import { registerGameTransferRoutes } from '../creation/game-transfer-routes.js';
 import { catalogEntryFromSpec } from '../catalog/github-client.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from '../catalog/game-page-routes.js';
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from '../notifications/game-follow-routes.js';
@@ -994,6 +996,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // N1: catalog owns the SPEC.md parse; the profile page is handed it.
     catalogEntryFromSpec,
   });
+
+  // GO-02 groundwork: lets a creator find/rotate their own recipient code.
+  await registerRecipientCodeRoutes(app, { store });
+
+  // GO-02: transfer invitation initiate/cancel/inspect/reject. Inert unless
+  // GAME_ACCESS_AUTHORITATIVE is on; acceptance itself lands in a later PR.
+  await registerGameTransferRoutes(app, { store });
 
   // The game page at `/:handle/:slug` — one aggregate read per game.
   await registerGamePageRoutes(app, {

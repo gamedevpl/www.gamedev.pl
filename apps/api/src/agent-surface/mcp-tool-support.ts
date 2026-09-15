@@ -102,6 +102,7 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'end',
   'show_round',
   'show_media',
+  'share_draft',
   'get_round_status',
   'get_gate_verdict',
   'get_gate_media',
