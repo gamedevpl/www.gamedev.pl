@@ -10,7 +10,9 @@ import {
 } from '../../creation/job-state.js';
 import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
 import type { BuilderHandoff } from '../records/rounds.js';
-import type { SubmissionRecord } from '../records/submission.js';
+import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
+import { ownsTakeoverRound, firestoreOwnsTakeoverRound } from '../takeover-authority.js';
+import type { GameAccessRecord } from '../records/game-access.js';
 
 // Fields a closed round clears -- signals belong to the round that ended.
 export function clearRoundSignals(next: SubmissionRecord): void {
@@ -27,13 +29,13 @@ export function clearRoundSignals(next: SubmissionRecord): void {
 
 export function takeoverRecord(
   sub: SubmissionRecord,
-  uid: string,
+  authorized: boolean,
   generation: number,
   at: string,
 ): SubmissionRecord | null {
   const state = resolveJobState(sub) ?? 'queued';
   if (
-    sub.ownerUid !== uid ||
+    !authorized ||
     (sub.roundGeneration ?? 1) !== generation ||
     sub.abandonedAt ||
     (sub.builder ?? sub.defaultBuilder ?? 'platform') !== 'self' ||
@@ -103,11 +105,22 @@ function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVe
 }
 
 export class InMemoryRoundsStore implements RoundsStore {
-  constructor(private submissions: Map<number, SubmissionRecord>) {}
+  constructor(
+    private submissions: Map<number, SubmissionRecord>,
+    private gameAccess: Map<string, GameAccessRecord>,
+  ) {}
 
   async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
     const sub = this.submissions.get(jobId);
-    const next = sub && takeoverRecord(sub, uid, generation, at);
+    const authorized =
+      sub &&
+      ownsTakeoverRound(
+        sub,
+        uid,
+        (slug) => this.gameAccess.get(slug) ?? null,
+        () => [...this.submissions.values()],
+      );
+    const next = sub && takeoverRecord(sub, Boolean(authorized), generation, at);
     if (!next) return false;
     this.submissions.set(jobId, next);
     return true;
@@ -266,7 +279,10 @@ export class FirestoreRoundsStore implements RoundsStore {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const next = snap.exists && takeoverRecord(snap.data() as SubmissionRecord, uid, generation, at);
+      if (!snap.exists) return false;
+      const sub = fromStoredSubmission(snap.data());
+      const authorized = await firestoreOwnsTakeoverRound(this.db, tx, sub, uid);
+      const next = takeoverRecord(sub, authorized, generation, at);
       if (!next) return false;
       tx.set(ref, next);
       return true;

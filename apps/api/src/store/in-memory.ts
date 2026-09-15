@@ -140,7 +140,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       }
     },
   );
-  private roundsStore = new InMemoryRoundsStore(this.submissions);
+  private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);

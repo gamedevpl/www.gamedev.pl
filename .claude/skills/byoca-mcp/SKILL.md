@@ -1213,3 +1213,5 @@ and this file is wrong or missing the new behaviour, update it in the same sessi
 ### Creator takeover for local delivery
 
 `GET /api/me/studio/games/:slug/sources/session` reports a live lock and its job/generation. The owner can explicitly `POST` the same job/generation with `stopAgent: true` to disconnect an own-agent session before delivering local files. The atomic takeover increments generation and marks the session ended, preserving round budgets and published/preview versions. It refuses managed agents, closed rounds, pending handoffs, and changed generations. The old staging remains isolated in the previous generation; the CLI stages a full local snapshot. `/submit --takeover` is explicit authorization; `--force` is not. This revokes session access, not the local OS process.
+
+Takeover authorization follows canonical `GameAccess` ownership, not the round’s historical `ownerUid`. Read that authority inside the takeover transaction so ownership transfers cannot race the write. Without a canonical record, resolve the newest non-abandoned round exactly as the access resolver does.
