@@ -119,7 +119,7 @@
     "apps/api/src/catalog/game-health.test.ts": 339,
     "apps/api/src/catalog/game-health.ts": 315,
     "apps/api/src/catalog/game-page-routes.test.ts": 248,
-    "apps/api/src/catalog/game-page-routes.ts": 164,
+    "apps/api/src/catalog/game-page-routes.ts": 166,
     "apps/api/src/catalog/game-snapshot-publish.test.ts": 349,
     "apps/api/src/catalog/game-snapshot-publish.ts": 205,
     "apps/api/src/catalog/game-snapshot.test.ts": 383,
