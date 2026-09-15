@@ -68,6 +68,11 @@ export interface DailyTelemetryAggregate {
 
   // Folded into the sweep's own truncated flag, never reported alone.
   gamesTruncated: boolean;
+
+  // The byte budget bound, so this day reranks over fewer candidates.
+
+  // Folded in the same way as games dropped for size.
+  tallyTruncated?: boolean;
   games: DailyGameAggregate[];
 }
 
@@ -117,6 +122,7 @@ export function samplesPerMetric(games: number): number {
 export function fitWithinDocument(ranked: GameHealthDetail[]): {
   games: DailyGameAggregate[];
   gamesTruncated: boolean;
+  tallyTruncated: boolean;
 } {
   let keep = Math.min(ranked.length, MAX_GAMES_PER_DAY);
   let perMetric = samplesPerMetric(keep);
@@ -139,7 +145,12 @@ export function fitWithinDocument(ranked: GameHealthDetail[]): {
     games = shape();
   }
 
-  return { games, gamesTruncated: games.length < ranked.length };
+  return {
+    games,
+    gamesTruncated: games.length < ranked.length,
+    // A shallower tally reranks over fewer candidates.
+    tallyTruncated: tallyRows < MAX_TALLY_ROWS_PER_GAME,
+  };
 }
 
 export function buildDailyAggregate(
@@ -149,7 +160,7 @@ export function buildDailyAggregate(
 ): DailyTelemetryAggregate {
   const rows = summarizeGameHealthDetailed(events);
   const ranked = [...rows].sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
-  const { games, gamesTruncated } = fitWithinDocument(ranked);
+  const { games, gamesTruncated, tallyTruncated } = fitWithinDocument(ranked);
   return {
     date,
     version: DAILY_AGGREGATE_VERSION,
@@ -157,6 +168,7 @@ export function buildDailyAggregate(
     sealed: meta.sealed,
     truncated: meta.truncated,
     gamesTruncated,
+    tallyTruncated,
     games,
   };
 }
@@ -329,8 +341,8 @@ export async function readDailyWindow(
     if (stored?.sealed && stored.version === DAILY_AGGREGATE_VERSION) {
       days.push(stored);
       scanned.push(dateStr);
-      // Games dropped for size make every count a floor too.
-      if (stored.truncated || stored.gamesTruncated) truncated = true;
+      // Games dropped, or tallies shortened, make every count a floor too.
+      if (stored.truncated || stored.gamesTruncated || stored.tallyTruncated) truncated = true;
       reused += 1;
       continue;
     }
@@ -353,7 +365,7 @@ export async function readDailyWindow(
       sealed: dateStr < meta.sealedBefore,
       truncated: dayTruncated,
     });
-    if (aggregate.gamesTruncated) truncated = true;
+    if (aggregate.gamesTruncated || aggregate.tallyTruncated) truncated = true;
     days.push(aggregate);
     scanned.push(dateStr);
     try {

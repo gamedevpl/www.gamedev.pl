@@ -261,6 +261,15 @@ describe('buildDailyAggregate', () => {
     // Shrinking depth came before dropping a game.
     expect(aggregate.games).toHaveLength(140);
     expect(aggregate.gamesTruncated).toBe(false);
+    // The shorter tally does not pass for complete.
+    expect(aggregate.tallyTruncated).toBe(true);
+    expect(aggregate.games[0]?.errorTally.length).toBeLessThan(32);
+  });
+
+  it('leaves the tally at full depth on an ordinary day', () => {
+    const aggregate = buildDailyAggregate('2026-09-13', manyGames(20), meta);
+
+    expect(aggregate.tallyTruncated).toBe(false);
   });
 
   it('keeps errors and labels deeper than the window reports them', () => {
@@ -364,6 +373,19 @@ describe('readDailyWindow', () => {
 
     expect(window.rescanned).toBe(2);
     expect(stored.get('2026-09-12')?.version).toBe(DAILY_AGGREGATE_VERSION);
+  });
+
+  it('marks the window truncated when a day shortened its tallies', async () => {
+    const day = '2026-09-13';
+    const stored = new Map<string, DailyTelemetryAggregate>();
+    const byDay = new Map<string, TelemetryEvent[]>();
+    const first = await readDailyWindow([day], budget, reader(stored, byDay), meta);
+    stored.set(day, { ...first.days[0], sealed: true, tallyTruncated: true });
+
+    const second = await readDailyWindow([day], budget, reader(stored, byDay), meta);
+
+    expect(second.reused).toBe(1);
+    expect(second.truncated).toBe(true);
   });
 
   it('marks the window truncated when a day dropped games for size', async () => {
