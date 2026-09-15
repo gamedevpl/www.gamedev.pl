@@ -19,17 +19,6 @@ export interface BuildCatalogFromArchiveOptions {
   commitCounts?: ReadonlyMap<string, number>;
 }
 
-function mediaPngCount(pathSet: ReadonlySet<string>, slug: string): number {
-  const prefix = `games/${slug}/media/`;
-  let count = 0;
-  for (const filePath of pathSet) {
-    if (!filePath.startsWith(prefix) || !filePath.endsWith('.png')) continue;
-    if (filePath.slice(prefix.length).includes('/')) continue;
-    count += 1;
-  }
-  return count;
-}
-
 export async function buildCatalogFromArchive(
   ref: string,
   readRawFile: (path: string, ref: string) => Promise<string | null>,
@@ -39,6 +28,7 @@ export async function buildCatalogFromArchive(
   const pathSet = new Set(paths);
   const slugs = new Set<string>();
   const tsPathsBySlug = new Map<string, string[]>();
+  const mediaPngBySlug = new Map<string, number>();
   for (const filePath of paths) {
     const match = /^games\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(filePath);
     if (!match) continue;
@@ -49,6 +39,9 @@ export async function buildCatalogFromArchive(
       const list = tsPathsBySlug.get(slug);
       if (list) list.push(filePath);
       else tsPathsBySlug.set(slug, [filePath]);
+    }
+    if (relative.startsWith('media/') && relative.endsWith('.png') && !relative.slice('media/'.length).includes('/')) {
+      mediaPngBySlug.set(slug, (mediaPngBySlug.get(slug) ?? 0) + 1);
     }
   }
 
@@ -94,7 +87,7 @@ export async function buildCatalogFromArchive(
           trace,
           acceptance,
           playtest,
-          mediaPngCount: mediaPngCount(pathSet, slug),
+          mediaPngCount: mediaPngBySlug.get(slug) ?? 0,
         }),
         commits: options.commitCounts?.get(slug) ?? 0,
       });

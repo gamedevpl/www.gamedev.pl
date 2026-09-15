@@ -45,6 +45,7 @@ axis scores `1`; a game with nothing measurable scores `0`.
   `CatalogEntry`.
 - **Not** applied to newest / most played / A–Z.
 
-Store-lane games have no games-repo tree, so they omit `effort` and rank as 0.
+Store-lane games have no games-repo tree, so they omit `effort`. They join the
+catalog merge on `/api/catalog`, not the repo-snapshot Recommended ranker.
 Archived / disabled repo games are measured out of the mix so they cannot
 move published scores.

@@ -65,8 +65,10 @@ Effort is a 0..1 catalog field computed at snapshot bake from loc, TRACE /
 ACCEPTANCE / PLAYTEST / media counts, and git history on `games/<slug>/`. It is
 the primary Recommended term; community score, genre affinity, and the replay
 penalty still apply, and continues still lead. Newest / most played / A–Z ignore
-it. Store-lane games omit the field and rank as 0. Builder round counts are not
-in v1 — see [`catalog-effort.md`](./catalog-effort.md).
+it. Store-lane games have no repo tree, so they omit `effort`; they are merged on
+`/api/catalog` and are not rows in `/api/recommendations` (that list is the repo
+snapshot). Builder round counts are not in v1 — see
+[`catalog-effort.md`](./catalog-effort.md).
 
 ## API
 

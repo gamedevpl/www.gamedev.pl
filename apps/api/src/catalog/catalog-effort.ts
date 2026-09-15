@@ -23,8 +23,6 @@ export function isGameLocPath(relative: string): boolean {
 
 export function countTraceFrames(raw: string | null | undefined): number {
   if (!raw) return 0;
-  const match = /"frames"\s*:\s*(\d+)/.exec(raw.slice(0, 2048));
-  if (match) return Number(match[1]);
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return 0;

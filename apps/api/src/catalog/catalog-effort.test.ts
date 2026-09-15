@@ -13,6 +13,10 @@ describe('countCodeLines', () => {
   it('skips blanks and comment-only lines', () => {
     expect(countCodeLines(['const x = 1;\n\n// note\nreturn x;\n'])).toBe(2);
   });
+
+  it('uses the same per-line prefixes as games-repo npm run loc', () => {
+    expect(countCodeLines(['const x = 1;\n/*\n inner\n*/\n'])).toBe(2);
+  });
 });
 
 describe('isGameLocPath', () => {
@@ -25,12 +29,16 @@ describe('isGameLocPath', () => {
 });
 
 describe('artifact counts', () => {
-  it('reads TRACE frames from the header without the samples array', () => {
+  it('reads TRACE frames from the parsed JSON object', () => {
     expect(countTraceFrames('{"formatVersion":2,"frames":840,"samples":[]}')).toBe(840);
     expect(countTraceFrames(null)).toBe(0);
   });
 
-  it('prefers parsed.frames when the key sits past the 2 KiB prefix', () => {
+  it('ignores a frames fragment that is not valid JSON', () => {
+    expect(countTraceFrames('not json "frames": 99')).toBe(0);
+  });
+
+  it('reads parsed.frames when the key sits past the first 2 KiB', () => {
     expect(countTraceFrames(JSON.stringify({ padding: 'x'.repeat(3000), frames: 840, samples: [1, 2, 3] }))).toBe(840);
   });
 
