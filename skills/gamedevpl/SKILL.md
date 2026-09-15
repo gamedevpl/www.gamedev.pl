@@ -50,8 +50,9 @@ often enough to name up front:
 
 1. **Screenshot as soon as the game draws — or skip, if you have no browser.**
    Without a shell or browser (ChatGPT): skip mid-build screenshots. Deliver
-   `mode=preview` then `end`; `get_gate_media` only in a later/resumed run once a
-   preview verdict is already available — that is the happy path; the gate
+   `mode=preview` then `end`. On a later/resumed run call `get_gate_verdict`
+   once (`start` does not surface `preview_passed`); if a preview verdict is
+   already available, then `get_gate_media` — that is the happy path; the gate
    captures with WebGL flags. With a shell: launch headless Chromium with
    `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150

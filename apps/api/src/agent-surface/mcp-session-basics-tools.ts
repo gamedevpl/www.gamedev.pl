@@ -253,7 +253,7 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). ' +
         'Capture canvas.toDataURL("image/png") inside the same render callback (or preserveDrawingBuffer:true); after compositing the default buffer is gone. page.screenshot()/CDP compositor also works. ' +
         'If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). ' +
-        'Without a shell or browser, skip this tool: deliver mode=preview, end, and get_gate_media in a later/resumed run once a preview verdict is already available — that is the happy path. ' +
+        'Without a shell or browser, skip this tool: deliver mode=preview, end, and on a later/resumed run call get_gate_verdict once then get_gate_media if a preview verdict is already available — that is the happy path. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',

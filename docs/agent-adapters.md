@@ -73,8 +73,8 @@ output goes out over MCP, never as a merged branch.
 
 Hosted MCP clients without a shell or browser (ChatGPT) cannot produce a mid-build
 WebGL screenshot. They skip `screenshot_upload_url`, deliver `mode=preview`, `end`,
-and read frames via `get_gate_media` in a later/resumed run once a preview verdict
-is already available — the gate already launches Chromium with Angle/SwiftShader.
+and on a later/resumed run call `get_gate_verdict` once then `get_gate_media` if a
+preview verdict is already available — the gate already launches Chromium with Angle/SwiftShader.
 Local agents that _do_ have a shell must pass
 `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`) and capture

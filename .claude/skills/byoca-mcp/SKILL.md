@@ -30,8 +30,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      describes — then keep building rather than waiting on it
 2. Build; `report_progress`; every game delivery must include an EditorKit declaration (`EDITOR.json` (required compiled contract; `EDITOR.ts` is optional authoring source)) with at least three meaningful tunables or one content collection. If `EDITOR.ts` is present, run `npm run editor:gen -- <slug>` and ship its matching `EDITOR.json`; the gate rejects stale pairs. Keep generated editor content (`EDITOR.content.json` when applicable and `game/editor-content.ts`) in sync and consumed by the game. Screenshot when something draws:
    - **No shell/browser:** skip mid-build screenshots. Deliver `mode=preview` then
-     `end`; `get_gate_media` only in a later/resumed run once a preview verdict is
-     already available — that is the happy path; the gate captures with WebGL flags
+     `end`. On a later/resumed run call `get_gate_verdict` once (`start` does not
+     surface `preview_passed`); if a preview verdict is already available, then
+     `get_gate_media` — that is the happy path; the gate captures with WebGL flags
    - **With a shell:** launch headless Chromium with `--use-gl=angle
 --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --enable-webgl
 --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150 may need
@@ -428,9 +429,10 @@ literally therefore never reached it: observed as Claude-family clients rarely c
 It is now tied to **a verdict already in hand** — a state the loop genuinely reaches —
 and still forbids waiting for one. A no-shell agent that just submitted `mode=preview`
 does not hold a verdict yet: `get_gate_media` then returns `available: false`. Call
-`end` and fetch the frames in a later/resumed run. When editing this loop, keep that
-property: a step gated on a condition the loop is told to avoid is a step that does
-not exist.
+`end`. On the later/resumed run, call `get_gate_verdict` once first — `start` does
+not surface `preview_passed` — then `get_gate_media` if a verdict is already there.
+When editing this loop, keep that property: a step gated on a condition the loop is
+told to avoid is a step that does not exist.
 
 **Both lanes carry frames** — see [Preview stills](#preview-stills-by-28a--frames-without-a-publish)
 below. That was not true when this section was written: the preview lane was typecheck →
@@ -786,8 +788,9 @@ Fallback when SwiftShader is unavailable: `GAME_CAPTURE_GFX=canvas2d` /
 `?gfx=canvas2d` (force2d).
 
 Agents **without** a shell or browser (ChatGPT) should not attempt a mid-build
-screenshot. Deliver `mode=preview` then `end`; `get_gate_media` only in a
-later/resumed run once a preview verdict is already available — that is the
+screenshot. Deliver `mode=preview` then `end`. On a later/resumed run call
+`get_gate_verdict` once (`start` does not surface `preview_passed`); if a
+preview verdict is already available, then `get_gate_media` — that is the
 documented happy path, not a footnote. Do not call it immediately after
 `submit_sources` (Cloud Build has stored nothing yet; do not wait or poll).
 There is no `capture_preview` tool; preview-lane stills from the existing

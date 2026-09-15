@@ -500,6 +500,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(screenshotUpload?.description).toMatch(/get_gate_media/);
     expect(screenshotUpload?.description).toMatch(/Without a shell or browser/i);
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
+    expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
     expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/curl --upload-file|prefer/i);
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
@@ -538,6 +539,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getGateMedia?.description).toMatch(/Without a shell or browser/i);
     expect(getGateMedia?.description).toMatch(/mode=preview/);
     expect(getGateMedia?.description).toMatch(/later\/resumed|already available/);
+    expect(getGateMedia?.description).toMatch(/get_gate_verdict/);
     expect(getGateMedia?.description).toMatch(/not wait or poll|must not wait/i);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
@@ -1232,6 +1234,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
     expect(joined).toMatch(/Without a shell or browser[\s\S]*get_gate_media/i);
     expect(joined).toMatch(/later\/resumed|already available/);
+    expect(joined).toMatch(/start does not surface preview_passed/);
     expect(joined).toMatch(/mode=preview/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);
     expect(joined).toMatch(/patch_source_file/);
