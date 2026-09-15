@@ -46,7 +46,7 @@ export async function canActOnSlug(
   return canActOnGame(await resolveGameAccess(store, slug), uid, action);
 }
 
-// Jobs without a slug are the actor's own draft, not a shared game.
+// Unslugged jobs are the actor's draft, not a shared game.
 export async function canActOnSubmissionOrSlug(
   store: GameOwnerLookup,
   record: { ownerUid: string | null; slug?: SubmissionRecord['slug'] },

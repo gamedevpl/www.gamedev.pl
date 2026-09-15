@@ -22,7 +22,7 @@ export interface StudioGame {
   live?: false;
   // Member's role on this row. Omitted on unsigned payloads.
   viewerRole?: 'owner' | 'editor';
-  // Present on editor rows so the shelf can name who still owns it.
+  // Names the owner on editor shelf rows.
   ownerProfileName?: string;
 }
 

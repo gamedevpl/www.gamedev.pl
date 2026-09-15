@@ -137,6 +137,7 @@ const FILE_BUCKET = {
   'game-access-cutover': 'platform',
   'atomic-slug-claim': 'platform',
   'slug-policy': 'platform',
+  'recipient-code': 'platform',
   // Bare env-driven constant factored out of creation/builder.ts because delivery,
   // agent-surface, and submissions.ts all need the cap without the rest of builder.ts's
   // handoff-authorization logic.
@@ -312,6 +313,7 @@ const FILE_BUCKET = {
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
   'game-transfer-routes': 'creation',
+  'transfer-inbox-cache': 'creation',
   'game-editor-invite-routes': 'creation',
   'editor-invite-inbox-cache': 'creation',
 

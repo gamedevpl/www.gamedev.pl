@@ -68,13 +68,13 @@ export type NotificationType =
    * here: merged contributors get digest visibility, never approval rights.
    */
   | 'proposal.merged'
-  /** Owner invited this person to edit a game. Access starts only after accept. */
+  // Owner invited this person; access starts only after accept.
   | 'share.offered'
-  /** An invited editor accepted; the owner is told. */
+  // Invited editor accepted; the owner is told.
   | 'share.accepted'
-  /** Owner removed this person as an editor. */
+  // Owner removed this person as an editor.
   | 'share.removed'
-  /** An editor left; the owner is told. */
+  // An editor left; the owner is told.
   | 'share.left'
   // A decision with a deadline, not news about a game.
   | 'transfer.offered';

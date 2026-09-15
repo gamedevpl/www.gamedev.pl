@@ -217,7 +217,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         }
         const ownerUid = canonicalCreatorOwnerUid(access);
         if (!ownerUid) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
-        // Game key stays owner-bound; editors open rounds with their own creator key.
+        // Game key stays owner-bound; editors use their own creator key.
         const lockRecord = await store.ensureGameAgentKey(resolved.slug, ownerUid, at);
         if (!lockRecord) {
           // Existing doc owned by someone else — do not touch their admission lock.

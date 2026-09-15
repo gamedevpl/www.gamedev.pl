@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import { emitShareNotice } from './notify-share.js';
 import { shareNotificationMessage, sharePushContent } from './email-templates-share.js';
