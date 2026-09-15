@@ -49,18 +49,17 @@ describe('what a draft may still be while it is being painted', () => {
 
 describe('what a draft may never be, however unfinished', () => {
   it('refuses a hole where an item belongs', () => {
-    expect(draftShapeProblems(tilemapDefinition, { boards: [null] })).toHaveLength(1);
+    expect(draftShapeProblems(tilemapDefinition, { boards: [null] }).join()).toContain('must be an object');
   });
 
   it('refuses an item with no rows, which the shell cannot recognise as a board', () => {
     const problems = draftShapeProblems(tilemapDefinition, { boards: [{ properties: {} }] });
-    expect(problems.some((problem) => problem.includes('rows is missing'))).toBe(true);
+    expect(problems.some((problem) => problem.includes('"rows" must be an array'))).toBe(true);
   });
 
   it('refuses more items than declared, and rows past the declared grid', () => {
-    expect(
-      draftShapeProblems(tilemapDefinition, { boards: [board(['..']), board(['..']), board(['..'])] }),
-    ).toHaveLength(1);
+    const many = draftShapeProblems(tilemapDefinition, { boards: [board(['..']), board(['..']), board(['..'])] });
+    expect(many.some((problem) => problem.includes('3 items'))).toBe(true);
     const wide = draftShapeProblems(tilemapDefinition, { boards: [board(['.'.repeat(40)])] });
     expect(wide.some((problem) => problem.includes('wide'))).toBe(true);
   });
@@ -75,8 +74,10 @@ describe('what a draft may never be, however unfinished', () => {
   });
 
   it('refuses a section the definition never declared', () => {
-    expect(draftShapeProblems(tilemapDefinition, { params: { speed: 2 } })).toHaveLength(1);
-    expect(draftShapeProblems(tilemapDefinition, { layers: {} })).toHaveLength(1);
+    const params = draftShapeProblems(tilemapDefinition, { params: { speed: 2 } });
+    expect(params.some((problem) => problem.includes('undeclared collection "params"'))).toBe(true);
+    const layers = draftShapeProblems(tilemapDefinition, { layers: {} });
+    expect(layers.some((problem) => problem.includes('undeclared content "layers"'))).toBe(true);
   });
 });
 
@@ -105,12 +106,12 @@ describe('a declared layer is part of the document, not an optional extra', () =
 
   it('refuses a declared layer that is not there at all', () => {
     const problems = draftShapeProblems(layeredDefinition, { layers: {} });
-    expect(problems.some((problem) => problem.includes('terrain is missing'))).toBe(true);
+    expect(problems.some((problem) => problem.includes('missing "terrain"'))).toBe(true);
   });
 
   it('refuses a layer with no rows to paint on', () => {
     const problems = draftShapeProblems(layeredDefinition, { layers: { terrain: { properties: {} } } });
-    expect(problems.some((problem) => problem.includes('rows is missing'))).toBe(true);
+    expect(problems.some((problem) => problem.includes('"rows" must be an array'))).toBe(true);
   });
 });
 
@@ -136,8 +137,8 @@ describe('a path point is a coordinate pair or it is nothing', () => {
 
   it('refuses a point with no coordinates, or coordinates that are not numbers', () => {
     const empty = draftShapeProblems(pathDefinition, { tracks: [{ properties: {}, points: [{}] }] });
-    expect(empty).toHaveLength(2);
+    expect(empty.some((problem) => problem.includes('integer x/y'))).toBe(true);
     const wrong = draftShapeProblems(pathDefinition, { tracks: [{ properties: {}, points: [{ x: 'oops', y: 1 }] }] });
-    expect(wrong.some((problem) => problem.includes('x must be a whole number'))).toBe(true);
+    expect(wrong.some((problem) => problem.includes('integer x/y'))).toBe(true);
   });
 });

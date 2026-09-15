@@ -394,7 +394,7 @@ describe('editor draft routes', () => {
       payload: { content: { gardens: [{ properties: { name: 'Empty' } }] } },
     });
     expect(response.statusCode).toBe(422);
-    expect(response.json().problems.some((p: string) => p.includes('rows is missing'))).toBe(true);
+    expect(response.json().problems.some((p: string) => p.includes('"rows" must be an array'))).toBe(true);
   });
 
   it('still refuses a property value of the wrong declared type', async () => {
