@@ -339,7 +339,7 @@ it.each(['success', 'refusal'])('preserves recovery %s when admission cleanup fa
   }
 });
 
-// No transfer API yet (GO-02); overwrite the auto-created record directly.
+// Bypasses the transfer API's invitation flow to set ownership directly.
 function transferTo(store: InMemoryStore, slug: string, uid: string): void {
   const gameAccessStore = (store as unknown as { gameAccessStore: { access: Map<string, { ownerUid: string }> } })
     .gameAccessStore;
@@ -348,20 +348,10 @@ function transferTo(store: InMemoryStore, slug: string, uid: string): void {
   gameAccessStore.access.set(slug, { ...record, ownerUid: uid });
 }
 
-it('flag off: the canonical new owner is still refused, matching the historical rule', async () => {
+it('the canonical new owner is recognized, though the claim itself is a deeper GO-02 gap', async () => {
   const f = await fixture('former-owner', 'canceled', 'new-owner');
   transferTo(f.store, 'sky', 'new-owner');
 
-  const status = await f.app.inject('/api/me/studio/games/sky/recovery');
-  expect(status.json()).toEqual({ kind: 'occupied' });
-});
-
-it('flag on: the canonical new owner is recognized, though the claim itself is a deeper GO-02 gap', async () => {
-  vi.stubEnv('GAME_ACCESS_AUTHORITATIVE', 'true');
-  const f = await fixture('former-owner', 'canceled', 'new-owner');
-  transferTo(f.store, 'sky', 'new-owner');
-
-  // Now recognized as canonical — used to read 'occupied' (test above).
   const status = await f.app.inject('/api/me/studio/games/sky/recovery');
   expect(status.json()).toEqual({ kind: 'canceled' });
 

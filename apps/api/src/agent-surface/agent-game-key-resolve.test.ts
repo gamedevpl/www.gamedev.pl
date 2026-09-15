@@ -1,11 +1,6 @@
 import type { BuilderKind } from '@gamedevpl/contract';
 import { describe, expect, it } from 'vitest';
-import {
-  NO_OPEN_ROUND_REASON,
-  PLATFORM_ROUND_REASON,
-  ROTATED_GAME_KEY_REASON,
-  mintGameAgentKey,
-} from './agent-game-key.js';
+import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, mintGameAgentKey } from './agent-game-key.js';
 import {
   findActiveRoundForSlug,
   findDraftJobForSlug,
@@ -202,7 +197,8 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
     }
   });
 
-  it('still refuses when the newest slug record is owned by someone else', async () => {
+  it('stays valid when a stranger opens an unrelated later submission on the same slug', async () => {
+    // A stray same-slug submission must not move canonical authority.
     const store = new InMemoryStore();
     await seedProlificCreatorBaseline(store);
     const transferIssue = 3;
@@ -211,16 +207,17 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
     setCreatedAt(store, transferIssue, '2026-09-01T12:00:00.000Z');
 
     const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
-    expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
+    expect(result.ok).toBe(true);
   });
 
-  it('still refuses when the newest slug record is abandoned', async () => {
+  it('stays valid after the originating job is abandoned', async () => {
+    // Abandoning the settling job must not strip the durable owner's key.
     const store = new InMemoryStore();
     await seedProlificCreatorBaseline(store);
     await store.setSubmissionAbandoned(publishedIssue, '2026-09-01T12:00:00.000Z');
 
     const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
-    expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
+    expect(result.ok).toBe(true);
   });
 
   /**
@@ -265,7 +262,7 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
       }
     });
 
-    it('still refuses once the newest live record belongs to someone else', async () => {
+    it('stays valid when a stranger opens an unrelated later submission on the same slug', async () => {
       const store = new InMemoryStore();
       await seedWithAbandonedNewerRound(store);
       await store.createSubmission(4, 'g:someone-else', 'Comet Courier');
@@ -273,17 +270,15 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
       setCreatedAt(store, 4, '2026-08-25T00:00:00.000Z');
 
       const result = await verifyDurableGameAgentKey(store, gameKey(), secret, now);
-      expect(result).toEqual({ ok: false, reason: ROTATED_GAME_KEY_REASON });
+      expect(result.ok).toBe(true);
     });
   });
 });
 
 describe('findActiveRoundForSlug / findDraftJobForSlug widen after transfer', () => {
   const newOwnerUid = 'g:new-owner';
-  const ON = { GAME_ACCESS_AUTHORITATIVE: 'true' };
-  const OFF = {};
 
-  // No transfer API yet (GO-02); overwrite the auto-created record directly.
+  // Overwrites the auto-created GameAccess record directly.
   function transferTo(store: InMemoryStore, transferSlug: string, uid: string): void {
     const gameAccessStore = (store as unknown as { gameAccessStore: { access: Map<string, { ownerUid: string }> } })
       .gameAccessStore;
@@ -292,34 +287,26 @@ describe('findActiveRoundForSlug / findDraftJobForSlug widen after transfer', ()
     gameAccessStore.access.set(transferSlug, { ...record, ownerUid: uid });
   }
 
-  it('flag off: an active round under the former owner is invisible to the new owner', async () => {
+  it('an active round under the former owner is found for the new owner', async () => {
     const store = new InMemoryStore();
     await seedActiveSelfRound(store, 1, 'self');
     transferTo(store, slug, newOwnerUid);
 
-    expect(await findActiveRoundForSlug(store, slug, newOwnerUid, OFF)).toBeNull();
-  });
-
-  it('flag on: an active round under the former owner is found for the new owner', async () => {
-    const store = new InMemoryStore();
-    await seedActiveSelfRound(store, 1, 'self');
-    transferTo(store, slug, newOwnerUid);
-
-    const found = await findActiveRoundForSlug(store, slug, newOwnerUid, ON);
+    const found = await findActiveRoundForSlug(store, slug, newOwnerUid);
     expect(found?.jobId).toBe(1);
   });
 
-  it('flag on: a draft job under the former owner is found for the new owner', async () => {
+  it('a draft job under the former owner is found for the new owner', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, ownerUid, 'Comet Courier');
     await store.setSubmissionSlug(1, slug);
     transferTo(store, slug, newOwnerUid);
 
-    const found = await findDraftJobForSlug(store, slug, newOwnerUid, ON);
+    const found = await findDraftJobForSlug(store, slug, newOwnerUid);
     expect(found?.jobId).toBe(1);
   });
 
-  it('flag on: an active round under the former owner is found even when the new owner has their own older round', async () => {
+  it('an active round under the former owner is found even when the new owner has their own older round', async () => {
     const store = new InMemoryStore();
     // The new owner's own unrelated round on this slug, so the naive "has own
     // rounds" fast path would wrongly stop widening before it finds job 2.
@@ -329,14 +316,14 @@ describe('findActiveRoundForSlug / findDraftJobForSlug widen after transfer', ()
     await seedActiveSelfRound(store, 2, 'self');
     transferTo(store, slug, newOwnerUid);
 
-    const found = await findActiveRoundForSlug(store, slug, newOwnerUid, ON);
+    const found = await findActiveRoundForSlug(store, slug, newOwnerUid);
     expect(found?.jobId).toBe(2);
   });
 
-  it('flag on: a stranger with no canonical claim still finds nothing', async () => {
+  it('a stranger with no canonical claim still finds nothing', async () => {
     const store = new InMemoryStore();
     await seedActiveSelfRound(store, 1, 'self');
 
-    expect(await findActiveRoundForSlug(store, slug, 'g:stranger', ON)).toBeNull();
+    expect(await findActiveRoundForSlug(store, slug, 'g:stranger')).toBeNull();
   });
 });

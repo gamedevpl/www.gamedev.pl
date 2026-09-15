@@ -166,6 +166,14 @@ export abstract class SubmissionFacade {
     );
   }
 
+  async acceptGameTransferInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
+    return this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at);
+  }
+
   async cancelGameTransferInvitation(
     slug: string,
     senderUid: string,

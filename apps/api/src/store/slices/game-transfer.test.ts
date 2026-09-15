@@ -184,3 +184,85 @@ describe('game transfer store slice', () => {
     expect(fresh.senderUid).toBe('g:grace');
   });
 });
+
+describe('acceptGameTransferInvitation', () => {
+  it('commits ownership and bumps the access revision when idle', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    if (typeof result === 'string' || result === null) throw new Error('unreachable');
+    expect(result.status).toBe('accepted');
+
+    const access = await store.getGameAccess('sky');
+    expect(access).toMatchObject({ ownerUid: 'g:grace', accessRevision: 2 });
+  });
+
+  it('is idempotent: accepting twice returns the same accepted invitation', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+
+    const again = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    if (typeof again === 'string' || again === null) throw new Error('unreachable');
+    expect(again.status).toBe('accepted');
+    expect((await store.getGameAccess('sky'))?.accessRevision).toBe(2);
+  });
+
+  it('refuses when someone other than the recipient tries to accept', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    expect(await store.acceptGameTransferInvitation('sky', 'g:mallory', LATER)).toBeNull();
+  });
+
+  it('leaves ownership unchanged when a build round is active', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+    await store.createSubmission(1, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(1, 'sky');
+    await store.recordJobTransition(1, { to: 'building', at: LATER, by: 'creator' });
+
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('busy');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
+  });
+
+  it('refuses when canonical ownership moved since the invitation was created', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    // Ownership settles to someone else before acceptance.
+    await store.recordSettledOwner('sky', 'g:mallory', 2, AT, LATER);
+
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('stale_owner');
+  });
+
+  it('refuses when the recipient became ineligible after the invitation was created', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+    await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
+
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('ineligible');
+  });
+
+  it('refuses to accept once the invitation has expired', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', AFTER_EXPIRY)).toBeNull();
+  });
+});

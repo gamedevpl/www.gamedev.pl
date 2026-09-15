@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { gameAccessAuthoritative } from '../platform/game-access-cutover.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isRecipientCodeShape } from '../platform/recipient-code.js';
 import { isCanonicalSlug } from '../platform/slug-policy.js';
@@ -10,11 +9,7 @@ import { invalidateTransferInboxCache, readIncomingTransfersCached } from './tra
 
 // Never the counterparty's raw uid -- a stable login identifier.
 
-// GO-02 transfer: initiate, cancel, inspect, list-incoming, reject.
-
-// Acceptance is a later PR -- it needs the idle-only commit protocol.
-
-// Inert while GAME_ACCESS_AUTHORITATIVE is off: no canonical owner to check.
+// GO-02 transfer: initiate, cancel, inspect, list-incoming, accept, reject.
 
 export interface GameTransferRoutesOptions {
   store: Store;
@@ -80,7 +75,6 @@ export async function registerGameTransferRoutes(
     { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const params = SlugParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;
@@ -121,7 +115,6 @@ export async function registerGameTransferRoutes(
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const params = SlugParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;
@@ -138,7 +131,6 @@ export async function registerGameTransferRoutes(
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const params = SlugParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;
@@ -157,7 +149,6 @@ export async function registerGameTransferRoutes(
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const at = new Date(now()).toISOString();
       const uid = request.user!.uid;
       const invites = await readIncomingTransfersCached(store, uid, at);
@@ -166,11 +157,30 @@ export async function registerGameTransferRoutes(
   );
 
   app.post(
+    '/api/me/transfers/:slug/accept',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return reply;
+      const params = SlugParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
+      const { slug } = params.data;
+      const uid = request.user!.uid;
+      const at = new Date(now()).toISOString();
+      const result = await store.acceptGameTransferInvitation(slug, uid, at);
+      if (result === 'busy') return reply.status(409).send({ error: 'busy' });
+      if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
+      if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
+      if (!result) return reply.status(404).send({ error: 'not_found' });
+      invalidateTransferInboxCache(store, uid);
+      return reply.send({ transfer: await toSummary(store, result, uid) });
+    },
+  );
+
+  app.post(
     '/api/me/transfers/:slug/reject',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      if (!gameAccessAuthoritative()) return reply.status(404).send({ error: 'not_found' });
       const params = SlugParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;

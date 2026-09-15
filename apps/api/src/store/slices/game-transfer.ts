@@ -1,11 +1,14 @@
 import type { Firestore } from '@google-cloud/firestore';
-import type { GameAccessRecord } from '../records/game-access.js';
+import { membersOf, type GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
   isPending,
   newTransferInvitation,
   type GameTransferInvitation,
 } from '../records/game-transfer.js';
+import { isActiveBuildRound } from '../../creation/job-state.js';
+import type { JobState } from '@gamedevpl/contract';
+import type { JobTransition } from '../../creation/job-state.js';
 
 export interface GameTransferStore {
   // Status is materialized against `at`; a stale pending row reads as expired.
@@ -20,6 +23,13 @@ export interface GameTransferStore {
     at: string,
     recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'>;
+
+  // Null: not found, or caller mismatch. Idempotent once accepted.
+  acceptGameTransferInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null>;
 
   // Null when nothing pending, or the caller did not send it.
   cancelGameTransferInvitation(slug: string, senderUid: string, at: string): Promise<GameTransferInvitation | null>;
@@ -44,6 +54,18 @@ function recipientEligible(recipient: { tier: string; deletionScheduledFor?: str
   return recipient.tier !== 'blocked' && !recipient.deletionScheduledFor;
 }
 
+// Default: the former owner loses management access (editors are GO-03 scope).
+function transferredAccess(access: GameAccessRecord, newOwnerUid: string, at: string): GameAccessRecord {
+  return {
+    ...access,
+    ownerUid: newOwnerUid,
+    editorUids: [],
+    memberUids: membersOf(newOwnerUid, []),
+    accessRevision: access.accessRevision + 1,
+    updatedAt: at,
+  };
+}
+
 export class InMemoryGameTransferStore implements GameTransferStore {
   // Not private -- deleteAccountIdentity reaches across this on erasure.
   transfers = new Map<string, GameTransferInvitation>();
@@ -53,6 +75,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private getGameAccess: (slug: string) => GameAccessRecord | null = () => null,
     private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string } | null = () => null,
     private getRecipientCodeOwner: (code: string) => string | null = () => null,
+    private writeGameAccess: (slug: string, record: GameAccessRecord) => void = () => {},
+    private hasActiveBuildRound: (slug: string) => boolean = () => false,
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -83,6 +107,31 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     const invite = newTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
     this.transfers.set(slug, invite);
     return clone(invite);
+  }
+
+  async acceptGameTransferInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
+    const existing = this.transfers.get(slug) ?? null;
+    if (!existing || existing.recipientUid !== recipientUid) return null;
+    if (existing.status === 'accepted') return clone(existing);
+    if (!isPending(existing, at)) return null;
+
+    if (this.isErased(existing.senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
+
+    const access = this.getGameAccess(slug);
+    if (!access || !ownerMatches(access, existing.senderUid, existing.accessRevision)) return 'stale_owner';
+
+    // Idle only: a live build/write must finish before ownership can move.
+    if (this.hasActiveBuildRound(slug)) return 'busy';
+
+    this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
+    const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
+    this.transfers.set(slug, accepted);
+    return clone(accepted);
   }
 
   async cancelGameTransferInvitation(
@@ -178,6 +227,51 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       const invite = newTransferInvitation(slug, senderUid, recipientUid, accessRevision, at);
       tx.set(ref, invite);
       return invite;
+    });
+  }
+
+  async acceptGameTransferInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+  ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
+    const ref = this.doc(slug);
+    const accessRef = this.db.collection('gameAccess').doc(slug);
+    const activeQuery = this.db.collection('submissions').where('slug', '==', slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
+      if (!existing || existing.recipientUid !== recipientUid) return null;
+      if (existing.status === 'accepted') return existing;
+      if (!isPending(existing, at)) return null;
+
+      const [senderFence, recipientFence, recipientSnap, accessSnap, activeSnap] = await Promise.all([
+        tx.get(this.erasureFence(existing.senderUid)),
+        tx.get(this.erasureFence(recipientUid)),
+        tx.get(this.db.collection('users').doc(recipientUid)),
+        tx.get(accessRef),
+        tx.get(activeQuery),
+      ]);
+      if (senderFence.exists || recipientFence.exists) return 'ineligible';
+
+      const recipient = recipientSnap.exists
+        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
+        : null;
+      if (!recipientEligible(recipient)) return 'ineligible';
+
+      const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;
+      if (!access || !ownerMatches(access, existing.senderUid, existing.accessRevision)) return 'stale_owner';
+
+      // Idle only: a live build/write must finish before ownership can move.
+      const busy = activeSnap.docs.some((doc) =>
+        isActiveBuildRound(doc.data() as { state?: JobState; transitions?: JobTransition[] }),
+      );
+      if (busy) return 'busy';
+
+      tx.set(accessRef, transferredAccess(access, recipientUid, at));
+      const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
+      tx.set(ref, accepted);
+      return accepted;
     });
   }
 

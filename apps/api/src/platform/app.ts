@@ -1000,8 +1000,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // GO-02 groundwork: lets a creator find/rotate their own recipient code.
   await registerRecipientCodeRoutes(app, { store });
 
-  // GO-02: transfer invitation initiate/cancel/inspect/reject. Inert unless
-  // GAME_ACCESS_AUTHORITATIVE is on; acceptance itself lands in a later PR.
+  // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
   await registerGameTransferRoutes(app, { store });
 
   // The game page at `/:handle/:slug` — one aggregate read per game.

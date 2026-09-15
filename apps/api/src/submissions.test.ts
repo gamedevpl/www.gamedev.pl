@@ -6265,6 +6265,14 @@ describe('POST /api/submissions/:token/improve', () => {
     const published = await store.allocateJobId();
     await store.createSubmission(published, 'g:test-user', 'History Game');
     await store.setSubmissionSlug(published, 'history-game');
+    // Settles canonical ownership on the job this test authenticates as.
+    await store.recordSettledOwner(
+      'history-game',
+      'g:test-user',
+      published,
+      '2026-07-01T00:00:00.000Z',
+      '2026-07-01T00:00:00.000Z',
+    );
     await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
     await store.appendCreatorMessage(published, 'Make the lobby louder.');
     await store.appendBuildEvent(published, {
@@ -6974,6 +6982,14 @@ describe('creator deletes their own published game', () => {
     await new Promise((resolve) => setTimeout(resolve, 2));
     await store.createSubmission(1_000_101, 'g:new-owner', 'Sky Dodge');
     await store.setSubmissionSlug(1_000_101, 'sky-dodge');
+    // Canonical settlement moves to the new owner's job, as a real transfer would.
+    await store.recordSettledOwner(
+      'sky-dodge',
+      'g:new-owner',
+      1_000_101,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
     await store.setPublication({
       slug: 'sky-dodge',
       state: 'published',

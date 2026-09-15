@@ -235,6 +235,7 @@ describe('POST /api/me/suggestions/:id/approve', () => {
 
 describe('POST /api/me/suggestions/:id/dismiss', () => {
   it('records the reason so the router can be tuned against it', async () => {
+    await publish('crashy', OWNER);
     await store.putSuggestion(suggestion());
     const app = await appFor();
 
