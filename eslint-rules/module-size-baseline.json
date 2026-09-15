@@ -127,7 +127,7 @@
     "apps/api/src/catalog/games-repo-client.ts": 33,
     "apps/api/src/catalog/games-repo-contract-check.test.ts": 526,
     "apps/api/src/catalog/games-repo-contract-check.ts": 621,
-    "apps/api/src/catalog/github-client.test.ts": 2042,
+    "apps/api/src/catalog/github-client.test.ts": 2044,
     "apps/api/src/catalog/github-client.ts": 2036,
     "apps/api/src/catalog/index-html-generator.ts": 244,
     "apps/api/src/catalog/local-games-repo.test.ts": 158,
