@@ -224,6 +224,14 @@ describe('GO-03 share flow over HTTP', () => {
     });
     expect(seal.statusCode).toBe(403);
 
+    const share = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/share`,
+      headers: session(B),
+      payload: { shared: true },
+    });
+    expect(share.statusCode).toBe(403);
+
     const invite = await app.inject({
       method: 'POST',
       url: `/api/me/studio/games/${SLUG}/editors/invites`,

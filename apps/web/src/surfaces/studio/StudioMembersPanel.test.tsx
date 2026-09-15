@@ -111,16 +111,20 @@ describe('StudioMembersPanel', () => {
   });
 
   it('lets the owner remove an editor and an editor leave', async () => {
+    let removed = false;
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        if (String(url).includes('/remove')) return { ok: true, json: async () => ({ ok: true }) };
+        if (String(url).includes('/remove')) {
+          removed = true;
+          return { ok: true, json: async () => ({ ok: true }) };
+        }
         return {
           ok: true,
           json: async () => ({
             viewerRole: 'owner',
             owner: OWNER,
-            editors: init?.method === 'POST' ? [] : [EDITOR],
+            editors: removed || init?.method === 'POST' ? [] : [EDITOR],
             invites: [],
           }),
         };

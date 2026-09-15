@@ -262,7 +262,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
       if (!checkUserAccess(request, reply)) return reply;
-      if (!store || !gamesStore || !gateTrigger) {
+      if (!store) {
         return reply.status(503).send({ error: 'store_unavailable' });
       }
 
@@ -280,6 +280,9 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       const owner = await store.getSubmission(jobId);
       if (!owner || !(await canActOnSubmissionOrSlug(store, owner, request.user!.uid, 'publish'))) {
         return reply.status(403).send({ error: 'only the creator can seal this build' });
+      }
+      if (!gamesStore || !gateTrigger) {
+        return reply.status(503).send({ error: 'store_unavailable' });
       }
 
       const at = () => new Date(now()).toISOString();
