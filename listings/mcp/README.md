@@ -55,6 +55,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | Tool                       | What it does                            |             |
 | -------------------------- | --------------------------------------- | ----------- |
 | `create_game`              | Create a game                           | write       |
+| `list_account_games`       | List games on this account              | read        |
 | `start`                    | Start or rejoin a build round           | write       |
 | `open_round`               | Open an improvement round               | write       |
 | `continue_draft`           | Continue an unpublished draft           | write       |

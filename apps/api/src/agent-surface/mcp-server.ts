@@ -30,6 +30,7 @@ import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourcePatchTools } from './mcp-source-patch-tools.js';
 import { createSourceSubmitTools } from './mcp-source-submit-tools.js';
 import { createGameCreateTools } from './mcp-game-create-tools.js';
+import { createAccountGamesTools, type LoadOwnerGamesFn } from './mcp-account-games-tools.js';
 import { createRoundReopenTools } from './mcp-round-reopen-tools.js';
 import { createSessionBasicsTools } from './mcp-session-basics-tools.js';
 
@@ -233,6 +234,7 @@ export interface McpServerOptions {
   contentChecker?: ContentChecker;
   dailyImprovementQuota?: number;
   dailyFeedbackQuota?: number;
+  loadOwnerGames?: LoadOwnerGamesFn;
   // N1: community's proposal state machine, wired at the composition root.
   proposals: ProposalDomain;
   // N1: delivery's deliverable-path vocabulary, applied without importing it.
@@ -1281,6 +1283,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     ...createGameCreateTools({ store, agentTokenSecret, platformConnectorSecret, now, createGame }),
+    ...createAccountGamesTools({
+      store,
+      agentTokenSecret,
+      platformConnectorSecret,
+      now,
+      loadOwnerGames: options.loadOwnerGames,
+    }),
 
     ...createProposalTools({
       store,
