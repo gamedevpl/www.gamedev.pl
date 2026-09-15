@@ -111,8 +111,7 @@ export interface GameHealthDetail extends GameHealth {
   };
 }
 
-// Kept per day, against the 5 and 8 that are reported.
-export const MAX_TALLY_ROWS = 32;
+// The tallies are handed over whole; the rollup owns the cut.
 
 export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
   return summarizeGameHealthDetailed(events).map(({ samples: _samples, ...row }) => row);
@@ -273,12 +272,10 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
 
     const errorTally = [...errorCounts.entries()]
       .map(([message, count]) => ({ message, count }))
-      .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message))
-      .slice(0, MAX_TALLY_ROWS);
+      .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message));
     const labelTally = [...labelSessions.entries()]
       .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
-      .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
-      .slice(0, MAX_TALLY_ROWS);
+      .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label));
 
     rows.push({
       slug,

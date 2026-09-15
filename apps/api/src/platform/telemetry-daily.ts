@@ -25,7 +25,9 @@ const MIN_SAMPLES_PER_METRIC = 16;
 export const MAX_GAMES_PER_DAY = 400;
 
 // Tally rows per game, against the 5 and 8 reported.
-export const MAX_TALLY_ROWS_PER_GAME = 32;
+
+// The byte budget bounds the document, so this can be generous.
+export const MAX_TALLY_ROWS_PER_GAME = 64;
 
 // The floor: below this the window can no longer rerank at all.
 const MIN_TALLY_ROWS_PER_GAME = 8;
@@ -145,11 +147,15 @@ export function fitWithinDocument(ranked: GameHealthDetail[]): {
     games = shape();
   }
 
+  // True whichever way a candidate was lost, budget or sheer variety.
+  const lostCandidates = ranked
+    .slice(0, keep)
+    .some(({ samples }) => samples.errorTally.length > tallyRows || samples.labelTally.length > tallyRows);
+
   return {
     games,
     gamesTruncated: games.length < ranked.length,
-    // A shallower tally reranks over fewer candidates.
-    tallyTruncated: tallyRows < MAX_TALLY_ROWS_PER_GAME,
+    tallyTruncated: lostCandidates,
   };
 }
 

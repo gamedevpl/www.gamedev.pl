@@ -39,6 +39,38 @@ describe('readStudioHealthCached', () => {
     expect(second).toBe(first);
   });
 
+  it('scans once for two requests that race a cold key', async () => {
+    const store = new InMemoryStore();
+    let release: (value: StudioHealthWindow) => void = () => {};
+    const scan = vi.fn(
+      () =>
+        new Promise<StudioHealthWindow>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const key = studioHealthKey('g:a', ['one'], ['2026-09-15']);
+
+    const first = readStudioHealthCached(store, key, scan, () => 1_000);
+    const second = readStudioHealthCached(store, key, scan, () => 1_000);
+    release(window(['2026-09-15']));
+
+    expect(await second).toEqual(await first);
+    expect(scan).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not leave a failed scan as the answer for the next request', async () => {
+    const store = new InMemoryStore();
+    const scan = vi
+      .fn<() => Promise<StudioHealthWindow>>()
+      .mockRejectedValueOnce(new Error('firestore down'))
+      .mockResolvedValueOnce(window(['2026-09-15']));
+    const key = studioHealthKey('g:a', ['one'], ['2026-09-15']);
+
+    await expect(readStudioHealthCached(store, key, scan, () => 1_000)).rejects.toThrow('firestore down');
+    await expect(readStudioHealthCached(store, key, scan, () => 1_000)).resolves.toEqual(window(['2026-09-15']));
+    expect(scan).toHaveBeenCalledTimes(2);
+  });
+
   it('scans again once the window has passed', async () => {
     const store = new InMemoryStore();
     const scan = vi.fn(async () => window(['2026-09-15']));

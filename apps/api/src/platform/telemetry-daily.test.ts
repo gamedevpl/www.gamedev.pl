@@ -7,6 +7,7 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_GAMES_PER_DAY,
   MAX_SAMPLE_VALUES_PER_DAY,
+  MAX_TALLY_ROWS_PER_GAME,
   readDailyWindow,
   samplesPerMetric,
   sealedBefore,
@@ -263,7 +264,28 @@ describe('buildDailyAggregate', () => {
     expect(aggregate.gamesTruncated).toBe(false);
     // The shorter tally does not pass for complete.
     expect(aggregate.tallyTruncated).toBe(true);
-    expect(aggregate.games[0]?.errorTally.length).toBeLessThan(32);
+    expect(aggregate.games[0]?.errorTally.length).toBeLessThan(MAX_TALLY_ROWS_PER_GAME);
+  });
+
+  it('says so when a game has more distinct errors than the tally holds', () => {
+    // Codex's case: the recurring error ranks below every day-unique one.
+    const events: TelemetryEvent[] = [];
+    for (let distinct = 0; distinct < MAX_TALLY_ROWS_PER_GAME + 1; distinct++) {
+      for (let repeat = 0; repeat < 2; repeat++) {
+        events.push({
+          slug: 'sky-dodge',
+          sessionId: `d${distinct}-${repeat}`,
+          type: 'error',
+          at: at('2026-09-13', distinct % 60),
+          msSinceOpen: 1_000,
+          message: `unique ${distinct}`,
+        });
+      }
+    }
+    const aggregate = buildDailyAggregate('2026-09-13', events, meta);
+
+    expect(aggregate.games[0]?.errorTally).toHaveLength(MAX_TALLY_ROWS_PER_GAME);
+    expect(aggregate.tallyTruncated).toBe(true);
   });
 
   it('leaves the tally at full depth on an ordinary day', () => {
