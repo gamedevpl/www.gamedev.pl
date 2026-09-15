@@ -174,16 +174,16 @@ export function useEditorDraftBridge(
       const data = parseEditorControllerEnvelope(event.data);
       if (!data) {
         const raw = event.data as Record<string, unknown> | null;
-        if (raw?.ns === BRIDGE_NAMESPACE && raw.v === PROTOCOL_VERSION && raw.t === 'editor:ui') {
-          failController('The game editor sent an invalid view.');
-        }
+        const invalidView = raw?.ns === BRIDGE_NAMESPACE && raw.v === PROTOCOL_VERSION && raw.t === 'editor:ui';
+        if (invalidView && !controllerStoodDownRef.current) failController('The game editor sent an invalid view.');
         return;
       }
+      // A stood-down controller gets no commands; the draft push stays.
+      if (controllerStoodDownRef.current && data.t !== 'editor:hello') return;
       if (data.t === 'editor:hello' && data.controller) {
         controllerHelloRef.current = true;
         expectController();
       } else if (data.t === 'editor:ui') {
-        if (controllerStoodDownRef.current) return;
         if ((Array.isArray(data.doc) ? data.doc : [data.doc]).length === 0) {
           failController('The game editor sent a view with nothing in it.');
           return;
@@ -233,6 +233,8 @@ export function useEditorDraftBridge(
       disposed = true;
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
       window.removeEventListener('message', onMessage);
+      // The creator retries by leaving playtest; the game cannot.
+      controllerStoodDownRef.current = false;
     };
   }, [frameRef, active, slug, editable]);
 

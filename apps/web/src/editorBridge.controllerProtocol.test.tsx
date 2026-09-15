@@ -12,8 +12,10 @@ import { useEditorDraftBridge, type EditorControllerState } from './editorBridge
 
 let latestController: EditorControllerState | null = null;
 
-function Harness({ frameRef }: { frameRef: MutableRefObject<HTMLIFrameElement | null> }) {
-  latestController = useEditorDraftBridge(frameRef, true, 'controller-fixture', true).controller;
+type HarnessProps = { frameRef: MutableRefObject<HTMLIFrameElement | null>; active?: boolean };
+
+function Harness({ frameRef, active = true }: HarnessProps) {
+  latestController = useEditorDraftBridge(frameRef, active, 'controller-fixture', true).controller;
   return null;
 }
 
@@ -47,12 +49,18 @@ describe('controller bridge boundary', () => {
     vi.clearAllMocks();
   });
 
+  let mountedFrameRef: MutableRefObject<HTMLIFrameElement | null>;
+
   function mount() {
-    const frameRef = {
+    mountedFrameRef = {
       current: { contentWindow: gameWindow },
     } as unknown as MutableRefObject<HTMLIFrameElement | null>;
     root = createRoot(container);
-    act(() => root!.render(<Harness frameRef={frameRef} />));
+    act(() => root!.render(<Harness frameRef={mountedFrameRef} />));
+  }
+
+  function setActive(active: boolean) {
+    act(() => root!.render(<Harness frameRef={mountedFrameRef} active={active} />));
   }
 
   function send(data: Record<string, unknown>, source = gameWindow, origin = 'null') {
@@ -138,5 +146,52 @@ describe('controller bridge boundary', () => {
     send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Back again' } }));
     expect(latestController?.status).toBe('failed');
     expect(latestController?.reason).toBe('the game refused this content change');
+  });
+
+  it('takes no further command from a controller that stood down, not just no view', () => {
+    mount();
+    connect();
+    send(frame({ t: 'editor:canvas', box: { width: 640, height: 360, x: 0, y: 0 } }));
+    act(() => latestController!.useFallback('the game refused this content change'));
+
+    send(frame({ t: 'editor:change', id: 'change-2', patch: { op: 'replace' } }));
+    send(frame({ t: 'editor:select', selection: { layer: 'actors', index: 3 } }));
+    send(frame({ t: 'editor:ui-request', id: 'ask-1', spec: { kind: 'toast', text: 'hello' } }));
+    send(frame({ t: 'editor:check', ok: false, problems: ['stale'] }));
+    send(frame({ t: 'editor:canvas', box: { width: 1, height: 1, x: 9, y: 9 } }));
+
+    // A patch applied here would edit and autosave the creator's draft.
+    expect(latestController?.pendingChange).toBeNull();
+    expect(latestController?.selected).toBeNull();
+    expect(latestController?.uiRequest).toBeNull();
+    expect(latestController?.checks).toBeNull();
+    expect(latestController?.canvasBox).toEqual({ width: 640, height: 360, x: 0, y: 0 });
+  });
+
+  it('still answers a hello with the draft, so play keeps working after fallback', async () => {
+    studioApi.fetchGameEditor.mockResolvedValue({
+      definition: { version: 2, controller: true, content: {} },
+      draft: { content: { levels: [] } },
+    });
+    mount();
+    connect();
+    await act(async () => void (await Promise.resolve()));
+    act(() => latestController!.useFallback('the game refused this content change'));
+    posted.length = 0;
+
+    send(frame({ t: 'editor:hello', controller: false }));
+    expect(posted.some((message) => message.t === 'editor:content')).toBe(true);
+  });
+
+  it('lets the creator retry by leaving the playtest, which the game cannot do for itself', () => {
+    mount();
+    connect();
+    act(() => latestController!.useFallback('the game refused this content change'));
+
+    setActive(false);
+    setActive(true);
+    send(frame({ t: 'editor:hello', controller: true }));
+    send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Second chance' } }));
+    expect(latestController?.status).toBe('ready');
   });
 });
