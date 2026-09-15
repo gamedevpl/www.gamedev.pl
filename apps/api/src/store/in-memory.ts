@@ -9,7 +9,12 @@ import type { SeedFiles } from '../agent-surface/agent-backend.js';
 import type { ProposalState } from '../community/proposal-state.js';
 import type { AgentTaskState } from '../platform/agent-state.js';
 import type { BuilderKind } from '../creation/builder.js';
-import type { AgentSessionTokens, JobTransition } from '../creation/job-state.js';
+import {
+  isActiveBuildRound,
+  revokedRoundGeneration,
+  type AgentSessionTokens,
+  type JobTransition,
+} from '../creation/job-state.js';
 import type { PublicationHealthCheck, PublicationRecord } from '../delivery/games-store.js';
 import type { AvatarMode } from '../platform/creator-profile.js';
 import type { BuildEvent, SubmissionStatus } from '../platform/submission-status.js';
@@ -80,7 +85,7 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
-import { InMemoryGameTransferStore } from './slices/game-transfer.js';
+import { InMemoryGameTransferStore, MAX_REVOKED_ROUNDS_PER_TRANSFER } from './slices/game-transfer.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
@@ -117,6 +122,23 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
+    (slug, record) => this.gameAccessStore.access.set(slug, record),
+    (slug) => [...this.submissions.values()].some((record) => record.slug === slug && isActiveBuildRound(record)),
+    (slug, now) => this.submissionStore.hasActiveCheckoutRecovery(slug, now),
+    (slug) => this.gameAdmissionStore.gameAgentKeys.delete(slug),
+    (slug) => this.contributionStore.gameAutonomy.delete(slug),
+    (slug) => {
+      const onSlug = [...this.submissions.values()]
+        .filter((record) => record.slug === slug)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
+        .slice(0, MAX_REVOKED_ROUNDS_PER_TRANSFER);
+      for (const record of onSlug) {
+        this.submissions.set(record.jobId, {
+          ...record,
+          roundGeneration: revokedRoundGeneration(record.roundGeneration),
+        });
+      }
+    },
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
@@ -499,6 +521,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
     return this.dispatchStore.setJobCostTokens(jobId, ref, tokens);
+  }
+
+  async setJobCostFinished(jobId: number, ref: string, finishedAt: string, state: string): Promise<void> {
+    return this.dispatchStore.setJobCostFinished(jobId, ref, finishedAt, state);
   }
 
   async setDispatchWorkspace(jobId: number, workspace: string): Promise<void> {

@@ -12,7 +12,13 @@ import { canTransition, type JobTransition } from './job-state.js';
 // The agent account is out of requests; every job is stuck.
 
 // Told apart so the creator hears "not now" rather than a guess.
-export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed' | 'platform_unavailable';
+export type ResumeFailureReason =
+  | 'not_configured'
+  | 'no_capacity'
+  | 'dispatch_failed'
+  | 'platform_unavailable'
+  // A round is already opening for this game, or one is live.
+  | 'busy';
 
 export type ResumeOutcome =
   { started: true } | { started: false; reason: ResumeFailureReason; unavailableReason?: ManagedUnavailableReason };

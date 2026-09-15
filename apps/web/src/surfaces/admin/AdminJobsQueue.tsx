@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import './admin-jobs-queue.css';
 import { AdminConfirmDialog } from './AdminConfirmDialog.js';
-import { cancelConfirmCopy, publishConfirmCopy } from './adminJobConfirm.js';
+import { AdminEditorialOverrideDialog } from './AdminEditorialOverrideDialog.js';
+import { cancelConfirmCopy, isEditorialRefusal, publishConfirmCopy, publishRefusalCopy } from './adminJobConfirm.js';
 import {
   cancelJob,
   deleteGame,
@@ -13,19 +14,10 @@ import {
   type DeleteGameRefusal,
   type JobQueueEntry,
   type PublishedGame,
-  type PublishRefusal,
+  type PublishOutcome,
   type RegateRefusal,
   type RetryRefusal,
 } from './adminJobsApi.js';
-
-const REFUSAL_COPY: Record<PublishRefusal, string> = {
-  gate_red: 'the gate failed this version — read its report before publishing',
-  not_gated: 'the gate has not run against this version yet',
-  nothing_delivered: 'this build has never delivered a version',
-  profile_required: 'the creator has not claimed a public profile — ask them to open Studio and use Claim handle',
-  store_unavailable: 'the games store is not configured on this deployment',
-  unknown: 'refused, and the reason was not one this console knows',
-};
 
 const STALL_COPY: Record<NonNullable<JobQueueEntry['stall']>, string> = {
   awaiting_input: 'waiting on the creator',
@@ -246,28 +238,35 @@ export function JobRow({
   const [busy, setBusy] = useState<'publish' | 'cancel' | 'retry' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<'publish' | 'cancel' | null>(null);
+  const [override, setOverride] = useState<Extract<PublishOutcome, { refused: string }> | null>(null);
 
   const publishable = job.state === 'ready_for_review';
   const previewable = publishable || Boolean(job.slug);
 
-  const onPublish = useCallback(async () => {
-    setBusy('publish');
-    setMessage(null);
-    try {
-      const result = await publishJob(job.jobId);
-      if ('refused' in result) {
-        setMessage(REFUSAL_COPY[result.refused]);
-      } else {
-        setMessage(`published ${result.slug}`);
-        onPublished();
+  const runPublish = useCallback(
+    async (body?: { override?: boolean; overrideReason?: string }) => {
+      setBusy('publish');
+      setMessage(null);
+      try {
+        const result = body ? await publishJob(job.jobId, body) : await publishJob(job.jobId);
+        if ('refused' in result) {
+          setMessage(publishRefusalCopy(result.refused, result.editorial));
+          if (isEditorialRefusal(result.refused) && !body?.override) setOverride(result);
+          else setOverride(null);
+        } else {
+          setMessage(`published ${result.slug}`);
+          setOverride(null);
+          onPublished();
+        }
+      } catch {
+        setMessage('could not reach the API');
+      } finally {
+        setBusy(null);
+        setConfirming(null);
       }
-    } catch {
-      setMessage('could not reach the API');
-    } finally {
-      setBusy(null);
-      setConfirming(null);
-    }
-  }, [job.jobId, onPublished]);
+    },
+    [job.jobId, onPublished],
+  );
 
   const onCancel = useCallback(async () => {
     setBusy('cancel');
@@ -380,9 +379,20 @@ export function JobRow({
             {...publishConfirmCopy([job])}
             busy={busy === 'publish'}
             busyLabel="Publishing…"
-            onConfirm={() => void onPublish()}
+            onConfirm={() => void runPublish()}
             onDismiss={() => {
               if (busy === null) setConfirming(null);
+            }}
+          />
+        ) : null}
+        {override && isEditorialRefusal(override.refused) ? (
+          <AdminEditorialOverrideDialog
+            refused={override.refused}
+            editorial={override.editorial}
+            busy={busy === 'publish'}
+            onConfirm={(reason) => void runPublish({ override: true, overrideReason: reason })}
+            onDismiss={() => {
+              if (busy === null) setOverride(null);
             }}
           />
         ) : null}

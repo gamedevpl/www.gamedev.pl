@@ -24,8 +24,9 @@ async function harness(seed = 20) {
   });
   const list = vi.spyOn(store, 'listBuildEvents');
   const counted = vi.spyOn(store, 'countBuildEvents');
+  // The creator's own poll: the feed answers to an owner.
   const poll = async () =>
-    assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en');
+    assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
   return { store, assembler, list, counted, poll, tick: (ms: number) => (clock += ms), at: () => clock };
 }
 

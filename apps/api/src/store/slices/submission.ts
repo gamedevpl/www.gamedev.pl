@@ -11,6 +11,9 @@ export interface SubmissionStore {
   claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number, admissionNonce?: string): Promise<boolean>;
   beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
   finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
+
+  // True while beginCheckoutRecovery's lease is still held for slug.
+  hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean>;
   claimSubmissionSlug(
     jobId: number,
     slug: string,
@@ -156,6 +159,10 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       if (snap.data()?.recoveryAdmission?.nonce === nonce) tx.update(ref, { recoveryAdmission: FieldValue.delete() });
     });
   }
+  async hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean> {
+    const snap = await this.db.collection('games').doc(slug).get();
+    return (snap.data()?.recoveryAdmission?.until ?? 0) > now;
+  }
   async claimSubmissionSlug(
     jobId: number,
     slug: string,
@@ -173,12 +180,12 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
       const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
       if (!target.exists || target.data()?.slug) return false;
+      // Lineage only: the recovery route already checked canonical ownership.
       if (
         sourceJobId === null
           ? records.length > 0
           : !holder ||
             holder.jobId !== sourceJobId ||
-            holder.ownerUid !== target.data()?.ownerUid ||
             (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
               !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
             holder.moderationBlockedAt

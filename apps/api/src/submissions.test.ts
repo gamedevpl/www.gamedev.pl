@@ -1231,6 +1231,108 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('fences reopening a closed round against a concurrent transfer accept', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.jobId, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    const at = new Date().toISOString();
+    const access = await store.ensureGameAccess(job.slug!, 'g:test-user', at, at);
+    await store.createGameTransferInvitation(job.slug!, 'g:test-user', 'g:recipient', access!.accessRevision, at);
+
+    const originalBegin = store.beginCheckoutRecovery.bind(store);
+    let acceptDuringWindow: unknown;
+    const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+      const result = await originalBegin(...args);
+      // A concurrent accept must see this lease as busy.
+      acceptDuringWindow = await store.acceptGameTransferInvitation(job.slug!, 'g:recipient', at);
+      return result;
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
+        headers: authHeaders,
+        payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(acceptDuringWindow).toBe('busy');
+      expect((await store.getSubmission(job.jobId))?.state).toBe('dispatched');
+    } finally {
+      spy.mockRestore();
+    }
+
+    await app.close();
+  });
+
+  it('refuses to reopen a closed round for an owner the transfer already replaced', async () => {
+    // Transfer commits before the lease: only a recheck under it catches this.
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.jobId, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    const at = new Date().toISOString();
+    const access = await store.ensureGameAccess(job.slug!, 'g:test-user', at, at);
+    await store.createGameTransferInvitation(job.slug!, 'g:test-user', 'g:recipient', access!.accessRevision, at);
+    expect(await store.acceptGameTransferInvitation(job.slug!, 'g:recipient', at)).toMatchObject({
+      status: 'accepted',
+    });
+    const briefsBefore = briefs.length;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    // The status token still verifies; canonical ownership refuses.
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('stale_owner');
+    expect(briefs).toHaveLength(briefsBefore);
+    expect((await store.getSubmission(job.jobId))?.state).toBe('ready_for_review');
+
+    await app.close();
+  });
+
   // ready_for_review isn't inbox-steered, so a failed queue write still dispatches.
   it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 77 });
@@ -5603,6 +5705,137 @@ describe('games published from the store rather than the repo', () => {
     await app.close();
   });
 
+  it('shows the catalog card under the new owner after a transfer', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
+    await store.createSubmission(123, 'g:test-user', 'Comet Courier');
+    await store.setSubmissionSlug(123, 'comet-courier');
+    await store.setSubmissionPublishedAt(123, '2026-07-30T12:00:00Z');
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.claimHandle('g:recipient', 'newowner', '2026-08-01T00:00:00.000Z');
+    await store.ensureGameAccess(
+      'comet-courier',
+      'g:test-user',
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+    await store.recordSettledOwner(
+      'comet-courier',
+      'g:recipient',
+      999,
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier')).toMatchObject({
+      submittedBy: 'newowner',
+      creatorHandle: 'newowner',
+    });
+
+    await app.close();
+  });
+
+  it('deattributes the catalog card when the recipient has no claimed handle yet', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
+    await store.createSubmission(123, 'g:test-user', 'Comet Courier');
+    await store.setSubmissionSlug(123, 'comet-courier');
+    await store.setSubmissionPublishedAt(123, '2026-07-30T12:00:00Z');
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.ensureGameAccess(
+      'comet-courier',
+      'g:test-user',
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+    await store.recordSettledOwner(
+      'comet-courier',
+      'g:recipient',
+      999,
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    // Never the sender's ('Ada Lovelace') SPEC-baked attribution.
+    expect(response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier')).toMatchObject({
+      submittedBy: 'gamedev-platform',
+      creatorHandle: null,
+    });
+
+    await app.close();
+  });
+
+  it('deattributes a transferred game whose recipient deletes without publishing', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
+    await store.createSubmission(123, 'g:test-user', 'Comet Courier');
+    await store.setSubmissionSlug(123, 'comet-courier');
+    await store.setSubmissionPublishedAt(123, '2026-07-30T12:00:00Z');
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.ensureGameAccess(
+      'comet-courier',
+      'g:test-user',
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+    await store.recordSettledOwner(
+      'comet-courier',
+      'g:recipient',
+      999,
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+    // No submission is ever reassigned to DELETED_ACCOUNT_UID for this slug.
+    await store.deleteAccountIdentity('g:recipient', '2026-08-04T00:00:00.000Z');
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier')).toMatchObject({
+      submittedBy: 'gamedev-platform',
+      creatorHandle: null,
+    });
+
+    await app.close();
+  });
+
+  it('invalidates the cached public game page after a transfer, not just the catalog card', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore());
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.claimHandle('g:recipient', 'newowner', '2026-08-01T00:00:00.000Z');
+    const at = '2026-08-01T00:00:00.000Z';
+    await store.ensureGameAccess('comet-courier', 'g:test-user', at, at);
+    const code = await store.ensureRecipientCode('g:recipient', at);
+
+    // Warms the page-route's own 60s cache under the sender's attribution.
+    const before = await app.inject({ method: 'GET', url: '/api/games/comet-courier/page' });
+    expect(before.statusCode).toBe(200);
+
+    const initiate = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/comet-courier/transfer',
+      headers: getAuthHeaders('g:test-user'),
+      payload: { recipientCode: code },
+    });
+    expect(initiate.statusCode).toBe(200);
+
+    const accept = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/comet-courier/accept',
+      headers: getAuthHeaders('g:recipient'),
+    });
+    expect(accept.statusCode).toBe(200);
+
+    const after = await app.inject({ method: 'GET', url: '/api/games/comet-courier/page' });
+    expect(after.statusCode).toBe(200);
+    expect(after.json().entry.creatorHandle).toBe('newowner');
+
+    await app.close();
+  });
+
   it('serves store-published gallery media from the published version’s derived artifacts', async () => {
     const { app } = await appWithPublication(publishedGamesStore());
 
@@ -6031,8 +6264,40 @@ describe('what a build costs', () => {
         ref: 'task-1',
         credits: 403.45,
         creditsMeasured: true,
+        finishedAt: expect.any(String),
+        state: 'completed',
       },
     ]);
+
+    await app.close();
+  });
+
+  it('stamps when a session finished, from the first observation that sees it settled', async () => {
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const observe = vi.fn(async () => ({ state: 'completed' as const, hasCandidate: true }));
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: { ...backend, observe },
+      submissionTokenSecret: secret,
+    });
+
+    const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    const { token } = created.json() as { token: string };
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'sources_uploaded',
+    });
+
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    const [entry] = (await store.getSubmission(job.jobId))?.costs ?? [];
+    expect(entry.state).toBe('completed');
+    expect(entry.finishedAt).toBeDefined();
 
     await app.close();
   });
@@ -6256,15 +6521,23 @@ describe('POST /api/submissions/:token/improve', () => {
       submissionTokenSecret: secret,
     });
 
-    // Another creator's job on the same slug must never appear.
+    // An earlier owner's round: the history a transfer hands over.
     const foreign = await store.allocateJobId();
     await store.createSubmission(foreign, 'g:other-user', 'History Game');
     await store.setSubmissionSlug(foreign, 'history-game');
-    await store.appendCreatorMessage(foreign, 'Secret foreign note.');
+    await store.appendCreatorMessage(foreign, 'Note from the previous owner.');
 
     const published = await store.allocateJobId();
     await store.createSubmission(published, 'g:test-user', 'History Game');
     await store.setSubmissionSlug(published, 'history-game');
+    // Settles canonical ownership on the job this test authenticates as.
+    await store.recordSettledOwner(
+      'history-game',
+      'g:test-user',
+      published,
+      '2026-07-01T00:00:00.000Z',
+      '2026-07-01T00:00:00.000Z',
+    );
     await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
     await store.appendCreatorMessage(published, 'Make the lobby louder.');
     await store.appendBuildEvent(published, {
@@ -6283,26 +6556,42 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(improve.statusCode).toBe(200);
     const tipToken = improve.json().token as string;
 
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}` });
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}`, headers: authHeaders });
     expect(status.statusCode).toBe(200);
     const prior = status.json().priorRounds as
       Array<{ id: string; publishedAt?: string; entries: Array<{ kind: string; text: string }> }> | undefined;
-    expect(prior).toHaveLength(1);
-    expect(prior![0]!.id).toBe(String(published));
-    expect(prior![0]!.publishedAt).toBe('2026-07-01T00:00:00.000Z');
-    expect(prior![0]!.entries.map((e) => e.text)).toEqual(
+    expect(prior?.map((round) => round.id)).toEqual([String(foreign), String(published)]);
+    const publishedRound = prior!.find((round) => round.id === String(published))!;
+    expect(publishedRound.publishedAt).toBe('2026-07-01T00:00:00.000Z');
+    expect(publishedRound.entries.map((e) => e.text)).toEqual(
       expect.arrayContaining(['Make the lobby louder.', 'Lobby volume bumped for the opening scene.']),
     );
-    expect(prior![0]!.entries.some((e) => e.text.includes('foreign'))).toBe(false);
+
+    // The status token names a job, not a person.
+    const anonymous = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}` });
+    expect(anonymous.statusCode).toBe(200);
+    expect(anonymous.json().priorRounds).toBeUndefined();
+
+    // Nor does holding a session that does not own the game.
+    const stranger = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${tipToken}`,
+      headers: getAuthHeaders('g:other-user'),
+    });
+    expect(stranger.statusCode).toBe(200);
+    expect(stranger.json().priorRounds).toBeUndefined();
 
     // An old status token must not list later improve rounds as "earlier" history
-    // (Codex): the published job's status stays its own thread only.
+    // (Codex): only rounds that started before this one are earlier than it.
     const oldStatus = await app.inject({
       method: 'GET',
       url: `/api/submissions/${mintToken(published, secret)}`,
+      headers: authHeaders,
     });
     expect(oldStatus.statusCode).toBe(200);
-    expect(oldStatus.json().priorRounds).toBeUndefined();
+    const olderPrior = (oldStatus.json().priorRounds ?? []) as Array<{ id: string }>;
+    expect(olderPrior.map((round) => round.id)).toEqual([String(foreign)]);
+    expect(olderPrior.map((round) => round.id)).not.toContain(String(improve.json().jobId));
 
     await app.close();
   });
@@ -6974,6 +7263,14 @@ describe('creator deletes their own published game', () => {
     await new Promise((resolve) => setTimeout(resolve, 2));
     await store.createSubmission(1_000_101, 'g:new-owner', 'Sky Dodge');
     await store.setSubmissionSlug(1_000_101, 'sky-dodge');
+    // Canonical settlement moves to the new owner's job, as a real transfer would.
+    await store.recordSettledOwner(
+      'sky-dodge',
+      'g:new-owner',
+      1_000_101,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
     await store.setPublication({
       slug: 'sky-dodge',
       state: 'published',

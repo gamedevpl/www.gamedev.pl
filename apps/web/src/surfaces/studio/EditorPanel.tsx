@@ -1013,7 +1013,7 @@ export function EditorPanel(props: {
           {item && spec ? (
             <div className="editor-side-group">
               <h4>{t('studioPanel.editor.properties')}</h4>
-              {Object.entries(spec.item.properties).map(([propertyName, propertySpec]) => {
+              {Object.entries(spec.item.properties ?? {}).map(([propertyName, propertySpec]) => {
                 const value = item.properties[propertyName];
                 if (propertySpec.type === 'text') {
                   return (

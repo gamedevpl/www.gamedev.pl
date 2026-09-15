@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import { createLocalGamesClient, FIXTURE_GAMES_DIR, resolveLocalGamesDir } from './local-games-repo.js';
 
 const client = createLocalGamesClient({ rootDir: FIXTURE_GAMES_DIR });
@@ -148,5 +149,26 @@ describe('local games repo', () => {
 
     const withoutEnv = await resolveLocalGamesDir({});
     expect(['checkout', 'fixtures']).toContain(withoutEnv.source);
+  });
+});
+
+describe('hidden fields through the gate lane', () => {
+  // The gate builds bundle.html this way; it is served first.
+  it('reaches the assembled bundle a store-lane game is served from', async () => {
+    const sources = await client.getGameSources('main', 'odd-one-out');
+    expect(sources?.hiddenFields).toEqual(['oddIndex']);
+
+    const html = assembleGameHtml(projectFromSources(sources!, sources!.title ?? 'odd-one-out'), {
+      restrictNetwork: true,
+    });
+    expect(html).toContain('window.__GAME_AGENT_HIDDEN__=Object.freeze(["oddIndex"]);');
+  });
+
+  it('says nothing for a game that declares none', async () => {
+    const sources = await client.getGameSources('main', 'pixel-dodge');
+    expect(sources?.hiddenFields).toBeUndefined();
+
+    const html = assembleGameHtml(projectFromSources(sources!, 'Pixel Dodge'));
+    expect(html).not.toContain('__GAME_AGENT_HIDDEN__');
   });
 });

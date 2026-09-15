@@ -1,5 +1,5 @@
 // Vendor-neutral seam for hosted coding-agent platforms.
-import type { AgentTaskState } from '../platform/agent-state.js';
+import { isSettledAgentState, type AgentTaskState } from '../platform/agent-state.js';
 import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
 
 // Coarse reasoning budget; vendors name it differently.
@@ -166,7 +166,7 @@ export function normalizeManagedState(raw: string | undefined | null): AgentTask
 }
 
 export function isManagedSessionSettled(state: AgentTaskState): boolean {
-  return state === 'completed' || state === 'failed' || state === 'timed_out' || state === 'cancelled';
+  return isSettledAgentState(state);
 }
 
 // Idle counts: runtimes park finished agents.

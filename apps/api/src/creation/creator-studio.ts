@@ -6,7 +6,7 @@ import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
-import { loadShelfRecords } from './studio-shelf-records.js';
+import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
@@ -250,7 +250,8 @@ export async function registerCreatorStudioRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const ownedRecords = await store.listSubmissionsByOwner(request.user!.uid);
+    const records = await reconcileTransferredOwnership(store, request.user!.uid, ownedRecords);
     const { games: published, truncated: gamesTruncated, total } = pageOwnerGames(records, 'published');
     const slugs = published.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug));
 
@@ -296,7 +297,8 @@ export async function registerCreatorStudioRoutes(
   app.get('/api/me/studio/scorecards', async (request, reply) => {
     if (!requireUser(request, reply)) return reply;
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const owned = await store.listSubmissionsByOwner(request.user!.uid);
+    const records = await reconcileTransferredOwnership(store, request.user!.uid, owned);
     const { games: published, truncated, total } = pageOwnerGames(records, 'published');
     const slugs = published.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug));
 

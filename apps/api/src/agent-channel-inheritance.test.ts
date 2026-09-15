@@ -96,7 +96,7 @@ describe('agent source inheritance across rounds', () => {
     await store.setSubmissionPreviewVersion(ISSUE - 1, PRIOR_VERSION);
     const deliveries: SourceFile[][] = [];
     app = await createApp(store, fakeGamesStore(deliveries));
-    const historyReads = vi.spyOn(store, 'listSubmissionsByOwnerAndSlug');
+    const historyReads = vi.spyOn(store, 'listSubmissionsBySlug');
 
     const restored = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
     expect(restored.json()).toMatchObject({

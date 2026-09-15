@@ -33,9 +33,10 @@ judgment_ from someone who knows what the shelf should feel like.
 
 ## Non-goals (this steel thread)
 
-- Auto-unpublishing or auto-filing issues from a cut — the desk records judgment; acting
-  on it stays a human operator decision. Handoff is **Copy JSON** on Admin → Assessments
-  into a coding-agent chat — see
+- Auto-unpublishing or auto-filing issues from a cut. Operator publish is default-deny
+  until one `keep` (or an override with a written reason); two reviewers can still block
+  with a cut consensus. Handoff is **Copy JSON** on Admin → Assessments into a
+  coding-agent chat — see
   [`.claude/skills/ingest-desk-reviews/SKILL.md`](../.claude/skills/ingest-desk-reviews/SKILL.md).
 - Star ratings or free-form rubrics beyond the fixed five-axis checklist.
 - Granting reviewers access to _private_ (unshared) creator drafts.

@@ -10,6 +10,7 @@ import {
 } from '../platform/dream-shots.js';
 import { carriesPixels, imageSize, isPng, sameAspectRatio } from '../platform/image-size.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { ProposalRefusedBy } from '../store/slices/build-log.js';
 
@@ -135,7 +136,9 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
 
       if (stopReason(record)) return reject('stopped');
       if (!(await dreamingEnabled())) return reject('paused');
-      if (await store.readProposalsMutedAt(record.ownerUid)) return reject('muted');
+      // Muting is the current owner's preference about their thread.
+      const ownerNow = record.slug ? await currentOwnerUid(store, record.slug, record.ownerUid) : record.ownerUid;
+      if (ownerNow && (await store.readProposalsMutedAt(ownerNow))) return reject('muted');
 
       const version = record.previewVersion ?? record.deliveredVersion;
       if (!record.slug || !version) return reject('no_screenshot');
@@ -198,7 +201,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         textLocalized: PROPOSAL_TEXT_PL,
         locale: 'pl',
         proposal: { sourceRef: sourceShot.id, version, options, builder: 'self' },
-        ownerUid: record.ownerUid,
+        ownerUid: ownerNow ?? record.ownerUid,
         roundGeneration,
         blocked: (job) => stopReason(job) !== null,
       });

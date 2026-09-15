@@ -7,7 +7,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assembleGameHtml } from '../src/platform/assemble.js';
+import { assembleGameHtml, projectFromSources } from '../src/platform/assemble.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { typeCheckGame } from '../src/creation/type-check.js';
 
@@ -31,16 +31,7 @@ export const github = createLocalGamesClient({ rootDir: GAMES_ROOT });
 export async function assembleGame(slug: string, overrides: Record<string, string>): Promise<string | null> {
   const sources = await github.getGameSources(REF, slug, overrides);
   if (!sources) return null;
-  return assembleGameHtml(
-    {
-      title: sources.title ?? slug,
-      description: '',
-      html: sources.indexHtml,
-      js: sources.gameJs,
-      css: sources.styleCss,
-    },
-    { restrictNetwork: true },
-  );
+  return assembleGameHtml(projectFromSources(sources, sources.title ?? slug), { restrictNetwork: true });
 }
 
 /**

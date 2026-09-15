@@ -122,6 +122,8 @@ export interface GameSources {
   styleCss: string;
   /** SPEC.md frontmatter title, when present. */
   title: string | null;
+  // AGENT.json hiddenFields: what an agent must not observe.
+  hiddenFields?: readonly string[];
   // Absent from every mock implementation; only the real client fills this in.
   timings?: GameSourcesTimings;
 }
@@ -171,7 +173,28 @@ const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
 const GAME_KIT_MODULE_ENTRIES = GAME_KIT_VERTICAL_ENTRIES;
 
 /** What `getGameFile` will read. Declarations and manifests, never source or media. */
-const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json']);
+const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json', 'AGENT.json']);
+
+// Malformed or missing means "declares none".
+const HIDDEN_FIELDS_CAP = 64;
+
+function parseAgentHiddenFields(source: string | null): readonly string[] | undefined {
+  if (!source) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  const declared = (parsed as { hiddenFields?: unknown }).hiddenFields;
+  if (!Array.isArray(declared)) return undefined;
+  const names = declared
+    .filter((field): field is string => typeof field === 'string' && field.trim().length > 0)
+    .map((field) => field.trim())
+    .slice(0, HIDDEN_FIELDS_CAP);
+  return names.length > 0 ? names : undefined;
+}
 
 interface SourcedAudioCatalog {
   sounds?: Record<string, { mime?: unknown }>;
@@ -1305,14 +1328,15 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       };
 
       const startedAt = Date.now();
-      // The SHA gates the caches below and shares this game's own request.
-      const [sha, indexHtml, gameTs, styleCss, specMd, manifestSource] = await Promise.all([
+      // The SHA gates the caches below; AGENT.json rides the same batch.
+      const [sha, indexHtml, gameTs, styleCss, specMd, manifestSource, agentSource] = await Promise.all([
         resolveEngineSha(ref),
         gameFile('index.html'),
         gameFile('game.ts'),
         gameFile('style.css'),
         gameFile('SPEC.md'),
         gameFile('GAME.json'),
+        gameFile('AGENT.json'),
       ]);
       // A cache hit here skips the network entirely.
       const [gameShellCss, coreJs] = await Promise.all([getCachedGameShellCss(sha), getCachedCoreJs(sha)]);
@@ -1466,6 +1490,7 @@ ${gameJs}`;
         gameJs: bundledJs,
         styleCss: bundledCss,
         title,
+        hiddenFields: parseAgentHiddenFields(agentSource),
         timings: { totalMs: Date.now() - startedAt, baseReadMs, kitModulesMs, audioMs, musicMs, bundleMs },
       };
     },

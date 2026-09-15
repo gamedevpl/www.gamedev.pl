@@ -213,6 +213,7 @@ export interface McpServerOptions {
     locale: string;
     log: { error: (context: object, message: string) => void };
     openedBy?: 'creator' | 'agent';
+    ownerUid?: string;
   }) => Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }>;
   /**
    * Creates a game, running the identical sequence Studio's POST /api/submissions runs.
