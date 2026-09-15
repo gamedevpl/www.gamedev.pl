@@ -509,3 +509,43 @@ is megabytes, so `7d` exited with `Argument list too long` before node started �
 hid it. Pages now go through a temp file. The lesson generalises: a tool whose only real use is
 one large window should be exercised at that window, because the small one is not a smaller
 version of the same code path.
+
+## The nightly sweep read the same days twenty-eight times
+
+The scorecard sweep is not a poll, so none of the windows above touch it, and it was the
+single largest read on the project outside the status poll: **24,186 document reads in the
+03:20 minute**, measured 2026-09-15. That is 40.3 reads/s over A30's 600-second bucket,
+which is exactly the 40.63 maximum the alert had been calibrated against — the "spike" the
+threshold was sized for was this job.
+
+The cause is not traffic. `SCORECARD_WINDOW_DAYS` is 28, and the sweep scanned all 28 raw
+`telemetry/{date}/playEvents` partitions every night under a 50,000-document budget. A day's
+partition was therefore read about 28 times over its life, and 27 of those reads returned
+data that could no longer change.
+
+The fix is a rollup, not a cache: `telemetryDaily/{date}` holds one document per day with
+every game played that day, written the first time the sweep sees the day. A day older than
+`SEAL_LAG_DAYS` is **sealed** and read back as one document forever after; today and
+yesterday stay open and are rescanned, so telemetry that flushed late is still picked up. In
+the steady state the 28-day window costs 26 document reads and two partition scans.
+
+Two properties make that safe to do to a number an agent acts on:
+
+- **The counters are exact.** Sessions, bounces, ticks, outcomes and totals are sums, and
+  sums of per-day sums are the same number.
+- **The medians are exact until a day gets big.** Each day keeps up to
+  `MAX_SAMPLES_PER_METRIC` values per metric, evenly spaced through that day's sorted
+  values, plus the count they stand for. Merging takes the weighted median, which reduces to
+  the plain median when no day was downsampled. `telemetry-daily.test.ts` asserts the merged
+  rows equal a straight scan over the same events.
+
+The one real difference is the seam. A session that crosses UTC midnight is counted in both
+its partitions, where a single 28-day scan used to stitch it back together. Events are
+already bucketed by event time on the write path, so the seam is in the stored data; what
+changed is that nothing re-joins it. It costs a slightly high `sessions` and a slightly low
+`zoneJoined` for sessions spanning 00:00 UTC — 01:00 or 02:00 in Poland, the quietest hour
+there is.
+
+Same day, same logs: `/api/me/studio/health` was running 1,500–2,000 reads a minute for the
+same structural reason, one telemetry query per (day, slug) with no window at all. It is in
+the table above now.

@@ -100,7 +100,17 @@ function median(values: number[]): number | null {
  * session before the continuity checks, because "the previous event" is only meaningful
  * in time order and Firestore returns documents in id order.
  */
+export interface GameHealthDetail extends GameHealth {
+  // What the three medians were taken over.
+  samples: { playSeconds: number[]; fps: number[]; bestScores: number[] };
+}
+
 export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
+  return summarizeGameHealthDetailed(events).map(({ samples: _samples, ...row }) => row);
+}
+
+// Same pass, one row wider.
+export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealthDetail[] {
   const bySlug = new Map<string, TelemetryEvent[]>();
   for (const event of events) {
     const bucket = bySlug.get(event.slug);
@@ -108,7 +118,7 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
     else bySlug.set(event.slug, [event]);
   }
 
-  const rows: GameHealth[] = [];
+  const rows: GameHealthDetail[] = [];
   for (const [slug, slugEvents] of bySlug) {
     const sessions = new Map<string, SessionState>();
     const errorCounts = new Map<string, number>();
@@ -285,6 +295,7 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
         .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
         .slice(0, MAX_PROGRESS_LABELS),
       gfxBackends,
+      samples: { playSeconds: playPerSession, fps: fpsSamples, bestScores },
     });
   }
 
