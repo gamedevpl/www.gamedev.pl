@@ -79,7 +79,15 @@ export function extractSpecDescription(specMd: string | null): string | null {
   return paragraph.length > 0 ? paragraph.join(' ') : null;
 }
 
-export async function registerGamePageRoutes(app: FastifyInstance, options: GamePageRoutesOptions): Promise<void> {
+export interface GamePageRoutesHandle {
+  // Drops the cached page for `slug`, e.g. after a transfer.
+  invalidateGameCache: (slug: string) => void;
+}
+
+export async function registerGamePageRoutes(
+  app: FastifyInstance,
+  options: GamePageRoutesOptions,
+): Promise<GamePageRoutesHandle> {
   const { store, gamesStore, getRepoPublishedCatalogEntry, githubClient } = options;
   const publishedRef = options.publishedRef ?? 'main';
   const now = options.now ?? Date.now;
@@ -163,4 +171,6 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
       description: extractSpecDescription(specMd),
     };
   }
+
+  return { invalidateGameCache: (slug) => cache.delete(slug) };
 }

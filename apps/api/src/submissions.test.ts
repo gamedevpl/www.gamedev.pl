@@ -1231,6 +1231,59 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('fences reopening a closed round against a concurrent transfer accept', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.jobId, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    const at = new Date().toISOString();
+    const access = await store.ensureGameAccess(job.slug!, 'g:test-user', at, at);
+    await store.createGameTransferInvitation(job.slug!, 'g:test-user', 'g:recipient', access!.accessRevision, at);
+
+    const originalBegin = store.beginCheckoutRecovery.bind(store);
+    let acceptDuringWindow: unknown;
+    const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+      const result = await originalBegin(...args);
+      // A concurrent accept must see this lease as busy.
+      acceptDuringWindow = await store.acceptGameTransferInvitation(job.slug!, 'g:recipient', at);
+      return result;
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
+        headers: authHeaders,
+        payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(acceptDuringWindow).toBe('busy');
+      expect((await store.getSubmission(job.jobId))?.state).toBe('dispatched');
+    } finally {
+      spy.mockRestore();
+    }
+
+    await app.close();
+  });
+
   // ready_for_review isn't inbox-steered, so a failed queue write still dispatches.
   it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 77 });
@@ -5696,6 +5749,40 @@ describe('games published from the store rather than the repo', () => {
       submittedBy: 'gamedev-platform',
       creatorHandle: null,
     });
+
+    await app.close();
+  });
+
+  it('invalidates the cached public game page after a transfer, not just the catalog card', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore());
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.claimHandle('g:recipient', 'newowner', '2026-08-01T00:00:00.000Z');
+    const at = '2026-08-01T00:00:00.000Z';
+    await store.ensureGameAccess('comet-courier', 'g:test-user', at, at);
+    const code = await store.ensureRecipientCode('g:recipient', at);
+
+    // Warms the page-route's own 60s cache under the sender's attribution.
+    const before = await app.inject({ method: 'GET', url: '/api/games/comet-courier/page' });
+    expect(before.statusCode).toBe(200);
+
+    const initiate = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/comet-courier/transfer',
+      headers: getAuthHeaders('g:test-user'),
+      payload: { recipientCode: code },
+    });
+    expect(initiate.statusCode).toBe(200);
+
+    const accept = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/comet-courier/accept',
+      headers: getAuthHeaders('g:recipient'),
+    });
+    expect(accept.statusCode).toBe(200);
+
+    const after = await app.inject({ method: 'GET', url: '/api/games/comet-courier/page' });
+    expect(after.statusCode).toBe(200);
+    expect(after.json().entry.creatorHandle).toBe('newowner');
 
     await app.close();
   });

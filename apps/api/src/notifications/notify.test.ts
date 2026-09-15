@@ -304,6 +304,19 @@ describe('notifyOnTransition', () => {
     expect((await notifyOnTransition({ store }, await record(), { status: 'publishing' }, 'tok')).emitted).toBe(false);
     expect(await store.listNotifications('g:owner')).toEqual([]);
   });
+
+  it('routes to the canonical owner after a transfer, not the job’s stale ownerUid', async () => {
+    await store.setSubmissionSlug(7, 'sky-dodge');
+    const at = new Date().toISOString();
+    await store.upsertUser({ uid: 'g:newowner' });
+    await store.ensureGameAccess('sky-dodge', 'g:owner', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:newowner', 999, at, at);
+
+    const res = await notifyOnTransition({ store }, await record(), { status: 'building' }, 'tok');
+    expect(res.emitted).toBe(true);
+    expect(await store.listNotifications('g:owner')).toEqual([]);
+    expect((await store.listNotifications('g:newowner'))[0].id).toBe('sub-7-building');
+  });
 });
 
 describe('emitSubmissionNotification email fan-out', () => {

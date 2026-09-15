@@ -945,40 +945,52 @@ export async function registerSubmissionRoutes(
       return { ok: false, reason: 'not_continuable' };
     }
 
-    try {
-      // Record who typed this. An agent calling `continue_draft` writes its own summary
-      // of a conversation held somewhere else — usually in English, whatever the creator
-      // was speaking — so the thread must not present it as the creator's own words.
-      const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
-      const relayed = await relayedMessageLocalization(origin, input.feedback);
-      await store.appendCreatorMessage(input.jobId, relayed.text, {
-        origin,
-        ...(relayed.textLocalized && relayed.locale
-          ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
-          : {}),
-      });
-    } catch (queueError) {
-      input.log.error({ err: queueError, jobId: input.jobId }, 'failed to queue continue_draft feedback');
-      return { ok: false, reason: 'queue_failed' };
-    }
+    const reopen = async (): Promise<
+      { ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }
+    > => {
+      try {
+        // Record who typed this. An agent calling `continue_draft` writes its own summary
+        // of a conversation held somewhere else — usually in English, whatever the creator
+        // was speaking — so the thread must not present it as the creator's own words.
+        const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
+        const relayed = await relayedMessageLocalization(origin, input.feedback);
+        await store.appendCreatorMessage(input.jobId, relayed.text, {
+          origin,
+          ...(relayed.textLocalized && relayed.locale
+            ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
+            : {}),
+        });
+      } catch (queueError) {
+        input.log.error({ err: queueError, jobId: input.jobId }, 'failed to queue continue_draft feedback');
+        return { ok: false, reason: 'queue_failed' };
+      }
 
-    const outcome = await resumeBuild({
-      jobId: input.jobId,
-      feedback: input.feedback,
-      locale: input.locale,
-      log: input.log,
-      // deliveredVersion misses platform rounds; dispatch presence is the real "never ran" signal.
-      ...(record.dispatch?.refs?.length ? {} : { undelivered: true }),
-      builder: 'self',
-      transition: {
-        by: input.openedBy === 'agent' ? 'agent' : 'creator',
-        reason: 'continue_draft',
-      },
-    });
-    if (!outcome.started) {
-      return { ok: false, reason: outcome.reason ?? 'resume_failed' };
+      const outcome = await resumeBuild({
+        jobId: input.jobId,
+        feedback: input.feedback,
+        locale: input.locale,
+        log: input.log,
+        // deliveredVersion misses platform rounds; dispatch presence is the real "never ran" signal.
+        ...(record.dispatch?.refs?.length ? {} : { undelivered: true }),
+        builder: 'self',
+        transition: {
+          by: input.openedBy === 'agent' ? 'agent' : 'creator',
+          reason: 'continue_draft',
+        },
+      });
+      if (!outcome.started) {
+        return { ok: false, reason: outcome.reason ?? 'resume_failed' };
+      }
+      return { ok: true, jobId: input.jobId, alreadyOpen: false };
+    };
+
+    // Without a slug there is no game a transfer could target yet -- nothing to fence.
+    if (!record.slug) return reopen();
+    try {
+      return await withImprovementAdmission(store, record.slug, now, reopen);
+    } catch {
+      return { ok: false, reason: 'busy' };
     }
-    return { ok: true, jobId: input.jobId, alreadyOpen: false };
   }
 
   /**

@@ -23,6 +23,7 @@ import type { ChatOrchestration } from './chat-orchestration.js';
 import { loadRecentChatTurns } from './chat-turns-history.js';
 import { FeedbackRequestSchema, TurnRequestSchema } from './feedback-request.js';
 import { detectStall, type JobTransition } from './job-state.js';
+import { withImprovementAdmission } from './improvement-admission.js';
 import type { ResumeOutcome } from './resume-build.js';
 
 export type CreatorMessageMode = 'feedback' | 'turn';
@@ -306,20 +307,32 @@ export async function handleCreatorFeedback(
         ? 'quiet_builder_handoff'
         : 'creator_feedback';
 
-  const outcome = await resumeBuild({
-    jobId,
-    feedback: inboxText,
-    locale: creatorLocale,
-    log: request.log,
-    ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
-    ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
-    ...(builderChanging ? { preserveRoundBudget: true } : {}),
-    ...(!queued ? { feedbackQueueFailed: true } : {}),
-    transition: {
-      by: 'creator',
-      reason: handoffReason,
-    },
-  });
+  const reopen = () =>
+    resumeBuild({
+      jobId,
+      feedback: inboxText,
+      locale: creatorLocale,
+      log: request.log,
+      ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
+      ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
+      ...(builderChanging ? { preserveRoundBudget: true } : {}),
+      ...(!queued ? { feedbackQueueFailed: true } : {}),
+      transition: {
+        by: 'creator',
+        reason: handoffReason,
+      },
+    });
+  // Fenced against a concurrent transfer only when reopening a closed round.
+  let outcome: ResumeOutcome;
+  if (store && record?.slug && !isActiveBuildRound(record)) {
+    try {
+      outcome = await withImprovementAdmission(store, record.slug, now, reopen);
+    } catch {
+      outcome = { started: false, reason: 'dispatch_failed' };
+    }
+  } else {
+    outcome = await reopen();
+  }
 
   if (outcome.started) await appendStudioAck();
   invalidateStatusCache(jobId);

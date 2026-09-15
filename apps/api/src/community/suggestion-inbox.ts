@@ -1,7 +1,7 @@
 import { DISMISS_REASONS } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { creatorOwnsSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { Scorecard, Store, SuggestionRecord } from '../platform/store.js';
 import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
 import { AUTONOMY_MODES, DEFAULT_AUTONOMY, type AutonomyMode } from './autonomy.js';
@@ -165,8 +165,23 @@ export async function registerSuggestionInboxRoutes(
 
   app.get('/api/me/suggestions', async (request, reply) => {
     if (!requireUser(request, reply)) return reply;
+    const uid = request.user!.uid;
 
-    const records = await store.listSuggestions({ ownerUid: request.user!.uid, limit: MAX_INBOX });
+    // The stored ownerUid is denormalised and stale after a transfer: re-verify each
+    // hit against live ownership, and pull in every canonically-owned slug's suggestions
+    // the stale-owner query missed (a slug can carry more than one open suggestion).
+    const stored = await store.listSuggestions({ ownerUid: uid, limit: MAX_INBOX });
+    const stillOwned = await Promise.all(stored.map((record) => creatorOwnsSlug(store, record.slug, uid)));
+    const merged = new Map(stored.filter((_, i) => stillOwned[i]).map((record) => [record.id, record]));
+
+    const memberAccess = await store.listGameAccessByMember(uid);
+    const canonicalSlugs = memberAccess.filter((access) => access.ownerUid === uid).map((access) => access.slug);
+    for (const record of (await Promise.all(canonicalSlugs.map((slug) => store.listSuggestions({ slug })))).flat()) {
+      merged.set(record.id, record);
+    }
+    const records = [...merged.values()]
+      .sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
+      .slice(0, MAX_INBOX);
     // One scorecard read per distinct game, not per suggestion.
     const slugs = [...new Set(records.map((record) => record.slug))];
     const cards = new Map<string, Scorecard | null>();

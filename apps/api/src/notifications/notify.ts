@@ -22,6 +22,7 @@ import {
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { invalidateNotificationCache } from './notification-cache.js';
 import type { JobAlert } from './operator-alerts.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
   NotificationType,
@@ -636,7 +637,7 @@ export async function emitProposalNotification(
  */
 export async function notifyOnTransition(
   deps: EmitDeps,
-  submission: Pick<SubmissionRecord, 'jobId' | 'ownerUid' | 'title' | 'lastNotifiedStatus'>,
+  submission: Pick<SubmissionRecord, 'jobId' | 'ownerUid' | 'title' | 'lastNotifiedStatus' | 'slug'>,
   status: SubmissionStatusResponse,
   statusToken: string,
 ): Promise<{ emitted: boolean }> {
@@ -646,8 +647,12 @@ export async function notifyOnTransition(
   const prevEvent = submission.lastNotifiedStatus ? statusToEvent(submission.lastNotifiedStatus) : null;
   if (prevEvent === event) return { emitted: false };
 
+  // Canonical ownership, not the stale ownerUid a transfer leaves behind.
+  const canonicalOwner = submission.slug ? (await resolveGameAccess(deps.store, submission.slug)).owner : null;
+  const recipientUid = canonicalOwner?.kind === 'creator' ? canonicalOwner.uid : submission.ownerUid;
+
   await emitSubmissionNotification(deps, {
-    uid: submission.ownerUid,
+    uid: recipientUid,
     type: event,
     jobId: submission.jobId,
     gameTitle: submission.title,

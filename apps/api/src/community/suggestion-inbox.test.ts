@@ -82,6 +82,8 @@ beforeEach(() => {
 
 describe('GET /api/me/suggestions', () => {
   it('returns only the caller’s own suggestions', async () => {
+    await publish('crashy', OWNER);
+    await publish('theirs', OTHER);
     await store.putSuggestion(suggestion());
     await store.putSuggestion(suggestion({ id: 'someone-elses', slug: 'theirs', ownerUid: OTHER }));
     const app = await appFor();
@@ -97,6 +99,7 @@ describe('GET /api/me/suggestions', () => {
     // The record stores none, deliberately, so that erasing a player's signals removes
     // their words from this surface on the next nightly recomputation with no extra
     // machinery. Reading it live is what makes that true.
+    await publish('crashy', OWNER);
     await store.putSuggestion(suggestion());
     await store.putScorecard('crashy', scorecard({ feedbackThemes: [{ theme: 'level 2 is a wall', count: 4 }] }));
     const app = await appFor();
@@ -112,6 +115,7 @@ describe('GET /api/me/suggestions', () => {
   it('reports missing context as absent rather than as empty', async () => {
     // No scorecard is not the same as a scorecard with nothing in it, and the studio
     // renders the two differently.
+    await publish('crashy', OWNER);
     await store.putSuggestion(suggestion());
     const app = await appFor();
 
@@ -119,6 +123,26 @@ describe('GET /api/me/suggestions', () => {
 
     expect(res.json().suggestions[0].untrustedContext).toBeNull();
     await app.close();
+  });
+
+  it('reconciles a transferred game: the recipient sees it, the sender no longer does', async () => {
+    const RECIPIENT = 'g:recipient';
+    await store.upsertUser({ uid: RECIPIENT });
+    await publish('crashy', OWNER);
+    // Stamped for the sender at sweep time, same as any suggestion created pre-transfer.
+    await store.putSuggestion(suggestion());
+    const at = '2026-07-31T00:00:00.000Z';
+    await store.recordSettledOwner('crashy', RECIPIENT, 999, at, at);
+
+    const senderApp = await appFor(undefined, OWNER);
+    const senderRes = await senderApp.inject({ method: 'GET', url: '/api/me/suggestions' });
+    expect(senderRes.json().suggestions).toEqual([]);
+    await senderApp.close();
+
+    const recipientApp = await appFor(undefined, RECIPIENT);
+    const recipientRes = await recipientApp.inject({ method: 'GET', url: '/api/me/suggestions' });
+    expect(recipientRes.json().suggestions.map((s: SuggestionRecord) => s.slug)).toEqual(['crashy']);
+    await recipientApp.close();
   });
 });
 

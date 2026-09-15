@@ -1000,20 +1000,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // GO-02 groundwork: lets a creator find/rotate their own recipient code.
   await registerRecipientCodeRoutes(app, { store });
 
-  // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
-  await registerGameTransferRoutes(app, {
-    store,
-    invalidatePublishedGameCaches: submissionSeams.invalidatePublishedGameCaches,
-  });
-
   // The game page at `/:handle/:slug` — one aggregate read per game.
-  await registerGamePageRoutes(app, {
+  const gamePageRoute = await registerGamePageRoutes(app, {
     store,
     gamesStore,
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
     githubClient: submissionSeams.githubClient ?? undefined,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     ...options.gamePageRoutes,
+  });
+
+  // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
+  await registerGameTransferRoutes(app, {
+    store,
+    invalidatePublishedGameCaches: (slug) => {
+      submissionSeams.invalidatePublishedGameCaches(slug);
+      gamePageRoute.invalidateGameCache(slug);
+    },
   });
 
   // Following a game: a subscription rather than a bookmark. The count is public,
