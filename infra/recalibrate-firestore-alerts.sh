@@ -233,8 +233,18 @@ node -e '
     }
     let best = 0;
     let run = 0;
-    for (const [, value] of series) {
-      run = Number(value) > threshold ? run + 1 : 0;
+    let previous = null;
+    for (const [when, value] of series) {
+      const at = Date.parse(when);
+      // Monitoring omits aligned intervals it has no data for, so adjacent entries
+      // are not adjacent in time. Two bursts either side of a quiet gap are two runs.
+      const contiguous = previous !== null && at - previous <= ALIGNMENT_SECONDS * 1000;
+      previous = at;
+      if (Number(value) <= threshold) {
+        run = 0;
+        continue;
+      }
+      run = contiguous ? run + 1 : 1;
       if (run > best) best = run;
     }
     return best * ALIGNMENT_SECONDS;

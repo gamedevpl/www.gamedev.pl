@@ -4,6 +4,7 @@ import {
   DAILY_AGGREGATE_VERSION,
   downsample,
   mergeDailyAggregates,
+  MAX_DOCUMENT_BYTES,
   MAX_GAMES_PER_DAY,
   MAX_SAMPLE_VALUES_PER_DAY,
   readDailyWindow,
@@ -234,6 +235,32 @@ describe('buildDailyAggregate', () => {
     expect(aggregate.games).toHaveLength(MAX_GAMES_PER_DAY);
     expect(aggregate.gamesTruncated).toBe(true);
     expect(aggregate.games[0]?.sessions).toBe(3);
+  });
+
+  it('stays inside the document ceiling when every game errors at full length', () => {
+    // 200 chars is the write path's own cap on a message.
+
+    // Unbudgeted, this shape serializes to 1.23 MB.
+    const events: TelemetryEvent[] = [];
+    for (let game = 0; game < 140; game++) {
+      for (let distinct = 0; distinct < 32; distinct++) {
+        events.push({
+          slug: `game-${game}`,
+          sessionId: `g${game}-e${distinct}`,
+          type: 'error',
+          at: at('2026-09-13', distinct),
+          msSinceOpen: 1_000,
+          message: `${game}-${distinct}-`.padEnd(200, 'x'),
+        });
+      }
+      events.push(...session('2026-09-13', `game-${game}`, `g${game}-p`, { seconds: 5, frames: [60] }));
+    }
+    const aggregate = buildDailyAggregate('2026-09-13', events, meta);
+
+    expect(Buffer.byteLength(JSON.stringify(aggregate))).toBeLessThanOrEqual(MAX_DOCUMENT_BYTES);
+    // Shrinking depth came before dropping a game.
+    expect(aggregate.games).toHaveLength(140);
+    expect(aggregate.gamesTruncated).toBe(false);
   });
 
   it('keeps errors and labels deeper than the window reports them', () => {

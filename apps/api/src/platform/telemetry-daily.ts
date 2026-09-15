@@ -24,6 +24,17 @@ const MIN_SAMPLES_PER_METRIC = 16;
 // A ceiling on games, well past any day this catalog has had.
 export const MAX_GAMES_PER_DAY = 400;
 
+// Tally rows per game, against the 5 and 8 reported.
+export const MAX_TALLY_ROWS_PER_GAME = 32;
+
+// The floor: below this the window can no longer rerank at all.
+const MIN_TALLY_ROWS_PER_GAME = 8;
+
+// What the whole serialized day may weigh, against Firestore's 1 MiB.
+
+// An error message is capped at 200 chars, so tallies outweigh samples.
+export const MAX_DOCUMENT_BYTES = 700_000;
+
 export interface SampleSet {
   // The day's real value count, which is their weight.
   count: number;
@@ -71,7 +82,7 @@ export function downsample(values: number[], max: number = MAX_SAMPLES_PER_METRI
   return { count: sorted.length, values: picked };
 }
 
-function toGameAggregate(detail: GameHealthDetail, perMetric: number): DailyGameAggregate {
+function toGameAggregate(detail: GameHealthDetail, perMetric: number, tallyRows: number): DailyGameAggregate {
   const {
     samples,
     medianPlaySeconds: _p,
@@ -86,8 +97,8 @@ function toGameAggregate(detail: GameHealthDetail, perMetric: number): DailyGame
     playSeconds: downsample(samples.playSeconds, perMetric),
     fps: downsample(samples.fps, perMetric),
     bestScores: downsample(samples.bestScores, perMetric),
-    errorTally: samples.errorTally,
-    labelTally: samples.labelTally,
+    errorTally: samples.errorTally.slice(0, tallyRows),
+    labelTally: samples.labelTally.slice(0, tallyRows),
   };
 }
 
@@ -100,6 +111,37 @@ export function samplesPerMetric(games: number): number {
   return Math.max(MIN_SAMPLES_PER_METRIC, Math.min(MAX_SAMPLES_PER_METRIC, share));
 }
 
+// Tally rows cost far more bytes than sample values do.
+
+// So rerank range shrinks first, then depth, and a game goes last.
+export function fitWithinDocument(ranked: GameHealthDetail[]): {
+  games: DailyGameAggregate[];
+  gamesTruncated: boolean;
+} {
+  let keep = Math.min(ranked.length, MAX_GAMES_PER_DAY);
+  let perMetric = samplesPerMetric(keep);
+  let tallyRows = MAX_TALLY_ROWS_PER_GAME;
+  const shape = () => ranked.slice(0, keep).map((detail) => toGameAggregate(detail, perMetric, tallyRows));
+
+  let games = shape();
+  // Bounded: each pass either halves a budget or drops games proportionally.
+  for (let pass = 0; pass < 32; pass++) {
+    const bytes = Buffer.byteLength(JSON.stringify(games));
+    if (bytes <= MAX_DOCUMENT_BYTES) break;
+    if (tallyRows > MIN_TALLY_ROWS_PER_GAME) {
+      tallyRows = Math.max(MIN_TALLY_ROWS_PER_GAME, Math.floor(tallyRows / 2));
+    } else if (perMetric > MIN_SAMPLES_PER_METRIC) {
+      perMetric = Math.max(MIN_SAMPLES_PER_METRIC, Math.floor(perMetric / 2));
+    } else {
+      const fits = Math.floor((keep * MAX_DOCUMENT_BYTES) / bytes);
+      keep = Math.max(1, Math.min(keep - 1, fits));
+    }
+    games = shape();
+  }
+
+  return { games, gamesTruncated: games.length < ranked.length };
+}
+
 export function buildDailyAggregate(
   date: string,
   events: TelemetryEvent[],
@@ -107,16 +149,15 @@ export function buildDailyAggregate(
 ): DailyTelemetryAggregate {
   const rows = summarizeGameHealthDetailed(events);
   const ranked = [...rows].sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
-  const kept = ranked.slice(0, MAX_GAMES_PER_DAY);
-  const perMetric = samplesPerMetric(kept.length);
+  const { games, gamesTruncated } = fitWithinDocument(ranked);
   return {
     date,
     version: DAILY_AGGREGATE_VERSION,
     computedAt: meta.computedAt,
     sealed: meta.sealed,
     truncated: meta.truncated,
-    gamesTruncated: ranked.length > MAX_GAMES_PER_DAY,
-    games: kept.map((detail) => toGameAggregate(detail, perMetric)),
+    gamesTruncated,
+    games,
   };
 }
 
