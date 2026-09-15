@@ -93,8 +93,9 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   // One write at a time, or a flush 409s against the autosave.
   const saveNow = useCallback(
     async (overwrite = false): Promise<boolean> => {
+      // Wait for the write ahead; its verdict is not ours.
       const running = inFlightRef.current;
-      if (running && !(await running)) return false;
+      if (running) await running;
       const attempt = writeDraft(overwrite);
       inFlightRef.current = attempt;
       try {
