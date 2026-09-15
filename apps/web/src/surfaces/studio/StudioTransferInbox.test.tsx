@@ -219,12 +219,22 @@ describe('StudioTransferInbox', () => {
     await act(async () => root.unmount());
   });
 
-  it('asks the shelf to open itself when an invitation is waiting', async () => {
+  it('asks the shelf to open itself when the invitation would go unread', async () => {
     vi.stubGlobal('fetch', routed([OFFER]));
     const onOffersPresent = vi.fn();
     const { root } = await mount(undefined, { visible: false, onOffersPresent });
 
     expect(onOffersPresent).toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it('leaves a shelf that already shows the offer alone', async () => {
+    // Forcing it open there costs the reader a collapse click.
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const onOffersPresent = vi.fn();
+    const { root } = await mount(undefined, { visible: true, onOffersPresent });
+
+    expect(onOffersPresent).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 });

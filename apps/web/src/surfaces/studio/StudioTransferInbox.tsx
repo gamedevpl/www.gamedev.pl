@@ -72,8 +72,9 @@ export function StudioTransferInbox({
   // An unseen invitation is what the notification exists to fix.
   const offered = pending.length > 0;
   useEffect(() => {
-    if (offered) onOffersPresent?.();
-  }, [offered, onOffersPresent]);
+    // Only when hidden; forcing an open shelf costs a click.
+    if (offered && !visible) onOffersPresent?.();
+  }, [offered, visible, onOffersPresent]);
 
   // Shown means shown; a hidden render inflates the denominator.
   useEffect(() => {
