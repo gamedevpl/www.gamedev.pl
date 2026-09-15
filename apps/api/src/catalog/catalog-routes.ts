@@ -305,8 +305,8 @@ export async function registerCatalogRoutes(
         const access = await resolveGameAccess(store, record.slug);
         const owner = access.owner.kind === 'creator' ? await store.getUser(access.owner.uid) : null;
         const profile = owner ? toPublicCreatorProfile(owner) : null;
-        // A canonical platform owner must not fall back to SPEC's byline.
-        const platformOwned = access.source === 'canonical' && access.owner.kind === 'platform';
+        // No canonical handle, or platform owned: never use the SPEC byline.
+        const noAttribution = access.source === 'canonical' && (access.owner.kind === 'platform' || !profile);
         const contributors: string[] = [];
         try {
           const manifest = await gamesStore.getManifest(record.slug, record.currentVersion);
@@ -321,8 +321,8 @@ export async function registerCatalogRoutes(
         entries.push({
           ...entry,
           status: 'published',
-          submittedBy: platformOwned ? 'gamedev-platform' : profile ? profileBylineName(profile) : entry.submittedBy,
-          creatorHandle: platformOwned ? null : (profile?.handle ?? null),
+          submittedBy: noAttribution ? 'gamedev-platform' : profile ? profileBylineName(profile) : entry.submittedBy,
+          creatorHandle: noAttribution ? null : (profile?.handle ?? null),
           ...(contributors.length > 0 ? { contributorHandles: contributors } : {}),
         });
       }

@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { membersOf, type GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
@@ -81,6 +81,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private hasActiveCheckoutRecovery: (slug: string, now: number) => Promise<boolean> = () => Promise.resolve(false),
     // Stale sender lock: retire it for a fresh one next time.
     private retireGameAgentKey: (slug: string) => void = () => {},
+    // The recipient never opted into the sender's autonomy consent.
+    private resetGameAutonomy: (slug: string) => void = () => {},
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -134,6 +136,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
 
     this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
     this.retireGameAgentKey(slug);
+    this.resetGameAutonomy(slug);
     const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
     this.transfers.set(slug, accepted);
     return clone(accepted);
@@ -282,6 +285,8 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       tx.set(accessRef, transferredAccess(access, recipientUid, at));
       // Stale sender lock: retire it for a fresh one next time.
       if (agentKeySnap.exists) tx.delete(agentKeyRef);
+      // The recipient never opted into the sender's autonomy consent.
+      if (gameSnap.data()?.autonomy !== undefined) tx.update(gameRef, { autonomy: FieldValue.delete() });
       const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
       tx.set(ref, accepted);
       return accepted;

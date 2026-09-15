@@ -214,6 +214,18 @@ describe('acceptGameTransferInvitation', () => {
     expect(await store.ensureGameAgentKey('sky', 'g:grace', LATER)).toMatchObject({ ownerUid: 'g:grace' });
   });
 
+  it('resets autonomy consent so the recipient inherits no standing consent', async () => {
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.setGameAutonomy('sky', 'auto-fix-defects');
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+
+    expect(await store.getGameAutonomy('sky')).toBeNull();
+  });
+
   it('is idempotent: accepting twice returns the same accepted invitation', async () => {
     const store = new InMemoryStore();
     await ownedGame(store, 'sky', 'g:ada');

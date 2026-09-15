@@ -1125,6 +1125,17 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     });
   });
 
+  it('resets autonomy consent so the recipient inherits no standing consent', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await pendingInvite(store);
+    await store.setGameAutonomy('sky', 'auto-fix-defects');
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+
+    expect(await store.getGameAutonomy('sky')).toBeNull();
+  });
+
   it('is idempotent: accepting twice returns the same accepted invitation', async () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);

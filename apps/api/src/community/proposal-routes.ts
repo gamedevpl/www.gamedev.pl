@@ -177,10 +177,10 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     return reply.send({ proposals: records.map(toPublicProposal) });
   });
 
-  // visibleToReviewer trusts the stale targetOwnerUid; recheck the current owner too.
+  // targetOwnerUid is denormalised and stale after a transfer; always re-resolve.
   async function canSeeAsReviewer(record: ProposalRecord, uid: string, isOperator: boolean): Promise<boolean> {
-    if (visibleToReviewer(record, uid, isOperator)) return true;
-    if (isOperator || !isReviewerVisible(record.state)) return false;
+    if (!isReviewerVisible(record.state)) return false;
+    if (record.targetOwnerUid === null) return isOperator;
     const owner = await resolveOwnerOfRecord(store, record.targetSlug);
     return owner.kind === 'creator' && owner.uid === uid;
   }
@@ -262,18 +262,16 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
       }),
     );
     const kept = stored.filter((_, i) => stillOwned[i]);
-    const keptSlugs = new Set(kept.map((record) => record.targetSlug));
 
+    // Every canonically owned slug: a slug can carry more than one proposal.
     const memberAccess = await store.listGameAccessByMember(uid);
-    const missingSlugs = memberAccess
-      .filter((access) => access.ownerUid === uid && !keptSlugs.has(access.slug))
-      .map((access) => access.slug);
-    const transferredIn = (
-      await Promise.all(missingSlugs.map((slug) => store.listProposals({ targetSlug: slug })))
-    ).flat();
+    const canonicalSlugs = memberAccess.filter((access) => access.ownerUid === uid).map((access) => access.slug);
+    const bySlug = (await Promise.all(canonicalSlugs.map((slug) => store.listProposals({ targetSlug: slug })))).flat();
 
-    const records = [...kept, ...transferredIn];
-    const visible = records.filter((record) => isReviewerVisible(record.state));
+    const byId = new Map(kept.map((record) => [record.id, record]));
+    for (const record of bySlug) byId.set(record.id, record);
+
+    const visible = [...byId.values()].filter((record) => isReviewerVisible(record.state));
     return reply.send({ proposals: visible.map(toPublicProposal) });
   });
 

@@ -94,6 +94,36 @@ it('opens an improvement from a published base after its newer round was cancele
   }
 });
 
+it('lets the recipient open the first improvement round after a transfer', async () => {
+  const at = '2026-01-01T00:00:00.000Z';
+  const store = new InMemoryStore();
+  await store.upsertUser({ uid: 'g:sender' });
+  await store.upsertUser({ uid: 'g:recipient' });
+  await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+  await store.setSubmissionSlug(10, 'sky-dodge');
+  await store.recordJobTransition(10, { to: 'published', at, by: 'operator' });
+  await store.createGameTransferInvitation('sky-dodge', 'g:sender', 'g:recipient', 1, at);
+  await store.acceptGameTransferInvitation('sky-dodge', 'g:recipient', at);
+
+  const app = Fastify();
+  const routes = await registerSubmissionRoutes(app, { store, submissionTokenSecret: 'test-secret' });
+  try {
+    const result = await routes.startImprovementRound({
+      jobId: 10,
+      text: 'Improve the sky',
+      locale: 'en',
+      builder: 'self',
+      ownerUid: 'g:recipient',
+      log: app.log,
+    });
+    expect(result?.route).toBe('job');
+    if (result?.route !== 'job') throw new Error('round missing');
+    expect((await store.getSubmission(result.jobId))?.ownerUid).toBe('g:recipient');
+  } finally {
+    await app.close();
+  }
+});
+
 it('refuses to open a round once canonical ownership moved to someone else', async () => {
   const at = '2026-01-01T00:00:00.000Z';
   const store = new InMemoryStore();

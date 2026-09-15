@@ -461,6 +461,40 @@ describe('editor draft routes', () => {
     }
   });
 
+  it('keeps the checkout-recovery lease through the job’s active-state transition', async () => {
+    const { app } = await createApp();
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: { gardens: [{ properties: { name: 'Mine' }, rows: ['########', '#..@..*#', '########'] }] } },
+    });
+    await store.upsertUser({ uid: 'g:recipient' });
+    const at = '2026-01-01T00:00:00.000Z';
+    await store.ensureGameAccess('garden-gather', 'g:alice', at, at);
+    await store.createGameTransferInvitation('garden-gather', 'g:alice', 'g:recipient', 1, at);
+
+    const originalSetSlug = store.setSubmissionSlug.bind(store);
+    let acceptDuringWindow: unknown;
+    const spy = vi.spyOn(store, 'setSubmissionSlug').mockImplementationOnce(async (...args) => {
+      const result = await originalSetSlug(...args);
+      // The window this fix closes: slug bound, active state not yet recorded.
+      acceptDuringWindow = await store.acceptGameTransferInvitation('garden-gather', 'g:recipient', at);
+      return result;
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/me/games/garden-gather/editor/publish',
+        headers: authHeaders('g:alice'),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(acceptDuringWindow).toBe('busy');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('409s a publish with no draft', async () => {
     const { app } = await createApp();
     const response = await app.inject({

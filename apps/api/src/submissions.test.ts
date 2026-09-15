@@ -5635,6 +5635,38 @@ describe('games published from the store rather than the repo', () => {
     await app.close();
   });
 
+  it('deattributes the catalog card when the recipient has no claimed handle yet', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
+    await store.createSubmission(123, 'g:test-user', 'Comet Courier');
+    await store.setSubmissionSlug(123, 'comet-courier');
+    await store.setSubmissionPublishedAt(123, '2026-07-30T12:00:00Z');
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.ensureGameAccess(
+      'comet-courier',
+      'g:test-user',
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+    await store.recordSettledOwner(
+      'comet-courier',
+      'g:recipient',
+      999,
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    );
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    // Never the sender's ('Ada Lovelace') SPEC-baked attribution.
+    expect(response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier')).toMatchObject({
+      submittedBy: 'gamedev-platform',
+      creatorHandle: null,
+    });
+
+    await app.close();
+  });
+
   it('deattributes a transferred game whose recipient deletes without publishing', async () => {
     const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
     await store.createSubmission(123, 'g:test-user', 'Comet Courier');

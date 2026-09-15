@@ -634,6 +634,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         });
       }
       let jobId: number;
+      const at = () => new Date(now()).toISOString();
       try {
         const access = await resolveGameAccess(store, slug);
         if (access.source === 'canonical' && !ownsGame(access, request.user!.uid)) {
@@ -646,12 +647,12 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         await store.createSubmission(jobId, request.user!.uid, source.title);
         if (source.locale) await store.setSubmissionLocale(jobId, source.locale);
         await store.setSubmissionSlug(jobId, slug, nonce);
+        // Lease held until the job is itself an active round.
+        await store.recordJobTransition(jobId, { to: 'queued', at: at(), by: 'creator', reason: 'content_edit' });
+        await store.recordJobTransition(jobId, { to: 'building', at: at(), by: 'creator', reason: 'content_edit' });
       } finally {
         await store.finishCheckoutRecovery(slug, nonce).catch(() => {});
       }
-      const at = () => new Date(now()).toISOString();
-      await store.recordJobTransition(jobId, { to: 'queued', at: at(), by: 'creator', reason: 'content_edit' });
-      await store.recordJobTransition(jobId, { to: 'building', at: at(), by: 'creator', reason: 'content_edit' });
 
       let version: string;
       try {

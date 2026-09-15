@@ -121,6 +121,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug) => [...this.submissions.values()].some((record) => record.slug === slug && isActiveBuildRound(record)),
     (slug, now) => this.submissionStore.hasActiveCheckoutRecovery(slug, now),
     (slug) => this.gameAdmissionStore.gameAgentKeys.delete(slug),
+    (slug) => this.contributionStore.gameAutonomy.delete(slug),
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
