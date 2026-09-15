@@ -135,8 +135,14 @@ export function EditorPanel(props: {
   const [controllerDisabled, setControllerDisabled] = useState(false);
   // The creator chooses; no controller message overrules it.
   const [standardPreferred, setStandardPreferred] = useState(false);
-  const controllerOffered = Boolean(props.controller?.status === 'ready' && props.controller.view);
-  const controllerActive = controllerOffered && !controllerDisabled && !standardPreferred;
+  const controllerOffered = Boolean(
+    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
+  );
+  const controllerActive = controllerOffered && !standardPreferred;
+  const chooseSurface = (standard: boolean) => {
+    setStandardPreferred(standard);
+    recordEditorStep(standard ? 'standard_surface_chosen' : 'controller_surface_restored');
+  };
   const lastControllerChangeRef = useRef<string | null>(null);
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
@@ -583,8 +589,10 @@ export function EditorPanel(props: {
             : [];
         }),
         ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
-        // Guarded: a dead controller's stale checks must not strand Publish.
-        ...(controllerActive && props.controller?.checks?.ok === false ? [t('studioPanel.editor.checksFromGame')] : []),
+        // A live controller's checks gate Publish whichever surface is shown.
+        ...(controllerOffered && props.controller?.checks?.ok === false
+          ? [t('studioPanel.editor.checksFromGame')]
+          : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
@@ -685,8 +693,8 @@ export function EditorPanel(props: {
           {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
         </div>
       ) : null}
-      {controllerOffered && !controllerDisabled ? (
-        <button type="button" className="editor-surface-switch" onClick={() => setStandardPreferred((on) => !on)}>
+      {controllerOffered ? (
+        <button type="button" className="editor-surface-switch" onClick={() => chooseSurface(!standardPreferred)}>
           {t(standardPreferred ? 'studioPanel.editor.useGameEditor' : 'studioPanel.editor.useStandardEditor')}
         </button>
       ) : null}

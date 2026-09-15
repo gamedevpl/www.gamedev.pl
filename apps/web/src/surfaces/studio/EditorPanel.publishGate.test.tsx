@@ -120,6 +120,19 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     expect(publishButton().disabled).toBe(false);
   });
 
+  it("keeps the game's own checks gating Publish after the creator takes the standard editor", async () => {
+    await renderWithController(controllerState({ checks: { ok: false, problems: ['Needs at least one exit'] } }));
+    expect(publishButton().disabled).toBe(true);
+
+    const toStandard = container.querySelector<HTMLButtonElement>('.editor-surface-switch');
+    expect(toStandard).not.toBeNull();
+    await act(async () => toStandard!.click());
+
+    // The controller is still live, so it still refuses.
+    expect(publishButton().disabled).toBe(true);
+    expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
+  });
+
   it('never strands Publish on a controller that failed — degrade, never break', async () => {
     // Stale checks from a dead controller must not lock Publish.
     await renderWithController(

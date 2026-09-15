@@ -282,6 +282,8 @@ describe('summarizeVisitFunnel', () => {
       { step: 'tool_used', visits: 0 },
       { step: 'undo_used', visits: 0 },
       { step: 'selection_from_game', visits: 0 },
+      { step: 'standard_surface_chosen', visits: 0 },
+      { step: 'controller_surface_restored', visits: 0 },
     ]);
   });
 

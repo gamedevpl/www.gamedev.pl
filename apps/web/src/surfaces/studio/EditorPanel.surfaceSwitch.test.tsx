@@ -16,7 +16,8 @@ vi.mock('../../studioApi.js', async () => {
   return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent };
 });
 
-vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
+const recordEditorStep = vi.hoisted(() => vi.fn());
+vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep }));
 
 import { EditorPanel } from './EditorPanel.js';
 
@@ -128,6 +129,17 @@ describe('a game driving the editor surface never strands the creator', () => {
     expect(board?.dataset.layerKey).toBe('terrain');
     expect(board!.querySelectorAll('.editor-cell').length).toBe(12);
     expect(switchButton()?.textContent).toBe(i18n.t('studioPanel.editor.useGameEditor'));
+  });
+
+  it('records both directions, so an abandoned controller surface is visible in the funnel', async () => {
+    await renderWithController(controllerState());
+    recordEditorStep.mockClear();
+
+    await act(async () => switchButton()!.click());
+    expect(recordEditorStep).toHaveBeenCalledWith('standard_surface_chosen');
+
+    await act(async () => switchButton()!.click());
+    expect(recordEditorStep).toHaveBeenCalledWith('controller_surface_restored');
   });
 
   it('keeps the creator on the standard editor when the controller sends a fresh view', async () => {
