@@ -26,6 +26,7 @@ export function AdminEditorialOverrideDialog({
       reasonValue={reason}
       onReasonChange={setReason}
       reasonRequired
+      reasonMaxLength={500}
       onConfirm={() => onConfirm(reason.trim())}
       onDismiss={onDismiss}
     />

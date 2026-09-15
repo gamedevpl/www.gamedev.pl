@@ -1,6 +1,12 @@
+import { z } from 'zod';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { BOT_UID_PREFIX } from '../platform/store.js';
 
 export type EditorialPublishDecision = 'blocked' | 'pending' | 'clear';
+
+export const MAX_OVERRIDE_REASON = 500;
+
+const OverrideReasonSchema = z.string().trim().max(MAX_OVERRIDE_REASON);
 
 export interface EditorialPublishCounts {
   decision: EditorialPublishDecision;
@@ -12,7 +18,7 @@ export interface EditorialPublishCounts {
 }
 
 export type EditorialPublishResult =
-  | { status: 400; body: { error: 'reason_required' } }
+  | { status: 400; body: { error: 'reason_required' | 'reason_too_long' } }
   | {
       status: 409;
       body: {
@@ -28,12 +34,20 @@ export type EditorialPublishResult =
 
 export function readPublishOverride(
   body: unknown,
-): { override: boolean; reason: string } | { error: 'reason_required' } {
+): { override: boolean; reason: string } | { error: 'reason_required' | 'reason_too_long' } {
   const raw = body && typeof body === 'object' ? (body as { override?: unknown; overrideReason?: unknown }) : {};
   const override = raw.override === true;
-  const reason = typeof raw.overrideReason === 'string' ? raw.overrideReason.trim() : '';
-  if (override && !reason) return { error: 'reason_required' };
-  return { override, reason };
+  if (!override) return { override: false, reason: '' };
+  if (typeof raw.overrideReason !== 'string') return { error: 'reason_required' };
+  const parsed = OverrideReasonSchema.safeParse(raw.overrideReason);
+  if (!parsed.success) {
+    return parsed.error.issues.some((issue) => issue.code === 'too_big')
+      ? { error: 'reason_too_long' }
+      : { error: 'reason_required' };
+  }
+  const reason = sanitizeCreatorText(parsed.data, { singleLine: true });
+  if (!reason) return { error: 'reason_required' };
+  return { override: true, reason };
 }
 
 export async function resolveEditorialPublish(opts: {
@@ -43,7 +57,7 @@ export async function resolveEditorialPublish(opts: {
   body: unknown;
 }): Promise<EditorialPublishResult> {
   const parsed = readPublishOverride(opts.body);
-  if ('error' in parsed) return { status: 400, body: { error: 'reason_required' } };
+  if ('error' in parsed) return { status: 400, body: { error: parsed.error } };
   // Policy at composition root, not a route invariant.
   if (!opts.editorialClearance || opts.ownerUid.startsWith(BOT_UID_PREFIX)) {
     return { reason: 'approved' };

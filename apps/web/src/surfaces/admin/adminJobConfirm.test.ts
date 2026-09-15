@@ -16,6 +16,7 @@ describe('publishRefusalCopy', () => {
     expect(publishRefusalCopy('editorial_pending', { ...counts, reviewers: 0, cut: 0 })).toContain(
       'no reviewer has cleared this game yet',
     );
+    expect(publishRefusalCopy('reason_too_long')).toContain('too long');
   });
 });
 

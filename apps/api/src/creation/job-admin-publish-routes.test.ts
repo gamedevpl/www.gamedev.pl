@@ -321,6 +321,23 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     await app.close();
   });
 
+  it('refuses an override whose reason exceeds the stored cap', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }), { clearance: 'pending' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: { ...adminHeaders, 'content-type': 'application/json' },
+      payload: { override: true, overrideReason: 'x'.repeat(501) },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'reason_too_long' });
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
+  });
+
   it('publishes on override and records which clearance was bypassed', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }), { clearance: 'cut' });
 

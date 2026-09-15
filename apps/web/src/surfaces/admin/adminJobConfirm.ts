@@ -58,6 +58,7 @@ export function publishRefusalCopy(code: PublishRefusal, counts?: EditorialCount
     editorial_cut: `reviewers cut this game (${formatEditorialCounts(counts)})`,
     editorial_pending: `no reviewer has cleared this game yet (${formatEditorialCounts(counts)})`,
     reason_required: 'an override needs a written reason',
+    reason_too_long: 'the override reason is too long',
     unknown: 'refused, and the reason was not one this console knows',
   };
   return known[code];

@@ -355,4 +355,67 @@ describe('AdminJobsPanel confirmations', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('names an editorial batch refusal and requires a reason to override', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(
+      queue([
+        job({ jobId: 10, title: 'Comet Courier', slug: 'comet-courier' }),
+        job({ jobId: 11, title: 'Sky Dodge', slug: 'sky-dodge' }),
+      ]),
+    );
+    mocked.publishJob
+      .mockResolvedValueOnce({
+        refused: 'editorial_pending',
+        editorial: { reviewers: 0, keep: 0, cut: 0, skip: 0, weakOrBad: {} },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        slug: 'sky-dodge',
+        version: 'v1',
+        publishedAt: '2026-07-30T12:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        slug: 'comet-courier',
+        version: 'v1',
+        publishedAt: '2026-07-30T12:00:00Z',
+      });
+
+    const { container, root } = await render();
+    await act(async () => {
+      (container.querySelector('.admin-bulk-publish-cta') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      confirmDialogButton('Publish 2').click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.admin-batch-progress')?.textContent).toContain('Comet Courier');
+    expect(container.querySelector('.admin-batch-progress')?.textContent).toContain(
+      'no reviewer has cleared this game yet',
+    );
+    expect(confirmDialog()?.textContent).toMatch(/Publish with no reviewer keep/i);
+    expect(confirmDialogButton('Override and publish').disabled).toBe(true);
+
+    const textarea = confirmDialog()?.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'reviewers are offline');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      confirmDialogButton('Override and publish').click();
+      await Promise.resolve();
+    });
+    expect(mocked.publishJob).toHaveBeenLastCalledWith(10, {
+      override: true,
+      overrideReason: 'reviewers are offline',
+    });
+
+    await act(async () => root.unmount());
+  });
 });

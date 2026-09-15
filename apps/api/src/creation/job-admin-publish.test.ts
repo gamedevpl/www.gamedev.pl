@@ -37,6 +37,16 @@ describe('readPublishOverride', () => {
     expect(readPublishOverride({ override: true })).toEqual({ error: 'reason_required' });
     expect(readPublishOverride({ override: true, overrideReason: '   ' })).toEqual({ error: 'reason_required' });
   });
+
+  it('sanitizes and bounds an override reason before it can be stored', () => {
+    expect(readPublishOverride({ override: true, overrideReason: '**still** the call' })).toEqual({
+      override: true,
+      reason: 'still the call',
+    });
+    expect(readPublishOverride({ override: true, overrideReason: 'x'.repeat(501) })).toEqual({
+      error: 'reason_too_long',
+    });
+  });
 });
 
 describe('resolveEditorialPublish', () => {

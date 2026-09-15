@@ -69,6 +69,7 @@ export type PublishRefusal =
   | 'editorial_cut'
   | 'editorial_pending'
   | 'reason_required'
+  | 'reason_too_long'
   | 'unknown';
 
 export interface EditorialCounts {
@@ -101,6 +102,7 @@ export async function publishJob(
     'editorial_cut',
     'editorial_pending',
     'reason_required',
+    'reason_too_long',
   ];
   const refused = known.find((code) => code === payload.error) ?? 'unknown';
   const editorial =

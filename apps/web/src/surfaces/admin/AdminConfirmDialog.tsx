@@ -18,6 +18,7 @@ export function AdminConfirmDialog({
   reasonValue,
   onReasonChange,
   reasonRequired = false,
+  reasonMaxLength,
   onConfirm,
   onDismiss,
 }: {
@@ -32,6 +33,7 @@ export function AdminConfirmDialog({
   reasonValue?: string;
   onReasonChange?: (value: string) => void;
   reasonRequired?: boolean;
+  reasonMaxLength?: number;
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
@@ -120,6 +122,7 @@ export function AdminConfirmDialog({
               onChange={(event) => onReasonChange?.(event.target.value)}
               disabled={busy}
               required={reasonRequired}
+              maxLength={reasonMaxLength}
             />
           </label>
         ) : null}
