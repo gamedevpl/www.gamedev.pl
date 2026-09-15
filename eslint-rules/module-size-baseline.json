@@ -756,7 +756,7 @@
     "apps/web/src/surfaces/admin/AdminConsole.test.tsx": 256,
     "apps/web/src/surfaces/admin/AdminConsole.tsx": 278,
     "apps/web/src/surfaces/admin/AdminJobPreviewModal.tsx": 136,
-    "apps/web/src/surfaces/admin/adminJobsApi.ts": 206,
+    "apps/web/src/surfaces/admin/adminJobsApi.ts": 241,
     "apps/web/src/surfaces/admin/AdminJobsPanel.test.tsx": 581,
     "apps/web/src/surfaces/admin/AdminJobsPanel.tsx": 847,
     "apps/web/src/surfaces/admin/CostsPanel.test.tsx": 304,

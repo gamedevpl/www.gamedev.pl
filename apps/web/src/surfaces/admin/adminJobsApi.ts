@@ -45,13 +45,6 @@ export async function fetchJobQueue(): Promise<JobQueueResponse | null> {
   return (await response.json()) as JobQueueResponse;
 }
 
-export interface PublishResult {
-  ok: true;
-  slug: string;
-  version: string;
-  publishedAt: string;
-}
-
 /**
  * Why a publish was refused, in the API's own vocabulary.
  *
@@ -60,26 +53,13 @@ export interface PublishResult {
  * `nothing_delivered` is "this build never uploaded anything". A single "could not
  * publish" would collapse three different next steps into one shrug.
  */
-export type PublishRefusal =
-  'gate_red' | 'not_gated' | 'nothing_delivered' | 'profile_required' | 'store_unavailable' | 'unknown';
-
-export async function publishJob(jobId: number): Promise<PublishResult | { refused: PublishRefusal }> {
-  const response = await fetch(`/api/admin/jobs/${jobId}/publish`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-  if (response.ok) return (await response.json()) as PublishResult;
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
-  const known: PublishRefusal[] = [
-    'gate_red',
-    'not_gated',
-    'nothing_delivered',
-    'profile_required',
-    'store_unavailable',
-  ];
-  const refusal = known.find((code) => code === body.error) ?? 'unknown';
-  return { refused: refusal };
-}
+export {
+  publishJob,
+  type EditorialCounts,
+  type PublishOutcome,
+  type PublishRefusal,
+  type PublishResult,
+} from './adminPublishApi.js';
 
 export interface CancelResult {
   ok: true;
