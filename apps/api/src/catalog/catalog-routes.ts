@@ -16,6 +16,7 @@ import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-p
 import { isVariantWidth } from '../platform/image-variants.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { sendMedia } from '../platform/media-response.js';
+import { chooseMediaObject } from './media-object-choice.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
@@ -424,10 +425,8 @@ export async function registerCatalogRoutes(
         allowedFiles.has(parsedParams.data.filename) &&
         snapshotReader?.getMediaObjectName
       ) {
-        const objectName =
-          (variantWidth !== undefined
-            ? await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename, variantWidth)
-            : null) ?? (await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename));
+        const { slug, filename } = parsedParams.data;
+        const objectName = await chooseMediaObject(snapshotReader, slug, filename, variantWidth);
         if (
           objectName &&
           (await redirectToSignedMedia(request, reply, mediaUrlSigner, objectName, parsedParams.data.filename))

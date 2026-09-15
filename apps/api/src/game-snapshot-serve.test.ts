@@ -494,6 +494,48 @@ describe('serving media straight from Cloud Storage', () => {
     await app.close();
   });
 
+  // WebP is far smaller on real screenshots; see bake-media.ts.
+  it('redirects to the WebP copy when the snapshot has one', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: {
+        'bubble-pop/w96/opening.png': Buffer.from('thumb'),
+        'bubble-pop/w96/opening.webp': Buffer.from('thumb-webp'),
+        'bubble-pop/opening.png': Buffer.from('full'),
+      },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.headers.location).toBe('https://signed/snapshots/s1/media/bubble-pop/w96/opening.webp');
+    await app.close();
+  });
+
+  // Snapshots baked before WebP hold only the PNG.
+  it('still redirects to the PNG when no WebP was baked', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/w96/opening.png': Buffer.from('thumb') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.headers.location).toBe('https://signed/snapshots/s1/media/bubble-pop/w96/opening.png');
+    await app.close();
+  });
+
   it('redirects to the baked variant when one is asked for', async () => {
     const { githubClient } = createGithubStub([withSignedMedia]);
     const snapshot = createSnapshotStub({
