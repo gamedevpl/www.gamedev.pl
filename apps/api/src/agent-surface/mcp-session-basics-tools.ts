@@ -250,10 +250,10 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         'there is no send_screenshot tool. The PUT validates ≤700 KB decoded PNG and returns stop/pendingMessages. ' +
         'With a shell, produce the PNG from headless Chromium: ' +
         'chromium.launch({args:["--use-gl=angle","--use-angle=swiftshader-webgl","--enable-unsafe-swiftshader","--enable-webgl","--ignore-gpu-blocklist"]}) ' +
-        '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). Wait for the first rendered frame, ' +
-        'capture canvas.toDataURL("image/png") — a page screenshot of WebGL is often black. ' +
+        '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). ' +
+        'Capture canvas.toDataURL("image/png") inside the same render callback (or preserveDrawingBuffer:true); after compositing the default buffer is gone. page.screenshot()/CDP compositor also works. ' +
         'If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). ' +
-        'Without a shell or browser, skip this tool: deliver mode=preview and read frames via get_gate_media — that is the happy path. ' +
+        'Without a shell or browser, skip this tool: deliver mode=preview, end, and get_gate_media in a later/resumed run once a preview verdict is already available — that is the happy path. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',

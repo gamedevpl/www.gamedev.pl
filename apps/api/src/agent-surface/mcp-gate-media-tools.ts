@@ -267,7 +267,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         'Fetch the media the gate itself produced for a delivery (default: latest). Screenshots come back ' +
         'BOTH as attached images (no fetching needed — use these) and as short-lived signed URLs; the ' +
         'gameplay MP4 is a URL only. ' +
-        'Without a shell or browser, deliver mode=preview then call this — that is how you see the game. ' +
+        'Without a shell or browser, call this only in a later/resumed run once a preview verdict is already available (after mode=preview) — that is how you see the game. Do not call it immediately after submit_sources: Cloud Build has stored nothing yet, and you must not wait or poll. ' +
         'Use it when you cannot run the game yourself — look at the attached frames for visual defects ' +
         '(blank canvas, missing sprites) before resubmitting, and show them to the creator. ' +
         'frames=opening (default) attaches one frame; frames=all attaches up to 3; frames=none skips them ' +

@@ -29,18 +29,20 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
      describes — then keep building rather than waiting on it
 2. Build; `report_progress`; every game delivery must include an EditorKit declaration (`EDITOR.json` (required compiled contract; `EDITOR.ts` is optional authoring source)) with at least three meaningful tunables or one content collection. If `EDITOR.ts` is present, run `npm run editor:gen -- <slug>` and ship its matching `EDITOR.json`; the gate rejects stale pairs. Keep generated editor content (`EDITOR.content.json` when applicable and `game/editor-content.ts`) in sync and consumed by the game. Screenshot when something draws:
-   - **No shell/browser:** skip mid-build screenshots. Deliver `mode=preview` and
-     read frames via `get_gate_media` — that is the happy path; the gate captures
-     with WebGL flags
+   - **No shell/browser:** skip mid-build screenshots. Deliver `mode=preview` then
+     `end`; `get_gate_media` only in a later/resumed run once a preview verdict is
+     already available — that is the happy path; the gate captures with WebGL flags
    - **With a shell:** launch headless Chromium with `--use-gl=angle
 --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --enable-webgl
 --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150 may need
-     `--use-angle=swiftshader`). Wait for the first rendered canvas frame,
-     capture `canvas.toDataURL('image/png')` (not a page screenshot), keep PNG
-     ≤700 KB, then `screenshot_upload_url` + `curl --upload-file <png> "$url"`.
-     A black frame means those WebGL flags were missing. Fallback:
-     `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d` (force2d). There is **no**
-     base64 `send_screenshot` — PNG bytes must never enter the model
+     `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')` inside
+     the same render callback (or `preserveDrawingBuffer:true`; after compositing
+     the default buffer is gone) — `page.screenshot()`/CDP compositor also works.
+     Keep PNG ≤700 KB, then `screenshot_upload_url` + `curl --upload-file <png>
+"$url"`. A black frame means those WebGL flags were missing or the drawing
+     buffer was discarded. Fallback: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d`
+     (force2d). There is **no** base64 `send_screenshot` — PNG bytes must never
+     enter the model
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
      `curl --upload-file <file> "$url"` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
@@ -424,8 +426,11 @@ literally therefore never reached it: observed as Claude-family clients rarely c
 (owner test, 2026-08-03).
 
 It is now tied to **a verdict already in hand** — a state the loop genuinely reaches —
-and still forbids waiting for one. When editing this loop, keep that property: a step
-gated on a condition the loop is told to avoid is a step that does not exist.
+and still forbids waiting for one. A no-shell agent that just submitted `mode=preview`
+does not hold a verdict yet: `get_gate_media` then returns `available: false`. Call
+`end` and fetch the frames in a later/resumed run. When editing this loop, keep that
+property: a step gated on a condition the loop is told to avoid is a step that does
+not exist.
 
 **Both lanes carry frames** — see [Preview stills](#preview-stills-by-28a--frames-without-a-publish)
 below. That was not true when this section was written: the preview lane was typecheck →
@@ -773,14 +778,20 @@ screenshots and the ffmpeg encode, keeping only the named marks.
 Agents that _do_ have a shell still fail this if they launch plain headless Chrome:
 WebGL canvases come back black without Angle/SwiftShader flags (games-repo
 `tools/lib/webgl-gate.ts` / `tools/capture.ts`). Never add `--disable-gpu`. Capture
-`canvas.toDataURL('image/png')` after the first rendered frame, keep PNG ≤700 KB,
-then `screenshot_upload_url` + `curl --upload-file`. Fallback when SwiftShader is
-unavailable: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d` (force2d).
+`canvas.toDataURL('image/png')` inside the same render callback (or
+`preserveDrawingBuffer:true`; after compositing the default buffer is gone),
+keep PNG ≤700 KB, then `screenshot_upload_url` + `curl --upload-file`.
+`page.screenshot()` / CDP compositor also works — that is the gate's path.
+Fallback when SwiftShader is unavailable: `GAME_CAPTURE_GFX=canvas2d` /
+`?gfx=canvas2d` (force2d).
 
 Agents **without** a shell or browser (ChatGPT) should not attempt a mid-build
-screenshot. Deliver `mode=preview` and read frames via `get_gate_media` — that is
-the documented happy path, not a footnote. There is no `capture_preview` tool;
-preview-lane stills from the existing gate **are** that capture.
+screenshot. Deliver `mode=preview` then `end`; `get_gate_media` only in a
+later/resumed run once a preview verdict is already available — that is the
+documented happy path, not a footnote. Do not call it immediately after
+`submit_sources` (Cloud Build has stored nothing yet; do not wait or poll).
+There is no `capture_preview` tool; preview-lane stills from the existing
+gate **are** that capture.
 
 ### Concept proposals share the shots collection (NP-1v)
 
