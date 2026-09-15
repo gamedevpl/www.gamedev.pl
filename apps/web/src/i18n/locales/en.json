@@ -2170,7 +2170,10 @@
         "rotate": "Could not make a new code.",
         "respond": "That did not work. Try again.",
         "busy": "A build round is running on that game. Try again once it finishes.",
-        "unreachable": "Could not load your invitations."
+        "unreachable": "Could not load your invitations.",
+        "ineligible": "Your account cannot receive games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "gone": "This invitation is no longer available."
       },
       "retry": "Try again"
     }

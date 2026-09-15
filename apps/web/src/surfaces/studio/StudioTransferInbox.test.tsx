@@ -204,4 +204,29 @@ describe('StudioTransferInbox', () => {
     expect(host.querySelector('[data-testid="studio-transfer-retry"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
+
+  it('names each accept refusal from the recipient side', async () => {
+    // The panel's wording is the sender's; here it is not.
+    for (const [code, expected] of [
+      ['recipient_ineligible', 'Your account cannot receive games'],
+      ['stale_owner', 'changed hands'],
+      ['not_found', 'no longer available'],
+    ] as const) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          if (String(url).includes('/recipient-code')) return reply(url, { code: 'MY-CODE' });
+          if (String(url).includes('/transfers/incoming')) return reply(url, { transfers: [OFFER] });
+          return { ok: false, status: 409, json: async () => ({ error: code }) } as unknown as Response;
+        }),
+      );
+      const { host, root } = await mount();
+      await click(host, 'studio-transfer-accept-comet-courier');
+
+      expect(host.querySelector('[data-testid="studio-transfer-inbox-error"]')?.textContent).toContain(expected);
+      await act(async () => root.unmount());
+      document.body.innerHTML = '';
+      vi.unstubAllGlobals();
+    }
+  });
 });

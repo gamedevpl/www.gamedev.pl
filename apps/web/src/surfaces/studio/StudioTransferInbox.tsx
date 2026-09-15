@@ -12,6 +12,14 @@ import {
 
 // Account-level: an offered game is not yours to select yet.
 
+// Answering an invitation can refuse for reasons of its own.
+const RESPOND_REFUSALS: Record<string, string> = {
+  busy: 'studioShelf.transfer.errors.busy',
+  recipient_ineligible: 'studioShelf.transfer.errors.ineligible',
+  stale_owner: 'studioShelf.transfer.errors.staleOwner',
+  not_found: 'studioShelf.transfer.errors.gone',
+};
+
 export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string) => void }): JSX.Element | null {
   const { t } = useTranslation();
   const [code, setCode] = useState<string | null>(null);
@@ -58,7 +66,9 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
       if (decision === 'accept') onAccepted?.(slug);
     } catch (caught) {
       const reason = (caught as TransferApiError)?.code;
-      setError(reason === 'busy' ? t('studioShelf.transfer.errors.busy') : t('studioShelf.transfer.errors.respond'));
+      setError(
+        reason && RESPOND_REFUSALS[reason] ? t(RESPOND_REFUSALS[reason]) : t('studioShelf.transfer.errors.respond'),
+      );
     } finally {
       setBusySlug(null);
     }

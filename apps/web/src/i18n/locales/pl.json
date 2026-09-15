@@ -2184,7 +2184,10 @@
         "rotate": "Nie udało się wygenerować nowego kodu.",
         "respond": "Nie udało się. Spróbuj ponownie.",
         "busy": "Na tej grze trwa runda budowania. Spróbuj, gdy się skończy.",
-        "unreachable": "Nie udało się wczytać zaproszeń."
+        "unreachable": "Nie udało się wczytać zaproszeń.",
+        "ineligible": "Twoje konto nie może teraz przyjmować gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "gone": "To zaproszenie jest już nieaktualne."
       },
       "retry": "Spróbuj ponownie"
     }
