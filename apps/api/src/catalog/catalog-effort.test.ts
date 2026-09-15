@@ -30,6 +30,10 @@ describe('artifact counts', () => {
     expect(countTraceFrames(null)).toBe(0);
   });
 
+  it('prefers parsed.frames when the key sits past the 2 KiB prefix', () => {
+    expect(countTraceFrames(JSON.stringify({ padding: 'x'.repeat(3000), frames: 840, samples: [1, 2, 3] }))).toBe(840);
+  });
+
   it('sums frames, acceptance, playtest steps, and media pngs', () => {
     expect(
       countArtifactRichness({

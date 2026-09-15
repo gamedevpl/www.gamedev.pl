@@ -27,7 +27,12 @@ export function countTraceFrames(raw: string | null | undefined): number {
   if (match) return Number(match[1]);
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { samples?: unknown }).samples)) {
+    if (!parsed || typeof parsed !== 'object') return 0;
+    const frames = (parsed as { frames?: unknown }).frames;
+    if (typeof frames === 'number' && Number.isFinite(frames) && frames >= 0) {
+      return Math.floor(frames);
+    }
+    if (Array.isArray((parsed as { samples?: unknown }).samples)) {
       return (parsed as { samples: unknown[] }).samples.length;
     }
   } catch {
