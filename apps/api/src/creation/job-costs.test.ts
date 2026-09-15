@@ -237,13 +237,13 @@ describe('buildCostReport', () => {
       record({
         jobId: 1,
         costs: [
-          { kind: 'seed', at: ago(10 * MINUTE), by: 'gemini-3.8-flash', tokens: { input: 900_000, output: 9_000 } },
+          { kind: 'seed', at: ago(10 * MINUTE), by: 'muse-spark-1.2', tokens: { input: 900_000, output: 9_000 } },
         ],
       }),
     ]);
 
     expect(report.jobs[0].usd).toBeUndefined();
-    expect(report.unpricedModels).toEqual(['gemini-3.8-flash']);
+    expect(report.unpricedModels).toEqual(['muse-spark-1.2']);
   });
 
   it('carries a session log alongside the per-job totals', () => {
