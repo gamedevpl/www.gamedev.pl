@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryStore } from '../../platform/store.js';
+import { MAX_REVOKED_ROUNDS_PER_TRANSFER } from './game-transfer.js';
+import { revokedRoundGeneration } from '../../creation/job-state.js';
 
 const AT = '2026-01-01T00:00:00.000Z';
 const LATER = '2026-01-02T00:00:00.000Z';
@@ -241,6 +243,27 @@ describe('acceptGameTransferInvitation', () => {
     const after = (await store.getSubmission(4242))?.roundGeneration ?? 0;
     // Two ahead: one would still leave the sender a terminal receipt.
     expect(after).toBe(before + 2);
+  });
+
+  it('bounds how many rounds it re-generations, newest first', async () => {
+    // One transaction, and Firestore caps its writes; these keys expire anyway.
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    const total = MAX_REVOKED_ROUNDS_PER_TRANSFER + 5;
+    for (let i = 0; i < total; i += 1) {
+      await store.createSubmission(5000 + i, 'g:ada', 'Sky');
+      await store.setSubmissionSlug(5000 + i, 'sky');
+    }
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+    const newestBefore = (await store.getSubmission(5000 + total - 1))?.roundGeneration;
+    const oldestBefore = (await store.getSubmission(5000))?.roundGeneration;
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+
+    // Newest re-generationed; the oldest, past the bound, is left.
+    expect((await store.getSubmission(5000 + total - 1))?.roundGeneration).toBe(revokedRoundGeneration(newestBefore));
+    expect((await store.getSubmission(5000))?.roundGeneration).toBe(oldestBefore);
   });
 
   it('is idempotent: accepting twice returns the same accepted invitation', async () => {

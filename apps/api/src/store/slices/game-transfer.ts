@@ -66,6 +66,20 @@ function transferredAccess(access: GameAccessRecord, newOwnerUid: string, at: st
   };
 }
 
+// Bounded because one transaction caps its writes, and round keys expire anyway.
+export const MAX_REVOKED_ROUNDS_PER_TRANSFER = 200;
+
+// Newest first, so the bound keeps rounds that may hold a key.
+function newestRounds<T extends { data: () => unknown }>(docs: readonly T[]): T[] {
+  return [...docs]
+    .sort((a, b) => {
+      const left = a.data() as { createdAt?: string; jobId?: number };
+      const right = b.data() as { createdAt?: string; jobId?: number };
+      return (right.createdAt ?? '').localeCompare(left.createdAt ?? '') || (right.jobId ?? 0) - (left.jobId ?? 0);
+    })
+    .slice(0, MAX_REVOKED_ROUNDS_PER_TRANSFER);
+}
+
 export class InMemoryGameTransferStore implements GameTransferStore {
   // Not private -- deleteAccountIdentity reaches across this on erasure.
   transfers = new Map<string, GameTransferInvitation>();
@@ -287,7 +301,7 @@ export class FirestoreGameTransferStore implements GameTransferStore {
 
       tx.set(accessRef, transferredAccess(access, recipientUid, at));
       // Revokes the sender's round channel, session, upload and opener tokens.
-      for (const doc of activeSnap.docs) {
+      for (const doc of newestRounds(activeSnap.docs)) {
         const current = (doc.data() as { roundGeneration?: number }).roundGeneration;
         tx.update(doc.ref, { roundGeneration: revokedRoundGeneration(current) });
       }

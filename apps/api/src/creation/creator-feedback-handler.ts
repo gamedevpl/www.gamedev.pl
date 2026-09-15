@@ -349,7 +349,8 @@ export async function handleCreatorFeedback(
         return reopen();
       });
     } catch {
-      outcome = { started: false, reason: 'dispatch_failed' };
+      // The fence refused: a round is opening, not a failed dispatch.
+      outcome = { started: false, reason: 'busy' };
     }
   } else {
     outcome = await reopen();

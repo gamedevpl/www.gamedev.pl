@@ -85,7 +85,7 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
-import { InMemoryGameTransferStore } from './slices/game-transfer.js';
+import { InMemoryGameTransferStore, MAX_REVOKED_ROUNDS_PER_TRANSFER } from './slices/game-transfer.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
@@ -128,9 +128,15 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug) => this.gameAdmissionStore.gameAgentKeys.delete(slug),
     (slug) => this.contributionStore.gameAutonomy.delete(slug),
     (slug) => {
-      for (const [jobId, record] of this.submissions) {
-        if (record.slug !== slug) continue;
-        this.submissions.set(jobId, { ...record, roundGeneration: revokedRoundGeneration(record.roundGeneration) });
+      const onSlug = [...this.submissions.values()]
+        .filter((record) => record.slug === slug)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
+        .slice(0, MAX_REVOKED_ROUNDS_PER_TRANSFER);
+      for (const record of onSlug) {
+        this.submissions.set(record.jobId, {
+          ...record,
+          roundGeneration: revokedRoundGeneration(record.roundGeneration),
+        });
       }
     },
   );
