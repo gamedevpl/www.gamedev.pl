@@ -31,6 +31,8 @@ export interface RefineQuestion {
   allowFreeText?: boolean;
   /** The options combine rather than compete ("which mechanics?"), so the UI accumulates. */
   multiple?: boolean;
+  // Options differ by how the game looks, so tiles are worth generating.
+  visual?: boolean;
 }
 
 export interface RefineResponse {
@@ -127,6 +129,7 @@ const RefineResultSchema = z.object({
         options: z.array(z.object({ label: z.string(), detail: z.string().optional() })).optional(),
         allowFreeText: z.boolean().optional(),
         multiple: z.boolean().optional(),
+        visual: z.boolean().optional(),
       }),
     )
     .optional(),
@@ -153,14 +156,17 @@ export class VertexSpecRefiner implements SpecRefiner {
   private getClient(model?: string): GenAIClient {
     if (model) {
       // Cached per model.
-      const spare = this.spareClients.get(model) ?? this.options.client ?? createVertexClient({
-        projectId: this.options.projectId,
-        region: this.options.region,
-        defaultRegion: 'global',
-        model,
-        defaultModel: model,
-        generationConfig: { responseMimeType: 'application/json' } as VertexGenerationConfig,
-      });
+      const spare =
+        this.spareClients.get(model) ??
+        this.options.client ??
+        createVertexClient({
+          projectId: this.options.projectId,
+          region: this.options.region,
+          defaultRegion: 'global',
+          model,
+          defaultModel: model,
+          generationConfig: { responseMimeType: 'application/json' } as VertexGenerationConfig,
+        });
       this.spareClients.set(model, spare);
       return spare;
     }
@@ -260,12 +266,15 @@ Respond STRICTLY with a JSON object following this schema:
         { "label": "Option Name", "detail": "Brief explanation" }
       ],
       "allowFreeText": true,
-      "multiple": false
+      "multiple": false,
+      "visual": false
     }
   ]
 }
 
 Set "multiple": true only when the options genuinely combine rather than compete — "which mechanics should be in?" can take several, "which visual style?" cannot. Default to false.
+
+Set "visual": true only when a screenshot of the finished game would visibly differ depending on which option is chosen — art style, visual theme, or camera perspective. Mood or tone alone does not qualify: "tense" and "relaxed" describe the same picture. Neither do controls, difficulty, scoring or mechanics. Ask whatever the concept actually needs; do not invent a visual question to fill this field, and do not avoid a second one if the concept genuinely needs both. Default to false.
 
 If the concept is already fully specified, return an empty "questions" array — but always propose a title.
 ${groundingNote ? `\nReal-world context on a game this concept appears to name (from a web search — use it to ask sharper, genre-accurate questions; do not quote it back to the creator verbatim):\n${groundingNote}\n` : ''}${params.title ? `\nThe creator's working title, to improve on or keep: "${params.title}"\n` : ''}
@@ -300,6 +309,7 @@ ${params.concept}
           // because presenting a single-choice question as multi-choice invites answers
           // that contradict each other.
           multiple: q.multiple === true,
+          visual: q.visual === true,
         })),
       };
     } catch (err) {

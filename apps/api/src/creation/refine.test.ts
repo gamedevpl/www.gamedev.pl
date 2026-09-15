@@ -307,6 +307,8 @@ describe('VertexSpecRefiner over a genaicode client', () => {
       // Opposite default to allowFreeText: a question is single-choice unless the
       // model explicitly says its options combine.
       multiple: false,
+      // Same default, same reason: illustrate only what the model marked visual.
+      visual: false,
     });
     expect(seen?.temperature).toBe(0.2);
     expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
@@ -334,7 +336,9 @@ describe('VertexSpecRefiner over a genaicode client', () => {
 
     const result = await refiner.refine({ title: 'Game', concept: 'Concept' });
 
-    expect(result.questions).toEqual([{ id: 'q_0', question: '', options: [], allowFreeText: false, multiple: false }]);
+    expect(result.questions).toEqual([
+      { id: 'q_0', question: '', options: [], allowFreeText: false, multiple: false, visual: false },
+    ]);
   });
 
   it('fails closed when the call outruns its abort budget', async () => {

@@ -144,6 +144,10 @@ GAME_ACCESS_AUTHORITATIVE="${GAME_ACCESS_AUTHORITATIVE:-false}"
 DREAMS_ENABLED="${DREAMS_ENABLED:-false}"
 # The agent writer is its own switch; see .claude/skills/byoca-mcp.
 AGENT_PROPOSALS_ENABLED="${AGENT_PROPOSALS_ENABLED:-false}"
+# CreatorQA option tiles. Off until OPTION_IMAGE_MODEL names an image model.
+OPTION_IMAGE_MODEL="${OPTION_IMAGE_MODEL:-}"
+OPTION_IMAGE_BASE_URL="${OPTION_IMAGE_BASE_URL:-}"
+OPTION_IMAGE_TIMEOUT_MS="${OPTION_IMAGE_TIMEOUT_MS:-}"
 DREAM_IMAGE_MODEL="${DREAM_IMAGE_MODEL:-}"
 DREAM_TIMEOUT_MS="${DREAM_TIMEOUT_MS:-}"
 NEXT_IDEAS_TIMEOUT_MS="${NEXT_IDEAS_TIMEOUT_MS:-}"
@@ -267,7 +271,9 @@ if gcloud secrets describe openai-api-key --project "$PROJECT_ID" >/dev/null 2>&
 fi
 if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
-  echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
+  # Muse Image draws the CreatorQA option tiles off the same credential.
+  SECRET_MAPPINGS+=("OPTION_IMAGE_API_KEY=meta-api-key:latest")
+  echo "==> meta-api-key found; a seed provider once SEED_META_MODEL is set, option tiles once OPTION_IMAGE_MODEL is."
 fi
 # describe only proves the secret container exists, not that it has a version
 # — a container created without a version passes describe but makes
@@ -433,6 +439,14 @@ for SEED_VAR in \
   eval "SEED_VAL=\${${SEED_VAR}:-}"
   if [ -n "${SEED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
+  fi
+done
+# CreatorQA option tiles. Unset OPTION_IMAGE_MODEL leaves the feature off and the
+# panel renders plain text options, which is the pre-existing state.
+for OPTION_IMAGE_VAR in OPTION_IMAGE_MODEL OPTION_IMAGE_BASE_URL OPTION_IMAGE_TIMEOUT_MS; do
+  eval "OPTION_IMAGE_VAL=\${${OPTION_IMAGE_VAR}:-}"
+  if [ -n "${OPTION_IMAGE_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${OPTION_IMAGE_VAR}=${OPTION_IMAGE_VAL}"
   fi
 done
 # Concept proposals. Repointing the image model or either timeout must survive the

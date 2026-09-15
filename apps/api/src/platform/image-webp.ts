@@ -51,14 +51,29 @@ export async function encodeWebp(image: RgbaImage, quality: number = WEBP_QUALIT
   }
 }
 
-// Test-only: the serve path hands out URLs, not pixels.
-export async function decodeWebp(bytes: Buffer): Promise<RgbaImage | null> {
+type Decoder = (bytes: ArrayBuffer) => Promise<RgbaImage>;
+
+let decoder: Promise<Decoder | null> | null = null;
+
+async function loadDecoder(): Promise<Decoder | null> {
   try {
     const module = (await import('@jsquash/webp/decode.js')) as unknown as WebpDecodeModule;
     const require = createRequire(import.meta.url);
     const wasmBinary = await readFile(require.resolve('@jsquash/webp/codec/dec/webp_dec.wasm'));
     await module.init({ wasmBinary });
-    const out = await module.default(Uint8Array.from(bytes).buffer);
+    return module.default;
+  } catch {
+    return null;
+  }
+}
+
+// Memoised like the encoder: option images decode three per request.
+export async function decodeWebp(bytes: Buffer): Promise<RgbaImage | null> {
+  decoder ??= loadDecoder();
+  const decode = await decoder;
+  if (!decode) return null;
+  try {
+    const out = await decode(Uint8Array.from(bytes).buffer);
     return { data: new Uint8ClampedArray(out.data), width: out.width, height: out.height };
   } catch {
     return null;
