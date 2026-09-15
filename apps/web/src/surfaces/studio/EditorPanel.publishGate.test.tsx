@@ -162,9 +162,18 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
   });
 
-  it('never holds Publish for a game that reports no checks at all', async () => {
+  it('never holds Publish for a game that declares no validator', async () => {
     await renderWithController(controllerState({ checks: null, checksFresh: false }));
     expect(publishButton().disabled).toBe(false);
+  });
+
+  it('holds Publish for a declared validator that has not answered yet', async () => {
+    fetchGameEditor.mockResolvedValue({ ...editorState, definition: { ...definition, validate: true } });
+    await renderWithController(controllerState({ checks: null }));
+
+    // The definition promises a verdict, so its absence is a missing answer.
+    expect(publishButton().disabled).toBe(true);
+    expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
   });
 
   it('refuses a controller patch while the creator is on the standard editor', async () => {

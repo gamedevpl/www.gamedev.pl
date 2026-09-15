@@ -113,6 +113,19 @@ export function useEditorDraftBridge(
   const controllerStoodDownRef = useRef(false);
   const checkTimerRef = useRef<number | null>(null);
   const checksSeenRef = useRef(false);
+  // The definition owes a verdict, so silence is a failure.
+  const validateDeclaredRef = useRef(false);
+
+  const standDownRef = useRef<(reason: string) => void>(() => {});
+
+  const armCheckWatchdog = useCallback(() => {
+    if (controllerStoodDownRef.current || checkTimerRef.current !== null) return;
+    if (!checksSeenRef.current && !validateDeclaredRef.current) return;
+    checkTimerRef.current = window.setTimeout(() => {
+      checkTimerRef.current = null;
+      standDownRef.current('The game editor stopped answering its own checks.');
+    }, CHECK_ANSWER_MS);
+  }, []);
 
   const standDown = useCallback(
     (reason: string) => {
@@ -129,6 +142,7 @@ export function useEditorDraftBridge(
     },
     [frameRef],
   );
+  standDownRef.current = standDown;
 
   const [documentGeneration, setDocumentGeneration] = useState(0);
   useEffect(() => {
@@ -151,6 +165,8 @@ export function useEditorDraftBridge(
     checksSeenRef.current = false;
     if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
     checkTimerRef.current = null;
+    if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
+    controllerTimerRef.current = null;
     setControllerStatus(null);
     setControllerView(null);
     setControllerReason(null);
@@ -174,6 +190,7 @@ export function useEditorDraftBridge(
       draftPromise ??= fetchGameEditor(slug as string)
         .then((state) => {
           controllerExpected = state.definition.controller === true;
+          validateDeclaredRef.current = state.definition.validate === true;
           if (controllerExpected && !controllerHelloRef.current) expectController();
           return state.draft?.content ?? null;
         })
@@ -230,6 +247,8 @@ export function useEditorDraftBridge(
         setControllerStatus('ready');
         setControllerReason(null);
         recordEditorStep('controller_loaded');
+        // A declared validator owes a verdict on the view it just drew.
+        armCheckWatchdog();
       } else if (data.t === 'editor:change') {
         setPendingChange({ id: data.id, patch: data.patch });
       } else if (data.t === 'editor:select') {
@@ -277,7 +296,7 @@ export function useEditorDraftBridge(
       checkTimerRef.current = null;
       window.removeEventListener('message', onMessage);
     };
-  }, [frameRef, active, slug, editable, standDown]);
+  }, [armCheckWatchdog, frameRef, active, slug, editable, standDown]);
 
   const push = useCallback<EditorContentPush>(
     (content, selection) => {
@@ -285,15 +304,10 @@ export function useEditorDraftBridge(
       if (selection !== undefined) lastSelectionRef.current = selection;
       // Unseen content; the last verdict is about older content.
       setChecksFresh(false);
-      if (checksSeenRef.current && !controllerStoodDownRef.current && checkTimerRef.current === null) {
-        checkTimerRef.current = window.setTimeout(() => {
-          checkTimerRef.current = null;
-          standDown('The game editor stopped answering its own checks.');
-        }, CHECK_ANSWER_MS);
-      }
+      armCheckWatchdog();
       frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, lastSelectionRef.current), '*');
     },
-    [frameRef, standDown],
+    [armCheckWatchdog, frameRef],
   );
 
   const send = useCallback(

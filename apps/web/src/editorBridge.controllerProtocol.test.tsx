@@ -272,6 +272,23 @@ describe('controller bridge boundary', () => {
     expect(latestController?.status).toBe('ready');
   });
 
+  it("does not let the old document's view watchdog fail the next one", () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      // Connecting, with the view watchdog running and no view yet.
+      send(frame({ t: 'editor:hello', controller: true }));
+      expect(latestController?.status).toBe('connecting');
+
+      act(() => void mountedFrameRef.current!.dispatchEvent(new Event('load')));
+      act(() => void vi.advanceTimersByTime(3000));
+
+      expect(latestController?.status).not.toBe('failed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('drops the check watchdog when the creator leaves, so silence cannot fail it later', () => {
     vi.useFakeTimers();
     try {
