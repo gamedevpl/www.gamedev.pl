@@ -6,7 +6,8 @@ const HEAVY_PREFIXES = ['shared/modules/', 'shared/verticals/'];
 export function languageKitSources(shared: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [rel, source] of Object.entries(shared)) {
-    if (rel === 'shared/game-kit.d.ts') continue;
+    // Ambient dts become worker roots via updateFile.
+    if (rel.endsWith('.d.ts')) continue;
     if (HEAVY_PREFIXES.some((prefix) => rel.startsWith(prefix))) continue;
     out[rel] = source;
   }

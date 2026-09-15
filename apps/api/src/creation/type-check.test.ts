@@ -104,4 +104,13 @@ export default defineEditor(1);
     if (missing.ok) return;
     expect(missing.errors[0]).toMatch(/editor-def/);
   });
+
+  it('does not root unimported kit ambient declarations', () => {
+    const result = typeCheckGame({ 'game.ts': 'export const n = play();\n' }, KIT, {
+      'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatch(/TS2304/);
+  });
 });

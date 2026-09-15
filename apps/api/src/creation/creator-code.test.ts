@@ -860,6 +860,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
     it('includes editor-def so Studio can resolve EDITOR.ts imports', async () => {
       const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
         'shared/editor-def.ts': 'export function defineEditor() {}\n',
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
       });
       await withApp(
         async (app) => {

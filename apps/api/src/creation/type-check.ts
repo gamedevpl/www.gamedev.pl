@@ -82,6 +82,7 @@ export function typeCheckGame(
   for (const [relative, source] of Object.entries(sources)) {
     if (relative.endsWith('.ts')) files.set(`${ROOT}/${relative}`, source);
   }
+  // Kit files resolve imports; they are not program roots.
   const roots = [...files.keys()];
   for (const [rel, source] of Object.entries(kitShared)) files.set(`/${rel}`, source);
 

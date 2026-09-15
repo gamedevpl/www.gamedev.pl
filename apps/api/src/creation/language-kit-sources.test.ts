@@ -20,6 +20,7 @@ describe('languageKitSources', () => {
       'shared/sim-math.ts': 'export const tau = 6;\n',
       'shared/modules/core.ts': 'export const core = 1;\n',
       'shared/verticals/racing/index.ts': 'export const racing = 1;\n',
+      'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
     });
     expect(Object.keys(files).sort()).toEqual([
       'shared/editor-def.ts',
