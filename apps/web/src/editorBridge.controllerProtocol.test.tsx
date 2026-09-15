@@ -61,9 +61,10 @@ describe('controller bridge boundary', () => {
   let mountedFrameRef: MutableRefObject<HTMLIFrameElement | null>;
 
   function mount() {
-    mountedFrameRef = {
-      current: { contentWindow: gameWindow },
-    } as unknown as MutableRefObject<HTMLIFrameElement | null>;
+    // Real, so a load is dispatchable; detached, so none fires alone.
+    const frame = document.createElement('iframe');
+    Object.defineProperty(frame, 'contentWindow', { value: gameWindow });
+    mountedFrameRef = { current: frame };
     root = createRoot(container);
     act(() => root!.render(<Harness frameRef={mountedFrameRef} />));
   }
@@ -254,6 +255,36 @@ describe('controller bridge boundary', () => {
       // Silence would otherwise hold Publish shut forever.
       expect(latestController?.status).toBe('failed');
       expect(latestController?.reason).toContain('stopped answering');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives a reloaded frame a fresh controller, even when the build did not change', () => {
+    mount();
+    connect();
+    act(() => latestController!.useFallback('the game refused this content change'));
+
+    // A locale switch rewrites srcDoc without changing the build's html.
+    act(() => void mountedFrameRef.current!.dispatchEvent(new Event('load')));
+    send(frame({ t: 'editor:hello', controller: true }));
+    send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Same build, new document' } }));
+    expect(latestController?.status).toBe('ready');
+  });
+
+  it('drops the check watchdog when the creator leaves, so silence cannot fail it later', () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      connect();
+      send(frame({ t: 'editor:check', ok: true, problems: [] }));
+      act(() => pushRef.current?.({ levels: [] } as unknown as EditorContentDoc));
+
+      setActive(false);
+      act(() => void vi.advanceTimersByTime(5000));
+
+      // Nothing is listening, so a timeout here would fail a healthy controller.
+      expect(latestController?.status).not.toBe('failed');
     } finally {
       vi.useRealTimers();
     }

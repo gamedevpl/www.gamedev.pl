@@ -88,7 +88,7 @@ export function useEditorDraftBridge(
   active: boolean,
   slug: string | undefined,
   editable: boolean,
-  // Changes when the frame loads a different document.
+  // Changes on a new build; a frame load resets too.
   documentKey?: string | null,
 ): { push: EditorContentPush; controller: EditorControllerState | null } {
   /** What the next `editor:hello` gets answered with. */
@@ -130,6 +130,15 @@ export function useEditorDraftBridge(
     [frameRef],
   );
 
+  const [documentGeneration, setDocumentGeneration] = useState(0);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || typeof frame.addEventListener !== 'function') return undefined;
+    const onLoad = () => setDocumentGeneration((generation) => generation + 1);
+    frame.addEventListener('load', onLoad);
+    return () => frame.removeEventListener('load', onLoad);
+  }, [frameRef]);
+
   // The draft outlives a rebuild; only another game replaces it.
   useEffect(() => {
     lastContentRef.current = null;
@@ -151,7 +160,7 @@ export function useEditorDraftBridge(
     setControllerChecks(null);
     setChecksFresh(true);
     setCanvasBox(null);
-  }, [slug, documentKey]);
+  }, [slug, documentKey, documentGeneration]);
 
   useEffect(() => {
     if (!active || !slug || !editable) return;
@@ -263,6 +272,9 @@ export function useEditorDraftBridge(
     return () => {
       disposed = true;
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
+      // No listener left to hear the answer, so no timeout.
+      if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+      checkTimerRef.current = null;
       window.removeEventListener('message', onMessage);
     };
   }, [frameRef, active, slug, editable, standDown]);
