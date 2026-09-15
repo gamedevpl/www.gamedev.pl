@@ -19,7 +19,16 @@ const RESPOND_REFUSALS: Record<string, string> = {
   not_found: 'studioShelf.transfer.errors.gone',
 };
 
-export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string) => void }): JSX.Element | null {
+export function StudioTransferInbox({
+  onAccepted,
+  visible = true,
+  onOffersPresent,
+}: {
+  onAccepted?: (slug: string) => void;
+  // False while the shelf is collapsed or off-canvas.
+  visible?: boolean;
+  onOffersPresent?: () => void;
+}): JSX.Element | null {
   const { t } = useTranslation();
   const [incoming, setIncoming] = useState<TransferSummary[]>([]);
   const [busySlug, setBusySlug] = useState<string | null>(null);
@@ -60,10 +69,16 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
   }
 
   const pending = incoming.filter((invite) => invite.status === 'pending');
-  // The denominator every decision below is measured against.
+  // An unseen invitation is what the notification exists to fix.
+  const offered = pending.length > 0;
   useEffect(() => {
-    if (pending.length > 0) recordTransferStep('offer_shown');
-  }, [pending.length]);
+    if (offered) onOffersPresent?.();
+  }, [offered, onOffersPresent]);
+
+  // Shown means shown; a hidden render inflates the denominator.
+  useEffect(() => {
+    if (offered && visible) recordTransferStep('offer_shown');
+  }, [offered, visible]);
 
   // Nothing to say without an invitation or a failure to report.
   if (pending.length === 0 && !unreachable) return null;

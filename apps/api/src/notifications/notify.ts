@@ -514,6 +514,8 @@ export interface TransferOfferedEvent {
   uid: string;
   slug: string;
   gameTitle: string;
+  // This invitation, not this game: re-inviting is a new ask.
+  invitedAt: string;
 }
 
 export async function emitTransferOfferedNotification(
@@ -521,7 +523,7 @@ export async function emitTransferOfferedNotification(
   event: TransferOfferedEvent,
 ): Promise<{ created: boolean }> {
   const { created, notification } = await createNotification(deps, event.uid, {
-    id: `transfer-${event.slug}`,
+    id: `transfer-${event.slug}-${event.invitedAt}`,
     type: 'transfer.offered',
     createdAt: new Date(deps.now?.() ?? Date.now()).toISOString(),
     titleKey: 'notifications.transfer.offered.title',

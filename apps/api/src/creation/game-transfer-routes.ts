@@ -17,7 +17,7 @@ export interface GameTransferRoutesOptions {
   // Catalog attribution joins from GameAccess, but caches per slug.
   invalidatePublishedGameCaches?: (slug: string) => void;
   // Tells the recipient. Optional: without it, transfers stay silent.
-  notifyTransferOffered?: (event: { uid: string; slug: string; gameTitle: string }) => Promise<void>;
+  notifyTransferOffered?: (event: { uid: string; slug: string; gameTitle: string; invitedAt: string }) => Promise<void>;
 }
 
 export interface TransferSummary {
@@ -114,7 +114,12 @@ export async function registerGameTransferRoutes(
       if (notifyTransferOffered) {
         try {
           const record = await store.getSubmissionBySlug(slug);
-          await notifyTransferOffered({ uid: recipient.uid, slug, gameTitle: record?.title ?? slug });
+          await notifyTransferOffered({
+            uid: recipient.uid,
+            slug,
+            gameTitle: record?.title ?? slug,
+            invitedAt: result.createdAt,
+          });
         } catch (error) {
           request.log.error({ err: error, slug }, 'transfer invitation notification failed');
         }

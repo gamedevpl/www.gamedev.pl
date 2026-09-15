@@ -79,7 +79,7 @@ describe('game transfer routes', () => {
   it('tells the recipient an invitation is waiting', async () => {
     // Otherwise only someone who opens Studio ever knows.
     const { store, code } = await ownedGameWithRecipientCode();
-    const offered: Array<{ uid: string; slug: string; gameTitle: string }> = [];
+    const offered: Array<{ uid: string; slug: string; gameTitle: string; invitedAt: string }> = [];
     const app = await appWith(store, { notifyTransferOffered: async (event) => void offered.push(event) });
 
     await app.inject({
@@ -89,7 +89,10 @@ describe('game transfer routes', () => {
       payload: { recipientCode: code },
     });
 
-    expect(offered).toEqual([{ uid: 'g:grace', slug: 'sky', gameTitle: 'sky' }]);
+    expect(offered).toHaveLength(1);
+    expect(offered[0]).toMatchObject({ uid: 'g:grace', slug: 'sky', gameTitle: 'sky' });
+    // Keyed to this invitation, so a later one still lands.
+    expect(offered[0].invitedAt).toEqual(expect.any(String));
   });
 
   it('keeps the invitation when telling the recipient fails', async () => {

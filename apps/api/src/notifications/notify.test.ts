@@ -639,7 +639,7 @@ describe('emitTransferOfferedNotification', () => {
   let store: InMemoryStore;
   let mailer: ConsoleMailer;
   const deps = (): EmitDeps => ({ store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' });
-  const event = { uid: 'g:grace', slug: 'sky-dodge', gameTitle: 'Sky Dodge' };
+  const event = { uid: 'g:grace', slug: 'sky-dodge', gameTitle: 'Sky Dodge', invitedAt: '2026-09-15T10:00:00.000Z' };
 
   beforeEach(async () => {
     store = new InMemoryStore();
@@ -667,11 +667,23 @@ describe('emitTransferOfferedNotification', () => {
     expect((await store.listNotifications('g:grace'))[0].emailedAt).not.toBeNull();
   });
 
-  it('is one invitation per game, however many times it is sent', async () => {
+  it('is one notification per invitation, however often it retries', async () => {
     await emitTransferOfferedNotification(deps(), event);
     const again = await emitTransferOfferedNotification(deps(), event);
 
     expect(again.created).toBe(false);
     expect(await store.listNotifications('g:grace')).toHaveLength(1);
+  });
+
+  it('tells them again when the same game is offered a second time', async () => {
+    // Keying by slug alone swallowed the second ask.
+    await emitTransferOfferedNotification(deps(), event);
+    const second = await emitTransferOfferedNotification(deps(), {
+      ...event,
+      invitedAt: '2026-09-30T10:00:00.000Z',
+    });
+
+    expect(second.created).toBe(true);
+    expect(await store.listNotifications('g:grace')).toHaveLength(2);
   });
 });
