@@ -469,6 +469,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.dispatchStore.setJobCostTokens(jobId, ref, tokens);
   }
 
+  async setJobCostFinished(jobId: number, ref: string, finishedAt: string, state: string): Promise<void> {
+    return this.dispatchStore.setJobCostFinished(jobId, ref, finishedAt, state);
+  }
+
   async setDispatchWorkspace(jobId: number, workspace: string): Promise<void> {
     return this.dispatchStore.setDispatchWorkspace(jobId, workspace);
   }

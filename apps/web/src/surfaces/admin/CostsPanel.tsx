@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './admin-jobs-queue.css';
 import './admin-small-panels.css';
-import { fetchCostReport, type CostReport, type JobCostSummary } from './adminApi.js';
+import { fetchCostReport, type CostReport, type JobCostSummary, type JobSessionSummary } from './adminApi.js';
 
 /**
  * What building games costs, per job and per shipped game.
@@ -29,6 +29,11 @@ function money(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+// Minute precision, UTC: a session log compares runs, not local clocks.
+function timestamp(iso: string): string {
+  return iso.slice(0, 16).replace('T', ' ');
+}
+
 function JobRow({ job }: { job: JobCostSummary }) {
   return (
     <tr className={job.published ? 'admin-cost-row' : 'admin-cost-row is-unpublished'}>
@@ -49,6 +54,29 @@ function JobRow({ job }: { job: JobCostSummary }) {
       <td>{job.tokens ? `${job.tokens.input + job.tokens.output}` : '—'}</td>
       <td title={job.usdBounded ? 'Upper bound: cache reads are folded into this session’s input count' : undefined}>
         {job.usd === undefined ? '—' : `${job.usdBounded ? '≤' : ''}${money(job.usd)}`}
+      </td>
+    </tr>
+  );
+}
+
+function SessionRow({ session }: { session: JobSessionSummary }) {
+  return (
+    <tr className="admin-cost-row">
+      <td>
+        <div className="admin-job-title">{session.title}</div>
+        <div className="admin-job-sub">#{session.jobId}</div>
+      </td>
+      <td>
+        {session.backend}
+        {session.model ? ` · ${session.model}` : ''}
+      </td>
+      <td>{timestamp(session.startedAt)}</td>
+      <td>{session.durationMs === undefined ? '—' : duration(session.durationMs)}</td>
+      <td>{session.state ?? '—'}</td>
+      <td
+        title={session.usdBounded ? 'Upper bound: cache reads are folded into this session’s input count' : undefined}
+      >
+        {session.usd === undefined ? '—' : `${session.usdBounded ? '≤' : ''}${money(session.usd)}`}
       </td>
     </tr>
   );
@@ -163,6 +191,39 @@ export function CostsPanel() {
             </tbody>
           </table>
         </div>
+      )}
+
+      <h2 className="health-section-title">Sessions</h2>
+
+      {report.sessions.length === 0 ? (
+        <p className="health-empty">No agent session has been dispatched yet.</p>
+      ) : (
+        <>
+          <div className="health-table-scroll">
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th>Game</th>
+                  <th>Backend</th>
+                  <th>Started</th>
+                  <th>Duration</th>
+                  <th>State</th>
+                  <th>Money</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.sessions.map((session) => (
+                  <SessionRow key={`${session.jobId}-${session.ref}`} session={session} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="health-note">
+            Newest {report.sessions.length} session{report.sessions.length === 1 ? '' : 's'}; older ones still count in
+            the totals above. A dash under Duration means still running, or an earlier session in the same job that a
+            resume superseded — the backend stops watching a superseded session, so it never learns how that one ended.
+          </p>
+        </>
       )}
 
       {report.unpricedModels.length > 0 && (

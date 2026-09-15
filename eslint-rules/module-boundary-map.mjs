@@ -238,6 +238,7 @@ const FILE_BUCKET = {
   'creator-self-routes': 'creation',
   'job-costs': 'creation',
   'token-prices': 'creation',
+  'session-log': 'creation',
   'job-admin-routes': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',

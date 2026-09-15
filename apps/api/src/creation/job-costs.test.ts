@@ -246,6 +246,20 @@ describe('buildCostReport', () => {
     expect(report.unpricedModels).toEqual(['gemini-3.8-flash']);
   });
 
+  it('carries a session log alongside the per-job totals', () => {
+    const report = buildCostReport([
+      record({
+        jobId: 1,
+        costs: [
+          { kind: 'agent_session', at: ago(10 * MINUTE), by: 'copilot', ref: 'task-1', finishedAt: ago(2 * MINUTE) },
+        ],
+      }),
+    ]);
+
+    expect(report.sessions).toHaveLength(1);
+    expect(report.sessions[0].durationMs).toBe(8 * MINUTE);
+  });
+
   it('does not bill a credit-billed session twice when it also carries tokens', () => {
     // Credits are already money; pricing tokens too would double it.
     const report = buildCostReport([

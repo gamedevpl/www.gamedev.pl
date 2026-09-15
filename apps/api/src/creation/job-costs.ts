@@ -20,8 +20,12 @@
 // with no ledger reads as unmeasured, not as free.
 
 import { resolveJobState, type JobState } from './job-state.js';
+import { buildSessionLog, type JobSessionSummary } from './session-log.js';
 import { modelOf, priceTokens, TOKEN_PRICE_TABLE_VERSION } from './token-prices.js';
 import type { JobCostEntry, SubmissionRecord } from '../platform/store.js';
+
+// Session rows the report carries; older ones still count in the totals.
+export const MAX_SESSION_LOG_ROWS = 100;
 
 /**
  * GitHub fixes an AI credit at $0.01 — 100 credits to the dollar, a published rate rather
@@ -112,6 +116,8 @@ export interface CostReport {
   /** Most expensive first — the tail is where a runaway job hides. */
   jobs: JobCostSummary[];
   totals: CostTotals;
+  // Every agent_session ledger entry, newest first, capped at MAX_SESSION_LOG_ROWS.
+  sessions: JobSessionSummary[];
   /**
    * The bizstrat number: what one published game costs, all in.
    *
@@ -267,5 +273,6 @@ export function buildCostReport(records: SubmissionRecord[]): CostReport {
     unmeasuredJobs: records.filter((record) => (record.costs ?? []).length === 0).length,
     unpricedModels,
     priceTableVersion: TOKEN_PRICE_TABLE_VERSION,
+    sessions: buildSessionLog(records, MAX_SESSION_LOG_ROWS),
   };
 }

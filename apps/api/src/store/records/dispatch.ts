@@ -77,6 +77,10 @@ export interface JobCostEntry {
   usd?: number;
   // Which vendor billed this; `by` stays the model id.
   provider?: string;
+  // First poll to see the session settled; late by minutes, never early.
+  finishedAt?: string;
+  // The settled AgentTaskState that stamped finishedAt.
+  state?: string;
 }
 
 /**
@@ -135,6 +139,22 @@ export function applyMeasuredTokens(
     changed = true;
     const { credits: _dropped, ...withoutCredits } = entry;
     return placeholder ? { ...withoutCredits, tokens } : { ...entry, tokens };
+  });
+  return changed ? next : null;
+}
+
+// First settled observation wins; a later one must not overwrite it.
+export function applyFinished(
+  costs: readonly JobCostEntry[],
+  ref: string,
+  finishedAt: string,
+  state: string,
+): JobCostEntry[] | null {
+  let changed = false;
+  const next = costs.map((entry) => {
+    if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.finishedAt !== undefined) return entry;
+    changed = true;
+    return { ...entry, finishedAt, state };
   });
   return changed ? next : null;
 }

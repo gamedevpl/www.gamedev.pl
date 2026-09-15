@@ -9,6 +9,7 @@ import {
 import {
   MAX_JOB_COSTS,
   applyMeasuredTokens,
+  applyFinished,
   MAX_JOB_TRANSITIONS,
   JOB_ID_FLOOR,
   type JobSeedOutcome,
@@ -46,6 +47,9 @@ export interface DispatchStore {
 
   // Token-billed twin of setJobCostCredits; drops the credit placeholder.
   setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
+
+  // First-settled wins; no-op once already stamped.
+  setJobCostFinished(jobId: number, ref: string, finishedAt: string, state: string): Promise<void>;
 
   // Records where a dispatched job's work actually lives.
   setDispatchWorkspace(jobId: number, workspace: string): Promise<void>;
@@ -173,6 +177,14 @@ export class InMemoryDispatchStore implements DispatchStore {
     const sub = this.submissions.get(jobId);
     if (!sub?.costs?.length) return;
     const costs = applyMeasuredTokens(sub.costs, ref, tokens);
+    if (!costs) return;
+    this.submissions.set(jobId, { ...sub, costs });
+  }
+
+  async setJobCostFinished(jobId: number, ref: string, finishedAt: string, state: string): Promise<void> {
+    const sub = this.submissions.get(jobId);
+    if (!sub?.costs?.length) return;
+    const costs = applyFinished(sub.costs, ref, finishedAt, state);
     if (!costs) return;
     this.submissions.set(jobId, { ...sub, costs });
   }
@@ -351,6 +363,18 @@ export class FirestoreDispatchStore implements DispatchStore {
       if (!snap.exists) return;
       const existing = (snap.data() as SubmissionRecord).costs ?? [];
       const costs = applyMeasuredTokens(existing, ref, tokens);
+      if (!costs) return;
+      tx.set(docRef, { costs }, { merge: true });
+    });
+  }
+
+  async setJobCostFinished(jobId: number, ref: string, finishedAt: string, state: string): Promise<void> {
+    const docRef = this.ref(jobId);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).costs ?? [];
+      const costs = applyFinished(existing, ref, finishedAt, state);
       if (!costs) return;
       tx.set(docRef, { costs }, { merge: true });
     });
