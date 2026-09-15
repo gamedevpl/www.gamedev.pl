@@ -6031,8 +6031,40 @@ describe('what a build costs', () => {
         ref: 'task-1',
         credits: 403.45,
         creditsMeasured: true,
+        finishedAt: expect.any(String),
+        state: 'completed',
       },
     ]);
+
+    await app.close();
+  });
+
+  it('stamps when a session finished, from the first observation that sees it settled', async () => {
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const observe = vi.fn(async () => ({ state: 'completed' as const, hasCandidate: true }));
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: { ...backend, observe },
+      submissionTokenSecret: secret,
+    });
+
+    const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
+    const { token } = created.json() as { token: string };
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'sources_uploaded',
+    });
+
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    const [entry] = (await store.getSubmission(job.jobId))?.costs ?? [];
+    expect(entry.state).toBe('completed');
+    expect(entry.finishedAt).toBeDefined();
 
     await app.close();
   });

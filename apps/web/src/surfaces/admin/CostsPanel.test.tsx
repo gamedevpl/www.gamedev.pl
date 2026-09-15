@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CostsPanel } from './CostsPanel.js';
-import type { CostReport, JobCostSummary } from './adminApi.js';
+import type { CostReport, JobCostSummary, JobSessionSummary } from './adminApi.js';
 
 const mocked = vi.hoisted(() => ({
   fetchAdminSummary: vi.fn(),
@@ -39,9 +39,26 @@ function job(overrides: Partial<JobCostSummary> = {}): JobCostSummary {
   };
 }
 
+function session(overrides: Partial<JobSessionSummary> = {}): JobSessionSummary {
+  return {
+    jobId: 1_000_001,
+    title: 'Comet Courier',
+    ref: 'session-1',
+    backend: 'anthropic',
+    model: 'claude-sonnet-5',
+    startedAt: '2026-07-30T10:00:00Z',
+    finishedAt: '2026-07-30T10:12:00Z',
+    durationMs: 12 * 60_000,
+    state: 'completed',
+    usd: 1.24,
+    ...overrides,
+  };
+}
+
 function report(overrides: Partial<CostReport> = {}): CostReport {
   return {
     jobs: [job()],
+    sessions: [],
     totals: { jobs: 1, sessions: 2, credits: 2, gateRuns: 1, conceptCalls: 0, published: 1, usd: 0.02 },
     creditsPerPublishedGame: 2,
     usdPerPublishedGame: 0.02,
@@ -49,6 +66,8 @@ function report(overrides: Partial<CostReport> = {}): CostReport {
     creditsOnUnpublished: 0,
     usdOnUnpublished: 0,
     unmeasuredJobs: 0,
+    unpricedModels: [],
+    priceTableVersion: '2026-09-14',
     ...overrides,
   };
 }
@@ -142,6 +161,29 @@ describe('CostsPanel', () => {
     await act(async () => root.unmount());
   });
 
+  it('names the models that spent tokens with no rate, so a cheap window is not read as cheap', async () => {
+    // Absent spending looks exactly like thrift.
+    mocked.fetchCostReport.mockResolvedValue(report({ unpricedModels: ['gemini-3.8-flash'] }));
+
+    const { container, root } = await render();
+
+    expect(container.textContent).toContain('gemini-3.8-flash');
+    expect(container.textContent).toContain('as a floor');
+
+    await act(async () => root.unmount());
+  });
+
+  it('marks money that is an upper bound rather than reporting it as measured', async () => {
+    mocked.fetchCostReport.mockResolvedValue(report({ jobs: [job({ usd: 1.24, usdBounded: true })] }));
+
+    const { container, root } = await render();
+
+    const cells = Array.from(container.querySelectorAll('tbody td')).map((cell) => cell.textContent);
+    expect(cells[cells.length - 1]).toBe('≤$1.24');
+
+    await act(async () => root.unmount());
+  });
+
   it('leaves money a dash on a job nothing was billed to, rather than showing it as free', async () => {
     mocked.fetchCostReport.mockResolvedValue(
       report({ jobs: [job({ sessions: 0, credits: 0, gateRuns: 0, usd: undefined })] }),
@@ -209,6 +251,53 @@ describe('CostsPanel', () => {
     expect(values[0]).toBe('—');
     expect(values[1]).toBe('—');
     expect(container.querySelector('.admin-cost-headline')?.textContent).toContain('nothing published yet');
+
+    await act(async () => root.unmount());
+  });
+
+  it('lists sessions with what they cost and how long they ran', async () => {
+    mocked.fetchCostReport.mockResolvedValue(report({ sessions: [session()] }));
+
+    const { container, root } = await render();
+
+    const tables = container.querySelectorAll('table.health-table');
+    const sessionTable = tables[tables.length - 1];
+    const cells = Array.from(sessionTable.querySelectorAll('tbody td')).map((td) => td.textContent);
+    expect(cells).toEqual([
+      'Comet Courier#1000001',
+      'anthropic · claude-sonnet-5',
+      '2026-07-30 10:00',
+      '12m',
+      'completed',
+      '$1.24',
+    ]);
+
+    await act(async () => root.unmount());
+  });
+
+  it('dashes duration and state for a session with no recorded finish', async () => {
+    // Absent means still running, or superseded by a resume.
+    mocked.fetchCostReport.mockResolvedValue(
+      report({
+        sessions: [session({ finishedAt: undefined, durationMs: undefined, state: undefined, usd: undefined })],
+      }),
+    );
+
+    const { container, root } = await render();
+
+    const tables = container.querySelectorAll('table.health-table');
+    const cells = Array.from(tables[tables.length - 1].querySelectorAll('tbody td')).map((td) => td.textContent);
+    expect(cells.slice(3)).toEqual(['—', '—', '—']);
+
+    await act(async () => root.unmount());
+  });
+
+  it('says when no session has run yet, rather than showing an empty table', async () => {
+    mocked.fetchCostReport.mockResolvedValue(report({ sessions: [] }));
+
+    const { container, root } = await render();
+
+    expect(container.textContent).toContain('No agent session has been dispatched yet');
 
     await act(async () => root.unmount());
   });

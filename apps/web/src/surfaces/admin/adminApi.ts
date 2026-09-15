@@ -368,13 +368,33 @@ export interface JobCostSummary {
   conceptCalls: number;
   tokens?: { input: number; output: number };
   usd?: number;
+  // Upper bound: cache reads hid inside the input count.
+  usdBounded?: boolean;
   elapsedMs: number;
   published: boolean;
   createdAt: string;
 }
 
+export interface JobSessionSummary {
+  jobId: number;
+  title: string;
+  slug?: string;
+  ref: string;
+  backend: string;
+  model?: string;
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  state?: string;
+  credits?: number;
+  tokens?: { input: number; output: number };
+  usd?: number;
+  usdBounded?: boolean;
+}
+
 export interface CostReport {
   jobs: JobCostSummary[];
+  sessions: JobSessionSummary[];
   totals: {
     jobs: number;
     sessions: number;
@@ -391,6 +411,9 @@ export interface CostReport {
   creditsOnUnpublished: number;
   usdOnUnpublished: number;
   unmeasuredJobs: number;
+  // Tokens billed with no published rate: counted, not priced.
+  unpricedModels: string[];
+  priceTableVersion: string;
 }
 
 export async function fetchCostReport(): Promise<CostReport | null> {

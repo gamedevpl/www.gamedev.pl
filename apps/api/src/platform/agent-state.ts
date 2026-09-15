@@ -18,3 +18,8 @@ const AGENT_TASK_STATE_SET: ReadonlySet<string> = new Set(AGENT_TASK_STATES);
 export function isAgentTaskState(value: unknown): value is AgentTaskState {
   return typeof value === 'string' && AGENT_TASK_STATE_SET.has(value);
 }
+
+// Nothing further will be charged to this ref once settled.
+export function isSettledAgentState(state: AgentTaskState): boolean {
+  return state === 'completed' || state === 'failed' || state === 'timed_out' || state === 'cancelled';
+}

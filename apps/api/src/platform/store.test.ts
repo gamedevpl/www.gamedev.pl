@@ -58,6 +58,20 @@ describe('InMemoryStore', () => {
     expect(entry.tokens).toEqual({ input: 10, output: 2 });
   });
 
+  it('stamps a session as finished once, and only once', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:123', 'A game');
+    await store.recordJobCost(1, { kind: 'agent_session', at: '2026-08-08T10:00:00Z', by: 'copilot', ref: 's1' });
+
+    await store.setJobCostFinished(1, 's1', '2026-08-08T10:12:00Z', 'completed');
+    // A later, different observation must not overwrite the real finish time.
+    await store.setJobCostFinished(1, 's1', '2026-08-08T10:20:00Z', 'failed');
+
+    const [entry] = (await store.getSubmission(1))?.costs ?? [];
+    expect(entry.finishedAt).toBe('2026-08-08T10:12:00Z');
+    expect(entry.state).toBe('completed');
+  });
+
   it('persists a later OpenAI usage breakdown even when input/output are unchanged', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:123', 'A game');
