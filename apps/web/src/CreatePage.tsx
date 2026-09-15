@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { CatalogRail } from './surfaces/catalog/CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
-import { InteractiveMascot } from './Mascot.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import type { PlatformBuilderAvailability } from './submissionApi.js';
 import type { PlayVia } from './visitTelemetry.js';
@@ -21,7 +20,11 @@ type CreatePageProps = {
 };
 
 const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'] as const;
-const STEP_ICONS: PixelIconName[] = ['chat', 'code', 'play', 'sparkle'];
+const STEP_SCENES = ['qa', 'code', 'play', 'live'] as const;
+const STEP_SCENE_ICONS: Partial<Record<(typeof STEP_SCENES)[number], PixelIconName>> = {
+  play: 'play',
+  live: 'gamepad',
+};
 
 // Real catalog cards for the showcase, no new data — just a slice.
 const SHOWCASE_LIMIT = 6;
@@ -45,19 +48,7 @@ export function CreatePage({
 
   return (
     <div className="create-page">
-      <div className="create-atmosphere" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-        <span />
-        <span />
-      </div>
-
       <header className="create-intro">
-        <div className="create-mascot-wrap">
-          <InteractiveMascot size={80} className="create-mascot" idleEmotion="wave" pokeLabel={t('mascot.poke')} />
-          <div className="create-mascot-glow" aria-hidden="true" />
-        </div>
         <h1 className="create-headline">{t('create.headline')}</h1>
         <p className="create-subhead">{t('create.subhead')}</p>
       </header>
@@ -87,20 +78,26 @@ export function CreatePage({
           {t('create.stepsHeading')}
         </h2>
         <ol className="create-steps-list">
-          {STEP_KEYS.map((key, index) => (
-            <li key={key} className="create-step">
-              <div className="create-step-head">
-                <span className="create-step-n" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
+          {STEP_KEYS.map((key, index) => {
+            const scene = STEP_SCENES[index];
+            const sceneIcon = STEP_SCENE_ICONS[scene];
+            return (
+              <li key={key} className="create-step">
+                <span className="create-step-index" aria-hidden="true">
+                  <span className="create-step-n">{String(index + 1).padStart(2, '0')}</span>
                 </span>
-                <span className="create-step-icon" aria-hidden="true">
-                  <PixelIcon name={STEP_ICONS[index]} size={16} />
-                </span>
-              </div>
-              <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
-              <p className="create-step-detail">{t(`create.${key}Detail`)}</p>
-            </li>
-          ))}
+                <div className="create-step-card">
+                  <div className={`create-step-scene is-${scene}`} aria-hidden="true">
+                    {sceneIcon ? <PixelIcon name={sceneIcon} size={20} /> : null}
+                  </div>
+                  <div className="create-step-body">
+                    <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
+                    <p className="create-step-detail">{t(`create.${key}Detail`)}</p>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ol>
         <p className="create-notify-note">
           <PixelIcon name="signal" size={13} /> {t('create.notifyNote')}
@@ -116,9 +113,15 @@ export function CreatePage({
         </div>
         <div className="create-builder-lanes">
           <div className="create-builder-lane is-picked">
+            <div className="create-builder-mark" aria-hidden="true">
+              <PixelIcon name="sparkle" size={22} />
+            </div>
             <div className="create-builder-lane-head">
               <span className="create-builder-lane-title">{t('builder.platform.title')}</span>
               <span className="create-builder-lane-badge is-turq">{t('create.defaultBadge')}</span>
+            </div>
+            <div className="create-builder-progress" aria-hidden="true">
+              <span />
             </div>
             <p className="create-builder-lane-detail">{t('builder.platform.detail')}</p>
             <ul className="create-builder-lane-list">
@@ -127,21 +130,24 @@ export function CreatePage({
             </ul>
           </div>
           <div className="create-builder-lane">
+            <div className="create-builder-mark" aria-hidden="true">
+              <PixelIcon name="code" size={22} />
+            </div>
             <div className="create-builder-lane-head">
               <span className="create-builder-lane-title">{t('builder.self.title')}</span>
               <span className="create-builder-lane-badge">{t('create.freeBadge')}</span>
             </div>
-            <p className="create-builder-lane-detail">{t('builder.self.detail')}</p>
-            <ul className="create-builder-lane-list">
-              <li>{t('create.selfPoint1')}</li>
-              <li>{t('create.selfPoint2')}</li>
-            </ul>
             <div className="create-agent-chips">
               <span className="create-agent-chip">{t('connect.clients.claudeCode')}</span>
               <span className="create-agent-chip">{t('connect.clients.codex')}</span>
               <span className="create-agent-chip">{t('connect.clients.cursor')}</span>
               <span className="create-agent-chip">{t('create.anyMcpClient')}</span>
             </div>
+            <p className="create-builder-lane-detail">{t('builder.self.detail')}</p>
+            <ul className="create-builder-lane-list">
+              <li>{t('create.selfPoint1')}</li>
+              <li>{t('create.selfPoint2')}</li>
+            </ul>
           </div>
         </div>
       </section>

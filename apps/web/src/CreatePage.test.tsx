@@ -76,8 +76,7 @@ describe('CreatePage', () => {
     });
 
     expect(container.querySelector('.create-headline')?.textContent).toBeTruthy();
-    expect(container.querySelector('.create-mascot')).not.toBeNull();
-    expect(container.querySelector('.create-atmosphere')).not.toBeNull();
+    expect(container.querySelector('.create-mascot')).toBeNull();
     // The composer is reused as-is; same input the home page ships.
     expect(container.querySelector('.big-prompt-input')).not.toBeNull();
 
@@ -92,7 +91,9 @@ describe('CreatePage', () => {
 
     const steps = container.querySelectorAll('.create-step');
     expect(steps).toHaveLength(4);
-    expect(container.querySelectorAll('.create-step-icon')).toHaveLength(4);
+    expect(container.querySelectorAll('.create-step-scene')).toHaveLength(4);
+    expect(container.querySelectorAll('.create-builder-mark')).toHaveLength(2);
+    expect(container.querySelector('.create-builder-progress')).not.toBeNull();
     expect(container.textContent).toContain('01');
     expect(container.textContent).toContain("A human reviews, then it's live");
 
