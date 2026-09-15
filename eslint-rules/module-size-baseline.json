@@ -565,7 +565,7 @@
     "apps/web/src/createInitialPrompt.test.ts": 18,
     "apps/web/src/createInitialPrompt.ts": 4,
     "apps/web/src/CreatePage.test.tsx": 166,
-    "apps/web/src/CreatePage.tsx": 130,
+    "apps/web/src/CreatePage.tsx": 150,
     "apps/web/src/creatorGames.test.ts": 75,
     "apps/web/src/creatorGames.ts": 95,
     "apps/web/src/CreatorMetricsPanel.test.tsx": 79,
