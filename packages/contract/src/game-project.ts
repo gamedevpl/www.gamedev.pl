@@ -5,4 +5,6 @@ export interface GameProject {
   html: string;
   js: string;
   css: string;
+  // AGENT.json fields an agent must not observe.
+  hiddenFields?: readonly string[];
 }

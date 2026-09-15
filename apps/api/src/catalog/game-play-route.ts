@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { GameProject } from '@gamedevpl/contract';
 import {
   assembleGameHtml,
+  projectFromSources,
   CredentialLeakError,
   EmptyProjectError,
   ProjectTooLargeError,
@@ -108,13 +109,7 @@ export async function registerGamePlayRoute(
         return reply.status(404).send({ error: 'game not found' });
       }
 
-      const project: GameProject = {
-        title: sources.title ?? slug,
-        description: '',
-        html: sources.indexHtml,
-        js: sources.gameJs,
-        css: sources.styleCss,
-      };
+      const project: GameProject = projectFromSources(sources, sources.title ?? slug);
 
       // restrictNetwork: published games are self-contained, like unreviewed previews.
       const html = assembleGameHtml(project, { restrictNetwork: true });
