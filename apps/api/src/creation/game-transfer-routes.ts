@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
+import { canActOnGame } from '../platform/game-access-permissions.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isRecipientCodeShape } from '../platform/recipient-code.js';
 import { isCanonicalSlug } from '../platform/slug-policy.js';
 import type { GameTransferInvitation } from '../platform/store.js';
@@ -85,7 +86,7 @@ export async function registerGameTransferRoutes(
 
       const uid = request.user!.uid;
       const access = await resolveGameAccess(store, slug);
-      if (!ownsGame(access, uid)) return reply.status(403).send({ error: 'not_owner' });
+      if (!canActOnGame(access, uid, 'transfer')) return reply.status(403).send({ error: 'not_owner' });
 
       if (!isRecipientCodeShape(body.data.recipientCode)) return reply.status(400).send({ error: 'invalid_code' });
       const recipient = await store.getUserByRecipientCode(body.data.recipientCode);

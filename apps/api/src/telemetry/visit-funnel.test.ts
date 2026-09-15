@@ -181,6 +181,31 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('reports the sharing funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'share_step', at: '2026-09-15T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'offered'),
+      step('a', 'accepted'),
+      started('b'),
+      step('b', 'offered'),
+      started('c'),
+      step('c', 'left'),
+    ]);
+
+    expect(funnel.sharing).toEqual([
+      { step: 'offered', visits: 2 },
+      { step: 'accepted', visits: 1 },
+      { step: 'declined', visits: 0 },
+      { step: 'cancelled', visits: 0 },
+      { step: 'expired', visits: 0 },
+      { step: 'removed', visits: 0 },
+      { step: 'left', visits: 1 },
+    ]);
+  });
+
   it('splits party rungs by whether the bar or a seat drove them', () => {
     // A seat rung is evidence phones drive the room.
     const funnel = summarizeVisitFunnel([

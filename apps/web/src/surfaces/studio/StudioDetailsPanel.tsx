@@ -16,11 +16,13 @@ import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { StudioPatPanel } from './StudioPatPanel.js';
+import { StudioMembersPanel } from './StudioMembersPanel.js';
 import { StudioTransferPanel } from './StudioTransferPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
 
 // One pane at a time, chosen by icon.
-export type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'workspace' | 'keys' | 'transfer' | 'stats';
+export type DetailsPaneId =
+  'overview' | 'connect' | 'build' | 'media' | 'workspace' | 'keys' | 'members' | 'transfer' | 'stats';
 
 type DetailsPaneDef = {
   id: DetailsPaneId;
@@ -49,6 +51,7 @@ export function DetailsPanel({
   onPlay,
   onDraftSharedChange,
   onRemoved,
+  onLeftGame,
 }: {
   game: StudioShelfGame;
   // Media and build-round token; differs from game.token during handoff.
@@ -70,12 +73,14 @@ export function DetailsPanel({
   onPlay: () => void;
   onDraftSharedChange: (shared: boolean) => void;
   onRemoved: (token: string) => void | Promise<void>;
+  onLeftGame?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   // This *job* is published — composer/playtest routing. Distinct from catalog-live below.
   const publishedJob = isStudioGamePublished(game);
   const catalogLive = isStudioGameShelfLive(game);
   const publishedAt = game.publishedAt ?? game.livePublishedAt;
+  const isOwner = game.viewerRole !== 'editor';
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -127,8 +132,10 @@ export function DetailsPanel({
       ? [{ id: 'workspace' as const, icon: 'download' as const, labelKey: 'studioPanel.rail.workspace' }]
       : []),
     { id: 'keys', icon: 'lock', labelKey: 'studioPanel.rail.credentials' },
-    // Needs a slug: the transfer routes key the invitation by it.
     ...(game.slug && game.lastKnownStatus !== 'abandoned'
+      ? [{ id: 'members' as const, icon: 'share' as const, labelKey: 'studioPanel.rail.members' }]
+      : []),
+    ...(isOwner && game.slug && game.lastKnownStatus !== 'abandoned'
       ? [{ id: 'transfer' as const, icon: 'handover' as const, labelKey: 'studioPanel.rail.transfer' }]
       : []),
     ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
@@ -139,7 +146,7 @@ export function DetailsPanel({
   // Contributions live in overview: a tab per setting makes a menu.
 
   // Published only: there is nothing to propose against a draft.
-  const showContributions = activePane === 'overview' && catalogLive;
+  const showContributions = activePane === 'overview' && catalogLive && isOwner;
   const activeLabel = t(panes.find((entry) => entry.id === activePane)?.labelKey ?? 'studioPanel.tabs.details');
 
   return (
@@ -192,7 +199,7 @@ export function DetailsPanel({
                 <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
                   <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
                 </button>
-                {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
+                {!publishedJob && game.lastKnownStatus !== 'abandoned' && isOwner ? (
                   <div className="studio-abandon-block">
                     {abandonArmed && !catalogLive ? (
                       <p className="studio-abandon-hint">{t('studioPanel.overview.abandonHintRemove')}</p>
@@ -213,7 +220,7 @@ export function DetailsPanel({
                     </button>
                   </div>
                 ) : null}
-                {catalogLive && game.lastKnownStatus !== 'abandoned' ? (
+                {catalogLive && game.lastKnownStatus !== 'abandoned' && isOwner ? (
                   <div className="studio-delete-block">
                     {deleteArmed ? <p className="studio-delete-hint">{t('studioPanel.overview.deleteHint')}</p> : null}
                     <button
@@ -229,7 +236,7 @@ export function DetailsPanel({
               </div>
             </section>
 
-            {game.slug && game.lastKnownStatus !== 'abandoned' ? (
+            {game.slug && game.lastKnownStatus !== 'abandoned' && isOwner ? (
               <section
                 className="studio-rail-section"
                 aria-label={t(catalogLive ? 'studioPanel.share.liveTitle' : 'studioPanel.share.title')}
@@ -291,7 +298,9 @@ export function DetailsPanel({
 
         {activePane === 'workspace' && game.slug ? <StudioWorkspaceCheckoutPanel slug={game.slug} /> : null}
 
-        {activePane === 'transfer' && game.slug ? <StudioTransferPanel slug={game.slug} /> : null}
+        {activePane === 'members' && game.slug ? <StudioMembersPanel slug={game.slug} onLeft={onLeftGame} /> : null}
+
+        {activePane === 'transfer' && game.slug && isOwner ? <StudioTransferPanel slug={game.slug} /> : null}
 
         {activePane === 'stats' && catalogLive ? (
           <StatsSection

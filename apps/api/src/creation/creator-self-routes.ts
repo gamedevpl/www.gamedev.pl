@@ -4,7 +4,7 @@ import { pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { mintToken } from '../platform/submission-token.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { reconcileTransferredOwnership } from './studio-shelf-records.js';
 
@@ -102,7 +102,7 @@ export async function registerCreatorSelfRoutes(
     // A round on a game given away is not work in flight.
     const owned = await store.listOpenRoundsByOwner(uid);
     const stillOwned = await Promise.all(
-      owned.map(async (round) => !round.slug || (await creatorOwnsSlug(store, round.slug, uid))),
+      owned.map(async (round) => !round.slug || (await canActOnSlug(store, round.slug, uid, 'read'))),
     );
     const open = owned.filter((_, index) => stillOwned[index]);
     const { games } = pageOwnerGames(open, 'shelf');

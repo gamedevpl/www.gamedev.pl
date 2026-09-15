@@ -44,7 +44,7 @@ import {
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug } from './agent-game-key-resolve.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import {
   JOINING_ROUND_PRESENCE,
   mcpPresenceKey,
@@ -1111,7 +1111,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
           }
 
-          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+          if (!(await canActOnSlug(store, slugArg, asAccess.ownerUid, 'build'))) {
             noteInvalidStart(ctx.request);
             return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           }

@@ -7,6 +7,8 @@ import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import { viewerRoleOnGame } from '../platform/game-access-permissions.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
@@ -213,23 +215,49 @@ export async function registerCreatorStudioRoutes(
         }),
     );
 
-    const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => ({
-      token: options.mintStatusToken!(tip.jobId),
-      title: tip.title,
-      createdAt: tip.createdAt,
-      // Prefer `lastStatus` (kept current on every derivation, and written at publish)
-      // over `lastNotifiedStatus` (only moves when a notification fires — `in_review`
-      // shares an event with `building`, so the studio would otherwise keep saying
-      // "building" for a game waiting on review, or for one that just went live).
-      lastKnownStatus: tip.lastStatus ?? tip.lastNotifiedStatus ?? null,
-      ...(tip.slug ? { slug: tip.slug } : {}),
-      ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
-      ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
-      ...(tip.slug && notLiveSlugs.has(tip.slug) ? { live: false as const } : {}),
-      ...(tip.draftSharedAt ? { draftShared: true } : {}),
-      ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),
-      ...(codeSurfaceEnabled() ? { codeSurface: true } : {}),
-    }));
+    const uid = request.user!.uid;
+    const slugs = [...new Set(shelf.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug)))];
+    const accessEntries = await Promise.all(
+      slugs.map(async (slug) => [slug, await resolveGameAccess(store, slug)] as const),
+    );
+    const accessBySlug = new Map(accessEntries);
+    const ownerUids = [
+      ...new Set(
+        [...accessBySlug.values()].flatMap((access) => (access.owner.kind === 'creator' ? [access.owner.uid] : [])),
+      ),
+    ];
+    const ownerUsers = await Promise.all(ownerUids.map((ownerUid) => store.getUser(ownerUid)));
+    const ownerNameByUid = new Map(
+      ownerUids.map((ownerUid, index) => {
+        const user = ownerUsers[index];
+        return [ownerUid, user?.profileName?.trim() || user?.handle || 'a creator'] as const;
+      }),
+    );
+
+    const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => {
+      const access = tip.slug ? accessBySlug.get(tip.slug) : undefined;
+      const viewerRole = access ? viewerRoleOnGame(access, uid) : 'owner';
+      const ownerUid = access?.owner.kind === 'creator' ? access.owner.uid : null;
+      return {
+        token: options.mintStatusToken!(tip.jobId),
+        title: tip.title,
+        createdAt: tip.createdAt,
+        // Prefer `lastStatus` (kept current on every derivation, and written at publish)
+        // over `lastNotifiedStatus` (only moves when a notification fires — `in_review`
+        // shares an event with `building`, so the studio would otherwise keep saying
+        // "building" for a game waiting on review, or for one that just went live).
+        lastKnownStatus: tip.lastStatus ?? tip.lastNotifiedStatus ?? null,
+        ...(tip.slug ? { slug: tip.slug } : {}),
+        ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
+        ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
+        ...(tip.slug && notLiveSlugs.has(tip.slug) ? { live: false as const } : {}),
+        ...(tip.draftSharedAt ? { draftShared: true } : {}),
+        ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),
+        ...(codeSurfaceEnabled() ? { codeSurface: true } : {}),
+        ...(viewerRole ? { viewerRole } : {}),
+        ...(viewerRole === 'editor' && ownerUid ? { ownerProfileName: ownerNameByUid.get(ownerUid) } : {}),
+      };
+    });
 
     return reply.send({ games, truncated, totalGames: total });
   });

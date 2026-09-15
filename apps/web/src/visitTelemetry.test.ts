@@ -19,6 +19,7 @@ import {
   recordPartyStep,
   playHandoffHref,
   recordWaitlistStep,
+  recordShareStep,
   recordFramedPlayStep,
   referrerDomain,
   routeKind,
@@ -450,6 +451,31 @@ describe('recordWaitlistStep', () => {
   it('is a silent no-op when tracking was never started', () => {
     setVisitSessionForTesting(null);
     expect(() => recordWaitlistStep('cta_clicked')).not.toThrow();
+  });
+});
+
+describe('recordShareStep', () => {
+  it('records each sharing step once per visit and carries no slug', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordShareStep('offered');
+    recordShareStep('offered');
+    recordShareStep('accepted');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'share_step', step: 'offered' }),
+      expect.objectContaining({ type: 'share_step', step: 'accepted' }),
+    ]);
+    expect(JSON.stringify(batches[0].events)).not.toContain('slug');
+  });
+
+  it('is a silent no-op when tracking was never started', () => {
+    setVisitSessionForTesting(null);
+    expect(() => recordShareStep('offered')).not.toThrow();
   });
 });
 

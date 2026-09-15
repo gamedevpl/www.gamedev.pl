@@ -94,6 +94,7 @@ export interface VisitEvent {
     | 'how_to_play_opened'
     | 'create_step'
     | 'waitlist_step'
+    | 'share_step'
     | 'framed_play_step'
     | 'invite_step'
     | 'party_step'

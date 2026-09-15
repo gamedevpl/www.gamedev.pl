@@ -17,6 +17,7 @@ import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
 import { normalizeAtIntake } from '../platform/localize-intake.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
@@ -46,6 +47,8 @@ export interface SourceDeliveryInput {
   summary?: string;
   // Caller identity is distinct from file authorship.
   actor?: 'agent' | 'creator';
+  // HTTP/MCP actor; job.ownerUid is still checked so a late callback cannot publish.
+  actorUid?: string;
 }
 
 export interface SourceDeliveryAccepted {
@@ -291,6 +294,23 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (input.authority) {
         const authorityError = managedAuthorityError(record, input, input.authority);
         if (authorityError) throw authorityError;
+      }
+      if (record.slug && record.ownerUid) {
+        const action = input.mode === 'publish' ? 'publish' : 'edit';
+        const actors = new Set([record.ownerUid, ...(input.actorUid ? [input.actorUid] : [])]);
+        let allowed = true;
+        for (const uid of actors) {
+          if (!(await canActOnSlug(options.store, record.slug, uid, action))) {
+            allowed = false;
+            break;
+          }
+        }
+        if (!allowed) {
+          if (input.authority) {
+            throw new SourceDeliveryAuthorityError('round_closed', 'managed delivery actor is no longer a member');
+          }
+          return { accepted: false, rejected: 'stopped' };
+        }
       }
 
       if (stopReason(record)) return { accepted: false, rejected: 'stopped' };

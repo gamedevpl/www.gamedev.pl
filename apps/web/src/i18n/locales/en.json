@@ -58,6 +58,24 @@
       "proposalsOn": "Concept proposals on",
       "proposalsOff": "Concept proposals off"
     },
+    "share": {
+      "offered": {
+        "title": "You were invited to edit a game",
+        "body": "{{actorName}} invited you to edit “{{title}}”."
+      },
+      "accepted": {
+        "title": "An editor joined your game",
+        "body": "{{actorName}} accepted the invite for “{{title}}”."
+      },
+      "removed": {
+        "title": "You were removed from a game",
+        "body": "{{actorName}} removed you from “{{title}}”."
+      },
+      "left": {
+        "title": "An editor left your game",
+        "body": "{{actorName}} left “{{title}}”."
+      }
+    },
     "operator": {
       "review_ready": {
         "title": "A build is waiting to be published",
@@ -377,6 +395,7 @@
         "live": "Live"
       },
       "noMatches": "No games match that search.",
+      "editorRole": "Editor · {{name}}",
       "countTruncated": "Showing {{shown}} of {{total}} games",
       "truncated": "You have more games than we can show here. The newest fifty are listed.",
       "openShelf": "Your games",
@@ -632,7 +651,8 @@
       "fullScreen": "Full screen",
       "exitFullScreen": "Exit full screen",
       "peekEmpty": "No updates yet",
-      "transfer": "Transfer"
+      "transfer": "Transfer",
+      "members": "Members"
     },
     "buildHistory": {
       "live": "Checking your latest changes now",
@@ -863,6 +883,38 @@
         "staleOwner": "This game changed hands. Reload Studio.",
         "notOwner": "This game is not yours to transfer.",
         "alreadyOut": "An invitation for this game is already out."
+      }
+    },
+    "share": {
+      "intro": "Invite another creator as an editor. They see the project only after they accept.",
+      "loading": "Checking…",
+      "codeLabel": "Recipient code",
+      "codePlaceholder": "Their code",
+      "codeHint": "Ask the other creator for the code shown on their Studio shelf.",
+      "send": "Send invitation",
+      "sending": "Sending…",
+      "pending": "Waiting for {{name}} to accept.",
+      "expires": "Expires {{when}}.",
+      "cancel": "Cancel invitation",
+      "cancelling": "Cancelling…",
+      "owner": "Owner: {{name}}",
+      "editor": "Editor: {{name}}",
+      "you": "(you)",
+      "ownerUnknown": "the owner",
+      "remove": "Remove",
+      "leave": "Leave this game",
+      "leaving": "Leaving…",
+      "errors": {
+        "load": "Could not load this game's members.",
+        "generic": "That did not work. Try again.",
+        "invalidCode": "That code does not match anyone.",
+        "self": "That is your own code.",
+        "ineligible": "That creator cannot join games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "notOwner": "Only the owner can manage members.",
+        "alreadyMember": "That creator is already on this game.",
+        "memberCap": "This game has reached its member limit.",
+        "alreadyOut": "An invitation for this person is already out."
       }
     }
   },
@@ -2176,6 +2228,22 @@
         "ineligible": "Your account cannot receive games right now.",
         "staleOwner": "This game changed hands. Reload Studio.",
         "gone": "This invitation is no longer available."
+      },
+      "retry": "Try again"
+    },
+    "share": {
+      "title": "Editor invitations",
+      "offer": "{{name}} invited you to edit {{slug}}.",
+      "accept": "Accept",
+      "reject": "Decline",
+      "errors": {
+        "respond": "That did not work. Try again.",
+        "unreachable": "Could not load your invitations.",
+        "ineligible": "Your account cannot join games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "gone": "This invitation is no longer available.",
+        "alreadyMember": "You are already on this game.",
+        "memberCap": "This game has reached its member limit."
       },
       "retry": "Try again"
     }

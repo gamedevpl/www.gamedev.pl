@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
+import { canActOnGame, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   EDITOR_CONTENT_FILE,
   EDITOR_FILE,
@@ -17,7 +18,6 @@ import {
 import { editorKitV2Enabled } from '../platform/editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from '../delivery/games-store.js';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from '../platform/store.js';
 import { replyModerationBlock, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
@@ -146,7 +146,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       return null;
     }
     const submission = await store.getSubmissionBySlug(params.data.slug);
-    if (!submission || !(await ownsSubmissionOrSlug(store, submission, request.user!.uid))) {
+    if (!submission || !(await canActOnSubmissionOrSlug(store, submission, request.user!.uid, 'edit'))) {
       reply.status(404).send({ error: 'not found' });
       return null;
     }
@@ -637,7 +637,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       const at = () => new Date(now()).toISOString();
       try {
         const access = await resolveGameAccess(store, slug);
-        if (access.source === 'canonical' && !ownsGame(access, request.user!.uid)) {
+        if (access.source === 'canonical' && !canActOnGame(access, request.user!.uid, 'publish')) {
           return reply
             .status(409)
             .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });

@@ -15,6 +15,7 @@ import {
   REMIX_CONTROLS,
   REMIX_PAINTED_VIAS,
   REMIX_STEPS,
+  SHARE_STEPS,
   STUDIO_STEP_DETAILS,
   STUDIO_STEPS,
   VISIT_ROUTE_KINDS,
@@ -62,6 +63,7 @@ const MAX_TRACKED_VISITS = 5000;
 const RouteKindSchema = z.enum(VISIT_ROUTE_KINDS);
 const CreateStepSchema = z.enum(CREATE_STEPS);
 const WaitlistStepSchema = z.enum(WAITLIST_STEPS);
+const ShareStepSchema = z.enum(SHARE_STEPS);
 const FramedPlayStepSchema = z.enum(FRAMED_PLAY_STEPS);
 const InviteStepSchema = z.enum(INVITE_STEPS);
 const PartyStepSchema = z.enum(PARTY_STEPS);
@@ -125,6 +127,7 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
+  z.object({ type: z.literal('share_step'), step: ShareStepSchema, ...offsetField }),
   z.object({ type: z.literal('framed_play_step'), step: FramedPlayStepSchema, ...offsetField }),
   z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
   z.object({
@@ -265,6 +268,8 @@ export async function registerVisitTelemetryRoutes(
             ...(event.builder === undefined ? {} : { builder: event.builder }),
           };
         case 'waitlist_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'share_step':
           return { ...base, type: event.type, step: event.step };
         case 'framed_play_step':
           return { ...base, type: event.type, step: event.step };

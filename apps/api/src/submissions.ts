@@ -1,5 +1,6 @@
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
-import { ownsGame, resolveGameAccess } from './platform/game-access-resolve.js';
+import { canActOnGame } from './platform/game-access-permissions.js';
+import { resolveGameAccess } from './platform/game-access-resolve.js';
 import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -819,7 +820,7 @@ export async function registerSubmissionRoutes(
       // Recheck ownership: a transfer may have landed while this lease was pending.
       const expectedOwnerUid = input.ownerUid ?? source.ownerUid;
       const access = await resolveGameAccess(store, slug);
-      if (access.source === 'canonical' && !ownsGame(access, expectedOwnerUid)) {
+      if (access.source === 'canonical' && !canActOnGame(access, expectedOwnerUid, 'build')) {
         throw Object.assign(new Error('Ownership of this game changed. Refresh before continuing.'), {
           statusCode: 409,
         });
@@ -953,7 +954,7 @@ export async function registerSubmissionRoutes(
       // Under the lease: a transfer may have committed first.
       if (record.slug && input.ownerUid) {
         const access = await resolveGameAccess(store, record.slug);
-        if (access.source === 'canonical' && !ownsGame(access, input.ownerUid)) {
+        if (access.source === 'canonical' && !canActOnGame(access, input.ownerUid, 'build')) {
           return { ok: false, reason: 'stale_owner' };
         }
       }

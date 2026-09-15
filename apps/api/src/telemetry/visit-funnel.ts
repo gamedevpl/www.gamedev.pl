@@ -13,6 +13,7 @@ import {
   REMIX_CONTROLS,
   REMIX_PAINTED_VIAS,
   REMIX_STEPS,
+  SHARE_STEPS,
   WAITLIST_STEPS,
   type AssistStep,
   type BetaWelcomeStep,
@@ -28,6 +29,7 @@ import {
   type RemixControl,
   type RemixPaintedVia,
   type RemixStep,
+  type ShareStep,
   type WaitlistStep,
 } from '@gamedevpl/contract';
 import type { VisitEvent } from '../platform/store.js';
@@ -101,6 +103,7 @@ export interface VisitFunnel {
    * present — including zeroes. Same posture as `creating`.
    */
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
+  sharing: Array<{ step: ShareStep; visits: number }>;
   // Framed /play/ interstitial; every step, zeroes included.
   framedPlay: Array<{ step: FramedPlayStep; visits: number }>;
   invites: Array<{ step: InviteStep; visits: number }>;
@@ -223,6 +226,7 @@ interface VisitRollup {
   steps: Set<string>;
   /** Waitlist steps this visit reached. Separate from create so the two funnels cannot collide. */
   waitlistSteps: Set<string>;
+  shareSteps: Set<string>;
   // Separate Set: `shown` is also a beta-welcome rung.
   framedPlaySteps: Set<string>;
   inviteSteps: Set<string>;
@@ -289,6 +293,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       plays: 0,
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
+      shareSteps: new Set<string>(),
       framedPlaySteps: new Set<string>(),
       inviteSteps: new Set<string>(),
       partySteps: new Set<string>(),
@@ -315,6 +320,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.steps.add(event.step);
     } else if (event.type === 'waitlist_step') {
       if (event.step) rollup.waitlistSteps.add(event.step);
+    } else if (event.type === 'share_step') {
+      if (event.step) rollup.shareSteps.add(event.step);
     } else if (event.type === 'framed_play_step') {
       if (event.step) rollup.framedPlaySteps.add(event.step);
     } else if (event.type === 'invite_step') {
@@ -538,6 +545,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     waitlist: WAITLIST_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.waitlistSteps.has(step)).length,
+    })),
+    sharing: SHARE_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.shareSteps.has(step)).length,
     })),
     framedPlay: FRAMED_PLAY_STEPS.map((step) => ({
       step,

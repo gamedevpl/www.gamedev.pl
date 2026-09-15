@@ -67,10 +67,20 @@ export type NotificationType =
    * A proposal this person sent is live in the game. The watcher relationship starts
    * here: merged contributors get digest visibility, never approval rights.
    */
-  | 'proposal.merged';
+  | 'proposal.merged'
+  /** Owner invited this person to edit a game. Access starts only after accept. */
+  | 'share.offered'
+  /** An invited editor accepted; the owner is told. */
+  | 'share.accepted'
+  /** Owner removed this person as an editor. */
+  | 'share.removed'
+  /** An editor left; the owner is told. */
+  | 'share.left';
 
 /** The proposal family, split out for the same reason the submission one is. */
 export type ProposalNotificationType = Extract<NotificationType, `proposal.${string}`>;
+
+export type ShareNotificationType = Extract<NotificationType, `share.${string}`>;
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".

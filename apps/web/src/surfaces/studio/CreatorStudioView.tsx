@@ -36,6 +36,7 @@ import {
 import { DetailsPanel, type DetailsPaneId } from './StudioDetailsPanel.js';
 import { DraftShareControl } from './DraftShareControl.js';
 import { StudioTransferInbox } from './StudioTransferInbox.js';
+import { StudioEditorInviteInbox } from './StudioEditorInviteInbox.js';
 import { StudioShelfControls, StudioShelfList } from './StudioShelf.js';
 import { defaultTabFor, resolveTab, studioAddress, tabAvailable } from './studioTabs.js';
 import { healthFor } from './studioHealth.js';
@@ -636,26 +637,27 @@ export function CreatorStudioView({
     );
   }
 
-  const transferInbox = (
-    <StudioTransferInbox
-      onAccepted={async (slug) => {
-        // Named, so a game below the shelf ceiling still comes back.
-        try {
-          const shelfPage = await fetchStudioGames(slug);
-          // The page is capped; keep the open game even when it falls outside.
-          setGames((prev) => {
-            const open = selectedRef.current;
-            if (!open || shelfPage.games.some((game) => game.token === open)) return shelfPage.games;
-            const kept = prev.filter((game) => game.token === open);
-            return kept.length > 0 ? [...shelfPage.games, ...kept] : shelfPage.games;
-          });
-          setShelfTruncated(shelfPage.truncated);
-          setTotalGames(shelfPage.totalGames);
-        } catch {
-          // The invitation is gone either way; the shelf catches up on reload.
-        }
-      }}
-    />
+  const onInviteAccepted = async (slug: string) => {
+    try {
+      const shelfPage = await fetchStudioGames(slug);
+      setGames((prev) => {
+        const open = selectedRef.current;
+        if (!open || shelfPage.games.some((game) => game.token === open)) return shelfPage.games;
+        const kept = prev.filter((game) => game.token === open);
+        return kept.length > 0 ? [...shelfPage.games, ...kept] : shelfPage.games;
+      });
+      setShelfTruncated(shelfPage.truncated);
+      setTotalGames(shelfPage.totalGames);
+    } catch {
+      // The invitation is gone either way; the shelf catches up on reload.
+    }
+  };
+
+  const inviteInboxes = (
+    <>
+      <StudioEditorInviteInbox onAccepted={(slug) => void onInviteAccepted(slug)} />
+      <StudioTransferInbox onAccepted={(slug) => void onInviteAccepted(slug)} />
+    </>
   );
 
   const shelfList = (
@@ -722,7 +724,7 @@ export function CreatorStudioView({
             <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
               <PixelIcon name="sparkle" size={14} /> {t('studioPanel.createFirst')}
             </button>
-            {transferInbox}
+            {inviteInboxes}
           </div>
         ) : null}
 
@@ -836,7 +838,7 @@ export function CreatorStudioView({
                 onFilterChange={setShelfFilter}
               />
               {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
-              {transferInbox}
+              {inviteInboxes}
               {shelfList}
             </aside>
 
@@ -1186,6 +1188,22 @@ export function CreatorStudioView({
                                     setAbandonNotice(abandonedTitle);
                                     setSelected(fallbackToken(games.filter((game) => game.token !== token)));
                                   }
+                                }}
+                                onLeftGame={() => {
+                                  const token = activeGame.token;
+                                  if (selectedRef.current === token) selectedRef.current = null;
+                                  setSelected((current) => (current === token ? null : current));
+                                  setGames((prev) => prev.filter((game) => game.token !== token));
+                                  void fetchStudioGames()
+                                    .then((shelfPage) => {
+                                      setGames(shelfPage.games);
+                                      setShelfTruncated(shelfPage.truncated);
+                                      setTotalGames(shelfPage.totalGames);
+                                      onNavigate(studioPath());
+                                    })
+                                    .catch(() => {
+                                      onNavigate(studioPath());
+                                    });
                                 }}
                               />
                             </aside>

@@ -131,6 +131,8 @@ const FILE_BUCKET = {
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
   'game-access-resolve': 'platform',
+  'game-access-permissions': 'platform',
+  'game-quota': 'platform',
   'game-access-backfill': 'platform',
   'game-access-cutover': 'platform',
   'atomic-slug-claim': 'platform',
@@ -309,6 +311,9 @@ const FILE_BUCKET = {
   'shelf-shadow': 'creation',
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
+  'game-transfer-routes': 'creation',
+  'game-editor-invite-routes': 'creation',
+  'editor-invite-inbox-cache': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
@@ -521,6 +526,8 @@ const FILE_BUCKET = {
   'game-follow-routes': 'notifications',
   'email-routes': 'notifications',
   'email-templates': 'notifications',
+  'email-templates-share': 'notifications',
+  'notify-share': 'notifications',
   'beta-welcome-email': 'notifications',
   mailer: 'notifications',
   'push-routes': 'notifications',

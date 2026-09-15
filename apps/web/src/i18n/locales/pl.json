@@ -58,6 +58,24 @@
       "proposalsOn": "Propozycje konceptów włączone",
       "proposalsOff": "Propozycje konceptów wyłączone"
     },
+    "share": {
+      "offered": {
+        "title": "Zaproszono cię do edycji gry",
+        "body": "{{actorName}} zaprasza cię do edycji „{{title}}”."
+      },
+      "accepted": {
+        "title": "Edytor dołączył do twojej gry",
+        "body": "{{actorName}} przyjął zaproszenie do „{{title}}”."
+      },
+      "removed": {
+        "title": "Usunięto cię z gry",
+        "body": "{{actorName}} usunął cię z „{{title}}”."
+      },
+      "left": {
+        "title": "Edytor opuścił twoją grę",
+        "body": "{{actorName}} opuścił „{{title}}”."
+      }
+    },
     "operator": {
       "review_ready": {
         "title": "Build czeka na publikację",
@@ -379,6 +397,7 @@
         "live": "Na żywo"
       },
       "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
+      "editorRole": "Edytor · {{name}}",
       "countTruncated": "Wyświetlam {{shown}} z {{total}} gier",
       "truncated": "Masz więcej gier, niż możemy tu pokazać. Widać pięćdziesiąt najnowszych.",
       "openShelf": "Twoje gry",
@@ -638,7 +657,8 @@
       "fullScreen": "Pełny ekran",
       "exitFullScreen": "Zamknij pełny ekran",
       "peekEmpty": "Brak nowości",
-      "transfer": "Przekazanie"
+      "transfer": "Przekazanie",
+      "members": "Członkowie"
     },
     "buildHistory": {
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
@@ -873,6 +893,38 @@
         "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
         "notOwner": "Ta gra nie jest twoja, więc nie możesz jej przekazać.",
         "alreadyOut": "Zaproszenie dla tej gry już jest wysłane."
+      }
+    },
+    "share": {
+      "intro": "Zaproś innego twórcę jako edytora. Zobaczy projekt dopiero po przyjęciu.",
+      "loading": "Sprawdzam…",
+      "codeLabel": "Kod odbiorcy",
+      "codePlaceholder": "Jego kod",
+      "codeHint": "Poproś drugiego twórcę o kod z jego półki w Studio.",
+      "send": "Wyślij zaproszenie",
+      "sending": "Wysyłam…",
+      "pending": "Czekam, aż {{name}} przyjmie.",
+      "expires": "Wygasa {{when}}.",
+      "cancel": "Anuluj zaproszenie",
+      "cancelling": "Anuluję…",
+      "owner": "Właściciel: {{name}}",
+      "editor": "Edytor: {{name}}",
+      "you": "(ty)",
+      "ownerUnknown": "właściciel",
+      "remove": "Usuń",
+      "leave": "Opuść tę grę",
+      "leaving": "Opuszczam…",
+      "errors": {
+        "load": "Nie udało się wczytać członków tej gry.",
+        "generic": "Nie udało się. Spróbuj ponownie.",
+        "invalidCode": "Ten kod do nikogo nie pasuje.",
+        "self": "To twój własny kod.",
+        "ineligible": "Ten twórca nie może teraz dołączać do gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "notOwner": "Tylko właściciel zarządza członkami.",
+        "alreadyMember": "Ten twórca już jest przy tej grze.",
+        "memberCap": "Ta gra osiągnęła limit członków.",
+        "alreadyOut": "Zaproszenie dla tej osoby już jest wysłane."
       }
     }
   },
@@ -2190,6 +2242,22 @@
         "ineligible": "Twoje konto nie może teraz przyjmować gier.",
         "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
         "gone": "To zaproszenie jest już nieaktualne."
+      },
+      "retry": "Spróbuj ponownie"
+    },
+    "share": {
+      "title": "Zaproszenia do edycji",
+      "offer": "{{name}} zaprasza cię do edycji {{slug}}.",
+      "accept": "Przyjmij",
+      "reject": "Odrzuć",
+      "errors": {
+        "respond": "Nie udało się. Spróbuj ponownie.",
+        "unreachable": "Nie udało się wczytać zaproszeń.",
+        "ineligible": "Twoje konto nie może teraz dołączać do gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "gone": "To zaproszenie jest już nieaktualne.",
+        "alreadyMember": "Jesteś już przy tej grze.",
+        "memberCap": "Ta gra osiągnęła limit członków."
       },
       "retry": "Spróbuj ponownie"
     }
