@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Delegated agents continue implementation without a connected browser and can use isolated temporary Playwright tooling for visual checks (#1364).
+
 ## 0.15.2 — 2026-09-13
 
 ### Fixed

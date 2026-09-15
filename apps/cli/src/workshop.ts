@@ -312,7 +312,7 @@ export async function runLocalBuild(input: {
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
     success = await repairLoop({
-      brief: `${input.brief}\n${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Open this exact URL with your available browser tool. Do not start or stop another preview server.` : 'No live preview was supplied. If visual work requires a browser or preview unavailable here, report the blocker; the creator can start /play in their terminal.'}`,
+      brief: `${input.brief}\n${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
@@ -382,7 +382,7 @@ export async function runLocalBuild(input: {
             'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
           );
           input.write(
-            'If the agent reported missing browser access, enable its browser tool or provide screenshots, then retry. /diff shows existing local edits; /submit delivers them explicitly.',
+            'Missing browser access prevents visual verification, not code changes. Retry an implementation task with that limitation noted. /diff shows existing local edits; /push delivers them explicitly.',
           );
           return false;
         }
