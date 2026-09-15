@@ -27,9 +27,14 @@ describe('controller bridge boundary', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     posted = [];
-    gameWindow = { postMessage: vi.fn((message: Record<string, unknown>) => posted.push(message)) } as unknown as Window;
+    gameWindow = {
+      postMessage: vi.fn((message: Record<string, unknown>) => posted.push(message)),
+    } as unknown as Window;
     otherWindow = { postMessage: vi.fn() } as unknown as Window;
-    studioApi.fetchGameEditor.mockResolvedValue({ definition: { version: 2, controller: true, content: {} }, draft: null });
+    studioApi.fetchGameEditor.mockResolvedValue({
+      definition: { version: 2, controller: true, content: {} },
+      draft: null,
+    });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = null;
@@ -43,7 +48,9 @@ describe('controller bridge boundary', () => {
   });
 
   function mount() {
-    const frameRef = { current: { contentWindow: gameWindow } } as unknown as MutableRefObject<HTMLIFrameElement | null>;
+    const frameRef = {
+      current: { contentWindow: gameWindow },
+    } as unknown as MutableRefObject<HTMLIFrameElement | null>;
     root = createRoot(container);
     act(() => root!.render(<Harness frameRef={frameRef} />));
   }
@@ -110,5 +117,26 @@ describe('controller bridge boundary', () => {
     send(frame({ t: 'editor:canvas', box: { width: 640, height: 360, x: 0, y: 0 } }));
     send(frame({ t: 'editor:canvas', box: { width: 0, height: 360, x: 0, y: 0 } }));
     expect(latestController?.canvasBox).toEqual({ width: 640, height: 360, x: 0, y: 0 });
+  });
+
+  it('refuses a view with nothing in it rather than handing over an empty surface', () => {
+    mount();
+    send(frame({ t: 'editor:hello', controller: true }));
+    send(frame({ t: 'editor:ui', doc: [] }));
+    expect(latestController?.status).toBe('failed');
+    expect(latestController?.view).toBeNull();
+    expect(latestController?.reason).toContain('nothing in it');
+    expect(posted).toContainEqual({ ns: 'gdp', v: 1, t: 'editor:mode', mode: 'fallback' });
+  });
+
+  it('keeps the fallback once a controller has stood down, however many views follow', () => {
+    mount();
+    connect();
+    act(() => latestController!.useFallback('the game refused this content change'));
+    expect(latestController?.status).toBe('failed');
+
+    send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Back again' } }));
+    expect(latestController?.status).toBe('failed');
+    expect(latestController?.reason).toBe('the game refused this content change');
   });
 });

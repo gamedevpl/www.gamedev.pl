@@ -101,11 +101,14 @@ export function useEditorDraftBridge(
   controllerStatusRef.current = controllerStatus;
   const controllerViewRef = useRef(controllerView);
   controllerViewRef.current = controllerView;
+  // A controller that stood down does not take the surface back.
+  const controllerStoodDownRef = useRef(false);
 
   useEffect(() => {
     lastContentRef.current = null;
     lastSelectionRef.current = null;
     controllerHelloRef.current = false;
+    controllerStoodDownRef.current = false;
     setControllerStatus(null);
     setControllerView(null);
     setControllerReason(null);
@@ -143,6 +146,7 @@ export function useEditorDraftBridge(
       if (disposed) return;
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
       controllerTimerRef.current = null;
+      controllerStoodDownRef.current = true;
       setControllerStatus('failed');
       setControllerReason(reason);
       frameRef.current?.contentWindow?.postMessage(
@@ -179,6 +183,11 @@ export function useEditorDraftBridge(
         controllerHelloRef.current = true;
         expectController();
       } else if (data.t === 'editor:ui') {
+        if (controllerStoodDownRef.current) return;
+        if ((Array.isArray(data.doc) ? data.doc : [data.doc]).length === 0) {
+          failController('The game editor sent a view with nothing in it.');
+          return;
+        }
         if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
         controllerTimerRef.current = null;
         setControllerView(data.doc);
@@ -272,6 +281,7 @@ export function useEditorDraftBridge(
           ...(error ? { error } : {}),
         }),
       useFallback: (reason) => {
+        controllerStoodDownRef.current = true;
         setControllerStatus('failed');
         setControllerReason(reason);
         send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:mode', mode: 'fallback' });

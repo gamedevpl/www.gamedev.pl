@@ -859,7 +859,7 @@
     "apps/web/src/surfaces/studio/EditorLayers.test.tsx": 190,
     "apps/web/src/surfaces/studio/EditorPanel.surfaceMode.test.ts": 80,
     "apps/web/src/surfaces/studio/EditorPanel.test.tsx": 285,
-    "apps/web/src/surfaces/studio/EditorPanel.tsx": 1136,
+    "apps/web/src/surfaces/studio/EditorPanel.tsx": 1142,
     "apps/web/src/surfaces/studio/editorPanelHelpers.ts": 89,
     "apps/web/src/surfaces/studio/editorParamsScrub.test.ts": 115,
     "apps/web/src/surfaces/studio/editorParamsScrub.ts": 78,

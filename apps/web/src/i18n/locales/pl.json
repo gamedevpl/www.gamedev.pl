@@ -593,7 +593,9 @@
       "assistNeedsContent": "To zmiana samych map — edytuj je poniżej.",
       "assistRejected": "Ta prośba została odrzucona.",
       "assistQuota": "Wykorzystano dzisiejsze prośby o strojenie. Suwaki nadal działają.",
-      "assistUnavailable": "Asystent nie odpowiedział — spróbuj ponownie lub użyj suwaków."
+      "assistUnavailable": "Asystent nie odpowiedział — spróbuj ponownie lub użyj suwaków.",
+      "useStandardEditor": "Użyj standardowego edytora",
+      "useGameEditor": "Użyj edytora tej gry"
     },
     "overview": {
       "status": "Status",

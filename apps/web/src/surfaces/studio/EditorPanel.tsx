@@ -133,9 +133,10 @@ export function EditorPanel(props: {
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
   const [controllerDisabled, setControllerDisabled] = useState(false);
-  const controllerActive = Boolean(
-    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
-  );
+  // The creator chooses; no controller message overrules it.
+  const [standardPreferred, setStandardPreferred] = useState(false);
+  const controllerOffered = Boolean(props.controller?.status === 'ready' && props.controller.view);
+  const controllerActive = controllerOffered && !controllerDisabled && !standardPreferred;
   const lastControllerChangeRef = useRef<string | null>(null);
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
@@ -683,6 +684,11 @@ export function EditorPanel(props: {
         <div className="editor-banner" role="alert">
           {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
         </div>
+      ) : null}
+      {controllerOffered && !controllerDisabled ? (
+        <button type="button" className="editor-surface-switch" onClick={() => setStandardPreferred((on) => !on)}>
+          {t(standardPreferred ? 'studioPanel.editor.useGameEditor' : 'studioPanel.editor.useStandardEditor')}
+        </button>
       ) : null}
 
       <div className="editor-body">

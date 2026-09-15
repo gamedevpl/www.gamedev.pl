@@ -587,7 +587,9 @@
       "assistNeedsContent": "That's a change to the maps themselves — edit them below.",
       "assistRejected": "That request was refused.",
       "assistQuota": "You've used today's tuning requests. The sliders still work.",
-      "assistUnavailable": "The assistant didn't answer — try again, or use the sliders."
+      "assistUnavailable": "The assistant didn't answer — try again, or use the sliders.",
+      "useStandardEditor": "Use the standard editor",
+      "useGameEditor": "Use this game's editor"
     },
     "overview": {
       "status": "Status",
