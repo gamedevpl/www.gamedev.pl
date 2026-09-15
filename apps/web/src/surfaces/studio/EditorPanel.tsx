@@ -190,11 +190,11 @@ export function EditorPanel(props: {
         recordEditorStep('opened');
         setEditor(loaded);
         const merged = mergeDraft(loaded);
-        resetDocument(merged, loaded.draft?.revision ?? 0);
+        resetDocument(merged.content, loaded.draft?.revision ?? 0, merged.unsaved);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
         const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
         pushLive(
-          merged,
+          merged.content,
           defaultKey
             ? { collection: defaultKey, index: 0 }
             : defaultLayer
@@ -396,11 +396,11 @@ export function EditorPanel(props: {
       if (!mountedRef.current) return;
       setEditor(loaded);
       const merged = mergeDraft(loaded);
-      resetDocument(merged, loaded.draft?.revision ?? 0);
+      resetDocument(merged.content, loaded.draft?.revision ?? 0, merged.unsaved);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
       const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
       pushLive(
-        merged,
+        merged.content,
         defaultKey
           ? { collection: defaultKey, index: 0 }
           : defaultLayer

@@ -13,7 +13,7 @@ import type {
   GameEditorState,
 } from '../../studioApi.js';
 import { defaultLayerKey, defaultLayerTileKey } from '../../editorContentTools.js';
-import { fillDeclaredValues } from '../../editorContentDefaults.js';
+import { draftHasHole, fillDeclaredValues } from '../../editorContentDefaults.js';
 
 export function useLabel(): (label: EditorLabel) => string {
   const { i18n } = useTranslation();
@@ -21,8 +21,8 @@ export function useLabel(): (label: EditorLabel) => string {
 }
 
 // A saved draft over current defaults; fields declared since are filled.
-export function mergeDraft(loaded: GameEditorState): EditorContentDoc {
-  if (!loaded.draft) return loaded.content;
+export function mergeDraft(loaded: GameEditorState): { content: EditorContentDoc; unsaved: boolean } {
+  if (!loaded.draft) return { content: loaded.content, unsaved: false };
   const merged: EditorContentDoc = { ...loaded.content, ...loaded.draft.content };
   if (loaded.definition.params) {
     merged.params = {
@@ -30,7 +30,7 @@ export function mergeDraft(loaded: GameEditorState): EditorContentDoc {
       ...((loaded.draft.content.params ?? {}) as Record<string, EditorParamValue>),
     };
   }
-  return fillDeclaredValues(loaded.definition, merged);
+  return { content: fillDeclaredValues(loaded.definition, merged), unsaved: draftHasHole(loaded) };
 }
 
 // A collection's items out of the mixed content document.

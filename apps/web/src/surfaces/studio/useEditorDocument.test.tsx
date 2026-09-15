@@ -124,3 +124,17 @@ describe('a save that queues behind another still sends its own snapshot', () =>
     expect(putEditorDraft).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('reset', () => {
+  it('leaves a document the server already holds clean', () => {
+    mount();
+    act(() => latest!.reset({ boards: [] } as EditorContentDoc, 4));
+    expect(latest!.saveState).toBe('clean');
+  });
+
+  it('marks a repaired document unsaved, so Publish flushes it before validating', () => {
+    mount();
+    act(() => latest!.reset({ boards: [] } as EditorContentDoc, 4, true));
+    expect(latest!.saveState).toBe('dirty');
+  });
+});

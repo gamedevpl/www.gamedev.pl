@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fillDeclaredValues } from './editorContentDefaults.js';
+import { draftHasHole, fillDeclaredValues } from './editorContentDefaults.js';
 import { mergeDraft } from './surfaces/studio/editorPanelHelpers.js';
 import type { EditorDefinition, EditorItemContent, GameEditorState } from './studioApi.js';
 
@@ -140,14 +140,44 @@ describe('fillDeclaredValues', () => {
   });
 });
 
+function loadedWith(draftContent: GameEditorState['draft']): GameEditorState {
+  return {
+    version: '3',
+    definition: entitiesDefinition,
+    content: { boards: [{ properties: { name: 'shipped', speed: 5 } }] },
+    draft: draftContent,
+  };
+}
+
 describe('mergeDraft', () => {
   it('hands the panel a draft with no hole where a newly declared field goes', () => {
-    const loaded: GameEditorState = {
-      version: '3',
-      definition: entitiesDefinition,
-      content: { boards: [{ properties: { name: 'shipped', speed: 5 } }] },
-      draft: { content: { boards: [{ properties: { name: 'mine' } }] }, revision: 2, updatedAt: '' },
-    };
-    expect(boards(mergeDraft(loaded))[0].properties).toEqual({ name: 'mine', speed: 3 });
+    const loaded = loadedWith({ content: { boards: [{ properties: { name: 'mine' } }] }, revision: 2, updatedAt: '' });
+    expect(boards(mergeDraft(loaded).content)[0].properties).toEqual({ name: 'mine', speed: 3 });
+  });
+
+  it('reports the repaired draft as unsaved, so Publish flushes it first', () => {
+    const loaded = loadedWith({ content: { boards: [{ properties: { name: 'mine' } }] }, revision: 2, updatedAt: '' });
+    expect(mergeDraft(loaded).unsaved).toBe(true);
+  });
+
+  it('leaves a draft the definition still fits alone', () => {
+    const stored = { boards: [{ properties: { name: 'mine', speed: 4 } }] };
+    expect(mergeDraft(loadedWith({ content: stored, revision: 2, updatedAt: '' })).unsaved).toBe(false);
+  });
+
+  it('never calls a game with no draft unsaved', () => {
+    expect(mergeDraft(loadedWith(null)).unsaved).toBe(false);
+  });
+});
+
+describe('draftHasHole', () => {
+  it('is false when every declared field is already stored', () => {
+    const stored = { boards: [{ properties: { name: 'a', speed: 6 } }] };
+    expect(draftHasHole(loadedWith({ content: stored, revision: 1, updatedAt: '' }))).toBe(false);
+  });
+
+  it('is true when a stored item is missing a declared field', () => {
+    const stored = { boards: [{ properties: { name: 'a' } }] };
+    expect(draftHasHole(loadedWith({ content: stored, revision: 1, updatedAt: '' }))).toBe(true);
   });
 });

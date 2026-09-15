@@ -9,6 +9,7 @@ import type {
   EditorParamSpec,
   EditorParamValue,
   EditorPropertySpec,
+  GameEditorState,
 } from './studioApi.js';
 
 const LAYERS_KEY = 'layers';
@@ -39,6 +40,13 @@ export function fillDeclaredValues(definition: EditorDefinition, doc: EditorCont
   }
   if (definition.params) filled.params = fillParams(definition.params, doc.params);
   return filled;
+}
+
+// A draft the definition moved under differs from what the server holds.
+export function draftHasHole(loaded: GameEditorState): boolean {
+  if (!loaded.draft) return false;
+  const stored = loaded.draft.content;
+  return JSON.stringify(fillDeclaredValues(loaded.definition, stored)) !== JSON.stringify(stored);
 }
 
 function fillParams(specs: Record<string, EditorParamSpec>, values: unknown): Record<string, EditorParamValue> {

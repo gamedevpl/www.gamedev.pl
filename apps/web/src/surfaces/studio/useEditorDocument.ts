@@ -47,7 +47,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   );
 
   const reset = useCallback(
-    (next: EditorContentDoc, nextRevision: number) => {
+    (next: EditorContentDoc, nextRevision: number, unsaved = false) => {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -60,7 +60,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
       futureRef.current = [];
       refreshHistory();
       setSaveProblems([]);
-      setSaveState('clean');
+      setSaveState(unsaved ? 'dirty' : 'clean');
     },
     [refreshHistory],
   );
