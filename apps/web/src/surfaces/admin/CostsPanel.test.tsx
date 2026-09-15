@@ -163,11 +163,11 @@ describe('CostsPanel', () => {
 
   it('names the models that spent tokens with no rate, so a cheap window is not read as cheap', async () => {
     // Absent spending looks exactly like thrift.
-    mocked.fetchCostReport.mockResolvedValue(report({ unpricedModels: ['gemini-3.8-flash'] }));
+    mocked.fetchCostReport.mockResolvedValue(report({ unpricedModels: ['muse-spark-1.2'] }));
 
     const { container, root } = await render();
 
-    expect(container.textContent).toContain('gemini-3.8-flash');
+    expect(container.textContent).toContain('muse-spark-1.2');
     expect(container.textContent).toContain('as a floor');
 
     await act(async () => root.unmount());
