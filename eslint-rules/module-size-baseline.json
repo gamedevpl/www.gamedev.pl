@@ -130,7 +130,7 @@
     "apps/api/src/catalog/github-client.test.ts": 2044,
     "apps/api/src/catalog/github-client.ts": 2036,
     "apps/api/src/catalog/index-html-generator.ts": 244,
-    "apps/api/src/catalog/local-games-repo.test.ts": 158,
+    "apps/api/src/catalog/local-games-repo.test.ts": 174,
     "apps/api/src/catalog/local-games-repo.ts": 212,
     "apps/api/src/catalog/published-slugs.test.ts": 175,
     "apps/api/src/catalog/published-slugs.ts": 149,

@@ -20,7 +20,7 @@ import type { Store } from '../platform/store.js';
 import { replyModerationBlock, isModerationBlock, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { peekQuota } from '../platform/quota-peek.js';
-import { assembleGameHtml } from '../platform/assemble.js';
+import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {
@@ -570,17 +570,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       ...overrides,
     });
     if (!sources) return null;
-    return assembleGameHtml(
-      {
-        title: session.title,
-        description: '',
-        html: sources.indexHtml,
-        js: sources.gameJs,
-        css: sources.styleCss,
-        hiddenFields: sources.hiddenFields,
-      },
-      { restrictNetwork: true },
-    );
+    return assembleGameHtml(projectFromSources(sources, session.title), { restrictNetwork: true });
   }
 
   app.post(

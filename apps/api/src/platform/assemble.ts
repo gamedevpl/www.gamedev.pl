@@ -12,6 +12,25 @@ export class ProjectTooLargeError extends Error {}
 export class EmptyProjectError extends Error {}
 export class CredentialLeakError extends Error {}
 
+// One shape for every lane: a field added here cannot be forgotten.
+export interface AssemblableSources {
+  indexHtml: string;
+  gameJs: string;
+  styleCss: string;
+  hiddenFields?: readonly string[];
+}
+
+export function projectFromSources(sources: AssemblableSources, title: string): GameProject {
+  return {
+    title,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+    hiddenFields: sources.hiddenFields,
+  };
+}
+
 export interface AssembleOptions {
   /**
    * Inject a strict Content-Security-Policy meta so the game cannot reach the

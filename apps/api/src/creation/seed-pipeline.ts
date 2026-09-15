@@ -1,4 +1,4 @@
-import { assembleGameHtml } from '../platform/assemble.js';
+import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
 import type { AgentBackend, SeedDelivery } from '../agent-surface/agent-backend.js';
@@ -212,17 +212,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     const overlay = overlayGameSources({ seed: input.files });
     const sources = await githubClient.getGameSources(publishedRef, input.slug, overlay);
     if (!sources) return;
-    const html = assembleGameHtml(
-      {
-        title: sources.title ?? input.slug,
-        description: '',
-        html: sources.indexHtml,
-        js: sources.gameJs,
-        css: sources.styleCss,
-        hiddenFields: sources.hiddenFields,
-      },
-      { restrictNetwork: true },
-    );
+    const html = assembleGameHtml(projectFromSources(sources, sources.title ?? input.slug), { restrictNetwork: true });
     if (Buffer.byteLength(html, 'utf8') > MAX_BUILD_PREVIEW_BYTES) return;
     await store.appendBuildPreview(input.jobId, {
       data: Buffer.from(html, 'utf8').toString('base64'),
