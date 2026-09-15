@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { CatalogRail } from './surfaces/catalog/CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
-import { PixelIcon } from './PixelIcon.js';
+import { InteractiveMascot } from './Mascot.js';
+import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import type { PlatformBuilderAvailability } from './submissionApi.js';
 import type { PlayVia } from './visitTelemetry.js';
+import './create-page.css';
 
 type CreatePageProps = {
   initialPrompt: string;
@@ -18,7 +20,8 @@ type CreatePageProps = {
   onPlatformBuilderAvailability: (availability: PlatformBuilderAvailability | undefined) => void;
 };
 
-const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'];
+const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'] as const;
+const STEP_ICONS: PixelIconName[] = ['chat', 'code', 'play', 'sparkle'];
 
 // Real catalog cards for the showcase, no new data — just a slice.
 const SHOWCASE_LIMIT = 6;
@@ -42,7 +45,19 @@ export function CreatePage({
 
   return (
     <div className="create-page">
+      <div className="create-atmosphere" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
+
       <header className="create-intro">
+        <div className="create-mascot-wrap">
+          <InteractiveMascot size={80} className="create-mascot" idleEmotion="wave" pokeLabel={t('mascot.poke')} />
+          <div className="create-mascot-glow" aria-hidden="true" />
+        </div>
         <h1 className="create-headline">{t('create.headline')}</h1>
         <p className="create-subhead">{t('create.subhead')}</p>
       </header>
@@ -60,6 +75,13 @@ export function CreatePage({
         />
       </div>
 
+      <CatalogRail
+        heading={t('create.showcaseHeading')}
+        entries={showcaseEntries}
+        via="create_showcase"
+        onPlayGame={onPlayGame}
+      />
+
       <section className="create-steps" aria-labelledby="create-steps-heading">
         <h2 id="create-steps-heading" className="create-section-heading">
           {t('create.stepsHeading')}
@@ -67,9 +89,14 @@ export function CreatePage({
         <ol className="create-steps-list">
           {STEP_KEYS.map((key, index) => (
             <li key={key} className="create-step">
-              <span className="create-step-n" aria-hidden="true">
-                {String(index + 1).padStart(2, '0')}
-              </span>
+              <div className="create-step-head">
+                <span className="create-step-n" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <span className="create-step-icon" aria-hidden="true">
+                  <PixelIcon name={STEP_ICONS[index]} size={16} />
+                </span>
+              </div>
               <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
               <p className="create-step-detail">{t(`create.${key}Detail`)}</p>
             </li>
@@ -118,13 +145,6 @@ export function CreatePage({
           </div>
         </div>
       </section>
-
-      <CatalogRail
-        heading={t('create.showcaseHeading')}
-        entries={showcaseEntries}
-        via="create_showcase"
-        onPlayGame={onPlayGame}
-      />
     </div>
   );
 }

@@ -1,0 +1,371 @@
+/* /create landing — atmosphere, mascot, steps, builder lanes. */
+
+.create-page {
+  position: relative;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3.5rem;
+}
+
+.create-atmosphere {
+  position: absolute;
+  inset: -0.5rem 0 auto;
+  height: 26rem;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.create-atmosphere span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--turquoise);
+  opacity: 0.28;
+  animation: create-twinkle 3.6s ease-in-out infinite;
+}
+
+.create-atmosphere span:nth-child(1) {
+  top: 8%;
+  left: 6%;
+}
+
+.create-atmosphere span:nth-child(2) {
+  top: 18%;
+  right: 10%;
+  animation-delay: 0.7s;
+}
+
+.create-atmosphere span:nth-child(3) {
+  top: 42%;
+  left: 3%;
+  width: 3px;
+  height: 3px;
+  animation-delay: 1.4s;
+}
+
+.create-atmosphere span:nth-child(4) {
+  top: 36%;
+  right: 4%;
+  animation-delay: 2.1s;
+}
+
+.create-atmosphere span:nth-child(5) {
+  top: 58%;
+  left: 14%;
+  width: 3px;
+  height: 3px;
+  animation-delay: 2.8s;
+}
+
+@keyframes create-twinkle {
+  0%,
+  100% {
+    opacity: 0.12;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.35);
+  }
+}
+
+.create-intro {
+  position: relative;
+  text-align: center;
+  margin: 0 0 2rem;
+}
+
+.create-intro::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(32rem, 100%);
+  height: 18rem;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 18%, rgba(0, 228, 172, 0.16), transparent 68%);
+  pointer-events: none;
+}
+
+.create-mascot-wrap,
+.create-headline,
+.create-subhead {
+  position: relative;
+}
+
+.create-mascot-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  margin: 0 auto 0.85rem;
+}
+
+.create-mascot {
+  position: relative;
+  z-index: 1;
+}
+
+.create-mascot-glow {
+  position: absolute;
+  inset: -1.15rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 228, 172, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+  animation: create-aura 4s ease-in-out infinite alternate;
+}
+
+@keyframes create-aura {
+  from {
+    transform: scale(0.92);
+    opacity: 0.45;
+  }
+  to {
+    transform: scale(1.18);
+    opacity: 0.9;
+  }
+}
+
+.create-headline {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  margin: 0 0 0.6rem;
+}
+
+.create-subhead {
+  color: var(--muted);
+  font-size: 1.05rem;
+  max-width: 38rem;
+  margin: 0 auto;
+}
+
+.create-section-heading {
+  font-size: 1.3rem;
+  margin: 0 0 1rem;
+}
+
+.create-steps,
+.create-builders {
+  margin: 3rem 0 0;
+}
+
+.create-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+/* Deliberate 2x2, not auto-fit: the 832px column only fits 4-across by
+   cramming, and auto-fit's leftover-item wrap (3 then 1 alone) reads as a
+   layout bug rather than a design choice. */
+@media (min-width: 640px) {
+  .create-steps-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.create-step,
+.create-builder-lane {
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(180deg, rgba(0, 228, 172, 0.05), transparent 42%), var(--panel-card);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.create-builder-lane {
+  padding: 1.1rem;
+}
+
+@media (hover: hover) {
+  .create-step:hover,
+  .create-builder-lane:hover {
+    border-color: rgba(0, 228, 172, 0.38);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    transform: translateY(-2px);
+  }
+
+  .create-builder-lane.is-picked:hover {
+    border-color: var(--turquoise);
+  }
+}
+
+.create-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.4rem;
+}
+
+.create-step-n {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--turquoise);
+}
+
+.create-step-icon {
+  display: inline-flex;
+  color: var(--turquoise);
+  opacity: 0.85;
+}
+
+.create-step-title {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.create-step-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.create-notify-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 1.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.create-builders-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+}
+
+.create-builders-head .create-section-heading {
+  margin: 0;
+}
+
+.create-builders-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.create-builder-lanes {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.create-builder-lane.is-picked {
+  border-color: var(--turquoise);
+}
+
+.create-builder-lane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.4rem;
+}
+
+.create-builder-lane-title {
+  font-weight: 600;
+}
+
+.create-builder-lane-detail {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.create-builder-lane-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.create-builder-lane-badge {
+  flex: none;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--panel-border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.create-builder-lane-badge.is-turq {
+  background: rgba(45, 212, 191, 0.14);
+  color: var(--turquoise);
+}
+
+.create-agent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.create-agent-chip {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.create-page .catalog-rail-section {
+  margin-top: 2.5rem;
+  margin-bottom: 0;
+}
+
+.create-page .prompt-example-chip {
+  animation: create-chip-in 0.45s ease both;
+}
+
+.create-page .prompt-example-chip:nth-child(1) {
+  animation-delay: 0.04s;
+}
+
+.create-page .prompt-example-chip:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.create-page .prompt-example-chip:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+@keyframes create-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .create-page {
+    padding: 0.75rem 1rem 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-atmosphere span,
+  .create-mascot-glow,
+  .create-page .prompt-example-chip,
+  .create-step,
+  .create-builder-lane {
+    animation: none;
+    transition: none;
+  }
+}
