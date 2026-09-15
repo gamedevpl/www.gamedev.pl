@@ -41,13 +41,15 @@ describe('what a draft may still be while it is being painted', () => {
     expect(draftShapeProblems(tilemapDefinition, { boards: [board(['.'])] })).toEqual([]);
     expect(draftShapeProblems(tilemapDefinition, { boards: [] })).toEqual([]);
   });
-
-  it('allows a property the definition gained after the draft was written', () => {
-    expect(draftShapeProblems(tilemapDefinition, { boards: [{ properties: {}, rows: ['....'] }] })).toEqual([]);
-  });
 });
 
 describe('what a draft may never be, however unfinished', () => {
+  it('refuses a declared property that is absent, which the shell fills on load', () => {
+    expect(draftShapeProblems(tilemapDefinition, { boards: [{ properties: {}, rows: ['....'] }] }).join()).toContain(
+      'missing property',
+    );
+  });
+
   it('refuses a hole where an item belongs', () => {
     expect(draftShapeProblems(tilemapDefinition, { boards: [null] }).join()).toContain('must be an object');
   });

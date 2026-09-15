@@ -10,12 +10,7 @@ const OPEN_GRID = { minCols: 1, minRows: 1 };
 
 // Same validator, with the finished-level rules switched off.
 export function draftShapeProblems(definition: EditorDefinition, content: unknown): string[] {
-  return validateEditorContent(draftRules(definition), content).filter((problem) => !isAbsentValue(problem));
-}
-
-// A container the shell cannot rebuild from is not in here.
-function isAbsentValue(problem: string): boolean {
-  return problem.includes('missing property "') || problem.includes('params: missing "');
+  return validateEditorContent(draftRules(definition), content);
 }
 
 function draftRules(definition: EditorDefinition): EditorDefinition {
