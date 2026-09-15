@@ -159,7 +159,7 @@
     "apps/api/src/community/proposal-base.ts": 171,
     "apps/api/src/community/proposal-diff.test.ts": 99,
     "apps/api/src/community/proposal-diff.ts": 176,
-    "apps/api/src/community/proposal-routes.test.ts": 413,
+    "apps/api/src/community/proposal-routes.test.ts": 417,
     "apps/api/src/community/proposal-routes.ts": 484,
     "apps/api/src/community/proposal-state.test.ts": 199,
     "apps/api/src/community/proposal-state.ts": 261,
