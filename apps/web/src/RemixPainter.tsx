@@ -266,7 +266,7 @@ function CollectionRemixPainter(props: RemixPainterProps & { content: Record<str
 
       {item && spec ? (
         <div className="remix-painter-properties">
-          {Object.entries(spec.item.properties).map(([propertyName, propertySpec]) => {
+          {Object.entries(spec.item.properties ?? {}).map(([propertyName, propertySpec]) => {
             const value = item.properties[propertyName];
             if (propertySpec.type === 'text') {
               return (
