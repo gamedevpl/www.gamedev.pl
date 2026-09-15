@@ -260,6 +260,26 @@ describe('controller bridge boundary', () => {
     }
   });
 
+  it('attaches to the frame that arrives with the first build, not only to one already there', () => {
+    // StudioStage renders no iframe until it has html for it.
+    mountedFrameRef = { current: null };
+    root = createRoot(container);
+    act(() => root!.render(<Harness frameRef={mountedFrameRef} documentKey="none" />));
+
+    const frameEl = document.createElement('iframe');
+    Object.defineProperty(frameEl, 'contentWindow', { value: gameWindow });
+    mountedFrameRef.current = frameEl;
+    loadDocument('build-1');
+
+    connect();
+    act(() => latestController!.useFallback('the game refused this content change'));
+    act(() => void frameEl.dispatchEvent(new Event('load')));
+
+    send(frame({ t: 'editor:hello', controller: true }));
+    send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'After the reload' } }));
+    expect(latestController?.status).toBe('ready');
+  });
+
   it('gives a reloaded frame a fresh controller, even when the build did not change', () => {
     mount();
     connect();

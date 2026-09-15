@@ -149,7 +149,8 @@ export function useEditorDraftBridge(
     const onLoad = () => setDocumentGeneration((generation) => generation + 1);
     frame.addEventListener('load', onLoad);
     return () => frame.removeEventListener('load', onLoad);
-  }, [frameRef]);
+    // documentKey: the frame does not exist until the first build arrives.
+  }, [frameRef, documentKey]);
 
   // The draft outlives a rebuild; only another game replaces it.
   useEffect(() => {
