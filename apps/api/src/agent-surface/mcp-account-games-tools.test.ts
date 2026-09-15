@@ -5,6 +5,7 @@ import { InMemoryStore } from '../store/in-memory.js';
 import { mintCreatorAgentKey } from './agent-creator-key.js';
 import { createAccountGamesTools } from './mcp-account-games-tools.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
+import { STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { PLATFORM_CONNECTOR_ONLY_REASON, RETIRED_GAME_KEY_REASON } from './mcp-tool-support.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import type { GitHubClient } from '../github.js';
@@ -81,7 +82,9 @@ async function callListAccountGames(
   const structured =
     body.result?.structuredContent ??
     (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
-  return { structured, isError: Boolean(body.result?.isError) };
+  const errorText =
+    (structured as { error?: string } | undefined)?.error ?? body.result?.content?.[0]?.text;
+  return { structured, errorText, isError: Boolean(body.result?.isError) };
 }
 
 describe('list_account_games MCP tool', () => {
@@ -277,6 +280,90 @@ describe('list_account_games MCP tool', () => {
     const body = structured as { total: number; games: Array<{ slug: string }> };
     expect(body.total).toBe(5);
     expect(body.games).toHaveLength(2);
+  });
+
+  it('clamps fractional limit like 0.5 to 1', async () => {
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+    const creatorKey = mintCreatorAgentKey(secret, { creatorUid: OWNER, keyGeneration: 1, now: Date.now() });
+
+    await store.createSubmission(401, OWNER, 'Game 1');
+    await store.createSubmission(402, OWNER, 'Game 2');
+
+    const { structured, isError } = await callListAccountGames(app, { limit: 0.5 }, {
+      authorization: `Bearer ${creatorKey}`,
+    });
+    expect(isError).toBe(false);
+    const body = structured as { total: number; games: Array<{ slug: string }> };
+    expect(body.total).toBe(2);
+    expect(body.games).toHaveLength(1);
+  });
+
+  it('allows platform connector bearer when valid sessionKey is supplied', async () => {
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+
+    const JOB_ID = 501;
+    await store.createSubmission(JOB_ID, OWNER, 'Connector Game');
+    await store.setSubmissionSlug(JOB_ID, 'connector-game');
+
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId: 'session-connector-1234',
+      jobId: JOB_ID,
+      roundGeneration: 1,
+      now: Date.now(),
+    });
+
+    const { structured, isError } = await callListAccountGames(
+      app,
+      { sessionKey },
+      { authorization: `Bearer ${connectorSecret}` },
+    );
+    expect(isError).toBe(false);
+    const body = structured as { total: number; games: Array<{ slug: string }> };
+    expect(body.total).toBe(1);
+    expect(body.games[0]?.slug).toBe('connector-game');
+  });
+
+  it('refuses stale sessionKey when round generation has advanced', async () => {
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+
+    const JOB_ID = 601;
+    await store.createSubmission(JOB_ID, OWNER, 'Stale Game');
+
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId: 'session-stale-1234',
+      jobId: JOB_ID,
+      roundGeneration: 1,
+      now: Date.now(),
+    });
+
+    await store.bumpRoundGeneration(JOB_ID);
+
+    const { errorText, isError } = await callListAccountGames(app, { sessionKey });
+    expect(isError).toBe(true);
+    expect(errorText).toBe(STALE_AGENT_TOKEN_REASON);
+  });
+
+  it('recovers state and hasActiveRound from legacy lastStatus', async () => {
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+    const creatorKey = mintCreatorAgentKey(secret, { creatorUid: OWNER, keyGeneration: 1, now: Date.now() });
+
+    const JOB_ID = 701;
+    await store.createSubmission(JOB_ID, OWNER, 'Legacy Game');
+    await store.setSubmissionSlug(JOB_ID, 'legacy-game');
+    await store.setSubmissionLastStatus(JOB_ID, 'building');
+
+    const { structured, isError } = await callListAccountGames(app, {}, {
+      authorization: `Bearer ${creatorKey}`,
+    });
+    expect(isError).toBe(false);
+    const body = structured as { total: number; games: Array<{ slug: string; state: string; hasActiveRound: boolean }> };
+    expect(body.total).toBe(1);
+    expect(body.games[0]?.state).toBe('building');
+    expect(body.games[0]?.hasActiveRound).toBe(true);
   });
 
   it('returns not configured tool error when loadOwnerGames is missing', async () => {

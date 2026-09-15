@@ -10,8 +10,12 @@ import {
   looksLikeMcpSessionKey,
   verifyMcpSessionKey,
 } from './mcp-session-key.js';
-import { InvalidAgentTokenError } from '../platform/agent-token.js';
-import { isActiveBuildRound } from '../creation/job-state.js';
+import {
+  assertAgentTokenActive,
+  InvalidAgentTokenError,
+  STALE_AGENT_TOKEN_REASON,
+} from '../platform/agent-token.js';
+import { isActiveBuildRound, resolveJobState } from '../creation/job-state.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import {
   toolOk,
@@ -122,9 +126,6 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
         const bearer = ctx.bearerToken;
         const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
 
-        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
-        }
         if (!store || !agentTokenSecret) {
           return toolErr('the MCP build endpoint is not configured');
         }
@@ -137,15 +138,27 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
             const claims = verifyMcpSessionKey(candidateKey, agentTokenSecret);
             assertMcpSessionKeyUnexpired(claims, now());
             const job = await store.getSubmission(claims.jobId);
-            if (job?.ownerUid) {
+            if (!job || job.abandonedAt) {
+              return toolErr('invalid sessionKey — call start() again');
+            }
+            assertAgentTokenActive(claims, job, now());
+            if (job.ownerUid) {
               creatorUid = job.ownerUid;
             }
           } catch (error) {
             if (error instanceof InvalidAgentTokenError) {
-              return toolErr('invalid sessionKey — call start() again');
+              return toolErr(
+                error.message === STALE_AGENT_TOKEN_REASON
+                  ? STALE_AGENT_TOKEN_REASON
+                  : 'invalid sessionKey — call start() again',
+              );
             }
             throw error;
           }
+        }
+
+        if (!creatorUid && matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
+          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
         }
 
         if (!creatorUid && bearer) {
@@ -177,20 +190,21 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
 
         const limitArg =
           typeof args.limit === 'number' && Number.isFinite(args.limit) && args.limit > 0
-            ? Math.min(Math.floor(args.limit), 50)
-            : 50;
+            ? Math.max(1, Math.min(Math.floor(args.limit), MAX_GAMES_LIMIT))
+            : MAX_GAMES_LIMIT;
 
         const paged = collapsed.slice(0, limitArg);
 
         const games = paged.map((ownerGame) => {
           const tip = ownerGame.tip;
+          const state = resolveJobState(tip) ?? 'queued';
           return {
             slug: tip.slug ?? null,
             title: tip.title,
-            state: tip.state ?? 'queued',
+            state,
             round: tip.roundGeneration ?? 1,
             published: Boolean(tip.publishedAt || ownerGame.catalogPublishedAt),
-            hasActiveRound: !tip.abandonedAt && isActiveBuildRound(tip),
+            hasActiveRound: !tip.abandonedAt && isActiveBuildRound({ state, transitions: tip.transitions }),
             builder: (tip.builder ?? 'platform') as 'self' | 'platform',
             createdAt: tip.createdAt,
             updatedAt: tip.stateSince ?? tip.lastAgentSignalAt ?? tip.createdAt,
