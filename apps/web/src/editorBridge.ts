@@ -28,6 +28,9 @@ export type {
 
 export type EditorContentPush = (content: EditorContentDoc, selection?: EditorSelection | null) => void;
 
+// validate() runs on apply, so an answer is due in seconds.
+const CHECK_ANSWER_MS = 3000;
+
 export type EditorControllerState = {
   status: 'connecting' | 'ready' | 'failed';
   view: EditorUiDocument | null;
@@ -85,6 +88,8 @@ export function useEditorDraftBridge(
   active: boolean,
   slug: string | undefined,
   editable: boolean,
+  // Changes when the frame loads a different document.
+  documentKey?: string | null,
 ): { push: EditorContentPush; controller: EditorControllerState | null } {
   /** What the next `editor:hello` gets answered with. */
   const lastContentRef = useRef<EditorContentDoc | null>(null);
@@ -106,12 +111,33 @@ export function useEditorDraftBridge(
   controllerViewRef.current = controllerView;
   // A controller that stood down does not take the surface back.
   const controllerStoodDownRef = useRef(false);
+  const checkTimerRef = useRef<number | null>(null);
+  const checksSeenRef = useRef(false);
+
+  const standDown = useCallback(
+    (reason: string) => {
+      if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+      checkTimerRef.current = null;
+      controllerStoodDownRef.current = true;
+      setControllerStatus('failed');
+      setControllerReason(reason);
+      frameRef.current?.contentWindow?.postMessage(
+        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:mode', mode: 'fallback' },
+        '*',
+      );
+      recordEditorStep('controller_failed');
+    },
+    [frameRef],
+  );
 
   useEffect(() => {
     lastContentRef.current = null;
     lastSelectionRef.current = null;
     controllerHelloRef.current = false;
     controllerStoodDownRef.current = false;
+    checksSeenRef.current = false;
+    if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+    checkTimerRef.current = null;
     setControllerStatus(null);
     setControllerView(null);
     setControllerReason(null);
@@ -121,7 +147,7 @@ export function useEditorDraftBridge(
     setControllerChecks(null);
     setChecksFresh(true);
     setCanvasBox(null);
-  }, [slug]);
+  }, [slug, documentKey]);
 
   useEffect(() => {
     if (!active || !slug || !editable) return;
@@ -150,14 +176,7 @@ export function useEditorDraftBridge(
       if (disposed) return;
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
       controllerTimerRef.current = null;
-      controllerStoodDownRef.current = true;
-      setControllerStatus('failed');
-      setControllerReason(reason);
-      frameRef.current?.contentWindow?.postMessage(
-        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:mode', mode: 'fallback' },
-        '*',
-      );
-      recordEditorStep('controller_failed');
+      standDown(reason);
     }
 
     function expectController() {
@@ -207,6 +226,9 @@ export function useEditorDraftBridge(
       } else if (data.t === 'editor:ui-request') {
         setUiRequest({ id: data.id, spec: data.spec });
       } else if (data.t === 'editor:check') {
+        if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+        checkTimerRef.current = null;
+        checksSeenRef.current = true;
         setControllerChecks({ ok: data.ok, problems: data.problems });
         setChecksFresh(true);
       } else if (data.t === 'editor:ack' && !data.ok && controllerStatusRef.current !== null) {
@@ -239,7 +261,7 @@ export function useEditorDraftBridge(
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
       window.removeEventListener('message', onMessage);
     };
-  }, [frameRef, active, slug, editable]);
+  }, [frameRef, active, slug, editable, standDown]);
 
   const push = useCallback<EditorContentPush>(
     (content, selection) => {
@@ -247,9 +269,15 @@ export function useEditorDraftBridge(
       if (selection !== undefined) lastSelectionRef.current = selection;
       // Unseen content; the last verdict is about older content.
       setChecksFresh(false);
+      if (checksSeenRef.current && !controllerStoodDownRef.current && checkTimerRef.current === null) {
+        checkTimerRef.current = window.setTimeout(() => {
+          checkTimerRef.current = null;
+          standDown('The game editor stopped answering its own checks.');
+        }, CHECK_ANSWER_MS);
+      }
       frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, lastSelectionRef.current), '*');
     },
-    [frameRef],
+    [frameRef, standDown],
   );
 
   const send = useCallback(

@@ -13,12 +13,16 @@ import type { EditorContentDoc } from './studioApi.js';
 
 let latestController: EditorControllerState | null = null;
 
-type HarnessProps = { frameRef: MutableRefObject<HTMLIFrameElement | null>; active?: boolean };
+type HarnessProps = {
+  frameRef: MutableRefObject<HTMLIFrameElement | null>;
+  active?: boolean;
+  documentKey?: string;
+};
 
 const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: null };
 
-function Harness({ frameRef, active = true }: HarnessProps) {
-  const bridge = useEditorDraftBridge(frameRef, active, 'controller-fixture', true);
+function Harness({ frameRef, active = true, documentKey = 'build-1' }: HarnessProps) {
+  const bridge = useEditorDraftBridge(frameRef, active, 'controller-fixture', true, documentKey);
   latestController = bridge.controller;
   pushRef.current = bridge.push;
   return null;
@@ -66,6 +70,10 @@ describe('controller bridge boundary', () => {
 
   function setActive(active: boolean) {
     act(() => root!.render(<Harness frameRef={mountedFrameRef} active={active} />));
+  }
+
+  function loadDocument(documentKey: string) {
+    act(() => root!.render(<Harness frameRef={mountedFrameRef} documentKey={documentKey} />));
   }
 
   function send(data: Record<string, unknown>, source = gameWindow, origin = 'null') {
@@ -201,6 +209,36 @@ describe('controller bridge boundary', () => {
     send(frame({ t: 'editor:change', id: 'change-3', patch: { path: ['a'], value: 1 } }));
     expect(latestController?.status).toBe('failed');
     expect(latestController?.pendingChange).toBeNull();
+  });
+
+  it('gives a replacement build its own chance, because the frame loaded a new document', () => {
+    mount();
+    connect();
+    act(() => latestController!.useFallback('the game refused this content change'));
+
+    loadDocument('build-2');
+    send(frame({ t: 'editor:hello', controller: true }));
+    send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'New build' } }));
+    expect(latestController?.status).toBe('ready');
+  });
+
+  it('stands a controller down when it stops answering for the content it was sent', () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      connect();
+      send(frame({ t: 'editor:check', ok: true, problems: [] }));
+
+      act(() => pushRef.current?.({ levels: [] }));
+      expect(latestController?.status).toBe('ready');
+
+      act(() => void vi.advanceTimersByTime(3000));
+      // Silence would otherwise hold Publish shut forever.
+      expect(latestController?.status).toBe('failed');
+      expect(latestController?.reason).toContain('stopped answering');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('marks the last verdict stale as soon as content the game has not seen is pushed', () => {
