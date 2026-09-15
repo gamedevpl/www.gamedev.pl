@@ -241,8 +241,8 @@ function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
       return (
         <>
           {eyeSlits(
-            { cx: 33.5, cy: 4.8, rot: -24, rx: 2.3, ry: 1.35 },
-            { cx: 41.5, cy: 4.8, rot: -24, rx: 2.3, ry: 1.35 },
+            { cx: 33.4, cy: 4.9, rot: -32, rx: 2.5, ry: 1.05 },
+            { cx: 42.4, cy: 3.9, rot: -8, rx: 2.2, ry: 1.7 },
           )}
           <path className="mascot__mouth" d={MOUTH_THINK} />
         </>
@@ -468,6 +468,7 @@ export function Mascot({
   const cutouts = cutoutsFor(emotion);
   const isIdle = emotion === 'idle' || cutouts == null;
   const showWaveArm = emotion === 'wave' || emotion === 'excited';
+  const showThinkArm = emotion === 'thinking';
   const showPhone = scrolling !== undefined;
   // Keep the nudge small — past ~3px the mouth starts to clip the silhouette.
   const lookTransform =
@@ -519,6 +520,21 @@ export function Mascot({
         {showWaveArm ? (
           <g className="mascot__wave-arm" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <path d="M64 36 Q70 26 67 14" />
+          </g>
+        ) : null}
+
+        {showThinkArm ? (
+          <g className="mascot__think-arm" aria-hidden="true">
+            <path d="M56 48 Q64 34 48 22" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
+            <ellipse
+              className="mascot__think-fist"
+              cx="44.5"
+              cy="18.5"
+              rx="4.4"
+              ry="3.6"
+              fill="currentColor"
+              transform="rotate(-28 44.5 18.5)"
+            />
           </g>
         ) : null}
 

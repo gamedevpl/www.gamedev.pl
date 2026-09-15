@@ -6244,6 +6244,14 @@ button.builder-mode-selector:disabled {
   animation: mascot-cheer-arm 0.55s ease-in-out infinite;
 }
 
+.mascot__think-arm {
+  transform-origin: 56px 48px;
+}
+
+.mascot:not(.mascot--static).mascot--thinking .mascot__think-arm {
+  animation: mascot-think-arm 2.6s ease-in-out infinite;
+}
+
 .mascot--logo {
   color: var(--turquoise);
 }
@@ -7076,10 +7084,21 @@ button.builder-mode-selector:disabled {
   }
 }
 
+@keyframes mascot-think-arm {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-6deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mascot .mascot__body-group,
   .mascot .mascot__lid,
   .mascot .mascot__wave-arm,
+  .mascot .mascot__think-arm,
   .mascot .mascot__eyes,
   .mascot .mascot__phone-feed-track,
   .mascot .mascot__phone-thumb {

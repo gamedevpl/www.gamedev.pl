@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { CatalogRail } from './surfaces/catalog/CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
-import { PixelIcon, type PixelIconName } from './PixelIcon.js';
+import { Mascot, type MascotEmotion, type MascotLook } from './Mascot.js';
+import { PixelIcon } from './PixelIcon.js';
 import type { PlatformBuilderAvailability } from './submissionApi.js';
 import type { PlayVia } from './visitTelemetry.js';
 import './create-page.css';
@@ -21,9 +22,11 @@ type CreatePageProps = {
 
 const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'] as const;
 const STEP_SCENES = ['qa', 'code', 'play', 'live'] as const;
-const STEP_SCENE_ICONS: Partial<Record<(typeof STEP_SCENES)[number], PixelIconName>> = {
-  play: 'play',
-  live: 'gamepad',
+const STEP_MASCOT: Record<(typeof STEP_SCENES)[number], { emotion: MascotEmotion; look?: MascotLook }> = {
+  qa: { emotion: 'thinking', look: { x: 0.2, y: -0.8 } },
+  code: { emotion: 'busy' },
+  play: { emotion: 'excited' },
+  live: { emotion: 'proud' },
 };
 
 // Real catalog cards for the showcase, no new data — just a slice.
@@ -79,8 +82,8 @@ export function CreatePage({
         </h2>
         <ol className="create-steps-list">
           {STEP_KEYS.map((key, index) => {
-            const scene = STEP_SCENES[index];
-            const sceneIcon = STEP_SCENE_ICONS[scene];
+            const scene = STEP_SCENES[index] ?? 'qa';
+            const pose = STEP_MASCOT[scene];
             return (
               <li key={key} className="create-step">
                 <span className="create-step-index" aria-hidden="true">
@@ -88,7 +91,7 @@ export function CreatePage({
                 </span>
                 <div className="create-step-card">
                   <div className={`create-step-scene is-${scene}`} aria-hidden="true">
-                    {sceneIcon ? <PixelIcon name={sceneIcon} size={20} /> : null}
+                    <Mascot emotion={pose.emotion} look={pose.look} size={56} />
                   </div>
                   <div className="create-step-body">
                     <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
