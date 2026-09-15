@@ -2,8 +2,9 @@
 
 > Status: 🚧 **implementation spike (2026-09-13).** The bridge, the reviewer gate, policy
 > scripts, the plan runner, the filmstrip, the panel and the entry points are built and
-> tested, and so is the games-repo half: hidden fields ride in the assembled document and
-> sound is readable text. Reviewer traffic
+> tested, and so is sound as readable text. Hidden fields ride in the games repo's own
+> assembly but not yet in the documents this site serves — see "Not built yet".
+> Reviewer traffic
 > leaves no trace: an agent-capable session is kept out of the play funnel. Strategy and the decisions
 > behind all of this live in the private ops repo (`agent-play-mode-research.md`).
 
@@ -113,10 +114,10 @@ twice would read as a sound heard twice.
 - **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
   the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
   answer never reaches the host at all. Redacting only at render would have put it on the
-  wire and into React state first. `assembleGame` writes the list into the document ahead
-  of the kit and the game, so the frame knows what is secret before anything can ask. A
-  game that declares none still reports `hiddenFields: null`, and the panel says so out
-  loud — a visible gap rather than a silent one.
+  wire and into React state first. The frame learns the list from
+  `window.__GAME_AGENT_HIDDEN__` — which nothing on this site sets yet, so every document
+  reports `hiddenFields: null` and the panel says so out loud. A visible gap rather than a
+  silent one.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
@@ -251,6 +252,16 @@ the game from its intro into a different room. Stepping cost scales with a game'
 cost, so a heavy 3D game is slower per frame.
 
 ## Not built yet
+
+- **Hidden fields in the documents this site serves.** The games repo's `assembleGame`
+  writes `window.__GAME_AGENT_HIDDEN__` from `AGENT.json.hiddenFields`, which covers its
+  own standalone builds and its sandbox. This site does not use that assembler: it reads a
+  game's sources itself (`getGameSources` — `index.html`, `game.ts`, `style.css`,
+  `SPEC.md`, `GAME.json`, and never `AGENT.json`) and builds the document with
+  `assembleGameHtml`. So the global is never set here, and a game with a hidden answer
+  still sends it in its snapshot. Closing this means carrying `AGENT.json` through the
+  catalog read, the project shape and the store lane — worth doing, and more than this
+  change should reach into.
 
 - **Telemetry.** No event is emitted in this mode. How an agent-driven play should be
   counted — and kept out of person-shaped metrics — is an open decision, not an oversight.
