@@ -1111,6 +1111,20 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     expect(access).toMatchObject({ ownerUid: 'g:grace', accessRevision: 2 });
   });
 
+  it('revokes the sender’s round capabilities in the same transaction', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.createSubmission(4242, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(4242, 'sky');
+    await pendingInvite(store);
+    const before = (await store.bumpRoundGeneration(4242)) ?? 0;
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+
+    // Two ahead: one would still leave the sender a terminal receipt.
+    expect((await store.getSubmission(4242))?.roundGeneration).toBe(before + 2);
+  });
+
   it('retires the sender’s agent key lock so the recipient can open self-build rounds', async () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);

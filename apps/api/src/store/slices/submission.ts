@@ -180,12 +180,12 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
       const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
       if (!target.exists || target.data()?.slug) return false;
+      // Lineage only: the recovery route already checked canonical ownership.
       if (
         sourceJobId === null
           ? records.length > 0
           : !holder ||
             holder.jobId !== sourceJobId ||
-            holder.ownerUid !== target.data()?.ownerUid ||
             (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
               !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
             holder.moderationBlockedAt

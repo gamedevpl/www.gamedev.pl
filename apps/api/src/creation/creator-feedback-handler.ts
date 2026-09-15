@@ -24,6 +24,7 @@ import { loadRecentChatTurns } from './chat-turns-history.js';
 import { FeedbackRequestSchema, TurnRequestSchema } from './feedback-request.js';
 import { detectStall, type JobTransition } from './job-state.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import { withImprovementAdmission } from './improvement-admission.js';
 import type { ResumeOutcome } from './resume-build.js';
 
@@ -166,6 +167,12 @@ export async function handleCreatorFeedback(
   }
 
   const record = store ? await store.getSubmission(jobId) : null;
+  // Before any write: that job may have changed hands.
+  if (store && record && !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
+    return reply
+      .status(409)
+      .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
+  }
   if (record?.publishedAt) {
     return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });
   }
@@ -394,6 +401,11 @@ export async function handleCreatorTurnsGet(
     throw error;
   }
   if (!store) return reply.send({ turns: [] });
+  // The token proves which job, never who is asking.
+  const record = await store.getSubmission(jobId);
+  if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
+    return reply.status(404).send({ error: 'not found' });
+  }
   const turns = await loadRecentChatTurns(store, jobId);
   return reply.send({ turns });
 }

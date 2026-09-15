@@ -9,7 +9,12 @@ import type { SeedFiles } from '../agent-surface/agent-backend.js';
 import type { ProposalState } from '../community/proposal-state.js';
 import type { AgentTaskState } from '../platform/agent-state.js';
 import type { BuilderKind } from '../creation/builder.js';
-import { isActiveBuildRound, type AgentSessionTokens, type JobTransition } from '../creation/job-state.js';
+import {
+  isActiveBuildRound,
+  revokedRoundGeneration,
+  type AgentSessionTokens,
+  type JobTransition,
+} from '../creation/job-state.js';
 import type { PublicationHealthCheck, PublicationRecord } from '../delivery/games-store.js';
 import type { AvatarMode } from '../platform/creator-profile.js';
 import type { BuildEvent, SubmissionStatus } from '../platform/submission-status.js';
@@ -122,6 +127,12 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug, now) => this.submissionStore.hasActiveCheckoutRecovery(slug, now),
     (slug) => this.gameAdmissionStore.gameAgentKeys.delete(slug),
     (slug) => this.contributionStore.gameAutonomy.delete(slug),
+    (slug) => {
+      for (const [jobId, record] of this.submissions) {
+        if (record.slug !== slug) continue;
+        this.submissions.set(jobId, { ...record, roundGeneration: revokedRoundGeneration(record.roundGeneration) });
+      }
+    },
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);

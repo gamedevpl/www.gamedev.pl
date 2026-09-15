@@ -7,7 +7,7 @@
 import type { Store, SubmissionRecord } from './store.js';
 import { publishedVersion } from '../platform/publication-state.js';
 
-export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwnerAndSlug'>;
+export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsBySlug'>;
 
 // A `SubmissionRecord`, structurally.
 export type BaseVersionRecord = Pick<SubmissionRecord, 'previewVersion' | 'deliveredVersion'> & {
@@ -37,10 +37,10 @@ async function resolveSiblingRoundVersion(
   record: BaseVersionRecord,
   slug: string,
 ): Promise<string | null> {
-  if (!record.ownerUid) return null;
-  const owned = await store.listSubmissionsByOwnerAndSlug(record.ownerUid, slug);
+  // Every round on the slug: a first round after transfer has none.
+  const onSlug = await store.listSubmissionsBySlug(slug);
   // Already newest-first and slug-scoped; only the round identity still filters.
-  const priors = owned.filter(
+  const priors = onSlug.filter(
     (other) => other.jobId !== record.jobId && !other.abandonedAt && other.state !== 'canceled',
   );
   for (const prior of priors) {

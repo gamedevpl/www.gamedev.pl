@@ -25,6 +25,12 @@ export interface GameAccessResolveStore extends GameAccessStore {
   listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
 }
 
+// The two reads resolving an owner needs, so a slice can answer.
+export interface GameOwnerLookup {
+  getGameAccess(slug: string): Promise<GameAccessRecord | null>;
+  listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
+}
+
 // The single classification rule, wherever the uid came from.
 export function classifyOwnerUid(ownerUid: string): GameOwner {
   if (ownerUid === DELETED_ACCOUNT_UID) return { kind: 'platform', reason: 'owner_deleted' };
@@ -48,7 +54,7 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
   };
 }
 
-export async function resolveGameAccess(store: GameAccessResolveStore, slug: string): Promise<ResolvedGameAccess> {
+export async function resolveGameAccess(store: GameOwnerLookup, slug: string): Promise<ResolvedGameAccess> {
   const record = await store.getGameAccess(slug);
   if (record) return fromRecord(record);
   return {

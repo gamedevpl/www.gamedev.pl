@@ -7,6 +7,7 @@ import {
   playSignalWinsOverEditorial,
   routeEditorialAggregate,
 } from './editorial-suggestions.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isReviewableCreatorDraft } from './review.js';
 import { routeScorecard, type Suggestion, type SuggestionClass } from './suggestions.js';
 import {
@@ -133,6 +134,7 @@ export interface SuggestionSweepDeps {
     locale: string;
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
+    ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
   /** Builds the brief an autonomously dispatched agent receives. */
   buildBrief?: (record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null) => string;
@@ -246,10 +248,13 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         await closeOpen(existing, `evidence now routes this game as ${routed.class}`);
       }
 
+      // The owner now: the publishing job names whoever built it.
+      const cardOwner = (await resolveGameAccess(store, card.slug)).owner;
+      const cardOwnerUid = cardOwner.kind === 'creator' ? cardOwner.uid : submission.ownerUid;
       const fresh: SuggestionRecord = {
         id: suggestionId(card.slug, routed.class, routed.computedFrom),
         slug: card.slug,
-        ownerUid: submission.ownerUid,
+        ownerUid: cardOwnerUid,
         class: routed.class,
         priority: routed.priority,
         evidence: evidenceOf(routed),
@@ -293,6 +298,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
         text: deps.buildBrief(fresh, card.untrusted),
         title: `Improve ${card.slug}: ${routed.class}`,
         locale: submission.locale ?? 'en',
+        ownerUid: cardOwnerUid,
         log: deps.log ?? { error: () => {} },
       });
       // No creator waiting on the reason — treated like any other failed start.
@@ -443,10 +449,11 @@ async function applyEditorialSuggestions(opts: {
         await opts.closeOpen(existing, `evidence now routes this game as ${routed.class}`);
       }
 
+      const aggOwner = (await opts.store.getGameAccess(agg.slug))?.ownerUid;
       const fresh: SuggestionRecord = {
         id: suggestionId(agg.slug, routed.class, routed.computedFrom),
         slug: agg.slug,
-        ownerUid: submission.ownerUid,
+        ownerUid: aggOwner ?? submission.ownerUid,
         class: routed.class,
         priority: routed.priority,
         evidence: evidenceOf(routed),

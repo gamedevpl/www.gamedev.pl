@@ -1598,7 +1598,7 @@ export async function registerSubmissionRoutes(
       if (cached && cached.expiresAt > currentTime) {
         // Events are attached outside the cache: the GitHub-derived part of a status
         // is worth a minute, but an agent's live update is worth seconds.
-        return reply.send(await attachBuildEvents(cached.value, jobId, locale));
+        return reply.send(await attachBuildEvents(cached.value, jobId, locale, request.user?.uid));
       }
 
       // An abandoned build is terminal and self-declared: answer from the record
@@ -1622,13 +1622,13 @@ export async function registerSubmissionRoutes(
         const lastKnown = statusCache.get(cacheKey);
         if (lastKnown) {
           request.log.warn({ err: error, jobId }, 'status refresh failed; serving last known status');
-          return reply.send(await attachBuildEvents(lastKnown.value, jobId, locale));
+          return reply.send(await attachBuildEvents(lastKnown.value, jobId, locale, request.user?.uid));
         }
         request.log.error({ err: error }, 'failed to resolve submission status');
         return reply.status(502).send({ error: 'failed to load submission status' });
       }
 
-      return reply.send(await attachBuildEvents(status, jobId, locale));
+      return reply.send(await attachBuildEvents(status, jobId, locale, request.user?.uid));
     },
   );
 

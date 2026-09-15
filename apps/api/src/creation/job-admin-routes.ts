@@ -246,7 +246,8 @@ export async function registerJobAdminRoutes(
           slug: record.slug,
           version: record.deliveredVersion,
           gameTitle: record.title,
-          ownerUid: record.ownerUid,
+          // Skipped as "already knows": that is the owner now, not the old row's.
+          ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
         });
       } catch (error) {
         request.log.error({ err: error, slug: record.slug }, 'follower notification fan-out failed after publish');

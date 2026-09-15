@@ -84,12 +84,10 @@ async function collectTranscriptEntries(
   record: SubmissionRecord,
   isPresenceEventText: (text: string, createdAt?: string) => boolean,
 ): Promise<{ entries: TranscriptEntry[]; truncatedAtSource: boolean }> {
+  // By slug: earlier rounds carry the sender's uid after a transfer.
   const eligibleSiblings = record.slug
     ? (await store.listSubmissionsBySlug(record.slug)).filter(
-        (sibling) =>
-          sibling.jobId !== record.jobId &&
-          sibling.ownerUid === record.ownerUid &&
-          sibling.createdAt < record.createdAt,
+        (sibling) => sibling.jobId !== record.jobId && sibling.createdAt < record.createdAt,
       )
     : [];
   const siblings = eligibleSiblings.slice(0, MAX_TRANSCRIPT_ROUNDS - 1);

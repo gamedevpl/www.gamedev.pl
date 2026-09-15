@@ -103,12 +103,12 @@ export class InMemorySubmissionStore implements SubmissionStore {
     const records = [...this.submissions.values()].filter((r) => r.slug === slug);
     const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
     if (!target || target.slug) return false;
+    // Lineage only: the recovery route already checked canonical ownership.
     if (
       sourceJobId === null
         ? records.length > 0
         : !holder ||
           holder.jobId !== sourceJobId ||
-          holder.ownerUid !== target.ownerUid ||
           (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
             !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
           holder.moderationBlockedAt

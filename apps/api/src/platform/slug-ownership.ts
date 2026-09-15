@@ -1,4 +1,4 @@
-import { ownsGame, resolveGameAccess } from './game-access-resolve.js';
+import { ownsGame, resolveGameAccess, type GameOwnerLookup } from './game-access-resolve.js';
 import { mintGameSlug } from './slug.js';
 import type { Store, SubmissionRecord } from './store.js';
 
@@ -64,7 +64,7 @@ export async function settleSlugClaim(
 }
 
 // Owns = the canonical GameAccess record names this uid as owner.
-export async function creatorOwnsSlug(store: Store, slug: string, creatorUid: string): Promise<boolean> {
+export async function creatorOwnsSlug(store: GameOwnerLookup, slug: string, creatorUid: string): Promise<boolean> {
   return ownsGame(await resolveGameAccess(store, slug), creatorUid);
 }
 
@@ -72,7 +72,7 @@ export async function creatorOwnsSlug(store: Store, slug: string, creatorUid: st
 
 // Past that, a stale record.ownerUid must not outrank the canonical one.
 export async function ownsSubmissionOrSlug(
-  store: Store,
+  store: GameOwnerLookup,
   record: { ownerUid: string | null; slug?: SubmissionRecord['slug'] },
   uid: string,
 ): Promise<boolean> {

@@ -147,6 +147,11 @@ export function nextRoundGeneration(current: number | undefined): number {
   return current === undefined ? 1 : current + 1;
 }
 
+// Revokes a round's capabilities on transfer; one behind still reads.
+export function revokedRoundGeneration(current: number | undefined): number {
+  return current === undefined ? 2 : current + 2;
+}
+
 /**
  * Why a job moved. Written onto every transition so the history explains itself — the
  * difference between "the build took 40 minutes" and "the build took 40 minutes because

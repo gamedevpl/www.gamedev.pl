@@ -6489,11 +6489,11 @@ describe('POST /api/submissions/:token/improve', () => {
       submissionTokenSecret: secret,
     });
 
-    // Another creator's job on the same slug must never appear.
+    // An earlier owner's round: the history a transfer hands over.
     const foreign = await store.allocateJobId();
     await store.createSubmission(foreign, 'g:other-user', 'History Game');
     await store.setSubmissionSlug(foreign, 'history-game');
-    await store.appendCreatorMessage(foreign, 'Secret foreign note.');
+    await store.appendCreatorMessage(foreign, 'Note from the previous owner.');
 
     const published = await store.allocateJobId();
     await store.createSubmission(published, 'g:test-user', 'History Game');
@@ -6524,26 +6524,42 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(improve.statusCode).toBe(200);
     const tipToken = improve.json().token as string;
 
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}` });
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}`, headers: authHeaders });
     expect(status.statusCode).toBe(200);
     const prior = status.json().priorRounds as
       Array<{ id: string; publishedAt?: string; entries: Array<{ kind: string; text: string }> }> | undefined;
-    expect(prior).toHaveLength(1);
-    expect(prior![0]!.id).toBe(String(published));
-    expect(prior![0]!.publishedAt).toBe('2026-07-01T00:00:00.000Z');
-    expect(prior![0]!.entries.map((e) => e.text)).toEqual(
+    expect(prior?.map((round) => round.id)).toEqual([String(foreign), String(published)]);
+    const publishedRound = prior!.find((round) => round.id === String(published))!;
+    expect(publishedRound.publishedAt).toBe('2026-07-01T00:00:00.000Z');
+    expect(publishedRound.entries.map((e) => e.text)).toEqual(
       expect.arrayContaining(['Make the lobby louder.', 'Lobby volume bumped for the opening scene.']),
     );
-    expect(prior![0]!.entries.some((e) => e.text.includes('foreign'))).toBe(false);
+
+    // The status token names a job, not a person.
+    const anonymous = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}` });
+    expect(anonymous.statusCode).toBe(200);
+    expect(anonymous.json().priorRounds).toBeUndefined();
+
+    // Nor does holding a session that does not own the game.
+    const stranger = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${tipToken}`,
+      headers: getAuthHeaders('g:other-user'),
+    });
+    expect(stranger.statusCode).toBe(200);
+    expect(stranger.json().priorRounds).toBeUndefined();
 
     // An old status token must not list later improve rounds as "earlier" history
-    // (Codex): the published job's status stays its own thread only.
+    // (Codex): only rounds that started before this one are earlier than it.
     const oldStatus = await app.inject({
       method: 'GET',
       url: `/api/submissions/${mintToken(published, secret)}`,
+      headers: authHeaders,
     });
     expect(oldStatus.statusCode).toBe(200);
-    expect(oldStatus.json().priorRounds).toBeUndefined();
+    const olderPrior = (oldStatus.json().priorRounds ?? []) as Array<{ id: string }>;
+    expect(olderPrior.map((round) => round.id)).toEqual([String(foreign)]);
+    expect(olderPrior.map((round) => round.id)).not.toContain(String(improve.json().jobId));
 
     await app.close();
   });

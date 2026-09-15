@@ -6,7 +6,7 @@ import {
   newTransferInvitation,
   type GameTransferInvitation,
 } from '../records/game-transfer.js';
-import { isActiveBuildRound } from '../../creation/job-state.js';
+import { isActiveBuildRound, revokedRoundGeneration } from '../../creation/job-state.js';
 import type { JobState } from '@gamedevpl/contract';
 import type { JobTransition } from '../../creation/job-state.js';
 
@@ -83,6 +83,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private retireGameAgentKey: (slug: string) => void = () => {},
     // The recipient never opted into the sender's autonomy consent.
     private resetGameAutonomy: (slug: string) => void = () => {},
+    // Revokes the sender's round channel, session, upload and opener tokens.
+    private revokeRoundCapabilities: (slug: string) => void = () => {},
   ) {}
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
@@ -137,6 +139,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
     this.retireGameAgentKey(slug);
     this.resetGameAutonomy(slug);
+    this.revokeRoundCapabilities(slug);
     const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
     this.transfers.set(slug, accepted);
     return clone(accepted);
@@ -283,6 +286,11 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (busy) return 'busy';
 
       tx.set(accessRef, transferredAccess(access, recipientUid, at));
+      // Revokes the sender's round channel, session, upload and opener tokens.
+      for (const doc of activeSnap.docs) {
+        const current = (doc.data() as { roundGeneration?: number }).roundGeneration;
+        tx.update(doc.ref, { roundGeneration: revokedRoundGeneration(current) });
+      }
       // Stale sender lock: retire it for a fresh one next time.
       if (agentKeySnap.exists) tx.delete(agentKeyRef);
       // The recipient never opted into the sender's autonomy consent.

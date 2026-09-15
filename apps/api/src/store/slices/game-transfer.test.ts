@@ -226,6 +226,23 @@ describe('acceptGameTransferInvitation', () => {
     expect(await store.getGameAutonomy('sky')).toBeNull();
   });
 
+  it('revokes the sender’s round capabilities, terminal receipt included', async () => {
+    // Those tokens carry a generation, checked against the job.
+    const store = new InMemoryStore();
+    await ownedGame(store, 'sky', 'g:ada');
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.createSubmission(4242, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(4242, 'sky');
+    const before = (await store.bumpRoundGeneration(4242)) ?? 0;
+    await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
+
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+
+    const after = (await store.getSubmission(4242))?.roundGeneration ?? 0;
+    // Two ahead: one would still leave the sender a terminal receipt.
+    expect(after).toBe(before + 2);
+  });
+
   it('is idempotent: accepting twice returns the same accepted invitation', async () => {
     const store = new InMemoryStore();
     await ownedGame(store, 'sky', 'g:ada');
