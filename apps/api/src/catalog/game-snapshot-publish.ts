@@ -134,6 +134,7 @@ async function bakeGame(args: {
     html: sources.indexHtml,
     js: sources.gameJs,
     css: sources.styleCss,
+    hiddenFields: sources.hiddenFields,
   };
 
   // restrictNetwork mirrors the play route exactly: published games are

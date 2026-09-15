@@ -219,6 +219,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
         html: sources.indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
+        hiddenFields: sources.hiddenFields,
       },
       { restrictNetwork: true },
     );

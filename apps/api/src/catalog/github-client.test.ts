@@ -693,6 +693,50 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).not.toContain('unused-theme');
   });
 
+  it('carries AGENT.json hiddenFields, and is silent when there are none', async () => {
+    // A browser cannot read AGENT.json; it must ride in the document.
+    const base = (): Array<[string, string | Uint8Array]> => [
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      ['games/raid/GAME.json', JSON.stringify({ engine: { modules: ['input'] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ];
+    const clientFor = (extra: Array<[string, string]>) => {
+      const files = new Map<string, string | Uint8Array>([...base(), ...extra]);
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+        const pathname = new URL(String(input)).pathname;
+        const marker = '/contents/';
+        const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+        const value = files.get(path);
+        return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+      }) as unknown as typeof fetch;
+      return createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    };
+
+    const declared = await clientFor([
+      ['games/raid/AGENT.json', JSON.stringify({ policy: 'capture', hiddenFields: ['targetWord'] })],
+    ]).getGameSources('main', 'raid');
+    expect(declared?.hiddenFields).toEqual(['targetWord']);
+
+    // Absent, empty and malformed all mean "declares none".
+    expect((await clientFor([]).getGameSources('main', 'raid'))?.hiddenFields).toBeUndefined();
+    expect(
+      (
+        await clientFor([['games/raid/AGENT.json', JSON.stringify({ policy: 'capture' })]]).getGameSources(
+          'main',
+          'raid',
+        )
+      )?.hiddenFields,
+    ).toBeUndefined();
+    expect(
+      (await clientFor([['games/raid/AGENT.json', 'not json at all']]).getGameSources('main', 'raid'))?.hiddenFields,
+    ).toBeUndefined();
+  });
+
   it('rejects an inherited Object.prototype name as a track', async () => {
     // The catalog comes from JSON.parse, so `tracks.constructor` is a function rather than
     // undefined and survives a truthiness check — and `constructor` is lowercase, so it

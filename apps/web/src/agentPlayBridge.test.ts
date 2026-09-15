@@ -70,6 +70,15 @@ function installHarness(): FakeHarness {
   return harness;
 }
 
+// One bridge per file, so its audio cursor outlives a test.
+let nextAudioSeq = 1;
+
+function pushAudio(harness: FakeHarness, entry: Record<string, unknown>): Record<string, unknown> {
+  const stamped = { source: 'gdpl-player', seq: nextAudioSeq++, ...entry };
+  harness.audio.push(stamped);
+  return stamped;
+}
+
 // One bridge per file: its listeners cannot be removed, so copies stack.
 const received: Message[] = [];
 
@@ -117,12 +126,10 @@ describe('the agent bridge, running for real', () => {
     send({ type: 'agent:enable' });
     await settle();
 
-    harness.audio.push(
-      { source: 'gdpl-player', frame: 1, seq: 1, type: 'music', name: 'ocean-drift' },
-      { source: 'gdpl-player', frame: 2, seq: 2, type: 'progress', label: 'round-start' },
-      { source: 'gdpl-player', frame: 2, seq: 3, type: 'sfx', name: 'dig', count: 3 },
-      { source: 'gdpl-player', frame: 3, seq: 4, type: 'sfx', name: 'ghost', missing: true },
-    );
+    pushAudio(harness, { frame: 1, type: 'music', name: 'ocean-drift' });
+    pushAudio(harness, { frame: 2, type: 'progress', label: 'round-start' });
+    pushAudio(harness, { frame: 2, type: 'sfx', name: 'dig', count: 3 });
+    pushAudio(harness, { frame: 3, type: 'sfx', name: 'ghost', missing: true });
     harness.frame = 60;
     send({ type: 'agent:command', command: { kind: 'look' } });
     await settle();
@@ -144,6 +151,32 @@ describe('the agent bridge, running for real', () => {
     expect(again.filter((entry) => entry.detail === 'dig x3')).toHaveLength(1);
   });
 
+  it('reports repeats that grow an entry a state already read', async () => {
+    send({ type: 'agent:enable' });
+    await settle();
+
+    // A reported entry can still grow; its seq does not move.
+    const beeps = () =>
+      ((lastOf(received, 'agent:state')!.log as Array<{ detail: string }>) ?? [])
+        .map((line) => line.detail)
+        .filter((detail) => detail.startsWith('beep'));
+
+    const entry = pushAudio(harness, { frame: 1, type: 'sfx', name: 'beep' });
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    expect(beeps()).toEqual(['beep']);
+
+    entry.count = 3;
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    expect(beeps()).toEqual(['beep', 'beep x2']);
+
+    // Nothing new, so nothing more is added.
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    expect(beeps()).toEqual(['beep', 'beep x2']);
+  });
+
   it('keeps hearing the game after the signal log has rotated', async () => {
     send({ type: 'agent:enable' });
     await settle();
@@ -151,9 +184,7 @@ describe('the agent bridge, running for real', () => {
     await settle();
 
     // At the cap, length stops moving; an index cursor goes deaf.
-    let seq = 1;
-    const push = (name: string) =>
-      harness.audio.push({ source: 'gdpl-player', frame: 1, seq: seq++, type: 'sfx', name });
+    const push = (name: string) => pushAudio(harness, { frame: 1, type: 'sfx', name });
     for (let turn = 0; turn < 400; turn++) push(`filler-${turn}`);
     harness.audio.splice(0, harness.audio.length - 400);
     send({ type: 'agent:command', command: { kind: 'look' } });

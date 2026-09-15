@@ -280,6 +280,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         html: sources.indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
+        hiddenFields: sources.hiddenFields,
       },
       { restrictNetwork: true },
     );
@@ -452,6 +453,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
           html: sources.indexHtml,
           js: sources.gameJs,
           css: sources.styleCss,
+          hiddenFields: sources.hiddenFields,
         },
         { restrictNetwork: true },
       );

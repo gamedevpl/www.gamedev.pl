@@ -114,6 +114,7 @@ export async function registerGamePlayRoute(
         html: sources.indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
+        hiddenFields: sources.hiddenFields,
       };
 
       // restrictNetwork: published games are self-contained, like unreviewed previews.

@@ -61,3 +61,29 @@ describe('AI provenance marking', () => {
     expect(() => assembleGameHtml(project({ js: filler }))).not.toThrow();
   });
 });
+
+describe('hidden fields in the assembled document', () => {
+  it('declares them ahead of the game, so nothing can be asked before the list lands', () => {
+    const html = assembleGameHtml(project({ hiddenFields: ['targetWord', 'mineMap'] }));
+
+    expect(html).toContain('window.__GAME_AGENT_HIDDEN__=Object.freeze(["targetWord","mineMap"]);');
+    // After the game runs is too late.
+    const script = html.slice(html.indexOf('<script>'));
+    expect(script.indexOf('__GAME_AGENT_HIDDEN__')).toBeLessThan(script.indexOf('const x = 1;'));
+  });
+
+  it('adds nothing at all for a game that declares none', () => {
+    for (const hiddenFields of [undefined, []]) {
+      const html = assembleGameHtml(project({ hiddenFields }));
+      expect(html).not.toContain('__GAME_AGENT_HIDDEN__');
+    }
+  });
+
+  it('keeps a field name from closing the script tag it sits in', () => {
+    // Only identifier-shaped names survive.
+    const html = assembleGameHtml(project({ hiddenFields: ['</script><script>alert(1)', 'safe'] }));
+
+    expect(html).toContain('Object.freeze(["safe"]);');
+    expect(html).not.toContain('alert(1)');
+  });
+});

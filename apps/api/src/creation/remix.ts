@@ -17,7 +17,7 @@ import { typeCheckGame } from './type-check.js';
 import { remixClientPayload } from './remix-view.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
-import { replyModerationBlock, isModerationBlock, type ContentChecker   } from '../platform/moderation.js';
+import { replyModerationBlock, isModerationBlock, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { assembleGameHtml } from '../platform/assemble.js';
@@ -571,7 +571,14 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     });
     if (!sources) return null;
     return assembleGameHtml(
-      { title: session.title, description: '', html: sources.indexHtml, js: sources.gameJs, css: sources.styleCss },
+      {
+        title: session.title,
+        description: '',
+        html: sources.indexHtml,
+        js: sources.gameJs,
+        css: sources.styleCss,
+        hiddenFields: sources.hiddenFields,
+      },
       { restrictNetwork: true },
     );
   }

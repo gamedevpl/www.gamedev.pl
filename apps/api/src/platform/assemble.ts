@@ -67,6 +67,8 @@ export function assembleGameHtml(project: GameProject, options: AssembleOptions 
     throw new CredentialLeakError('generated project contains credential-like strings');
   }
 
+  const hiddenFieldsJs = agentHiddenFieldsJs(project.hiddenFields);
+
   const cspMeta = options.restrictNetwork
     ? `\n    <meta http-equiv="Content-Security-Policy" content="${RESTRICTIVE_CSP}" />`
     : '';
@@ -82,9 +84,19 @@ ${AI_PROVENANCE_META}
   </head>
   <body>
 ${project.html}
-    <script>${project.js}</script>
+    <script>${hiddenFieldsJs}${project.js}</script>
   </body>
 </html>`;
+}
+
+// Identifiers only: JSON.stringify leaves `/`, closing the tag.
+const HIDDEN_FIELD_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function agentHiddenFieldsJs(hiddenFields: readonly string[] | undefined): string {
+  if (!hiddenFields || hiddenFields.length === 0) return '';
+  const names = hiddenFields.filter((field) => typeof field === 'string' && HIDDEN_FIELD_NAME.test(field));
+  if (names.length === 0) return '';
+  return `window.__GAME_AGENT_HIDDEN__=Object.freeze(${JSON.stringify(names)});`;
 }
 
 function escapeHtml(value: string): string {
