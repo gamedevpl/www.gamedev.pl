@@ -109,7 +109,11 @@ export function StudioTransferPanel({ slug }: { slug: string }): JSX.Element {
         <div className="studio-transfer-pending" data-testid="studio-transfer-pending">
           <p className="studio-transfer-who">
             <PixelIcon name="handover" size={14} />
-            <span>{t('studioPanel.transfer.pending', { name: pending.counterparty.profileName })}</span>
+            <span>
+              {t('studioPanel.transfer.pending', {
+                name: pending.counterparty.profileName ?? t('studioPanel.transfer.someone'),
+              })}
+            </span>
           </p>
           <p className="studio-transfer-expiry">
             {t('studioPanel.transfer.expires', {

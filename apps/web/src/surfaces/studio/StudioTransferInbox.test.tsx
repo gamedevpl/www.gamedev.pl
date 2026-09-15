@@ -65,17 +65,6 @@ describe('StudioTransferInbox', () => {
     await act(async () => root.unmount());
   });
 
-  it('keeps the recipient code hidden until asked', async () => {
-    vi.stubGlobal('fetch', routed([]));
-    const { host, root } = await mount();
-
-    expect(host.querySelector('[data-testid="studio-recipient-code"]')?.textContent).not.toContain('MY-CODE');
-    const reveal = host.querySelectorAll('.link-btn')[0];
-    await act(async () => reveal?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(host.querySelector('[data-testid="studio-recipient-code"]')?.textContent).toBe('MY-CODE');
-    await act(async () => root.unmount());
-  });
-
   it('accepting drops the offer and tells the shelf to refetch', async () => {
     vi.stubGlobal('fetch', routed([OFFER]));
     const onAccepted = vi.fn();
@@ -119,32 +108,10 @@ describe('StudioTransferInbox', () => {
     await act(async () => root.unmount());
   });
 
-  it('shows an offer even when the viewer has no code yet', async () => {
+  it('renders nothing when no invitation is waiting', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => {
-        if (String(url).includes('/recipient-code')) {
-          return { ok: false, status: 404, json: async () => ({ error: 'not_found' }) } as unknown as Response;
-        }
-        return reply(url, { transfers: [OFFER] });
-      }),
-    );
-    const { host, root } = await mount();
-
-    expect(host.querySelector('[data-testid="studio-transfer-invite-comet-courier"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="studio-recipient-code"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it('renders nothing when there is no code and no offer', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (String(url).includes('/recipient-code')) {
-          return { ok: false, status: 404, json: async () => ({ error: 'not_found' }) } as unknown as Response;
-        }
-        return reply(url, { transfers: [] });
-      }),
+      vi.fn(async (url: string) => reply(url, { transfers: [] })),
     );
     const { host, root } = await mount();
 

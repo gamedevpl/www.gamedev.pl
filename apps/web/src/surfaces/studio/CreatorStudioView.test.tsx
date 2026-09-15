@@ -2142,16 +2142,27 @@ describe('CreatorStudioView delete', () => {
   });
 
   it('offers the transfer inbox to a creator with no games yet', async () => {
-    // A first game can arrive by transfer, not only by building one.
+    // A first game can arrive by transfer, not only by building.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'u1', name: 'Ada' };
     fetchStudioGames.mockResolvedValue(studioShelf([]));
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => ({
+      vi.fn(async () => ({
         ok: true,
-        json: async () => (String(url).includes('/recipient-code') ? { code: 'rc_first' } : { transfers: [] }),
+        json: async () => ({
+          transfers: [
+            {
+              slug: 'comet-courier',
+              status: 'pending',
+              you: 'recipient',
+              counterparty: { profileName: 'Ada' },
+              createdAt: '2026-09-15T10:00:00.000Z',
+              expiresAt: '2026-09-22T10:00:00.000Z',
+            },
+          ],
+        }),
       })),
     );
 

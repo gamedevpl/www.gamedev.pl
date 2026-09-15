@@ -16,13 +16,15 @@ export interface GameTransferRoutesOptions {
   now?: () => number;
   // Catalog attribution joins from GameAccess, but caches per slug.
   invalidatePublishedGameCaches?: (slug: string) => void;
+  // Tells the recipient. Optional: without it, transfers stay silent.
+  notifyTransferOffered?: (event: { uid: string; slug: string; gameTitle: string }) => Promise<void>;
 }
 
 export interface TransferSummary {
   slug: string;
   status: GameTransferInvitation['status'];
   you: 'sender' | 'recipient';
-  counterparty: { profileName: string };
+  counterparty: { profileName: string | null };
   createdAt: string;
   expiresAt: string;
 }
@@ -46,10 +48,10 @@ function requireUser(
   return true;
 }
 
-// No handle claimed yet is exactly the case recipient codes exist for.
-async function describeParticipant(store: Store, uid: string): Promise<string> {
+// Null rather than a name we invent in one language.
+async function describeParticipant(store: Store, uid: string): Promise<string | null> {
   const user = await store.getUser(uid);
-  return user?.profileName?.trim() || user?.handle || 'a creator';
+  return user?.profileName?.trim() || user?.handle || null;
 }
 
 async function toSummary(store: Store, invite: GameTransferInvitation, viewerUid: string): Promise<TransferSummary> {
@@ -69,7 +71,7 @@ export async function registerGameTransferRoutes(
   app: FastifyInstance,
   options: GameTransferRoutesOptions,
 ): Promise<void> {
-  const { store, invalidatePublishedGameCaches } = options;
+  const { store, invalidatePublishedGameCaches, notifyTransferOffered } = options;
   const now = options.now ?? Date.now;
 
   app.post(
@@ -108,6 +110,15 @@ export async function registerGameTransferRoutes(
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
       invalidateTransferInboxCache(store, recipient.uid);
+      // After the invitation exists, so a failure cannot lose it.
+      if (notifyTransferOffered) {
+        try {
+          const record = await store.getSubmissionBySlug(slug);
+          await notifyTransferOffered({ uid: recipient.uid, slug, gameTitle: record?.title ?? slug });
+        } catch (error) {
+          request.log.error({ err: error, slug }, 'transfer invitation notification failed');
+        }
+      }
       return reply.send({ transfer: await toSummary(store, result, uid) });
     },
   );

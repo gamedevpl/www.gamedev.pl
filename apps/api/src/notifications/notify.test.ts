@@ -6,6 +6,7 @@ import {
   emitDigestNotification,
   emitOperatorAlert,
   emitSubmissionNotification,
+  emitTransferOfferedNotification,
   emitWaitlistJoined,
   notifyOnTransition,
   statusToEvent,
@@ -631,5 +632,46 @@ describe('emitWaitlistJoined', () => {
     expect(await store.listNotifications('g:second')).toHaveLength(1);
     expect(mailer.sent).toHaveLength(0);
     expect(errors).toContain('operator alert email send failed');
+  });
+});
+
+describe('emitTransferOfferedNotification', () => {
+  let store: InMemoryStore;
+  let mailer: ConsoleMailer;
+  const deps = (): EmitDeps => ({ store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' });
+  const event = { uid: 'g:grace', slug: 'sky-dodge', gameTitle: 'Sky Dodge' };
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    mailer = new ConsoleMailer();
+    await store.upsertUser({ uid: 'g:grace', email: 'grace@example.com' });
+  });
+
+  it('tells the recipient, and points them where they can act', async () => {
+    await emitTransferOfferedNotification(deps(), event);
+
+    const [notification] = await store.listNotifications('g:grace');
+    expect(notification.type).toBe('transfer.offered');
+    expect(notification.params).toEqual({ title: 'Sky Dodge', slug: 'sky-dodge' });
+    expect(notification.link).toBe('/studio');
+  });
+
+  it('emails it, because an invitation expires unseen', async () => {
+    const sent: EmailMessage[] = [];
+    const recorder: Mailer = { send: async (message) => void sent.push(message) };
+    await emitTransferOfferedNotification({ ...deps(), mailer: recorder }, event);
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe('grace@example.com');
+    expect(`${sent[0].subject} ${sent[0].html}`).toContain('Sky Dodge');
+    expect((await store.listNotifications('g:grace'))[0].emailedAt).not.toBeNull();
+  });
+
+  it('is one invitation per game, however many times it is sent', async () => {
+    await emitTransferOfferedNotification(deps(), event);
+    const again = await emitTransferOfferedNotification(deps(), event);
+
+    expect(again.created).toBe(false);
+    expect(await store.listNotifications('g:grace')).toHaveLength(1);
   });
 });

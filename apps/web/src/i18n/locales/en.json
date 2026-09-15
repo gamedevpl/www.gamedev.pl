@@ -111,6 +111,12 @@
         "title": "Your contribution is live",
         "body": "Your change is now part of {{title}}."
       }
+    },
+    "transfer": {
+      "offered": {
+        "title": "A game is being handed to you",
+        "body": "{{title}} is yours if you accept. The invitation expires in seven days."
+      }
     }
   },
   "header": {
@@ -863,7 +869,8 @@
         "staleOwner": "This game changed hands. Reload Studio.",
         "notOwner": "This game is not yours to transfer.",
         "alreadyOut": "An invitation for this game is already out."
-      }
+      },
+      "someone": "another creator"
     }
   },
   "submit": {
@@ -2175,9 +2182,12 @@
         "unreachable": "Could not load your invitations.",
         "ineligible": "Your account cannot receive games right now.",
         "staleOwner": "This game changed hands. Reload Studio.",
-        "gone": "This invitation is no longer available."
+        "gone": "This invitation is no longer available.",
+        "code": "Could not load your recipient code."
       },
-      "retry": "Try again"
+      "retry": "Try again",
+      "someone": "Another creator",
+      "codeHint": "Give this code to whoever is handing you a game."
     }
   }
 }

@@ -111,6 +111,12 @@
         "title": "Twoja zmiana jest na żywo",
         "body": "Twoja zmiana jest już częścią {{title}}."
       }
+    },
+    "transfer": {
+      "offered": {
+        "title": "Ktoś przekazuje ci grę",
+        "body": "{{title}} będzie twoja, jeśli przyjmiesz. Zaproszenie wygasa po siedmiu dniach."
+      }
     }
   },
   "header": {
@@ -873,7 +879,8 @@
         "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
         "notOwner": "Ta gra nie jest twoja, więc nie możesz jej przekazać.",
         "alreadyOut": "Zaproszenie dla tej gry już jest wysłane."
-      }
+      },
+      "someone": "inny twórca"
     }
   },
   "submit": {
@@ -2189,9 +2196,12 @@
         "unreachable": "Nie udało się wczytać zaproszeń.",
         "ineligible": "Twoje konto nie może teraz przyjmować gier.",
         "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
-        "gone": "To zaproszenie jest już nieaktualne."
+        "gone": "To zaproszenie jest już nieaktualne.",
+        "code": "Nie udało się wczytać twojego kodu odbiorcy."
       },
-      "retry": "Spróbuj ponownie"
+      "retry": "Spróbuj ponownie",
+      "someone": "Inny twórca",
+      "codeHint": "Podaj ten kod osobie, która przekazuje ci grę."
     }
   }
 }

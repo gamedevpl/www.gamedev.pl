@@ -9,7 +9,7 @@ export interface TransferSummary {
   status: TransferStatus;
   // Which side the viewer is on.
   you: 'sender' | 'recipient';
-  counterparty: { profileName: string };
+  counterparty: { profileName: string | null };
   createdAt: string;
   expiresAt: string;
 }

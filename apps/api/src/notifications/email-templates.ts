@@ -11,6 +11,7 @@ import type {
   OperatorNotificationType,
   ProposalNotificationType,
   SubmissionNotificationType,
+  TransferNotificationType,
 } from '../platform/store.js';
 
 export function normalizeLocale(value: string | undefined): Locale {
@@ -243,6 +244,35 @@ export function followedGamePushContent(locale: Locale, title: string): { title:
 }
 
 /** Short push copy for a proposal event, from the same strings as the email. */
+const transferCopy: Record<TransferNotificationType, Record<Locale, { subject: string; lead: string; cta: string }>> = {
+  'transfer.offered': {
+    en: {
+      subject: 'Someone wants to hand you a game',
+      lead: 'is being handed to you. Accept it and the game becomes yours, with its history; the invitation expires in seven days.',
+      cta: 'Open the invitation',
+    },
+    pl: {
+      subject: 'Ktoś chce przekazać ci grę',
+      lead: 'jest przekazywana tobie. Po przyjęciu gra staje się twoja wraz z historią; zaproszenie wygasa po siedmiu dniach.',
+      cta: 'Zobacz zaproszenie',
+    },
+  },
+};
+
+export function transferPushContent(locale: Locale, title: string): { title: string; body: string } {
+  const copy = transferCopy['transfer.offered'][locale];
+  return { title: copy.subject, body: `“${title}” ${copy.lead}` };
+}
+
+export function transferNotificationMessage(
+  to: string,
+  locale: Locale,
+  type: TransferNotificationType,
+  params: NotificationEmailParams,
+): EmailMessage {
+  return renderNotificationEmail(to, locale, transferCopy[type][locale], params);
+}
+
 export function proposalPushContent(
   locale: Locale,
   type: ProposalNotificationType,
