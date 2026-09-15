@@ -9,7 +9,6 @@ import type {
   EditorParamSpec,
   EditorParamValue,
   EditorPropertySpec,
-  GameEditorState,
 } from './studioApi.js';
 
 const LAYERS_KEY = 'layers';
@@ -42,11 +41,16 @@ export function fillDeclaredValues(definition: EditorDefinition, doc: EditorCont
   return filled;
 }
 
-// A draft the definition moved under differs from what the server holds.
-export function draftHasHole(loaded: GameEditorState): boolean {
-  if (!loaded.draft) return false;
-  const stored = loaded.draft.content;
-  return JSON.stringify(fillDeclaredValues(loaded.definition, stored)) !== JSON.stringify(stored);
+// Anything the merge added must still be written back.
+export function differsFromStored(stored: EditorContentDoc, shown: EditorContentDoc): boolean {
+  return stableJson(stored) !== stableJson(shown);
+}
+
+// Key order is not content, so reordering is no change.
+function stableJson(value: unknown): string {
+  const sorted = (inner: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(inner).sort(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify(value, (_key, inner: unknown) => (isRecord(inner) ? sorted(inner) : inner));
 }
 
 function fillParams(specs: Record<string, EditorParamSpec>, values: unknown): Record<string, EditorParamValue> {

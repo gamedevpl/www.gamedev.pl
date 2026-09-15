@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftHasHole, fillDeclaredValues } from './editorContentDefaults.js';
+import { differsFromStored, fillDeclaredValues } from './editorContentDefaults.js';
 import { mergeDraft } from './surfaces/studio/editorPanelHelpers.js';
 import type { EditorDefinition, EditorItemContent, GameEditorState } from './studioApi.js';
 
@@ -170,14 +170,47 @@ describe('mergeDraft', () => {
   });
 });
 
-describe('draftHasHole', () => {
-  it('is false when every declared field is already stored', () => {
+describe('differsFromStored', () => {
+  it('is false for the same document', () => {
     const stored = { boards: [{ properties: { name: 'a', speed: 6 } }] };
-    expect(draftHasHole(loadedWith({ content: stored, revision: 1, updatedAt: '' }))).toBe(false);
+    expect(differsFromStored(stored, { boards: [{ properties: { name: 'a', speed: 6 } }] })).toBe(false);
   });
 
-  it('is true when a stored item is missing a declared field', () => {
-    const stored = { boards: [{ properties: { name: 'a' } }] };
-    expect(draftHasHole(loadedWith({ content: stored, revision: 1, updatedAt: '' }))).toBe(true);
+  it('does not call a reordered document a change', () => {
+    const stored = { boards: [{ properties: { name: 'a', speed: 6 } }], params: { g: 1 } };
+    const shown = { params: { g: 1 }, boards: [{ properties: { speed: 6, name: 'a' } }] };
+    expect(differsFromStored(stored, shown)).toBe(false);
+  });
+
+  it('still calls a reordered array a change, because item order is content', () => {
+    const stored = { boards: [{ properties: { name: 'a' } }, { properties: { name: 'b' } }] };
+    const shown = { boards: [{ properties: { name: 'b' } }, { properties: { name: 'a' } }] };
+    expect(differsFromStored(stored, shown)).toBe(true);
+  });
+
+  it('is true when the shown document gained a field', () => {
+    expect(differsFromStored({ boards: [{ properties: {} }] }, { boards: [{ properties: { speed: 3 } }] })).toBe(true);
+  });
+});
+
+describe('a collection the delivery added after the draft was saved', () => {
+  const twoCollections: EditorDefinition = {
+    version: 1,
+    content: {
+      boards: entitiesDefinition.content.boards,
+      levels: { ...entitiesDefinition.content.boards, defaults: [{ properties: { name: 'one', speed: 4 } }] },
+    },
+  };
+
+  it('is shown from the delivered content and reported unsaved', () => {
+    const loaded: GameEditorState = {
+      version: '4',
+      definition: twoCollections,
+      content: { boards: [], levels: [{ properties: { name: 'one', speed: 4 } }] },
+      draft: { content: { boards: [{ properties: { name: 'mine', speed: 2 } }] }, revision: 3, updatedAt: '' },
+    };
+    const merged = mergeDraft(loaded);
+    expect(merged.content.levels).toEqual([{ properties: { name: 'one', speed: 4 } }]);
+    expect(merged.unsaved).toBe(true);
   });
 });

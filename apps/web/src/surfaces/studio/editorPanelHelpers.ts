@@ -13,7 +13,7 @@ import type {
   GameEditorState,
 } from '../../studioApi.js';
 import { defaultLayerKey, defaultLayerTileKey } from '../../editorContentTools.js';
-import { draftHasHole, fillDeclaredValues } from '../../editorContentDefaults.js';
+import { differsFromStored, fillDeclaredValues } from '../../editorContentDefaults.js';
 
 export function useLabel(): (label: EditorLabel) => string {
   const { i18n } = useTranslation();
@@ -30,7 +30,8 @@ export function mergeDraft(loaded: GameEditorState): { content: EditorContentDoc
       ...((loaded.draft.content.params ?? {}) as Record<string, EditorParamValue>),
     };
   }
-  return { content: fillDeclaredValues(loaded.definition, merged), unsaved: draftHasHole(loaded) };
+  const content = fillDeclaredValues(loaded.definition, merged);
+  return { content, unsaved: differsFromStored(loaded.draft.content, content) };
 }
 
 // A collection's items out of the mixed content document.
