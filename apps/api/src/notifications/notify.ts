@@ -125,7 +125,7 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
   // Operator alerts have their own send (see `emitOperatorAlert`): they carry no
   // unsubscribe and must not be silenced by one. Guarded here rather than left to the
   // call sites so a future caller cannot accidentally route one through creator mail.
-  if (isOperatorNotification(notification.type)) return;
+  if (isOperatorNotification(notification.type) || notification.type.startsWith('share.')) return;
 
   // Explicit deps win (tests inject them). Otherwise fall back to env config so
   // the default call sites send email in prod with no extra wiring: a real mailer
@@ -166,7 +166,12 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
           ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
           : isProposalNotification(notification.type)
             ? proposalNotificationMessage(user.email, locale, notification.type, emailParams)
-            : submissionNotificationMessage(user.email, locale, notification.type, emailParams);
+            : submissionNotificationMessage(
+                user.email,
+                locale,
+                notification.type as SubmissionNotificationType,
+                emailParams,
+              );
 
     if (!message) return;
     await mailer.send(message);
@@ -189,7 +194,7 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
 
   try {
     const [user, subscriptions] = await Promise.all([deps.store.getUser(uid), deps.store.listPushSubscriptions(uid)]);
-    if (subscriptions.length === 0) return;
+    if (subscriptions.length === 0 || notification.type.startsWith('share.')) return;
     // The digest opt-out is per-notification, not per-channel: someone who asked to stop
     // the weekly summary meant the summary, not just the email carrying it. Without this
     // an unsubscribed creator keeps getting pushed every Monday, which is the version of
@@ -208,7 +213,11 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
               operatorPushContent(notification.type, notification.params.title ?? '')
             : isProposalNotification(notification.type)
               ? proposalPushContent(locale, notification.type, notification.params.title ?? '')
-              : submissionPushContent(locale, notification.type, notification.params.title ?? '');
+              : submissionPushContent(
+                  locale,
+                  notification.type as SubmissionNotificationType,
+                  notification.params.title ?? '',
+                );
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(

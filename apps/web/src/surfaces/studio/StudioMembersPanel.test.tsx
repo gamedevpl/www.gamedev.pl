@@ -76,7 +76,7 @@ describe('StudioMembersPanel', () => {
     let posted = false;
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string, init?: RequestInit) => {
+      vi.fn(async (_url: string, init?: RequestInit) => {
         if (init?.method === 'POST') {
           posted = true;
           return { ok: true, json: async () => ({ invite: PENDING }) };

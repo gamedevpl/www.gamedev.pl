@@ -85,6 +85,7 @@ export async function registerDraftLifecycleRoutes(
 
       const record = await store.getSubmission(jobId);
       if (!record || !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'publish'))) {
+        return reply.status(403).send({ error: 'only the creator can share this game' });
       }
       if (!record.slug) {
         return reply.status(409).send({ error: 'this game has no address yet' });
@@ -133,6 +134,7 @@ export async function registerDraftLifecycleRoutes(
 
       const record = await store.getSubmission(jobId);
       if (!record || !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'build'))) {
+        return reply.status(403).send({ error: 'only the creator can abandon this build' });
       }
       if (record.abandonedAt) {
         return reply.send({ ok: true, alreadyAbandoned: true });
