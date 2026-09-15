@@ -22,6 +22,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   const revisionRef = useRef(revision);
   revisionRef.current = revision;
   const timerRef = useRef<number | null>(null);
+  const tailRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const pastRef = useRef<EditorContentDoc[]>([]);
   const futureRef = useRef<EditorContentDoc[]>([]);
 
@@ -46,7 +47,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   );
 
   const reset = useCallback(
-    (next: EditorContentDoc, nextRevision: number) => {
+    (next: EditorContentDoc, nextRevision: number, unsaved = false) => {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -59,13 +60,13 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
       futureRef.current = [];
       refreshHistory();
       setSaveProblems([]);
-      setSaveState('clean');
+      setSaveState(unsaved ? 'dirty' : 'clean');
     },
     [refreshHistory],
   );
 
-  const saveNow = useCallback(
-    async (overwrite = false): Promise<boolean> => {
+  const writeDraft = useCallback(
+    async (overwrite: boolean): Promise<boolean> => {
       setSaveState('saving');
       setSaveProblems([]);
       try {
@@ -87,6 +88,16 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
       }
     },
     [slug],
+  );
+
+  // Every save joins the tail, so none of them race the revision.
+  const saveNow = useCallback(
+    (overwrite = false): Promise<boolean> => {
+      const attempt = tailRef.current.then(() => writeDraft(overwrite));
+      tailRef.current = attempt.catch(() => false);
+      return attempt;
+    },
+    [writeDraft],
   );
 
   const scheduleSave = useCallback(() => {

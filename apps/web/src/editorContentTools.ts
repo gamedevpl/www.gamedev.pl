@@ -13,6 +13,7 @@ import type {
   EditorTilemapItemContent,
   EditorTilemapSpec,
 } from './studioApi.js';
+import { declaredDefaults } from './editorContentDefaults.js';
 
 export type EditorPatchOperation = { path: Array<string | number>; value: unknown };
 
@@ -289,13 +290,7 @@ export function setCell(
 }
 
 export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
-  const properties: Record<string, unknown> = {};
-  for (const [name, propertySpec] of Object.entries(spec.properties ?? {})) {
-    if (propertySpec.type === 'text') properties[name] = '';
-    else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
-    else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
-    else properties[name] = false;
-  }
+  const properties = declaredDefaults(spec.properties);
   if (spec.widget === 'path') return { properties, points: blankPathPoints(spec) };
   if (spec.widget !== 'tilemap') return { properties };
   // Smallest legal grid, all first-tile — the creator paints from there.
@@ -304,14 +299,7 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
 }
 
 export function blankLayerEntity(spec: EditorEntitiesLayerSpec): EditorEntityItemContent {
-  const properties: Record<string, unknown> = {};
-  for (const [name, propertySpec] of Object.entries(spec.properties ?? {})) {
-    if (propertySpec.type === 'text') properties[name] = '';
-    else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
-    else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
-    else properties[name] = false;
-  }
-  return { properties };
+  return { properties: declaredDefaults(spec.properties) };
 }
 
 function layerEntityProblems(spec: EditorEntitiesLayerSpec, items: EditorEntityItemContent[]): string[] {

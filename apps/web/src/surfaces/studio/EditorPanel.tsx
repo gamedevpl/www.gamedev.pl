@@ -190,11 +190,11 @@ export function EditorPanel(props: {
         recordEditorStep('opened');
         setEditor(loaded);
         const merged = mergeDraft(loaded);
-        resetDocument(merged, loaded.draft?.revision ?? 0);
+        resetDocument(merged.content, loaded.draft?.revision ?? 0, merged.unsaved);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
         const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
         pushLive(
-          merged,
+          merged.content,
           defaultKey
             ? { collection: defaultKey, index: 0 }
             : defaultLayer
@@ -396,11 +396,11 @@ export function EditorPanel(props: {
       if (!mountedRef.current) return;
       setEditor(loaded);
       const merged = mergeDraft(loaded);
-      resetDocument(merged, loaded.draft?.revision ?? 0);
+      resetDocument(merged.content, loaded.draft?.revision ?? 0, merged.unsaved);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
       const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
       pushLive(
-        merged,
+        merged.content,
         defaultKey
           ? { collection: defaultKey, index: 0 }
           : defaultLayer
@@ -637,12 +637,17 @@ export function EditorPanel(props: {
             // the debounce timer, so a click inside that window would have sent the
             // creator to a playtest of the draft *before* their last edit.
             onClick={() => {
-              recordEditorStep('previewed');
-              if (saveState === 'dirty') {
-                void saveNow().then(() => props.onOpenPlaytest());
+              // Leaving unmounts the panel, so anything not on the server is gone.
+              if (saveState === 'clean' || saveState === 'saved') {
+                recordEditorStep('previewed');
+                props.onOpenPlaytest();
                 return;
               }
-              props.onOpenPlaytest();
+              void saveNow().then((saved) => {
+                if (!saved) return;
+                recordEditorStep('previewed');
+                props.onOpenPlaytest();
+              });
             }}
           >
             <PixelIcon name="play" size={12} /> {t('studioPanel.editor.tryDraft')}
