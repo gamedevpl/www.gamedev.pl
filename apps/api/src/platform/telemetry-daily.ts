@@ -381,6 +381,8 @@ export async function readDailyWindow(
   let reused = 0;
   // The newest day comes first, so its events are still in hand.
   let nextDayEvents: TelemetryEvent[] = [];
+  // The day just visited, in case its events must be fetched back.
+  let nextDate: string | undefined;
 
   for (const dateStr of requested) {
     const stored = await reader.get(dateStr);
@@ -390,15 +392,28 @@ export async function readDailyWindow(
       // Games dropped, or tallies shortened, make every count a floor too.
       if (stored.truncated || stored.gamesTruncated || stored.tallyTruncated) truncated = true;
       reused += 1;
-      // A sealed day yields no events, so no tail to pass back.
-
-      // Only reachable on a partial version migration.
+      // A sealed day yields no events; the day before reads them back.
       nextDayEvents = [];
+      nextDate = dateStr;
       continue;
     }
 
     if (remaining <= 0) {
       // Out of budget, so the window measured is the narrower one.
+      truncated = true;
+      break;
+    }
+    // Without the tail this day would seal a session as a bounce.
+
+    // One scan beats a wrong number that never expires.
+    if (nextDate !== undefined && nextDayEvents.length === 0 && remaining > 0) {
+      const tailLimit = Math.min(budget.perDay, remaining);
+      nextDayEvents = await reader.read(nextDate, tailLimit);
+      remaining -= nextDayEvents.length;
+      rescanned += 1;
+    }
+
+    if (remaining <= 0) {
       truncated = true;
       break;
     }
@@ -417,6 +432,7 @@ export async function readDailyWindow(
       nextDayEvents,
     });
     nextDayEvents = events;
+    nextDate = dateStr;
     if (aggregate.gamesTruncated || aggregate.tallyTruncated) truncated = true;
     days.push(aggregate);
     scanned.push(dateStr);

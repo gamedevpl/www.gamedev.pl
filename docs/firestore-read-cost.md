@@ -573,6 +573,21 @@ The grace window is what keeps it honest in the other direction: wide enough for
 flush, narrow enough that a session whose open was simply dropped at two in the afternoon
 is still counted as the session it is.
 
+One consequence is deliberate and worth stating. A session is counted on the day it
+opened, so the tail at the very start of the **oldest** day in a window belongs to the day
+before it — which is outside the window. A straight scan of the same partitions would have
+counted that fragment as a session of its own; the rollup does not. That is the same
+distortion the seam fix exists to remove, and fixing it only at the window edge would mean
+storing boundary session state in every day's document to serve one partial session out of
+twenty-eight days. The rule "a session belongs to the day it opened" is worth more than
+parity with a scan that was itself approximating.
+
+The failure path is not deliberate and is handled. If a day's rollup write fails while its
+successor's succeeded, the next sweep would rebuild that day with no tail in hand and seal
+a finished session as a bounce — permanently, since sealing is once. So when a day needs
+rebuilding and its successor came from a rollup rather than a scan, the successor is read
+back for the tail. One extra scan beats a wrong number that never expires.
+
 Same day, same logs: `/api/me/studio/health` was running 1,500–2,000 reads a minute for the
 same structural reason, one telemetry query per (day, slug) with no window at all. It is in
 the table above now.

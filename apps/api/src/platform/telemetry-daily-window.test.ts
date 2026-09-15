@@ -158,6 +158,40 @@ describe('readDailyWindow', () => {
     expect(merged).toEqual(direct);
   });
 
+  it('reads a sealed successor back rather than sealing a bounce forever', async () => {
+    const slug = 'night-owl';
+    const before: TelemetryEvent[] = [
+      { slug, sessionId: 'n1', type: 'game_opened', at: '2026-09-12T23:59:00.000Z', msSinceOpen: 0 },
+      { slug, sessionId: 'n1', type: 'play_time', at: '2026-09-12T23:59:30.000Z', msSinceOpen: 30_000, seconds: 30 },
+    ];
+    const after: TelemetryEvent[] = [
+      { slug, sessionId: 'n1', type: 'play_time', at: '2026-09-13T00:00:30.000Z', msSinceOpen: 90_000, seconds: 30 },
+    ];
+    const byDay = new Map<string, TelemetryEvent[]>([
+      ['2026-09-13', after],
+      ['2026-09-12', before],
+    ]);
+    const days = ['2026-09-13', '2026-09-12'];
+
+    // The newer day sealed; the older day's own write never landed.
+    const stored = new Map<string, DailyTelemetryAggregate>();
+    const first = reader(stored, byDay);
+    first.put.mockImplementation(async (dateStr: string, aggregate: DailyTelemetryAggregate) => {
+      if (dateStr === '2026-09-13') stored.set(dateStr, { ...aggregate, sealed: true });
+    });
+    await readDailyWindow(days, budget, first, meta);
+    expect(stored.has('2026-09-12')).toBe(false);
+
+    const second = reader(stored, byDay);
+    const window = await readDailyWindow(days, budget, second, meta);
+    const merged = mergeDailyAggregates(window.days)[0];
+    const direct = summarizeGameHealth([...before, ...after])[0];
+
+    expect(second.read).toHaveBeenCalledWith('2026-09-13', expect.any(Number));
+    expect(merged?.medianPlaySeconds).toBe(direct?.medianPlaySeconds);
+    expect(merged?.bounces).toBe(0);
+  });
+
   it('ignores a rollup written by an older version', async () => {
     const byDay = corpus();
     const stored = new Map<string, DailyTelemetryAggregate>();
