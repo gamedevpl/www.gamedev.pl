@@ -88,7 +88,7 @@ describe('StudioTransferPanel', () => {
     await act(async () => root.unmount());
   });
 
-  it('explains a busy refusal as a running round, not a failure', async () => {
+  it('falls back to a plain message when busy but no invitation comes back', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) =>
@@ -110,10 +110,9 @@ describe('StudioTransferPanel', () => {
       host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
 
-    const error = host.querySelector('[data-testid="studio-transfer-error"]');
-    expect(error?.textContent).toContain('build round');
-    // Still offered, because waiting and retrying is the whole remedy.
-    expect(host.querySelector('[data-testid="studio-transfer-code"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="studio-transfer-error"]')?.textContent).toContain('already out');
+    // Never the build-round copy: creating checks no round.
+    expect(host.querySelector('[data-testid="studio-transfer-error"]')?.textContent).not.toContain('build round');
     await act(async () => root.unmount());
   });
 
@@ -133,6 +132,37 @@ describe('StudioTransferPanel', () => {
     // Cancelled is not pending, so the form comes back.
     expect(host.querySelector('[data-testid="studio-transfer-pending"]')).toBeNull();
     expect(host.querySelector('[data-testid="studio-transfer-code"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('shows the invitation already out instead of blaming a build round', async () => {
+    // Busy on create means an invitation is already pending.
+    let sent = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          sent = true;
+          return { ok: false, status: 409, json: async () => ({ error: 'busy' }) };
+        }
+        return { ok: true, json: async () => ({ transfer: sent ? PENDING : null }) };
+      }),
+    );
+    const { host, root } = mountPanel();
+    await render(host, root);
+
+    const input = host.querySelector<HTMLInputElement>('[data-testid="studio-transfer-code"]')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, 'ADA-CODE');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(host.querySelector('[data-testid="studio-transfer-pending"]')?.textContent).toContain('Ada');
+    expect(host.querySelector('[data-testid="studio-transfer-error"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });

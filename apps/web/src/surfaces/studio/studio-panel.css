@@ -275,6 +275,12 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.6rem 0;
+  /* The shelf is clipped to the viewport and only its game list scrolls. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .studio-transfer-invites {

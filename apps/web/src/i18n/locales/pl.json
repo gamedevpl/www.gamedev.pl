@@ -869,7 +869,8 @@
         "ineligible": "Ten twórca nie może teraz przyjmować gier.",
         "busy": "Trwa runda budowania. Przekaż grę, gdy się skończy.",
         "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
-        "notOwner": "Ta gra nie jest twoja, więc nie możesz jej przekazać."
+        "notOwner": "Ta gra nie jest twoja, więc nie możesz jej przekazać.",
+        "alreadyOut": "Zaproszenie dla tej gry już jest wysłane."
       }
     }
   },
@@ -2182,8 +2183,10 @@
       "errors": {
         "rotate": "Nie udało się wygenerować nowego kodu.",
         "respond": "Nie udało się. Spróbuj ponownie.",
-        "busy": "Na tej grze trwa runda budowania. Spróbuj, gdy się skończy."
-      }
+        "busy": "Na tej grze trwa runda budowania. Spróbuj, gdy się skończy.",
+        "unreachable": "Nie udało się wczytać zaproszeń."
+      },
+      "retry": "Spróbuj ponownie"
     }
   }
 }

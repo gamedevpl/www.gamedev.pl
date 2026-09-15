@@ -859,7 +859,8 @@
         "ineligible": "That creator cannot receive games right now.",
         "busy": "A build round is running. Transfer once it finishes.",
         "staleOwner": "This game changed hands. Reload Studio.",
-        "notOwner": "This game is not yours to transfer."
+        "notOwner": "This game is not yours to transfer.",
+        "alreadyOut": "An invitation for this game is already out."
       }
     }
   },
@@ -2168,8 +2169,10 @@
       "errors": {
         "rotate": "Could not make a new code.",
         "respond": "That did not work. Try again.",
-        "busy": "A build round is running on that game. Try again once it finishes."
-      }
+        "busy": "A build round is running on that game. Try again once it finishes.",
+        "unreachable": "Could not load your invitations."
+      },
+      "retry": "Try again"
     }
   }
 }

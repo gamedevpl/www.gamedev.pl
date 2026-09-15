@@ -17,7 +17,6 @@ const REFUSALS: Record<string, string> = {
   invalid_code: 'studioPanel.transfer.errors.invalidCode',
   cannot_transfer_to_self: 'studioPanel.transfer.errors.self',
   recipient_ineligible: 'studioPanel.transfer.errors.ineligible',
-  busy: 'studioPanel.transfer.errors.busy',
   stale_owner: 'studioPanel.transfer.errors.staleOwner',
   not_owner: 'studioPanel.transfer.errors.notOwner',
 };
@@ -61,7 +60,18 @@ export function StudioTransferPanel({ slug }: { slug: string }): JSX.Element {
       setTransfer(await startGameTransfer(slug, trimmed));
       setCode('');
     } catch (caught) {
-      setError(explain(caught));
+      // Creating refuses as busy only when an invitation is already out.
+      if ((caught as TransferApiError)?.code === 'busy') {
+        const open = await fetchGameTransfer(slug).catch(() => null);
+        if (open?.status === 'pending') {
+          setTransfer(open);
+          setCode('');
+        } else {
+          setError(t('studioPanel.transfer.errors.alreadyOut'));
+        }
+      } else {
+        setError(explain(caught));
+      }
     } finally {
       setBusy(false);
     }

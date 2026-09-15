@@ -20,12 +20,15 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unreachable, setUnreachable] = useState(false);
 
   const load = useCallback(async () => {
     // A missing code must not hide an invitation.
     const [codeResult, incomingResult] = await Promise.allSettled([fetchRecipientCode(), fetchIncomingTransfers()]);
     if (codeResult.status === 'fulfilled') setCode(codeResult.value);
     if (incomingResult.status === 'fulfilled') setIncoming(incomingResult.value);
+    // A failed read is not an empty inbox.
+    setUnreachable(incomingResult.status === 'rejected');
   }, []);
 
   useEffect(() => {
@@ -62,8 +65,8 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
   }
 
   const pending = incoming.filter((invite) => invite.status === 'pending');
-  // Nothing to say without an invitation or a code.
-  if (pending.length === 0 && !code) return null;
+  // Nothing to say without an invitation, code or failure.
+  if (pending.length === 0 && !code && !unreachable) return null;
 
   return (
     <section
@@ -126,6 +129,15 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
             {rotating ? t('studioShelf.transfer.rotating') : t('studioShelf.transfer.rotate')}
           </button>
         </div>
+      ) : null}
+
+      {unreachable ? (
+        <p className="error" role="alert" data-testid="studio-transfer-inbox-unreachable">
+          {t('studioShelf.transfer.errors.unreachable')}{' '}
+          <button type="button" className="link-btn" onClick={() => void load()} data-testid="studio-transfer-retry">
+            {t('studioShelf.transfer.retry')}
+          </button>
+        </p>
       ) : null}
 
       {error ? (

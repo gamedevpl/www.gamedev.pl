@@ -175,4 +175,33 @@ describe('StudioTransferInbox', () => {
     expect(onAccepted).toHaveBeenCalledWith('comet-courier');
     await act(async () => root.unmount());
   });
+
+  it('reports an unreachable inbox rather than showing it as empty', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/recipient-code')) return reply(url, { code: 'MY-CODE' });
+        throw new Error('network down');
+      }),
+    );
+    const { host, root } = await mount();
+
+    expect(host.querySelector('[data-testid="studio-transfer-inbox-unreachable"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="studio-transfer-retry"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('stays visible to retry when both reads fail', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
+    const { host, root } = await mount();
+
+    expect(host.querySelector('[data-testid="studio-transfer-inbox"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="studio-transfer-retry"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
 });
