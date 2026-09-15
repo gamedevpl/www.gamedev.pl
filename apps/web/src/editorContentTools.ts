@@ -190,7 +190,7 @@ export function itemProblems(
     return tile ? name(tile.label) : key;
   };
   const problems: string[] = [];
-  for (const rule of spec.constraints) {
+  for (const rule of spec.constraints ?? []) {
     if ('reachable' in rule) {
       const missed = unreachableCount(spec, item, rule.reachable);
       if (missed > 0) {
@@ -259,7 +259,7 @@ function pathProblems(spec: EditorPathSpec, item: EditorPathItemContent, message
 export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
   if (spec.item.widget !== 'entities') return [];
   const problems: string[] = [];
-  for (const rule of spec.item.constraints) {
+  for (const rule of spec.item.constraints ?? []) {
     if (!('uniqueBy' in rule)) continue;
     const seenAt = new Map<string, number>();
     items.forEach((entry, index) => {
@@ -290,7 +290,7 @@ export function setCell(
 
 export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
   const properties: Record<string, unknown> = {};
-  for (const [name, propertySpec] of Object.entries(spec.properties)) {
+  for (const [name, propertySpec] of Object.entries(spec.properties ?? {})) {
     if (propertySpec.type === 'text') properties[name] = '';
     else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
     else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
@@ -305,7 +305,7 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
 
 export function blankLayerEntity(spec: EditorEntitiesLayerSpec): EditorEntityItemContent {
   const properties: Record<string, unknown> = {};
-  for (const [name, propertySpec] of Object.entries(spec.properties)) {
+  for (const [name, propertySpec] of Object.entries(spec.properties ?? {})) {
     if (propertySpec.type === 'text') properties[name] = '';
     else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
     else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
@@ -319,7 +319,7 @@ function layerEntityProblems(spec: EditorEntitiesLayerSpec, items: EditorEntityI
   if (items.length < spec.min || items.length > spec.max) {
     problems.push(`has ${items.length} items; expected ${spec.min}-${spec.max}`);
   }
-  for (const rule of spec.constraints) {
+  for (const rule of spec.constraints ?? []) {
     if (!('uniqueBy' in rule)) continue;
     const seen = new Map<string, number>();
     items.forEach((item, index) => {
