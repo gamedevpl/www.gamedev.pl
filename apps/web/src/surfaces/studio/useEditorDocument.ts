@@ -22,7 +22,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   const revisionRef = useRef(revision);
   revisionRef.current = revision;
   const timerRef = useRef<number | null>(null);
-  const inFlightRef = useRef<Promise<boolean> | null>(null);
+  const tailRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const pastRef = useRef<EditorContentDoc[]>([]);
   const futureRef = useRef<EditorContentDoc[]>([]);
 
@@ -90,19 +90,12 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
     [slug],
   );
 
-  // One write at a time, or a flush 409s against the autosave.
+  // Every save joins the tail, so none of them race the revision.
   const saveNow = useCallback(
-    async (overwrite = false): Promise<boolean> => {
-      // Wait for the write ahead; its verdict is not ours.
-      const running = inFlightRef.current;
-      if (running) await running;
-      const attempt = writeDraft(overwrite);
-      inFlightRef.current = attempt;
-      try {
-        return await attempt;
-      } finally {
-        if (inFlightRef.current === attempt) inFlightRef.current = null;
-      }
+    (overwrite = false): Promise<boolean> => {
+      const attempt = tailRef.current.then(() => writeDraft(overwrite));
+      tailRef.current = attempt.catch(() => false);
+      return attempt;
     },
     [writeDraft],
   );
