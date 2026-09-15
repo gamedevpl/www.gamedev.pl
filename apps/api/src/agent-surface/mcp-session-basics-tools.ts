@@ -248,7 +248,12 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         'The only way to send a mid-build screenshot. Returns a short-lived signed PUT URL — run the returned ' +
         '`upload` one-liner (curl --upload-file <png> "$url"). PNG bytes must never enter the model as base64; ' +
         'there is no send_screenshot tool. The PUT validates ≤700 KB decoded PNG and returns stop/pendingMessages. ' +
-        'Without shell egress, skip mid-build screenshots — the gate still captures on delivery. ' +
+        'With a shell, produce the PNG from headless Chromium: ' +
+        'chromium.launch({args:["--use-gl=angle","--use-angle=swiftshader-webgl","--enable-unsafe-swiftshader","--enable-webgl","--ignore-gpu-blocklist"]}) ' +
+        '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). ' +
+        'Capture canvas.toDataURL("image/png") inside the same render callback. Set preserveDrawingBuffer:true when creating the GL context, not at capture time; after compositing the default buffer is gone. page.screenshot({path:"shot.png"}) writes PNG directly. Decode a data URL with fs.writeFileSync("shot.png", Buffer.from(dataUrl.split(",")[1], "base64")) in the same Node process — never print or return the data URL. ' +
+        'If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). ' +
+        'Without a shell or browser, skip this tool: deliver mode=preview, end, and on a later/resumed run call get_gate_verdict once then get_gate_media if a preview verdict is already available — that is the happy path. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',

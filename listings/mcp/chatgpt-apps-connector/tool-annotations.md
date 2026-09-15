@@ -486,6 +486,17 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 
 ## `screenshot_upload_url`
 
+Produces a PNG only when the agent has a shell. Headless Chromium needs
+`--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
+--enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`); capture
+`canvas.toDataURL` inside the same render callback (set
+`preserveDrawingBuffer:true` when creating the GL context, not at capture
+time), decode to `shot.png` with `Buffer.from(dataUrl.split(',')[1],'base64')`
+without printing it, or `page.screenshot({path:'shot.png'})`. Keep PNG ≤700 KB.
+Without a shell or browser, skip this tool and read frames via
+`get_gate_media` in a later/resumed run: call `get_gate_verdict` once first,
+then fetch media if a preview verdict is already available after `mode=preview`.
+
 **Read Only: False**
 
 ```
@@ -880,6 +891,10 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 
 ```
 Returns the gate's screenshots and gameplay recording for inspection, and writes nothing.
+Without a shell or browser, this is how the agent sees the game once a preview
+verdict is already available after a mode=preview delivery — not immediately after
+submit_sources, and not by waiting or polling. On resume, call get_gate_verdict
+once first; start does not surface preview_passed.
 ```
 
 **Destructive: False**
