@@ -18,6 +18,8 @@ import {
 } from '../../editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from '../../LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
+import { EditorSurfaceSwitch } from './EditorSurfaceSwitch.js';
+import { useEditorSurfaceChoice } from './editorSurfaceChoice.js';
 import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
 import { useEditorDocument } from './useEditorDocument.js';
 import { recordAssistStep, recordEditorStep } from '../../visitTelemetry.js';
@@ -133,16 +135,9 @@ export function EditorPanel(props: {
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
   const [controllerDisabled, setControllerDisabled] = useState(false);
-  // The creator chooses; no controller message overrules it.
-  const [standardPreferred, setStandardPreferred] = useState(false);
-  const controllerOffered = Boolean(
-    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
-  );
-  const controllerActive = controllerOffered && !standardPreferred;
-  const chooseSurface = (standard: boolean) => {
-    setStandardPreferred(standard);
-    recordEditorStep(standard ? 'standard_surface_chosen' : 'controller_surface_restored');
-  };
+  const { standardPreferred, chooseSurface } = useEditorSurfaceChoice();
+  const controllerLive = Boolean(props.controller?.status === 'ready' && !controllerDisabled && props.controller.view);
+  const controllerActive = controllerLive && !standardPreferred;
   const lastControllerChangeRef = useRef<string | null>(null);
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
@@ -590,9 +585,7 @@ export function EditorPanel(props: {
         }),
         ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
         // A live controller's checks gate Publish whichever surface is shown.
-        ...(controllerOffered && props.controller?.checks?.ok === false
-          ? [t('studioPanel.editor.checksFromGame')]
-          : []),
+        ...(controllerLive && props.controller?.checks?.ok === false ? [t('studioPanel.editor.checksFromGame')] : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
@@ -693,11 +686,7 @@ export function EditorPanel(props: {
           {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
         </div>
       ) : null}
-      {controllerOffered ? (
-        <button type="button" className="editor-surface-switch" onClick={() => chooseSurface(!standardPreferred)}>
-          {t(standardPreferred ? 'studioPanel.editor.useGameEditor' : 'studioPanel.editor.useStandardEditor')}
-        </button>
-      ) : null}
+      {controllerLive ? <EditorSurfaceSwitch standard={standardPreferred} onChoose={chooseSurface} /> : null}
 
       <div className="editor-body">
         {controllerActive && props.controller ? (
