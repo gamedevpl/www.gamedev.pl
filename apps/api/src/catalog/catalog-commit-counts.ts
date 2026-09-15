@@ -30,7 +30,7 @@ export async function fetchGameCommitCounts(options: FetchGameCommitCountsOption
   for (let offset = 0; offset < slugs.length; offset += CHUNK) {
     const chunk = slugs.slice(offset, offset + CHUNK);
     const fields = chunk
-      .map((slug, index) => `c${offset + index}: history(path: "games/${slug}/") { totalCount }`)
+      .map((slug, index) => `c${offset + index}: history(path: "games/${slug}/", first: 1) { totalCount }`)
       .join('\n');
     const response = await fetchImpl('https://api.github.com/graphql', {
       method: 'POST',

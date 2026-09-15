@@ -10,11 +10,11 @@ and the games-repo `tools/lib/effort.ts` in lockstep with it.
 
 ## Inputs
 
-| Signal        | What is counted                                                                                                                                           |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **loc**       | Code lines in `games/<slug>/game.ts` plus `games/<slug>/game/**/*.ts` (blanks and `//` comments excluded — same rule as games-repo `npm run loc`)         |
-| **artifacts** | `TRACE.json` `frames` + `ACCEPTANCE.json` `achieved.length` + `PLAYTEST.json` `expectProgress.length` + PNG files under `games/<slug>/media/`             |
-| **commits**   | `git rev-list --count HEAD -- games/<slug>/` (games-repo tool). Snapshot bake asks GitHub GraphQL for the same path history. Missing history counts as 0. |
+| Signal        | What is counted                                                                                                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **loc**       | Code lines in `games/<slug>/game.ts` plus `games/<slug>/game/**/*.ts` (blanks and `//` comments excluded — same rule as games-repo `npm run loc`)                                                     |
+| **artifacts** | `TRACE.json` `frames` + `ACCEPTANCE.json` `achieved.length` + `PLAYTEST.json` `expectProgress.length` + PNG files under `games/<slug>/media/`                                                         |
+| **commits**   | Snapshot bake: GitHub GraphQL `history(path: "games/<slug>/", first: 1) { totalCount }` on the pinned SHA. Games-repo CLI: `git rev-list --count HEAD -- games/<slug>/`. Missing history counts as 0. |
 
 Each missing file or failed parse is 0, not an error.
 
@@ -46,3 +46,5 @@ axis scores `1`; a game with nothing measurable scores `0`.
 - **Not** applied to newest / most played / A–Z.
 
 Store-lane games have no games-repo tree, so they omit `effort` and rank as 0.
+Archived / disabled repo games are measured out of the mix so they cannot
+move published scores.

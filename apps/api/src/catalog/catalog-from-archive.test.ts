@@ -55,4 +55,46 @@ describe('buildCatalogFromArchive effort', () => {
     );
     expect(catalog[0]?.effort).toBe(0.8);
   });
+
+  it('does not let an archived game move published effort scores', async () => {
+    const liveFiles = [
+      ['games/live/SPEC.md', spec('Live')],
+      ['games/live/game.ts', 'const x = 1;\nconst y = 2;\n'],
+      ['games/live/TRACE.json', '{"frames":12}'],
+    ] as const;
+    const retiredFiles = [
+      [
+        'games/retired/SPEC.md',
+        ['---', 'title: Retired', 'status: archived', 'genre: arcade', '---', '', 'Gone.'].join('\n'),
+      ],
+      ['games/retired/game.ts', Array.from({ length: 40 }, (_, i) => `const n${i} = ${i};\n`).join('')],
+    ] as const;
+
+    const withoutRetired = await buildCatalogFromArchive(
+      'main',
+      async (filePath) => new Map(liveFiles).get(filePath) ?? null,
+      liveFiles.map(([filePath]) => filePath),
+      { entryFromSpec: catalogEntryFromSpec, commitCounts: new Map([['live', 1]]) },
+    );
+    const withRetired = await buildCatalogFromArchive(
+      'main',
+      async (filePath) => new Map([...liveFiles, ...retiredFiles]).get(filePath) ?? null,
+      [...liveFiles, ...retiredFiles].map(([filePath]) => filePath),
+      {
+        entryFromSpec: catalogEntryFromSpec,
+        commitCounts: new Map([
+          ['live', 1],
+          ['retired', 99],
+        ]),
+      },
+    );
+
+    const liveAlone = withoutRetired.find((entry) => entry.slug === 'live');
+    const liveBeside = withRetired.find((entry) => entry.slug === 'live');
+    const retired = withRetired.find((entry) => entry.slug === 'retired');
+    expect(retired?.status).toBe('archived');
+    expect(retired?.effort).toBeUndefined();
+    expect(liveBeside?.effort).toBe(liveAlone?.effort);
+    expect(liveAlone?.effort).toBe(1);
+  });
 });

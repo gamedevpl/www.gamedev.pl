@@ -39,6 +39,8 @@ describe('fetchGameCommitCounts', () => {
     expect(counts.get('rich-game')).toBe(12);
     expect(counts.get('thin-game')).toBe(3);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const query = JSON.parse(String(vi.mocked(fetchImpl).mock.calls[0]?.[1]?.body)) as { query: string };
+    expect(query.query).toContain('first: 1');
   });
 
   it('returns an empty map when GraphQL fails', async () => {

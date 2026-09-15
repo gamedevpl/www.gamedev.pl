@@ -1,4 +1,4 @@
-import type { CatalogEntry } from '@gamedevpl/contract';
+import { isPublishedEntry, type CatalogEntry } from '@gamedevpl/contract';
 import { classifyTouchSource } from './catalog-touch.js';
 import {
   countArtifactRichness,
@@ -74,29 +74,31 @@ export async function buildCatalogFromArchive(
     const sources = await Promise.all(tsPaths.map((filePath) => readRawFile(filePath, ref)));
     entry.touch = classifyTouchSource(sources.filter((text): text is string => text !== null).join('\n'));
 
-    const locSources: string[] = [];
-    for (const [index, filePath] of tsPaths.entries()) {
-      const relative = filePath.slice(`games/${slug}/`.length);
-      const text = sources[index];
-      if (text !== null && isGameLocPath(relative)) locSources.push(text);
+    if (isPublishedEntry(entry)) {
+      const locSources: string[] = [];
+      for (const [index, filePath] of tsPaths.entries()) {
+        const relative = filePath.slice(`games/${slug}/`.length);
+        const text = sources[index];
+        if (text !== null && isGameLocPath(relative)) locSources.push(text);
+      }
+
+      const [trace, acceptance, playtest] = await Promise.all([
+        pathSet.has(`games/${slug}/TRACE.json`) ? readRawFile(`games/${slug}/TRACE.json`, ref) : null,
+        pathSet.has(`games/${slug}/ACCEPTANCE.json`) ? readRawFile(`games/${slug}/ACCEPTANCE.json`, ref) : null,
+        pathSet.has(`games/${slug}/PLAYTEST.json`) ? readRawFile(`games/${slug}/PLAYTEST.json`, ref) : null,
+      ]);
+
+      inputs.set(slug, {
+        loc: countCodeLines(locSources),
+        artifacts: countArtifactRichness({
+          trace,
+          acceptance,
+          playtest,
+          mediaPngCount: mediaPngCount(pathSet, slug),
+        }),
+        commits: options.commitCounts?.get(slug) ?? 0,
+      });
     }
-
-    const [trace, acceptance, playtest] = await Promise.all([
-      pathSet.has(`games/${slug}/TRACE.json`) ? readRawFile(`games/${slug}/TRACE.json`, ref) : null,
-      pathSet.has(`games/${slug}/ACCEPTANCE.json`) ? readRawFile(`games/${slug}/ACCEPTANCE.json`, ref) : null,
-      pathSet.has(`games/${slug}/PLAYTEST.json`) ? readRawFile(`games/${slug}/PLAYTEST.json`, ref) : null,
-    ]);
-
-    inputs.set(slug, {
-      loc: countCodeLines(locSources),
-      artifacts: countArtifactRichness({
-        trace,
-        acceptance,
-        playtest,
-        mediaPngCount: mediaPngCount(pathSet, slug),
-      }),
-      commits: options.commitCounts?.get(slug) ?? 0,
-    });
 
     entries.push(entry);
   }
