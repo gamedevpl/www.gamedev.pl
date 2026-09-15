@@ -63,6 +63,7 @@ import { pickLatestChangelogText } from '../platform/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 
 // The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
 // Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.
@@ -1088,8 +1089,9 @@ export async function registerAgentChannelRoutes(
         if (!(await (options.dreamingEnabled ?? (async () => false))())) {
           return reply.send({ accepted: false, rejected: 'proposals_off', ...(await channelState(jobId, record)) });
         }
-        // Uncached: a mute from another instance must not buy two frames.
-        if (await store!.readProposalsMutedAt(record.ownerUid)) {
+        // Uncached, and the owner's now: a mute must not buy frames.
+        const mutedBy = record.slug ? await currentOwnerUid(store!, record.slug, record.ownerUid) : record.ownerUid;
+        if (mutedBy && (await store!.readProposalsMutedAt(mutedBy))) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
         }
         // Without a green capture the card can never post, and the agent would learn that

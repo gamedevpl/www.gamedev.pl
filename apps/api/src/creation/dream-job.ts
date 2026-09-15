@@ -16,6 +16,7 @@ import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 
 // Two directions per proposal; a third would be a menu again.
 export const DREAM_OPTIONS = 2;
@@ -159,7 +160,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The switch, the mute, and anything that moved under this run.
     const stopped = async (): Promise<DreamOutcome | null> => {
       if (!(await availability.dreamingEnabled())) return 'paused';
-      if (await store.readProposalsMutedAt(record.ownerUid)) return 'muted';
+      // The current owner's, not the uid that built the round.
+      const mutedBy = record.slug ? await currentOwnerUid(store, record.slug, record.ownerUid) : record.ownerUid;
+      if (mutedBy && (await store.readProposalsMutedAt(mutedBy))) return 'muted';
       const live = await store.getSubmission(jobId);
       // A reopen leaves the version alone, so the generation is the tell.
       if ((live?.roundGeneration ?? 1) !== (record.roundGeneration ?? 1)) return 'superseded';

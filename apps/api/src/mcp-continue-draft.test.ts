@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintCreatorAgentKey } from './agent-surface/agent-creator-key.js';
 import {
   DRAFT_NOT_CONTINUABLE_REASON,
@@ -153,6 +153,62 @@ describe('MCP continue_draft', () => {
     const started = await callTool(app, 'start', { slug: SLUG }, headers);
     expect(started.isError).toBe(false);
     expect(started.structured).toMatchObject({ jobId: DRAFT_ISSUE, slug: SLUG });
+  });
+
+  it('fences reopening against a concurrent transfer accept, same as any other round-opening path', async () => {
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    await store.upsertUser({ uid: 'g:recipient' });
+    const at = '2026-08-01T12:00:00.000Z';
+    const access = await store.ensureGameAccess(SLUG, OWNER, at, at);
+    await store.createGameTransferInvitation(SLUG, OWNER, 'g:recipient', access!.accessRevision, at);
+    const headers = await creatorHeaders(store);
+    app = await createApp(store);
+
+    const originalBegin = store.beginCheckoutRecovery.bind(store);
+    let acceptDuringWindow: unknown;
+    const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+      const result = await originalBegin(...args);
+      // A concurrent accept must see this lease as busy.
+      acceptDuringWindow = await store.acceptGameTransferInvitation(SLUG, 'g:recipient', at);
+      return result;
+    });
+    try {
+      const { isError } = await callTool(
+        app,
+        'continue_draft',
+        { slug: SLUG, feedback: 'Make the paddle wider and add a second ball.' },
+        headers,
+      );
+      expect(isError).toBe(false);
+      expect(acceptDuringWindow).toBe('busy');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('refuses to reopen for a creator the transfer already replaced', async () => {
+    // Refused at key resolution: the slug is no longer on this account.
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    await store.upsertUser({ uid: 'g:recipient' });
+    const at = '2026-08-01T12:00:00.000Z';
+    const access = await store.ensureGameAccess(SLUG, OWNER, at, at);
+    await store.createGameTransferInvitation(SLUG, OWNER, 'g:recipient', access!.accessRevision, at);
+    expect(await store.acceptGameTransferInvitation(SLUG, 'g:recipient', at)).toMatchObject({ status: 'accepted' });
+    const headers = await creatorHeaders(store);
+    app = await createApp(store);
+
+    const { structured, isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Make the paddle wider and add a second ball.' },
+      headers,
+    );
+
+    expect(isError).toBe(true);
+    expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    expect((await store.getSubmission(DRAFT_ISSUE))?.state).toBe('ready_for_review');
   });
 
   it('reopens as self even when the closed round was platform-built and never set deliveredVersion', async () => {

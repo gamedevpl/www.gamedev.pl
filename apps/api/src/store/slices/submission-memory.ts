@@ -86,6 +86,9 @@ export class InMemorySubmissionStore implements SubmissionStore {
   async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
     if (this.recoveryAdmissions.get(slug)?.nonce === nonce) this.recoveryAdmissions.delete(slug);
   }
+  async hasActiveCheckoutRecovery(slug: string, now: number): Promise<boolean> {
+    return (this.recoveryAdmissions.get(slug)?.until ?? 0) > now;
+  }
   async claimSubmissionSlug(
     jobId: number,
     slug: string,
@@ -100,12 +103,12 @@ export class InMemorySubmissionStore implements SubmissionStore {
     const records = [...this.submissions.values()].filter((r) => r.slug === slug);
     const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
     if (!target || target.slug) return false;
+    // Lineage only: the recovery route already checked canonical ownership.
     if (
       sourceJobId === null
         ? records.length > 0
         : !holder ||
           holder.jobId !== sourceJobId ||
-          holder.ownerUid !== target.ownerUid ||
           (!(holder.state === 'canceled' || isAbandonedRecovery(holder)) &&
             !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
           holder.moderationBlockedAt

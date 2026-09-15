@@ -11,7 +11,8 @@ import {
 } from './job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublishableMode } from '../platform/publication-state.js';
-import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from '../platform/store.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
 import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
 
@@ -184,10 +185,10 @@ export async function registerJobAdminRoutes(
         return reply.code(409).send({ error: 'nothing_delivered' });
       }
 
-      // Platform/bot-authored jobs may publish without a human profile. Creator-owned
-      // jobs cannot — catalog attribution has nowhere to point otherwise.
-      if (!record.ownerUid.startsWith(BOT_UID_PREFIX)) {
-        const owner = await store.getUser(record.ownerUid);
+      // Creator-owned games need a publishable profile: the canonical owner's.
+      const publishOwner = (await resolveGameAccess(store, record.slug)).owner;
+      if (publishOwner.kind === 'creator') {
+        const owner = await store.getUser(publishOwner.uid);
         if (!hasPublishableProfile(owner)) {
           return reply.code(409).send({ error: 'profile_required' });
         }
@@ -259,7 +260,8 @@ export async function registerJobAdminRoutes(
             slug: record.slug,
             version: record.deliveredVersion,
             gameTitle: record.title,
-            ownerUid: record.ownerUid,
+            // Skipped as "already knows": that is the owner now, not the old row's.
+            ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
           });
         } catch (error) {
           request.log.error({ err: error, slug: record.slug }, 'follower notification fan-out failed after publish');

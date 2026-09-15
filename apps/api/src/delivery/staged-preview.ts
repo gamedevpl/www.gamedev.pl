@@ -157,7 +157,7 @@ function noteJob<K, V>(entries: Map<K, V>, key: K, value: V, maxJobs = MAX_STAGE
 export interface StagedPreviewOptions {
   store: Pick<
     Store,
-    'getSubmission' | 'getPublication' | 'listSubmissionsByOwnerAndSlug' | 'appendBuildPreview' | 'pruneBuildPreviews'
+    'getSubmission' | 'getPublication' | 'listSubmissionsBySlug' | 'appendBuildPreview' | 'pruneBuildPreviews'
   >;
   gamesStore: Pick<GamesStore, 'getStagedSourceFiles' | 'getManifest' | 'getSourceFile'> & {
     putDerivedArtifact?: GamesStore['putDerivedArtifact'];

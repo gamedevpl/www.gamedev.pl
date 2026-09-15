@@ -104,10 +104,14 @@ it('only one concurrent recovery can claim a canceled slug; old history is prese
   await store.createSubmission(4, 'other', 'Sky');
   expect(await store.claimSubmissionSlug(4, 'sky', null)).toBe(false);
 });
-it('never claims another owner’s canceled round', async () => {
+it('claims on lineage alone — the route, not the store, decides who may', async () => {
+  // The route checked canonical ownership; a recipient is a different uid.
   const { store } = await fixture('other');
   await store.createSubmission(2, 'owner', 'Sky');
-  expect(await store.claimSubmissionSlug(2, 'sky', 1)).toBe(false);
+  expect(await store.claimSubmissionSlug(2, 'sky', 1)).toBe(true);
+  // Lineage still holds: an unrelated round cannot claim it.
+  await store.createSubmission(3, 'owner', 'Sky');
+  expect(await store.claimSubmissionSlug(3, 'sky', 99)).toBe(false);
 });
 it('reuses a fully initialized self round after a lost response without recharging or dispatch', async () => {
   const f = await fixture();
@@ -339,7 +343,7 @@ it.each(['success', 'refusal'])('preserves recovery %s when admission cleanup fa
   }
 });
 
-// No transfer API yet (GO-02); overwrite the auto-created record directly.
+// Bypasses the transfer API's invitation flow to set ownership directly.
 function transferTo(store: InMemoryStore, slug: string, uid: string): void {
   const gameAccessStore = (store as unknown as { gameAccessStore: { access: Map<string, { ownerUid: string }> } })
     .gameAccessStore;
@@ -348,27 +352,27 @@ function transferTo(store: InMemoryStore, slug: string, uid: string): void {
   gameAccessStore.access.set(slug, { ...record, ownerUid: uid });
 }
 
-it('flag off: the canonical new owner is still refused, matching the historical rule', async () => {
+it('lets the canonical new owner actually recover, not just see that they could', async () => {
   const f = await fixture('former-owner', 'canceled', 'new-owner');
   transferTo(f.store, 'sky', 'new-owner');
 
-  const status = await f.app.inject('/api/me/studio/games/sky/recovery');
-  expect(status.json()).toEqual({ kind: 'occupied' });
-});
-
-it('flag on: the canonical new owner is recognized, though the claim itself is a deeper GO-02 gap', async () => {
-  vi.stubEnv('GAME_ACCESS_AUTHORITATIVE', 'true');
-  const f = await fixture('former-owner', 'canceled', 'new-owner');
-  transferTo(f.store, 'sky', 'new-owner');
-
-  // Now recognized as canonical — used to read 'occupied' (test above).
   const status = await f.app.inject('/api/me/studio/games/sky/recovery');
   expect(status.json()).toEqual({ kind: 'canceled' });
 
-  // The claim itself still compares raw ownerUid — a deeper GO-02 gap.
+  // Reporting it recoverable then refusing the claim trapped the recipient.
+  const recovered = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+  expect(recovered.statusCode).toBe(200);
+  expect(await f.store.getSubmissionBySlug('sky')).toMatchObject({ ownerUid: 'new-owner', slug: 'sky' });
+});
+
+it('still refuses a stranger, who is not the canonical owner either', async () => {
+  const f = await fixture('owner', 'canceled', 'stranger');
+
+  const status = await f.app.inject('/api/me/studio/games/sky/recovery');
+  expect(status.json()).toEqual({ kind: 'occupied' });
+
   const recovered = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
   expect(recovered.statusCode).toBe(409);
-  expect(recovered.json().error).toBe('recovery_changed');
 });
 
 it('names the field it refused instead of only saying the request is invalid', async () => {

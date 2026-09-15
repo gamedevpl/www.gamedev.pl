@@ -68,8 +68,9 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await tick();
       await submit(store, 2, 'g:grace', 'orbital-dogfight');
 
-      // Legacy follows the newest round; canonical does not.
-      expect(await creatorOwnsSlug(store, 'orbital-dogfight', 'g:grace')).toBe(true);
+      // The newest-submission derivation would follow grace; canonical does not.
+      expect(await creatorOwnsSlug(store, 'orbital-dogfight', 'g:ada')).toBe(true);
+      expect(await creatorOwnsSlug(store, 'orbital-dogfight', 'g:grace')).toBe(false);
       const access = await resolveGameAccess(store, 'orbital-dogfight');
       expect(access.owner).toEqual({ kind: 'creator', uid: 'g:ada' });
       expect(await gameAccessMatchesDerived(store, 'orbital-dogfight')).toBe(false);

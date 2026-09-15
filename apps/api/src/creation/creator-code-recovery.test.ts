@@ -23,9 +23,12 @@ it('refuses stale manual staging when recovery claims the slug first', async () 
       publishedAt: '2026-08-01T00:00:00.000Z',
       takedownReason: 'deleted by creator',
     });
-    const original = store.claimManualRoundSlug.bind(store);
+    // A concurrent recovery run wins the lease and claims the slug first.
+    const originalBegin = store.beginCheckoutRecovery.bind(store);
     let recoveredJob = 0;
-    const claim = vi.spyOn(store, 'claimManualRoundSlug').mockImplementationOnce(async (...args) => {
+    const begin = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+      const recoveryNonce = 'recovery-nonce';
+      await originalBegin('sky-dodge', recoveryNonce, Date.now());
       recoveredJob = await store.allocateJobId();
       await store.createSubmission(recoveredJob, 'g:creator', 'Recovered');
       expect(
@@ -33,25 +36,26 @@ it('refuses stale manual staging when recovery claims the slug first', async () 
           key: 'recovery',
           spec: 'Local sources',
           locale: 'en',
+          admissionNonce: recoveryNonce,
         }),
       ).toBe(true);
-      return original(...args);
+      await store.finishCheckoutRecovery('sky-dodge', recoveryNonce);
+      return originalBegin(...args);
     });
     try {
       const response = await app.inject({
         method: 'PUT',
         url: '/api/me/studio/games/sky-dodge/sources/stage',
-
         payload: { path: 'game.ts', content: 'stale edit', rebuild: false },
       });
       expect(response.statusCode).toBe(409);
-      const lostJob = claim.mock.calls[0]![0];
+      const lostJob = recoveredJob + 1;
       expect((await store.getSubmission(lostJob))?.state).toBe('abandoned');
       expect((await store.listQueuedSubmissions()).map((row) => row.jobId)).not.toContain(lostJob);
       expect((await store.getSubmissionBySlug('sky-dodge'))?.jobId).toBe(recoveredJob);
       expect(stage).not.toHaveBeenCalled();
     } finally {
-      claim.mockRestore();
+      begin.mockRestore();
     }
   } finally {
     await app.close();

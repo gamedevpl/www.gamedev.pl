@@ -42,12 +42,10 @@ export function canClaimManualRound(
   const latest = ordered[0];
   const holder = ordered.find((record) => !record.abandonedAt) ?? latest;
   if (!target || target.slug || !holder || !latest) return false;
-  const expected =
-    holder.jobId === sourceJobId ||
-    (latest.jobId === sourceJobId && !!latest.abandonedAt && latest.ownerUid === target.ownerUid);
+  // Lineage only: callers already verify canonical ownership before this call.
+  const expected = holder.jobId === sourceJobId || (latest.jobId === sourceJobId && !!latest.abandonedAt);
   return (
     expected &&
-    holder.ownerUid === target.ownerUid &&
     !holder.moderationBlockedAt &&
     !latest.moderationBlockedAt &&
     !isActiveBuildRound(holder) &&

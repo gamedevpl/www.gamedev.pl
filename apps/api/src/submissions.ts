@@ -1,4 +1,5 @@
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
+import { ownsGame, resolveGameAccess } from './platform/game-access-resolve.js';
 import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -382,6 +383,8 @@ export interface SubmissionRoutesHandle {
    * poll a stale status for up to the 60s TTL after an owner staged a file.
    */
   invalidateStatusCache: (jobId: number) => void;
+  /** Busts the catalog + game-play caches a slug's ownership/publication touches. */
+  invalidatePublishedGameCaches: (slug: string) => void;
   /**
    * Arms the staged-preview publisher for a job, the same debounced assembly the agent
    * channel's `onSourcesStaged` triggers. Null when the publisher could not be built
@@ -813,6 +816,15 @@ export async function registerSubmissionRoutes(
       const holder = await store.getSubmissionBySlug(slug);
       if (!holder) return null;
 
+      // Recheck ownership: a transfer may have landed while this lease was pending.
+      const expectedOwnerUid = input.ownerUid ?? source.ownerUid;
+      const access = await resolveGameAccess(store, slug);
+      if (access.source === 'canonical' && !ownsGame(access, expectedOwnerUid)) {
+        throw Object.assign(new Error('Ownership of this game changed. Refresh before continuing.'), {
+          statusCode: 409,
+        });
+      }
+
       // Resolve against the *source* game before the new job exists. `dispatchBuild`
       // would otherwise ask `builderOf` on a blank record and always pick `platform`.
       const builder = input.builder ?? builderOf(source);
@@ -905,6 +917,8 @@ export async function registerSubmissionRoutes(
     locale: string;
     log: { error: (context: object, message: string) => void };
     openedBy?: 'creator' | 'agent';
+    // The caller: rechecked under the lease, and charged for the round.
+    ownerUid?: string;
   }): Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }> {
     if (!store) return { ok: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.jobId);
@@ -933,40 +947,61 @@ export async function registerSubmissionRoutes(
       return { ok: false, reason: 'not_continuable' };
     }
 
-    try {
-      // Record who typed this. An agent calling `continue_draft` writes its own summary
-      // of a conversation held somewhere else — usually in English, whatever the creator
-      // was speaking — so the thread must not present it as the creator's own words.
-      const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
-      const relayed = await relayedMessageLocalization(origin, input.feedback);
-      await store.appendCreatorMessage(input.jobId, relayed.text, {
-        origin,
-        ...(relayed.textLocalized && relayed.locale
-          ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
-          : {}),
-      });
-    } catch (queueError) {
-      input.log.error({ err: queueError, jobId: input.jobId }, 'failed to queue continue_draft feedback');
-      return { ok: false, reason: 'queue_failed' };
-    }
+    const reopen = async (): Promise<
+      { ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }
+    > => {
+      // Under the lease: a transfer may have committed first.
+      if (record.slug && input.ownerUid) {
+        const access = await resolveGameAccess(store, record.slug);
+        if (access.source === 'canonical' && !ownsGame(access, input.ownerUid)) {
+          return { ok: false, reason: 'stale_owner' };
+        }
+      }
+      try {
+        // Record who typed this. An agent calling `continue_draft` writes its own summary
+        // of a conversation held somewhere else — usually in English, whatever the creator
+        // was speaking — so the thread must not present it as the creator's own words.
+        const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
+        const relayed = await relayedMessageLocalization(origin, input.feedback);
+        await store.appendCreatorMessage(input.jobId, relayed.text, {
+          origin,
+          ...(relayed.textLocalized && relayed.locale
+            ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
+            : {}),
+        });
+      } catch (queueError) {
+        input.log.error({ err: queueError, jobId: input.jobId }, 'failed to queue continue_draft feedback');
+        return { ok: false, reason: 'queue_failed' };
+      }
 
-    const outcome = await resumeBuild({
-      jobId: input.jobId,
-      feedback: input.feedback,
-      locale: input.locale,
-      log: input.log,
-      // deliveredVersion misses platform rounds; dispatch presence is the real "never ran" signal.
-      ...(record.dispatch?.refs?.length ? {} : { undelivered: true }),
-      builder: 'self',
-      transition: {
-        by: input.openedBy === 'agent' ? 'agent' : 'creator',
-        reason: 'continue_draft',
-      },
-    });
-    if (!outcome.started) {
-      return { ok: false, reason: outcome.reason ?? 'resume_failed' };
+      const outcome = await resumeBuild({
+        jobId: input.jobId,
+        feedback: input.feedback,
+        locale: input.locale,
+        log: input.log,
+        // deliveredVersion misses platform rounds; dispatch presence is the real "never ran" signal.
+        ...(record.dispatch?.refs?.length ? {} : { undelivered: true }),
+        builder: 'self',
+        // Charged to the caller, not the historical row's owner, after a transfer.
+        ...(input.ownerUid ? { ownerUid: input.ownerUid } : {}),
+        transition: {
+          by: input.openedBy === 'agent' ? 'agent' : 'creator',
+          reason: 'continue_draft',
+        },
+      });
+      if (!outcome.started) {
+        return { ok: false, reason: outcome.reason ?? 'resume_failed' };
+      }
+      return { ok: true, jobId: input.jobId, alreadyOpen: false };
+    };
+
+    // Without a slug there is no game a transfer could target yet -- nothing to fence.
+    if (!record.slug) return reopen();
+    try {
+      return await withImprovementAdmission(store, record.slug, now, reopen);
+    } catch {
+      return { ok: false, reason: 'busy' };
     }
-    return { ok: true, jobId: input.jobId, alreadyOpen: false };
   }
 
   /**
@@ -1563,7 +1598,7 @@ export async function registerSubmissionRoutes(
       if (cached && cached.expiresAt > currentTime) {
         // Events are attached outside the cache: the GitHub-derived part of a status
         // is worth a minute, but an agent's live update is worth seconds.
-        return reply.send(await attachBuildEvents(cached.value, jobId, locale));
+        return reply.send(await attachBuildEvents(cached.value, jobId, locale, request.user?.uid));
       }
 
       // An abandoned build is terminal and self-declared: answer from the record
@@ -1587,13 +1622,13 @@ export async function registerSubmissionRoutes(
         const lastKnown = statusCache.get(cacheKey);
         if (lastKnown) {
           request.log.warn({ err: error, jobId }, 'status refresh failed; serving last known status');
-          return reply.send(await attachBuildEvents(lastKnown.value, jobId, locale));
+          return reply.send(await attachBuildEvents(lastKnown.value, jobId, locale, request.user?.uid));
         }
         request.log.error({ err: error }, 'failed to resolve submission status');
         return reply.status(502).send({ error: 'failed to load submission status' });
       }
 
-      return reply.send(await attachBuildEvents(status, jobId, locale));
+      return reply.send(await attachBuildEvents(status, jobId, locale, request.user?.uid));
     },
   );
 
@@ -1878,6 +1913,7 @@ export async function registerSubmissionRoutes(
     startImprovementRound,
     buildNotifyDeps,
     invalidateStatusCache,
+    invalidatePublishedGameCaches,
     scheduleStagedPreview: stagedPreviews ? (jobId) => stagedPreviews.schedule(jobId) : null,
     redispatchQueuedJob,
     dispatchQueuedJob,

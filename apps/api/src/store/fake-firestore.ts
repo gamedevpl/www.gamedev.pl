@@ -173,7 +173,8 @@ export function fakeFirestore() {
           rejectNestedArrays(data);
           if (!docs.has(docKey)) throw new Error('no document to update');
         },
-        apply: () => docs.set(docKey, { ...docs.get(docKey)!, ...data }),
+        // Same sentinel handling as a merge `set` -- update() honours FieldValue.delete() too.
+        apply: () => docs.set(docKey, mergeInto(docs.get(docKey)!, data)),
       }),
       delete: () => ({ validate: () => {}, apply: () => docs.delete(docKey) }),
     };

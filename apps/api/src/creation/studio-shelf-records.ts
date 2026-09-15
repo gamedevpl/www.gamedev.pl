@@ -1,6 +1,9 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { ownsGame, resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
 
-type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'>;
+export type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'> &
+  GameAccessResolveStore &
+  Pick<Store, 'listGameAccessByMember'>;
 
 // Judged before the deep-link merge adds its record.
 export type ShelfRecordsObserver = (records: SubmissionRecord[]) => Promise<void>;
@@ -28,6 +31,31 @@ async function lookupRequested(
   return store.getSubmission(jobId);
 }
 
+// listSubmissionsByOwner alone drifts after a transfer -- reconcile it.
+export async function reconcileTransferredOwnership(
+  store: ShelfStore,
+  ownerUid: string,
+  records: SubmissionRecord[],
+): Promise<SubmissionRecord[]> {
+  const memberAccess = await store.listGameAccessByMember(ownerUid);
+  const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
+
+  const nonCanonical = records.filter((r) => !r.slug || !canonicalSlugs.has(r.slug));
+  const stillOwned = await Promise.all(
+    nonCanonical.map(async (record) => {
+      if (!record.slug) return true;
+      const access = await resolveGameAccess(store, record.slug);
+      return access.source !== 'canonical' || ownsGame(access, ownerUid);
+    }),
+  );
+  const kept = nonCanonical.filter((_, i) => stillOwned[i]);
+
+  // Every job on the slug, not just this owner's historical rows.
+  const canonicalJobs = await Promise.all([...canonicalSlugs].map((slug) => store.listSubmissionsBySlug(slug)));
+
+  return [...canonicalJobs.flat(), ...kept];
+}
+
 // Owner-query lag: document GET still finds a just-written draft.
 export async function loadShelfRecords(
   store: ShelfStore,
@@ -36,7 +64,8 @@ export async function loadShelfRecords(
   mintStatusToken: (jobId: number) => string,
   observe?: ShelfRecordsObserver,
 ): Promise<SubmissionRecord[]> {
-  const records = await store.listSubmissionsByOwner(ownerUid);
+  const owned = await store.listSubmissionsByOwner(ownerUid);
+  const records = await reconcileTransferredOwnership(store, ownerUid, owned);
   if (observe) await observe(records);
   if (!requested) return records;
   const known = records.some((record) => record.slug === requested || mintStatusToken(record.jobId) === requested);

@@ -35,10 +35,11 @@ export interface ContributionStore {
   // One suggestion by id, or null.
   getSuggestion(id: string): Promise<SuggestionRecord | null>;
 
-  // Suggestions, newest first, optionally narrowed by status/owner.
+  // Suggestions, newest first, optionally narrowed by status/owner/slug.
   listSuggestions(opts?: {
     status?: SuggestionStatus[];
     ownerUid?: string;
+    slug?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]>;
 
@@ -113,6 +114,7 @@ export class InMemoryContributionStore implements ContributionStore {
   async listSuggestions(opts?: {
     status?: SuggestionStatus[];
     ownerUid?: string;
+    slug?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]> {
     const wanted = opts?.status ? new Set(opts.status) : null;
@@ -120,6 +122,7 @@ export class InMemoryContributionStore implements ContributionStore {
       [...this.suggestions.values()]
         .filter((record) => (wanted ? wanted.has(record.status) : true))
         .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
+        .filter((record) => (opts?.slug ? record.slug === opts.slug : true))
         .map((record) => structuredClone(record))
         .sort(compareSuggestions)
         // No limit means every match, matching Firestore's paged read.
@@ -242,12 +245,14 @@ export class FirestoreContributionStore implements ContributionStore {
   async listSuggestions(opts?: {
     status?: SuggestionStatus[];
     ownerUid?: string;
+    slug?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]> {
     let query: FirebaseFirestore.Query = this.db.collection('suggestions');
     // `in` caps at 30 values; 8 statuses never need chunking.
     if (opts?.status?.length) query = query.where('status', 'in', opts.status);
     if (opts?.ownerUid) query = query.where('ownerUid', '==', opts.ownerUid);
+    if (opts?.slug) query = query.where('slug', '==', opts.slug);
 
     // No `orderBy` -- avoids a composite index; order restored in memory.
     const pageSize = 500;

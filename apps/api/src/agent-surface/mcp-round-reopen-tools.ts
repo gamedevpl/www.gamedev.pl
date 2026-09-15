@@ -60,6 +60,7 @@ export interface RoundReopenToolsDeps {
         locale: string;
         log: { error: (context: object, message: string) => void };
         openedBy?: 'creator' | 'agent';
+        ownerUid?: string;
       }) => Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }>)
     | undefined;
   contentChecker: ContentChecker | undefined;
@@ -471,6 +472,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           locale: resolved.draft.locale ?? 'en',
           log: ctx.request.log,
           openedBy: 'agent',
+          ownerUid: resolved.creatorUid,
         });
         if (!continued.ok) {
           if (continued.reason === 'already_published') return toolErr(GAME_ALREADY_PUBLISHED_REASON);

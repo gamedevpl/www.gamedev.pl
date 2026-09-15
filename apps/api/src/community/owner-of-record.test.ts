@@ -38,43 +38,40 @@ function transferredGameStore(opts: { jobs: SubmissionRecord[]; access?: GameAcc
   } as unknown as Store;
 }
 
-const ON = { GAME_ACCESS_AUTHORITATIVE: 'true' };
-const OFF = {};
-
 describe('resolveOwnerOfRecord', () => {
-  it('flag off: derives the owner from submissions as before', async () => {
+  it('reads the canonical record over the derived submission owner', async () => {
     const store = transferredGameStore({ jobs: [job(1, 'g:ada', 'sky')], access: access('sky', 'g:grace') });
 
-    expect(await resolveOwnerOfRecord(store, 'sky', OFF)).toEqual({ kind: 'creator', uid: 'g:ada' });
+    expect(await resolveOwnerOfRecord(store, 'sky')).toEqual({ kind: 'creator', uid: 'g:grace' });
   });
 
-  it('flag on: reads the canonical record instead', async () => {
-    const store = transferredGameStore({ jobs: [job(1, 'g:ada', 'sky')], access: access('sky', 'g:grace') });
-
-    expect(await resolveOwnerOfRecord(store, 'sky', ON)).toEqual({ kind: 'creator', uid: 'g:grace' });
-  });
-
-  it('flag on: a bot-owned canonical record still routes to platform', async () => {
+  it('a bot-owned canonical record still routes to platform', async () => {
     const store = transferredGameStore({
       jobs: [],
       access: access('repo-lane', `${BOT_UID_PREFIX}worker`),
     });
 
-    expect(await resolveOwnerOfRecord(store, 'repo-lane', ON)).toEqual({ kind: 'platform', reason: 'bot_owned' });
+    expect(await resolveOwnerOfRecord(store, 'repo-lane')).toEqual({ kind: 'platform', reason: 'bot_owned' });
   });
 
-  it('flag on: an erased canonical owner still routes to platform', async () => {
+  it('an erased canonical owner still routes to platform', async () => {
     const store = transferredGameStore({ jobs: [], access: access('sky', DELETED_ACCOUNT_UID) });
 
-    expect(await resolveOwnerOfRecord(store, 'sky', ON)).toEqual({ kind: 'platform', reason: 'owner_deleted' });
+    expect(await resolveOwnerOfRecord(store, 'sky')).toEqual({ kind: 'platform', reason: 'owner_deleted' });
+  });
+
+  it('no canonical record: derives the owner from submissions', async () => {
+    const store = transferredGameStore({ jobs: [job(1, 'g:ada', 'sky')] });
+
+    expect(await resolveOwnerOfRecord(store, 'sky')).toEqual({ kind: 'creator', uid: 'g:ada' });
   });
 });
 
 describe('canReviewSlug', () => {
-  it('flag on: the new canonical owner may review, the old owner may not', async () => {
+  it('the new canonical owner may review, the old owner may not', async () => {
     const store = transferredGameStore({ jobs: [job(1, 'g:ada', 'sky')], access: access('sky', 'g:grace') });
 
-    expect(await canReviewSlug(store, 'sky', 'g:grace', ON)).toBe(true);
-    expect(await canReviewSlug(store, 'sky', 'g:ada', ON)).toBe(false);
+    expect(await canReviewSlug(store, 'sky', 'g:grace')).toBe(true);
+    expect(await canReviewSlug(store, 'sky', 'g:ada')).toBe(false);
   });
 });

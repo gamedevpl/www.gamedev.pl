@@ -343,6 +343,30 @@ describe('decisions', () => {
     expect((await store.getPublication(SLUG))?.currentVersion).toBe('base-1');
   });
 
+  it('refuses to accept when ownership moves during the admission lease', async () => {
+    const proposal = await openAndGreen();
+    const at = new Date(NOW).toISOString();
+    await store.ensureGameAccess(SLUG, OWNER, at, at);
+    const originalBegin = store.beginCheckoutRecovery.bind(store);
+    const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+      // Ownership moves between resolveReviewer's check and this lease's acquisition.
+      await store.recordSettledOwner(SLUG, 'g:newowner', 999, at, at);
+      return originalBegin(...args);
+    });
+    const adoptIntoJob = vi.fn();
+    try {
+      const result = await acceptProposal(
+        { ...deps(store, gamesStore), adoptIntoJob },
+        { id: proposal.id, byUid: OWNER, reviewer: 'creator' },
+      );
+      expect(result).toMatchObject({ ok: false, error: 'stale_owner' });
+      expect(adoptIntoJob).not.toHaveBeenCalled();
+      expect((await store.getProposal(proposal.id))?.state).toBe('in_review');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('refuses to accept a proposal the gate has not passed', async () => {
     const result = await openProposal(deps(store, gamesStore), OPEN_INPUT);
     if (!result.ok) throw new Error('setup failed');
