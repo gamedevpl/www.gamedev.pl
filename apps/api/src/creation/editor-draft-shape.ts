@@ -14,7 +14,14 @@ export function draftShapeProblems(definition: EditorDefinition, content: unknow
   const declared = Object.keys(definition.content);
 
   for (const key of Object.keys(content)) {
-    if (key === PARAMS_KEY || key === LAYERS_KEY) continue;
+    if (key === PARAMS_KEY) {
+      if (!definition.params) problems.push(`undeclared collection "${key}"`);
+      continue;
+    }
+    if (key === LAYERS_KEY) {
+      if (!definition.layers) problems.push(`undeclared content "${key}"`);
+      continue;
+    }
     if (!declared.includes(key)) problems.push(`undeclared collection "${key}"`);
   }
 
@@ -74,7 +81,8 @@ function itemShapeProblems(owner: string, spec: CollectionItemSpec, item: unknow
 }
 
 function layerShapeProblems(owner: string, spec: EditorLayerSpec, value: unknown): string[] {
-  if (value === undefined) return [];
+  // A skipped layer leaves no cells to rebuild it from.
+  if (value === undefined) return [`${owner} is missing`];
   if (spec.widget === 'tilemap') {
     if (!isPlainObject(value)) return [`${owner} must be an object`];
     if (value.rows === undefined) return [`${owner}.rows is missing`];
@@ -138,7 +146,16 @@ function pointsShapeProblems(owner: string, maxPoints: number, points: unknown):
   const problems: string[] = [];
   if (points.length > maxPoints) problems.push(`${owner}.points has ${points.length}; at most ${maxPoints}`);
   points.forEach((point, index) => {
-    if (!isPlainObject(point)) problems.push(`${owner}.points[${index}] must be an object`);
+    if (!isPlainObject(point)) {
+      problems.push(`${owner}.points[${index}] must be an object`);
+      return;
+    }
+    for (const axis of ['x', 'y'] as const) {
+      const coordinate = point[axis];
+      if (typeof coordinate !== 'number' || !Number.isInteger(coordinate)) {
+        problems.push(`${owner}.points[${index}].${axis} must be a whole number`);
+      }
+    }
   });
   return problems;
 }

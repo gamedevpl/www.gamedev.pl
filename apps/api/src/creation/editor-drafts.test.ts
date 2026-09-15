@@ -409,6 +409,23 @@ describe('editor draft routes', () => {
     expect(response.json().problems.some((p: string) => p.includes('must be a string'))).toBe(true);
   });
 
+  it('still refuses a hidden section the definition never declared', async () => {
+    const { app } = await createApp();
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: {
+          gardens: [{ properties: { name: 'Fine' }, rows: ['########', '#..@..*#', '########'] }],
+          layers: { smuggled: { properties: {}, rows: ['##'] } },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().problems.some((p: string) => p.includes('undeclared'))).toBe(true);
+  });
+
   it('still refuses a row wider than the declared grid', async () => {
     const { app } = await createApp();
     const response = await app.inject({
