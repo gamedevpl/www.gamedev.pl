@@ -26,6 +26,8 @@ round is, and which mistakes cost a whole build.
 
 ## Getting into a round
 
+- **Listing your games:** `list_account_games` returns every game on your account with its
+  slug, title, published status, and whether an active build round is open (`hasActiveRound`).
 - **New game:** `create_game` first. `start` needs a slug and a new game has none.
 - **Existing game with a round already open:** `start` directly.
 - **Existing game with no open round:** `start` is refused — nothing exists for it to bind

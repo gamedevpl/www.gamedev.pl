@@ -41,6 +41,8 @@ import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-conne
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { closeJob } from './creation/close-job.js';
 import { registerCliChatRoutes } from './creation/cli-chat-routes.js';
+import { collapseJobsToOwnerGames } from './creation/owner-games.js';
+import { reconcileTransferredOwnership } from './creation/studio-shelf-records.js';
 import { createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
 import {
   createSeedDispatchClientFromEnv,
@@ -315,6 +317,7 @@ export interface AgentSurfaceSeams {
     | 'dailyImprovementQuota'
     | 'dailyFeedbackQuota'
     | 'refuseShare'
+    | 'loadOwnerGames'
   >;
 }
 
@@ -1898,6 +1901,13 @@ export async function registerSubmissionRoutes(
       dailyImprovementQuota,
       dailyFeedbackQuota,
       refuseShare,
+      loadOwnerGames: store
+        ? async (ownerUid: string) => {
+            const owned = await store.listSubmissionsByOwner(ownerUid);
+            const records = await reconcileTransferredOwnership(store, ownerUid, owned);
+            return collapseJobsToOwnerGames(records, 'shelf');
+          }
+        : undefined,
     },
   };
 
