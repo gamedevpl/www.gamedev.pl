@@ -14,6 +14,8 @@ import { invalidateTransferInboxCache, readIncomingTransfersCached } from './tra
 export interface GameTransferRoutesOptions {
   store: Store;
   now?: () => number;
+  // Catalog attribution joins from GameAccess, but caches per slug.
+  invalidatePublishedGameCaches?: (slug: string) => void;
 }
 
 export interface TransferSummary {
@@ -67,7 +69,7 @@ export async function registerGameTransferRoutes(
   app: FastifyInstance,
   options: GameTransferRoutesOptions,
 ): Promise<void> {
-  const { store } = options;
+  const { store, invalidatePublishedGameCaches } = options;
   const now = options.now ?? Date.now;
 
   app.post(
@@ -172,6 +174,7 @@ export async function registerGameTransferRoutes(
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
       if (!result) return reply.status(404).send({ error: 'not_found' });
       invalidateTransferInboxCache(store, uid);
+      invalidatePublishedGameCaches?.(slug);
       return reply.send({ transfer: await toSummary(store, result, uid) });
     },
   );

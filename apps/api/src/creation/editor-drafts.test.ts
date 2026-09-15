@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
@@ -428,6 +428,37 @@ describe('editor draft routes', () => {
       headers: authHeaders('g:alice'),
     });
     expect(again.statusCode).toBe(429);
+  });
+
+  it('refuses to publish once canonical ownership moved mid-request', async () => {
+    const { app } = await createApp();
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: { gardens: [{ properties: { name: 'Mine' }, rows: ['########', '#..@..*#', '########'] }] } },
+    });
+    await store.upsertUser({ uid: 'g:other' });
+    const at = '2026-01-01T00:00:00.000Z';
+    await store.ensureGameAccess('garden-gather', 'g:alice', at, at);
+
+    const originalBegin = store.beginCheckoutRecovery.bind(store);
+    const begin = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+      // Ownership moves between the route's own ownership check and this lease.
+      await store.recordSettledOwner('garden-gather', 'g:other', 999, at, at);
+      return originalBegin(...args);
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/me/games/garden-gather/editor/publish',
+        headers: authHeaders('g:alice'),
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe('stale_owner');
+    } finally {
+      begin.mockRestore();
+    }
   });
 
   it('409s a publish with no draft', async () => {

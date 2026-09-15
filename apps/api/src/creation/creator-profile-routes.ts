@@ -253,24 +253,25 @@ async function reconcilePublishedOwnership(
   ownerUid: string,
   records: SubmissionRecord[],
 ): Promise<SubmissionRecord[]> {
+  const memberAccess = await store.listGameAccessByMember(ownerUid);
+  const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
+
+  const nonCanonical = records.filter((r) => !r.slug || !canonicalSlugs.has(r.slug));
   const stillOwned = await Promise.all(
-    records.map(async (record) => {
+    nonCanonical.map(async (record) => {
       if (!record.slug) return true;
       const access = await resolveGameAccess(store, record.slug);
       return access.source !== 'canonical' || ownsGame(access, ownerUid);
     }),
   );
-  const kept = records.filter((_, i) => stillOwned[i]);
-  const keptSlugs = new Set(kept.map((r) => r.slug).filter((slug): slug is string => Boolean(slug)));
+  const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
-  const memberAccess = await store.listGameAccessByMember(ownerUid);
-  const transferredIn = await Promise.all(
-    memberAccess
-      .filter((access) => access.ownerUid === ownerUid && !keptSlugs.has(access.slug))
-      .map((access) => publishedSubmissionForSlug(store, access.slug)),
+  // Refetches the published tip fresh, never a stale pre-boomerang round.
+  const canonicalRecords = await Promise.all(
+    [...canonicalSlugs].map((slug) => publishedSubmissionForSlug(store, slug)),
   );
 
-  return [...kept, ...transferredIn.filter((r): r is SubmissionRecord => r !== null)];
+  return [...canonicalRecords.filter((r): r is SubmissionRecord => r !== null), ...kept];
 }
 
 // The newest round may be unpublished while an older sibling is live.

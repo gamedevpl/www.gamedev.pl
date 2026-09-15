@@ -1,7 +1,9 @@
+import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { InMemoryStore } from '../platform/store.js';
+import { registerGameTransferRoutes } from './game-transfer-routes.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const AT = '2026-01-01T00:00:00.000Z';
@@ -329,6 +331,37 @@ describe('game transfer routes', () => {
       headers: { cookie: authCookie('g:grace') },
     });
     expect(incoming.json().transfers).toHaveLength(0);
+  });
+
+  it('accepting busts the catalog/game-play caches for the transferred slug', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = Fastify();
+    app.addHook('preHandler', async (req) => {
+      const cookie = req.headers.cookie as string | undefined;
+      const token = cookie?.split(`${SESSION_COOKIE_NAME}=`)[1];
+      req.user = token ? ({ uid: readSessionToken(token, sessionSecret).uid } as typeof req.user) : null;
+    });
+    const invalidatePublishedGameCaches = vi.fn();
+    await registerGameTransferRoutes(app, { store, invalidatePublishedGameCaches });
+    try {
+      await app.inject({
+        method: 'POST',
+        url: '/api/me/studio/games/sky/transfer',
+        headers: { cookie: authCookie('g:ada') },
+        payload: { recipientCode: code },
+      });
+      expect(invalidatePublishedGameCaches).not.toHaveBeenCalled();
+
+      const accept = await app.inject({
+        method: 'POST',
+        url: '/api/me/transfers/sky/accept',
+        headers: { cookie: authCookie('g:grace') },
+      });
+      expect(accept.statusCode).toBe(200);
+      expect(invalidatePublishedGameCaches).toHaveBeenCalledWith('sky');
+    } finally {
+      await app.close();
+    }
   });
 
   it('the sender cannot accept their own invitation', async () => {

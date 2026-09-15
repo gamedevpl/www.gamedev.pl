@@ -383,6 +383,8 @@ export interface SubmissionRoutesHandle {
    * poll a stale status for up to the 60s TTL after an owner staged a file.
    */
   invalidateStatusCache: (jobId: number) => void;
+  /** Busts the catalog + game-play caches a slug's ownership/publication touches. */
+  invalidatePublishedGameCaches: (slug: string) => void;
   /**
    * Arms the staged-preview publisher for a job, the same debounced assembly the agent
    * channel's `onSourcesStaged` triggers. Null when the publisher could not be built
@@ -1888,6 +1890,7 @@ export async function registerSubmissionRoutes(
     startImprovementRound,
     buildNotifyDeps,
     invalidateStatusCache,
+    invalidatePublishedGameCaches,
     scheduleStagedPreview: stagedPreviews ? (jobId) => stagedPreviews.schedule(jobId) : null,
     redispatchQueuedJob,
     dispatchQueuedJob,

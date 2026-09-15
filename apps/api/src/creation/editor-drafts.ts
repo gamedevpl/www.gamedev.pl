@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   EDITOR_CONTENT_FILE,
   EDITOR_FILE,
@@ -623,11 +625,30 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       // dispatched: the sources exist already, so the job walks straight to
       // `submitted`.
       const source = resolved.submission;
-      const jobId = await store.allocateJobId();
-      // The caller, not source.ownerUid, which a transfer leaves stale.
-      await store.createSubmission(jobId, request.user!.uid, source.title);
-      if (source.locale) await store.setSubmissionLocale(jobId, source.locale);
-      await store.setSubmissionSlug(jobId, slug);
+      // Same admission fence acceptGameTransferInvitation checks against.
+      const nonce = randomUUID();
+      if (!(await store.beginCheckoutRecovery(slug, nonce, Date.now()))) {
+        return reply.status(409).send({
+          error: 'busy',
+          message: 'A round is already opening for this game. Refresh before continuing.',
+        });
+      }
+      let jobId: number;
+      try {
+        const access = await resolveGameAccess(store, slug);
+        if (access.source === 'canonical' && !ownsGame(access, request.user!.uid)) {
+          return reply
+            .status(409)
+            .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
+        }
+        jobId = await store.allocateJobId();
+        // The caller, not source.ownerUid, which a transfer leaves stale.
+        await store.createSubmission(jobId, request.user!.uid, source.title);
+        if (source.locale) await store.setSubmissionLocale(jobId, source.locale);
+        await store.setSubmissionSlug(jobId, slug, nonce);
+      } finally {
+        await store.finishCheckoutRecovery(slug, nonce).catch(() => {});
+      }
       const at = () => new Date(now()).toISOString();
       await store.recordJobTransition(jobId, { to: 'queued', at: at(), by: 'creator', reason: 'content_edit' });
       await store.recordJobTransition(jobId, { to: 'building', at: at(), by: 'creator', reason: 'content_edit' });

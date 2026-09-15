@@ -37,24 +37,23 @@ export async function reconcileTransferredOwnership(
   ownerUid: string,
   records: SubmissionRecord[],
 ): Promise<SubmissionRecord[]> {
+  const memberAccess = await store.listGameAccessByMember(ownerUid);
+  const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
+
+  const nonCanonical = records.filter((r) => !r.slug || !canonicalSlugs.has(r.slug));
   const stillOwned = await Promise.all(
-    records.map(async (record) => {
+    nonCanonical.map(async (record) => {
       if (!record.slug) return true;
       const access = await resolveGameAccess(store, record.slug);
       return access.source !== 'canonical' || ownsGame(access, ownerUid);
     }),
   );
-  const kept = records.filter((_, i) => stillOwned[i]);
-  const keptSlugs = new Set(kept.map((r) => r.slug).filter((slug): slug is string => Boolean(slug)));
+  const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
-  const memberAccess = await store.listGameAccessByMember(ownerUid);
-  const transferredIn = await Promise.all(
-    memberAccess
-      .filter((access) => access.ownerUid === ownerUid && !keptSlugs.has(access.slug))
-      .map((access) => store.getSubmissionBySlug(access.slug)),
-  );
+  // Every job on the slug, not just this owner's historical rows.
+  const canonicalJobs = await Promise.all([...canonicalSlugs].map((slug) => store.listSubmissionsBySlug(slug)));
 
-  return [...transferredIn.filter((r): r is SubmissionRecord => r !== null && !r.abandonedAt), ...kept];
+  return [...canonicalJobs.flat(), ...kept];
 }
 
 // Owner-query lag: document GET still finds a just-written draft.

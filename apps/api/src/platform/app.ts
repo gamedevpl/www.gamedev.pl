@@ -1001,7 +1001,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerRecipientCodeRoutes(app, { store });
 
   // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
-  await registerGameTransferRoutes(app, { store });
+  await registerGameTransferRoutes(app, {
+    store,
+    invalidatePublishedGameCaches: submissionSeams.invalidatePublishedGameCaches,
+  });
 
   // The game page at `/:handle/:slug` — one aggregate read per game.
   await registerGamePageRoutes(app, {

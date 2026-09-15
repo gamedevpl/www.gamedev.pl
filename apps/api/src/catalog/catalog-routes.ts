@@ -21,6 +21,7 @@ import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 
 type PublishedGame = { slug: string; title: string; html: string };
 
@@ -300,9 +301,9 @@ export async function registerCatalogRoutes(
           name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
         );
         if (!entry) continue;
-        // Attribution joins from the owner's profile at read time, never SPEC.
-        const submission = await store.getSubmissionBySlug(record.slug);
-        const owner = submission ? await store.getUser(submission.ownerUid) : null;
+        // Attribution joins from canonical access, not the publishing submission.
+        const access = await resolveGameAccess(store, record.slug);
+        const owner = access.owner.kind === 'creator' ? await store.getUser(access.owner.uid) : null;
         const profile = owner ? toPublicCreatorProfile(owner) : null;
         const contributors: string[] = [];
         try {

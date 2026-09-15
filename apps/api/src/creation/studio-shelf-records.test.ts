@@ -87,4 +87,33 @@ describe('reconcileTransferredOwnership', () => {
     const recipientRecords = await reconcileTransferredOwnership(store, 'g:recipient', recipientOwned);
     expect(recipientRecords.map((r) => r.slug)).toContain('sky-dodge');
   });
+
+  it('shows the current tip after ownership boomerangs back (A -> B -> A)', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const later = '2026-01-02T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:a' });
+    await store.upsertUser({ uid: 'g:b' });
+    // A's own pre-transfer round.
+    await store.createSubmission(10, 'g:a', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:a', at, at);
+
+    // A -> B: B opens a newer round under their own uid.
+    await store.createGameTransferInvitation('sky-dodge', 'g:a', 'g:b', 1, at);
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:b', at);
+    await store.createSubmission(11, 'g:b', 'Sky Dodge (B)');
+    await store.setSubmissionSlug(11, 'sky-dodge');
+
+    // B -> A: ownership boomerangs back.
+    await store.createGameTransferInvitation('sky-dodge', 'g:b', 'g:a', 2, later);
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:a', later);
+
+    const owned = await store.listSubmissionsByOwner('g:a');
+    const records = await reconcileTransferredOwnership(store, 'g:a', owned);
+    const skyDodgeJobIds = records.filter((r) => r.slug === 'sky-dodge').map((r) => r.jobId);
+    // B's round survives A's old job on the same slug.
+    expect(skyDodgeJobIds).toContain(11);
+    expect(skyDodgeJobIds).toContain(10);
+  });
 });
