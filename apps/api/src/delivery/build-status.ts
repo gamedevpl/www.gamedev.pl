@@ -1,7 +1,7 @@
 import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
-import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
+import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-state.js';
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
@@ -240,7 +240,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
     // Started before this one, whoever built them: the slug's own history.
     const siblings = (await store.listSubmissionsBySlug(record.slug))
-      .filter((sibling) => sibling.jobId !== record.jobId && sibling.createdAt < record.createdAt)
+      .filter((sibling) => startedBefore(sibling, record))
       .slice(0, maxPriorRounds)
       .reverse();
 

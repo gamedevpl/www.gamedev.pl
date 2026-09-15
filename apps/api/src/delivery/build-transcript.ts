@@ -1,6 +1,7 @@
 // Creator conversation, served in windows — get_kit_api hit a token ceiling at whole.
 
 import { stripPlaytestContext } from '../platform/playtest-context.js';
+import { startedBefore } from '../creation/job-state.js';
 import {
   DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
   MAX_TRANSCRIPT_WINDOW_BYTES,
@@ -86,9 +87,7 @@ async function collectTranscriptEntries(
 ): Promise<{ entries: TranscriptEntry[]; truncatedAtSource: boolean }> {
   // By slug: earlier rounds carry the sender's uid after a transfer.
   const eligibleSiblings = record.slug
-    ? (await store.listSubmissionsBySlug(record.slug)).filter(
-        (sibling) => sibling.jobId !== record.jobId && sibling.createdAt < record.createdAt,
-      )
+    ? (await store.listSubmissionsBySlug(record.slug)).filter((sibling) => startedBefore(sibling, record))
     : [];
   const siblings = eligibleSiblings.slice(0, MAX_TRANSCRIPT_ROUNDS - 1);
   const rounds = [

@@ -147,6 +147,16 @@ export function nextRoundGeneration(current: number | undefined): number {
   return current === undefined ? 1 : current + 1;
 }
 
+// Earlier round of the same game; ties break on jobId.
+export function startedBefore(
+  sibling: { jobId: number; createdAt: string },
+  record: { jobId: number; createdAt: string },
+): boolean {
+  if (sibling.jobId === record.jobId) return false;
+  if (sibling.createdAt !== record.createdAt) return sibling.createdAt < record.createdAt;
+  return sibling.jobId < record.jobId;
+}
+
 // Revokes a round's capabilities on transfer; one behind still reads.
 export function revokedRoundGeneration(current: number | undefined): number {
   return current === undefined ? 2 : current + 2;
