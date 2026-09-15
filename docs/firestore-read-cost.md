@@ -548,12 +548,22 @@ Two properties make that safe to do to a number an agent acts on:
   ranks sixth every single day still wins the 28-day window. Merging the reported top-N of
   each day would have lost it.
 
-The one real difference is the seam. A session that crosses UTC midnight is counted in both
-its partitions, where a single 28-day scan used to stitch it back together. Events are
-already bucketed by event time on the write path, so the seam is in the stored data; what
-changed is that nothing re-joins it. It costs a slightly high `sessions` and a slightly low
-`zoneJoined` for sessions spanning 00:00 UTC — 01:00 or 02:00 in Poland, the quietest hour
-there is.
+The midnight seam needs care, and the naive version of this is worse than it looks. Events
+are bucketed by event time on the write path, so a session running across UTC midnight
+leaves a tail in the next partition: no `game_opened`, and whatever it did after 00:00.
+Summed as if it were its own session, that tail is a fresh visit that played for nothing
+and bounced. A player who finished a game at 00:00:10 would turn one completed session
+into two, one of them a bounce — halving the finish rate and the median play time on a
+number an agent acts on.
+
+So the rollup recognizes it. A session with no open whose first event lands within
+`CONTINUATION_GRACE_MS` of the partition start is a **continuation**: its seconds, ticks
+and outcomes still count, but it is not a visit, it did not bounce, and its ending is
+carried as `continuationEndings` for the merge to credit to the day that did count it as
+a session. The grace window is wide enough for a late flush and narrow enough that a
+session whose open was simply dropped at two in the afternoon is still the session it is.
+A test asserts the merged row for the finished-after-midnight case is **identical** to a
+whole-window scan.
 
 Same day, same logs: `/api/me/studio/health` was running 1,500–2,000 reads a minute for the
 same structural reason, one telemetry query per (day, slug) with no window at all. It is in

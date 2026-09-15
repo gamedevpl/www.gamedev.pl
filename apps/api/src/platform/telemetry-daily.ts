@@ -56,6 +56,9 @@ export interface DailyGameAggregate extends DailyCounters {
   // Deeper than the reported top-N, so the window reranks.
   errorTally: { message: string; count: number }[];
   labelTally: { label: string; sessions: number }[];
+
+  // Endings owed to a session opened the day before.
+  continuationEndings: number;
 }
 
 export interface DailyTelemetryAggregate {
@@ -106,6 +109,7 @@ function toGameAggregate(detail: GameHealthDetail, perMetric: number, tallyRows:
     bestScores: downsample(samples.bestScores, perMetric),
     errorTally: samples.errorTally.slice(0, tallyRows),
     labelTally: samples.labelTally.slice(0, tallyRows),
+    continuationEndings: samples.continuationEndings,
   };
 }
 
@@ -164,7 +168,8 @@ export function buildDailyAggregate(
   events: TelemetryEvent[],
   meta: { computedAt: string; sealed: boolean; truncated: boolean },
 ): DailyTelemetryAggregate {
-  const rows = summarizeGameHealthDetailed(events);
+  // The partition start is what makes a tail recognizable.
+  const rows = summarizeGameHealthDetailed(events, { partitionStartMs: Date.parse(`${date}T00:00:00.000Z`) });
   const ranked = [...rows].sort((a, b) => b.sessions - a.sessions || a.slug.localeCompare(b.slug));
   const { games, gamesTruncated, tallyTruncated } = fitWithinDocument(ranked);
   return {
@@ -245,7 +250,8 @@ function mergeGame(days: DailyGameAggregate[]): GameHealth {
   const won = sum((day) => day.outcomes.won);
   const lost = sum((day) => day.outcomes.lost);
   const decided = won + lost;
-  const sessionsWithEnding = sum((day) => day.sessionsWithEnding);
+  // One finish, credited to the day that counted the session.
+  const sessionsWithEnding = sum((day) => day.sessionsWithEnding + (day.continuationEndings ?? 0));
   const zoneAdmitted = sum((day) => day.zoneAdmitted);
   const zoneJoined = sum((day) => day.zoneJoined);
 
@@ -280,9 +286,9 @@ function mergeGame(days: DailyGameAggregate[]): GameHealth {
   };
 }
 
-// A session crossing UTC midnight is counted in both partitions.
+// A session crossing UTC midnight leaves a tail in the second partition.
 
-// The write path buckets by event time; the seam precedes this.
+// The tail is not a session, so the merge sees one.
 export function mergeDailyAggregates(days: DailyTelemetryAggregate[]): GameHealth[] {
   const bySlug = new Map<string, DailyGameAggregate[]>();
   for (const day of days) {

@@ -129,7 +129,7 @@ describe('mergeDailyAggregates', () => {
     expect(merged).toEqual(direct);
   });
 
-  it('counts a session that crosses UTC midnight once per partition', () => {
+  it('joins a session that crosses UTC midnight rather than doubling it', () => {
     const slug = 'night-owl';
     const before: TelemetryEvent[] = [
       { slug, sessionId: 'n1', type: 'game_opened', at: '2026-09-12T23:59:00.000Z', msSinceOpen: 0 },
@@ -145,10 +145,46 @@ describe('mergeDailyAggregates', () => {
       buildDailyAggregate('2026-09-13', after, { computedAt: 'now', sealed: true, truncated: false }),
     ]);
 
-    expect(direct[0]?.sessions).toBe(1);
-    expect(merged[0]?.sessions).toBe(2);
-    // The seam splits the session, never its seconds.
+    expect(merged[0]?.sessions).toBe(direct[0]?.sessions);
     expect(merged[0]?.totalPlaySeconds).toBe(direct[0]?.totalPlaySeconds);
+  });
+
+  it('does not turn a game finished after midnight into a bounce', () => {
+    const slug = 'night-owl';
+    const before: TelemetryEvent[] = [
+      { slug, sessionId: 'n1', type: 'game_opened', at: '2026-09-12T23:59:00.000Z', msSinceOpen: 0 },
+      { slug, sessionId: 'n1', type: 'play_time', at: '2026-09-12T23:59:30.000Z', msSinceOpen: 30_000, seconds: 5 },
+    ];
+    const after: TelemetryEvent[] = [
+      { slug, sessionId: 'n1', type: 'end', at: '2026-09-13T00:00:10.000Z', msSinceOpen: 70_000, outcome: 'won' },
+    ];
+
+    const direct = summarizeGameHealth([...before, ...after])[0];
+    const merged = mergeDailyAggregates([
+      buildDailyAggregate('2026-09-12', before, { computedAt: 'now', sealed: true, truncated: false }),
+      buildDailyAggregate('2026-09-13', after, { computedAt: 'now', sealed: true, truncated: false }),
+    ])[0];
+
+    expect(merged?.sessions).toBe(1);
+    expect(merged?.bounces).toBe(0);
+    expect(merged?.finishRate).toBe(1);
+    expect(merged?.medianPlaySeconds).toBe(5);
+    expect(merged).toEqual(direct);
+  });
+
+  it('still counts a session whose open simply never arrived', () => {
+    const slug = 'night-owl';
+    // Mid-afternoon, far outside the grace: a lost open.
+    const events: TelemetryEvent[] = [
+      { slug, sessionId: 'n1', type: 'play_time', at: '2026-09-13T14:00:00.000Z', msSinceOpen: 30_000, seconds: 30 },
+    ];
+    const aggregate = buildDailyAggregate('2026-09-13', events, {
+      computedAt: 'now',
+      sealed: true,
+      truncated: false,
+    });
+
+    expect(aggregate.games[0]?.sessions).toBe(1);
   });
 
   it('reranks errors across the window instead of inheriting each day’s top five', () => {

@@ -46,7 +46,16 @@ const MAX_PROGRESS_LABELS = 8;
  */
 const MAX_TRACKED_LABELS_PER_SESSION = 20;
 
+// The midnight seam: docs/firestore-read-cost.md.
+const CONTINUATION_GRACE_MS = 15 * 60_000;
+
+export interface SummarizeOptions {
+  partitionStartMs?: number;
+}
+
 interface SessionState {
+  opened: boolean;
+  firstAtMs: number;
   playSeconds: number;
   closed: boolean;
   /** Previous event's position, for deciding whether the next tick is continuous. */
@@ -108,6 +117,7 @@ export interface GameHealthDetail extends GameHealth {
     bestScores: number[];
     errorTally: { message: string; count: number }[];
     labelTally: { label: string; sessions: number }[];
+    continuationEndings: number;
   };
 }
 
@@ -118,7 +128,10 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
 }
 
 // Same pass, one row wider.
-export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealthDetail[] {
+export function summarizeGameHealthDetailed(
+  events: TelemetryEvent[],
+  options: SummarizeOptions = {},
+): GameHealthDetail[] {
   const bySlug = new Map<string, TelemetryEvent[]>();
   for (const event of events) {
     const bucket = bySlug.get(event.slug);
@@ -152,6 +165,8 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
         (a, b) => (a.msSinceOpen ?? 0) - (b.msSinceOpen ?? 0) || a.at.localeCompare(b.at),
       );
       const state: SessionState = {
+        opened: ordered.some((event) => event.type === 'game_opened'),
+        firstAtMs: Date.parse(ordered[0].at),
         playSeconds: 0,
         closed: false,
         lastOffsetMs: undefined,
@@ -243,7 +258,18 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
       }
     }
 
-    const sessionStates = [...sessions.values()];
+    const all = [...sessions.values()];
+    // A tail is not a visit, and did not bounce.
+    const isContinuation = (state: SessionState) =>
+      options.partitionStartMs !== undefined &&
+      !state.opened &&
+      Number.isFinite(state.firstAtMs) &&
+      state.firstAtMs - options.partitionStartMs <= CONTINUATION_GRACE_MS;
+    const sessionStates = all.filter((state) => !isContinuation(state));
+    const continuations = all.filter(isContinuation);
+    const continuationEndings = continuations.filter((state) => state.reachedEnd).length;
+    const carriedPlaySeconds = continuations.reduce((sum, state) => sum + state.playSeconds, 0);
+
     for (const state of sessionStates) {
       for (const label of state.labels) labelSessions.set(label, (labelSessions.get(label) ?? 0) + 1);
     }
@@ -279,11 +305,11 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
 
     rows.push({
       slug,
-      sessions: sessions.size,
+      sessions: sessionStates.length,
       bounces: playPerSession.filter((seconds) => seconds === 0).length,
       closes: sessionStates.filter((state) => state.closed).length,
       medianPlaySeconds: median(playPerSession) ?? 0,
-      totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0),
+      totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0) + carriedPlaySeconds,
       errors,
       errorSamples: errorTally.slice(0, MAX_ERROR_SAMPLES),
       aliveTicks,
@@ -299,12 +325,19 @@ export function summarizeGameHealthDetailed(events: TelemetryEvent[]): GameHealt
       // this file follows and the operator page renders as an em dash. A game with no
       // zone and a zone that never connects must not read the same.
       zoneJoinRate: zoneAdmitted === 0 ? null : zoneJoined / zoneAdmitted,
-      finishRate: sessions.size === 0 ? 0 : sessionsWithEnding / sessions.size,
+      finishRate: sessionStates.length === 0 ? 0 : sessionsWithEnding / sessionStates.length,
       winRate: decided === 0 ? null : outcomes.won / decided,
       medianBestScore: median(bestScores),
       progressLabels: labelTally.slice(0, MAX_PROGRESS_LABELS),
       gfxBackends,
-      samples: { playSeconds: playPerSession, fps: fpsSamples, bestScores, errorTally, labelTally },
+      samples: {
+        playSeconds: playPerSession,
+        fps: fpsSamples,
+        bestScores,
+        errorTally,
+        labelTally,
+        continuationEndings,
+      },
     });
   }
 
