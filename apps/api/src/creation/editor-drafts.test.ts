@@ -323,17 +323,53 @@ describe('editor draft routes', () => {
     expect(get.json().draft.revision).toBe(1);
   });
 
-  it('refuses a draft that breaks the declared schema, naming the problems', async () => {
+  it('saves a draft that breaks the declared schema — reaching one start means passing through two', async () => {
+    const { app } = await createApp();
+    // Two starts — violates the exactly-one constraint, and is where painting goes.
+    const content = { gardens: [{ properties: { name: 'Mid-edit' }, rows: ['########', '#@..@.*#', '########'] }] };
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const get = await app.inject({
+      method: 'GET',
+      url: '/api/me/games/garden-gather/editor',
+      headers: authHeaders('g:alice'),
+    });
+    expect(get.json().draft.content).toEqual(content);
+  });
+
+  it('refuses to publish that draft, which is where the rules belong', async () => {
+    const { app } = await createApp();
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: { gardens: [{ properties: { name: 'Bad' }, rows: ['########', '#@..@.*#', '########'] }] } },
+    });
+    const publish = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/publish',
+      headers: authHeaders('g:alice'),
+    });
+    expect(publish.statusCode).toBe(422);
+    expect(publish.json().problems.some((p: string) => p.includes('exactly 1 "start"'))).toBe(true);
+  });
+
+  it('saves a draft carrying a hole where an item will go, without crashing on it', async () => {
     const { app } = await createApp();
     const response = await app.inject({
       method: 'PUT',
       url: '/api/me/games/garden-gather/editor/draft',
       headers: authHeaders('g:alice'),
-      // Two starts — violates the exactly-one constraint.
-      payload: { content: { gardens: [{ properties: { name: 'Bad' }, rows: ['########', '#@..@.*#', '########'] }] } },
+      // Moderation walks declared text fields; a null item must not throw there.
+      payload: { content: { gardens: [null] } },
     });
-    expect(response.statusCode).toBe(422);
-    expect(response.json().problems.some((p: string) => p.includes('exactly 1 "start"'))).toBe(true);
+    expect(response.statusCode).toBe(200);
   });
 
   it('409s a stale baseRevision so a second tab warns instead of clobbering', async () => {
@@ -597,16 +633,23 @@ describe('editor draft routes', () => {
       return { app, stored };
     }
 
-    it('refuses a draft with a duplicate uniqueBy value', async () => {
+    it('saves a draft with a duplicate uniqueBy value, and refuses to publish it', async () => {
       const { app } = await createEntitiesApp();
-      const response = await app.inject({
+      const draft = await app.inject({
         method: 'PUT',
         url: '/api/me/games/garden-gather/editor/draft',
         headers: authHeaders('g:alice'),
         payload: { content: { cards: [{ properties: { cost: 1 } }, { properties: { cost: 1 } }] } },
       });
-      expect(response.statusCode).toBe(422);
-      expect(response.json().problems.some((p: string) => p.includes('duplicates'))).toBe(true);
+      expect(draft.statusCode).toBe(200);
+
+      const publish = await app.inject({
+        method: 'POST',
+        url: '/api/me/games/garden-gather/editor/publish',
+        headers: authHeaders('g:alice'),
+      });
+      expect(publish.statusCode).toBe(422);
+      expect(publish.json().problems.some((p: string) => p.includes('duplicates'))).toBe(true);
     });
 
     it('drafts, publishes, and gates an entities collection — no board, no rows in L1', async () => {
