@@ -80,7 +80,8 @@ Local agents that _do_ have a shell must pass
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`) and capture
 `canvas.toDataURL` inside the same render callback (set
 `preserveDrawingBuffer:true` when creating the GL context, not at capture
-time); `page.screenshot()`/CDP compositor also works.
+time); decode to `shot.png` in-process and never print the data URL.
+`page.screenshot({path:'shot.png'})` writes PNG directly.
 A black frame means those flags were missing or the drawing buffer was discarded.
 
 Hosted-agent output is still external contributor output, so it is still worth verifying

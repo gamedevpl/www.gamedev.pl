@@ -39,9 +39,12 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')` inside
      the same render callback (set `preserveDrawingBuffer:true` when creating the
      GL context, not at capture time; after compositing the default buffer is
-     gone) — `page.screenshot()`/CDP compositor also works.
-     Keep PNG ≤700 KB, then `screenshot_upload_url` + `curl --upload-file <png>
-"$url"`. A black frame means those WebGL flags were missing or the drawing
+     gone) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a
+     data URL to disk in-process (`fs.writeFileSync('shot.png',
+Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
+     data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` +
+     `curl --upload-file shot.png "$url"`. A black frame means those WebGL flags
+     were missing or the drawing
      buffer was discarded. Fallback: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d`
      (force2d). There is **no** base64 `send_screenshot` — PNG bytes must never
      enter the model
@@ -783,9 +786,11 @@ WebGL canvases come back black without Angle/SwiftShader flags (games-repo
 `tools/lib/webgl-gate.ts` / `tools/capture.ts`). Never add `--disable-gpu`. Capture
 `canvas.toDataURL('image/png')` inside the same render callback (set
 `preserveDrawingBuffer:true` when creating the GL context, not at capture
-time; after compositing the default buffer is gone),
-keep PNG ≤700 KB, then `screenshot_upload_url` + `curl --upload-file`.
-`page.screenshot()` / CDP compositor also works — that is the gate's path.
+time; after compositing the default buffer is gone). Decode the data URL to
+`shot.png` in-process (`Buffer.from(dataUrl.split(',')[1], 'base64')`; never
+print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` +
+`curl --upload-file shot.png`. `page.screenshot({path:'shot.png'})` writes
+PNG directly — that is the gate's path.
 Fallback when SwiftShader is unavailable: `GAME_CAPTURE_GFX=canvas2d` /
 `?gfx=canvas2d` (force2d).
 

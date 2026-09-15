@@ -491,7 +491,8 @@ Produces a PNG only when the agent has a shell. Headless Chromium needs
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`); capture
 `canvas.toDataURL` inside the same render callback (set
 `preserveDrawingBuffer:true` when creating the GL context, not at capture
-time), or use `page.screenshot()`/CDP compositor.
+time), decode to `shot.png` with `Buffer.from(dataUrl.split(',')[1],'base64')`
+without printing it, or `page.screenshot({path:'shot.png'})`. Keep PNG ≤700 KB.
 Without a shell or browser, skip this tool and read frames via
 `get_gate_media` in a later/resumed run: call `get_gate_verdict` once first,
 then fetch media if a preview verdict is already available after `mode=preview`.

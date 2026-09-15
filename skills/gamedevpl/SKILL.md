@@ -59,8 +59,11 @@ often enough to name up front:
    may need `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')`
    inside the same render callback (set `preserveDrawingBuffer:true` when creating
    the GL context, not at capture time; after compositing the default buffer is
-   gone) — `page.screenshot()`/CDP compositor also works. Keep PNG ≤700 KB, then
-   `screenshot_upload_url` and `curl --upload-file <png> "$url"`. A black/blank
+   gone) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a data
+   URL to disk in-process (`fs.writeFileSync('shot.png',
+Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
+   data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and
+   `curl --upload-file shot.png "$url"`. A black/blank
    frame means those WebGL flags were missing or the drawing buffer was already
    discarded. If SwiftShader is unavailable, `GAME_CAPTURE_GFX=canvas2d` or
    `?gfx=canvas2d` (force2d). There is no base64 screenshot tool — PNG bytes must

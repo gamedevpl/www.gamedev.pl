@@ -251,7 +251,7 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         'With a shell, produce the PNG from headless Chromium: ' +
         'chromium.launch({args:["--use-gl=angle","--use-angle=swiftshader-webgl","--enable-unsafe-swiftshader","--enable-webgl","--ignore-gpu-blocklist"]}) ' +
         '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). ' +
-        'Capture canvas.toDataURL("image/png") inside the same render callback. Set preserveDrawingBuffer:true when creating the GL context, not at capture time; after compositing the default buffer is gone. page.screenshot()/CDP compositor also works. ' +
+        'Capture canvas.toDataURL("image/png") inside the same render callback. Set preserveDrawingBuffer:true when creating the GL context, not at capture time; after compositing the default buffer is gone. page.screenshot({path:"shot.png"}) writes PNG directly. Decode a data URL with fs.writeFileSync("shot.png", Buffer.from(dataUrl.split(",")[1], "base64")) in the same Node process — never print or return the data URL. ' +
         'If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). ' +
         'Without a shell or browser, skip this tool: deliver mode=preview, end, and on a later/resumed run call get_gate_verdict once then get_gate_media if a preview verdict is already available — that is the happy path. ' +
         BEHAVIOURAL_CONTRACT,
