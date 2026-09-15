@@ -7,6 +7,7 @@ import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
+import { readStudioHealthCached, studioHealthKey } from './studio-health-cache.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
@@ -267,16 +268,25 @@ export async function registerCreatorStudioRoutes(
     }
 
     const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    const { events, scanned, truncated } = await scanOwnedSlugs(store, slugs, requested);
-    const owned = new Set(slugs);
-    const games = summarizeGameHealth(events).filter((game) => owned.has(game.slug));
+    // The shelf above stays live; only the scan is windowed. It is days x slugs
+    // queries, and an empty day still bills a read, so it is the whole cost here.
+    const window = await readStudioHealthCached(
+      store,
+      studioHealthKey(request.user!.uid, slugs, requested),
+      async () => {
+        const { events, scanned, truncated } = await scanOwnedSlugs(store, slugs, requested);
+        const owned = new Set(slugs);
+        return { days: scanned, truncated, games: summarizeGameHealth(events).filter((game) => owned.has(game.slug)) };
+      },
+      now,
+    );
 
     const body: CreatorHealthResponse = {
-      days: scanned,
-      truncated,
+      days: window.days,
+      truncated: window.truncated,
       gamesTruncated,
       totalGames: total,
-      games,
+      games: window.games,
     };
     return reply.send(body);
   });
