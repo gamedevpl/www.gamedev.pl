@@ -54,13 +54,18 @@ export function draftShapeProblems(definition: EditorDefinition, content: unknow
 function itemShapeProblems(owner: string, spec: CollectionItemSpec, item: unknown): string[] {
   if (!isPlainObject(item)) return [`${owner} must be an object`];
   const problems = propertiesShapeProblems(owner, spec.properties, item.properties);
+  // The shell knows an item by its container; absent is not empty.
   if (spec.widget === 'tilemap') {
-    problems.push(...rowsShapeProblems(owner, spec.grid.maxRows, spec.grid.maxCols, item.rows));
+    if (item.rows === undefined) problems.push(`${owner}.rows is missing`);
+    else problems.push(...rowsShapeProblems(owner, spec.grid.maxRows, spec.grid.maxCols, item.rows));
   }
-  if (spec.widget === 'path') problems.push(...pointsShapeProblems(owner, spec.maxPoints, item.points));
+  if (spec.widget === 'path') {
+    if (item.points === undefined) problems.push(`${owner}.points is missing`);
+    else problems.push(...pointsShapeProblems(owner, spec.maxPoints, item.points));
+  }
   if (spec.widget === 'layered') {
-    if (item.layers !== undefined && !isPlainObject(item.layers)) problems.push(`${owner}.layers must be an object`);
-    else if (isPlainObject(item.layers))
+    if (!isPlainObject(item.layers)) problems.push(`${owner}.layers must be an object`);
+    else
       for (const [key, layer] of Object.entries(spec.layers)) {
         problems.push(...layerShapeProblems(`${owner}.layers.${key}`, layer, item.layers[key]));
       }
@@ -72,6 +77,7 @@ function layerShapeProblems(owner: string, spec: EditorLayerSpec, value: unknown
   if (value === undefined) return [];
   if (spec.widget === 'tilemap') {
     if (!isPlainObject(value)) return [`${owner} must be an object`];
+    if (value.rows === undefined) return [`${owner}.rows is missing`];
     return [
       ...propertiesShapeProblems(owner, spec.properties, value.properties),
       ...rowsShapeProblems(owner, spec.grid.maxRows, spec.grid.maxCols, value.rows),
@@ -101,9 +107,16 @@ function propertiesShapeProblems(
   return problems;
 }
 
-// Only the bound: half-typed is progress, 64 KiB is not.
+// Declared type and bound; the range is Publish's to judge.
 function propertyProblems(owner: string, spec: PropertySpec, value: unknown): string[] {
-  if (spec.type !== 'text' || typeof value !== 'string') return [];
+  if (value === undefined) return [];
+  if (spec.type === 'bool') return typeof value === 'boolean' ? [] : [`${owner} must be a boolean`];
+  if (spec.type === 'enum') return typeof value === 'string' ? [] : [`${owner} must be a string`];
+  if (spec.type === 'int' || spec.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return [`${owner} must be a finite number`];
+    return spec.type === 'int' && !Number.isInteger(value) ? [`${owner} must be a whole number`] : [];
+  }
+  if (typeof value !== 'string') return [`${owner} must be a string`];
   return value.length > spec.max ? [`${owner} is ${value.length} characters; at most ${spec.max}`] : [];
 }
 

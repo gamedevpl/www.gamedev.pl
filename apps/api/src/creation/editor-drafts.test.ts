@@ -385,6 +385,30 @@ describe('editor draft routes', () => {
     expect(response.json().problems.some((p: string) => p.includes('characters'))).toBe(true);
   });
 
+  it('still refuses a tilemap item with no rows at all — the shell could not paint them back', async () => {
+    const { app } = await createApp();
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: { gardens: [{ properties: { name: 'Empty' } }] } },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().problems.some((p: string) => p.includes('rows is missing'))).toBe(true);
+  });
+
+  it('still refuses a property value of the wrong declared type', async () => {
+    const { app } = await createApp();
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: { content: { gardens: [{ properties: { name: 7 }, rows: ['########', '#..@..*#', '########'] }] } },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().problems.some((p: string) => p.includes('must be a string'))).toBe(true);
+  });
+
   it('still refuses a row wider than the declared grid', async () => {
     const { app } = await createApp();
     const response = await app.inject({
