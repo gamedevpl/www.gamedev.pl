@@ -637,7 +637,8 @@
       "expand": "Rozwiń",
       "fullScreen": "Pełny ekran",
       "exitFullScreen": "Zamknij pełny ekran",
-      "peekEmpty": "Brak nowości"
+      "peekEmpty": "Brak nowości",
+      "transfer": "Przekazanie"
     },
     "buildHistory": {
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
@@ -849,6 +850,30 @@
       "notChecked": "jeszcze niesprawdzona",
       "checkedTitle": "Ta wersja przeszła bramkę podglądu.",
       "notCheckedTitle": "Ta wersja nie została jeszcze sprawdzona."
+    },
+    "transfer": {
+      "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie.",
+      "loading": "Sprawdzam…",
+      "codeLabel": "Kod odbiorcy",
+      "codePlaceholder": "Jego kod",
+      "codeHint": "Poproś drugiego twórcę o kod z jego półki w Studio.",
+      "send": "Wyślij zaproszenie",
+      "sending": "Wysyłam…",
+      "pending": "Czekam, aż {{name}} przyjmie.",
+      "expires": "Wygasa {{when}}.",
+      "cancel": "Anuluj zaproszenie",
+      "cancelling": "Anuluję…",
+      "errors": {
+        "load": "Nie udało się sprawdzić przekazania tej gry.",
+        "generic": "Nie udało się. Spróbuj ponownie.",
+        "invalidCode": "Ten kod do nikogo nie pasuje.",
+        "self": "To twój własny kod.",
+        "ineligible": "Ten twórca nie może teraz przyjmować gier.",
+        "busy": "Trwa runda budowania. Przekaż grę, gdy się skończy.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "notOwner": "Ta gra nie jest twoja, więc nie możesz jej przekazać.",
+        "alreadyOut": "Zaproszenie dla tej gry już jest wysłane."
+      }
     }
   },
   "submit": {
@@ -2145,5 +2170,28 @@
     "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
     "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
     "selfMode": "Ta runda: Twój agent (BYOCA)"
+  },
+  "studioShelf": {
+    "transfer": {
+      "title": "Przekazania",
+      "offer": "{{name}} przekazuje ci {{slug}}.",
+      "accept": "Przyjmij",
+      "reject": "Odrzuć",
+      "yourCode": "Twój kod odbiorcy",
+      "reveal": "Pokaż",
+      "hide": "Ukryj",
+      "rotate": "Nowy kod",
+      "rotating": "Zmieniam…",
+      "errors": {
+        "rotate": "Nie udało się wygenerować nowego kodu.",
+        "respond": "Nie udało się. Spróbuj ponownie.",
+        "busy": "Na tej grze trwa runda budowania. Spróbuj, gdy się skończy.",
+        "unreachable": "Nie udało się wczytać zaproszeń.",
+        "ineligible": "Twoje konto nie może teraz przyjmować gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "gone": "To zaproszenie jest już nieaktualne."
+      },
+      "retry": "Spróbuj ponownie"
+    }
   }
 }

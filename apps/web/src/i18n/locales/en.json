@@ -631,7 +631,8 @@
       "expand": "Expand",
       "fullScreen": "Full screen",
       "exitFullScreen": "Exit full screen",
-      "peekEmpty": "No updates yet"
+      "peekEmpty": "No updates yet",
+      "transfer": "Transfer"
     },
     "buildHistory": {
       "live": "Checking your latest changes now",
@@ -839,6 +840,30 @@
       "notChecked": "not yet checked",
       "checkedTitle": "This build passed the preview gate.",
       "notCheckedTitle": "This build hasn't been checked yet."
+    },
+    "transfer": {
+      "intro": "Hand this game to another creator. Nothing moves until they accept.",
+      "loading": "Checking…",
+      "codeLabel": "Recipient code",
+      "codePlaceholder": "Their code",
+      "codeHint": "Ask the other creator for the code shown on their Studio shelf.",
+      "send": "Send invitation",
+      "sending": "Sending…",
+      "pending": "Waiting for {{name}} to accept.",
+      "expires": "Expires {{when}}.",
+      "cancel": "Cancel invitation",
+      "cancelling": "Cancelling…",
+      "errors": {
+        "load": "Could not check this game's transfer.",
+        "generic": "That did not work. Try again.",
+        "invalidCode": "That code does not match anyone.",
+        "self": "That is your own code.",
+        "ineligible": "That creator cannot receive games right now.",
+        "busy": "A build round is running. Transfer once it finishes.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "notOwner": "This game is not yours to transfer.",
+        "alreadyOut": "An invitation for this game is already out."
+      }
     }
   },
   "submit": {
@@ -2131,5 +2156,28 @@
     "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet.",
     "panelWaiting": "Waiting for your agent to connect. You can close this panel and follow progress in the conversation.",
     "selfMode": "This round: your own agent (BYOCA)"
+  },
+  "studioShelf": {
+    "transfer": {
+      "title": "Transfers",
+      "offer": "{{name}} is handing you {{slug}}.",
+      "accept": "Accept",
+      "reject": "Decline",
+      "yourCode": "Your recipient code",
+      "reveal": "Show",
+      "hide": "Hide",
+      "rotate": "New code",
+      "rotating": "Rotating…",
+      "errors": {
+        "rotate": "Could not make a new code.",
+        "respond": "That did not work. Try again.",
+        "busy": "A build round is running on that game. Try again once it finishes.",
+        "unreachable": "Could not load your invitations.",
+        "ineligible": "Your account cannot receive games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "gone": "This invitation is no longer available."
+      },
+      "retry": "Try again"
+    }
   }
 }

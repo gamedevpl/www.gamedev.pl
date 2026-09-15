@@ -2140,4 +2140,29 @@ describe('CreatorStudioView delete', () => {
 
     root.unmount();
   });
+
+  it('offers the transfer inbox to a creator with no games yet', async () => {
+    // A first game can arrive by transfer, not only by building one.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'u1', name: 'Ada' };
+    fetchStudioGames.mockResolvedValue(studioShelf([]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () => (String(url).includes('/recipient-code') ? { code: 'rc_first' } : { transfers: [] }),
+      })),
+    );
+
+    const { container, root } = await renderStudio();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="studio-transfer-inbox"]')).not.toBeNull();
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
 });
