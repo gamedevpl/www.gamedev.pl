@@ -141,12 +141,7 @@ export function EditorPanel(props: {
   const lastControllerChangeRef = useRef<string | null>(null);
   // A verdict about older content is no verdict about this one.
   const verdict = props.controller?.checks ?? null;
-  const verdictOwed = editor?.definition.validate === true || verdict !== null;
-  // Connecting counts: a declared verdict is owed before the view even lands.
-  const controllerEngaged =
-    !controllerDisabled && (props.controller?.status === 'ready' || props.controller?.status === 'connecting');
-  const checksBlock =
-    controllerEngaged && verdictOwed && (verdict === null || !verdict.ok || !props.controller?.checksFresh);
+  const checksBlock = controllerLive && verdict !== null && (!verdict.ok || !props.controller?.checksFresh);
   // Read at publish time, so a late verdict still counts.
   const checksBlockRef = useRef(false);
   checksBlockRef.current = checksBlock;

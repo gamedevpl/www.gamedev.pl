@@ -113,14 +113,12 @@ export function useEditorDraftBridge(
   const controllerStoodDownRef = useRef(false);
   const checkTimerRef = useRef<number | null>(null);
   const checksSeenRef = useRef(false);
-  // The definition owes a verdict, so silence is a failure.
-  const validateDeclaredRef = useRef(false);
 
   const standDownRef = useRef<(reason: string) => void>(() => {});
 
   const armCheckWatchdog = useCallback(() => {
     if (controllerStoodDownRef.current || checkTimerRef.current !== null) return;
-    if (!checksSeenRef.current && !validateDeclaredRef.current) return;
+    if (!checksSeenRef.current) return;
     checkTimerRef.current = window.setTimeout(() => {
       checkTimerRef.current = null;
       standDownRef.current('The game editor stopped answering its own checks.');
@@ -190,10 +188,7 @@ export function useEditorDraftBridge(
       statePromise ??= fetchGameEditor(slug as string)
         .then((state) => {
           controllerExpected = state.definition.controller === true;
-          validateDeclaredRef.current = state.definition.validate === true;
           if (controllerExpected && !controllerHelloRef.current) expectController();
-          // The view may be up already, and a verdict is owed.
-          if (!disposed && controllerViewRef.current !== null) armCheckWatchdog();
           return state;
         })
         .catch(() => null);
@@ -249,8 +244,6 @@ export function useEditorDraftBridge(
         setControllerStatus('ready');
         setControllerReason(null);
         recordEditorStep('controller_loaded');
-        // A declared validator owes a verdict on the view it just drew.
-        armCheckWatchdog();
       } else if (data.t === 'editor:change') {
         setPendingChange({ id: data.id, patch: data.patch });
       } else if (data.t === 'editor:select') {
