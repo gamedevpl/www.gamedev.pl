@@ -20,6 +20,10 @@
 # number here looks wrong and you need to know which writer to go after; run this when
 # the numbers are believable and the thresholds need to follow them.
 #
+# It also reads the deployed policies back and says whether the measured window already
+# crosses one. That question has no good answer from the derivation alone: a threshold
+# derived from a window that already breached it is a threshold sized to the incident.
+#
 # What it deliberately does not do: edit setup-monitoring.sh. It prints what each
 # threshold would become; a human decides, records the measurement in the CALIBRATION
 # comment above the policy, and re-runs setup-monitoring.sh. Two reasons, both learned
@@ -67,7 +71,8 @@ START_TIME="$(started_at)"
 
 TMP_ALL="$(mktemp)"
 TMP_PAGE="$(mktemp)"
-trap 'rm -f "$TMP_ALL" "$TMP_PAGE"' EXIT
+TMP_POLICIES="$(mktemp)"
+trap 'rm -f "$TMP_ALL" "$TMP_PAGE" "$TMP_POLICIES"' EXIT
 
 urlencode() {
   node -e 'console.log(encodeURIComponent(process.argv[1]))' "$1"
@@ -118,6 +123,16 @@ fetch_series() {
   done
 }
 
+# The deployed thresholds, so the numbers below are compared against what is actually
+# alerting rather than against the last value someone wrote in git. Best effort: a token
+# without monitoring.alertPolicies.list still gets the measurement, just not the guard.
+# pageSize is generous because the project has tens of policies, not thousands.
+fetch_policies() {
+  local url="https://monitoring.googleapis.com/v3/projects/${PROJECT_ID}/alertPolicies?pageSize=1000"
+  echo "{}" >"$TMP_POLICIES"
+  curl -sS -H "Authorization: Bearer ${ACCESS_TOKEN}" "$url" -o "$TMP_POLICIES" || echo "{}" >"$TMP_POLICIES"
+}
+
 # Sums the per-label series back into one value per bucket, keeps the split visible, and
 # prints nearest-rank percentiles over the buckets -- the same arithmetic for all three.
 summarize() {
@@ -138,6 +153,7 @@ summarize() {
         perLabel.set(name, (perLabel.get(name) ?? 0) + value);
       }
     }
+    const ranked = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
     const totals = [...buckets.values()].sort((a, b) => a - b);
     if (totals.length === 0) {
       console.log(`  no data in the window`);
@@ -148,6 +164,10 @@ summarize() {
     console.log(`  buckets ${totals.length}  median ${fmt(at(0.5))}  p95 ${fmt(at(0.95))}  max ${fmt(totals.at(-1))}  (${unit})`);
     const split = [...perLabel.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}=${fmt(v)}`);
     console.log(`  by ${label}: ${split.join("  ")}`);
+    // When the max is what decides a threshold, the minute it landed in is what decides
+    // whether it was a runaway or a cron -- and that is a log query away, not a guess.
+    const worst = ranked.slice(0, 3).map(([when, value]) => `${when} ${fmt(value)}`);
+    console.log(`  worst: ${worst.join("   ")}`);
     // Handed to the shell so the derivations below read one measurement, not two.
     fs.writeFileSync(`${path}.stats`, JSON.stringify({ median: at(0.5), p95: at(0.95), max: totals.at(-1) }));
   ' "$TMP_ALL" "$label" "$unit"
@@ -181,12 +201,85 @@ summarize "type" "reads/day"
 A31_MAX="$(stat max)"
 echo
 
+fetch_policies
+
 # The rules these follow are in the ops repo's cost-controls-execution-plan.md, under the
 # A29 and A30/A31 recalibration recipes. Kept here as arithmetic, not as prose.
 node -e '
-  const [a29Max, a30Max, a30Median, a31Max] = process.argv.slice(1).map(Number);
+  const fs = require("fs");
+  const [a29Max, a30Max, a30Median, a31Max] = process.argv.slice(1, 5).map(Number);
+  const policiesPath = process.argv[5];
   const round = (v, step) => Math.ceil(v / step) * step;
   const fmt = (v) => v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+
+  // A condition is matched on the policy name and its own duration: A30 carries two,
+  // and they answer different questions at the same threshold field.
+  const deployed = (() => {
+    let doc;
+    try {
+      doc = JSON.parse(fs.readFileSync(policiesPath, "utf8") || "{}");
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(doc.alertPolicies)) return null;
+    const rows = [];
+    for (const policy of doc.alertPolicies) {
+      for (const condition of policy.conditions ?? []) {
+        const threshold = condition.conditionThreshold;
+        if (!threshold) continue;
+        rows.push({
+          policy: policy.displayName ?? "",
+          duration: threshold.duration ?? "",
+          value: Number(threshold.thresholdValue ?? 0),
+          enabled: policy.enabled !== false,
+        });
+      }
+    }
+    return rows;
+  })();
+
+  const find = (prefix, duration) =>
+    (deployed ?? []).find((row) => row.policy.startsWith(prefix) && (!duration || row.duration === duration));
+
+  const breaches = [];
+
+  // Measured against deployed, not against derived: a window that already crosses a live
+  // threshold means the policy fired, and a fired policy is a finding, not an input.
+  const compare = (name, measured, unit, row, note) => {
+    if (!row) {
+      console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   (no deployed condition found)`);
+      return;
+    }
+    const share = row.value === 0 ? Infinity : measured / row.value;
+    let verdict = `${Math.round(share * 100)}% of ${fmt(row.value)}`;
+    if (measured >= row.value) {
+      verdict = `BREACH -- deployed ${fmt(row.value)} crossed`;
+      breaches.push(name);
+    }
+    const off = row.enabled ? "" : "  [policy disabled]";
+    console.log(`  ${name.padEnd(20)} ${fmt(measured)} ${unit}   ${verdict}${off}${note ?? ""}`);
+  };
+
+  if (deployed === null) {
+    console.log("Deployed thresholds: could not be read (monitoring.alertPolicies.list).");
+    console.log("The derivations below still hold; the regression guard is skipped.");
+  } else {
+    console.log("Measured against what is deployed right now:");
+    console.log("");
+    compare("A29 write rate", a29Max, "/s ", find("A29"));
+    compare("A30 spike", a30Max, "/s ", find("A30", "600s"));
+    compare("A30 drift", a30Median, "/s ", find("A30", "10800s"), "  (median of 600s buckets)");
+    compare("A31 daily total", a31Max, "   ", find("A31"));
+  }
+  console.log("");
+
+  if (breaches.length > 0) {
+    console.log(`!! ${breaches.join(", ")} already cross a deployed threshold in this window.`);
+    console.log("   Find the writer before touching anything below. A threshold moved up to");
+    console.log("   fit what it just measured is no longer a ceiling, and the next runaway");
+    console.log("   passes under it silently.");
+    console.log("");
+  }
 
   console.log("Derived thresholds -- review, do not paste blindly:");
   console.log("");
@@ -207,6 +300,22 @@ node -e '
     console.log("       size it nearer 150-200K so the free tier stays a visible target.");
   }
 
+  // A derivation that only ever moves up is a ratchet in the wrong direction.
+  const loosened = [];
+  const slack = (name, derivedValue, row) => {
+    if (row && derivedValue > row.value) loosened.push(`${name} ${fmt(row.value)} -> ${fmt(derivedValue)}`);
+  };
+  slack("A29", a29, find("A29"));
+  slack("A30 spike", round(a30Max * 3, 1), find("A30", "600s"));
+  slack("A30 drift", round(a30Median * 2, 1), find("A30", "10800s"));
+  slack("A31", a31, find("A31"));
+  if (loosened.length > 0) {
+    console.log("");
+    console.log(`  Looser than deployed: ${loosened.join("; ")}.`);
+    console.log("  Each one buys quiet by watching less. Take it only with a reason you can");
+    console.log("  write in the CALIBRATION comment.");
+  }
+
   console.log("");
   console.log("If the week came back near the old numbers despite a fix that should have");
   console.log("moved them, the fan-out is somewhere else: infra/read-cost-report.sh splits");
@@ -216,4 +325,4 @@ node -e '
   console.log("Then: edit the CALIBRATION comments and thresholdValue in");
   console.log("infra/setup-monitoring.sh (A29, A30, A31), carrying the measured figures");
   console.log("above, and re-run that script. Record the numbers in the PR.");
-' "$A29_MAX" "$A30_MAX" "$A30_MEDIAN" "$A31_MAX"
+' "$A29_MAX" "$A30_MAX" "$A30_MEDIAN" "$A31_MAX" "$TMP_POLICIES"
