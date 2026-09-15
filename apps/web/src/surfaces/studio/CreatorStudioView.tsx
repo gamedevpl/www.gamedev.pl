@@ -636,6 +636,22 @@ export function CreatorStudioView({
     );
   }
 
+  const transferInbox = (
+    <StudioTransferInbox
+      onAccepted={async (slug) => {
+        // Named, so a game below the shelf ceiling still comes back.
+        try {
+          const shelfPage = await fetchStudioGames(slug);
+          setGames(shelfPage.games);
+          setShelfTruncated(shelfPage.truncated);
+          setTotalGames(shelfPage.totalGames);
+        } catch {
+          // The invitation is gone either way; the shelf catches up on reload.
+        }
+      }}
+    />
+  );
+
   const shelfList = (
     <StudioShelfList
       games={visibleGames}
@@ -700,6 +716,7 @@ export function CreatorStudioView({
             <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
               <PixelIcon name="sparkle" size={14} /> {t('studioPanel.createFirst')}
             </button>
+            {transferInbox}
           </div>
         ) : null}
 
@@ -813,19 +830,7 @@ export function CreatorStudioView({
                 onFilterChange={setShelfFilter}
               />
               {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
-              <StudioTransferInbox
-                onAccepted={async () => {
-                  // The game is only on the shelf once the server says so.
-                  try {
-                    const shelfPage = await fetchStudioGames();
-                    setGames(shelfPage.games);
-                    setShelfTruncated(shelfPage.truncated);
-                    setTotalGames(shelfPage.totalGames);
-                  } catch {
-                    // The invitation is gone either way; the shelf catches up on reload.
-                  }
-                }}
-              />
+              {transferInbox}
               {shelfList}
             </aside>
 

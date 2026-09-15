@@ -12,7 +12,7 @@ import {
 
 // Account-level: an offered game is not yours to select yet.
 
-export function StudioTransferInbox({ onAccepted }: { onAccepted?: () => void }): JSX.Element | null {
+export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string) => void }): JSX.Element | null {
   const { t } = useTranslation();
   const [code, setCode] = useState<string | null>(null);
   const [incoming, setIncoming] = useState<TransferSummary[]>([]);
@@ -52,7 +52,7 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: () => void })
       await respondToTransfer(slug, decision);
       setIncoming((current) => current.filter((invite) => invite.slug !== slug));
       // Not on the shelf until the caller refetches.
-      if (decision === 'accept') onAccepted?.();
+      if (decision === 'accept') onAccepted?.(slug);
     } catch (caught) {
       const reason = (caught as TransferApiError)?.code;
       setError(reason === 'busy' ? t('studioShelf.transfer.errors.busy') : t('studioShelf.transfer.errors.respond'));

@@ -163,4 +163,16 @@ describe('StudioTransferInbox', () => {
     expect(host.querySelector('[data-testid="studio-transfer-inbox"]')).toBeNull();
     await act(async () => root.unmount());
   });
+
+  it('names the accepted slug so the shelf can refetch past its ceiling', async () => {
+    // A bare refetch returns the capped page, omitting this game.
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const onAccepted = vi.fn();
+    const { host, root } = await mount(onAccepted);
+
+    await click(host, 'studio-transfer-accept-comet-courier');
+
+    expect(onAccepted).toHaveBeenCalledWith('comet-courier');
+    await act(async () => root.unmount());
+  });
 });
