@@ -119,6 +119,13 @@ twice would read as a sound heard twice.
   code from the `AGENT.json` the catalog read now carries. A game that declares none still
   reports `hiddenFields: null`, and the panel says so out loud — which is now a statement
   about that game rather than about the platform.
+- **The prelude reaches a game when its document is next assembled, not when this deploys.**
+  Published games are served from artifacts baked earlier — the snapshot for repo games, the
+  gate's `bundle.html` for delivered ones — so one built before this change carries no
+  prelude and keeps sending declared-hidden values until it is rebuilt. Repo games: run
+  "Publish games snapshot" (`workflow_dispatch`, ref `main`) after the deploy; the nightly
+  04:23 UTC bake bounds the window at a day either way. Delivered games: the bundle is
+  rewritten by that version's next gate run.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
