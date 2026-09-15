@@ -139,6 +139,9 @@ export function EditorPanel(props: {
   const controllerLive = Boolean(props.controller?.status === 'ready' && !controllerDisabled && props.controller.view);
   const controllerActive = controllerLive && !standardPreferred;
   const lastControllerChangeRef = useRef<string | null>(null);
+  // Read at publish time, so a late verdict still counts.
+  const liveChecksRef = useRef<boolean>(true);
+  liveChecksRef.current = !controllerLive || props.controller?.checks?.ok !== false;
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
     content,
@@ -262,6 +265,11 @@ export function EditorPanel(props: {
     const change = props.controller?.pendingChange;
     if (!change || lastControllerChangeRef.current === change.id) return;
     lastControllerChangeRef.current = change.id;
+    if (standardPreferred) {
+      // A patch now would overwrite the creator's own edit.
+      props.controller?.acknowledgeChange(change.id, false, 'The creator is using the standard editor.');
+      return;
+    }
     const result = applyEditorPatch(contentRef.current, change.patch);
     if (result.error) {
       props.controller?.acknowledgeChange(change.id, false, result.error);
@@ -274,7 +282,7 @@ export function EditorPanel(props: {
     scheduleSave();
     props.controller?.acknowledgeChange(change.id, true);
     recordEditorStep('tool_used');
-  }, [contentRef, props.controller, pushLive, scheduleSave, setContent]);
+  }, [contentRef, props.controller, pushLive, scheduleSave, setContent, standardPreferred]);
 
   function updateItem(next: EditorItemContent) {
     if (!collectionKey) return;
@@ -484,6 +492,10 @@ export function EditorPanel(props: {
     // already says what went wrong.
     if (saveState === 'dirty') {
       if (!(await saveNow())) return;
+    }
+    if (!liveChecksRef.current) {
+      setPublish({ kind: 'idle' });
+      return;
     }
     setPublish({ kind: 'publishing' });
     try {
