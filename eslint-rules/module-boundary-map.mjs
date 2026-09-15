@@ -308,6 +308,8 @@ const FILE_BUCKET = {
   'shelf-shadow': 'creation',
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
+  'studio-health-cache': 'creation',
+  'studio-health-cache.test': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
