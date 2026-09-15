@@ -396,3 +396,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* The way back to the standard board when a game drives the surface. */
+.editor-surface-switch {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.editor-surface-switch:hover {
+  border-color: var(--turquoise);
+}

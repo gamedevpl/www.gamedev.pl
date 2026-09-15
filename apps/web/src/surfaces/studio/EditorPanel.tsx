@@ -18,6 +18,8 @@ import {
 } from '../../editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from '../../LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
+import { EditorSurfaceSwitch } from './EditorSurfaceSwitch.js';
+import { useEditorSurfaceChoice } from './editorSurfaceChoice.js';
 import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
 import { useEditorDocument } from './useEditorDocument.js';
 import { recordAssistStep, recordEditorStep } from '../../visitTelemetry.js';
@@ -133,10 +135,16 @@ export function EditorPanel(props: {
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
   const [controllerDisabled, setControllerDisabled] = useState(false);
-  const controllerActive = Boolean(
-    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
-  );
+  const { standardPreferred, chooseSurface } = useEditorSurfaceChoice();
+  const controllerLive = Boolean(props.controller?.status === 'ready' && !controllerDisabled && props.controller.view);
+  const controllerActive = controllerLive && !standardPreferred;
   const lastControllerChangeRef = useRef<string | null>(null);
+  // A verdict about older content is no verdict about this one.
+  const verdict = props.controller?.checks ?? null;
+  const checksBlock = controllerLive && verdict !== null && (!verdict.ok || !props.controller?.checksFresh);
+  // Read at publish time, so a late verdict still counts.
+  const checksBlockRef = useRef(false);
+  checksBlockRef.current = checksBlock;
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
     content,
@@ -260,6 +268,11 @@ export function EditorPanel(props: {
     const change = props.controller?.pendingChange;
     if (!change || lastControllerChangeRef.current === change.id) return;
     lastControllerChangeRef.current = change.id;
+    if (standardPreferred) {
+      // A patch now would overwrite the creator's own edit.
+      props.controller?.acknowledgeChange(change.id, false, 'The creator is using the standard editor.');
+      return;
+    }
     const result = applyEditorPatch(contentRef.current, change.patch);
     if (result.error) {
       props.controller?.acknowledgeChange(change.id, false, result.error);
@@ -272,7 +285,7 @@ export function EditorPanel(props: {
     scheduleSave();
     props.controller?.acknowledgeChange(change.id, true);
     recordEditorStep('tool_used');
-  }, [contentRef, props.controller, pushLive, scheduleSave, setContent]);
+  }, [contentRef, props.controller, pushLive, scheduleSave, setContent, standardPreferred]);
 
   function updateItem(next: EditorItemContent) {
     if (!collectionKey) return;
@@ -483,6 +496,10 @@ export function EditorPanel(props: {
     if (saveState === 'dirty') {
       if (!(await saveNow())) return;
     }
+    if (checksBlockRef.current) {
+      setPublish({ kind: 'idle' });
+      return;
+    }
     setPublish({ kind: 'publishing' });
     try {
       const result = await publishEditorContent(slug);
@@ -582,8 +599,8 @@ export function EditorPanel(props: {
             : [];
         }),
         ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
-        // Guarded: a dead controller's stale checks must not strand Publish.
-        ...(controllerActive && props.controller?.checks?.ok === false ? [t('studioPanel.editor.checksFromGame')] : []),
+        // A live controller's checks gate Publish whichever surface is shown.
+        ...(checksBlock ? [t('studioPanel.editor.checksFromGame')] : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
@@ -684,6 +701,7 @@ export function EditorPanel(props: {
           {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
         </div>
       ) : null}
+      {controllerLive ? <EditorSurfaceSwitch standard={standardPreferred} onChoose={chooseSurface} /> : null}
 
       <div className="editor-body">
         {controllerActive && props.controller ? (

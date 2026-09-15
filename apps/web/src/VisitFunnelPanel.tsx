@@ -67,6 +67,8 @@ const EDITOR_LABELS: Record<string, string> = {
   draft_saved: 'saved a draft',
   previewed: 'played the draft',
   published: 'published changes',
+  standard_surface_chosen: 'left the game editor',
+  controller_surface_restored: 'went back to it',
 };
 
 const REMIX_LABELS: Record<string, string> = {

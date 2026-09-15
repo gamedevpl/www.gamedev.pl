@@ -81,6 +81,7 @@ function controllerState(overrides: Partial<EditorControllerState> = {}): Editor
     pendingChange: null,
     uiRequest: null,
     checks: null,
+    checksFresh: true,
     canvasBox: null,
     sendEvent: vi.fn(),
     sendSelection: vi.fn(),
@@ -120,6 +121,78 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     expect(publishButton().disabled).toBe(false);
   });
 
+  it("keeps the game's own checks gating Publish after the creator takes the standard editor", async () => {
+    await renderWithController(controllerState({ checks: { ok: false, problems: ['Needs at least one exit'] } }));
+    expect(publishButton().disabled).toBe(true);
+
+    const toStandard = container.querySelector<HTMLButtonElement>('.editor-surface-switch');
+    expect(toStandard).not.toBeNull();
+    await act(async () => toStandard!.click());
+
+    // The controller is still live, so it still refuses.
+    expect(publishButton().disabled).toBe(true);
+    expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
+  });
+
+  it('holds Publish after a standard edit until the game has answered for it', async () => {
+    await renderWithController(controllerState({ checks: { ok: true, problems: [] } }));
+    await act(async () => container.querySelector<HTMLButtonElement>('.editor-surface-switch')!.click());
+    expect(publishButton().disabled).toBe(false);
+
+    const slider = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(slider, '150');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Unseen edit, so the green verdict is about older content.
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: true, problems: [] }, checksFresh: false })}
+          onOpenPlaytest={vi.fn()}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(publishButton().disabled).toBe(true);
+    expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
+  });
+
+  it('never holds Publish for a game that declares no validator', async () => {
+    await renderWithController(controllerState({ checks: null, checksFresh: false }));
+    expect(publishButton().disabled).toBe(false);
+  });
+
+  it('refuses a controller patch while the creator is on the standard editor', async () => {
+    const controller = controllerState({ checks: { ok: true, problems: [] } });
+    await renderWithController(controller);
+    await act(async () => container.querySelector<HTMLButtonElement>('.editor-surface-switch')!.click());
+
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={{
+            ...controller,
+            pendingChange: { id: 'change-9', patch: { path: ['params', 'width'], value: 150 } },
+          }}
+          onOpenPlaytest={vi.fn()}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    // A patch that would otherwise have applied cleanly is refused instead.
+    expect(controller.acknowledgeChange).toHaveBeenCalledWith('change-9', false, expect.any(String));
+    expect(controller.acknowledgeChange).not.toHaveBeenCalledWith('change-9', true);
+    expect(putEditorDraft).not.toHaveBeenCalled();
+  });
+
   it('never strands Publish on a controller that failed — degrade, never break', async () => {
     // Stale checks from a dead controller must not lock Publish.
     await renderWithController(
@@ -127,6 +200,52 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     );
 
     expect(publishButton().disabled).toBe(false);
+  });
+});
+
+describe('EK2-29 — a verdict that lands mid-publish still counts', () => {
+  it('drops the publish when the game turns its checks red while the save is in flight', async () => {
+    let releaseSave: (value: { revision: number; updatedAt: string }) => void = () => {};
+    putEditorDraft.mockReturnValue(
+      new Promise<{ revision: number; updatedAt: string }>((resolve) => {
+        releaseSave = resolve;
+      }),
+    );
+    await renderWithController(controllerState({ checks: { ok: true, problems: [] } }));
+
+    const slider = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(slider, '150');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(publishButton().disabled).toBe(false);
+
+    await act(async () => {
+      publishButton().click();
+      await Promise.resolve();
+    });
+    expect(putEditorDraft).toHaveBeenCalled();
+
+    // The game answers while the draft flush is still in the air.
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: false, problems: ['Needs at least one exit'] } })}
+          onOpenPlaytest={vi.fn()}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      releaseSave({ revision: 1, updatedAt: '2026-08-07T00:00:01.000Z' });
+      await Promise.resolve();
+    });
+
+    expect(publishEditorContent).not.toHaveBeenCalled();
   });
 });
 

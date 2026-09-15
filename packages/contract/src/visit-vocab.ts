@@ -107,6 +107,8 @@ export const EDITOR_STEPS = [
   'tool_used',
   'undo_used',
   'selection_from_game',
+  'standard_surface_chosen',
+  'controller_surface_restored',
 ] as const;
 export type EditorStep = (typeof EDITOR_STEPS)[number];
 
