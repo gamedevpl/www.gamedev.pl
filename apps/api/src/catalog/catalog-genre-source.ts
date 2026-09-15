@@ -67,9 +67,7 @@ export async function createCatalogGenreSourceFromEnv(fetchImpl?: typeof fetch):
     return createCatalogGenreSource({
       client: {
         async getCatalog() {
-          const catalog = await snapshot.getCatalog();
-          if (!catalog) throw new Error('catalog snapshot is unavailable');
-          return catalog;
+          return (await snapshot.getCatalog()) ?? Promise.reject(new Error('catalog snapshot is unavailable'));
         },
       },
     });
