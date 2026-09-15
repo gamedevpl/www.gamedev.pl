@@ -152,7 +152,20 @@ describe('after a transfer, the sender keeps nothing', () => {
     expect(await store.listCreatorMessages(jobId)).toHaveLength(1);
 
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(SENDER) });
+    expect(status.statusCode).toBe(200);
+    // State is a receipt the token carries; what was said is not.
+    expect(status.json().status).toBeDefined();
     expect(status.json().priorRounds).toBeUndefined();
+    expect(status.json().events).toBeUndefined();
+    expect(status.json().media).toBeUndefined();
+
+    // The recipient, on the same job, gets all of it.
+    const theirs = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: session(RECIPIENT),
+    });
+    expect(theirs.json().events.map((event: { text: string }) => event.text)).toContain('Asteroid speed reduced.');
   });
 
   it('cannot reuse an agent round key: the transfer advances every round’s generation', async () => {

@@ -114,7 +114,11 @@ describe('agent build channel', () => {
     expect(posted.json().accepted).toBe(true);
     expect(posted.json().event).toMatchObject({ kind: 'step', step: 'mechanics' });
 
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(ISSUE, secret)}` });
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(ISSUE, secret)}`,
+      headers: creatorHeaders(),
+    });
     expect(status.statusCode).toBe(200);
     expect(status.json().events).toHaveLength(1);
     expect(status.json().events[0]).toMatchObject({
@@ -143,6 +147,7 @@ describe('agent build channel', () => {
     const polish = await app.inject({
       method: 'GET',
       url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl`,
+      headers: creatorHeaders(),
     });
     expect(polish.json().events[0].text).toBe('Rysuję żołnierzy.');
     // The wire carries one resolved sentence, not a choice for the client to make.
@@ -153,6 +158,7 @@ describe('agent build channel', () => {
     const english = await app.inject({
       method: 'GET',
       url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=en`,
+      headers: creatorHeaders(),
     });
     expect(english.json().events[0].text).toBe('Drawing the soldiers.');
   });
@@ -206,7 +212,11 @@ describe('agent build channel', () => {
     // assertion that would have caught 2026-08-04: the leak was not a bad translation,
     // it was a translation on a 3s-polled read path.
     for (let i = 0; i < 3; i++) {
-      await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl` });
+      await app.inject({
+        method: 'GET',
+        url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl`,
+        headers: creatorHeaders(),
+      });
     }
     expect(asked).toHaveLength(1);
   });
@@ -262,7 +272,11 @@ describe('agent build channel', () => {
     expect(events[0]!.locale).toBe('pl');
 
     // And a Polish reader gets Polish, despite the record claiming English.
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(4242, secret)}?locale=pl` });
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(4242, secret)}?locale=pl`,
+      headers: creatorHeaders(),
+    });
     expect(status.json().events[0].text).toBe('PL:Zeichne die Soldaten.');
   });
 
@@ -322,6 +336,7 @@ describe('agent build channel', () => {
     const status = await app.inject({
       method: 'GET',
       url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl`,
+      headers: creatorHeaders(),
     });
     expect(status.json().events[0].text).toBe('Drawing the soldiers.');
     expect(calls).toBe(1);
@@ -541,7 +556,11 @@ describe('agent build channel', () => {
 
     expect(end.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
 
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(ISSUE, secret)}` });
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(ISSUE, secret)}`,
+      headers: creatorHeaders(),
+    });
     expect(status.json().events).toHaveLength(1);
     expect(status.json().events[0]).toMatchObject({
       kind: 'done',
@@ -661,6 +680,7 @@ describe('agent build channel', () => {
     const polish = await app.inject({
       method: 'GET',
       url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl`,
+      headers: creatorHeaders(),
     });
     expect(polish.json().events[0].text).toBe('Chmury płyną wolniej.');
   });
@@ -1040,7 +1060,7 @@ describe('agent build channel', () => {
     // No pull request exists in this fixture, so this is exactly the empty-page
     // stretch the channel is for: a picture with nothing committed anywhere.
     const token = mintToken(ISSUE, secret);
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: creatorHeaders() });
     expect(status.json().media).toEqual([
       expect.objectContaining({ source: 'channel', ref: shotId, label: 'First bridge' }),
     ]);
@@ -1170,7 +1190,7 @@ describe('agent build channel', () => {
     const previewId = pushed.json().preview.id as string;
 
     const token = mintToken(ISSUE, secret);
-    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: creatorHeaders() });
     expect(status.json().playable).toEqual([
       expect.objectContaining({ ref: previewId, slug: 'puppy-stroll', label: 'You can walk the puppy now.' }),
     ]);
@@ -2678,7 +2698,7 @@ describe('agent build channel', () => {
 
       // The status response says where it came from.
       const token = mintToken(ISSUE, secret);
-      const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+      const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: creatorHeaders() });
       expect(status.json().playable).toEqual([expect.objectContaining({ ref: preview!.id, origin: 'staged' })]);
     });
 

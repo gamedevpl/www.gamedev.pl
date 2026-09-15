@@ -5,7 +5,7 @@ import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { creatorOwnsSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -307,16 +307,23 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
+    // State is a receipt the token carries; what was said is not.
+    const viewerOwns = Boolean(store && record && viewerUid && (await ownsSubmissionOrSlug(store, record, viewerUid)));
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
       ...status,
-      ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
-      ...(media.length > 0 ? { media } : {}),
-      ...(playable.length > 0 ? { playable } : {}),
+      ...(viewerOwns && events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
+      ...(viewerOwns && media.length > 0 ? { media } : {}),
+      ...(viewerOwns && playable.length > 0 ? { playable } : {}),
       // Resolved here, not in nativeJobStatus, so the cache stays language-neutral.
       ...(status.progress
-        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
+        ? {
+            progress: {
+              ...status.progress,
+              revisions: viewerOwns ? localizeRevisions(status.progress.revisions, locale) : [],
+            },
+          }
         : {}),
     };
     if (!record) return next;
