@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
+import { recordTransferStep } from '../../visitTelemetry.js';
 import {
   fetchIncomingTransfers,
   fetchRecipientCode,
@@ -61,6 +62,7 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
     setError(null);
     try {
       await respondToTransfer(slug, decision);
+      recordTransferStep(decision === 'accept' ? 'offer_accepted' : 'offer_declined');
       setIncoming((current) => current.filter((invite) => invite.slug !== slug));
       // Not on the shelf until the caller refetches.
       if (decision === 'accept') onAccepted?.(slug);
@@ -75,6 +77,11 @@ export function StudioTransferInbox({ onAccepted }: { onAccepted?: (slug: string
   }
 
   const pending = incoming.filter((invite) => invite.status === 'pending');
+  // The denominator every decision below is measured against.
+  useEffect(() => {
+    if (pending.length > 0) recordTransferStep('offer_shown');
+  }, [pending.length]);
+
   // Nothing to say without an invitation, code or failure.
   if (pending.length === 0 && !code && !unreachable) return null;
 

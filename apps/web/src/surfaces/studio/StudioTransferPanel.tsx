@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
+import { recordTransferStep } from '../../visitTelemetry.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import {
   cancelGameTransfer,
@@ -59,6 +60,7 @@ export function StudioTransferPanel({ slug }: { slug: string }): JSX.Element {
     try {
       setTransfer(await startGameTransfer(slug, trimmed));
       setCode('');
+      recordTransferStep('invite_sent');
     } catch (caught) {
       // Creating refuses as busy only when an invitation is already out.
       if ((caught as TransferApiError)?.code === 'busy') {
@@ -82,6 +84,7 @@ export function StudioTransferPanel({ slug }: { slug: string }): JSX.Element {
     setError(null);
     try {
       setTransfer(await cancelGameTransfer(slug));
+      recordTransferStep('invite_cancelled');
     } catch (caught) {
       // Gone already: accepted elsewhere, or expired while this sat open.
       if ((caught as TransferApiError)?.code === 'not_found') {

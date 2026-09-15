@@ -188,6 +188,16 @@ export type PartyStep = (typeof PARTY_STEPS)[number];
 export const PARTY_VIAS = ['bar', 'seat'] as const;
 export type PartyVia = (typeof PARTY_VIAS)[number];
 
+// Two audiences, one lane: the step name says which side acted.
+export const TRANSFER_STEPS = [
+  'invite_sent',
+  'invite_cancelled',
+  'offer_shown',
+  'offer_accepted',
+  'offer_declined',
+] as const;
+export type TransferStep = (typeof TRANSFER_STEPS)[number];
+
 export const CLI_STEPS = [
   'installed',
   'authorized',
