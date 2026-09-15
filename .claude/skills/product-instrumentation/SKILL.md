@@ -325,6 +325,20 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   button from the host keyboard, so it does not claim to. Unlike the create funnel, a
   rung dedupes per `step:via` and not per step — "the bar paused it" and "the room paused
   it" are the question, and collapsing them would erase it.
+  - ~~Game handovers unmeasured~~ — **closed 2026-09-15 (GO-02)**: `transfer_step` on the
+    visit stream records the sender's `invite_sent` → `invite_cancelled` and the
+    recipient's `offer_shown` → `offer_accepted` / `offer_declined`. `TRANSFER_STEPS`
+    lives in `packages/contract/src/visit-vocab.ts` like the others;
+    `summarizeTransfers` ([visit-transfers.ts](../../../apps/api/src/telemetry/visit-transfers.ts))
+    rolls up as `transfers` on `GET /api/admin/telemetry/visits` and `TransferFunnelBlock`
+    renders it. The read side shipped in the same PR as the rungs, which is the point.
+    Two rules it inherits: **two sides, two denominators** — cancellations count only
+    inside the visits that sent one and decisions only inside those shown one, so
+    neither ratio can exceed its own maximum when a batch is lost; and **no slug, no
+    counterparty, no invitation code** travels, so the streams stay unjoinable and a
+    bearer credential never reaches telemetry. A visit that both sends and is offered
+    is counted on each side, because those are different questions.
+
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 - ~~Shared zones were unmeasured~~ — **closed 2026-07-31**: `zone_link`

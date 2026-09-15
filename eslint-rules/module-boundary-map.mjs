@@ -340,6 +340,7 @@ const FILE_BUCKET = {
   'mcp-source-patch-tools': 'agent-surface',
   'mcp-source-submit-tools': 'agent-surface',
   'mcp-game-create-tools': 'agent-surface',
+  'mcp-account-games-tools': 'agent-surface',
   'mcp-round-reopen-tools': 'agent-surface',
   'mcp-session-basics-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
@@ -515,6 +516,7 @@ const FILE_BUCKET = {
   'visit-cli-funnel': 'telemetry',
   'visit-cli-pilot': 'telemetry',
   'visit-proposals': 'telemetry',
+  'visit-transfers': 'telemetry',
   'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
 

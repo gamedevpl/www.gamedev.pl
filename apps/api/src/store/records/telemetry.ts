@@ -98,6 +98,7 @@ export interface VisitEvent {
     | 'framed_play_step'
     | 'invite_step'
     | 'party_step'
+    | 'transfer_step'
     | 'beta_welcome_step'
     | 'studio_step'
     | 'editor_step'

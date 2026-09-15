@@ -10,6 +10,7 @@ import {
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
   PARTY_STEPS,
+  TRANSFER_STEPS,
   PARTY_VIAS,
   PLAY_VIAS,
   REMIX_CONTROLS,
@@ -67,6 +68,7 @@ const ShareStepSchema = z.enum(SHARE_STEPS);
 const FramedPlayStepSchema = z.enum(FRAMED_PLAY_STEPS);
 const InviteStepSchema = z.enum(INVITE_STEPS);
 const PartyStepSchema = z.enum(PARTY_STEPS);
+const TransferStepSchema = z.enum(TRANSFER_STEPS);
 const PartyViaSchema = z.enum(PARTY_VIAS);
 const BetaWelcomeStepSchema = z.enum(BETA_WELCOME_STEPS);
 const StudioStepSchema = z.enum(STUDIO_STEPS);
@@ -136,6 +138,7 @@ const EventSchema = z.discriminatedUnion('type', [
     via: PartyViaSchema.optional(),
     ...offsetField,
   }),
+  z.object({ type: z.literal('transfer_step'), step: TransferStepSchema, ...offsetField }),
   z.object({ type: z.literal('beta_welcome_step'), step: BetaWelcomeStepSchema, ...offsetField }),
   z.object({
     type: z.literal('studio_step'),
@@ -274,6 +277,8 @@ export async function registerVisitTelemetryRoutes(
         case 'framed_play_step':
           return { ...base, type: event.type, step: event.step };
         case 'invite_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'transfer_step':
           return { ...base, type: event.type, step: event.step };
         case 'party_step':
           return {

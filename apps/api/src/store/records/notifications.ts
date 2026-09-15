@@ -75,7 +75,9 @@ export type NotificationType =
   /** Owner removed this person as an editor. */
   | 'share.removed'
   /** An editor left; the owner is told. */
-  | 'share.left';
+  | 'share.left'
+  // A decision with a deadline, not news about a game.
+  | 'transfer.offered';
 
 /** The proposal family, split out for the same reason the submission one is. */
 export type ProposalNotificationType = Extract<NotificationType, `proposal.${string}`>;
@@ -91,6 +93,9 @@ export type ShareNotificationType = Extract<NotificationType, `share.${string}`>
  * second non-submission event has to be thought about.
  */
 export type SubmissionNotificationType = Extract<NotificationType, `submission.${string}`>;
+
+// Handovers, derived the same way. The family is the seam.
+export type TransferNotificationType = Extract<NotificationType, `transfer.${string}`>;
 
 /** The operator-facing half, derived the same way and for the same reason. */
 export type OperatorNotificationType = Extract<NotificationType, `operator.${string}`>;

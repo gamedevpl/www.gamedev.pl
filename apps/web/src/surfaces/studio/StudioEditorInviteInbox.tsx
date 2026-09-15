@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { recordShareStep } from '../../visitTelemetry.js';
@@ -17,7 +17,15 @@ const RESPOND_REFUSALS: Record<string, string> = {
   member_cap: 'studioShelf.share.errors.memberCap',
 };
 
-export function StudioEditorInviteInbox({ onAccepted }: { onAccepted?: (slug: string) => void }): JSX.Element | null {
+export function StudioEditorInviteInbox({
+  onAccepted,
+  visible = true,
+  onOffersPresent,
+}: {
+  onAccepted?: (slug: string) => void;
+  visible?: boolean;
+  onOffersPresent?: () => void;
+}): JSX.Element | null {
   const { t } = useTranslation();
   const [incoming, setIncoming] = useState<EditorInviteSummary[]>([]);
   const [busySlug, setBusySlug] = useState<string | null>(null);
@@ -56,6 +64,14 @@ export function StudioEditorInviteInbox({ onAccepted }: { onAccepted?: (slug: st
   }
 
   const pending = incoming.filter((invite) => invite.status === 'pending');
+  const offered = pending.length > 0;
+  const announced = useRef(false);
+  useEffect(() => {
+    if (!offered || announced.current) return;
+    announced.current = true;
+    if (!visible) onOffersPresent?.();
+  }, [offered, visible, onOffersPresent]);
+
   if (pending.length === 0 && !unreachable) return null;
 
   return (
