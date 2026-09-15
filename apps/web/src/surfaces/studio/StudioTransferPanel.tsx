@@ -83,7 +83,12 @@ export function StudioTransferPanel({ slug }: { slug: string }): JSX.Element {
     try {
       setTransfer(await cancelGameTransfer(slug));
     } catch (caught) {
-      setError(explain(caught));
+      // Gone already: accepted elsewhere, or expired while this sat open.
+      if ((caught as TransferApiError)?.code === 'not_found') {
+        setTransfer(await fetchGameTransfer(slug).catch(() => null));
+      } else {
+        setError(explain(caught));
+      }
     } finally {
       setBusy(false);
     }

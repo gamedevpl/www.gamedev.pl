@@ -165,4 +165,28 @@ describe('StudioTransferPanel', () => {
     expect(host.querySelector('[data-testid="studio-transfer-error"]')).toBeNull();
     await act(async () => root.unmount());
   });
+
+  it('recovers the form when the invitation is gone before cancelling', async () => {
+    // Accepted elsewhere or expired: cancel 404s and the pane must not stick.
+    let cancelled = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/cancel')) {
+          cancelled = true;
+          return { ok: false, status: 404, json: async () => ({ error: 'not_found' }) };
+        }
+        return { ok: true, json: async () => ({ transfer: cancelled ? null : PENDING }) };
+      }),
+    );
+    const { host, root } = mountPanel();
+    await render(host, root);
+
+    expect(host.querySelector('[data-testid="studio-transfer-pending"]')).not.toBeNull();
+    await click(host, 'studio-transfer-cancel');
+
+    expect(host.querySelector('[data-testid="studio-transfer-pending"]')).toBeNull();
+    expect(host.querySelector('[data-testid="studio-transfer-code"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
 });

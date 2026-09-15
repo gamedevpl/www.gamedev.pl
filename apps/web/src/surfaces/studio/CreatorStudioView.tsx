@@ -642,7 +642,13 @@ export function CreatorStudioView({
         // Named, so a game below the shelf ceiling still comes back.
         try {
           const shelfPage = await fetchStudioGames(slug);
-          setGames(shelfPage.games);
+          // The page is capped; keep the open game even when it falls outside.
+          setGames((prev) => {
+            const open = selectedRef.current;
+            if (!open || shelfPage.games.some((game) => game.token === open)) return shelfPage.games;
+            const kept = prev.filter((game) => game.token === open);
+            return kept.length > 0 ? [...shelfPage.games, ...kept] : shelfPage.games;
+          });
           setShelfTruncated(shelfPage.truncated);
           setTotalGames(shelfPage.totalGames);
         } catch {
