@@ -71,6 +71,14 @@ but the agent has no shell to reach it with and nothing on our side ever reads i
 workspace of files; it is released with the round on a best-effort basis. The agent's
 output goes out over MCP, never as a merged branch.
 
+Hosted MCP clients without a shell or browser (ChatGPT) cannot produce a mid-build
+WebGL screenshot. They skip `screenshot_upload_url`, deliver `mode=preview`, and
+read frames via `get_gate_media` — the gate already launches Chromium with
+Angle/SwiftShader. Local agents that _do_ have a shell must pass
+`--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
+--enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`) and capture
+`canvas.toDataURL`; a black frame means those flags were missing.
+
 Hosted-agent output is still external contributor output, so it is still worth verifying
 before it is trusted: follow the repository's
 [`verify-agent-work`](../.claude/skills/verify-agent-work/SKILL.md) playbook against the

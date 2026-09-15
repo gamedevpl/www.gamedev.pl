@@ -491,6 +491,13 @@ describe('POST /api/mcp (BY-05)', () => {
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
     expect(screenshotUpload?.description).toMatch(/curl --upload-file/i);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
+    expect(screenshotUpload?.description).toMatch(/--use-gl=angle/);
+    expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
+    expect(screenshotUpload?.description).toMatch(/canvas\.toDataURL/);
+    expect(screenshotUpload?.description).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
+    expect(screenshotUpload?.description).toMatch(/mode=preview/);
+    expect(screenshotUpload?.description).toMatch(/get_gate_media/);
+    expect(screenshotUpload?.description).toMatch(/Without a shell or browser/i);
     expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/curl --upload-file|prefer/i);
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
@@ -524,6 +531,10 @@ describe('POST /api/mcp (BY-05)', () => {
     const getKitApi = tools.find((t) => t.name === 'get_kit_api');
     expect(getKitApi?.description).toMatch(/party|zone|commons|presence/i);
     expect(getKitApi?.description).toMatch(/engineRef/);
+
+    const getGateMedia = tools.find((t) => t.name === 'get_gate_media');
+    expect(getGateMedia?.description).toMatch(/Without a shell or browser/i);
+    expect(getGateMedia?.description).toMatch(/mode=preview/);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
     expect(gateVerdict?.annotations?.title).toBe('Check the gate once');
@@ -1210,6 +1221,12 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
     expect(joined).toMatch(/screenshot_upload_url/);
     expect(joined).not.toMatch(/send_screenshot/);
+    expect(joined).toMatch(/--use-gl=angle/);
+    expect(joined).toMatch(/never --disable-gpu/);
+    expect(joined).toMatch(/canvas\.toDataURL/);
+    expect(joined).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
+    expect(joined).toMatch(/Without a shell or browser[\s\S]*get_gate_media/i);
+    expect(joined).toMatch(/mode=preview/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);
     expect(joined).toMatch(/patch_source_file/);
     expect(joined).toMatch(/module_too_large/);

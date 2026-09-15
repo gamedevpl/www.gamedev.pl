@@ -78,7 +78,8 @@ gate and publishes it.
 
 This skill is the part an agent needs before the first tool call: what a build round is,
 how to get into one, and the handful of loop rules that cost a whole build when missed —
-screenshot early, stage rather than re-upload, staging is not delivering, call end after
+screenshot early (or skip and read `get_gate_media` after `mode=preview` when there is no
+browser), stage rather than re-upload, staging is not delivering, call end after
 the last submit, never poll the gate or the inbox.
 
 It deliberately does not restate the session workflow. The server returns that on start

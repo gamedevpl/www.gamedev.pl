@@ -48,9 +48,19 @@ round is, and which mistakes cost a whole build.
 Everything else is in the workflow `start` hands you. These are the ones agents get wrong
 often enough to name up front:
 
-1. **Screenshot as soon as the game draws.** `screenshot_upload_url` then
-   `curl --upload-file <png> "$url"` early, not at the end. There is no base64
-   screenshot tool — PNG bytes must never enter the model.
+1. **Screenshot as soon as the game draws — or skip, if you have no browser.**
+   Without a shell or browser (ChatGPT): skip mid-build screenshots. Deliver
+   `mode=preview` and read frames via `get_gate_media` — that is the happy path;
+   the gate captures with WebGL flags. With a shell: launch headless Chromium
+   with `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
+--enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150
+   may need `--use-angle=swiftshader`). Wait for the first rendered canvas
+   frame, capture `canvas.toDataURL('image/png')` (not a page screenshot), keep
+   PNG ≤700 KB, then `screenshot_upload_url` and `curl --upload-file <png>
+"$url"`. A black/blank frame means those WebGL flags were missing. If
+   SwiftShader is unavailable, `GAME_CAPTURE_GFX=canvas2d` or `?gfx=canvas2d`
+   (force2d). There is no base64 screenshot tool — PNG bytes must never enter
+   the model.
 2. **Stage, don't re-upload.** `stage_source_file` for new or fully rewritten paths;
    `patch_source_file` for edits. Then `submit_sources({ fromStaged: true, … })`, which
    overlays onto the latest delivery — so only changed paths need staging. Never re-emit a
