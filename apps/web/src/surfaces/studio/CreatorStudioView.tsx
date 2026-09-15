@@ -35,6 +35,7 @@ import {
 } from '../../studioShelf.js';
 import { DetailsPanel, type DetailsPaneId } from './StudioDetailsPanel.js';
 import { DraftShareControl } from './DraftShareControl.js';
+import { StudioTransferInbox } from './StudioTransferInbox.js';
 import { StudioShelfControls, StudioShelfList } from './StudioShelf.js';
 import { defaultTabFor, resolveTab, studioAddress, tabAvailable } from './studioTabs.js';
 import { healthFor } from './studioHealth.js';
@@ -812,6 +813,19 @@ export function CreatorStudioView({
                 onFilterChange={setShelfFilter}
               />
               {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
+              <StudioTransferInbox
+                onAccepted={async () => {
+                  // The game is only on the shelf once the server says so.
+                  try {
+                    const shelfPage = await fetchStudioGames();
+                    setGames(shelfPage.games);
+                    setShelfTruncated(shelfPage.truncated);
+                    setTotalGames(shelfPage.totalGames);
+                  } catch {
+                    // The invitation is gone either way; the shelf catches up on reload.
+                  }
+                }}
+              />
               {shelfList}
             </aside>
 
