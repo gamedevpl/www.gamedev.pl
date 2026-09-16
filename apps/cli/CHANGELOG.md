@@ -9,13 +9,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Type follow-up requests while a local agent works; Enter queues them for after the current task without interrupting it.
-- Interactive sessions restore recent conversation output and prompt history after restarting, separately for each account, server, and game.
+- Type follow-up requests while a local agent works; Enter queues them for after the current task without interrupting it (#1369).
+- Interactive sessions restore recent conversation output and prompt history after restarting, separately for each account, server, and game (#1369).
 
 ### Fixed
 
-- Interactive `/update` distinguishes the installed version from the running session and explains that a restart is required.
-- Delegated agents explicitly consider browser automation through shell commands and scripts without requiring a specific automation library.
+- Interactive `/update` distinguishes the installed version from the running session and explains that a restart is required (#1369).
+- Delegated agents explicitly consider browser automation through shell commands and scripts without requiring a specific automation library (#1369).
+
 ## 0.15.3 — 2026-09-15
 
 ### Fixed
