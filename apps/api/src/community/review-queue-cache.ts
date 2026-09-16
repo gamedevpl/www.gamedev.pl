@@ -174,12 +174,15 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     if (!record.slug) return record.ownerUid;
     const hit = ownerCache.get(record.slug);
     if (fresh(hit)) return hit.value;
+    const at = generation;
     let uid: string;
     try {
       uid = (await currentOwnerUid(store, record.slug, record.ownerUid)) ?? record.ownerUid;
     } catch {
       return record.ownerUid;
     }
+    // A handover landed mid-read: answer, but do not cache.
+    if (generation !== at) return uid;
     rememberBounded(ownerCache, record.slug, { value: uid, expiresAt: now() + BADGE_WINDOW_MS }, MAX_CACHED_HANDLES);
     return uid;
   }
@@ -309,6 +312,9 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     invalidateReviewer,
     invalidateGameOwner: (slug: string) => {
       ownerCache.delete(slug);
+      // A queued item carries the handle its read derived.
+      targetedCache.clear();
+      generation += 1;
     },
   };
 }

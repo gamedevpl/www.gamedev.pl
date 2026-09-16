@@ -110,7 +110,10 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
     const selected = await backendFor(builder);
     if (!selected) return { started: false, reason: 'not_configured' };
-    const spendingUid = input.ownerUid ?? record?.ownerUid;
+    // Quota follows the game, not the row's author.
+    const access = record?.slug === undefined ? null : await resolveGameAccess(store, record.slug);
+    const canonicalOwner = access?.owner.kind === 'creator' ? access.owner.uid : undefined;
+    const spendingUid = input.ownerUid ?? canonicalOwner ?? record?.ownerUid;
     // Skip for undelivered continuations — not a fresh dispatch.
     if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && spendingUid) {
       const dateStr = new Date(now()).toISOString().slice(0, 10);
@@ -129,8 +132,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       // A legacy job still needs the field written for the reminted key.
 
       // A handover revoked the token the nudge would keep.
-      const revoked =
-        record?.slug !== undefined && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug));
+      const revoked = record !== undefined && access !== null && !roundAuthorityCurrent(record, access);
       const roundGeneration =
         input.undelivered && !revoked
           ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
