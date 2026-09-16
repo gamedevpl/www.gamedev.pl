@@ -53,7 +53,7 @@ export async function runInkRepl(input: {
     uid = user.uid;
     who = user.handle ?? uid;
   } catch {
-    who = 'not signed in';
+    who = 'account unavailable';
   }
   let history: ReturnType<typeof historyStore> | undefined;
   let historyScope = '';

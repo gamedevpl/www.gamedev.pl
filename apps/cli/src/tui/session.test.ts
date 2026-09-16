@@ -172,3 +172,22 @@ it('preserves an unfinished follow-up through a choice and clears queued work on
   expect(stop).toHaveBeenCalledOnce();
   session.close();
 });
+
+it('keeps queued work and unfinished drafts out of a model ID question', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  session.insertDraft('add ramps');
+  session.queueDraft();
+  session.insertDraft('unfinished request');
+  const model = session.prompt([], 'Model ID');
+  expect(session.get().draft).toBe('');
+  expect(session.get().queued).toEqual(['add ramps']);
+  session.insertDraft('my-model');
+  session.submit();
+  expect(await model).toBe('my-model');
+  expect(await session.prompt()).toBe('add ramps');
+  const next = session.prompt();
+  expect(session.get().draft).toBe('unfinished request');
+  session.close();
+  await next;
+});

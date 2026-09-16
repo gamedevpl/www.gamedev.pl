@@ -221,8 +221,9 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       emit();
     },
     prompt(choices, question) {
+      const nextTurn = choices === undefined && question === undefined;
       if (state.mode === 'busy' && state.draft) followupDraft = state.draft;
-      if (!choices?.length && state.queued.length) {
+      if (nextTurn && state.queued.length) {
         const [line, ...queued] = state.queued;
         state = { ...state, queued };
         savedLines = [...savedLines, `› ${line}`].slice(-200);
@@ -247,11 +248,11 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
           choices: choices ?? [],
           question: question ?? '',
           pickIndex: 0,
-          draft: choices?.length ? '' : followupDraft,
-          draftCursor: choices?.length ? 0 : [...followupDraft].length,
+          draft: nextTurn ? followupDraft : '',
+          draftCursor: nextTurn ? [...followupDraft].length : 0,
           draftFromHistory: false,
         };
-        if (!choices?.length) followupDraft = '';
+        if (nextTurn) followupDraft = '';
         emit();
       });
     },
