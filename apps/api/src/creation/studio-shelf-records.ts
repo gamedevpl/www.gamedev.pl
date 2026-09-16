@@ -1,5 +1,6 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { ownsGame, resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
+import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
 
 export type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'> &
   GameAccessResolveStore &
@@ -72,6 +73,16 @@ export async function loadShelfRecords(
   if (known) return records;
 
   const extra = await lookupRequested(store, requested, mintStatusToken);
-  if (!extra || extra.ownerUid !== ownerUid || extra.abandonedAt) return records;
+  if (!extra) return records;
+  if (!(await ownsSubmissionOrSlug(store, extra, ownerUid))) return records;
+  if (extra.slug) {
+    const slugJobs = await store.listSubmissionsBySlug(extra.slug);
+    const jobs = slugJobs.length > 0 ? slugJobs : [extra];
+    // The newest round can be an abandoned one over a live build.
+    if (!jobs.some((job) => !job.abandonedAt)) return records;
+    const jobIds = new Set(jobs.map((j) => j.jobId));
+    return [...jobs, ...records.filter((record) => !jobIds.has(record.jobId))];
+  }
+  if (extra.abandonedAt) return records;
   return [extra, ...records.filter((record) => record.jobId !== extra.jobId)];
 }

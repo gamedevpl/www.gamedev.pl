@@ -19,7 +19,13 @@ describe('game transfer routes', () => {
   });
 
   async function appWith(store: InMemoryStore, gameTransferRoutes = {}) {
-    const app = await buildApp({ store, sessionSecret, gameTransferRoutes });
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      gameTransferRoutes,
+      // The shelf route mints status tokens, so it needs the secret.
+      submissionRoutes: { submissionTokenSecret: 'dev-token-secret' },
+    });
     apps.push(app);
     return app;
   }
@@ -435,5 +441,43 @@ describe('game transfer routes', () => {
       headers: { cookie: authCookie('g:ada') },
     });
     expect(accept.statusCode).toBe(404);
+  });
+
+  it('transferred game disappears from sender studio shelf even when requested directly', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    await store.createSubmission(10, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(10, 'sky');
+    const app = await appWith(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+    });
+
+    const senderStudio = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio?game=sky',
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(senderStudio.statusCode).toBe(200);
+    const senderGames = senderStudio.json().games as Array<{ slug?: string }>;
+    expect(senderGames.map((g) => g.slug)).not.toContain('sky');
+
+    const recipientStudio = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio?game=sky',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(recipientStudio.statusCode).toBe(200);
+    const recipientGames = recipientStudio.json().games as Array<{ slug?: string }>;
+    expect(recipientGames.map((g) => g.slug)).toContain('sky');
   });
 });
