@@ -40,11 +40,13 @@ describe('editor-contract lockstep fingerprint', () => {
     expect(extractNamedFunction(source, 'validateEditorContent')).toContain('content must be an object');
     expect(editorContractFingerprint(source)).toContain('function valueProblem');
     expect(editorContractFingerprint(source)).toContain('MAX_TEXT_LENGTH = 240');
+    expect(editorContractFingerprint(source)).toContain("EDITOR_CONTENT_FILE = 'EDITOR.content.json'");
   });
 
   it('changes when a helper or limit used by the wrappers changes', () => {
     const base = [
       'export const MAX_TEXT_LENGTH = 240;',
+      "export const EDITOR_CONTENT_FILE = 'EDITOR.content.json';",
       'export function valueProblem() { return "old"; }',
       'export function parseEditorDefinition() { return "p"; }',
       'export function validateEditorContent() { return valueProblem(); }',
@@ -52,8 +54,10 @@ describe('editor-contract lockstep fingerprint', () => {
     ].join('\n');
     const helperChanged = base.replace('return "old"', 'return "new"');
     const limitChanged = base.replace('MAX_TEXT_LENGTH = 240', 'MAX_TEXT_LENGTH = 99');
+    const filenameChanged = base.replace('EDITOR.content.json', 'EDITOR.other.json');
     expect(editorContractFingerprint(base)).not.toBe(editorContractFingerprint(helperChanged));
     expect(editorContractFingerprint(base)).not.toBe(editorContractFingerprint(limitChanged));
+    expect(editorContractFingerprint(base)).not.toBe(editorContractFingerprint(filenameChanged));
   });
 
   it('treats exported and local helper declarations as the same body', () => {

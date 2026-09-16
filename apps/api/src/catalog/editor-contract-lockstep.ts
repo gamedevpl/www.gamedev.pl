@@ -12,8 +12,7 @@ const LOCAL_VALIDATE_REACH_PATH = path.join(REPO_ROOT, 'packages/contract/src/ed
 const LOCAL_KIT_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-kit.ts');
 
 const FN_NAME_RE = /(?:export\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
-const CONST_NAME_RE =
-  /(?:export\s+)?const\s+(MAX_[A-Z0-9_]+|PARAMS_KEY|LAYERS_KEY|PROPERTY_TYPES|KEY_PATTERN|TILE_KEY_PATTERN|HEX_COLOR_PATTERN)\s*=/g;
+const CONST_NAME_RE = /(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*=/g;
 
 function uniqueSorted(names: Iterable<string>): string[] {
   return [...new Set(names)].sort();

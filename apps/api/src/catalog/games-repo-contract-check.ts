@@ -458,7 +458,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       reason:
         `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs packages/contract + editor-contract.ts): ` +
         `${describeTextDrift(remoteEditorContract, localEditorContract)}\n` +
-        `  parse/generate/validate helpers and limits must match the games-repo copy. ` +
+        `  parse/generate/validate helpers, limits, and contract constants must match the games-repo copy. ` +
         `Update both sides in one paired change.`,
     };
   }
