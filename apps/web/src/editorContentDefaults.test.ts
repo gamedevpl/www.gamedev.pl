@@ -355,19 +355,19 @@ describe('a value the definition no longer accepts', () => {
     constraints: [],
   } as unknown as EditorDefinition['content'][string]['item']);
 
-  it('replaces a number outside the declared bounds with the default', () => {
+  it('keeps a number outside the declared bounds so the gate can name the field', () => {
     const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 1, kind: 'red', title: 'ab' } }] });
-    expect(boards(filled)[0].properties.speed).toBe(5);
+    expect(boards(filled)[0].properties.speed).toBe(1);
   });
 
-  it('replaces an enum value the definition dropped', () => {
+  it('keeps an enum value the definition dropped', () => {
     const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 6, kind: 'gone', title: 'ab' } }] });
-    expect(boards(filled)[0].properties.kind).toBe('red');
+    expect(boards(filled)[0].properties.kind).toBe('gone');
   });
 
-  it('replaces a value of the wrong type outright', () => {
+  it('keeps a value of the wrong type so the creator can see what was saved', () => {
     const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 'six', kind: 'red', title: 7 } }] });
-    expect(boards(filled)[0].properties).toEqual({ speed: 5, kind: 'red', title: '' });
+    expect(boards(filled)[0].properties).toEqual({ speed: 'six', kind: 'red', title: 7 });
   });
 
   it('keeps a value that still fits', () => {
@@ -375,13 +375,13 @@ describe('a value the definition no longer accepts', () => {
     expect(boards(filled)[0].properties).toEqual({ speed: 7, kind: 'blue', title: 'ab' });
   });
 
-  it('replaces a param the definition retyped', () => {
+  it('keeps a param the definition retyped, rather than silently replacing it', () => {
     const definition: EditorDefinition = {
       version: 1,
       content: {},
       params: { mode: { type: 'enum', values: ['calm', 'wild'], label, default: 'calm' } },
     };
-    expect(fillDeclaredValues(definition, { params: { mode: 3 } }).params).toEqual({ mode: 'calm' });
+    expect(fillDeclaredValues(definition, { params: { mode: 3 } }).params).toEqual({ mode: 3 });
   });
 });
 

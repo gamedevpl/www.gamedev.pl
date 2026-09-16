@@ -9,12 +9,15 @@ import {
   defaultCollectionKey,
   defaultLayerKey,
   defaultLayerTileKey,
+  documentProblems,
   isPathItem,
   isTilemapItem,
   itemProblems,
   layerProblems,
   layeredProblems,
   setCell,
+  specFieldClass,
+  valueProblem,
 } from '../../editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from '../../LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
@@ -168,7 +171,6 @@ export function EditorPanel(props: {
   const spec = collectionKey ? editor!.definition.content[collectionKey] : null;
   const items = collectionKey ? ((content[collectionKey] ?? []) as EditorItemContent[]) : [];
   const item = items[itemIndex] ?? null;
-  const layerKeys = editor ? Object.keys(editor.definition.layers ?? {}) : [];
   const layerKey =
     editor && selectedLayerKey && editor.definition.layers?.[selectedLayerKey]
       ? selectedLayerKey
@@ -581,25 +583,7 @@ export function EditorPanel(props: {
     : [];
   const allProblems = editor
     ? [
-        ...collectionKeys.flatMap((key) => {
-          const collection = editor.definition.content[key];
-          const collectionItems = itemsOf(content, key);
-          const perItem = collectionItems.flatMap((entry, index) => {
-            const found = itemProblems(collection.item, entry, name, pathMessages);
-            return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
-          });
-          const collectionWide = collectionProblems(collection, collectionItems);
-          return collectionWide.length > 0 ? [...perItem, name(collection.itemLabel)] : perItem;
-        }),
-        ...layerKeys.flatMap((key) => {
-          const declaredLayer = editor.definition.layers?.[key];
-          if (!declaredLayer) return [];
-          return layerProblems(declaredLayer, layersContent[key], name, pathMessages).length > 0
-            ? [name(declaredLayer.label)]
-            : [];
-        }),
-        ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
-        // A live controller's checks gate Publish whichever surface is shown.
+        ...documentProblems(editor.definition, content),
         ...(checksBlock ? [t('studioPanel.editor.checksFromGame')] : []),
       ]
     : [];
@@ -665,47 +649,49 @@ export function EditorPanel(props: {
         </div>
       </div>
 
-      {saveState === 'conflict' ? (
-        <div className="editor-banner" role="alert">
-          {t('studioPanel.editor.conflict')}
-          <button type="button" onClick={() => void reloadNewest()}>
-            {t('studioPanel.editor.conflictReload')}
-          </button>
-          <button type="button" onClick={() => void saveNow(true)}>
-            {t('studioPanel.editor.conflictOverwrite')}
-          </button>
-        </div>
-      ) : null}
-      {saveState === 'error' && saveProblems.length > 0 ? (
-        <div className="editor-banner" role="alert">
-          {saveProblems.slice(0, 3).join(' · ')}
-        </div>
-      ) : null}
-      {publish.kind === 'published' ? (
-        <div className="editor-banner is-ok" role="status">
-          {t('studioPanel.editor.published')}
-        </div>
-      ) : null}
-      {publish.kind === 'cooldown' ? (
-        <div className="editor-banner" role="status">
-          {t('studioPanel.editor.cooldown')}
-        </div>
-      ) : null}
-      {publish.kind === 'waiting' ? (
-        <div className="editor-banner" role="status">
-          {t('studioPanel.editor.notSealed')}
-        </div>
-      ) : null}
-      {publish.kind === 'error' ? (
-        <div className="editor-banner" role="alert">
-          {publish.message}
-        </div>
-      ) : null}
-      {props.controller?.status === 'failed' || controllerDisabled ? (
-        <div className="editor-banner" role="alert">
-          {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
-        </div>
-      ) : null}
+      <div className="editor-banner-slot">
+        {saveState === 'conflict' ? (
+          <div className="editor-banner" role="alert">
+            {t('studioPanel.editor.conflict')}
+            <button type="button" onClick={() => void reloadNewest()}>
+              {t('studioPanel.editor.conflictReload')}
+            </button>
+            <button type="button" onClick={() => void saveNow(true)}>
+              {t('studioPanel.editor.conflictOverwrite')}
+            </button>
+          </div>
+        ) : null}
+        {saveState === 'error' && saveProblems.length > 0 ? (
+          <div className="editor-banner" role="alert">
+            {saveProblems.slice(0, 3).join(' · ')}
+          </div>
+        ) : null}
+        {publish.kind === 'published' ? (
+          <div className="editor-banner is-ok" role="status">
+            {t('studioPanel.editor.published')}
+          </div>
+        ) : null}
+        {publish.kind === 'cooldown' ? (
+          <div className="editor-banner" role="status">
+            {t('studioPanel.editor.cooldown')}
+          </div>
+        ) : null}
+        {publish.kind === 'waiting' ? (
+          <div className="editor-banner" role="status">
+            {t('studioPanel.editor.notSealed')}
+          </div>
+        ) : null}
+        {publish.kind === 'error' ? (
+          <div className="editor-banner" role="alert">
+            {publish.message}
+          </div>
+        ) : null}
+        {props.controller?.status === 'failed' || controllerDisabled ? (
+          <div className="editor-banner" role="alert">
+            {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
+          </div>
+        ) : null}
+      </div>
       {controllerLive ? <EditorSurfaceSwitch standard={standardPreferred} onChoose={chooseSurface} /> : null}
 
       <div className="editor-body">
@@ -800,7 +786,6 @@ export function EditorPanel(props: {
             )}
           </div>
         ) : null}
-
         <aside className="editor-side">
           {paramSpecs ? (
             <div className="editor-side-group">
@@ -849,12 +834,14 @@ export function EditorPanel(props: {
                 </p>
               ) : null}
               {Object.entries(paramSpecs).map(([paramName, paramSpec]) => {
-                const value = paramValues[paramName] ?? paramSpec.default;
+                const stored = paramValues[paramName];
+                const value = stored ?? paramSpec.default;
+                const problem = valueProblem(paramSpec, stored);
                 if (paramSpec.type === 'int' || paramSpec.type === 'number') {
                   const step = paramSpec.type === 'int' ? 1 : (paramSpec.max - paramSpec.min) / 100;
                   const shown = typeof value === 'number' ? value : paramSpec.min;
                   return (
-                    <label key={paramName} className="editor-prop editor-tuning-row">
+                    <label key={paramName} className={specFieldClass(problem, 'editor-tuning-row')}>
                       <span>
                         {name(paramSpec.label)} <em>{Math.round(shown * 100) / 100}</em>
                       </span>
@@ -875,12 +862,15 @@ export function EditorPanel(props: {
                 }
                 if (paramSpec.type === 'enum') {
                   return (
-                    <label key={paramName} className="editor-prop">
+                    <label key={paramName} className={specFieldClass(problem)}>
                       <span>{name(paramSpec.label)}</span>
                       <select
                         value={typeof value === 'string' ? value : paramSpec.values[0]}
                         onChange={(event) => updateParam(paramName, event.target.value)}
                       >
+                        {typeof value === 'string' && !paramSpec.values.includes(value) ? (
+                          <option value={value}>{value}</option>
+                        ) : null}
                         {paramSpec.values.map((option) => (
                           <option key={option} value={option}>
                             {option}
@@ -892,7 +882,7 @@ export function EditorPanel(props: {
                 }
                 if (paramSpec.type === 'text') {
                   return (
-                    <label key={paramName} className="editor-prop">
+                    <label key={paramName} className={specFieldClass(problem)}>
                       <span>{name(paramSpec.label)}</span>
                       <input
                         type="text"
@@ -904,7 +894,7 @@ export function EditorPanel(props: {
                   );
                 }
                 return (
-                  <label key={paramName} className="editor-prop">
+                  <label key={paramName} className={specFieldClass(problem)}>
                     <span>{name(paramSpec.label)}</span>
                     <input
                       type="checkbox"
@@ -1038,9 +1028,10 @@ export function EditorPanel(props: {
               <h4>{t('studioPanel.editor.properties')}</h4>
               {Object.entries(spec.item.properties ?? {}).map(([propertyName, propertySpec]) => {
                 const value = item.properties?.[propertyName];
+                const problem = valueProblem(propertySpec, value);
                 if (propertySpec.type === 'text') {
                   return (
-                    <label key={propertyName} className="editor-prop">
+                    <label key={propertyName} className={specFieldClass(problem)}>
                       <span>{propertyName}</span>
                       <input
                         type="text"
@@ -1058,7 +1049,7 @@ export function EditorPanel(props: {
                 }
                 if (propertySpec.type === 'int' || propertySpec.type === 'number') {
                   return (
-                    <label key={propertyName} className="editor-prop">
+                    <label key={propertyName} className={specFieldClass(problem)}>
                       <span>
                         {propertyName}{' '}
                         <em>
@@ -1082,7 +1073,7 @@ export function EditorPanel(props: {
                 }
                 if (propertySpec.type === 'enum') {
                   return (
-                    <label key={propertyName} className="editor-prop">
+                    <label key={propertyName} className={specFieldClass(problem)}>
                       <span>{propertyName}</span>
                       <select
                         value={typeof value === 'string' ? value : propertySpec.values[0]}
@@ -1093,6 +1084,9 @@ export function EditorPanel(props: {
                           })
                         }
                       >
+                        {typeof value === 'string' && !propertySpec.values.includes(value) ? (
+                          <option value={value}>{value}</option>
+                        ) : null}
                         {propertySpec.values.map((option) => (
                           <option key={option} value={option}>
                             {option}
@@ -1103,7 +1097,7 @@ export function EditorPanel(props: {
                   );
                 }
                 return (
-                  <label key={propertyName} className="editor-prop">
+                  <label key={propertyName} className={specFieldClass(problem)}>
                     <span>{propertyName}</span>
                     <input
                       type="checkbox"

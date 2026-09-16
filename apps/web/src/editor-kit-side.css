@@ -195,6 +195,11 @@
   color: var(--text);
 }
 
+.editor-prop.is-invalid input,
+.editor-prop.is-invalid select {
+  border-color: var(--error);
+}
+
 .editor-check {
   margin: 0 0 6px;
   font-size: 0.78rem;

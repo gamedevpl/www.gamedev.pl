@@ -76,27 +76,39 @@ export type EditorControllerInbound =
   | (GdpEnvelope<'editor:select'> & { selection: EditorControllerSelection | null })
   | (GdpEnvelope<'editor:canvas'> & { box: EditorCanvasBox })
   | (GdpEnvelope<'editor:ui-request'> & EditorUiRequest)
-  | (GdpEnvelope<'editor:check'> & { ok: boolean; problems: string[] })
+  | (GdpEnvelope<'editor:check'> & { ok: boolean; problems: string[]; revision?: number })
   | (GdpEnvelope<'editor:ack'> & { ok: boolean; error?: string })
   | (GdpEnvelope<'editor:controller-error'> & { error?: string });
 
 export type EditorControllerOutbound =
-  | (GdpEnvelope<'editor:content'> & { content: EditorContentDoc; selection?: EditorSelection })
+  | (GdpEnvelope<'editor:content'> & { content: EditorContentDoc; selection?: EditorSelection; revision?: number })
   | (GdpEnvelope<'editor:event'> & { event: Record<string, unknown> })
   | (GdpEnvelope<'editor:select'> & { selection: EditorControllerSelection | null })
   | (GdpEnvelope<'editor:ui-result'> & { id: string; value: unknown; cancelled: boolean })
   | (GdpEnvelope<'editor:change:ack'> & { id: string; ok: boolean; error?: string })
   | (GdpEnvelope<'editor:mode'> & { mode: 'fallback' });
 
+export function editorContentMessage(
+  content: EditorContentDoc,
+  selection?: EditorSelection | null,
+  revision?: number,
+): Extract<EditorControllerOutbound, { t: 'editor:content' }> {
+  return {
+    ns: BRIDGE_NAMESPACE,
+    v: PROTOCOL_VERSION,
+    t: 'editor:content' as const,
+    content,
+    ...(selection ? { selection } : {}),
+    ...(revision !== undefined ? { revision } : {}),
+  };
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isLabel(value: unknown): value is EditorUiLabel {
-  return (
-    typeof value === 'string' ||
-    (isObject(value) && typeof value.en === 'string' && typeof value.pl === 'string')
-  );
+  return typeof value === 'string' || (isObject(value) && typeof value.en === 'string' && typeof value.pl === 'string');
 }
 
 function parseUiField(value: unknown): EditorUiField | null {
@@ -145,7 +157,8 @@ function parsePaletteTile(value: unknown) {
 }
 
 function parseBoardTile(value: unknown) {
-  if (!isObject(value) || typeof value.char !== 'string' || value.char.length === 0 || value.char.length > 4) return null;
+  if (!isObject(value) || typeof value.char !== 'string' || value.char.length === 0 || value.char.length > 4)
+    return null;
   if (value.color !== undefined && typeof value.color !== 'string') return null;
   return { char: value.char, ...(typeof value.color === 'string' ? { color: value.color } : {}) };
 }
@@ -177,7 +190,11 @@ function parseUiNode(value: unknown, depth: number, budget: UiBudget): EditorUiN
     };
   }
   if (type === 'board') {
-    if (!Array.isArray(value.layers) || value.layers.length > 32 || !value.layers.every((layer) => typeof layer === 'string'))
+    if (
+      !Array.isArray(value.layers) ||
+      value.layers.length > 32 ||
+      !value.layers.every((layer) => typeof layer === 'string')
+    )
       return null;
     if (value.active !== undefined && typeof value.active !== 'string') return null;
     if (value.rows !== undefined) {
@@ -197,7 +214,9 @@ function parseUiNode(value: unknown, depth: number, budget: UiBudget): EditorUiN
   }
   if (type === 'toolbar') {
     if (value.active !== undefined && typeof value.active !== 'string') return null;
-    return Array.isArray(value.tools) && value.tools.length <= 32 && value.tools.every((tool) => typeof tool === 'string')
+    return Array.isArray(value.tools) &&
+      value.tools.length <= 32 &&
+      value.tools.every((tool) => typeof tool === 'string')
       ? { type, tools: value.tools as string[], ...(typeof value.active === 'string' ? { active: value.active } : {}) }
       : null;
   }
@@ -209,7 +228,9 @@ function parseUiNode(value: unknown, depth: number, budget: UiBudget): EditorUiN
     return {
       type,
       ...(typeof value.layer === 'string' ? { layer: value.layer } : {}),
-      ...(tiles === undefined ? {} : { tiles: tiles as NonNullable<Extract<EditorUiNode, { type: 'palette' }>['tiles']> }),
+      ...(tiles === undefined
+        ? {}
+        : { tiles: tiles as NonNullable<Extract<EditorUiNode, { type: 'palette' }>['tiles']> }),
     };
   }
   if (type === 'propertySheet') {
@@ -240,7 +261,8 @@ function parseUiNode(value: unknown, depth: number, budget: UiBudget): EditorUiN
     };
   }
   if (type === 'note') return isLabel(value.text) ? { type, text: value.text } : null;
-  if (type === 'check') return typeof value.ok === 'boolean' && isLabel(value.text) ? { type, ok: value.ok, text: value.text } : null;
+  if (type === 'check')
+    return typeof value.ok === 'boolean' && isLabel(value.text) ? { type, ok: value.ok, text: value.text } : null;
   return null;
 }
 
@@ -335,15 +357,34 @@ export function parseEditorControllerEnvelope(raw: unknown): EditorControllerInb
       !raw.problems.every((entry) => typeof entry === 'string')
     )
       return null;
-    return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: raw.t, ok: raw.ok, problems: raw.problems };
+    if (raw.revision !== undefined && (!Number.isInteger(raw.revision) || (raw.revision as number) < 0)) return null;
+    return {
+      ns: BRIDGE_NAMESPACE,
+      v: PROTOCOL_VERSION,
+      t: raw.t,
+      ok: raw.ok,
+      problems: raw.problems,
+      ...(typeof raw.revision === 'number' ? { revision: raw.revision } : {}),
+    };
   }
   if (raw.t === 'editor:ack') {
     if (typeof raw.ok !== 'boolean' || (raw.error !== undefined && typeof raw.error !== 'string')) return null;
-    return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: raw.t, ok: raw.ok, ...(raw.error === undefined ? {} : { error: raw.error }) };
+    return {
+      ns: BRIDGE_NAMESPACE,
+      v: PROTOCOL_VERSION,
+      t: raw.t,
+      ok: raw.ok,
+      ...(raw.error === undefined ? {} : { error: raw.error }),
+    };
   }
   if (raw.t === 'editor:controller-error') {
     if (raw.error !== undefined && typeof raw.error !== 'string') return null;
-    return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: raw.t, ...(raw.error === undefined ? {} : { error: raw.error }) };
+    return {
+      ns: BRIDGE_NAMESPACE,
+      v: PROTOCOL_VERSION,
+      t: raw.t,
+      ...(raw.error === undefined ? {} : { error: raw.error }),
+    };
   }
   return null;
 }

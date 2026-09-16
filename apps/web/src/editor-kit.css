@@ -26,6 +26,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
 .editor-panel-note {
@@ -60,6 +61,17 @@
   gap: 8px;
 }
 
+.editor-banner-slot {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
 .editor-banner {
   display: flex;
   align-items: center;
@@ -72,6 +84,7 @@
   padding: 8px 12px;
   font-size: 0.85rem;
   color: var(--text);
+  pointer-events: auto;
 }
 
 .editor-banner.is-ok {

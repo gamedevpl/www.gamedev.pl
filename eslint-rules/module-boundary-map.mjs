@@ -471,6 +471,7 @@ const FILE_BUCKET = {
   'game-health': 'catalog',
   'games-repo-client': 'catalog',
   'games-repo-contract-check': 'catalog',
+  'editor-contract-lockstep': 'catalog',
   'local-games-repo': 'catalog',
   'index-html-generator': 'catalog',
   'slug-backfill': 'catalog',

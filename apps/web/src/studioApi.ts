@@ -2,137 +2,76 @@ import type {
   AssistLane,
   AutonomyMode,
   BuilderKind,
+  CollectionItemSpec as EditorCollectionItemSpec,
+  CollectionSpec as EditorCollectionSpec,
+  EditorConstraint,
+  EditorDefinition,
+  EditorLabel,
+  EditorLayerConstraint,
+  EditorLayerContent,
+  EditorLayerSpec,
+  EditorLayersContent as EditorLayersDoc,
+  EntitiesItemSpec as EditorEntitiesSpec,
+  EntitiesLayerSpec as EditorEntitiesLayerSpec,
+  EntityItemContent as EditorEntityItemContent,
+  LayeredItemContent as EditorLayeredItemContent,
+  LayeredItemSpec as EditorLayeredSpec,
+  ParamSpec as EditorParamSpec,
+  ParamValue as EditorParamValue,
+  PathItemContent as EditorPathItemContent,
+  PathItemSpec as EditorPathSpec,
+  PathPoint as EditorPathPoint,
+  PropertySpec as EditorPropertySpec,
   StudioBuildsResponse,
   StudioGame,
   StudioGamesResponse,
   StudioHealthResponse,
   StudioScorecard,
+  TileSpec as EditorTileSpec,
+  TilemapItemContent as EditorTilemapItemContent,
+  TilemapItemSpec as EditorTilemapSpec,
+  TilemapLayerSpec as EditorTilemapLayerSpec,
 } from '@gamedevpl/contract';
-
-export type { StudioBuildsResponse, StudioGame, StudioGamesResponse, StudioHealthResponse, StudioScorecard };
 import type { FeedbackContext } from './submissionApi.js';
 
+export type {
+  EditorCollectionItemSpec,
+  EditorCollectionSpec,
+  EditorConstraint,
+  EditorDefinition,
+  EditorEntitiesLayerSpec,
+  EditorEntitiesSpec,
+  EditorEntityItemContent,
+  EditorLabel,
+  EditorLayerConstraint,
+  EditorLayerContent,
+  EditorLayeredItemContent,
+  EditorLayeredSpec,
+  EditorLayerSpec,
+  EditorLayersDoc,
+  EditorParamSpec,
+  EditorParamValue,
+  EditorPathItemContent,
+  EditorPathPoint,
+  EditorPathSpec,
+  EditorPropertySpec,
+  EditorTilemapItemContent,
+  EditorTilemapLayerSpec,
+  EditorTilemapSpec,
+  EditorTileSpec,
+  StudioBuildsResponse,
+  StudioGame,
+  StudioGamesResponse,
+  StudioHealthResponse,
+  StudioScorecard,
+};
 export type { AssistLane };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-/* ---------------------------------------------------------------------------
- * Content editor (EditorKit) — the studio's Edit surface.
- * The definition is the game's own EDITOR.json (agent-authored, gate-validated);
- * the studio renders it with the fixed widget vocabulary and never invents
- * structure the definition does not declare.
- * ------------------------------------------------------------------------- */
-
-export type EditorLabel = { en: string; pl: string };
-
-export type EditorPropertySpec =
-  | { type: 'text'; max: number }
-  | { type: 'int'; min: number; max: number }
-  | { type: 'number'; min: number; max: number }
-  | { type: 'enum'; values: string[] }
-  | { type: 'bool' };
-
-export type EditorConstraint =
-  | { tile: string; min?: number; max?: number; exactly?: number }
-  | { equalCounts: [string, string] }
-  /** Every `require` tile must be reachable from `from` without crossing `blockedBy`. */
-  | { reachable: { from: string; blockedBy: string[]; require: string[] } }
-  /** No two items in the collection may share this property's value. */
-  | { uniqueBy: string };
-
-export type EditorTileSpec = {
-  key: string;
-  char: string;
-  label: EditorLabel;
-  /** `#rrggbb` the game declared for this tile, so the painter matches the played game. */
-  color?: string;
-};
-
-export type EditorTilemapSpec = {
-  widget: 'tilemap';
-  grid: { minCols: number; maxCols: number; minRows: number; maxRows: number };
-  tiles: EditorTileSpec[];
-  properties: Record<string, EditorPropertySpec>;
-  constraints: EditorConstraint[];
-};
-
-/** A property-sheet-only item — no grid, no tiles. */
-export type EditorEntitiesSpec = {
-  widget: 'entities';
-  properties: Record<string, EditorPropertySpec>;
-  constraints: EditorConstraint[];
-};
-
-export type EditorPathSpec = {
-  widget: 'path';
-  gridCols: number;
-  gridRows: number;
-  minPoints: number;
-  maxPoints: number;
-  closed: boolean;
-  properties: Record<string, EditorPropertySpec>;
-};
-
-// A per-level stack: each item owns its own layers.
-export type EditorLayeredSpec = {
-  widget: 'layered';
-  layers: Record<string, EditorLayerSpec>;
-  constraints: EditorLayerConstraint[];
-  properties: Record<string, EditorPropertySpec>;
-};
-
-export type EditorCollectionItemSpec = EditorTilemapSpec | EditorEntitiesSpec | EditorPathSpec | EditorLayeredSpec;
-
-export type EditorCollectionSpec = {
-  widget: 'collection';
-  label: EditorLabel;
-  itemLabel: EditorLabel;
-  min: number;
-  max: number;
-  item: EditorCollectionItemSpec;
-  defaults: EditorItemContent[];
-};
-
-export type EditorTilemapLayerSpec = EditorTilemapSpec & { label: EditorLabel };
-export type EditorEntitiesLayerSpec = EditorEntitiesSpec & { label: EditorLabel; min: number; max: number };
-export type EditorLayerSpec = EditorTilemapLayerSpec | EditorEntitiesLayerSpec;
-export type EditorLayerContent = EditorTilemapItemContent | EditorEntityItemContent[];
-export type EditorLayersDoc = Record<string, EditorLayerContent>;
-export type EditorLayerConstraint = {
-  reachable: {
-    from: { layer: string; tile: string };
-    blockedBy: Array<{ layer: string; tile: string }>;
-    require: Array<{ layer: string; tile: string }>;
-  };
-};
-
-export type EditorTilemapItemContent = { properties: Record<string, unknown>; rows: string[] };
-export type EditorEntityItemContent = { properties: Record<string, unknown> };
-export type EditorPathPoint = { x: number; y: number };
-export type EditorPathItemContent = { properties: Record<string, unknown>; points: EditorPathPoint[] };
-export type EditorLayeredItemContent = { properties: Record<string, unknown>; layers: EditorLayersDoc };
 export type EditorItemContent =
   EditorTilemapItemContent | EditorEntityItemContent | EditorPathItemContent | EditorLayeredItemContent;
 
-export type EditorParamValue = string | number | boolean;
-
-/** A game-wide scalar tunable; the label names the Tuning slider. */
-export type EditorParamSpec = EditorPropertySpec & { label: EditorLabel; default: EditorParamValue };
-
-export type EditorDefinition = {
-  version: 1 | 2;
-  params?: Record<string, EditorParamSpec>;
-  content: Record<string, EditorCollectionSpec>;
-  layers?: Record<string, EditorLayerSpec>;
-  constraints?: EditorLayerConstraint[];
-  controller?: true;
-  validate?: true;
-};
-
-/**
- * A whole content document: collections keyed by name, plus param values under
- * the reserved `params` key when the game declares tunables.
- */
 export type EditorContentDoc = Record<
   string,
   EditorItemContent[] | Record<string, EditorParamValue> | EditorLayersDoc | undefined

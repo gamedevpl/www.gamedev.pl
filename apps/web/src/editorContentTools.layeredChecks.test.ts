@@ -37,12 +37,12 @@ const layered = {
 describe('a layered item reports the checks its layers fail', () => {
   it('reports a layer that is not a tilemap at all', () => {
     const problems = itemProblems(layered, { properties: {}, layers: {} } as never, name);
-    expect(problems.join()).toContain('Layer needs a tilemap document');
+    expect(problems.join()).toContain('missing layer "terrain"');
   });
 
   it('reports a tile count its layer breaks, named by the layer', () => {
     const item = { properties: {}, layers: { terrain: { properties: {}, rows: ['S.G', '...', '..G'] } } };
-    expect(itemProblems(layered, item as never, name).join()).toContain('Terrain');
+    expect(itemProblems(layered, item as never, name).join()).toContain('needs exactly 1 "goal"');
   });
 
   it('reports a goal the creator has walled off', () => {

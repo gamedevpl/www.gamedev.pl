@@ -160,3 +160,6 @@ export { ZONE_PROTOCOL_VERSION } from './zone-protocol.js';
 export { isCliAction, type CliAction, type CliSessionContext } from './cli-assistant.js';
 
 export type { LocalActivity } from './local-activity.js';
+export * from './editor-kit.js';
+export * from './editor-validate.js';
+export { validateLayerReachable } from './editor-validate-reach.js';
