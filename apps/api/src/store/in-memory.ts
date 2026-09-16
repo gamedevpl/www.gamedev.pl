@@ -110,6 +110,7 @@ import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
 import { InMemorySubmissionStore } from './slices/submission.js';
 import { InMemoryTelemetryStore } from './slices/telemetry.js';
+import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
@@ -801,6 +802,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
     return this.telemetryStore.appendTelemetryEvents(dateStr, events);
+  }
+
+  async getTelemetryDaily(dateStr: string): Promise<DailyTelemetryAggregate | undefined> {
+    return this.telemetryStore.getTelemetryDaily(dateStr);
+  }
+
+  async putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void> {
+    return this.telemetryStore.putTelemetryDaily(dateStr, aggregate);
   }
 
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {

@@ -32,6 +32,7 @@ Two corollaries, both of which have been got wrong here:
 | `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
 | `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
 | Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
+| Studio health scan          | mount | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)   |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -508,3 +509,85 @@ is megabytes, so `7d` exited with `Argument list too long` before node started �
 hid it. Pages now go through a temp file. The lesson generalises: a tool whose only real use is
 one large window should be exercised at that window, because the small one is not a smaller
 version of the same code path.
+
+## The nightly sweep read the same days twenty-eight times
+
+The scorecard sweep is not a poll, so none of the windows above touch it, and it was the
+single largest read on the project outside the status poll: **24,186 document reads in the
+03:20 minute**, measured 2026-09-15. That is 40.3 reads/s over A30's 600-second bucket,
+which is exactly the 40.63 maximum the alert had been calibrated against — the "spike" the
+threshold was sized for was this job.
+
+The cause is not traffic. `SCORECARD_WINDOW_DAYS` is 28, and the sweep scanned all 28 raw
+`telemetry/{date}/playEvents` partitions every night under a 50,000-document budget. A day's
+partition was therefore read about 28 times over its life, and 27 of those reads returned
+data that could no longer change.
+
+The fix is a rollup, not a cache: `telemetryDaily/{date}` holds one document per day with
+every game played that day, written the first time the sweep sees the day. A day older than
+`SEAL_LAG_DAYS` is **sealed** and read back as one document forever after; today and
+yesterday stay open and are rescanned, so telemetry that flushed late is still picked up. In
+the steady state the 28-day window costs 26 document reads and two partition scans.
+
+Two properties make that safe to do to a number an agent acts on:
+
+- **The counters are exact.** Sessions, bounces, ticks, outcomes and totals are sums, and
+  sums of per-day sums are the same number.
+- **The medians are exact until a day gets big.** Each day keeps up to
+  `MAX_SAMPLES_PER_METRIC` values per metric, evenly spaced through that day's sorted
+  values, plus the count they stand for. Merging takes the weighted median, which reduces to
+  the plain median when no day was downsampled. `telemetry-daily.test.ts` asserts the merged
+  rows equal a straight scan over the same events.
+- **The sample budget is spent on games, not on depth.** A day document has a fixed total
+  (`MAX_SAMPLE_VALUES_PER_DAY`) shared across every game that played, so a catalog-wide day
+  shortens each game's sample set instead of dropping the quiet games off the end. Past the
+  hard `MAX_GAMES_PER_DAY` ceiling the day sets `gamesTruncated`, which the sweep folds into
+  `window.truncated` — a dropped game is never reported as a complete window.
+- **The top lists are reranked, not inherited.** The rollup stores `MAX_TALLY_ROWS` errors
+  and labels per day, well past the five and eight a scorecard reports, so an error that
+  ranks sixth every single day still wins the 28-day window. Merging the reported top-N of
+  each day would have lost it.
+
+The midnight seam needs care, and the naive version of this is worse than it looks. Events
+are bucketed by event time on the write path, so a session running across UTC midnight
+leaves a tail in the next partition: no `game_opened`, and whatever it did after 00:00.
+Summed as if it were its own session, that tail is a fresh visit that played for nothing
+and bounced. A player who finished a game at 00:00:10 would turn one completed session
+into two, one of them a bounce — halving the finish rate and the median play time on a
+number an agent acts on.
+
+So the rollup joins it rather than tolerating it. A session with no open whose first
+event lands within `CONTINUATION_GRACE_MS` of the partition start is a **continuation**:
+it is dropped from its own day entirely, and absorbed whole by the day that opened it.
+That costs nothing extra to read, because the walk runs newest first and the sweep is
+already scanning the next partition when it builds the previous one — a day is only
+sealed on a run where its successor was scanned, which is what makes the join always
+available.
+
+The result is that a session is summarized in exactly one place, with all its play time,
+its score, its labels, its zone rungs and its ending, so every session-derived number
+matches a whole-window scan rather than approximating it. Tests assert `toEqual` against
+that scan for the seam cases, not a tolerance.
+
+The grace window is what keeps it honest in the other direction: wide enough for a late
+flush, narrow enough that a session whose open was simply dropped at two in the afternoon
+is still counted as the session it is.
+
+One consequence is deliberate and worth stating. A session is counted on the day it
+opened, so the tail at the very start of the **oldest** day in a window belongs to the day
+before it — which is outside the window. A straight scan of the same partitions would have
+counted that fragment as a session of its own; the rollup does not. That is the same
+distortion the seam fix exists to remove, and fixing it only at the window edge would mean
+storing boundary session state in every day's document to serve one partial session out of
+twenty-eight days. The rule "a session belongs to the day it opened" is worth more than
+parity with a scan that was itself approximating.
+
+The failure path is not deliberate and is handled. If a day's rollup write fails while its
+successor's succeeded, the next sweep would rebuild that day with no tail in hand and seal
+a finished session as a bounce — permanently, since sealing is once. So when a day needs
+rebuilding and its successor came from a rollup rather than a scan, the successor is read
+back for the tail. One extra scan beats a wrong number that never expires.
+
+Same day, same logs: `/api/me/studio/health` was running 1,500–2,000 reads a minute for the
+same structural reason, one telemetry query per (day, slug) with no window at all. It is in
+the table above now.

@@ -120,6 +120,9 @@ const FILE_BUCKET = {
   'moderation-metrics': 'platform',
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',
+  'telemetry-daily': 'platform',
+  'telemetry-daily.test': 'platform',
+  'telemetry-daily-window.test': 'platform',
   'delivery-metrics': 'platform',
   // Pure vocabulary and formatting for a creator's public identity -- read by every
   // surface that renders a byline, not creation-domain business logic.
@@ -316,6 +319,8 @@ const FILE_BUCKET = {
   'transfer-inbox-cache': 'creation',
   'game-editor-invite-routes': 'creation',
   'editor-invite-inbox-cache': 'creation',
+  'studio-health-cache': 'creation',
+  'studio-health-cache.test': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
