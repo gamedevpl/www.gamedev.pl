@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { editorContractFingerprint, extractNamedFunction } from './editor-contract-lockstep.js';
+import {
+  editorContractFingerprint,
+  extractNamedFunction,
+  defaultReadLocalFile,
+  readLocalEditorContract,
+} from './editor-contract-lockstep.js';
 
 describe('editor-contract lockstep fingerprint', () => {
   it('extracts a named function body even when the file is split', () => {
@@ -17,5 +22,12 @@ describe('editor-contract lockstep fingerprint', () => {
     const combined = `${parse}\n${validate}\n${generate}`;
     expect(editorContractFingerprint(split)).toBe(editorContractFingerprint(combined));
     expect(editorContractFingerprint(split)).toContain('return "v"');
+  });
+
+  it('reads the split local sources from disk', () => {
+    const source = readLocalEditorContract(defaultReadLocalFile);
+    expect(extractNamedFunction(source, 'parseEditorDefinition')).toBeTruthy();
+    expect(extractNamedFunction(source, 'generateEditorContentModule')).toBeTruthy();
+    expect(extractNamedFunction(source, 'validateEditorContent')).toContain('content must be an object');
   });
 });
