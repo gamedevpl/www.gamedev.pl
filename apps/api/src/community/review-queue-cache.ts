@@ -66,6 +66,9 @@ export interface ReviewQueueCache {
   ): Promise<{ items: ReviewQueueItem[] }>;
   invalidateOpenSweep(): void;
   invalidateReviewer(reviewerUid: string): void;
+
+  // A handover changes who owns a slug.
+  invalidateGameOwner(slug: string): void;
 }
 
 export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueCache {
@@ -304,5 +307,8 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     targetedQueueItems,
     invalidateOpenSweep,
     invalidateReviewer,
+    invalidateGameOwner: (slug: string) => {
+      ownerCache.delete(slug);
+    },
   };
 }

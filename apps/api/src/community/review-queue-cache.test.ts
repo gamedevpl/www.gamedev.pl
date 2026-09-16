@@ -334,4 +334,36 @@ describe('review queue attribution after a transfer', () => {
 
     expect(item?.creatorHandle).toBe('grace');
   });
+
+  it('drops the cached owner when the game changes hands', async () => {
+    // The handle is persisted, so a stale window sticks.
+    const store = new InMemoryStore();
+    const at = '2026-01-01T00:00:00.000Z';
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.claimHandle('g:ada', 'ada', at);
+    await store.claimHandle('g:grace', 'grace', at);
+
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:ada', 'Sky Dodge');
+    await store.setSubmissionSlug(jobId, 'sky-dodge');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+    await store.setDraftShared(jobId, at);
+    await store.ensureGameAccess('sky-dodge', 'g:ada', at, at);
+
+    const cache = createReviewQueueCache({ store, listCatalog: async () => [], now: () => Date.now() });
+    // Warm the window while ada still owns it.
+    expect((await cache.findQueueItem('sky-dodge', await cache.loadReviewPools()))?.creatorHandle).toBe('ada');
+
+    const later = new Date(Date.now() + 1000).toISOString();
+    const code = (await store.ensureRecipientCode('g:grace', later))!;
+    const revision = (await store.getGameAccess('sky-dodge'))!.accessRevision;
+    await store.createGameTransferInvitation('sky-dodge', 'g:ada', 'g:grace', revision, later, code);
+    const invite = (await store.getActiveGameTransfer('sky-dodge', later))!;
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:grace', later, invite.invitationId);
+    cache.invalidateGameOwner('sky-dodge');
+
+    const after = await cache.findQueueItem('sky-dodge', await cache.loadReviewPools());
+    expect(after?.creatorHandle).toBe('grace');
+  });
 });

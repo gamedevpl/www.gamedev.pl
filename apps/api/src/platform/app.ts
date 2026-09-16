@@ -689,7 +689,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
   // The agent executor, withheld from every non-reviewer session.
   await registerAgentPlayRoutes(app, { reviewerUids, adminUids });
-  await registerReviewRoutes(app, {
+  const reviewRoutes = await registerReviewRoutes(app, {
     store,
     reviewerUids,
     adminUids,
@@ -1026,6 +1026,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     invalidatePublishedGameCaches: (slug) => {
       submissionSeams.invalidatePublishedGameCaches(slug);
       gamePageRoute.invalidateGameCache(slug);
+      // The review queue caches who owns a slug; a handover retires that.
+      reviewRoutes.invalidateGameOwner(slug);
     },
     ...options.gameTransferRoutes,
   });
