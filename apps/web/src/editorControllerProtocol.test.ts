@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEditorControllerEnvelope } from './editorControllerProtocol.js';
+import { editorContentMessage, parseEditorControllerEnvelope } from './editorControllerProtocol.js';
 
 const envelope = (body: Record<string, unknown>) => ({ ns: 'gdp', v: 1, ...body });
 
@@ -162,5 +162,13 @@ describe('EditorKit controller protocol', () => {
     expect(
       parseEditorControllerEnvelope(envelope({ t: 'editor:check', ok: true, problems: [], revision: -1 })),
     ).toBeNull();
+  });
+
+  it('omits revision on editor:content until the shell assigns one', () => {
+    expect(editorContentMessage({ maps: [] })).not.toHaveProperty('revision');
+  });
+
+  it('includes a non-negative integer revision on editor:content', () => {
+    expect(editorContentMessage({ maps: [] }, null, 7)).toMatchObject({ t: 'editor:content', revision: 7 });
   });
 });
