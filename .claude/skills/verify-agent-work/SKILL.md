@@ -42,6 +42,16 @@ Clean up when done (`git worktree remove --force`, delete the temp branch/clone)
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
+## Keep flow tests independent of live conversation routing
+
+A transfer test calling `/improve` must inject a `chatAgent` whose `decide` returns
+`kind: 'build'`, plus a deterministic `contentChecker`. Otherwise the default conversation
+router can answer with chat instead of opening the round. A sandboxed run may fall back
+to building while a network-enabled run takes the chat branch, so the same ownership
+assertions pass alone and fail in the full gate. Check the response shape and keep the
+real authorization, store and admission path; stub only the unrelated model decisions.
+Derive handover times from the created record instead of dating them before its creation.
+
 ## Run the project's real gate
 
 Whatever the project's definition of green is — run all of it, in the isolated checkout:
