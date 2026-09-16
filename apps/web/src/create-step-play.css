@@ -1,0 +1,126 @@
+/* Poke-the-pipeline: spark pass, combo win. */
+
+button.create-step-scene {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.create-step-scene:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+button.create-step-scene:hover .mascot {
+  filter: brightness(1.1);
+}
+
+button.create-step-scene:active .mascot {
+  transform: scale(0.94, 0.9);
+}
+
+.create-step-spark {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  z-index: 2;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--turquoise);
+  box-shadow: 0 0 8px var(--turquoise-glow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.create-step-scene.is-throwing .create-step-spark {
+  animation: create-spark-throw 0.28s ease-in;
+}
+
+.create-step-scene.is-catching .create-step-spark {
+  animation: create-spark-catch 0.28s ease-out;
+}
+
+.create-step-scene.is-catching .mascot {
+  animation: create-mascot-catch 0.4s ease;
+}
+
+.create-step-scene.is-miss .mascot {
+  animation: create-mascot-miss 0.45s ease;
+}
+
+.create-steps-list.is-won .create-step-scene {
+  box-shadow: 0 0 14px var(--turquoise-glow);
+}
+
+.create-step-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes create-spark-throw {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 18px);
+  }
+}
+
+@keyframes create-spark-catch {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -14px);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes create-mascot-catch {
+  0% {
+    transform: translateY(-5px) scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes create-mascot-miss {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-step-spark,
+  .create-step-scene.is-catching .mascot,
+  .create-step-scene.is-miss .mascot,
+  button.create-step-scene:active .mascot {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

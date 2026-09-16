@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { CatalogRail } from './surfaces/catalog/CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
-import { Mascot, type MascotEmotion, type MascotLook } from './Mascot.js';
+import { CreateStepsList } from './CreateStepsList.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PlatformBuilderAvailability } from './submissionApi.js';
 import type { PlayVia } from './visitTelemetry.js';
@@ -18,15 +18,6 @@ type CreatePageProps = {
   submissionError: string | null;
   onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
   onPlatformBuilderAvailability: (availability: PlatformBuilderAvailability | undefined) => void;
-};
-
-const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'] as const;
-const STEP_SCENES = ['qa', 'code', 'play', 'live'] as const;
-const STEP_MASCOT: Record<(typeof STEP_SCENES)[number], { emotion: MascotEmotion; look?: MascotLook }> = {
-  qa: { emotion: 'thinking', look: { x: 0.2, y: -0.8 } },
-  code: { emotion: 'busy' },
-  play: { emotion: 'excited' },
-  live: { emotion: 'proud' },
 };
 
 // Real catalog cards for the showcase, no new data — just a slice.
@@ -70,28 +61,7 @@ export function CreatePage({
         <h2 id="create-steps-heading" className="create-section-heading">
           {t('create.stepsHeading')}
         </h2>
-        <ol className="create-steps-list">
-          {STEP_KEYS.map((key, index) => {
-            const scene = STEP_SCENES[index] ?? 'qa';
-            const pose = STEP_MASCOT[scene];
-            return (
-              <li key={key} className="create-step">
-                <span className="create-step-index" aria-hidden="true">
-                  <span className="create-step-n">{String(index + 1).padStart(2, '0')}</span>
-                </span>
-                <div className="create-step-card">
-                  <div className="create-step-body">
-                    <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
-                    <p className="create-step-detail">{t(`create.${key}Detail`)}</p>
-                  </div>
-                  <div className={`create-step-scene is-${scene}`} aria-hidden="true">
-                    <Mascot emotion={pose.emotion} look={pose.look} size={48} />
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+        <CreateStepsList />
         <p className="create-notify-note">
           <PixelIcon name="signal" size={13} /> {t('create.notifyNote')}
         </p>

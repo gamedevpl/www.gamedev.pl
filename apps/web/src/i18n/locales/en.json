@@ -1383,7 +1383,12 @@
     "selfPoint1": "One-click install, or paste the config",
     "selfPoint2": "Your agent, your tokens — no daily limit from us",
     "anyMcpClient": "any MCP client",
-    "showcaseHeading": "Live in the catalog"
+    "showcaseHeading": "Live in the catalog",
+    "pokeQa": "Poke the thinking mascot — pass the idea down",
+    "pokeCode": "Poke the BRRR mascot — pass the spark down",
+    "pokePlay": "Poke the play mascot — pass the spark down",
+    "pokeLive": "Poke the live mascot — finish the tiny build",
+    "comboBuilt": "The four mascots finished a tiny build."
   },
   "ai": {
     "generatedBadge": "AI-generated game",

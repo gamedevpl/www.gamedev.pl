@@ -88,6 +88,7 @@ describe('CreatePage', () => {
     expect(container.querySelector('.create-step-scene.is-code .mascot--busy')).not.toBeNull();
     expect(container.querySelector('.create-step-scene.is-play .mascot--excited')).not.toBeNull();
     expect(container.querySelector('.create-step-scene.is-live .mascot--proud')).not.toBeNull();
+    expect(container.querySelector('button.create-step-scene.is-qa')).not.toBeNull();
     expect(container.querySelector('.create-steps-mascot')).toBeNull();
     expect(container.querySelectorAll('.create-builder-mark')).toHaveLength(2);
     expect(container.querySelector('.create-builder-progress')).not.toBeNull();
