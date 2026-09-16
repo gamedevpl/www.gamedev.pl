@@ -68,6 +68,57 @@ describe('loadShelfRecords', () => {
 });
 
 // Shared by the health, scorecards, and /api/submissions/mine routes too.
+describe('loadShelfRecords after a transfer', () => {
+  const AT = '2026-01-01T00:00:00.000Z';
+
+  async function handedOver() {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.createSubmission(20, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(20, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', AT, AT);
+    const code = await store.ensureRecipientCode('g:recipient', AT);
+    const rev = (await store.getGameAccess('sky-dodge'))!.accessRevision;
+    await store.createGameTransferInvitation('sky-dodge', 'g:sender', 'g:recipient', rev, AT, code);
+    await store.acceptGameTransferInvitation(
+      'sky-dodge',
+      'g:recipient',
+      AT,
+      (await store.getActiveGameTransfer('sky-dodge', AT))!.invitationId,
+    );
+    return store;
+  }
+
+  it('does not let a deep link put a given-away game back on the sender shelf', async () => {
+    // The row's ownerUid is its historical author, which a transfer never rewrites.
+    const store = await handedOver();
+
+    const plain = await loadShelfRecords(store, 'g:sender', undefined, (id) => mintToken(id, 'secret'));
+    const deepLinked = await loadShelfRecords(store, 'g:sender', 'sky-dodge', (id) => mintToken(id, 'secret'));
+
+    expect(plain.map((record) => record.slug)).not.toContain('sky-dodge');
+    expect(deepLinked.map((record) => record.slug)).not.toContain('sky-dodge');
+  });
+
+  it('refuses the sender a status token for the round as well as the slug', async () => {
+    const store = await handedOver();
+    const token = mintToken(20, 'secret');
+
+    const records = await loadShelfRecords(store, 'g:sender', token, (id) => mintToken(id, 'secret'));
+
+    expect(records.map((record) => record.jobId)).not.toContain(20);
+  });
+
+  it('still shows the game to the creator who now owns it', async () => {
+    const store = await handedOver();
+
+    const records = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', (id) => mintToken(id, 'secret'));
+
+    expect(records.map((record) => record.slug)).toContain('sky-dodge');
+  });
+});
+
 describe('reconcileTransferredOwnership', () => {
   it('reconciles ownership the same way for every owner-scoped read', async () => {
     const at = '2026-01-01T00:00:00.000Z';

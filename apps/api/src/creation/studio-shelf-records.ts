@@ -31,6 +31,13 @@ async function lookupRequested(
   return store.getSubmission(jobId);
 }
 
+// Canonical authority decides, not the uid the row was authored under.
+async function stillOwnedBy(store: ShelfStore, record: SubmissionRecord, ownerUid: string): Promise<boolean> {
+  if (!record.slug) return true;
+  const access = await resolveGameAccess(store, record.slug);
+  return access.source !== 'canonical' || ownsGame(access, ownerUid);
+}
+
 // listSubmissionsByOwner alone drifts after a transfer -- reconcile it.
 export async function reconcileTransferredOwnership(
   store: ShelfStore,
@@ -41,13 +48,7 @@ export async function reconcileTransferredOwnership(
   const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
 
   const nonCanonical = records.filter((r) => !r.slug || !canonicalSlugs.has(r.slug));
-  const stillOwned = await Promise.all(
-    nonCanonical.map(async (record) => {
-      if (!record.slug) return true;
-      const access = await resolveGameAccess(store, record.slug);
-      return access.source !== 'canonical' || ownsGame(access, ownerUid);
-    }),
-  );
+  const stillOwned = await Promise.all(nonCanonical.map((record) => stillOwnedBy(store, record, ownerUid)));
   const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
   // Every job on the slug, not just this owner's historical rows.
@@ -73,5 +74,7 @@ export async function loadShelfRecords(
 
   const extra = await lookupRequested(store, requested, mintStatusToken);
   if (!extra || extra.ownerUid !== ownerUid || extra.abandonedAt) return records;
+  // ownerUid is the row's historical author, which a transfer never rewrites.
+  if (!(await stillOwnedBy(store, extra, ownerUid))) return records;
   return [extra, ...records.filter((record) => record.jobId !== extra.jobId)];
 }
