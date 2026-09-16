@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { sendMedia } from '../platform/media-response.js';
 import type { BuildMediaStore, Store } from '../platform/store.js';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 
 export interface CreatorMediaRoutesOptions {
@@ -57,7 +57,7 @@ export async function registerCreatorMediaRoutes(
 
       // The token names a job, never who is asking.
       const owned = await store.getSubmission(jobId);
-      if (!owned || !(await ownsSubmissionOrSlug(store, owned, request.user!.uid))) {
+      if (!owned || !(await canActOnSubmissionOrSlug(store, owned, request.user!.uid, 'read'))) {
         return reply.status(404).send({ error: 'media not found' });
       }
 
@@ -122,7 +122,7 @@ export async function registerCreatorMediaRoutes(
       }
 
       const ownedPreview = await store.getSubmission(jobId);
-      if (!ownedPreview || !(await ownsSubmissionOrSlug(store, ownedPreview, request.user!.uid))) {
+      if (!ownedPreview || !(await canActOnSubmissionOrSlug(store, ownedPreview, request.user!.uid, 'read'))) {
         return reply.status(404).send({ error: 'preview not found' });
       }
 

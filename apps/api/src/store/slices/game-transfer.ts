@@ -1,5 +1,5 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
-import { membersOf, type GameAccessRecord } from '../records/game-access.js';
+import { transferredAccess, type GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
   isPending,
@@ -52,18 +52,6 @@ function ownerMatches(access: GameAccessRecord, uid: string, revision: number): 
 function recipientEligible(recipient: { tier: string; deletionScheduledFor?: string } | null): boolean {
   if (!recipient) return true;
   return recipient.tier !== 'blocked' && !recipient.deletionScheduledFor;
-}
-
-// Default: the former owner loses management access (editors are GO-03 scope).
-function transferredAccess(access: GameAccessRecord, newOwnerUid: string, at: string): GameAccessRecord {
-  return {
-    ...access,
-    ownerUid: newOwnerUid,
-    editorUids: [],
-    memberUids: membersOf(newOwnerUid, []),
-    accessRevision: access.accessRevision + 1,
-    updatedAt: at,
-  };
 }
 
 // Bounded because one transaction caps its writes, and round keys expire anyway.

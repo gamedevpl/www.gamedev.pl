@@ -10,7 +10,7 @@ export interface GameAccessRecord {
   // Verbatim, including bot: and deleted-account uids; classification stays in the resolver.
   ownerUid: string;
 
-  // Accepted editors. Empty until GO-03 builds collaboration.
+  // Accepted editors. Owner remains the only publisher and member manager.
   editorUids: string[];
 
   // Owner plus editors, for shelf queries. Written with them, never apart.
@@ -69,6 +69,46 @@ export function settledOver(
 // Work begun before erasure belongs to the erased incarnation.
 export function fencedOut(erasedAt: string | null, workAt: string): boolean {
   return erasedAt !== null && workAt <= erasedAt;
+}
+
+// An accepted editor; never the owner, never a duplicate.
+export function withEditorAdded(record: GameAccessRecord, uid: string, at: string): GameAccessRecord | null {
+  if (uid === record.ownerUid || record.editorUids.includes(uid)) return null;
+  if (membersOf(record.ownerUid, record.editorUids).length >= MAX_GAME_MEMBERS) return null;
+  const editorUids = [...record.editorUids, uid];
+  return {
+    ...record,
+    editorUids,
+    memberUids: membersOf(record.ownerUid, editorUids),
+    accessRevision: record.accessRevision + 1,
+    updatedAt: at,
+  };
+}
+
+// Removing an editor never promotes anyone.
+export function withEditorRemoved(record: GameAccessRecord, uid: string, at: string): GameAccessRecord | null {
+  if (!record.editorUids.includes(uid)) return null;
+  const editorUids = record.editorUids.filter((editor) => editor !== uid);
+  return {
+    ...record,
+    editorUids,
+    memberUids: membersOf(record.ownerUid, editorUids),
+    accessRevision: record.accessRevision + 1,
+    updatedAt: at,
+  };
+}
+
+// Remaining editors stay; the former owner is not auto-added.
+export function transferredAccess(record: GameAccessRecord, newOwnerUid: string, at: string): GameAccessRecord {
+  const editorUids = record.editorUids.filter((uid) => uid !== newOwnerUid && uid !== record.ownerUid);
+  return {
+    ...record,
+    ownerUid: newOwnerUid,
+    editorUids,
+    memberUids: membersOf(newOwnerUid, editorUids),
+    accessRevision: record.accessRevision + 1,
+    updatedAt: at,
+  };
 }
 
 // Erasure: the platform takes custody, and the uid leaves every membership.

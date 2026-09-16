@@ -1,20 +1,9 @@
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { verifyDurableCreatorAgentKey } from './agent-creator-key-resolve.js';
-import {
-  looksLikeGameAgentKey,
-  SESSION_KEY_IS_NOT_AN_OPENER_REASON,
-} from './agent-game-key.js';
+import { looksLikeGameAgentKey, SESSION_KEY_IS_NOT_AN_OPENER_REASON } from './agent-game-key.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
-import {
-  assertMcpSessionKeyUnexpired,
-  looksLikeMcpSessionKey,
-  verifyMcpSessionKey,
-} from './mcp-session-key.js';
-import {
-  assertAgentTokenActive,
-  InvalidAgentTokenError,
-  STALE_AGENT_TOKEN_REASON,
-} from '../platform/agent-token.js';
+import { assertMcpSessionKeyUnexpired, looksLikeMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
+import { assertAgentTokenActive, InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { isActiveBuildRound, resolveJobState } from '../creation/job-state.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import {
@@ -86,16 +75,7 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
                 createdAt: { type: 'string' },
                 updatedAt: { type: 'string' },
               },
-              required: [
-                'title',
-                'state',
-                'round',
-                'published',
-                'hasActiveRound',
-                'builder',
-                'createdAt',
-                'updatedAt',
-              ],
+              required: ['title', 'state', 'round', 'published', 'hasActiveRound', 'builder', 'createdAt', 'updatedAt'],
             },
           },
           total: { type: 'number' },

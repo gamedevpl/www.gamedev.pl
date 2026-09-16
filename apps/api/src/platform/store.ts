@@ -28,6 +28,14 @@ export type { GameTransferStore };
 import type { GameTransferInvitation, GameTransferStatus } from '../store/records/game-transfer.js';
 export type { GameTransferInvitation, GameTransferStatus };
 export type { GameAccessRecord, GameAccessRole };
+import type { GameEditorInviteStore } from '../store/slices/game-editor-invite.js';
+export type { GameEditorInviteStore };
+import type { GameEditorInvitation, GameEditorInviteStatus } from '../store/records/game-editor-invite.js';
+export type { GameEditorInvitation, GameEditorInviteStatus };
+import type { GameMembershipStore } from '../store/slices/game-membership.js';
+export type { GameMembershipStore };
+import type { GameQuotaStore } from '../store/slices/game-quota.js';
+export type { GameQuotaStore };
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -104,6 +112,7 @@ export type { WorldEntriesStore };
 import type {
   NotificationType,
   ProposalNotificationType,
+  ShareNotificationType,
   TransferNotificationType,
   SubmissionNotificationType,
   OperatorNotificationType,
@@ -112,6 +121,7 @@ import type {
 export type {
   NotificationType,
   ProposalNotificationType,
+  ShareNotificationType,
   TransferNotificationType,
   SubmissionNotificationType,
   OperatorNotificationType,
@@ -269,6 +279,9 @@ export interface Store
     CatalogEnrichmentStore,
     GameAccessStore,
     GameTransferStore,
+    GameEditorInviteStore,
+    GameMembershipStore,
+    GameQuotaStore,
     OAuthStore,
     CliChatStore {}
 
