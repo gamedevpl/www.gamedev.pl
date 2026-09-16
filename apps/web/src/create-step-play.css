@@ -3,6 +3,9 @@
 button.create-step-scene {
   margin: 0;
   padding: 0;
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -55,7 +58,9 @@ button.create-step-scene:active .mascot {
 }
 
 .create-steps-list.is-won .create-step-scene {
-  box-shadow: 0 0 14px var(--turquoise-glow);
+  box-shadow:
+    0 0 0 2px var(--turquoise),
+    0 0 16px var(--turquoise-glow);
 }
 
 .create-step-status {
