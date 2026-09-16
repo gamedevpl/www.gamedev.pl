@@ -73,7 +73,16 @@ export async function loadShelfRecords(
   if (known) return records;
 
   const extra = await lookupRequested(store, requested, mintStatusToken);
-  if (!extra || extra.abandonedAt) return records;
+  if (!extra) return records;
   if (!(await canActOnSubmissionOrSlug(store, extra, ownerUid, 'read'))) return records;
+  if (extra.slug) {
+    const slugJobs = await store.listSubmissionsBySlug(extra.slug);
+    const jobs = slugJobs.length > 0 ? slugJobs : [extra];
+    // The newest round can be an abandoned one over a live build.
+    if (!jobs.some((job) => !job.abandonedAt)) return records;
+    const jobIds = new Set(jobs.map((j) => j.jobId));
+    return [...jobs, ...records.filter((record) => !jobIds.has(record.jobId))];
+  }
+  if (extra.abandonedAt) return records;
   return [extra, ...records.filter((record) => record.jobId !== extra.jobId)];
 }
