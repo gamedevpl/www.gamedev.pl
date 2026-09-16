@@ -2235,6 +2235,7 @@
         "ineligible": "Your account cannot receive games right now.",
         "staleOwner": "This game changed hands. Reload Studio.",
         "gone": "This invitation is no longer available.",
+        "staleClient": "Refresh the page and try again — this tab is out of date.",
         "code": "Could not load your recipient code."
       },
       "retry": "Try again",

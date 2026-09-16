@@ -281,6 +281,46 @@ describe('list_account_games MCP tool', () => {
     expect(body.games[0]?.slug).toBe('cyber-racer');
   });
 
+  it('names the current owner for an inherited round, not the row author', async () => {
+    // The row still names the sender after the recipient reopens it.
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+    const JOB_ID = 6100;
+    await store.createSubmission(JOB_ID, OWNER, 'Cyber Racer');
+    await store.setSubmissionSlug(JOB_ID, 'cyber-racer');
+    await store.ensureGameAccess('cyber-racer', OWNER, new Date().toISOString(), new Date().toISOString());
+    const theirs = await store.allocateJobId();
+    await store.createSubmission(theirs, OTHER, 'Their Own Game');
+    await store.setSubmissionSlug(theirs, 'their-own-game');
+    const kept = await store.allocateJobId();
+    await store.createSubmission(kept, OWNER, 'Kept By Sender');
+    await store.setSubmissionSlug(kept, 'kept-by-sender');
+
+    const at = new Date(Date.now() + 1000).toISOString();
+    const code = (await store.ensureRecipientCode(OTHER, at))!;
+    const revision = (await store.getGameAccess('cyber-racer'))!.accessRevision;
+    await store.createGameTransferInvitation('cyber-racer', OWNER, OTHER, revision, at, code);
+    const invite = (await store.getActiveGameTransfer('cyber-racer', at))!;
+    await store.acceptGameTransferInvitation('cyber-racer', OTHER, at, invite.invitationId);
+    // The recipient reopens the inherited round, which re-mints its keys.
+    const generation = (await store.bumpRoundGeneration(JOB_ID)) ?? 1;
+
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId: 'session-123456789013',
+      jobId: JOB_ID,
+      roundGeneration: generation,
+      now: Date.now(),
+    });
+
+    const { structured, isError } = await callListAccountGames(app, { sessionKey });
+    expect(isError).toBe(false);
+    const body = structured as { games: Array<{ slug: string | null }> };
+    const slugs = body.games.map((game) => game.slug);
+    expect(slugs).toContain('their-own-game');
+    // The other account's unrelated game must never appear here.
+    expect(slugs).not.toContain('kept-by-sender');
+  });
+
   it('respects limit parameter', async () => {
     const store = new InMemoryStore();
     const app = await createApp(store);

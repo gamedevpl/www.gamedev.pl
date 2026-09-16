@@ -140,7 +140,14 @@ function reviewerAudience(reviewerUids: Set<string>, adminUids: Set<string>): Se
   return new Set([...reviewerUids, ...adminUids]);
 }
 
-export async function registerReviewRoutes(app: FastifyInstance, options: ReviewRoutesOptions): Promise<void> {
+export interface ReviewRoutesHandle {
+  invalidateGameOwner(slug: string): void;
+}
+
+export async function registerReviewRoutes(
+  app: FastifyInstance,
+  options: ReviewRoutesOptions,
+): Promise<ReviewRoutesHandle> {
   const { store } = options;
   const reviewerUids = options.reviewerUids ?? new Set<string>();
   const adminUids = options.adminUids ?? new Set<string>();
@@ -155,6 +162,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     targetedQueueItems,
     invalidateOpenSweep,
     invalidateReviewer,
+    invalidateGameOwner,
   } = createReviewQueueCache({ store, listCatalog, now });
 
   function refuseUnlessReviewer(
@@ -708,4 +716,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const requests = await store.listReReviewRequests({ limit: MAX_ADMIN_ROWS });
     return { requests };
   });
+
+  return { invalidateGameOwner };
 }

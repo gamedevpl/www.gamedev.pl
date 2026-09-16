@@ -172,10 +172,16 @@ function describeStoreContract(): void {
           const replayed = await store.createEditorInvitation(SLUG, A, B, AFTER_EXPIRY, beaCode);
           expect(replayed).toMatchObject({ status: 'pending' });
           const access = await store.getGameAccess(SLUG);
+          const offer = await store.createGameTransferInvitation(SLUG, A, D, access!.accessRevision, AFTER_EXPIRY);
+          expect(offer).toMatchObject({ status: 'pending' });
           expect(
-            await store.createGameTransferInvitation(SLUG, A, D, access!.accessRevision, AFTER_EXPIRY),
-          ).toMatchObject({ status: 'pending' });
-          expect(await store.acceptGameTransferInvitation(SLUG, D, AFTER_EXPIRY)).toMatchObject({
+            await store.acceptGameTransferInvitation(
+              SLUG,
+              D,
+              AFTER_EXPIRY,
+              (offer as { invitationId?: string }).invitationId,
+            ),
+          ).toMatchObject({
             status: 'accepted',
           });
           // Transfer cancels leftover editor invites rather than leaving a stale sender.

@@ -10,6 +10,7 @@ vi.mock('../../visitTelemetry.js', () => ({ recordTransferStep: vi.fn() }));
 
 const OFFER = {
   slug: 'comet-courier',
+  invitationId: 'offer-7f3a',
   status: 'pending',
   you: 'recipient',
   counterparty: { profileName: 'Ada' },
@@ -22,7 +23,7 @@ function reply(url: string, body: unknown) {
 }
 
 function routed(incoming: unknown[], code = 'MY-CODE') {
-  return vi.fn(async (url: string) => {
+  return vi.fn(async (url: string, _init?: RequestInit) => {
     if (String(url).includes('/recipient-code')) return reply(url, { code });
     if (String(url).includes('/transfers/incoming')) return reply(url, { transfers: incoming });
     return reply(url, { transfer: { ...OFFER, status: 'accepted' } });
@@ -111,6 +112,20 @@ describe('StudioTransferInbox', () => {
     expect(host.querySelector('[data-testid="studio-transfer-inbox-error"]')?.textContent).toContain('build round');
     // The offer is still theirs to accept once the round finishes.
     expect(host.querySelector('[data-testid="studio-transfer-invite-comet-courier"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('answers the offer by id, not by slug', async () => {
+    // A bare slug answers whichever offer is live.
+    const fetchMock = routed([OFFER]);
+    vi.stubGlobal('fetch', fetchMock);
+    const { host, root } = await mount();
+
+    await click(host, 'studio-transfer-accept-comet-courier');
+
+    const accept = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/accept'));
+    expect(accept).toBeDefined();
+    expect(JSON.parse(String((accept?.[1] as RequestInit)?.body))).toEqual({ invitationId: 'offer-7f3a' });
     await act(async () => root.unmount());
   });
 

@@ -55,6 +55,7 @@ import {
   shouldPulseMcpPresence,
   type McpPresencePulse,
 } from './mcp-presence.js';
+import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -688,6 +689,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (!record) {
       return toolErr('unknown build');
     }
+    // Fences a round whose game changed hands, however many rounds it has.
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug))) {
+      return toolErr(FINISHED_REASON);
+    }
 
     let access: AgentTokenAccess;
     try {
@@ -1158,6 +1163,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               noteInvalidStart(ctx.request);
               return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
             }
+            if (active.slug && !roundAuthorityCurrent(active, await resolveGameAccess(store, active.slug))) {
+              noteInvalidStart(ctx.request);
+              return toolErr(FINISHED_REASON);
+            }
             try {
               if (classifyAgentTokenAccess(claims, active, now()) !== 'active') {
                 noteInvalidStart(ctx.request);
@@ -1233,6 +1242,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           if (!found) {
             noteInvalidStart(ctx.request);
             return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
+          }
+
+          if (found.slug && !roundAuthorityCurrent(found, await resolveGameAccess(store, found.slug))) {
+            noteInvalidStart(ctx.request);
+            return toolErr(FINISHED_REASON);
           }
 
           let access: AgentTokenAccess;

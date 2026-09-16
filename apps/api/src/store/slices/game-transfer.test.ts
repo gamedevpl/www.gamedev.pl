@@ -3,6 +3,12 @@ import { InMemoryStore } from '../../platform/store.js';
 import { MAX_REVOKED_ROUNDS_PER_TRANSFER } from './game-transfer.js';
 import { revokedRoundGeneration } from '../../creation/job-state.js';
 
+// A response names the offer, so tests look it up.
+async function offerId(store: InMemoryStore, slug: string, at: string): Promise<string> {
+  const invite = await store.getActiveGameTransfer(slug, at);
+  return invite?.invitationId ?? 'no-open-offer';
+}
+
 const AT = '2026-01-01T00:00:00.000Z';
 const LATER = '2026-01-02T00:00:00.000Z';
 const AFTER_EXPIRY = '2026-01-09T00:00:00.000Z';
@@ -47,8 +53,15 @@ describe('game transfer store slice', () => {
     await ownedGame(store, 'sky', 'g:ada');
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    expect(await store.cancelGameTransferInvitation('sky', 'g:grace', LATER)).toBeNull();
-    const cancelled = await store.cancelGameTransferInvitation('sky', 'g:ada', LATER);
+    expect(
+      await store.cancelGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER)),
+    ).toBeNull();
+    const cancelled = await store.cancelGameTransferInvitation(
+      'sky',
+      'g:ada',
+      LATER,
+      await offerId(store, 'sky', LATER),
+    );
     expect(cancelled?.status).toBe('cancelled');
 
     const reinvite = await store.createGameTransferInvitation('sky', 'g:ada', 'g:someone-else', 1, LATER);
@@ -60,8 +73,15 @@ describe('game transfer store slice', () => {
     await ownedGame(store, 'sky', 'g:ada');
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    expect(await store.rejectGameTransferInvitation('sky', 'g:ada', LATER)).toBeNull();
-    const rejected = await store.rejectGameTransferInvitation('sky', 'g:grace', LATER);
+    expect(
+      await store.rejectGameTransferInvitation('sky', 'g:ada', LATER, await offerId(store, 'sky', LATER)),
+    ).toBeNull();
+    const rejected = await store.rejectGameTransferInvitation(
+      'sky',
+      'g:grace',
+      LATER,
+      await offerId(store, 'sky', LATER),
+    );
     expect(rejected?.status).toBe('rejected');
   });
 
@@ -71,7 +91,7 @@ describe('game transfer store slice', () => {
     await ownedGame(store, 'lake', 'g:bob');
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
     await store.createGameTransferInvitation('lake', 'g:bob', 'g:grace', 1, AT);
-    await store.rejectGameTransferInvitation('lake', 'g:grace', LATER);
+    await store.rejectGameTransferInvitation('lake', 'g:grace', LATER, await offerId(store, 'lake', LATER));
 
     const pending = await store.listPendingGameTransfersForRecipient('g:grace', LATER);
     expect(pending.map((t) => t.slug)).toEqual(['sky']);
@@ -194,7 +214,12 @@ describe('acceptGameTransferInvitation', () => {
     await store.upsertUser({ uid: 'g:grace' });
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      LATER,
+      await offerId(store, 'sky', LATER),
+    );
     if (typeof result === 'string' || result === null) throw new Error('unreachable');
     expect(result.status).toBe('accepted');
 
@@ -209,7 +234,7 @@ describe('acceptGameTransferInvitation', () => {
     await store.ensureGameAgentKey('sky', 'g:ada', AT);
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER));
 
     expect(await store.getGameAgentKey('sky')).toBeNull();
     // The next open_round issues a fresh key instead of being locked out.
@@ -223,7 +248,7 @@ describe('acceptGameTransferInvitation', () => {
     await store.setGameAutonomy('sky', 'auto-fix-defects');
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER));
 
     expect(await store.getGameAutonomy('sky')).toBeNull();
   });
@@ -238,7 +263,7 @@ describe('acceptGameTransferInvitation', () => {
     const before = (await store.bumpRoundGeneration(4242)) ?? 0;
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER));
 
     const after = (await store.getSubmission(4242))?.roundGeneration ?? 0;
     // Two ahead: one would still leave the sender a terminal receipt.
@@ -259,7 +284,7 @@ describe('acceptGameTransferInvitation', () => {
     const newestBefore = (await store.getSubmission(5000 + total - 1))?.roundGeneration;
     const oldestBefore = (await store.getSubmission(5000))?.roundGeneration;
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER));
 
     // Newest re-generationed; the oldest, past the bound, is left.
     expect((await store.getSubmission(5000 + total - 1))?.roundGeneration).toBe(revokedRoundGeneration(newestBefore));
@@ -271,9 +296,9 @@ describe('acceptGameTransferInvitation', () => {
     await ownedGame(store, 'sky', 'g:ada');
     await store.upsertUser({ uid: 'g:grace' });
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
-    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER));
 
-    const again = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    const again = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER));
     if (typeof again === 'string' || again === null) throw new Error('unreachable');
     expect(again.status).toBe('accepted');
     expect((await store.getGameAccess('sky'))?.accessRevision).toBe(2);
@@ -285,7 +310,9 @@ describe('acceptGameTransferInvitation', () => {
     await store.upsertUser({ uid: 'g:grace' });
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:mallory', LATER)).toBeNull();
+    expect(
+      await store.acceptGameTransferInvitation('sky', 'g:mallory', LATER, await offerId(store, 'sky', LATER)),
+    ).toBeNull();
   });
 
   it('leaves ownership unchanged when a build round is active', async () => {
@@ -297,7 +324,9 @@ describe('acceptGameTransferInvitation', () => {
     await store.setSubmissionSlug(1, 'sky');
     await store.recordJobTransition(1, { to: 'building', at: LATER, by: 'creator' });
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('busy');
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER))).toBe(
+      'busy',
+    );
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
 
@@ -310,7 +339,9 @@ describe('acceptGameTransferInvitation', () => {
     // Ownership settles to someone else before acceptance.
     await store.recordSettledOwner('sky', 'g:mallory', 2, AT, LATER);
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('stale_owner');
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER))).toBe(
+      'stale_owner',
+    );
   });
 
   it('refuses when the recipient became ineligible after the invitation was created', async () => {
@@ -320,7 +351,9 @@ describe('acceptGameTransferInvitation', () => {
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
     await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('ineligible');
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER))).toBe(
+      'ineligible',
+    );
   });
 
   it('refuses to accept once the invitation has expired', async () => {
@@ -329,7 +362,14 @@ describe('acceptGameTransferInvitation', () => {
     await store.upsertUser({ uid: 'g:grace' });
     await store.createGameTransferInvitation('sky', 'g:ada', 'g:grace', 1, AT);
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', AFTER_EXPIRY)).toBeNull();
+    expect(
+      await store.acceptGameTransferInvitation(
+        'sky',
+        'g:grace',
+        AFTER_EXPIRY,
+        await offerId(store, 'sky', AFTER_EXPIRY),
+      ),
+    ).toBeNull();
   });
 
   it('leaves ownership unchanged while a round is still opening (no submission yet)', async () => {
@@ -340,14 +380,36 @@ describe('acceptGameTransferInvitation', () => {
     // The sender holds the round-opening lease with no submission yet.
     await store.beginCheckoutRecovery('sky', 'nonce-1', Date.parse(LATER));
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER)).toBe('busy');
+    expect(await store.acceptGameTransferInvitation('sky', 'g:grace', LATER, await offerId(store, 'sky', LATER))).toBe(
+      'busy',
+    );
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
 
     // Once the lease is released, acceptance succeeds.
     await store.finishCheckoutRecovery('sky', 'nonce-1');
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', LATER);
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      LATER,
+      await offerId(store, 'sky', LATER),
+    );
     if (typeof result === 'string' || result === null) throw new Error('unreachable');
     expect(result.status).toBe('accepted');
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');
+  });
+
+  it('lets an account that signed up again receive a game', async () => {
+    // A code it could never use is worse than none.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:gone' });
+    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
+    await store.deleteAccountIdentity('g:gone', AT);
+    await store.upsertUser({ uid: 'g:gone' });
+    const code = (await store.ensureRecipientCode('g:gone', LATER))!;
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:gone', 1, LATER, code);
+
+    expect(result).not.toBe('ineligible');
   });
 });

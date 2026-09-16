@@ -23,6 +23,7 @@ import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.j
 import type { StagedPreviewPublisher } from './staged-preview.js';
 import type { ContentChecker, RejectCategory } from '../platform/moderation.js';
 import { createDeliveryModerationGate } from './delivery-moderation.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -356,10 +357,14 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         );
       }
 
+      // Abuse concentrates on a person, so it must name the current one.
+      const moderatedUid = record.slug
+        ? ((await currentOwnerUid(options.store, record.slug, record.ownerUid)) ?? record.ownerUid)
+        : record.ownerUid;
       // After every cap, so a flood cannot buy itself an inference call.
       const proseRefusal = await proseGate.refuse({
         files: input.files,
-        uid: record.ownerUid,
+        uid: moderatedUid,
         log: options.log?.warn ? { warn: options.log.warn } : null,
       });
       if (proseRefusal) return { accepted: false, ...proseRefusal };

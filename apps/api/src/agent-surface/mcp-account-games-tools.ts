@@ -3,6 +3,7 @@ import { verifyDurableCreatorAgentKey } from './agent-creator-key-resolve.js';
 import { looksLikeGameAgentKey, SESSION_KEY_IS_NOT_AN_OPENER_REASON } from './agent-game-key.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { assertMcpSessionKeyUnexpired, looksLikeMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
+import { ownsGame, resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
 import { assertAgentTokenActive, InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { isActiveBuildRound, resolveJobState } from '../creation/job-state.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -122,9 +123,16 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
               return toolErr('invalid sessionKey — call start() again');
             }
             assertAgentTokenActive(claims, job, now());
-            if (job.ownerUid) {
-              creatorUid = job.ownerUid;
+            const access = job.slug ? await resolveGameAccess(store, job.slug) : null;
+            // A round key stops naming its creator once the game changes hands.
+            if (access && !roundAuthorityCurrent(job, access)) {
+              return toolErr('invalid sessionKey — call start() again');
             }
+            // A still-current member keeps their account; a former owner does not.
+            const stillMember = access && (ownsGame(access, job.ownerUid) || access.editorUids.includes(job.ownerUid));
+            const owner = access?.owner;
+            const current = owner?.kind === 'creator' ? owner.uid : undefined;
+            creatorUid = stillMember ? job.ownerUid : (current ?? job.ownerUid);
           } catch (error) {
             if (error instanceof InvalidAgentTokenError) {
               return toolErr(

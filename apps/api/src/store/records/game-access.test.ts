@@ -37,6 +37,8 @@ describe('editor membership helpers', () => {
     expect(moved.editorUids).toEqual(['g:bea', 'g:cal']);
     expect(moved.memberUids).toEqual(membersOf('g:dana', ['g:bea', 'g:cal']));
     expect(moved.editorUids).not.toContain('g:ada');
+    expect(moved.capabilitiesRevokedAtRevision).toBe(withCal.accessRevision + 1);
+    expect(moved.capabilitiesRevokedAt).toBe(LATER);
   });
 
   it('does not promote an editor when the owner is erased', () => {

@@ -17,6 +17,7 @@ const RESPOND_REFUSALS: Record<string, string> = {
   recipient_ineligible: 'studioShelf.transfer.errors.ineligible',
   stale_owner: 'studioShelf.transfer.errors.staleOwner',
   not_found: 'studioShelf.transfer.errors.gone',
+  stale_client: 'studioShelf.transfer.errors.staleClient',
 };
 
 export function StudioTransferInbox({
@@ -49,11 +50,13 @@ export function StudioTransferInbox({
     void load();
   }, [load]);
 
-  async function respond(slug: string, decision: 'accept' | 'reject'): Promise<void> {
+  // Takes the invitation: an answer must name the offer.
+  async function respond(invite: TransferSummary, decision: 'accept' | 'reject'): Promise<void> {
+    const slug = invite.slug;
     setBusySlug(slug);
     setError(null);
     try {
-      await respondToTransfer(slug, decision);
+      await respondToTransfer(slug, decision, invite.invitationId);
       recordTransferStep(decision === 'accept' ? 'offer_accepted' : 'offer_declined');
       setIncoming((current) => current.filter((invite) => invite.slug !== slug));
       // Not on the shelf until the caller refetches.
@@ -111,7 +114,7 @@ export function StudioTransferInbox({
                   type="button"
                   className="primary-btn"
                   disabled={busySlug === invite.slug}
-                  onClick={() => void respond(invite.slug, 'accept')}
+                  onClick={() => void respond(invite, 'accept')}
                   data-testid={`studio-transfer-accept-${invite.slug}`}
                 >
                   {t('studioShelf.transfer.accept')}
@@ -120,7 +123,7 @@ export function StudioTransferInbox({
                   type="button"
                   className="status-delete"
                   disabled={busySlug === invite.slug}
-                  onClick={() => void respond(invite.slug, 'reject')}
+                  onClick={() => void respond(invite, 'reject')}
                   data-testid={`studio-transfer-reject-${invite.slug}`}
                 >
                   {t('studioShelf.transfer.reject')}

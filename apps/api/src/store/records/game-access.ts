@@ -19,6 +19,18 @@ export interface GameAccessRecord {
   // Bumped on every authority change; fences work admitted before a revocation.
   accessRevision: number;
 
+  // The revision a handover last revoked capabilities at.
+
+  // Present means this game has changed hands, so a round carrying no
+
+  // epoch of its own is fenced, never guessed at.
+  capabilitiesRevokedAtRevision?: number;
+
+  // When that handover happened. A round that began earlier keeps no
+
+  // epoch: its credentials were issued under the revoked authority.
+  capabilitiesRevokedAt?: string;
+
   // The job whose settled slug claim wrote this. Absent while still tentative.
   settledJobId?: number;
 
@@ -101,12 +113,15 @@ export function withEditorRemoved(record: GameAccessRecord, uid: string, at: str
 // Remaining editors stay; the former owner is not auto-added.
 export function transferredAccess(record: GameAccessRecord, newOwnerUid: string, at: string): GameAccessRecord {
   const editorUids = record.editorUids.filter((uid) => uid !== newOwnerUid && uid !== record.ownerUid);
+  const accessRevision = record.accessRevision + 1;
   return {
     ...record,
     ownerUid: newOwnerUid,
     editorUids,
     memberUids: membersOf(newOwnerUid, editorUids),
-    accessRevision: record.accessRevision + 1,
+    accessRevision,
+    capabilitiesRevokedAtRevision: accessRevision,
+    capabilitiesRevokedAt: at,
     updatedAt: at,
   };
 }

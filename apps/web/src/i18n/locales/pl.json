@@ -2249,6 +2249,7 @@
         "ineligible": "Twoje konto nie może teraz przyjmować gier.",
         "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
         "gone": "To zaproszenie jest już nieaktualne.",
+        "staleClient": "Odśwież stronę i spróbuj ponownie — ta karta jest nieaktualna.",
         "code": "Nie udało się wczytać twojego kodu odbiorcy."
       },
       "retry": "Spróbuj ponownie",

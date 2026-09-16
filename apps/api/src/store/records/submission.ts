@@ -211,6 +211,13 @@ export interface SubmissionRecord {
    * the field. New jobs start at `1`.
    */
   roundGeneration?: number;
+
+  // The game's accessRevision when this round opened.
+
+  // A transfer advances that revision, retiring every earlier round at once.
+
+  // Absent on rounds opened before the epoch existed.
+  accessEpoch?: number;
   /**
    * Which builder owns the *current* round: the platform's coding agent, or the
    * creator's own. Absent on legacy jobs (= platform).

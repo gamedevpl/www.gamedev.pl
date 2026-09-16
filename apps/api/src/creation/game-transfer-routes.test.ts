@@ -1,43 +1,20 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../platform/app.js';
-import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { readSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { InMemoryStore } from '../platform/store.js';
 import { registerGameTransferRoutes } from './game-transfer-routes.js';
-
-const sessionSecret = 'dev-session-secret-change-me';
-const AT = '2026-01-01T00:00:00.000Z';
-
-function authCookie(uid: string): string {
-  return `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}`;
-}
+import {
+  appFactory,
+  AT,
+  authCookie,
+  offerId,
+  ownedGameWithRecipientCode,
+  sessionSecret,
+} from './game-transfer-routes.harness.js';
 
 describe('game transfer routes', () => {
-  const apps: Array<{ close: () => Promise<void> }> = [];
-  afterEach(async () => {
-    while (apps.length) await apps.pop()!.close();
-  });
-
-  async function appWith(store: InMemoryStore, gameTransferRoutes = {}) {
-    const app = await buildApp({
-      store,
-      sessionSecret,
-      gameTransferRoutes,
-      // The shelf route mints status tokens, so it needs the secret.
-      submissionRoutes: { submissionTokenSecret: 'dev-token-secret' },
-    });
-    apps.push(app);
-    return app;
-  }
-
-  async function ownedGameWithRecipientCode() {
-    const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:ada' });
-    await store.upsertUser({ uid: 'g:grace' });
-    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
-    const code = (await store.ensureRecipientCode('g:grace', AT))!;
-    return { store, code };
-  }
+  const { appWith, closeAll } = appFactory();
+  afterEach(closeAll);
 
   it('a malformed slug is refused before it reaches the store', async () => {
     const { store } = await ownedGameWithRecipientCode();
@@ -250,6 +227,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/studio/games/sky/transfer/cancel',
       headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(cancel.json().transfer.status).toBe('cancelled');
 
@@ -257,6 +235,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/studio/games/sky/transfer/cancel',
       headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(cancelAgain.statusCode).toBe(404);
   });
@@ -294,6 +273,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/reject',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
 
     // The reject must invalidate the cache, not just the store.
@@ -321,6 +301,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/reject',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(reject.json().transfer.status).toBe('rejected');
 
@@ -377,6 +358,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/accept',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(accept.statusCode).toBe(200);
     expect(accept.json().transfer).toMatchObject({ slug: 'sky', status: 'accepted', you: 'recipient' });
@@ -416,6 +398,7 @@ describe('game transfer routes', () => {
         method: 'POST',
         url: '/api/me/transfers/sky/accept',
         headers: { cookie: authCookie('g:grace') },
+        payload: { invitationId: await offerId(store, 'sky') },
       });
       expect(accept.statusCode).toBe(200);
       expect(invalidatePublishedGameCaches).toHaveBeenCalledWith('sky');
@@ -439,6 +422,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/accept',
       headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(accept.statusCode).toBe(404);
   });
@@ -456,11 +440,14 @@ describe('game transfer routes', () => {
       payload: { recipientCode: code },
     });
 
-    await app.inject({
+    const accepted = await app.inject({
       method: 'POST',
       url: '/api/me/transfers/sky/accept',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
+    // Without this the shelf assertions would pass for the wrong reason.
+    expect(accepted.statusCode).toBe(200);
 
     const senderStudio = await app.inject({
       method: 'GET',
