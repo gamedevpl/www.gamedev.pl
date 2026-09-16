@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior.
+
 ## 0.16.0 — 2026-09-16
 
 ### Added
