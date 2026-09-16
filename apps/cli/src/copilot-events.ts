@@ -12,6 +12,10 @@ export function copilotEventText(value: unknown): string | null | undefined {
     return `Tool failed: ${text(error?.message) ?? text(data.error) ?? 'unknown tool error'}`;
   }
   if (event.type === 'session.error') return text(data.message) ?? 'Copilot session failed';
+  if (event.type === 'session.warning') return text(data.message);
+  const error = data.error as { message?: unknown } | undefined;
+  const failure = text(error?.message) ?? text(data.error);
+  if (failure) return failure;
   if (/^(assistant|tool|session|model|user|permission|hook|system)\./.test(event.type)) return null;
   return undefined;
 }

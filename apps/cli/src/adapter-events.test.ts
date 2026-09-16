@@ -40,6 +40,12 @@ it('keeps Copilot failures and plain stderr visible', () => {
     ),
   ).toBe('Tool failed: Permission denied');
   expect(parseEventLine(event('tool.execution_complete', { success: false }), 'copilot')).toContain('Tool failed');
+  expect(parseEventLine(event('hook.end', { success: false, error: { message: 'Hook failed' } }), 'copilot')).toBe(
+    'Hook failed',
+  );
+  expect(parseEventLine(event('session.warning', { message: 'Context truncated' }), 'copilot')).toBe(
+    'Context truncated',
+  );
   expect(parseEventLine('Login required', 'copilot')).toBe('Login required');
   expect(parseEventLine('{"error":{"message":"Transport failed"}}', 'copilot')).toBe('Transport failed');
 });
