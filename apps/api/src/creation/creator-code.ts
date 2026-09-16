@@ -1323,6 +1323,7 @@ export async function registerCreatorCodeRoutes(
           authorship: 'owner',
           summary: `Reverted to build ${targetVersion}`,
           actor: 'creator',
+          actorUid: request.user!.uid,
         });
         if (outcome.accepted) {
           lastDeliverAt.set(slug, nowMs);

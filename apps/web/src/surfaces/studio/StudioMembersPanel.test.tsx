@@ -106,7 +106,22 @@ describe('StudioMembersPanel', () => {
     });
 
     expect(host.querySelector('[data-testid="studio-share-pending-invitekeyinvitek"]')?.textContent).toContain('Cal');
-    expect(host.querySelector('[data-testid="studio-share-code"]')).toBeNull();
+    expect(host.querySelector('[data-testid="studio-share-code"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('keeps the invite form while a pending invitation is open', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ viewerRole: 'owner', owner: OWNER, editors: [], invites: [PENDING] }),
+      })),
+    );
+    const { host, root } = mountPanel();
+    await render(host, root);
+    expect(host.querySelector('[data-testid="studio-share-pending-invitekeyinvitek"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="studio-share-code"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 

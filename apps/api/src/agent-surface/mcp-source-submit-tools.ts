@@ -6,6 +6,7 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canon
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import {
   toolOk,
   toolErr,
@@ -32,6 +33,7 @@ interface AuthedSubmitJob {
   jobId: number;
   record: SubmissionRecord;
   channelToken: string;
+  actorUid: string;
 }
 
 export interface SourceSubmitToolsDeps {
@@ -290,6 +292,12 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
 
         // Passed through only if set; omitted infers the previous lane.
         const mode = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
+        const wantsPublish = mode === 'publish' || (mode === undefined && !fromLatestDelivery);
+        if (wantsPublish && auth.record.slug && store) {
+          if (!(await canActOnSlug(store, auth.record.slug, auth.actorUid, 'publish'))) {
+            return toolErr('only the owner can publish this game');
+          }
+        }
 
         const decodedFiles: Array<{ path: string; content: string }> = [];
         for (const file of inlineFiles) {

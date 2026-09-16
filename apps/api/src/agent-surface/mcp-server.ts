@@ -256,6 +256,8 @@ interface AuthedJob {
   /** Round-scoped agent token for channel inject (same generation as the capability). */
   channelToken: string;
   claims: Pick<AgentTokenClaims, 'jobId' | 'roundGeneration' | 'exp'>;
+  /** Session writer; job.ownerUid is historical authorship. */
+  actorUid: string;
 }
 
 function jsonRpcResult(id: string | number | null | undefined, result: unknown) {
@@ -599,6 +601,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         bearerIsPlatformConnector ||
         bearerIsManagedOpener);
     let identity!: AuthedJob['identity'];
+    let sessionActorUid: string | undefined;
 
     if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
@@ -653,6 +656,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         ttlDays: 1,
       });
       identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
+      sessionActorUid = sessionClaims.actorUid;
     } else if (bearerIsOAuth) {
       return toolErr(
         'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
@@ -704,12 +708,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(FINISHED_REASON);
     }
 
+    const actorUid = sessionActorUid ?? record.ownerUid;
+    if (record.slug && !(await canActOnSlug(store, record.slug, actorUid, 'build'))) {
+      return toolErr('this session can no longer write this game');
+    }
+
     return {
       jobId: claims.jobId,
       record,
       access,
       identity,
       channelToken,
+      actorUid,
       claims: {
         jobId: claims.jobId,
         roundGeneration: claims.roundGeneration,
@@ -1046,7 +1056,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
         }
 
-        const bindActiveRound = async (active: SubmissionRecord): Promise<ToolResult> => {
+        const bindActiveRound = async (active: SubmissionRecord, actorUid: string): Promise<ToolResult> => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
           // Prefer the client's correlator when well-formed — even if this instance
@@ -1062,6 +1072,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             jobId,
             roundGeneration,
             now: now(),
+            actorUid,
           });
           const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 
@@ -1100,7 +1111,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             noteInvalidStart(ctx.request);
             return toolErr(resolved.reason);
           }
-          return await bindActiveRound(resolved.record);
+          return await bindActiveRound(resolved.record, resolved.claims.creatorUid);
         }
 
         if (!key && bearer && looksLikeAsAccessToken(bearer)) {
@@ -1129,7 +1140,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr(PLATFORM_ROUND_REASON);
           }
 
-          return await bindActiveRound(active);
+          return await bindActiveRound(active, asAccess.ownerUid);
         }
 
         if (!key && bearer) {
@@ -1163,7 +1174,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               noteInvalidStart(ctx.request);
               return toolErr('slug is required and must match this platform round');
             }
-            return await bindActiveRound(active);
+            return await bindActiveRound(active, active.ownerUid);
           }
         }
 
@@ -1252,6 +1263,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           jobId,
           roundGeneration,
           now: now(),
+          actorUid: record.ownerUid,
         });
         const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 

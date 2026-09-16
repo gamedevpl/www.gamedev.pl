@@ -197,7 +197,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
           ))
         : null}
 
-      {isOwner && pending.length === 0 ? (
+      {isOwner ? (
         <form className="studio-transfer-form" onSubmit={(event) => void send(event)}>
           <label htmlFor="studio-share-code">{t('studioPanel.share.codeLabel')}</label>
           <input
