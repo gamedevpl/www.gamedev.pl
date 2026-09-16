@@ -6,6 +6,8 @@ export type TransferStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' |
 
 export interface TransferSummary {
   slug: string;
+  // Names the offer a response must answer, not the slug it is about.
+  invitationId: string;
   status: TransferStatus;
   // Which side the viewer is on.
   you: 'sender' | 'recipient';
@@ -70,8 +72,14 @@ export async function startGameTransfer(slug: string, recipientCode: string): Pr
   ).transfer;
 }
 
-export async function cancelGameTransfer(slug: string): Promise<TransferSummary> {
-  return (await request<{ transfer: TransferSummary }>(`${forSlug(slug)}/cancel`, { method: 'POST' })).transfer;
+export async function cancelGameTransfer(slug: string, invitationId: string): Promise<TransferSummary> {
+  return (
+    await request<{ transfer: TransferSummary }>(`${forSlug(slug)}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invitationId }),
+    })
+  ).transfer;
 }
 
 export async function fetchIncomingTransfers(): Promise<TransferSummary[]> {
@@ -79,7 +87,17 @@ export async function fetchIncomingTransfers(): Promise<TransferSummary[]> {
   return Array.isArray(body.transfers) ? (body.transfers as TransferSummary[]) : [];
 }
 
-export async function respondToTransfer(slug: string, decision: 'accept' | 'reject'): Promise<TransferSummary> {
+export async function respondToTransfer(
+  slug: string,
+  decision: 'accept' | 'reject',
+  invitationId: string,
+): Promise<TransferSummary> {
   const path = `/api/me/transfers/${encodeURIComponent(slug)}/${decision}`;
-  return (await request<{ transfer: TransferSummary }>(path, { method: 'POST' })).transfer;
+  return (
+    await request<{ transfer: TransferSummary }>(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invitationId }),
+    })
+  ).transfer;
 }

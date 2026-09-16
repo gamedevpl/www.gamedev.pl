@@ -182,7 +182,14 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     const at = '2026-08-01T00:00:00.000Z';
     const access = await store.ensureGameAccess('comet-courier', 'g:boss', at, at);
     await store.createGameTransferInvitation('comet-courier', 'g:boss', 'g:recipient', access!.accessRevision, at);
-    expect(await store.acceptGameTransferInvitation('comet-courier', 'g:recipient', at)).toMatchObject({
+    expect(
+      await store.acceptGameTransferInvitation(
+        'comet-courier',
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer('comet-courier', at))!.invitationId,
+      ),
+    ).toMatchObject({
       status: 'accepted',
     });
 
@@ -206,7 +213,14 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     const at = '2026-08-01T00:00:00.000Z';
     const access = await store.ensureGameAccess('comet-courier', 'g:boss', at, at);
     await store.createGameTransferInvitation('comet-courier', 'g:boss', 'g:recipient', access!.accessRevision, at);
-    expect(await store.acceptGameTransferInvitation('comet-courier', 'g:recipient', at)).toMatchObject({
+    expect(
+      await store.acceptGameTransferInvitation(
+        'comet-courier',
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer('comet-courier', at))!.invitationId,
+      ),
+    ).toMatchObject({
       status: 'accepted',
     });
 

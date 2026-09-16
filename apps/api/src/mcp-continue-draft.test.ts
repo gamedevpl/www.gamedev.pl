@@ -170,7 +170,12 @@ describe('MCP continue_draft', () => {
     const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
       const result = await originalBegin(...args);
       // A concurrent accept must see this lease as busy.
-      acceptDuringWindow = await store.acceptGameTransferInvitation(SLUG, 'g:recipient', at);
+      acceptDuringWindow = await store.acceptGameTransferInvitation(
+        SLUG,
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer(SLUG, at))!.invitationId,
+      );
       return result;
     });
     try {
@@ -195,7 +200,14 @@ describe('MCP continue_draft', () => {
     const at = '2026-08-01T12:00:00.000Z';
     const access = await store.ensureGameAccess(SLUG, OWNER, at, at);
     await store.createGameTransferInvitation(SLUG, OWNER, 'g:recipient', access!.accessRevision, at);
-    expect(await store.acceptGameTransferInvitation(SLUG, 'g:recipient', at)).toMatchObject({ status: 'accepted' });
+    expect(
+      await store.acceptGameTransferInvitation(
+        SLUG,
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer(SLUG, at))!.invitationId,
+      ),
+    ).toMatchObject({ status: 'accepted' });
     const headers = await creatorHeaders(store);
     app = await createApp(store);
 

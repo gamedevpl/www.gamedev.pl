@@ -101,13 +101,23 @@ describe('reconcileTransferredOwnership', () => {
 
     // A -> B: B opens a newer round under their own uid.
     await store.createGameTransferInvitation('sky-dodge', 'g:a', 'g:b', 1, at);
-    await store.acceptGameTransferInvitation('sky-dodge', 'g:b', at);
+    await store.acceptGameTransferInvitation(
+      'sky-dodge',
+      'g:b',
+      at,
+      (await store.getActiveGameTransfer('sky-dodge', at))!.invitationId,
+    );
     await store.createSubmission(11, 'g:b', 'Sky Dodge (B)');
     await store.setSubmissionSlug(11, 'sky-dodge');
 
     // B -> A: ownership boomerangs back.
     await store.createGameTransferInvitation('sky-dodge', 'g:b', 'g:a', 2, later);
-    await store.acceptGameTransferInvitation('sky-dodge', 'g:a', later);
+    await store.acceptGameTransferInvitation(
+      'sky-dodge',
+      'g:a',
+      later,
+      (await store.getActiveGameTransfer('sky-dodge', later))!.invitationId,
+    );
 
     const owned = await store.listSubmissionsByOwner('g:a');
     const records = await reconcileTransferredOwnership(store, 'g:a', owned);

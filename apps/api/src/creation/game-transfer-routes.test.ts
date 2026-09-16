@@ -5,6 +5,12 @@ import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from '../plat
 import { InMemoryStore } from '../platform/store.js';
 import { registerGameTransferRoutes } from './game-transfer-routes.js';
 
+// A response names the offer it answers, so a test has to look the id up.
+async function offerId(store: InMemoryStore, slug: string): Promise<string> {
+  const invite = await store.getActiveGameTransfer(slug, new Date().toISOString());
+  return invite?.invitationId ?? 'no-open-offer';
+}
+
 const sessionSecret = 'dev-session-secret-change-me';
 const AT = '2026-01-01T00:00:00.000Z';
 
@@ -244,6 +250,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/studio/games/sky/transfer/cancel',
       headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(cancel.json().transfer.status).toBe('cancelled');
 
@@ -251,6 +258,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/studio/games/sky/transfer/cancel',
       headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(cancelAgain.statusCode).toBe(404);
   });
@@ -288,6 +296,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/reject',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
 
     // The reject must invalidate the cache, not just the store.
@@ -315,6 +324,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/reject',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(reject.json().transfer.status).toBe('rejected');
 
@@ -356,6 +366,67 @@ describe('game transfer routes', () => {
     expect(after.json().transfers).toHaveLength(0);
   });
 
+  it('a replayed answer cannot land on an offer it never saw', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+    const staleId = first.json().transfer.invitationId;
+
+    // Taken back, then offered again: a second decision on the same slug.
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer/cancel',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: staleId },
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+    expect(second.json().transfer.invitationId).not.toBe(staleId);
+
+    const replayed = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: staleId },
+    });
+
+    expect(replayed.statusCode).toBe(404);
+    // The live offer is untouched: nobody answered it.
+    expect((await store.getActiveGameTransfer('sky', new Date().toISOString()))?.status).toBe('pending');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
+  });
+
+  it('refuses an answer that names no offer at all', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const unscoped = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+    });
+
+    expect(unscoped.statusCode).toBe(400);
+    expect(unscoped.json().error).toBe('invalid_invitation');
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
+  });
+
   it('the recipient can accept a pending invitation, moving canonical ownership', async () => {
     const { store, code } = await ownedGameWithRecipientCode();
     const app = await appWith(store);
@@ -371,6 +442,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/accept',
       headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(accept.statusCode).toBe(200);
     expect(accept.json().transfer).toMatchObject({ slug: 'sky', status: 'accepted', you: 'recipient' });
@@ -410,6 +482,7 @@ describe('game transfer routes', () => {
         method: 'POST',
         url: '/api/me/transfers/sky/accept',
         headers: { cookie: authCookie('g:grace') },
+        payload: { invitationId: await offerId(store, 'sky') },
       });
       expect(accept.statusCode).toBe(200);
       expect(invalidatePublishedGameCaches).toHaveBeenCalledWith('sky');
@@ -433,6 +506,7 @@ describe('game transfer routes', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/accept',
       headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: await offerId(store, 'sky') },
     });
     expect(accept.statusCode).toBe(404);
   });

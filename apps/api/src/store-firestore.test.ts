@@ -1103,7 +1103,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     const store = new FirestoreStore(db);
     await pendingInvite(store);
 
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     if (typeof result === 'string' || result === null) throw new Error('unreachable');
     expect(result.status).toBe('accepted');
 
@@ -1119,7 +1124,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     await pendingInvite(store);
     const before = (await store.bumpRoundGeneration(4242)) ?? 0;
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
 
     // Two ahead: one would still leave the sender a terminal receipt.
     expect((await store.getSubmission(4242))?.roundGeneration).toBe(before + 2);
@@ -1131,7 +1141,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     await pendingInvite(store);
     await store.ensureGameAgentKey('sky', 'g:ada', '2026-01-01T00:00:00.000Z');
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
 
     expect(await store.getGameAgentKey('sky')).toBeNull();
     expect(await store.ensureGameAgentKey('sky', 'g:grace', '2026-01-02T00:00:00.000Z')).toMatchObject({
@@ -1145,7 +1160,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     await pendingInvite(store);
     await store.setGameAutonomy('sky', 'auto-fix-defects');
 
-    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
 
     expect(await store.getGameAutonomy('sky')).toBeNull();
   });
@@ -1154,9 +1174,19 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);
     await pendingInvite(store);
-    await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
 
-    const again = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const again = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     if (typeof again === 'string' || again === null) throw new Error('unreachable');
     expect(again.status).toBe('accepted');
     expect((await store.getGameAccess('sky'))?.accessRevision).toBe(2);
@@ -1167,7 +1197,14 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     const store = new FirestoreStore(db);
     await pendingInvite(store);
 
-    expect(await store.acceptGameTransferInvitation('sky', 'g:mallory', '2026-01-02T00:00:00.000Z')).toBeNull();
+    expect(
+      await store.acceptGameTransferInvitation(
+        'sky',
+        'g:mallory',
+        '2026-01-02T00:00:00.000Z',
+        (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+      ),
+    ).toBeNull();
   });
 
   it('leaves ownership unchanged when a build round is active', async () => {
@@ -1178,7 +1215,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     await store.setSubmissionSlug(1, 'sky');
     await store.recordJobTransition(1, { to: 'building', at: '2026-01-02T00:00:00.000Z', by: 'creator' });
 
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     expect(result).toBe('busy');
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
@@ -1189,7 +1231,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     await pendingInvite(store);
     await store.recordSettledOwner('sky', 'g:mallory', 2, '2026-01-01T00:00:00.000Z', '2026-01-01T12:00:00.000Z');
 
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     expect(result).toBe('stale_owner');
   });
 
@@ -1199,7 +1246,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     await pendingInvite(store);
     await store.upsertUser({ uid: 'g:grace', tier: 'blocked' });
 
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     expect(result).toBe('ineligible');
   });
 
@@ -1208,7 +1260,12 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     const store = new FirestoreStore(db);
     await pendingInvite(store);
 
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-09T00:00:00.000Z');
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-09T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-09T00:00:00.000Z'))!.invitationId,
+    );
     expect(result).toBeNull();
   });
 
@@ -1219,12 +1276,22 @@ describe('FirestoreStore.acceptGameTransferInvitation', () => {
     // The sender holds the round-opening lease with no submission yet.
     await store.beginCheckoutRecovery('sky', 'nonce-1', Date.parse('2026-01-02T00:00:00.000Z'));
 
-    const busy = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const busy = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     expect(busy).toBe('busy');
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
 
     await store.finishCheckoutRecovery('sky', 'nonce-1');
-    const result = await store.acceptGameTransferInvitation('sky', 'g:grace', '2026-01-02T00:00:00.000Z');
+    const result = await store.acceptGameTransferInvitation(
+      'sky',
+      'g:grace',
+      '2026-01-02T00:00:00.000Z',
+      (await store.getActiveGameTransfer('sky', '2026-01-02T00:00:00.000Z'))!.invitationId,
+    );
     if (typeof result === 'string' || result === null) throw new Error('unreachable');
     expect(result.status).toBe('accepted');
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');

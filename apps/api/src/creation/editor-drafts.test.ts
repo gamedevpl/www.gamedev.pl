@@ -479,7 +479,12 @@ describe('editor draft routes', () => {
     const spy = vi.spyOn(store, 'setSubmissionSlug').mockImplementationOnce(async (...args) => {
       const result = await originalSetSlug(...args);
       // The window this fix closes: slug bound, active state not yet recorded.
-      acceptDuringWindow = await store.acceptGameTransferInvitation('garden-gather', 'g:recipient', at);
+      acceptDuringWindow = await store.acceptGameTransferInvitation(
+        'garden-gather',
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer('garden-gather', at))!.invitationId,
+      );
       return result;
     });
     try {

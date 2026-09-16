@@ -24,24 +24,47 @@ export interface GameTransferStore {
     recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'>;
 
-  // Null: not found, or caller mismatch. Idempotent once accepted.
+  // Null: not found, caller mismatch, or answering a different offer.
   acceptGameTransferInvitation(
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null>;
 
-  // Null when nothing pending, or the caller did not send it.
-  cancelGameTransferInvitation(slug: string, senderUid: string, at: string): Promise<GameTransferInvitation | null>;
+  // Null when nothing pending, the caller did not send it, or the id differs.
+  cancelGameTransferInvitation(
+    slug: string,
+    senderUid: string,
+    at: string,
+    invitationId?: string,
+  ): Promise<GameTransferInvitation | null>;
 
-  // Null when nothing pending, or the caller is not its recipient.
-  rejectGameTransferInvitation(slug: string, recipientUid: string, at: string): Promise<GameTransferInvitation | null>;
+  // Null when nothing pending, the caller is not its recipient, or the id differs.
+  rejectGameTransferInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    invitationId?: string,
+  ): Promise<GameTransferInvitation | null>;
 
   // Every invitation still pending for uid as recipient.
   listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]>;
 }
 
 const clone = (invite: GameTransferInvitation): GameTransferInvitation => ({ ...invite });
+
+/**
+ * Whether a response is answering the invitation it names.
+ *
+ * An id-less caller is admitted only against an id-less row, which is a
+ * pre-migration invitation; those expire within the invitation TTL, after
+ * which every row carries one and every response must name it.
+ */
+function answersInvitation(invite: GameTransferInvitation, invitationId: string | undefined): boolean {
+  if (invitationId === undefined) return invite.invitationId === undefined;
+  return invite.invitationId === invitationId;
+}
 
 // No canonical record: never current, whatever revision was sent.
 function ownerMatches(access: GameAccessRecord, uid: string, revision: number): boolean {
@@ -135,9 +158,11 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
     const existing = this.transfers.get(slug) ?? null;
     if (!existing || existing.recipientUid !== recipientUid) return null;
+    if (!answersInvitation(existing, invitationId)) return null;
     if (existing.status === 'accepted') return clone(existing);
     if (!isPending(existing, at)) return null;
 
@@ -163,9 +188,11 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     slug: string,
     senderUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
     const existing = this.transfers.get(slug) ?? null;
     if (!isPending(existing, at) || existing.senderUid !== senderUid) return null;
+    if (!answersInvitation(existing, invitationId)) return null;
     const updated: GameTransferInvitation = { ...existing, status: 'cancelled', respondedAt: at };
     this.transfers.set(slug, updated);
     return clone(updated);
@@ -175,9 +202,11 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
     const existing = this.transfers.get(slug) ?? null;
     if (!isPending(existing, at) || existing.recipientUid !== recipientUid) return null;
+    if (!answersInvitation(existing, invitationId)) return null;
     const updated: GameTransferInvitation = { ...existing, status: 'rejected', respondedAt: at };
     this.transfers.set(slug, updated);
     return clone(updated);
@@ -259,6 +288,7 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
     const ref = this.doc(slug);
     const accessRef = this.db.collection('gameAccess').doc(slug);
@@ -269,6 +299,7 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
       if (!existing || existing.recipientUid !== recipientUid) return null;
+      if (!answersInvitation(existing, invitationId)) return null;
       if (existing.status === 'accepted') return existing;
       if (!isPending(existing, at)) return null;
 
@@ -319,12 +350,14 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     slug: string,
     senderUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
     const ref = this.doc(slug);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
       if (!isPending(existing, at) || existing.senderUid !== senderUid) return null;
+      if (!answersInvitation(existing, invitationId)) return null;
       const updated: GameTransferInvitation = { ...existing, status: 'cancelled', respondedAt: at };
       tx.set(ref, updated);
       return updated;
@@ -335,12 +368,14 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
     const ref = this.doc(slug);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
       if (!isPending(existing, at) || existing.recipientUid !== recipientUid) return null;
+      if (!answersInvitation(existing, invitationId)) return null;
       const updated: GameTransferInvitation = { ...existing, status: 'rejected', respondedAt: at };
       tx.set(ref, updated);
       return updated;

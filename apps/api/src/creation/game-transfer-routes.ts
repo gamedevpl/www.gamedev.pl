@@ -22,6 +22,8 @@ export interface GameTransferRoutesOptions {
 
 export interface TransferSummary {
   slug: string;
+  // Names the offer a response must answer, not the slug it is about.
+  invitationId: string;
   status: GameTransferInvitation['status'];
   you: 'sender' | 'recipient';
   counterparty: { profileName: string | null };
@@ -30,6 +32,9 @@ export interface TransferSummary {
 }
 
 const TransferBody = z.object({ recipientCode: z.string().min(1).max(64) });
+
+// A response says which offer it answers; the slug alone outlives any one.
+const RespondBody = z.object({ invitationId: z.string().min(1).max(128) });
 
 const SlugParams = z.object({ slug: z.string().max(61).refine(isCanonicalSlug) });
 
@@ -59,6 +64,7 @@ async function toSummary(store: Store, invite: GameTransferInvitation, viewerUid
   const counterpartyUid = isSender ? invite.recipientUid : invite.senderUid;
   return {
     slug: invite.slug,
+    invitationId: invite.invitationId,
     status: invite.status,
     you: isSender ? 'sender' : 'recipient',
     counterparty: { profileName: await describeParticipant(store, counterpartyUid) },
@@ -136,8 +142,10 @@ export async function registerGameTransferRoutes(
       const params = SlugParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;
+      const body = RespondBody.safeParse(request.body ?? {});
+      if (!body.success) return reply.status(400).send({ error: 'invalid_invitation' });
       const at = new Date(now()).toISOString();
-      const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at);
+      const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at, body.data.invitationId);
       if (!result) return reply.status(404).send({ error: 'not_found' });
       invalidateTransferInboxCache(store, result.recipientUid);
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
@@ -183,8 +191,10 @@ export async function registerGameTransferRoutes(
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;
       const uid = request.user!.uid;
+      const body = RespondBody.safeParse(request.body ?? {});
+      if (!body.success) return reply.status(400).send({ error: 'invalid_invitation' });
       const at = new Date(now()).toISOString();
-      const result = await store.acceptGameTransferInvitation(slug, uid, at);
+      const result = await store.acceptGameTransferInvitation(slug, uid, at, body.data.invitationId);
       if (result === 'busy') return reply.status(409).send({ error: 'busy' });
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
@@ -203,8 +213,10 @@ export async function registerGameTransferRoutes(
       const params = SlugParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const { slug } = params.data;
+      const body = RespondBody.safeParse(request.body ?? {});
+      if (!body.success) return reply.status(400).send({ error: 'invalid_invitation' });
       const at = new Date(now()).toISOString();
-      const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at);
+      const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at, body.data.invitationId);
       if (!result) return reply.status(404).send({ error: 'not_found' });
       invalidateTransferInboxCache(store, result.recipientUid);
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });

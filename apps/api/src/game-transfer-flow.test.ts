@@ -114,6 +114,7 @@ async function handOver(app: FastifyInstance, store: InMemoryStore, from: string
     method: 'POST',
     url: '/api/me/transfers/comet-courier/accept',
     headers: session(to),
+    payload: { invitationId: initiated.json().transfer.invitationId },
   });
   expect(accepted.statusCode).toBe(200);
 }
@@ -226,7 +227,12 @@ describe('after a transfer, the sender keeps nothing', () => {
     let acceptDuringWindow: unknown;
     const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
       const held = await originalBegin(...args);
-      acceptDuringWindow = await store.acceptGameTransferInvitation('comet-courier', RECIPIENT, at);
+      acceptDuringWindow = await store.acceptGameTransferInvitation(
+        'comet-courier',
+        RECIPIENT,
+        at,
+        (await store.getActiveGameTransfer('comet-courier', at))!.invitationId,
+      );
       return held;
     });
     try {
@@ -381,6 +387,8 @@ describe('the transfer itself', () => {
       method: 'POST',
       url: '/api/me/transfers/comet-courier/accept',
       headers: session(RECIPIENT),
+      // The same answer to the same offer, replayed.
+      payload: { invitationId: (await store.getActiveGameTransfer('comet-courier', at))!.invitationId },
     });
 
     expect(again.statusCode).toBe(200);
