@@ -1,3 +1,4 @@
+import { withCheckoutWriter } from './workbench-lock.js';
 import {
   copyFileSync,
   existsSync,
@@ -94,7 +95,7 @@ export async function checkKit(
   };
 }
 
-export async function updateKit(input: Input & { release?: Awaited<ReturnType<typeof checkKit>> }): Promise<void> {
+async function updateKitUnlocked(input: Input & { release?: Awaited<ReturnType<typeof checkKit>> }): Promise<void> {
   const release = input.release ?? (await checkKit(input));
   const { root, lock } = release;
   const state = kitPath(root, '.gamedev');
@@ -173,4 +174,8 @@ export async function offerKitUpdate(input: Input): Promise<void> {
     return;
   }
   await updateKit({ ...input, release });
+}
+
+export function updateKit(input: Parameters<typeof updateKitUnlocked>[0]): ReturnType<typeof updateKitUnlocked> {
+  return withCheckoutWriter(input.cwd, () => updateKitUnlocked(input));
 }

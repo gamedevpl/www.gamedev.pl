@@ -447,3 +447,14 @@ blocked reports also enter the conversation. They do not mark checks or delivery
 as completed. Other adapters, including Muse, use activity inferred from their
 events and their normal progress messages; automatic MCP wiring for them is not
 implemented. Task diagnostics and progress text stay local, outside telemetry.
+
+### Browser-first creation and editing
+
+Run `gamedevpl create --play "Your game idea"` to open browser intake, or
+`gamedevpl play --edit` inside a checkout. The session runs independently of the
+terminal. Use Tools for CLI/platform operations, local attachments, screenshots,
+recording, diagnostic traces and phone pairing on trusted Wi-Fi. Compatible game
+updates can preserve state; unsupported updates require an explicit restart.
+
+See [Play workbench](../../docs/play-workbench.md) for access boundaries, adapter
+limitations, recovery and verification details. `--no-open` prints the session link.

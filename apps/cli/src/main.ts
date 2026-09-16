@@ -143,6 +143,41 @@ export async function runCli(
   if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
+    if ((verb === 'create' && flags.play) || (verb === 'play' && flags.edit)) {
+      const { launchWorkbench } = await import('./workbench-launch.js');
+      await launchWorkbench({
+        cwd: process.cwd(),
+        entry: argv[1]!,
+        env,
+        idea: verb === 'create' ? args.join(' ').trim() || undefined : undefined,
+        noOpen: flags['no-open'] === true,
+        write: (line) => io.stdout.write(`${line}\n`),
+      });
+      return EXIT_GREEN;
+    }
+    if (verb === '__play-session') {
+      const { runPlayWorker } = await import('./workbench-launch.js');
+      await runPlayWorker({
+        api,
+        path: args[0] ?? '',
+        env,
+        entry: argv[1]!,
+        login: async (write) => {
+          await runLoopbackLogin({
+            origin,
+            store,
+            env,
+            stdout: {
+              write: (chunk) => {
+                write(String(chunk));
+                return true;
+              },
+            } as NodeJS.WritableStream,
+          });
+        },
+      });
+      return EXIT_GREEN;
+    }
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;

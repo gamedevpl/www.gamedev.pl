@@ -19,6 +19,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Create and edit in a detached Play workbench with state-preserving updates, local evidence attachments, phone playtesting, and guarded CLI/platform controls.
+
 - Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
 - Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
 - Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).

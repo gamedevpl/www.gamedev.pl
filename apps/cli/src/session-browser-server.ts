@@ -1,3 +1,9 @@
+import { EVIDENCE_MARKER } from './workbench-evidence.js';
+import { lanAddresses, startPhonePreview, type PhoneReport } from './workbench-phone.js';
+import { embedGameHtml } from '@gamedevpl/contract';
+import { WORKBENCH_GAME_BRIDGE } from './workbench-game-bridge.js';
+import { workbenchArtifacts } from './workbench-artifacts.js';
+import { workbenchActionSchema, WORKBENCH_ACTIONS } from './workbench-actions.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import { stripVTControlCharacters } from 'node:util';
@@ -10,33 +16,79 @@ import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const generation = z.number();
 const command = z.discriminatedUnion('kind', [
-  z.object({ id, kind: z.literal('input'), promptId: generation, text: z.string() }).strict(),
-  z.object({ id, kind: z.literal('queue'), taskId: generation, text: z.string() }).strict(),
+  z
+    .object({
+      id,
+      kind: z.literal('input'),
+      promptId: generation,
+      text: z.string(),
+      attachments: z.array(z.string().uuid()).max(8).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      id,
+      kind: z.literal('queue'),
+      taskId: generation,
+      text: z.string(),
+      attachments: z.array(z.string().uuid()).max(8).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      id,
+      kind: z.literal('action'),
+      promptId: generation,
+      action: workbenchActionSchema,
+      argument: z.string().max(80).optional(),
+    })
+    .strict(),
   z.object({ id, kind: z.literal('stop'), taskId: generation }).strict(),
 ]);
 const envelope = z.object({ version: z.literal(1), sessionId: z.string().uuid(), command }).strict();
 const clean = (text: string) => stripVTControlCharacters(text).slice(-8000);
 
-async function body(req: IncomingMessage): Promise<unknown> {
+async function body(req: IncomingMessage, limit = 40_000): Promise<unknown> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 40_000) throw new Error('Request too large');
+    if (size > limit) throw new Error('Request too large');
     chunks.push(Buffer.from(chunk));
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-export async function startSessionBrowser(session: SessionController) {
+export async function startSessionBrowser(session: SessionController, options: { detached?: boolean } = {}) {
   const sessionId = randomUUID();
   const token = randomBytes(32).toString('hex');
-  const dispatch = createSessionCommands(session);
+  const artifacts = workbenchArtifacts();
+  const dispatch = createSessionCommands(session, 1024, (ids) => {
+    const records = artifacts.resolve(ids);
+    return EVIDENCE_MARKER + records.map((r) => JSON.stringify(r)).join('\n');
+  });
   let origin = '';
   let sequence = 0;
   let preview: { url: string; abort: AbortController; source: ReturnType<typeof previewSource> } | undefined;
   let sourceId = 0;
   let stopped = false;
+  let phone: Awaited<ReturnType<typeof startPhonePreview>> | undefined;
+  let phoneOpening = false;
+  const reports: PhoneReport[] = [];
+  const revokePhone = () => {
+    const previous = phone;
+    phone = undefined;
+    void previous?.close();
+  };
+
+  const snapshot = async () => {
+    const current = preview,
+      currentId = sourceId;
+    if (!current) throw Error('No preview');
+    const data = await current.source.snapshot();
+    if (current !== preview) throw Error('Preview changed');
+    return { ...data, html: embedGameHtml(data.html, WORKBENCH_GAME_BRIDGE), sourceId: currentId };
+  };
   const unsubscribe = session.subscribe(() => {
     sequence++;
   });
@@ -75,10 +127,15 @@ export async function startSessionBrowser(session: SessionController) {
         const state = session.get();
         reply(200, {
           version: 1,
+          detached: options.detached === true,
           sessionId,
           sequence,
           sourceId,
           hasPreview: Boolean(preview),
+          actions: Object.keys(WORKBENCH_ACTIONS),
+          addresses: lanAddresses(),
+          phone: phone && { url: phone.url, expiresAt: phone.expiresAt, qr: phone.qr },
+          reports,
           mode: state.mode,
           promptId: state.promptId,
           taskId: state.taskId,
@@ -105,7 +162,63 @@ export async function startSessionBrowser(session: SessionController) {
           reply(409, { error: 'Preview changed' });
           return;
         }
-        reply(200, { ...data, sourceId: currentId });
+        reply(200, {
+          ...data,
+          ...('html' in data ? { html: embedGameHtml(data.html, WORKBENCH_GAME_BRIDGE) } : {}),
+          sourceId: currentId,
+        });
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/phone') {
+        if (req.headers.origin !== origin || req.headers['content-type'] !== 'application/json') {
+          reply(403, { error: 'JSON and same-origin required' });
+          return;
+        }
+        const command = z
+          .object({ address: z.string().optional(), stop: z.boolean().optional() })
+          .strict()
+          .parse(await body(req));
+        if (phoneOpening) {
+          reply(409, { error: 'Pairing already in progress' });
+          return;
+        }
+        const pairingSource = preview;
+        if (!command.stop && !pairingSource) throw Error('Open a game before pairing');
+        phoneOpening = true;
+        try {
+          await phone?.close();
+          phone = undefined;
+          if (!command.stop)
+            phone = await startPhonePreview({
+              address: command.address ?? '',
+              snapshot: async () => {
+                if (preview !== pairingSource) throw Error('Paired game changed');
+                return snapshot();
+              },
+              status: async () =>
+                preview === pairingSource && pairingSource
+                  ? pairingSource.source.status()
+                  : { error: 'Paired game changed' },
+              artifact: artifacts.add,
+              reports,
+            });
+          if (stopped || preview !== pairingSource) {
+            await phone?.close();
+            phone = undefined;
+            return;
+          }
+          reply(200, { url: phone?.url, expiresAt: phone?.expiresAt });
+        } finally {
+          phoneOpening = false;
+        }
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/artifacts') {
+        if (req.headers.origin !== origin || req.headers['content-type'] !== 'application/json') {
+          reply(403, { error: 'JSON and same-origin required' });
+          return;
+        }
+        reply(200, artifacts.add(await body(req, 24_010_000)));
         return;
       }
       if (req.method === 'POST' && req.url === '/commands') {
@@ -145,19 +258,29 @@ export async function startSessionBrowser(session: SessionController) {
     });
   } catch (error) {
     unsubscribe();
+    artifacts.close();
     throw error;
   }
   return {
     url: `${origin}/#${token}`,
+    setSource(key: string, source: ReturnType<typeof previewSource>) {
+      if (stopped || preview?.url === key) return;
+      revokePhone();
+      preview?.abort.abort();
+      preview = { url: key, abort: new AbortController(), source };
+      sourceId++;
+    },
     setPreview(url: string) {
       if (stopped || preview?.url === url) return;
       const abort = new AbortController();
       const source = previewSource(url, abort.signal);
+      revokePhone();
       preview?.abort.abort();
       preview = { url, abort, source };
       sourceId++;
     },
     clearPreview() {
+      revokePhone();
       preview?.abort.abort();
       preview = undefined;
       sourceId++;
@@ -165,6 +288,8 @@ export async function startSessionBrowser(session: SessionController) {
     async close() {
       stopped = true;
       unsubscribe();
+      await phone?.close();
+      artifacts.close();
       preview?.abort.abort();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

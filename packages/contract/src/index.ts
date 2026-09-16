@@ -163,3 +163,5 @@ export type { LocalActivity } from './local-activity.js';
 export * from './editor-kit.js';
 export * from './editor-validate.js';
 export { validateLayerReachable } from './editor-validate-reach.js';
+
+export { embedGameHtml } from './game-embed.js';

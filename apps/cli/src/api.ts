@@ -29,6 +29,7 @@ function throwForStatus(res: Response, errBody: { error?: string; message?: stri
             EXIT_REFUSED,
           );
   error.apiCode = errBody.error;
+  error.httpStatus = res.status;
   throw error;
 }
 
@@ -93,7 +94,7 @@ export function createApi(input: {
       if (!res.ok) {
         throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });
       }
-      return (await res.json()) as T;
+      return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
     },
     async requestBytes(path: string): Promise<Buffer> {
       const res = await authorized(path, {

@@ -32,6 +32,10 @@ export async function runInkRepl(input: {
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
   currentPath?: string;
+  browserOnly?: boolean;
+  onReady?: (url: string) => void;
+  login?: (write: (line: string) => void) => Promise<void>;
+  onCheckpoint?: (state: { token: string | null; slug: string; checkout?: { root: string; slug: string } }) => void;
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
@@ -44,18 +48,6 @@ export async function runInkRepl(input: {
   let conversationId: string | undefined;
   let uid = '';
   let who = '';
-  try {
-    const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
-      'GET',
-      '/api/auth/me',
-      undefined,
-      AbortSignal.timeout(3000),
-    );
-    uid = user.uid;
-    who = user.handle ?? uid;
-  } catch {
-    who = 'account unavailable';
-  }
   let history: ReturnType<typeof historyStore> | undefined;
   let historyScope = '';
   let lastLines: string[] | undefined;
@@ -91,7 +83,6 @@ export async function runInkRepl(input: {
     session.restoreHistory(saved);
   };
   bindHistory(input.checkout?.slug ?? input.slug ?? '');
-  if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
   session.subscribe((state) => {
     if (state.lines === lastLines) return;
     lastLines = state.lines;
@@ -102,7 +93,45 @@ export async function runInkRepl(input: {
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
-  const browser = sessionBrowserHost(session);
+  const browser = sessionBrowserHost(session, input.browserOnly);
+  if (input.browserOnly) {
+    input.onReady?.(await browser.start());
+    session.writeLine('Play session ready. Closing the terminal does not stop this session.');
+  }
+  const refreshAccount = async (): Promise<void> => {
+    const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
+      'GET',
+      '/api/auth/me',
+      undefined,
+      AbortSignal.timeout(3000),
+    );
+    if (uid !== user.uid) {
+      saveHistory();
+      history = undefined;
+      historyScope = '';
+      conversationId = undefined;
+    }
+    uid = user.uid;
+    who = user.handle ?? uid;
+  };
+  try {
+    await refreshAccount();
+  } catch {
+    who = 'account unavailable';
+  }
+
+  if (input.browserOnly && !uid && input.login) {
+    const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
+    if (answer === 'Sign in') {
+      try {
+        await input.login(session.writeLine);
+        await refreshAccount();
+      } catch (error) {
+        session.writeLine(formatError(error));
+      }
+    }
+  }
+  if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
   const openPreview = (url: string): void => {
     telemetry.record('play_requested');
     void browser.open(url).then((opened) => {
@@ -112,6 +141,7 @@ export async function runInkRepl(input: {
   let workshop: Workshop | undefined;
   const readLogs = () => taskLogTail(workshop?.lastLog);
   const mount = (historyOffset = 0) => {
+    if (input.browserOnly) return;
     host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview, readLogs }), {
       stdin: input.io.stdin,
       stdout: input.io.stdout,
@@ -122,6 +152,10 @@ export async function runInkRepl(input: {
   mount();
   const stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
   const interactiveRun: InteractiveRun = async (request) => {
+    if (input.browserOnly)
+      throw new Error(
+        'This agent requires an interactive terminal permission handoff. Choose another installed agent or use gamedevpl connect in a terminal.',
+      );
     const offset = session.get().lines.length;
     host.instance?.unmount();
     try {
@@ -193,6 +227,7 @@ export async function runInkRepl(input: {
     onStatus: (status) => {
       if (isPublishTransition(watched, status.status)) telemetry.record('published');
       watched = status.status;
+      if (token && !workshop) browser.registerPlatform(input.api, token);
     },
     onSlug: (next) => {
       if (next !== slug) session.clearPreview();
@@ -207,6 +242,16 @@ export async function runInkRepl(input: {
       if (!spoke && (!input.checkout || token) && line.trim() && !line.trim().startsWith('/')) {
         spoke = true;
         telemetry.record('first_turn');
+      }
+      if (line === '/login' && input.login) {
+        try {
+          await input.login(session.writeLine);
+          await refreshAccount();
+          paintIdentity();
+        } catch (error) {
+          session.writeLine(formatError(error));
+        }
+        continue;
       }
       const turnScope = historyScope;
       let result;
@@ -237,6 +282,11 @@ export async function runInkRepl(input: {
             opened.onLocalPreview = browser.registerPreview;
             opened.interactiveRun = interactiveRun;
             opened.activityApi = input.api;
+            input.onCheckpoint?.({
+              token: opened.token,
+              slug: opened.slug,
+              checkout: { root: opened.root, slug: opened.slug },
+            });
             if (token !== opened.token) {
               token = opened.token;
               delete pendingExecution.current;
@@ -279,6 +329,7 @@ export async function runInkRepl(input: {
       if (result.conversationId !== undefined && (result.conversationId !== '' || historyScope === turnScope)) {
         conversationId = result.conversationId;
       }
+      input.onCheckpoint?.({ token, slug, checkout: workshop && { root: workshop.root, slug: workshop.slug } });
       saveHistory();
       if (result.next === 'quit') break;
     }

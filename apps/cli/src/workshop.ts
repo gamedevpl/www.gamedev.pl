@@ -1,4 +1,6 @@
 import { PROGRESS_INSTRUCTIONS } from './local-progress.js';
+
+import { withCheckoutWriter } from './workbench-lock.js';
 import { localPreviewTools, startWorkshopPreview, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
@@ -471,7 +473,7 @@ export async function readyToEdit(input: {
 }
 
 // One creator request, end to end: agent, ladder, offer.
-export async function workshopTurn(input: {
+async function workshopTurnUnlocked(input: {
   api: ApiClient;
   ws: Workshop;
   request: string;
@@ -489,4 +491,10 @@ export async function workshopTurn(input: {
   });
   if (ok) await offerSubmit(input);
   return ok;
+}
+
+export function workshopTurn(
+  input: Parameters<typeof workshopTurnUnlocked>[0],
+): ReturnType<typeof workshopTurnUnlocked> {
+  return withCheckoutWriter(input.ws.root, () => workshopTurnUnlocked(input));
 }

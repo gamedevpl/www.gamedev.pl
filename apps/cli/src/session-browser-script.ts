@@ -1,10 +1,15 @@
+import { WORKBENCH_PLAYER_SCRIPT } from './workbench-player-script.js';
+import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
 export const SESSION_BROWSER_SCRIPT = String.raw`
 const el = id => document.getElementById(id);
-const panel = el('panel'), frame = el('game'), draft = el('prompt');
+const panel = el('panel'), draft = el('prompt');
+let frame=el('game');
 let token = location.hash.slice(1) || sessionStorage.getItem('session-token') || '';
 if (/^[a-f0-9]{64}$/.test(token)) sessionStorage.setItem('session-token', token);
 history.replaceState(null, '', '/');
 let state, online = false, pending, sending = false, stopping = -1;
+try {draft.value=sessionStorage.getItem('play-draft')||'';const saved=sessionStorage.getItem('play-pending');if(saved&&saved.length<20000)pending=JSON.parse(saved);}catch{}
+draft.addEventListener('input',()=>sessionStorage.setItem('play-draft',draft.value));
 let sourceId = -1, revision = '', candidate = '', loading = false;
 async function api(path, data, timeout = 6000) {
   const response = await fetch(path, {
@@ -16,6 +21,7 @@ async function api(path, data, timeout = 6000) {
   return response.json();
 }
 function controls() {
+  el('run-operation').disabled = !online || state?.mode !== 'prompt' || !!state?.question || !!pending;
   const ready = online && state && !pending;
   el('send').disabled = !ready || state.mode === 'pick' || (state.mode === 'busy' && !state.localTask);
   el('send').textContent = state?.mode === 'busy' ? 'Queue request' : 'Send';
@@ -27,6 +33,9 @@ function controls() {
 function render(next) {
   const old = state;
   state = next;
+  el('session-lifetime').textContent=state.detached?'This session runs independently. Use End session in Tools to stop it.':'Shared with your terminal. Keep the terminal session open.';
+  if(!old&&!state.hasPreview&&!panel.open)panel.showModal();
+  const fingerprint=JSON.stringify([next.addresses,next.phone,next.reports]);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;devices(next);}
   if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
   el('identity').textContent = state.identity;
@@ -48,8 +57,8 @@ function render(next) {
     }
   }
   if (sourceId !== state.sourceId) {
-    sourceId = state.sourceId; revision = ''; candidate = '';
-    frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
+    sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';
+    swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
   }
   controls();
 }
@@ -60,9 +69,9 @@ async function deliver() {
     const result = await api('/commands', pending.envelope);
     if (result.status === 'accepted') {
       if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
-      else { if (pending.clearDraft && draft.value === pending.text) draft.value = ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task.' : 'Request accepted.'; }
+      else { if (pending.clearDraft && draft.value === pending.text) {draft.value = '';attachments=attachments.filter(a=>!pending.attachmentIds.includes(a.id));sessionStorage.removeItem('play-draft');tray();} el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task.' : 'Request accepted.'; }
     } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
-    pending = undefined;
+    pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {
     online = false;
     el('feedback').textContent = 'No receipt received. Retry keeps the same request ID and cannot enqueue twice.';
@@ -70,8 +79,8 @@ async function deliver() {
 }
 function send(command) {
   if (!online || !state || pending) return;
-  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, id:crypto.randomUUID()}}, text:draft.value, clearDraft:state.mode !== 'pick'};
-  void deliver();
+  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&command.kind!=='action'};
+  sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
 el('composer').onsubmit = event => {
   event.preventDefault(); if (!draft.value.trim() || !state || el('send').disabled) return;
@@ -85,29 +94,29 @@ panel.addEventListener('close', () => frame.focus());
 el('fullscreen').onclick = () => { const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); request.catch(() => { el('notice').textContent = 'Fullscreen is unavailable in this browser.'; }); };
 function viewport() { document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
 window.visualViewport?.addEventListener('resize', viewport); viewport();
-async function apply() {
+async function apply(force=false,automatic=false) {
   if (loading) return;
   loading = true; el('apply').disabled = true;
   const expectedSource = sourceId;
   try {
     const build = await api('/preview/game', undefined, 50000);
     if (build.sourceId !== expectedSource || sourceId !== expectedSource) return;
-    frame.srcdoc = build.html; revision = build.revision;
-    el('empty').hidden = true; el('apply').hidden = true; el('notice').textContent = '';
+    await swapBuild(build,force,automatic);
   } catch { el('notice').textContent = 'Could not load the update. The previous game remains available.'; }
   finally { loading = false; el('apply').disabled = false; }
 }
-el('apply').onclick = apply;
+el('apply').onclick = () => apply();
+let lastAuto='';
 async function previewTick() {
   try {
     if (online && state?.hasPreview && !loading) {
       const build = await api('/preview/status');
       if (build.sourceId === sourceId) {
-        el('notice').textContent = build.error || (build.busy || build.stale ? 'Building update…' : '');
+        el('notice').textContent = build.error || (build.busy || build.stale ? 'Building update…' : lastSwapError);
         if (!build.busy && !build.stale && build.revision) {
           candidate = build.revision;
           if (!revision) await apply();
-          else el('apply').hidden = candidate === revision;
+          else {el('apply').hidden=candidate===revision||el('policy').value==='freeze';if(candidate!==revision&&el('policy').value==='auto'&&lastAuto!==candidate){const caps=await gameRequest(frame,'capabilities').catch(()=>null);if(caps?.validate&&caps.safe){lastAuto=candidate;await apply(false,true);}else el('notice').textContent='Update ready · waiting for a supported safe point, or apply manually.';}}
         }
       }
     }
@@ -116,8 +125,10 @@ async function previewTick() {
 }
 async function tick() {
   try { const next = await api('/state'); online = true; render(next); }
-  catch { online = false; el('connection').textContent = 'Disconnected · keep the terminal open'; el('task').textContent = 'Disconnected. Reopen /play from your terminal session.'; controls(); }
+  catch { online = false; el('connection').textContent = 'Disconnected'; el('task').textContent = state?.detached?'Reconnect with gamedevpl play --edit in the launch directory. Accepted tasks are never replayed automatically.':'Disconnected. Reopen /play from your terminal session.'; controls(); }
   setTimeout(tick, 1000);
 }
+${WORKBENCH_PLAYER_SCRIPT}
+${WORKBENCH_TOOLS_SCRIPT}
 tick(); previewTick();
 `;

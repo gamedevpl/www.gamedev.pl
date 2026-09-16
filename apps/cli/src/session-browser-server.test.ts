@@ -132,7 +132,10 @@ it('serves only explicitly bound preview snapshots and fences a switched source'
   expect(() => server.setPreview('https://evil.example/')).toThrow();
   server.setPreview(`http://127.0.0.1:${address.port}/${'a'.repeat(48)}/`);
   const built = await fetch(`${url.origin}/preview/game`, { headers }).then((r) => r.json());
-  expect(built).toMatchObject({ html, revision, sourceId: 1 });
+  expect(built).toMatchObject({ revision, sourceId: 1 });
+  expect(built.html).toContain('test game');
+  expect(built.html).toContain('gdpl-embed');
+  expect(built.html).toContain('gdpl-workbench-game');
   server.clearPreview();
   expect((await fetch(`${url.origin}/preview/game`, { headers })).status).toBe(404);
   expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).toMatchObject({
