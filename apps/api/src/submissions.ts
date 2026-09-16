@@ -1091,6 +1091,7 @@ export async function registerSubmissionRoutes(
     backendFor,
     githubClient,
     publishedRef,
+    onPreviewPublished: (jobId: number) => invalidateStatusCache(jobId),
     ...(seedDispatch
       ? {
           handoff: (jobId: number, steer?: string) =>
@@ -1130,7 +1131,15 @@ export async function registerSubmissionRoutes(
   // Bumped on invalidate so a refresh that started on a stale snapshot cannot
   // repopulate the cache after feedback/handoff cleared it.
   const statusCacheEpoch = new Map<number, number>();
-  /** Drop every locale variant so the next poll rebuilds from the job record. */
+  /**
+   * Drop every locale variant so the next poll rebuilds from the job record.
+   *
+   * Also busts buildStatus's own previews/shots cache: every caller here is saying
+   * "something about this job's status changed," and a creator-uploaded screenshot
+   * or a gate-posted frame is exactly that kind of change -- without this, a route
+   * that writes a shot/preview and calls only invalidateStatusCache (feedback,
+   * handoff, draft lifecycle) would leave the 30s media cache serving stale media.
+   */
   function invalidateStatusCache(jobId: number): void {
     for (const key of [...statusCache.keys()]) {
       if (key.startsWith(`${jobId}:`)) statusCache.delete(key);
@@ -1139,6 +1148,7 @@ export async function registerSubmissionRoutes(
       if (key.startsWith(`${jobId}:`)) statusRefreshes.delete(key);
     }
     statusCacheEpoch.set(jobId, (statusCacheEpoch.get(jobId) ?? 0) + 1);
+    buildStatus.invalidateEvents(jobId);
   }
 
   const buildStatus = createBuildStatusAssembler({
@@ -1365,6 +1375,7 @@ export async function registerSubmissionRoutes(
     acknowledgeBuilderHandoff,
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
+    onGateScreenshotPosted: invalidateStatusCache,
   });
 
   /**

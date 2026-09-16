@@ -932,6 +932,49 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('shows a feedback screenshot immediately, not after the 30s media cache', async () => {
+    const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.jobId, secret);
+
+    const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(before.statusCode).toBe(200);
+    expect(before.json().media ?? []).toHaveLength(0);
+
+    const feedbackResponse = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: {
+        feedback: 'Here is what it looks like right now.',
+        context: { screenshotPng: TINY_PNG },
+      },
+    });
+    expect(feedbackResponse.statusCode).toBe(200);
+    const shots = await store.listBuildShots(job.jobId);
+    expect(shots.some((shot) => shot.label === 'creator-playtest')).toBe(true);
+
+    const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(after.statusCode).toBe(200);
+    expect(after.json().media?.length ?? 0).toBeGreaterThan(0);
+
+    await app.close();
+  });
+
   it('keeps feedback in the inbox after an optimistic submit marker', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();

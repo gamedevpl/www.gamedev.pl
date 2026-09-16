@@ -445,14 +445,26 @@ export class FirestoreBuildLogStore implements BuildLogStore {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     }
 
-    // Buffered fetch so filtering proposals still yields requested limit.
-    const bufferLimit = Math.max(limit * 2, limit + 20);
-    const snap = await this.messagesCollection(jobId).orderBy('createdAt', 'desc').limit(bufferLimit).get();
-    return snap.docs
-      .map((doc) => doc.data() as CreatorMessage)
-      .filter((message) => !message.proposal)
-      .slice(0, limit)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    // Pages until `limit` non-proposal messages are found.
+
+    // Capped at 5 pages -- bounded, never the unbounded scan it replaces.
+    const pageSize = Math.max(limit * 2, limit + 20);
+    const maxPages = 5;
+    const kept: CreatorMessage[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (let page = 0; page < maxPages && kept.length < limit; page += 1) {
+      let query = this.messagesCollection(jobId).orderBy('createdAt', 'desc').limit(pageSize);
+      if (cursor) query = query.startAfter(cursor);
+      const snap = await query.get();
+      if (snap.empty) break;
+      for (const doc of snap.docs) {
+        const message = doc.data() as CreatorMessage;
+        if (!message.proposal) kept.push(message);
+      }
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < pageSize) break;
+    }
+    return kept.slice(0, limit).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
 
   async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {

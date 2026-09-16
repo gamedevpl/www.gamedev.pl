@@ -235,13 +235,12 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   ): Promise<PriorRoundHistory[]> {
     if (!store || !record.slug || !viewerUid) return [];
     // Earlier rounds carry private chat, and a status token names no one.
+    if (!viewerOwnsSlug && !(await creatorOwnsSlug(store, record.slug, viewerUid))) return [];
+
     const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
     if (cached && cached.expiresAt > currentTime) return cached.value;
-
-    const owns = viewerOwnsSlug || (await creatorOwnsSlug(store, record.slug, viewerUid));
-    if (!owns) return [];
 
     // Started before this one, whoever built them: the slug's own history.
     const siblings = (await store.listSubmissionsBySlug(record.slug))

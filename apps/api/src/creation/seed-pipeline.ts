@@ -26,6 +26,8 @@ export interface SeedPipelineOptions {
   publishedRef: string;
   // Regenerates inside a request (seed-dispatch.ts); false means run here.
   handoff?: (jobId: number, steer?: string) => Promise<boolean>;
+  // Fired after the round-0 preview lands, to bust the media cache.
+  onPreviewPublished?: (jobId: number) => void;
 }
 
 type SeedBuildResult = { draft: SeedDraft } | { draft?: undefined; reason: string; provider?: string };
@@ -222,6 +224,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
       label: SEED_PREVIEW_LABEL,
       ...(input.locale.startsWith('pl') ? { labelLocalized: SEED_PREVIEW_LABEL_PL, locale: input.locale } : {}),
     });
+    options.onPreviewPublished?.(input.jobId);
   }
 
   return { seedDeliveryFor, seedBuild, regenerateSeed, publishSeedPreview, runSeedRegeneration };

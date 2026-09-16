@@ -16,6 +16,12 @@ function describeStoreContract(sliceName: string, spec: (makeStore: () => Store)
   });
 }
 
+const PROPOSAL = {
+  sourceRef: 'shot-1',
+  version: 'v1',
+  options: [],
+};
+
 describeStoreContract('creator messages', (makeStore) => {
   it('returns the newest limit messages in oldest-first order', async () => {
     const store = makeStore();
@@ -27,5 +33,23 @@ describeStoreContract('creator messages', (makeStore) => {
     }
     const messages = await store.listCreatorMessages(12, { limit: 3 });
     expect(messages.map((m) => m.text)).toEqual(['msg 3', 'msg 4', 'msg 5']);
+  });
+
+  // A proposal-heavy thread must not silently return fewer than `limit`.
+  it('still returns the full limit when proposals crowd the newest window', async () => {
+    const store = makeStore();
+    await store.createSubmission(13, 'g:owner', 'Proposal Heavy');
+    // Real messages are buried behind proposals; a single buffer misses them.
+    for (let i = 1; i <= 5; i += 1) {
+      await store.appendCreatorMessage(13, `real ${i}`);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    for (let i = 1; i <= 40; i += 1) {
+      await store.appendCreatorMessage(13, `proposal ${i}`, { proposal: PROPOSAL });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+
+    const messages = await store.listCreatorMessages(13, { limit: 5, excludeProposals: true });
+    expect(messages.map((m) => m.text)).toEqual(['real 1', 'real 2', 'real 3', 'real 4', 'real 5']);
   });
 });
