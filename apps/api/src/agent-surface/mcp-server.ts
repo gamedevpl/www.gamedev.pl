@@ -997,33 +997,22 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           seedNotice: { type: ['string', 'null'] },
           dispatchAttempt: {
             type: 'number',
-            description:
-              '1 for the very first dispatch of this game ever; incrementing on every dispatch after that ' +
-              '(revision, undelivered retry, or builder handoff). Not the same as round: an undelivered retry ' +
-              'resumes the same round number. Above 1 means call get_transcript before deciding what to build.',
+            description: 'Increments per dispatch; above 1 means call get_transcript. Not the round number.',
           },
           gate: {
             type: 'object',
-            description:
-              'Present only when the round already has a delivery whose gate needs a fix (preview_failed / red / ' +
-              'kit_outdated) — e.g. a prior session submitted and ended before its gate finished. Absent when ' +
-              'nothing is outstanding. warnings.code=must_fix_gate rides alongside this on the same reply.',
+            description: 'Set when a prior delivery still needs a gate fix.',
             properties: { status: { type: 'string' }, deliveryId: { type: 'string' } },
           },
         },
         required: ['sessionKey', 'jobId', 'workflow', 'seedAvailable', 'seedStatus'],
       },
       description:
-        'Bind this MCP client to a build round using a creator key in Authorization: Bearer plus a game slug, ' +
-        'a legacy round-scoped key, or OAuth Bearer + slug. ' +
-        'Call it ONCE per round and keep the sessionKey for the whole round: it lasts until expiresAt (hours, ' +
-        'not minutes), so calling start again before each operation to refresh the key is wrong. Doing that ' +
-        'costs a round trip every time and, in a client that renders MCP Apps views, leaves a duplicate status ' +
-        'card in the conversation for each call. If a call is ever refused as unauthenticated, then re-run start. ' +
-        'Returns that sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
-        '(the ordered start→done loop), seedAvailable/seedStatus/seedNotice, an inbox policy, and what to relay if a later call is refused. ' +
-        'Creator keys are openers only — never a write capability. OAuth access is identity only. ' +
-        'Does not treat Mcp-Session-Id as authority. ' +
+        'Bind this MCP client to a round with Bearer (creator key or OAuth) plus slug, or a legacy round key. ' +
+        'Call it once per round and keep sessionKey until expiresAt — do not re-run start to refresh it. ' +
+        'Re-run start only if a later call is refused as unauthenticated. ' +
+        'Returns sessionKey (pass it on every later call), workflow, seedAvailable/seedStatus/seedNotice, inbox policy, and refusal guidance. ' +
+        'Creator keys are openers only. OAuth access is identity only. Does not treat Mcp-Session-Id as authority. ' +
         CREATOR_TEXT_SAFETY,
       inputSchema: {
         type: 'object',

@@ -311,4 +311,14 @@ describe('MCP ownership tools', () => {
       expect(result.structured.proposalId).toBeUndefined();
     }
   });
+
+  it('treats a recreated editor as a stranger until they are invited again', async () => {
+    const { app, store } = await ready();
+    await acceptEditor(store);
+    await store.deleteAccountIdentity(EDITOR, AT);
+    await store.upsertUser({ uid: EDITOR });
+    const editorToken = await token(app, EDITOR, 'mcp ownership', 'editor-recreated');
+    const gone = await callTool(app, 'get_game_access', { slug: SLUG }, { authorization: `Bearer ${editorToken}` });
+    expect(gone.structured).toMatchObject({ error: GAME_UNAVAILABLE });
+  });
 });

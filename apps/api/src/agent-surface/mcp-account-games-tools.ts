@@ -85,11 +85,9 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
         required: ['games', 'total'],
       },
       description:
-        "List games associated with the creator's account. " +
-        'Accepts Authorization: Bearer (creator key or OAuth access), or sessionKey in arguments. ' +
-        'Returns each game’s slug, title, state, round, published status, whether an active round is open ' +
-        '(hasActiveRound), and builder. Use the returned slug with start({ slug }) if hasActiveRound is true, ' +
-        'open_round({ slug, feedback }) if published, or continue_draft({ slug, feedback }) if an unpublished draft.',
+        "List games on the creator's account. Returns slug, title, state, round, published, hasActiveRound, and builder. " +
+        'Use start({ slug }) if hasActiveRound, open_round({ slug, feedback }) if published, or continue_draft({ slug, feedback }) for a draft. ' +
+        'Accepts Bearer (creator key or OAuth) or sessionKey.',
       inputSchema: {
         type: 'object',
         properties: {

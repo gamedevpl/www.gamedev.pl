@@ -45,6 +45,18 @@ describe('game transfer proposal routes', () => {
     return `/api/me/studio/games/${SLUG}/transfer/propose/${proposalId}`;
   }
 
+  it('requires a signed-in session', async () => {
+    const { app, proposalId } = await seeded();
+    const get = await app.inject({ method: 'GET', url: url(proposalId) });
+    const post = await app.inject({
+      method: 'POST',
+      url: url(proposalId),
+      payload: { recipientCode: 'XXXX-YYYY' },
+    });
+    expect(get.statusCode).toBe(401);
+    expect(post.statusCode).toBe(401);
+  });
+
   it('hides a missing proposal the same way as another owner’s', async () => {
     const { app } = await seeded();
     const missing = await app.inject({

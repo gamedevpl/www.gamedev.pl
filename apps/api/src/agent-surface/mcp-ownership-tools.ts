@@ -81,33 +81,11 @@ export function createOwnershipTools(deps: OwnershipToolsDeps): Record<string, O
   return {
     get_game_access: {
       annotations: { title: 'Read current game access', ...READS },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          slug: { type: 'string' },
-          viewerRole: { type: 'string', enum: ['owner', 'editor'] },
-          permittedActions: { type: 'array', items: { type: 'string' } },
-          members: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                memberKey: { type: 'string' },
-                profileName: { type: ['string', 'null'] },
-                role: { type: 'string', enum: ['owner', 'editor'] },
-              },
-            },
-          },
-          accessVersion: { type: 'string' },
-        },
-        required: ['slug', 'viewerRole', 'permittedActions', 'members', 'accessVersion'],
-      },
-      description:
-        'Read the caller’s current role and permitted actions on a game they belong to. ' +
-        'Requires Authorization: Bearer with the ownership OAuth scope. Round keys cannot call this.',
+      outputSchema: { type: 'object' },
+      description: 'Read current role and members on a game the caller belongs to.',
       inputSchema: {
         type: 'object',
-        properties: { slug: { type: 'string', description: 'Game slug.' } },
+        properties: { slug: { type: 'string' } },
         required: ['slug'],
       },
       handler: async (args, ctx) => {
@@ -149,19 +127,8 @@ export function createOwnershipTools(deps: OwnershipToolsDeps): Record<string, O
     },
     propose_game_transfer: {
       annotations: { title: 'Propose a game transfer for human review', ...WRITES },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          proposalId: { type: 'string' },
-          reviewUrl: { type: 'string' },
-          expiresAt: { type: 'string' },
-          accessVersion: { type: 'string' },
-        },
-        required: ['proposalId', 'reviewUrl', 'expiresAt', 'accessVersion'],
-      },
-      description:
-        'Create an expiring transfer proposal for the signed-in owner to confirm in Studio. ' +
-        'Does not choose a recipient and does not complete the transfer. Requires the ownership scope.',
+      outputSchema: { type: 'object' },
+      description: 'Create an expiring Studio transfer proposal. Does not pick a recipient or complete the transfer.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -208,19 +175,8 @@ export function createOwnershipTools(deps: OwnershipToolsDeps): Record<string, O
     },
     get_game_transfer_proposal_receipt: {
       annotations: { title: 'Read a transfer proposal receipt', ...READS },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          status: { type: 'string', enum: ['not_found', 'pending', 'ready', 'expired', 'invalidated'] },
-          proposalId: { type: 'string' },
-          reviewUrl: { type: 'string' },
-          expiresAt: { type: 'string' },
-        },
-        required: ['status'],
-      },
-      description:
-        'Look up the caller’s transfer proposal by the same idempotency key. ' +
-        'After a timeout, call this then retry propose_game_transfer with the same key.',
+      outputSchema: { type: 'object' },
+      description: 'Look up a transfer proposal by idempotency key, then retry propose_game_transfer with that key.',
       inputSchema: {
         type: 'object',
         properties: { idempotencyKey: { type: 'string' } },
