@@ -123,12 +123,16 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
               return toolErr('invalid sessionKey — call start() again');
             }
             assertAgentTokenActive(claims, job, now());
+            const access = job.slug ? await resolveGameAccess(store, job.slug) : null;
             // A round key stops naming its creator once the game changes hands.
-            if (job.slug && !roundAuthorityCurrent(job, await resolveGameAccess(store, job.slug))) {
+            if (access && !roundAuthorityCurrent(job, access)) {
               return toolErr('invalid sessionKey — call start() again');
             }
-            if (job.ownerUid) {
-              creatorUid = job.ownerUid;
+            // The account is whoever owns the game now.
+            const owner = access?.owner;
+            const current = owner?.kind === 'creator' ? owner.uid : undefined;
+            if (current ?? job.ownerUid) {
+              creatorUid = current ?? job.ownerUid;
             }
           } catch (error) {
             if (error instanceof InvalidAgentTokenError) {

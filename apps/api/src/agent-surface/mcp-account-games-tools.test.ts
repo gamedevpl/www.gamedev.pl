@@ -82,8 +82,7 @@ async function callListAccountGames(
   const structured =
     body.result?.structuredContent ??
     (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
-  const errorText =
-    (structured as { error?: string } | undefined)?.error ?? body.result?.content?.[0]?.text;
+  const errorText = (structured as { error?: string } | undefined)?.error ?? body.result?.content?.[0]?.text;
   return { structured, errorText, isError: Boolean(body.result?.isError) };
 }
 
@@ -114,9 +113,13 @@ describe('list_account_games MCP tool', () => {
     const store = new InMemoryStore();
     const app = await createApp(store);
 
-    const { structured, isError } = await callListAccountGames(app, {}, {
-      authorization: 'Bearer invalid-bearer-token',
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      {},
+      {
+        authorization: 'Bearer invalid-bearer-token',
+      },
+    );
     expect(isError).toBe(true);
     expect(JSON.stringify(structured)).toMatch(/creator key or OAuth access/i);
   });
@@ -125,9 +128,13 @@ describe('list_account_games MCP tool', () => {
     const store = new InMemoryStore();
     const app = await createApp(store);
 
-    const { structured, isError } = await callListAccountGames(app, {}, {
-      authorization: `Bearer ${connectorSecret}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      {},
+      {
+        authorization: `Bearer ${connectorSecret}`,
+      },
+    );
     expect(isError).toBe(true);
     expect(JSON.stringify(structured)).toContain(PLATFORM_CONNECTOR_ONLY_REASON);
   });
@@ -142,9 +149,13 @@ describe('list_account_games MCP tool', () => {
       now: Date.now(),
     });
 
-    const { structured, isError } = await callListAccountGames(app, {}, {
-      authorization: `Bearer ${retiredKey}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      {},
+      {
+        authorization: `Bearer ${retiredKey}`,
+      },
+    );
     expect(isError).toBe(true);
     expect(JSON.stringify(structured)).toContain(RETIRED_GAME_KEY_REASON);
   });
@@ -154,9 +165,13 @@ describe('list_account_games MCP tool', () => {
     const app = await createApp(store);
     const creatorKey = mintCreatorAgentKey(secret, { creatorUid: OWNER, keyGeneration: 1, now: Date.now() });
 
-    const { structured, isError } = await callListAccountGames(app, {}, {
-      authorization: `Bearer ${creatorKey}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      {},
+      {
+        authorization: `Bearer ${creatorKey}`,
+      },
+    );
     expect(isError).toBe(false);
     expect(structured).toEqual({ games: [], total: 0 });
   });
@@ -196,9 +211,13 @@ describe('list_account_games MCP tool', () => {
     await store.createSubmission(JOB_OTHER, OTHER, 'Secret Island');
     await store.setSubmissionSlug(JOB_OTHER, 'secret-island');
 
-    const { structured, isError } = await callListAccountGames(app, {}, {
-      authorization: `Bearer ${creatorKey}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      {},
+      {
+        authorization: `Bearer ${creatorKey}`,
+      },
+    );
 
     expect(isError).toBe(false);
     const body = structured as {
@@ -262,6 +281,46 @@ describe('list_account_games MCP tool', () => {
     expect(body.games[0]?.slug).toBe('cyber-racer');
   });
 
+  it('names the current owner for an inherited round, not the row author', async () => {
+    // The row still names the sender after the recipient reopens it.
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+    const JOB_ID = 6100;
+    await store.createSubmission(JOB_ID, OWNER, 'Cyber Racer');
+    await store.setSubmissionSlug(JOB_ID, 'cyber-racer');
+    await store.ensureGameAccess('cyber-racer', OWNER, new Date().toISOString(), new Date().toISOString());
+    const theirs = await store.allocateJobId();
+    await store.createSubmission(theirs, OTHER, 'Their Own Game');
+    await store.setSubmissionSlug(theirs, 'their-own-game');
+    const kept = await store.allocateJobId();
+    await store.createSubmission(kept, OWNER, 'Kept By Sender');
+    await store.setSubmissionSlug(kept, 'kept-by-sender');
+
+    const at = new Date(Date.now() + 1000).toISOString();
+    const code = (await store.ensureRecipientCode(OTHER, at))!;
+    const revision = (await store.getGameAccess('cyber-racer'))!.accessRevision;
+    await store.createGameTransferInvitation('cyber-racer', OWNER, OTHER, revision, at, code);
+    const invite = (await store.getActiveGameTransfer('cyber-racer', at))!;
+    await store.acceptGameTransferInvitation('cyber-racer', OTHER, at, invite.invitationId);
+    // The recipient reopens the inherited round, which re-mints its keys.
+    const generation = (await store.bumpRoundGeneration(JOB_ID)) ?? 1;
+
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId: 'session-123456789013',
+      jobId: JOB_ID,
+      roundGeneration: generation,
+      now: Date.now(),
+    });
+
+    const { structured, isError } = await callListAccountGames(app, { sessionKey });
+    expect(isError).toBe(false);
+    const body = structured as { games: Array<{ slug: string | null }> };
+    const slugs = body.games.map((game) => game.slug);
+    expect(slugs).toContain('their-own-game');
+    // The other account's unrelated game must never appear here.
+    expect(slugs).not.toContain('kept-by-sender');
+  });
+
   it('respects limit parameter', async () => {
     const store = new InMemoryStore();
     const app = await createApp(store);
@@ -273,9 +332,13 @@ describe('list_account_games MCP tool', () => {
       await store.setSubmissionSlug(id, `game-${i}`);
     }
 
-    const { structured, isError } = await callListAccountGames(app, { limit: 2 }, {
-      authorization: `Bearer ${creatorKey}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      { limit: 2 },
+      {
+        authorization: `Bearer ${creatorKey}`,
+      },
+    );
     expect(isError).toBe(false);
     const body = structured as { total: number; games: Array<{ slug: string }> };
     expect(body.total).toBe(5);
@@ -290,9 +353,13 @@ describe('list_account_games MCP tool', () => {
     await store.createSubmission(401, OWNER, 'Game 1');
     await store.createSubmission(402, OWNER, 'Game 2');
 
-    const { structured, isError } = await callListAccountGames(app, { limit: 0.5 }, {
-      authorization: `Bearer ${creatorKey}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      { limit: 0.5 },
+      {
+        authorization: `Bearer ${creatorKey}`,
+      },
+    );
     expect(isError).toBe(false);
     const body = structured as { total: number; games: Array<{ slug: string }> };
     expect(body.total).toBe(2);
@@ -356,11 +423,18 @@ describe('list_account_games MCP tool', () => {
     await store.setSubmissionSlug(JOB_ID, 'legacy-game');
     await store.setSubmissionLastStatus(JOB_ID, 'building');
 
-    const { structured, isError } = await callListAccountGames(app, {}, {
-      authorization: `Bearer ${creatorKey}`,
-    });
+    const { structured, isError } = await callListAccountGames(
+      app,
+      {},
+      {
+        authorization: `Bearer ${creatorKey}`,
+      },
+    );
     expect(isError).toBe(false);
-    const body = structured as { total: number; games: Array<{ slug: string; state: string; hasActiveRound: boolean }> };
+    const body = structured as {
+      total: number;
+      games: Array<{ slug: string; state: string; hasActiveRound: boolean }>;
+    };
     expect(body.total).toBe(1);
     expect(body.games[0]?.state).toBe('building');
     expect(body.games[0]?.hasActiveRound).toBe(true);
