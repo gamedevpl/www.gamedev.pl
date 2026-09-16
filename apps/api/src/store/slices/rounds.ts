@@ -130,9 +130,11 @@ export class InMemoryRoundsStore implements RoundsStore {
     const sub = this.submissions.get(jobId);
     if (!sub) return null;
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
+    const epoch = sub.slug ? this.gameAccess.get(sub.slug)?.accessRevision : undefined;
     const next: SubmissionRecord = {
       ...sub,
       roundGeneration,
+      ...(epoch === undefined ? {} : { accessEpoch: epoch }),
       roundDeliveryCount: 0,
       roundTypecheckPreflightRefusals: 0,
       roundSubmitAttempts: 0,
@@ -295,10 +297,14 @@ export class FirestoreRoundsStore implements RoundsStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
+      // Read before the write: a transaction needs its reads up front.
+      const accessSnap = current.slug ? await tx.get(this.db.collection('gameAccess').doc(current.slug)) : null;
+      const epoch = accessSnap?.exists ? (accessSnap.data() as GameAccessRecord).accessRevision : undefined;
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
       const next: SubmissionRecord = {
         ...current,
         roundGeneration,
+        ...(epoch === undefined ? {} : { accessEpoch: epoch }),
         roundDeliveryCount: 0,
         roundTypecheckPreflightRefusals: 0,
         roundSubmitAttempts: 0,

@@ -43,3 +43,13 @@ export function appFactory(): {
     },
   };
 }
+
+// Rewrites the open invitation into the shape rows had before ids.
+export async function stripInvitationId(store: InMemoryStore, slug: string): Promise<void> {
+  const live = await store.getActiveGameTransfer(slug, new Date().toISOString());
+  if (!live) return;
+  delete (live as { invitationId?: string }).invitationId;
+  const transfers = (store as unknown as { gameTransferStore: { transfers: Map<string, unknown> } }).gameTransferStore
+    .transfers;
+  transfers.set(slug, live);
+}

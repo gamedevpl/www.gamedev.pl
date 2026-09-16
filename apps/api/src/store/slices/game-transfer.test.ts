@@ -397,4 +397,19 @@ describe('acceptGameTransferInvitation', () => {
     expect(result.status).toBe('accepted');
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');
   });
+
+  it('lets an account that signed up again receive a game', async () => {
+    // A code it could never use is worse than none.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:gone' });
+    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
+    await store.deleteAccountIdentity('g:gone', AT);
+    await store.upsertUser({ uid: 'g:gone' });
+    const code = (await store.ensureRecipientCode('g:gone', LATER))!;
+
+    const result = await store.createGameTransferInvitation('sky', 'g:ada', 'g:gone', 1, LATER, code);
+
+    expect(result).not.toBe('ineligible');
+  });
 });

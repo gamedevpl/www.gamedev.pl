@@ -75,11 +75,22 @@ export async function currentOwnerUid(
   return owner.kind === 'creator' ? owner.uid : fallback;
 }
 
-// A round's keys answer to the game's current owner.
+// A round's keys answer to the revision it opened under.
+
+// An owner comparison alone would revive rounds a transfer revoked,
+
+// A -> B -> A restores the uid, never the revision.
+
+// Rounds predating the epoch fall back to that weaker owner check.
 
 // Derived authority has no revision, so it is left alone.
-export function roundAuthorityCurrent(record: { ownerUid: string }, access: ResolvedGameAccess): boolean {
+export function roundAuthorityCurrent(
+  record: { ownerUid: string; accessEpoch?: number },
+  access: ResolvedGameAccess,
+): boolean {
   if (access.source !== 'canonical') return true;
+  // The epoch is what makes a revocation permanent.
+  if (record.accessEpoch !== undefined) return record.accessEpoch === access.accessRevision;
   return sameOwner(classifyOwnerUid(record.ownerUid), access.owner);
 }
 

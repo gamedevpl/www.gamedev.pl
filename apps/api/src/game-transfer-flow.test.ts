@@ -210,6 +210,32 @@ describe('after a transfer, the sender keeps nothing', () => {
     expect((await store.getSubmission(jobId))?.roundGeneration).toBe(generation);
   });
 
+  it('cannot revive a revoked round key by being given the game back', async () => {
+    // A -> B -> A restores the uid, never the revision.
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    // Past the cap, so the generation bump cannot refuse it.
+    for (let i = 0; i < MAX_REVOKED_ROUNDS_PER_TRANSFER + 4; i += 1) {
+      const later = await store.allocateJobId();
+      await store.createSubmission(later, SENDER, `Round ${i}`);
+      await store.setSubmissionSlug(later, 'comet-courier');
+      await store.bumpRoundGeneration(later);
+    }
+    const app = await createApp(store);
+    const generation = (await store.bumpRoundGeneration(jobId)) ?? 1;
+    const headers = { authorization: `Bearer ${mintAgentToken(jobId, SECRET, { roundGeneration: generation })}` };
+    expect((await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers })).statusCode).toBe(200);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+    expect((await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers })).statusCode).toBe(401);
+
+    await handOver(app, store, RECIPIENT, SENDER, at);
+
+    // Owned again, but this round's revision is two behind: still refused.
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(generation);
+    expect((await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers })).statusCode).toBe(401);
+  });
+
   it('cannot start work through a concurrent accept: the lock holds both ways', async () => {
     const store = new InMemoryStore();
     const { at } = await gameWithHistory(store, { published: true });

@@ -22,8 +22,8 @@ export interface GameTransferRoutesOptions {
 
 export interface TransferSummary {
   slug: string;
-  // Names the offer a response must answer.
-  invitationId: string;
+  // Names the offer a response must answer. Absent on pre-migration rows.
+  invitationId?: string;
   status: GameTransferInvitation['status'];
   you: 'sender' | 'recipient';
   counterparty: { profileName: string | null };
@@ -34,7 +34,11 @@ export interface TransferSummary {
 const TransferBody = z.object({ recipientCode: z.string().min(1).max(64) });
 
 // A response says which offer it answers.
-const RespondBody = z.object({ invitationId: z.string().min(1).max(128) });
+
+// Optional only for invitations written before ids existed; the store
+
+// admits an id-less answer only against an id-less row.
+const RespondBody = z.object({ invitationId: z.string().min(1).max(128).optional() });
 
 const SlugParams = z.object({ slug: z.string().max(61).refine(isCanonicalSlug) });
 

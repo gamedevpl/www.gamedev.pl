@@ -6,8 +6,8 @@ export type TransferStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' |
 
 export interface TransferSummary {
   slug: string;
-  // Names the offer a response must answer.
-  invitationId: string;
+  // Names the offer a response must answer. Absent on pre-migration rows.
+  invitationId?: string;
   status: TransferStatus;
   // Which side the viewer is on.
   you: 'sender' | 'recipient';
@@ -72,7 +72,7 @@ export async function startGameTransfer(slug: string, recipientCode: string): Pr
   ).transfer;
 }
 
-export async function cancelGameTransfer(slug: string, invitationId: string): Promise<TransferSummary> {
+export async function cancelGameTransfer(slug: string, invitationId?: string): Promise<TransferSummary> {
   return (
     await request<{ transfer: TransferSummary }>(`${forSlug(slug)}/cancel`, {
       method: 'POST',
@@ -90,7 +90,7 @@ export async function fetchIncomingTransfers(): Promise<TransferSummary[]> {
 export async function respondToTransfer(
   slug: string,
   decision: 'accept' | 'reject',
-  invitationId: string,
+  invitationId?: string,
 ): Promise<TransferSummary> {
   const path = `/api/me/transfers/${encodeURIComponent(slug)}/${decision}`;
   return (

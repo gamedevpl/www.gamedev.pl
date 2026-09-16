@@ -6,6 +6,7 @@ import {
   newTransferInvitation,
   type GameTransferInvitation,
 } from '../records/game-transfer.js';
+import { fencedOut } from '../records/game-access.js';
 import { isActiveBuildRound, revokedRoundGeneration } from '../../creation/job-state.js';
 import type { JobState } from '@gamedevpl/contract';
 import type { JobTransition } from '../../creation/job-state.js';
@@ -67,6 +68,20 @@ function ownerMatches(access: GameAccessRecord, uid: string, revision: number): 
   return access.ownerUid === uid && access.accessRevision === revision;
 }
 
+// The fence belongs to an incarnation, not to a uid.
+
+// A uid that signed up again is a different account.
+function erasedIncarnation(user: { createdAt?: string } | null, erasedAt: string | null): boolean {
+  if (erasedAt === null) return false;
+  // No record to date: treat the fence as covering it.
+  return user?.createdAt === undefined || fencedOut(erasedAt, user.createdAt);
+}
+
+// The fence document carries when the erasure began, or nothing.
+function fenceAt(snap: { exists: boolean; data: () => unknown }): string | null {
+  return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
+}
+
 // Recheck eligibility at commit time; erasure races are fenced separately.
 function recipientEligible(recipient: { tier: string; deletionScheduledFor?: string } | null): boolean {
   if (!recipient) return true;
@@ -104,9 +119,10 @@ export class InMemoryGameTransferStore implements GameTransferStore {
   transfers = new Map<string, GameTransferInvitation>();
 
   constructor(
-    private isErased: (uid: string) => boolean = () => false,
+    private erasedAt: (uid: string) => string | null = () => null,
     private getGameAccess: (slug: string) => GameAccessRecord | null = () => null,
-    private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string } | null = () => null,
+    private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string; createdAt?: string } | null = () =>
+      null,
     private getRecipientCodeOwner: (code: string) => string | null = () => null,
     private writeGameAccess: (slug: string, record: GameAccessRecord) => void = () => {},
     private hasActiveBuildRound: (slug: string) => boolean = () => false,
@@ -119,6 +135,10 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     // Revokes the sender's round channel, session, upload and opener tokens.
     private revokeRoundCapabilities: (slug: string) => void = () => {},
   ) {}
+
+  private erased(uid: string): boolean {
+    return erasedIncarnation(this.getUser(uid), this.erasedAt(uid));
+  }
 
   async getActiveGameTransfer(slug: string, at: string): Promise<GameTransferInvitation | null> {
     const existing = this.transfers.get(slug);
@@ -134,7 +154,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     at: string,
     recipientCode?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner'> {
-    if (this.isErased(senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if (this.erased(senderUid) || this.erased(recipientUid)) return 'ineligible';
     if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
     if (recipientCode !== undefined && this.getRecipientCodeOwner(recipientCode) !== recipientUid) return 'ineligible';
     const access = this.getGameAccess(slug);
@@ -162,7 +182,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     if (existing.status === 'accepted') return clone(existing);
     if (!isPending(existing, at)) return null;
 
-    if (this.isErased(existing.senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if (this.erased(existing.senderUid) || this.erased(recipientUid)) return 'ineligible';
     if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
 
     const access = this.getGameAccess(slug);
@@ -245,20 +265,23 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     const recipientRef = this.db.collection('users').doc(recipientUid);
     const codeRef = recipientCode !== undefined ? this.db.collection('recipientCodes').doc(recipientCode) : null;
     return this.db.runTransaction(async (tx) => {
-      const [snap, senderFence, recipientFence, accessSnap, recipientSnap, codeSnap] = await Promise.all([
+      const [snap, senderFence, recipientFence, accessSnap, senderSnap, recipientSnap, codeSnap] = await Promise.all([
         tx.get(ref),
         tx.get(this.erasureFence(senderUid)),
         tx.get(this.erasureFence(recipientUid)),
         tx.get(accessRef),
+        tx.get(this.db.collection('users').doc(senderUid)),
         tx.get(recipientRef),
         codeRef ? tx.get(codeRef) : Promise.resolve(null),
       ]);
-      if (senderFence.exists || recipientFence.exists) return 'ineligible';
 
       // Re-read at commit time, not the route's earlier code lookup.
+      const sender = senderSnap.exists ? (senderSnap.data() as { createdAt?: string }) : null;
       const recipient = recipientSnap.exists
-        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
+        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string; createdAt?: string })
         : null;
+      if (erasedIncarnation(sender, fenceAt(senderFence))) return 'ineligible';
+      if (erasedIncarnation(recipient, fenceAt(recipientFence))) return 'ineligible';
       if (!recipientEligible(recipient)) return 'ineligible';
 
       // A rotation between lookup and commit revokes the code.
@@ -299,21 +322,24 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (existing.status === 'accepted') return existing;
       if (!isPending(existing, at)) return null;
 
-      const [senderFence, recipientFence, recipientSnap, accessSnap, activeSnap, gameSnap, agentKeySnap] =
+      const [senderFence, recipientFence, senderSnap, recipientSnap, accessSnap, activeSnap, gameSnap, agentKeySnap] =
         await Promise.all([
           tx.get(this.erasureFence(existing.senderUid)),
           tx.get(this.erasureFence(recipientUid)),
+          tx.get(this.db.collection('users').doc(existing.senderUid)),
           tx.get(this.db.collection('users').doc(recipientUid)),
           tx.get(accessRef),
           tx.get(activeQuery),
           tx.get(gameRef),
           tx.get(agentKeyRef),
         ]);
-      if (senderFence.exists || recipientFence.exists) return 'ineligible';
 
+      const sender = senderSnap.exists ? (senderSnap.data() as { createdAt?: string }) : null;
       const recipient = recipientSnap.exists
-        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
+        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string; createdAt?: string })
         : null;
+      if (erasedIncarnation(sender, fenceAt(senderFence))) return 'ineligible';
+      if (erasedIncarnation(recipient, fenceAt(recipientFence))) return 'ineligible';
       if (!recipientEligible(recipient)) return 'ineligible';
 
       const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;

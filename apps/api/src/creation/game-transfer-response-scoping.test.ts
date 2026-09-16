@@ -1,7 +1,12 @@
 // The scoping half of the transfer routes: which offer a response answers.
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { appFactory, authCookie, ownedGameWithRecipientCode } from './game-transfer-routes.harness.js';
+import {
+  appFactory,
+  authCookie,
+  ownedGameWithRecipientCode,
+  stripInvitationId,
+} from './game-transfer-routes.harness.js';
 
 describe('a transfer response names the offer it answers', () => {
   const { appWith, closeAll } = appFactory();
@@ -47,7 +52,8 @@ describe('a transfer response names the offer it answers', () => {
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
 
-  it('refuses an answer that names no offer at all', async () => {
+  it('an answer naming no offer cannot land on one that has an id', async () => {
+    // Omission is the old shape, not an opt-out.
     const { store, code } = await ownedGameWithRecipientCode();
     const app = await appWith(store);
     await app.inject({
@@ -61,10 +67,33 @@ describe('a transfer response names the offer it answers', () => {
       method: 'POST',
       url: '/api/me/transfers/sky/accept',
       headers: { cookie: authCookie('g:grace') },
+      payload: {},
     });
 
-    expect(unscoped.statusCode).toBe(400);
-    expect(unscoped.json().error).toBe('invalid_invitation');
+    expect(unscoped.statusCode).toBe(404);
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
+  });
+
+  it('still lets an invitation written before ids existed be answered', async () => {
+    // Otherwise every open offer is stranded until its seven-day expiry.
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+    await stripInvitationId(store, 'sky');
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+      payload: {},
+    });
+
+    expect(accepted.statusCode).toBe(200);
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');
   });
 });
