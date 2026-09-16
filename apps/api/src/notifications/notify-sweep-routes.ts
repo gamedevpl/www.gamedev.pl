@@ -152,8 +152,8 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       }
 
       const active = openRounds.filter((record) => isSweepActive(record) && !closedIds.has(record.jobId));
-      let emitted = 0;
-      let deferred = 0;
+      let emitted = 0,
+        deferred = 0;
       const stalledIssues: number[] = [];
       const stalledCauses: Record<string, UncollectedFeedbackCause> = {};
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
@@ -315,7 +315,6 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           }
         }
       }
-
       // Bounded floor under the shelf write-through; failures are counted, never thrown.
       const shelfRebuild = await runShelfRebuildPass({ store, now });
       try {
