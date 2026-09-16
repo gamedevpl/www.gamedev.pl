@@ -1643,6 +1643,6 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   waitlistEntries(): WaitlistEntry[] {
     return Array.from(this.accessStore.waitlist.values());
   }
-  getCliChat = (uid: string) => this.cliChatStore.getCliChat(uid);
+  getCliChat = (uid: string, conversationId?: string) => this.cliChatStore.getCliChat(uid, conversationId);
   putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

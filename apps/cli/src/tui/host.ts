@@ -19,6 +19,7 @@ import { agentHint, discoverAgents } from '../agents.js';
 import { createCliTelemetry } from '../telemetry.js';
 import { reportInstall } from '../main.js';
 import { openUrl } from '../open-url.js';
+import { historyStore } from './history.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -39,6 +40,36 @@ export async function runInkRepl(input: {
   reportInstall(telemetry, input.env, isTty);
   let watched = '';
   let spoke = false;
+  let conversationId: string | undefined;
+  let uid = '';
+  let who = '';
+  try {
+    const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
+      'GET',
+      '/api/auth/me',
+      undefined,
+      AbortSignal.timeout(3000),
+    );
+    uid = user.uid;
+    who = user.handle ?? uid;
+  } catch {
+    who = 'account unavailable';
+  }
+  let history: ReturnType<typeof historyStore> | undefined;
+  let historyScope = '';
+  let lastLines: string[] | undefined;
+  let historyWarning = false;
+  const saveHistory = (): void => {
+    if (!history) return;
+    try {
+      history.save({ ...session.savedHistory(), conversationId });
+    } catch {
+      if (!historyWarning) {
+        historyWarning = true;
+        session.writeLine('Could not save local conversation history. This session can continue.');
+      }
+    }
+  };
   const session = createTuiSession(replBanner(isTty, input.env), () => {
     if (abort.current) {
       abort.current.abort();
@@ -47,6 +78,23 @@ export async function runInkRepl(input: {
     session.close();
     host.instance?.unmount();
     process.exit(EXIT_GREEN);
+  });
+  const bindHistory = (game: string): void => {
+    const scope = game ? `game:${game}` : `directory:${input.checkout?.root ?? process.cwd()}`;
+    if (!uid || input.env.GAMEDEV_HISTORY === 'off' || scope === historyScope) return;
+    saveHistory();
+    historyScope = scope;
+    history = historyStore(input.env, input.api.origin, uid, scope);
+    const saved = history.load();
+    conversationId = saved.conversationId;
+    session.restoreHistory(saved);
+  };
+  bindHistory(input.checkout?.slug ?? input.slug ?? '');
+  if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
+  session.subscribe((state) => {
+    if (state.lines === lastLines) return;
+    lastLines = state.lines;
+    saveHistory();
   });
   const foregroundApi = activityApi(input.api, (activity) => {
     const previous = session.get().activity;
@@ -79,11 +127,13 @@ export async function runInkRepl(input: {
     }
   };
   let token = input.token;
-  let conversationId: string | undefined;
-  let who = '';
   let slug = input.checkout?.slug ?? input.slug ?? '';
   let initialLine = input.initialLine;
-  const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
+  const paintIdentity = (): void => {
+    bindHistory(slug);
+    session.setIdentity(formatSessionIdentity(who, slug));
+  };
+  paintIdentity();
   let workshop: Workshop | undefined;
   const pendingExecution: PendingExecution = {};
   if (!input.checkout) {
@@ -145,18 +195,6 @@ export async function runInkRepl(input: {
       paintIdentity();
     },
   });
-  // Don't block the prompt on profile.
-  void input.api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile').then(
-    (profile) => {
-      who = profile.handle ?? profile.uid ?? '';
-      paintIdentity();
-    },
-    (error: unknown) => {
-      who = 'not signed in';
-      paintIdentity();
-      session.writeLine(formatError(error));
-    },
-  );
   try {
     for (;;) {
       const line = initialLine ?? (await session.prompt());
@@ -165,6 +203,7 @@ export async function runInkRepl(input: {
         spoke = true;
         telemetry.record('first_turn');
       }
+      const turnScope = historyScope;
       let result;
       try {
         result = await handleReplLine({
@@ -182,6 +221,7 @@ export async function runInkRepl(input: {
           pendingExecution,
           interactiveRun,
           onWorkshop: (opened) => {
+            bindHistory(opened.slug);
             if (workshop?.slug !== opened.slug || workshop?.root !== opened.root) session.clearPreview();
             workshop = opened;
             opened.onActivity = session.setActivity;
@@ -225,10 +265,14 @@ export async function runInkRepl(input: {
         slug = result.slug;
         paintIdentity();
       }
-      if (result.conversationId !== undefined) conversationId = result.conversationId;
+      if (result.conversationId !== undefined && (result.conversationId !== '' || historyScope === turnScope)) {
+        conversationId = result.conversationId;
+      }
+      saveHistory();
       if (result.next === 'quit') break;
     }
   } finally {
+    saveHistory();
     stopUpdateNotice();
     watch.stop();
     session.close();
