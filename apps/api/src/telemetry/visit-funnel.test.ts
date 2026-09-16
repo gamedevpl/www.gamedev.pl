@@ -224,6 +224,24 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('surfaces the handover rollup, so the rungs are not written for nobody', () => {
+    const at = '2026-09-15T10:00:00.000Z';
+    const funnel = summarizeVisitFunnel([
+      { visitId: 'v1', type: 'transfer_step', at, msSinceStart: 0, step: 'invite_sent' },
+      { visitId: 'v2', type: 'transfer_step', at, msSinceStart: 0, step: 'offer_shown' },
+      { visitId: 'v2', type: 'transfer_step', at, msSinceStart: 1, step: 'offer_accepted' },
+    ]);
+
+    expect(funnel.transfers).toEqual({
+      sent: 1,
+      cancelled: 0,
+      offered: 1,
+      answered: 1,
+      accepted: 1,
+      declined: 0,
+    });
+  });
+
   it('keeps waitlist and create steps from colliding', () => {
     // Both event types share the `step` field on the wire; a shared Set would make a
     // waitlist click look like a create step if the names ever overlapped.

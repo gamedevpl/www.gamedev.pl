@@ -120,6 +120,9 @@ const FILE_BUCKET = {
   'moderation-metrics': 'platform',
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',
+  'telemetry-daily': 'platform',
+  'telemetry-daily.test': 'platform',
+  'telemetry-daily-window.test': 'platform',
   'delivery-metrics': 'platform',
   // Pure vocabulary and formatting for a creator's public identity -- read by every
   // surface that renders a byline, not creation-domain business logic.
@@ -250,6 +253,7 @@ const FILE_BUCKET = {
   'quota-gate': 'creation',
   builder: 'creation',
   'typecheck-preflight': 'creation',
+  'language-kit-sources': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
   'checkout-recovery': 'creation',
@@ -308,6 +312,8 @@ const FILE_BUCKET = {
   'shelf-shadow': 'creation',
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
+  'studio-health-cache': 'creation',
+  'studio-health-cache.test': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
@@ -334,6 +340,7 @@ const FILE_BUCKET = {
   'mcp-source-patch-tools': 'agent-surface',
   'mcp-source-submit-tools': 'agent-surface',
   'mcp-game-create-tools': 'agent-surface',
+  'mcp-account-games-tools': 'agent-surface',
   'mcp-round-reopen-tools': 'agent-surface',
   'mcp-session-basics-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
@@ -440,6 +447,9 @@ const FILE_BUCKET = {
   'media-object-choice': 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
+  'catalog-effort': 'catalog',
+  'catalog-from-archive': 'catalog',
+  'catalog-commit-counts': 'catalog',
   'affinity-cache': 'catalog',
   recommend: 'catalog',
   recommendations: 'catalog',
@@ -506,6 +516,7 @@ const FILE_BUCKET = {
   'visit-cli-funnel': 'telemetry',
   'visit-cli-pilot': 'telemetry',
   'visit-proposals': 'telemetry',
+  'visit-transfers': 'telemetry',
   'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
 

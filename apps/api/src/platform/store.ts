@@ -104,6 +104,7 @@ export type { WorldEntriesStore };
 import type {
   NotificationType,
   ProposalNotificationType,
+  TransferNotificationType,
   SubmissionNotificationType,
   OperatorNotificationType,
   StoredNotification,
@@ -111,6 +112,7 @@ import type {
 export type {
   NotificationType,
   ProposalNotificationType,
+  TransferNotificationType,
   SubmissionNotificationType,
   OperatorNotificationType,
   StoredNotification,

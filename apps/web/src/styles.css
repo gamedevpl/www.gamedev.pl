@@ -1011,7 +1011,9 @@
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   display: block;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .matched-thumb-wrap:hover {
@@ -7483,6 +7485,7 @@ button.builder-mode-selector:disabled {
 
   /* Letter chips stay out of the tab order until the list is expanded. */
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-list,
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-transfer-inbox,
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-empty {
     display: none;
   }

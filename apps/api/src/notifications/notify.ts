@@ -13,6 +13,8 @@ import {
   operatorPushContent,
   proposalNotificationMessage,
   proposalPushContent,
+  transferNotificationMessage,
+  transferPushContent,
   submissionNotificationMessage,
   followedGamePushContent,
   submissionPushContent,
@@ -28,6 +30,7 @@ import type {
   NotificationType,
   OperatorNotificationType,
   ProposalNotificationType,
+  TransferNotificationType,
   StoredNotification,
   SubmissionNotificationType,
   SubmissionRecord,
@@ -67,6 +70,10 @@ function isOperatorNotification(type: NotificationType): type is OperatorNotific
 }
 
 /** Same narrowing for the proposal family, which has its own copy — see email-templates. */
+function isTransferNotification(type: NotificationType): type is TransferNotificationType {
+  return type.startsWith('transfer.');
+}
+
 function isProposalNotification(type: NotificationType): type is ProposalNotificationType {
   return type.startsWith('proposal.');
 }
@@ -164,9 +171,11 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
           null
         : notification.type === 'creator.digest'
           ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
-          : isProposalNotification(notification.type)
-            ? proposalNotificationMessage(user.email, locale, notification.type, emailParams)
-            : submissionNotificationMessage(user.email, locale, notification.type, emailParams);
+          : isTransferNotification(notification.type)
+            ? transferNotificationMessage(user.email, locale, notification.type, emailParams)
+            : isProposalNotification(notification.type)
+              ? proposalNotificationMessage(user.email, locale, notification.type, emailParams)
+              : submissionNotificationMessage(user.email, locale, notification.type, emailParams);
 
     if (!message) return;
     await mailer.send(message);
@@ -206,9 +215,11 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
           : isOperatorNotification(notification.type)
             ? // English regardless of the reader's locale — see the operator copy's comment.
               operatorPushContent(notification.type, notification.params.title ?? '')
-            : isProposalNotification(notification.type)
-              ? proposalPushContent(locale, notification.type, notification.params.title ?? '')
-              : submissionPushContent(locale, notification.type, notification.params.title ?? '');
+            : isTransferNotification(notification.type)
+              ? transferPushContent(locale, notification.params.title ?? '')
+              : isProposalNotification(notification.type)
+                ? proposalPushContent(locale, notification.type, notification.params.title ?? '')
+                : submissionPushContent(locale, notification.type, notification.params.title ?? '');
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
@@ -491,6 +502,34 @@ export async function emitFollowedGameNotification(
     bodyKey: 'notifications.game.new_version.body',
     params: { title: event.gameTitle, slug: event.slug },
     link: event.link,
+  });
+
+  await maybeSendEmail(deps, event.uid, notification);
+  if (created) await maybePush(deps, event.uid, notification);
+
+  return { created };
+}
+
+export interface TransferOfferedEvent {
+  uid: string;
+  slug: string;
+  gameTitle: string;
+  // This invitation, not this game: re-inviting is a new ask.
+  invitedAt: string;
+}
+
+export async function emitTransferOfferedNotification(
+  deps: EmitDeps,
+  event: TransferOfferedEvent,
+): Promise<{ created: boolean }> {
+  const { created, notification } = await createNotification(deps, event.uid, {
+    id: `transfer-${event.slug}-${event.invitedAt}`,
+    type: 'transfer.offered',
+    createdAt: new Date(deps.now?.() ?? Date.now()).toISOString(),
+    titleKey: 'notifications.transfer.offered.title',
+    bodyKey: 'notifications.transfer.offered.body',
+    params: { title: event.gameTitle, slug: event.slug },
+    link: '/studio',
   });
 
   await maybeSendEmail(deps, event.uid, notification);

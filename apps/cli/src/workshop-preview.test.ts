@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { runLocalBuild, type Workshop } from './workshop.js';
+import { runLocalBuild, workshopBrief, type Workshop } from './workshop.js';
 import { startLocalPlay } from './play.js';
 import { preflightAdapter } from './adapters.js';
 import { EventEmitter } from 'node:events';
@@ -57,7 +57,9 @@ it.each([true, false])('starts a preview only in interactive delegation: unatten
     run: () => ({ status: 0, stderr: '' }),
     ...(unattended ? { unattended: { deliver: false } } : {}),
   };
-  await expect(runLocalBuild({ ws, spec, brief: 'test', write: () => undefined })).resolves.toBe(true);
+  await expect(
+    runLocalBuild({ ws, spec, brief: workshopBrief('robot', 'add ramps'), write: () => undefined }),
+  ).resolves.toBe(true);
   expect(preflightAdapter).toHaveBeenCalled();
   expect(requireClaudeSubscription).toHaveBeenCalledTimes(1);
   const { spawnAdapter } = await import('./delegate.js');
@@ -66,6 +68,11 @@ it.each([true, false])('starts a preview only in interactive delegation: unatten
   expect(spawnAdapter).toHaveBeenCalledWith(
     expect.objectContaining({
       prompt: expect.stringContaining(unattended ? 'No live preview was supplied' : 'http://127.0.0.1:1/'),
+    }),
+  );
+  expect(spawnAdapter).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prompt: expect.stringContaining('Missing browser access blocks visual verification, not implementation'),
     }),
   );
   if (!unattended)

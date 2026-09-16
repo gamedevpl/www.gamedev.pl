@@ -16,10 +16,11 @@ import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { StudioPatPanel } from './StudioPatPanel.js';
+import { StudioTransferPanel } from './StudioTransferPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
 
 // One pane at a time, chosen by icon.
-export type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'workspace' | 'keys' | 'stats';
+export type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'workspace' | 'keys' | 'transfer' | 'stats';
 
 type DetailsPaneDef = {
   id: DetailsPaneId;
@@ -126,6 +127,10 @@ export function DetailsPanel({
       ? [{ id: 'workspace' as const, icon: 'download' as const, labelKey: 'studioPanel.rail.workspace' }]
       : []),
     { id: 'keys', icon: 'lock', labelKey: 'studioPanel.rail.credentials' },
+    // Needs a slug: the transfer routes key the invitation by it.
+    ...(game.slug && game.lastKnownStatus !== 'abandoned'
+      ? [{ id: 'transfer' as const, icon: 'handover' as const, labelKey: 'studioPanel.rail.transfer' }]
+      : []),
     ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
   ];
 
@@ -285,6 +290,8 @@ export function DetailsPanel({
         ) : null}
 
         {activePane === 'workspace' && game.slug ? <StudioWorkspaceCheckoutPanel slug={game.slug} /> : null}
+
+        {activePane === 'transfer' && game.slug ? <StudioTransferPanel slug={game.slug} /> : null}
 
         {activePane === 'stats' && catalogLive ? (
           <StatsSection

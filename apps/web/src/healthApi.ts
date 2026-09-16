@@ -92,6 +92,15 @@ export interface VisitFunnel {
       muted: number;
     }>;
   };
+  // Game handovers, both sides; optional like its neighbours.
+  transfers?: {
+    sent: number;
+    cancelled: number;
+    offered: number;
+    answered: number;
+    accepted: number;
+    declined: number;
+  };
   completion?: {
     requests: number;
     shown: number;

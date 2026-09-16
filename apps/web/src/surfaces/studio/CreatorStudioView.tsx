@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../AuthContext.js';
 import { AuthModal } from '../../AuthModal.js';
@@ -35,6 +35,7 @@ import {
 } from '../../studioShelf.js';
 import { DetailsPanel, type DetailsPaneId } from './StudioDetailsPanel.js';
 import { DraftShareControl } from './DraftShareControl.js';
+import { StudioTransferInbox } from './StudioTransferInbox.js';
 import { StudioShelfControls, StudioShelfList } from './StudioShelf.js';
 import { defaultTabFor, resolveTab, studioAddress, tabAvailable } from './studioTabs.js';
 import { healthFor } from './studioHealth.js';
@@ -396,6 +397,13 @@ export function CreatorStudioView({
   // Long shelf auto-compacts; short shelf compacts only if manually collapsed.
   const compactShelf = Boolean(activeGame) && (showShelfTools || shelfCollapsedByUser);
   const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
+  // A waiting invitation opens the shelf once: the notification's link lands here.
+  const offerOpenedShelf = useRef(false);
+  const openShelfForOffer = useCallback(() => {
+    if (offerOpenedShelf.current) return;
+    offerOpenedShelf.current = true;
+    setShelfOpen(true);
+  }, []);
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
   // link worked and the game vanished.
@@ -635,6 +643,33 @@ export function CreatorStudioView({
     );
   }
 
+  // Collapsed rail or off-canvas drawer: mounted, but nobody can read it.
+  const inboxVisible = shelfOpen || !(compactShelf || (Boolean(activeGame) && shelfIsDrawer));
+
+  const transferInbox = (
+    <StudioTransferInbox
+      visible={inboxVisible}
+      onOffersPresent={openShelfForOffer}
+      onAccepted={async (slug) => {
+        // Named, so a game below the shelf ceiling still comes back.
+        try {
+          const shelfPage = await fetchStudioGames(slug);
+          // The page is capped; keep the open game even when it falls outside.
+          setGames((prev) => {
+            const open = selectedRef.current;
+            if (!open || shelfPage.games.some((game) => game.token === open)) return shelfPage.games;
+            const kept = prev.filter((game) => game.token === open);
+            return kept.length > 0 ? [...shelfPage.games, ...kept] : shelfPage.games;
+          });
+          setShelfTruncated(shelfPage.truncated);
+          setTotalGames(shelfPage.totalGames);
+        } catch {
+          // The invitation is gone either way; the shelf catches up on reload.
+        }
+      }}
+    />
+  );
+
   const shelfList = (
     <StudioShelfList
       games={visibleGames}
@@ -699,6 +734,7 @@ export function CreatorStudioView({
             <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
               <PixelIcon name="sparkle" size={14} /> {t('studioPanel.createFirst')}
             </button>
+            {transferInbox}
           </div>
         ) : null}
 
@@ -812,6 +848,7 @@ export function CreatorStudioView({
                 onFilterChange={setShelfFilter}
               />
               {shelfTruncated ? <p className="studio-shelf-truncated">{t('studioPanel.shelf.truncated')}</p> : null}
+              {transferInbox}
               {shelfList}
             </aside>
 

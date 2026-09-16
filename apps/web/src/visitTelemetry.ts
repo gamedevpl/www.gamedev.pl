@@ -16,6 +16,7 @@ import {
   type HowToPlayVia,
   type InviteStep,
   type PartyStep,
+  type TransferStep,
   type PartyVia,
   type PlayVia,
   type RemixControl,
@@ -53,6 +54,7 @@ export type {
   RemixStep,
   StudioStep,
   StudioStepDetail,
+  TransferStep,
   VisitRouteKind,
   WaitlistStep,
 };
@@ -124,6 +126,8 @@ export type VisitEvent =
    * game itself reported, which is a phone's menu button or the host keyboard.
    */
   | { type: 'party_step'; step: PartyStep; via?: PartyVia }
+  // A game changing hands. No slug, no counterparty, no code.
+  | { type: 'transfer_step'; step: TransferStep }
   | { type: 'beta_welcome_step'; step: BetaWelcomeStep }
   /**
    * Studio / self-build funnel facts on the same visit stream as `create_step`.
@@ -420,6 +424,20 @@ export function recordFramedPlayStep(step: FramedPlayStep): void {
   if (step !== 'shown') currentSession.flush();
 }
 
+let recordedTransferSteps = new Set<TransferStep>();
+
+/**
+ * Handing a game over. The step names carry which side acted, so no second
+ * dimension is needed; the slug and the counterparty deliberately never travel.
+ */
+export function recordTransferStep(step: TransferStep): void {
+  if (!currentSession || recordedTransferSteps.has(step)) return;
+  recordedTransferSteps.add(step);
+  currentSession.record({ type: 'transfer_step', step });
+  // Accepting changes route; send before the navigation.
+  if (step === 'offer_accepted') currentSession.flush();
+}
+
 let recordedPartySteps = new Set<string>();
 
 /**
@@ -608,6 +626,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedWaitlistSteps = new Set();
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
+  recordedTransferSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
@@ -651,6 +670,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   recordedWaitlistSteps = new Set();
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
+  recordedTransferSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();

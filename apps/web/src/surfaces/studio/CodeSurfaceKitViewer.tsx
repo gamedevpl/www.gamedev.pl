@@ -5,10 +5,12 @@ import { tokenizeLine } from './codeTokens.js';
 
 // GA-09: the kit .d.ts, opened at the jump's line.
 export function CodeSurfaceKitViewer({
+  path,
   declaration,
   activeLine,
   onClose,
 }: {
+  path?: string;
   declaration: string;
   activeLine: number;
   onClose: () => void;
@@ -42,7 +44,7 @@ export function CodeSurfaceKitViewer({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="code-surface-kit-viewer-head">
-          <h3 id="code-surface-kit-viewer-title">{t('studioPanel.code.kitViewerTitle')}</h3>
+          <h3 id="code-surface-kit-viewer-title">{path ?? t('studioPanel.code.kitViewerTitle')}</h3>
           <button
             type="button"
             className="code-surface-kit-close"

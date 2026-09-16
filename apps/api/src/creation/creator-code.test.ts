@@ -89,9 +89,12 @@ function kitTarball(files: Record<string, string>): Buffer {
 }
 
 /** A games store and an object store sharing one fake bucket, with a kit published. */
-function storesWithKit(kitDts: string): { games: GamesStore; objectStore: GcsObjectStore } {
+function storesWithKit(
+  kitDts: string,
+  extra: Record<string, string> = {},
+): { games: GamesStore; objectStore: GcsObjectStore } {
   const { impl, objects } = stubGcs();
-  const tarball = kitTarball({ 'shared/game-kit.d.ts': kitDts });
+  const tarball = kitTarball({ 'shared/game-kit.d.ts': kitDts, ...extra });
   objects.set(
     'kits/current.json',
     Buffer.from(JSON.stringify({ current: ENGINE_REF, previous: null, updatedAt: '2026-08-10T00:00:00.000Z' })),
@@ -646,6 +649,32 @@ describe('the Code surface routes (creator-code.ts)', () => {
         { objectStore, games: withKitGames },
       );
     });
+
+    it('accepts EDITOR.ts that imports defineEditor from the kit', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
+        'shared/editor-def.ts': 'export function defineEditor(value: number) { return value; }\n',
+      });
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/typecheck',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: {
+              overlay: [
+                {
+                  path: 'EDITOR.ts',
+                  content: `import { defineEditor } from '../../shared/editor-def.ts';\nexport default defineEditor(1);\n`,
+                },
+              ],
+            },
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toEqual({ ok: true });
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
   });
 
   describe('POST /api/me/studio/games/:slug/sources/preview', () => {
@@ -820,8 +849,32 @@ describe('the Code surface routes (creator-code.ts)', () => {
           expect(res.json()).toEqual({
             engineRef: ENGINE_REF,
             declaration: 'declare const GameKit: { boot(): void };',
+            files: {},
           });
           expect(res.headers.etag).toBe(`"${ENGINE_REF}"`);
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
+
+    it('includes editor-def so Studio can resolve EDITOR.ts imports', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
+        'shared/editor-def.ts': 'export function defineEditor() {}\n',
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+      });
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'GET',
+            url: '/api/me/studio/games/sky-dodge/sources/kit-declaration',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toEqual({
+            engineRef: ENGINE_REF,
+            declaration: 'declare const GameKit: { boot(): void };',
+            files: { 'shared/editor-def.ts': 'export function defineEditor() {}\n' },
+          });
         },
         { objectStore, games: withKitGames },
       );

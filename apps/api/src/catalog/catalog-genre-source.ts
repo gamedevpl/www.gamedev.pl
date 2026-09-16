@@ -1,4 +1,5 @@
 import { createGitHubClient, type GitHubClient } from './github-client.js';
+import { createSnapshotReaderFromEnv } from './game-snapshot.js';
 import type { CatalogGenreSource } from './recommendations.js';
 import type { RecommendGame } from './recommend.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
@@ -31,7 +32,11 @@ export function createCatalogGenreSource(options: CatalogGenreSourceOptions): Ca
 
   async function load(): Promise<RecommendGame[]> {
     const entries = await client.getCatalog(ref);
-    const games = entries.filter(isPublishedEntry).map((entry) => ({ slug: entry.slug, genre: entry.genre }));
+    const games = entries.filter(isPublishedEntry).map((entry) => ({
+      slug: entry.slug,
+      genre: entry.genre,
+      ...(typeof entry.effort === 'number' ? { effort: entry.effort } : {}),
+    }));
     cache = { games, expiresAt: now() + ttlMs };
     return games;
   }
@@ -57,6 +62,17 @@ export function createCatalogGenreSource(options: CatalogGenreSourceOptions): Ca
 }
 
 export async function createCatalogGenreSourceFromEnv(fetchImpl?: typeof fetch): Promise<CatalogGenreSource | null> {
+  const snapshot = createSnapshotReaderFromEnv();
+  if (snapshot) {
+    return createCatalogGenreSource({
+      client: {
+        async getCatalog() {
+          return (await snapshot.getCatalog()) ?? Promise.reject(new Error('catalog snapshot is unavailable'));
+        },
+      },
+    });
+  }
+
   const token = process.env.GITHUB_TOKEN?.trim();
   const repo = process.env.GAMES_REPO?.trim();
   if (token && repo) {
