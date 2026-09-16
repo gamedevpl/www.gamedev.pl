@@ -32,6 +32,12 @@ export interface NotificationsStore {
   // Stamp emailedAt after a successful send so retries don't re-send.
   markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
 
+  // Pending notification emails across users, optionally bounded by age.
+  listPendingEmailNotifications(opts?: {
+    limit?: number;
+    createdAfter?: string;
+  }): Promise<Array<{ uid: string; notification: StoredNotification }>>;
+
   // Upsert a browser push subscription (idempotent by endpoint).
   savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void>;
 
@@ -105,6 +111,23 @@ export class InMemoryNotificationsStore implements NotificationsStore {
     const forUser = this.notifications.get(uid);
     const n = forUser?.get(id);
     if (n) forUser!.set(id, { ...n, emailedAt: at ?? new Date().toISOString() });
+  }
+
+  async listPendingEmailNotifications(opts?: {
+    limit?: number;
+    createdAfter?: string;
+  }): Promise<Array<{ uid: string; notification: StoredNotification }>> {
+    const limit = opts?.limit ?? 200;
+    const pending: Array<{ uid: string; notification: StoredNotification }> = [];
+    for (const [uid, rows] of this.notifications) {
+      for (const notification of rows.values()) {
+        if (notification.emailedAt !== null) continue;
+        if (opts?.createdAfter && notification.createdAt < opts.createdAfter) continue;
+        pending.push({ uid, notification: { ...notification } });
+      }
+    }
+    pending.sort((a, b) => a.notification.createdAt.localeCompare(b.notification.createdAt));
+    return pending.slice(0, limit);
   }
 
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
@@ -206,6 +229,25 @@ export class FirestoreNotificationsStore implements NotificationsStore {
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
     await this.notificationRef(uid, id).set({ emailedAt: at ?? new Date().toISOString() }, { merge: true });
+  }
+
+  async listPendingEmailNotifications(opts?: {
+    limit?: number;
+    createdAfter?: string;
+  }): Promise<Array<{ uid: string; notification: StoredNotification }>> {
+    const limit = opts?.limit ?? 200;
+    const scanLimit = Math.min(Math.max(limit * 4, limit), 1_000);
+    const snap = await this.db.collectionGroup('notifications').where('emailedAt', '==', null).limit(scanLimit).get();
+    const pending: Array<{ uid: string; notification: StoredNotification }> = [];
+    for (const doc of snap.docs) {
+      const uid = doc.ref.parent.parent?.id;
+      if (!uid) continue;
+      const notification = doc.data() as StoredNotification;
+      if (opts?.createdAfter && notification.createdAt < opts.createdAfter) continue;
+      pending.push({ uid, notification });
+      if (pending.length >= limit) break;
+    }
+    return pending;
   }
 
   private pushSubRef(uid: string, endpoint: string) {

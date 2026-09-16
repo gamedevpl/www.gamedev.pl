@@ -1107,31 +1107,30 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   ): Promise<{ created: boolean; notification: StoredNotification }> {
     return this.notificationsStore.createNotification(uid, notification);
   }
-
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
     return this.notificationsStore.listNotifications(uid, opts);
   }
-
   async markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void> {
     return this.notificationsStore.markNotificationsRead(uid, ids);
   }
-
   async deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void> {
     return this.notificationsStore.deleteNotifications(uid, ids);
   }
-
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
     return this.notificationsStore.markNotificationEmailed(uid, id, at);
   }
-
+  async listPendingEmailNotifications(opts?: {
+    limit?: number;
+    createdAfter?: string;
+  }): Promise<Array<{ uid: string; notification: StoredNotification }>> {
+    return this.notificationsStore.listPendingEmailNotifications(opts);
+  }
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
     return this.notificationsStore.savePushSubscription(uid, subscription);
   }
-
   async listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]> {
     return this.notificationsStore.listPushSubscriptions(uid);
   }
-
   async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
     return this.notificationsStore.deletePushSubscription(uid, endpoint);
   }
