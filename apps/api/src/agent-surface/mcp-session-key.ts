@@ -1,5 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { ACTOR_UID_RE, InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
+import {
+  ACTOR_UID_RE,
+  decodeActorUidField,
+  encodeActorUidField,
+  InvalidAgentTokenError,
+  STALE_AGENT_TOKEN_REASON,
+} from '../platform/agent-token.js';
 
 /**
  * Short-lived MCP session capability (BY-05).
@@ -100,7 +106,7 @@ export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOpti
   const ttlHours = options.ttlHours ?? mcpSessionKeyTtlHours();
   const exp = Math.floor(nowMs / 1000) + ttlHours * 60 * 60;
   const signature = sign(options.sessionId, options.jobId, options.roundGeneration, exp, secret, options.actorUid);
-  const actorField = options.actorUid ? `.${options.actorUid}` : '';
+  const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
   return Buffer.from(
     `${options.sessionId}.${options.jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`,
     'utf8',
@@ -125,7 +131,7 @@ export function looksLikeMcpSessionKey(candidate: string): boolean {
   const expRaw = parts[3];
   const actorOrSig = parts[4];
   const signature = parts.length === 6 ? parts[5] : actorOrSig;
-  const actorOk = parts.length === 5 || ACTOR_UID_RE.test(actorOrSig ?? '');
+  const actorOk = parts.length === 5 || decodeActorUidField(actorOrSig ?? '') !== undefined;
   return (
     Boolean(sessionId) &&
     SESSION_ID_RE.test(sessionId) &&
@@ -151,7 +157,7 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
     const jobIdRaw = parts[1];
     const generationRaw = parts[2];
     const expRaw = parts[3];
-    const actorUid = parts.length === 6 ? parts[4] : undefined;
+    const actorUid = parts.length === 6 ? decodeActorUidField(parts[4] ?? '') : undefined;
     const signature = parts.length === 6 ? parts[5] : parts[4];
     if (
       !sessionId ||
@@ -163,7 +169,7 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
       !/^\d+$/.test(jobIdRaw) ||
       !/^\d+$/.test(generationRaw) ||
       !/^\d+$/.test(expRaw) ||
-      (actorUid !== undefined && !ACTOR_UID_RE.test(actorUid)) ||
+      (parts.length === 6 && actorUid === undefined) ||
       !/^[a-f0-9]{64}$/i.test(signature)
     ) {
       throw new InvalidAgentTokenError();

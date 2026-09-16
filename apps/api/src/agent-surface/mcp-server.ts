@@ -708,7 +708,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(FINISHED_REASON);
     }
 
-    const actorUid = sessionActorUid ?? record.ownerUid;
+    const actorUid = sessionActorUid ?? claims.actorUid ?? record.ownerUid;
     if (record.slug && !(await canActOnSlug(store, record.slug, actorUid, 'build'))) {
       return toolErr('this session can no longer write this game');
     }

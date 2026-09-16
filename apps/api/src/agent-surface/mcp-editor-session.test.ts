@@ -174,6 +174,51 @@ describe('MCP editor session actor', () => {
     expect((brief.structured as { error: string }).error).toMatch(/can no longer write this game/i);
   });
 
+  it('refuses a leftover editor upload URL after the owner removes them', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await seedSharedRound(store);
+
+    const minted = await app.inject({
+      method: 'GET',
+      url: '/api/me/creator-agent-key',
+      headers: authHeaders(EDITOR),
+    });
+    const creatorKey = minted.json().key as string;
+    const sessionId = await initialize(app);
+    const started = await callTool(
+      app,
+      'start',
+      { slug: SLUG },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${creatorKey}` },
+    );
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const issued = await callTool(
+      app,
+      'screenshot_upload_url',
+      { sessionKey, caption: 'before remove' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(issued.isError).toBe(false);
+    const url = (issued.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+
+    expect(await store.removeEditor(SLUG, OWNER, EDITOR, AT)).toMatchObject({ editorUids: [] });
+
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const put = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { 'content-type': 'image/png' },
+      payload: pngBytes,
+    });
+    expect(put.statusCode).toBe(401);
+    expect(put.json()).toMatchObject({ error: expect.stringMatching(/finished/i) });
+  });
+
   it('refuses fromLatestDelivery without mode when the previous lane cannot be proven preview', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);

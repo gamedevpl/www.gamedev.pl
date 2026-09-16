@@ -901,6 +901,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.gameQuotaStore.checkAndIncrementGameQuota(slug, dateStr, limit, action);
   }
 
+  async decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void> {
+    return this.gameQuotaStore.decrementGameQuota(slug, dateStr, action);
+  }
+
   async getCreationLimits(): Promise<CreationLimits | null> {
     return this.quotaStore.getCreationLimits();
   }

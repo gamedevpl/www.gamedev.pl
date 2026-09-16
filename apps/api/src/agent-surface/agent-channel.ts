@@ -18,6 +18,7 @@ import {
   type AgentTokenAccess,
 } from '../platform/agent-token.js';
 import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import {
   assertUploadTokenUnexpired,
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
@@ -802,6 +803,10 @@ export async function registerAgentChannelRoutes(
       reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       return null;
     }
+    if (record.slug && upload.actorUid && !(await canActOnSlug(store, record.slug, upload.actorUid, 'edit'))) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      return null;
+    }
 
     try {
       assertAgentTokenActive(
@@ -1082,7 +1087,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { jobId, record } = resolved;
+      const { jobId, record, actorUid } = resolved;
       if (!agentTokenSecret) {
         return reply.status(503).send({ error: 'the build channel is not configured' });
       }
@@ -1156,6 +1161,7 @@ export async function registerAgentChannelRoutes(
         kind: 'screenshot',
         ...(label ? { label } : {}),
         ...(mintedFor ? { version: mintedFor } : {}),
+        ...(actorUid ? { actorUid } : {}),
         now: issuedAt,
         ttlSeconds,
       });

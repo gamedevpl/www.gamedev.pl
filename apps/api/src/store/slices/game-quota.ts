@@ -12,6 +12,7 @@ export interface GameQuotaStore {
     limit: number,
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number }>;
+  decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void>;
 }
 
 export class InMemoryGameQuotaStore implements GameQuotaStore {
@@ -34,6 +35,14 @@ export class InMemoryGameQuotaStore implements GameQuotaStore {
     const next = { ...currentCounters, [action]: currentVal + 1 };
     this.usage.set(key, next);
     return { allowed: true, current: currentVal + 1 };
+  }
+
+  async decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void> {
+    const key = `${slug}:${dateStr}`;
+    const currentCounters = this.usage.get(key) ?? emptyUsageCounters();
+    const currentVal = currentCounters[action] ?? 0;
+    if (currentVal <= 0) return;
+    this.usage.set(key, { ...currentCounters, [action]: currentVal - 1 });
   }
 }
 
@@ -68,6 +77,18 @@ export class FirestoreGameQuotaStore implements GameQuotaStore {
       const next = { ...currentCounters, [action]: currentVal + 1 };
       tx.set(ref, next);
       return { allowed: true, current: currentVal + 1 };
+    });
+  }
+
+  async decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void> {
+    const ref = this.doc(slug, dateStr);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const currentCounters = { ...emptyUsageCounters(), ...(snap.data() as UsageCounters) } as UsageCounters;
+      const currentVal = currentCounters[action] ?? 0;
+      if (currentVal <= 0) return;
+      tx.set(ref, { ...currentCounters, [action]: currentVal - 1 });
     });
   }
 }

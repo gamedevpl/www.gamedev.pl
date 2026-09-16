@@ -38,8 +38,17 @@ describe('agent build-channel token', () => {
       actorUid: 'g:bea',
     });
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    const tampered = Buffer.from(decoded.replace('g:bea', 'g:ada'), 'utf8').toString('base64url');
+    const parts = decoded.split('.');
+    parts[3] = Buffer.from('g:ada', 'utf8').toString('base64url');
+    const tampered = Buffer.from(parts.join('.'), 'utf8').toString('base64url');
     expect(() => verifyAgentToken(tampered, secret)).toThrow(InvalidAgentTokenError);
+  });
+
+  it('round-trips an Apple uid that contains dots', () => {
+    const appleUid = 'a:001234.abcdef.0000';
+    const token = mintAgentToken(42, secret, { roundGeneration: 1, now, ttlDays: 1, actorUid: appleUid });
+    expect(verifyAgentToken(token, secret).actorUid).toBe(appleUid);
+    expect(Buffer.from(token, 'base64url').toString('utf8').split('.')).toHaveLength(5);
   });
 
   it('keeps a managed MCP opener separate from the build-channel capability', () => {

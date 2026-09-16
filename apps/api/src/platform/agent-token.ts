@@ -66,7 +66,22 @@ export interface MintAgentTokenOptions {
   actorUid?: string;
 }
 
-export const ACTOR_UID_RE = /^[A-Za-z0-9:_-]+$/;
+// Apple `sub` values contain dots; encode them on the wire.
+export const ACTOR_UID_RE = /^[A-Za-z0-9:._-]+$/;
+
+export function encodeActorUidField(uid: string): string {
+  return Buffer.from(uid, 'utf8').toString('base64url');
+}
+
+export function decodeActorUidField(raw: string): string | undefined {
+  if (!raw || !/^[A-Za-z0-9_-]+$/.test(raw)) return undefined;
+  try {
+    const uid = Buffer.from(raw, 'base64url').toString('utf8');
+    return ACTOR_UID_RE.test(uid) ? uid : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Round-key lifetime. Reads `SELF_BUILD_KEY_TTL_DAYS` (default 14) and, when the
@@ -132,7 +147,7 @@ export function mintAgentToken(jobId: number, secret: string, options: MintAgent
   const ttlDays = options.ttlDays ?? selfBuildKeyTtlDays();
   const exp = Math.floor(nowMs / 1000) + ttlDays * 24 * 60 * 60;
   const signature = signRoundScoped(jobId, options.roundGeneration, exp, secret, options.actorUid);
-  const actorField = options.actorUid ? `.${options.actorUid}` : '';
+  const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
   return Buffer.from(`${jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`, 'utf8').toString(
     'base64url',
   );
@@ -223,7 +238,7 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
 
     if (parts.length === 4 || parts.length === 5) {
       const [jobIdRaw, generationRaw, expRaw, actorOrSig, maybeSig] = parts;
-      const actorUid = parts.length === 5 ? actorOrSig : undefined;
+      const actorUid = parts.length === 5 ? decodeActorUidField(actorOrSig ?? '') : undefined;
       const signature = parts.length === 5 ? maybeSig : actorOrSig;
       if (
         !jobIdRaw ||
@@ -234,7 +249,7 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
         !/^\d+$/.test(generationRaw) ||
         !/^\d+$/.test(expRaw) ||
         !/^[a-f0-9]{64}$/i.test(signature) ||
-        (actorUid !== undefined && !ACTOR_UID_RE.test(actorUid))
+        (parts.length === 5 && actorUid === undefined)
       ) {
         throw new InvalidAgentTokenError();
       }

@@ -47,6 +47,21 @@ describe('mcp sessionKey', () => {
     });
   });
 
+  it('round-trips an Apple uid that contains dots', () => {
+    const appleUid = 'a:001234.abcdef.0000';
+    const sessionId = newMcpSessionId();
+    const key = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: 42,
+      roundGeneration: 2,
+      now,
+      ttlHours: 24,
+      actorUid: appleUid,
+    });
+    expect(verifyMcpSessionKey(key, secret).actorUid).toBe(appleUid);
+    expect(Buffer.from(key, 'base64url').toString('utf8').split('.')).toHaveLength(6);
+  });
+
   it('rejects a tampered actorUid on a sessionKey', () => {
     const key = mintMcpSessionKey(secret, {
       sessionId: 'abc',
@@ -58,7 +73,7 @@ describe('mcp sessionKey', () => {
     });
     const decoded = Buffer.from(key, 'base64url').toString('utf8');
     const parts = decoded.split('.');
-    parts[4] = 'g:ada';
+    parts[4] = Buffer.from('g:ada', 'utf8').toString('base64url');
     const forged = Buffer.from(parts.join('.'), 'utf8').toString('base64url');
     expect(() => verifyMcpSessionKey(forged, secret)).toThrow(InvalidAgentTokenError);
   });
