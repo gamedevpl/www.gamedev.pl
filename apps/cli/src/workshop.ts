@@ -1,3 +1,4 @@
+import { localPreviewTools, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
 import { runMuseWithApprovals } from './muse-approval.js';
@@ -27,9 +28,7 @@ import { repairLoop } from './repair-loop.js';
 import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
-
 export type PickChoice = (choices: string[], question: string) => Promise<string>;
-
 export type AdapterRun = (input: {
   spec: AdapterSpec;
   prompt: string;
@@ -247,7 +246,7 @@ export async function runLocalBuild(input: {
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws } = input;
-  const spec = configureAdapter(input.spec, ws.env);
+  let spec = configureAdapter(input.spec, ws.env);
   const output = taskOutput(input.write);
   ws.lastLog = output.path;
   input = { ...input, write: output.write };
@@ -262,6 +261,7 @@ export async function runLocalBuild(input: {
   let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
   let authCheck: Promise<void> | undefined;
+  let localTools: Awaited<ReturnType<typeof localPreviewTools>>;
   try {
     if (!(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
     if (!ws.runAdapter && spec.name === 'claude') {
@@ -303,6 +303,8 @@ export async function runLocalBuild(input: {
         input.write(formatError(error));
       }
     }
+    localTools = await localPreviewTools({ spec, previewUrl, abort: controller.signal, write: input.write });
+    if (localTools) spec = localTools.spec;
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
     input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
@@ -312,7 +314,7 @@ export async function runLocalBuild(input: {
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
     success = await repairLoop({
-      brief: `${input.brief}\n${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
+      brief: `${input.brief}\n${localTools ? LOCAL_PREVIEW_INSTRUCTIONS : ''}${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
@@ -391,6 +393,7 @@ export async function runLocalBuild(input: {
     });
     return success;
   } finally {
+    await localTools?.close();
     output.flush();
     await presence?.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
     if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);

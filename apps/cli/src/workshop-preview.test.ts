@@ -27,6 +27,18 @@ vi.mock('./claude-auth.js', async (original) => ({
   ...(await original<typeof import('./claude-auth.js')>()),
   requireClaudeSubscription: vi.fn(async () => undefined),
 }));
+const localToolsClose = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('./local-preview-tools.js', async (original) => ({
+  ...(await original<typeof import('./local-preview-tools.js')>()),
+  localPreviewTools: vi.fn(async (input) =>
+    input.previewUrl
+      ? {
+          spec: { ...input.spec, headless: [...input.spec.headless, '--local-mcp'] },
+          close: localToolsClose,
+        }
+      : undefined,
+  ),
+}));
 const roots: string[] = [];
 afterEach(() => {
   vi.clearAllMocks();
@@ -65,6 +77,15 @@ it.each([true, false])('starts a preview only in interactive delegation: unatten
   const { spawnAdapter } = await import('./delegate.js');
   expect(spawnAdapter).toHaveBeenCalledWith(expect.objectContaining({ authCheck: expect.any(Promise) }));
   expect(startLocalPlay).toHaveBeenCalledTimes(unattended ? 0 : 1);
+  expect(localToolsClose).toHaveBeenCalledTimes(unattended ? 0 : 1);
+  if (!unattended) {
+    expect(spawnAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({ headless: expect.arrayContaining(['--local-mcp']) }),
+        prompt: expect.stringContaining('Use gamedevpl_local MCP tools'),
+      }),
+    );
+  }
   expect(spawnAdapter).toHaveBeenCalledWith(
     expect.objectContaining({
       prompt: expect.stringContaining(unattended ? 'No live preview was supplied' : 'http://127.0.0.1:1/'),
