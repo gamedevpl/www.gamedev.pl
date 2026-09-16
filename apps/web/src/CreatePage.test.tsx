@@ -108,10 +108,15 @@ describe('CreatePage', () => {
     expect(container.textContent).toContain('Free to use');
     expect(container.textContent).toContain('Claude Code');
 
-    // The showcase is real catalog entries, not invented ones.
-    expect(container.textContent).toContain('Made exactly this way');
+    // Proof sits after the process, not under the composer.
+    expect(container.textContent).toContain('Live in the catalog');
     expect(container.textContent).toContain('Sky Dodge');
     expect(container.textContent).toContain('Arena Tag');
+    const html = container.innerHTML;
+    expect(html.indexOf('create-steps')).toBeGreaterThan(-1);
+    expect(html.indexOf('create-builders')).toBeGreaterThan(-1);
+    expect(html.indexOf('create-steps')).toBeLessThan(html.indexOf('catalog-rail-section'));
+    expect(html.indexOf('create-builders')).toBeLessThan(html.indexOf('catalog-rail-section'));
 
     // A wide median build time reads as "give up" — never state one.
     expect(container.textContent).not.toMatch(/\b(median|ETA)\b/i);

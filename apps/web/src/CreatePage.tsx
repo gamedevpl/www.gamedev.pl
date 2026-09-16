@@ -23,7 +23,7 @@ type CreatePageProps = {
 const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'] as const;
 
 // Real catalog cards for the showcase, no new data — just a slice.
-const SHOWCASE_LIMIT = 6;
+const SHOWCASE_LIMIT = 4;
 
 // /create: the creation landing page. No ETA anywhere on it, ever.
 export function CreatePage({
@@ -61,13 +61,6 @@ export function CreatePage({
           exampleChips={exampleChips}
         />
       </div>
-
-      <CatalogRail
-        heading={t('create.showcaseHeading')}
-        entries={showcaseEntries}
-        via="create_showcase"
-        onPlayGame={onPlayGame}
-      />
 
       <section className="create-steps" aria-labelledby="create-steps-heading">
         <h2 id="create-steps-heading" className="create-section-heading">
@@ -144,6 +137,13 @@ export function CreatePage({
           </div>
         </div>
       </section>
+
+      <CatalogRail
+        heading={t('create.showcaseHeading')}
+        entries={showcaseEntries}
+        via="create_showcase"
+        onPlayGame={onPlayGame}
+      />
     </div>
   );
 }

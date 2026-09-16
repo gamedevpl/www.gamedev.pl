@@ -29,7 +29,8 @@
 }
 
 .create-steps,
-.create-builders {
+.create-builders,
+.create-page .catalog-rail-section {
   margin: 3rem 0 0;
 }
 
@@ -81,14 +82,14 @@
   position: relative;
   display: flex;
   justify-content: center;
-  padding-top: 0.85rem;
+  padding-top: 0.2rem;
 }
 
 .create-step:not(:last-child) .create-step-index::after {
   content: '';
   position: absolute;
   left: 50%;
-  top: 2.9rem;
+  top: 2.25rem;
   bottom: 0.15rem;
   width: 2px;
   transform: translateX(-50%);
@@ -115,28 +116,12 @@
 
 .create-step-card {
   min-width: 0;
-  margin: 0 0 0.85rem;
-  padding: 0.8rem 0.9rem 0.85rem;
-  border-radius: 10px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-card);
-  overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+  margin: 0 0 1.1rem;
+  padding: 0.15rem 0 0.15rem;
 }
 
 .create-step:last-child .create-step-card {
   margin-bottom: 0;
-}
-
-@media (hover: hover) {
-  .create-step-card:hover {
-    border-color: rgba(0, 228, 172, 0.38);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
-    transform: translateY(-2px);
-  }
 }
 
 .create-step-title {
@@ -310,9 +295,8 @@
   background: rgba(56, 189, 248, 0.08);
 }
 
-.create-page .catalog-rail-section {
-  margin-top: 2.5rem;
-  margin-bottom: 0;
+.create-page .rail-card {
+  flex-basis: 168px;
 }
 
 .create-page .prompt-example-chip {
@@ -361,7 +345,6 @@
 @media (prefers-reduced-motion: reduce) {
   .create-builder-progress span,
   .create-page .prompt-example-chip,
-  .create-step-card,
   .create-builder-lane {
     animation: none;
     transition: none;
