@@ -13,6 +13,7 @@ import type { BuilderHandoff } from '../records/rounds.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 import { ownsTakeoverRound, firestoreOwnsTakeoverRound } from '../takeover-authority.js';
 import type { GameAccessRecord } from '../records/game-access.js';
+import { epochForRound } from './round-epoch.js';
 
 // Fields a closed round clears -- signals belong to the round that ended.
 export function clearRoundSignals(next: SubmissionRecord): void {
@@ -102,20 +103,6 @@ function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVe
   return (
     record.state === 'ready_for_review' && !record.deliveredVersion && Boolean(record.slug && record.previewVersion)
   );
-}
-
-/**
- * The epoch to stamp on a round that is starting, or undefined to leave it.
- *
- * Only a round whose author is the game's current owner may take the current
- * revision. A round left behind by a previous owner must never pick one up:
- * that would hand its already-issued keys back the authority a handover
- * revoked. Rounds that already carry an epoch keep it.
- */
-function epochForRound(record: SubmissionRecord, access: GameAccessRecord | null): number | undefined {
-  if (!access || record.accessEpoch !== undefined) return undefined;
-  if (record.ownerUid !== access.ownerUid) return undefined;
-  return access.accessRevision;
 }
 
 export class InMemoryRoundsStore implements RoundsStore {
@@ -216,13 +203,11 @@ export class InMemoryRoundsStore implements RoundsStore {
     const sub = this.submissions.get(jobId);
     if (!sub) return null;
     const epoch = epochForRound(sub, sub.slug ? (this.gameAccess.get(sub.slug) ?? null) : null);
-    if (sub.roundGeneration !== undefined) {
-      if (epoch === undefined) return sub.roundGeneration;
-      this.submissions.set(jobId, { ...sub, accessEpoch: epoch });
-      return sub.roundGeneration;
+    const roundGeneration = sub.roundGeneration ?? 1;
+    if (sub.roundGeneration === undefined || epoch !== undefined) {
+      this.submissions.set(jobId, { ...sub, roundGeneration, ...(epoch === undefined ? {} : { accessEpoch: epoch }) });
     }
-    this.submissions.set(jobId, { ...sub, roundGeneration: 1, ...(epoch === undefined ? {} : { accessEpoch: epoch }) });
-    return 1;
+    return roundGeneration;
   }
 
   async clearAgentEnded(jobId: number): Promise<void> {
@@ -424,13 +409,11 @@ export class FirestoreRoundsStore implements RoundsStore {
       const accessSnap = current.slug ? await tx.get(this.db.collection('gameAccess').doc(current.slug)) : null;
       const access = accessSnap?.exists ? (accessSnap.data() as GameAccessRecord) : null;
       const epoch = epochForRound(current, access);
-      if (current.roundGeneration !== undefined) {
-        if (epoch === undefined) return current.roundGeneration;
-        tx.set(ref, { accessEpoch: epoch }, { merge: true });
-        return current.roundGeneration;
+      const roundGeneration = current.roundGeneration ?? 1;
+      if (current.roundGeneration === undefined || epoch !== undefined) {
+        tx.set(ref, { roundGeneration, ...(epoch === undefined ? {} : { accessEpoch: epoch }) }, { merge: true });
       }
-      tx.set(ref, { roundGeneration: 1, ...(epoch === undefined ? {} : { accessEpoch: epoch }) }, { merge: true });
-      return 1;
+      return roundGeneration;
     });
   }
 
