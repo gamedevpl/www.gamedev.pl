@@ -1,3 +1,4 @@
+import { canShareStudioGame, canClaimPublishHandle } from './studio-header-permissions.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../AuthContext.js';
@@ -600,7 +601,7 @@ export function CreatorStudioView({
   // Share is about the permalink, not about the draft switch: a game already live in
   // the catalog has nothing to toggle, but it still needs a way to hand the link out.
   // Hiding the control there left published games with no share affordance anywhere.
-  const canShare = Boolean(activeGame && activeGame.slug && activeGame.lastKnownStatus !== 'abandoned');
+  const canShare = canShareStudioGame(activeGame);
   const shareIsLive = Boolean(activeGame && isStudioGameShelfLive(activeGame));
   const shareTitle = t(shareIsLive ? 'studioPanel.share.liveTitle' : 'studioPanel.share.title');
 
@@ -868,10 +869,7 @@ export function CreatorStudioView({
                   // Drawer covers chat; keep its opener and rows clickable.
                   const chatCovered = shelfOpen || tab === 'details' || tab === 'edit';
                   const chatVisible = railOpen && !chatCovered;
-                  const canClaim = Boolean(
-                    !user?.handle &&
-                    (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing'),
-                  );
+                  const canClaim = canClaimPublishHandle(activeGame, user?.handle);
                   const backToFullBleed = () => {
                     if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
                     if (tab !== 'thread') openTab('thread');
