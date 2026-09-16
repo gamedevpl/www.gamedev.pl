@@ -140,12 +140,12 @@ describe('reset', () => {
 });
 
 describe('an edit made while a save is in flight', () => {
-  it('leaves the document dirty, so nothing treats it as persisted', async () => {
-    let finish: (value: { revision: number; updatedAt: string }) => void = () => {};
+  it('sends the newer snapshot instead of resting on the older one', async () => {
+    const release: Array<(value: { revision: number; updatedAt: string }) => void> = [];
     putEditorDraft.mockImplementation(
       () =>
         new Promise((resolve) => {
-          finish = resolve;
+          release.push(resolve);
         }),
     );
     mount();
@@ -159,20 +159,26 @@ describe('an edit made while a save is in flight', () => {
     act(() => latest!.setContent({ params: { name: 'second' } } as unknown as EditorContentDoc));
 
     await act(async () => {
-      finish({ revision: 3, updatedAt: '2026-08-07T00:00:03.000Z' });
-      await inFlight;
+      release[0]({ revision: 3, updatedAt: '2026-08-07T00:00:03.000Z' });
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(putEditorDraft.mock.calls[0][1]).toEqual({ params: { name: 'first' } });
-    expect(latest!.saveState).toBe('dirty');
+    expect(putEditorDraft.mock.calls[1][1]).toEqual({ params: { name: 'second' } });
+
+    await act(async () => {
+      release[1]({ revision: 4, updatedAt: '2026-08-07T00:00:04.000Z' });
+      await inFlight;
+    });
   });
 
   it('still reports saved when nothing changed while it was in flight', async () => {
-    let finish: (value: { revision: number; updatedAt: string }) => void = () => {};
+    const release: Array<(value: { revision: number; updatedAt: string }) => void> = [];
     putEditorDraft.mockImplementation(
       () =>
         new Promise((resolve) => {
-          finish = resolve;
+          release.push(resolve);
         }),
     );
     mount();
@@ -185,10 +191,51 @@ describe('an edit made while a save is in flight', () => {
     });
 
     await act(async () => {
-      finish({ revision: 4, updatedAt: '2026-08-07T00:00:04.000Z' });
+      release[0]({ revision: 4, updatedAt: '2026-08-07T00:00:04.000Z' });
       await inFlight;
     });
 
+    expect(putEditorDraft).toHaveBeenCalledTimes(1);
+    expect(await inFlight).toBe(true);
+    expect(latest!.saveState).toBe('saved');
+  });
+});
+
+describe('a flush that lands on a stale snapshot', () => {
+  it('goes again rather than reporting a flush the caller would navigate on', async () => {
+    const release: Array<(value: { revision: number; updatedAt: string }) => void> = [];
+    putEditorDraft.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release.push(resolve);
+        }),
+    );
+    mount();
+
+    act(() => latest!.setContent({ params: { name: 'first' } } as unknown as EditorContentDoc));
+    let flushed: Promise<boolean> | null = null;
+    await act(async () => {
+      flushed = latest!.saveNow();
+      await Promise.resolve();
+    });
+
+    // The creator changes another control while that request is in flight.
+    act(() => latest!.setContent({ params: { name: 'second' } } as unknown as EditorContentDoc));
+    await act(async () => {
+      release[0]({ revision: 5, updatedAt: '2026-08-07T00:00:05.000Z' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // A second write must carry the newer edit.
+    expect(putEditorDraft).toHaveBeenCalledTimes(2);
+    expect(putEditorDraft.mock.calls[1][1]).toEqual({ params: { name: 'second' } });
+
+    await act(async () => {
+      release[1]({ revision: 6, updatedAt: '2026-08-07T00:00:06.000Z' });
+      await flushed;
+    });
+    expect(await flushed).toBe(true);
     expect(latest!.saveState).toBe('saved');
   });
 });

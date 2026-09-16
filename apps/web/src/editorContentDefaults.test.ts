@@ -53,9 +53,39 @@ describe('fillDeclaredValues', () => {
     expect(boards(filled)[0].properties).toEqual({ title: '', size: 0, on: false });
   });
 
-  it('leaves an undeclared property in place for the server to report', () => {
+  it('drops a property the definition no longer declares', () => {
     const filled = fillDeclaredValues(entitiesDefinition, { boards: [{ properties: { stray: 1, name: 'a' } }] });
-    expect(boards(filled)[0].properties).toEqual({ stray: 1, name: 'a', speed: 3 });
+    expect(boards(filled)[0].properties).toEqual({ name: 'a', speed: 3 });
+  });
+
+  it('drops a key the widget does not own', () => {
+    const filled = fillDeclaredValues(entitiesDefinition, { boards: [{ properties: { name: 'a' }, rows: ['..'] }] });
+    expect(boards(filled)[0]).toEqual({ properties: { name: 'a', speed: 3 } });
+  });
+
+  it('drops a section the definition no longer declares', () => {
+    const filled = fillDeclaredValues(entitiesDefinition, { boards: [], retired: [{ properties: {} }] });
+    expect(filled.retired).toBeUndefined();
+  });
+
+  it('drops a param the definition no longer declares', () => {
+    const definition: EditorDefinition = {
+      version: 1,
+      content: {},
+      params: { gravity: { type: 'int', min: 1, max: 9, label, default: 4 } },
+    };
+    expect(fillDeclaredValues(definition, { params: { gravity: 8, retired: 2 } }).params).toEqual({ gravity: 8 });
+  });
+
+  it('reports a draft carrying a retired value as unsaved, so the repair is written', () => {
+    const stored = { boards: [{ properties: { name: 'a', speed: 3, stray: 1 } }] };
+    const loaded: GameEditorState = {
+      version: '7',
+      definition: entitiesDefinition,
+      content: { boards: [] },
+      draft: { content: stored, revision: 8, updatedAt: '' },
+    };
+    expect(mergeDraft(loaded).unsaved).toBe(true);
   });
 
   it('leaves a hole where an item should be, so the gap is still visible', () => {

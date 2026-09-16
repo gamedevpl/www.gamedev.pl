@@ -10,6 +10,11 @@ type EditorDocumentOptions = {
   autosaveMs?: number;
 };
 
+type WriteOutcome = 'saved' | 'stale' | 'failed';
+
+// Enough to outlast a burst of edits landing during one request.
+const FLUSH_ATTEMPTS = 3;
+
 export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDocumentOptions) {
   const [content, setContentState] = useState<EditorContentDoc>({});
   const [revision, setRevision] = useState(0);
@@ -66,7 +71,7 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
   );
 
   const writeDraft = useCallback(
-    async (overwrite: boolean): Promise<boolean> => {
+    async (overwrite: boolean): Promise<WriteOutcome> => {
       setSaveState('saving');
       setSaveProblems([]);
       const sent = contentRef.current;
@@ -74,10 +79,11 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
         const saved = await putEditorDraft(slug, sent, overwrite ? undefined : revisionRef.current);
         setRevision(saved.revision);
         revisionRef.current = saved.revision;
-        // An edit made in flight is not what the server holds.
-        setSaveState(contentRef.current === sent ? 'saved' : 'dirty');
         recordEditorStep('draft_saved');
-        return true;
+        // An edit made in flight is not what the server holds.
+        const current = contentRef.current === sent;
+        setSaveState(current ? 'saved' : 'dirty');
+        return current ? 'saved' : 'stale';
       } catch (error) {
         const status = (error as StudioApiError).status;
         if (status === 409) setSaveState('conflict');
@@ -86,20 +92,32 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
           const problems = (error as StudioApiError).problems;
           setSaveProblems(problems && problems.length > 0 ? problems : [(error as Error).message]);
         }
-        return false;
+        return 'failed';
       }
     },
     [slug],
   );
 
+  // True means the server holds what the creator sees.
+  const flush = useCallback(
+    async (overwrite: boolean): Promise<boolean> => {
+      for (let attempt = 0; attempt < FLUSH_ATTEMPTS; attempt += 1) {
+        const outcome = await writeDraft(overwrite);
+        if (outcome !== 'stale') return outcome === 'saved';
+      }
+      return false;
+    },
+    [writeDraft],
+  );
+
   // Every save joins the tail, so none of them race the revision.
   const saveNow = useCallback(
     (overwrite = false): Promise<boolean> => {
-      const attempt = tailRef.current.then(() => writeDraft(overwrite));
+      const attempt = tailRef.current.then(() => flush(overwrite));
       tailRef.current = attempt.catch(() => false);
       return attempt;
     },
-    [writeDraft],
+    [flush],
   );
 
   const scheduleSave = useCallback(() => {

@@ -26,9 +26,9 @@ export function declaredDefaults(specs: Record<string, EditorPropertySpec> | und
   return Object.fromEntries(Object.entries(specs ?? {}).map(([name, spec]) => [name, defaultPropertyValue(spec)]));
 }
 
-// Every container the definition declares exists once this has run.
+// What the definition declares, all of it and nothing else.
 export function fillDeclaredValues(definition: EditorDefinition, doc: EditorContentDoc): EditorContentDoc {
-  const filled: EditorContentDoc = { ...doc };
+  const filled: EditorContentDoc = {};
   for (const [key, spec] of Object.entries(definition.content)) {
     const items = Array.isArray(doc[key]) ? (doc[key] as EditorItemContent[]) : spec.defaults;
     filled[key] = items.map((item) => fillItem(spec.item, item));
@@ -54,27 +54,29 @@ function stableJson(value: unknown): string {
 }
 
 function fillParams(specs: Record<string, EditorParamSpec>, values: unknown): Record<string, EditorParamValue> {
-  const filled: Record<string, EditorParamValue> = isRecord(values)
-    ? { ...(values as Record<string, EditorParamValue>) }
-    : {};
+  const current = (isRecord(values) ? values : {}) as Record<string, EditorParamValue>;
+  const filled: Record<string, EditorParamValue> = {};
   for (const [name, spec] of Object.entries(specs)) {
-    if (filled[name] === undefined) filled[name] = spec.default;
+    filled[name] = current[name] === undefined ? spec.default : current[name];
   }
   return filled;
 }
 
+// An item carries its container and declared properties only.
 function fillItem(spec: EditorCollectionItemSpec, item: EditorItemContent): EditorItemContent {
   if (!isRecord(item)) return item;
   const raw = item as unknown as Record<string, unknown>;
   const properties = withDeclared(spec.properties, raw.properties);
-  if (spec.widget !== 'layered') return { ...raw, properties } as unknown as EditorItemContent;
-  const layers = isRecord(raw.layers) ? fillLayers(spec.layers, raw.layers as EditorLayersDoc) : raw.layers;
-  return { ...raw, properties, layers } as unknown as EditorItemContent;
+  if (spec.widget === 'tilemap') return { properties, rows: raw.rows } as unknown as EditorItemContent;
+  if (spec.widget === 'path') return { properties, points: raw.points } as unknown as EditorItemContent;
+  if (spec.widget !== 'layered') return { properties } as unknown as EditorItemContent;
+  const layers = fillLayers(spec.layers, (isRecord(raw.layers) ? raw.layers : {}) as EditorLayersDoc);
+  return { properties, layers } as unknown as EditorItemContent;
 }
 
 // A layer declared later has nothing to fill from.
 function fillLayers(specs: Record<string, EditorLayerSpec>, layers: EditorLayersDoc): EditorLayersDoc {
-  const filled: EditorLayersDoc = { ...layers };
+  const filled: EditorLayersDoc = {};
   for (const [key, spec] of Object.entries(specs)) {
     filled[key] = layers[key] === undefined ? blankLayerContent(spec) : fillLayerContent(spec, layers[key]);
   }
@@ -105,9 +107,10 @@ function withDeclared(
   specs: Record<string, EditorPropertySpec> | undefined,
   properties: unknown,
 ): Record<string, unknown> {
-  const filled: Record<string, unknown> = isRecord(properties) ? { ...properties } : {};
+  const current = isRecord(properties) ? properties : {};
+  const filled: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(specs ?? {})) {
-    if (filled[name] === undefined) filled[name] = defaultPropertyValue(spec);
+    filled[name] = current[name] === undefined ? defaultPropertyValue(spec) : current[name];
   }
   return filled;
 }
