@@ -18,7 +18,8 @@ import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
 import { agentHint, discoverAgents } from '../agents.js';
 import { createCliTelemetry } from '../telemetry.js';
 import { reportInstall } from '../main.js';
-import { openUrl } from '../open-url.js';
+import { sessionBrowserHost } from '../session-browser-host.js';
+import { historyStore } from './history.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -39,6 +40,36 @@ export async function runInkRepl(input: {
   reportInstall(telemetry, input.env, isTty);
   let watched = '';
   let spoke = false;
+  let conversationId: string | undefined;
+  let uid = '';
+  let who = '';
+  try {
+    const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
+      'GET',
+      '/api/auth/me',
+      undefined,
+      AbortSignal.timeout(3000),
+    );
+    uid = user.uid;
+    who = user.handle ?? uid;
+  } catch {
+    who = 'account unavailable';
+  }
+  let history: ReturnType<typeof historyStore> | undefined;
+  let historyScope = '';
+  let lastLines: string[] | undefined;
+  let historyWarning = false;
+  const saveHistory = (): void => {
+    if (!history) return;
+    try {
+      history.save({ ...session.savedHistory(), conversationId });
+    } catch {
+      if (!historyWarning) {
+        historyWarning = true;
+        session.writeLine('Could not save local conversation history. This session can continue.');
+      }
+    }
+  };
   const session = createTuiSession(replBanner(isTty, input.env), () => {
     if (abort.current) {
       abort.current.abort();
@@ -48,14 +79,32 @@ export async function runInkRepl(input: {
     host.instance?.unmount();
     process.exit(EXIT_GREEN);
   });
+  const bindHistory = (game: string): void => {
+    const scope = game ? `game:${game}` : `directory:${input.checkout?.root ?? process.cwd()}`;
+    if (!uid || input.env.GAMEDEV_HISTORY === 'off' || scope === historyScope) return;
+    saveHistory();
+    historyScope = scope;
+    history = historyStore(input.env, input.api.origin, uid, scope);
+    const saved = history.load();
+    conversationId = saved.conversationId;
+    session.restoreHistory(saved);
+  };
+  bindHistory(input.checkout?.slug ?? input.slug ?? '');
+  if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
+  session.subscribe((state) => {
+    if (state.lines === lastLines) return;
+    lastLines = state.lines;
+    saveHistory();
+  });
   const foregroundApi = activityApi(input.api, (activity) => {
     const previous = session.get().activity;
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
+  const browser = sessionBrowserHost(session);
   const openPreview = (url: string): void => {
     telemetry.record('play_requested');
-    void openUrl(url).then((opened) => {
+    void browser.open(url).then((opened) => {
       if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
     });
   };
@@ -79,11 +128,13 @@ export async function runInkRepl(input: {
     }
   };
   let token = input.token;
-  let conversationId: string | undefined;
-  let who = '';
   let slug = input.checkout?.slug ?? input.slug ?? '';
   let initialLine = input.initialLine;
-  const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
+  const paintIdentity = (): void => {
+    bindHistory(slug);
+    session.setIdentity(formatSessionIdentity(who, slug));
+  };
+  paintIdentity();
   let workshop: Workshop | undefined;
   const pendingExecution: PendingExecution = {};
   if (!input.checkout) {
@@ -104,6 +155,8 @@ export async function runInkRepl(input: {
       telemetry,
       onActivity: session.setActivity,
       onLocalTask: session.setLocalTask,
+      onSteering: session.setSteering,
+      onLocalPreview: browser.registerPreview,
       interactiveRun,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
@@ -145,18 +198,6 @@ export async function runInkRepl(input: {
       paintIdentity();
     },
   });
-  // Don't block the prompt on profile.
-  void input.api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile').then(
-    (profile) => {
-      who = profile.handle ?? profile.uid ?? '';
-      paintIdentity();
-    },
-    (error: unknown) => {
-      who = 'not signed in';
-      paintIdentity();
-      session.writeLine(formatError(error));
-    },
-  );
   try {
     for (;;) {
       const line = initialLine ?? (await session.prompt());
@@ -165,6 +206,7 @@ export async function runInkRepl(input: {
         spoke = true;
         telemetry.record('first_turn');
       }
+      const turnScope = historyScope;
       let result;
       try {
         result = await handleReplLine({
@@ -181,11 +223,16 @@ export async function runInkRepl(input: {
           telemetry,
           pendingExecution,
           interactiveRun,
+          openPreview: browser.open,
+          onLocalPreview: browser.registerPreview,
           onWorkshop: (opened) => {
+            bindHistory(opened.slug);
             if (workshop?.slug !== opened.slug || workshop?.root !== opened.root) session.clearPreview();
             workshop = opened;
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
+            opened.onSteering = session.setSteering;
+            opened.onLocalPreview = browser.registerPreview;
             opened.interactiveRun = interactiveRun;
             opened.activityApi = input.api;
             if (token !== opened.token) {
@@ -217,6 +264,8 @@ export async function runInkRepl(input: {
         workshop = result.workshop;
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
+        workshop.onSteering = session.setSteering;
+        workshop.onLocalPreview = browser.registerPreview;
         workshop.interactiveRun = interactiveRun;
         workshop.activityApi = input.api;
       }
@@ -225,13 +274,18 @@ export async function runInkRepl(input: {
         slug = result.slug;
         paintIdentity();
       }
-      if (result.conversationId !== undefined) conversationId = result.conversationId;
+      if (result.conversationId !== undefined && (result.conversationId !== '' || historyScope === turnScope)) {
+        conversationId = result.conversationId;
+      }
+      saveHistory();
       if (result.next === 'quit') break;
     }
   } finally {
+    saveHistory();
     stopUpdateNotice();
     watch.stop();
     session.close();
+    await browser.close();
     host.instance?.unmount();
     await telemetry.flush();
   }

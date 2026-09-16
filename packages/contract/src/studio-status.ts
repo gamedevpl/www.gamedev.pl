@@ -20,6 +20,10 @@ export interface StudioGame {
   codeSurface?: boolean;
   // False only when the slug's publication is archived or disabled.
   live?: false;
+  // Member's role on this row. Omitted on unsigned payloads.
+  viewerRole?: 'owner' | 'editor';
+  // Names the owner on editor shelf rows.
+  ownerProfileName?: string;
 }
 
 // One page of the creator's Studio shelf.

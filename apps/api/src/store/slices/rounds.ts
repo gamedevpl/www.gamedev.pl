@@ -10,7 +10,10 @@ import {
 } from '../../creation/job-state.js';
 import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
 import type { BuilderHandoff } from '../records/rounds.js';
-import type { SubmissionRecord } from '../records/submission.js';
+import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
+import { ownsTakeoverRound, firestoreOwnsTakeoverRound } from '../takeover-authority.js';
+import type { GameAccessRecord } from '../records/game-access.js';
+import { epochForRound } from './round-epoch.js';
 
 // Fields a closed round clears -- signals belong to the round that ended.
 export function clearRoundSignals(next: SubmissionRecord): void {
@@ -27,13 +30,13 @@ export function clearRoundSignals(next: SubmissionRecord): void {
 
 export function takeoverRecord(
   sub: SubmissionRecord,
-  uid: string,
+  authorized: boolean,
   generation: number,
   at: string,
 ): SubmissionRecord | null {
   const state = resolveJobState(sub) ?? 'queued';
   if (
-    sub.ownerUid !== uid ||
+    !authorized ||
     (sub.roundGeneration ?? 1) !== generation ||
     sub.abandonedAt ||
     (sub.builder ?? sub.defaultBuilder ?? 'platform') !== 'self' ||
@@ -103,11 +106,22 @@ function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVe
 }
 
 export class InMemoryRoundsStore implements RoundsStore {
-  constructor(private submissions: Map<number, SubmissionRecord>) {}
+  constructor(
+    private submissions: Map<number, SubmissionRecord>,
+    private gameAccess: Map<string, GameAccessRecord>,
+  ) {}
 
   async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
     const sub = this.submissions.get(jobId);
-    const next = sub && takeoverRecord(sub, uid, generation, at);
+    const authorized =
+      sub &&
+      ownsTakeoverRound(
+        sub,
+        uid,
+        (slug) => this.gameAccess.get(slug) ?? null,
+        () => [...this.submissions.values()],
+      );
+    const next = sub && takeoverRecord(sub, Boolean(authorized), generation, at);
     if (!next) return false;
     this.submissions.set(jobId, next);
     return true;
@@ -117,9 +131,11 @@ export class InMemoryRoundsStore implements RoundsStore {
     const sub = this.submissions.get(jobId);
     if (!sub) return null;
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
+    const epoch = sub.slug ? this.gameAccess.get(sub.slug)?.accessRevision : undefined;
     const next: SubmissionRecord = {
       ...sub,
       roundGeneration,
+      ...(epoch === undefined ? {} : { accessEpoch: epoch }),
       roundDeliveryCount: 0,
       roundTypecheckPreflightRefusals: 0,
       roundSubmitAttempts: 0,
@@ -186,9 +202,12 @@ export class InMemoryRoundsStore implements RoundsStore {
   async ensureRoundGeneration(jobId: number): Promise<number | null> {
     const sub = this.submissions.get(jobId);
     if (!sub) return null;
-    if (sub.roundGeneration !== undefined) return sub.roundGeneration;
-    this.submissions.set(jobId, { ...sub, roundGeneration: 1 });
-    return 1;
+    const epoch = epochForRound(sub, sub.slug ? (this.gameAccess.get(sub.slug) ?? null) : null);
+    const roundGeneration = sub.roundGeneration ?? 1;
+    if (sub.roundGeneration === undefined || epoch !== undefined) {
+      this.submissions.set(jobId, { ...sub, roundGeneration, ...(epoch === undefined ? {} : { accessEpoch: epoch }) });
+    }
+    return roundGeneration;
   }
 
   async clearAgentEnded(jobId: number): Promise<void> {
@@ -266,7 +285,10 @@ export class FirestoreRoundsStore implements RoundsStore {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const next = snap.exists && takeoverRecord(snap.data() as SubmissionRecord, uid, generation, at);
+      if (!snap.exists) return false;
+      const sub = fromStoredSubmission(snap.data());
+      const authorized = await firestoreOwnsTakeoverRound(this.db, tx, sub, uid);
+      const next = takeoverRecord(sub, authorized, generation, at);
       if (!next) return false;
       tx.set(ref, next);
       return true;
@@ -279,10 +301,14 @@ export class FirestoreRoundsStore implements RoundsStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
+      // Read before the write: a transaction needs its reads up front.
+      const accessSnap = current.slug ? await tx.get(this.db.collection('gameAccess').doc(current.slug)) : null;
+      const epoch = accessSnap?.exists ? (accessSnap.data() as GameAccessRecord).accessRevision : undefined;
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
       const next: SubmissionRecord = {
         ...current,
         roundGeneration,
+        ...(epoch === undefined ? {} : { accessEpoch: epoch }),
         roundDeliveryCount: 0,
         roundTypecheckPreflightRefusals: 0,
         roundSubmitAttempts: 0,
@@ -380,9 +406,14 @@ export class FirestoreRoundsStore implements RoundsStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
-      if (current.roundGeneration !== undefined) return current.roundGeneration;
-      tx.set(ref, { roundGeneration: 1 }, { merge: true });
-      return 1;
+      const accessSnap = current.slug ? await tx.get(this.db.collection('gameAccess').doc(current.slug)) : null;
+      const access = accessSnap?.exists ? (accessSnap.data() as GameAccessRecord) : null;
+      const epoch = epochForRound(current, access);
+      const roundGeneration = current.roundGeneration ?? 1;
+      if (current.roundGeneration === undefined || epoch !== undefined) {
+        tx.set(ref, { roundGeneration, ...(epoch === undefined ? {} : { accessEpoch: epoch }) }, { merge: true });
+      }
+      return roundGeneration;
     });
   }
 

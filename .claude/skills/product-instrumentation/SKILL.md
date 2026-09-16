@@ -187,6 +187,13 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     sat unread for months, and this entry described the write side in enough detail to
     look finished while nothing could read it. Writing the vocabulary entry is not the
     instrumentation; the aggregate is.
+  - ~~Editor-invite sharing funnel unmeasured~~ — **closed 2026-09-15 (GO-03)**:
+    `share_step` (`offered` → `accepted` / `declined` / `cancelled` / `expired` /
+    `removed` / `left`) lives in `visit-vocab.ts` like the other step vocabularies,
+    is recorded from Studio members/inbox with no slug (the visit stream stays
+    unjoinable), rolls up as `sharing` in `summarizeVisitFunnel`, and renders as
+    the Sharing block on `VisitFunnelPanel` (percent of offered). Membership
+    changes also write a separate operational audit trail, never this stream.
   - ~~Framed `/play/` interstitial handoff unmeasured~~ — **closed 2026-09-12**: a
     framed visit used to look like a bounce (the card) or a new "direct" visit (the
     new tab), with no way to tell an embed click-through from a dead landing.
@@ -318,6 +325,20 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   button from the host keyboard, so it does not claim to. Unlike the create funnel, a
   rung dedupes per `step:via` and not per step — "the bar paused it" and "the room paused
   it" are the question, and collapsing them would erase it.
+  - ~~Game handovers unmeasured~~ — **closed 2026-09-15 (GO-02)**: `transfer_step` on the
+    visit stream records the sender's `invite_sent` → `invite_cancelled` and the
+    recipient's `offer_shown` → `offer_accepted` / `offer_declined`. `TRANSFER_STEPS`
+    lives in `packages/contract/src/visit-vocab.ts` like the others;
+    `summarizeTransfers` ([visit-transfers.ts](../../../apps/api/src/telemetry/visit-transfers.ts))
+    rolls up as `transfers` on `GET /api/admin/telemetry/visits` and `TransferFunnelBlock`
+    renders it. The read side shipped in the same PR as the rungs, which is the point.
+    Two rules it inherits: **two sides, two denominators** — cancellations count only
+    inside the visits that sent one and decisions only inside those shown one, so
+    neither ratio can exceed its own maximum when a batch is lost; and **no slug, no
+    counterparty, no invitation code** travels, so the streams stay unjoinable and a
+    bearer credential never reaches telemetry. A visit that both sends and is offered
+    is counted on each side, because those are different questions.
+
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 - ~~Shared zones were unmeasured~~ — **closed 2026-07-31**: `zone_link`

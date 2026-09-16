@@ -664,4 +664,93 @@ export function tick(round: Round) {
       });
     });
   });
+
+  it('refuses publish from an editor job', async () => {
+    const { store, service } = await setup();
+    const at = '2026-08-09T18:00:00.000Z';
+    await store.upsertUser({ uid: 'owner' });
+    await store.upsertUser({ uid: 'g:bea' });
+    await store.ensureGameAccess(SLUG, 'owner', at, at);
+    const code = (await store.ensureRecipientCode('g:bea', at))!;
+    await store.createEditorInvitation(SLUG, 'owner', 'g:bea', at, code);
+    await store.acceptEditorInvitation(SLUG, 'g:bea', at, (await store.getEditorInvite(SLUG, 'g:bea', at))!.inviteId);
+
+    const editorJob = await store.allocateJobId();
+    await store.createSubmission(editorJob, 'g:bea', 'Managed Comet');
+    await store.setSubmissionSlug(editorJob, SLUG);
+    await store.recordJobTransition(editorJob, { to: 'building', at, by: 'creator', reason: 'editor_round' });
+
+    const published = await service.deliver({
+      jobId: editorJob,
+      slug: SLUG,
+      files: PUBLISH_FILES,
+      mode: 'publish',
+      actorUid: 'g:bea',
+    });
+    expect(published).toMatchObject({ accepted: false, rejected: 'stopped' });
+
+    const preview = await service.deliver({
+      jobId: editorJob,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      actorUid: 'g:bea',
+    });
+    expect(preview.accepted).toBe(true);
+  });
+
+  it('refuses publish when an editor rides the owner round', async () => {
+    const { store, service } = await setup();
+    const at = '2026-08-09T18:00:00.000Z';
+    await store.upsertUser({ uid: 'owner' });
+    await store.upsertUser({ uid: 'g:bea' });
+    await store.ensureGameAccess(SLUG, 'owner', at, at);
+    const code = (await store.ensureRecipientCode('g:bea', at))!;
+    await store.createEditorInvitation(SLUG, 'owner', 'g:bea', at, code);
+    await store.acceptEditorInvitation(SLUG, 'g:bea', at, (await store.getEditorInvite(SLUG, 'g:bea', at))!.inviteId);
+
+    const result = await service.deliver({
+      jobId: ISSUE,
+      slug: SLUG,
+      files: PUBLISH_FILES,
+      mode: 'publish',
+      actorUid: 'g:bea',
+    });
+    expect(result).toMatchObject({ accepted: false, rejected: 'stopped' });
+  });
+
+  it('lets the owner continue a removed editor round', async () => {
+    const { store, service } = await setup();
+    const at = '2026-08-09T18:00:00.000Z';
+    await store.upsertUser({ uid: 'owner' });
+    await store.upsertUser({ uid: 'g:bea' });
+    await store.ensureGameAccess(SLUG, 'owner', at, at);
+    const code = (await store.ensureRecipientCode('g:bea', at))!;
+    await store.createEditorInvitation(SLUG, 'owner', 'g:bea', at, code);
+    await store.acceptEditorInvitation(SLUG, 'g:bea', at, (await store.getEditorInvite(SLUG, 'g:bea', at))!.inviteId);
+
+    const editorJob = await store.allocateJobId();
+    await store.createSubmission(editorJob, 'g:bea', 'Managed Comet');
+    await store.setSubmissionSlug(editorJob, SLUG);
+    await store.recordJobTransition(editorJob, { to: 'building', at, by: 'creator', reason: 'editor_round' });
+    expect(await store.removeEditor(SLUG, 'owner', 'g:bea', at)).toMatchObject({ editorUids: [] });
+
+    const continued = await service.deliver({
+      jobId: editorJob,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      actorUid: 'owner',
+    });
+    expect(continued.accepted).toBe(true);
+
+    const leftover = await service.deliver({
+      jobId: editorJob,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      actorUid: 'g:bea',
+    });
+    expect(leftover).toMatchObject({ accepted: false, rejected: 'stopped' });
+  });
 });

@@ -1,3 +1,4 @@
+import { runReplPlay } from './repl-play.js';
 import { recoverRepl } from './recover.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { readFileSync } from 'node:fs';
@@ -48,6 +49,8 @@ export async function handleReplLine(input: {
   onWorkshop?: (ws: Workshop) => void;
   write: (s: string) => void;
   onActivity?: (activity: string) => void;
+  openPreview?: (url: string) => Promise<boolean>;
+  onLocalPreview?: (url: string) => void;
   currentPath?: string;
   cwd?: string;
 }): Promise<ReplLineResult> {
@@ -97,30 +100,7 @@ export async function handleReplLine(input: {
     return { next: 'continue', conversationId: input.conversationId };
   }
   if (/^\/play(?:\s|$)/u.test(trimmed)) {
-    try {
-      const parsed = parseArgv([
-        'node',
-        'cli',
-        ...(trimmed.startsWith('/') ? trimmed.slice(1).split(/\s+/u) : ['play']),
-      ]);
-      const slug =
-        parsed.args[0] ??
-        input.workshop?.slug ??
-        (input.token ? (await getStatus(input.api, input.token)).slug : undefined);
-      input.onActivity?.('Starting game preview');
-      await playGame({
-        cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
-        slug,
-        origin: input.api.origin,
-        env: input.env,
-        noOpen: parsed.flags['no-open'] === true,
-        stop: parsed.flags.stop === true,
-        write: input.write,
-        telemetry: input.telemetry,
-      });
-    } catch (error) {
-      input.write(formatError(error));
-    }
+    await runReplPlay(input, trimmed);
     return { next: 'continue', conversationId: input.conversationId };
   }
   if (trimmed.startsWith('/')) {
@@ -232,6 +212,7 @@ export async function handleReplLine(input: {
           io: { stdout },
           env: input.env,
           currentPath: input.currentPath,
+          runningVersion: CLI_VERSION,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);
@@ -264,6 +245,8 @@ export async function handleReplLine(input: {
         if (result.action.name === 'play') {
           input.onActivity?.('Starting game preview');
           await playGame({
+            open: input.openPreview,
+            onLocalPreview: input.onLocalPreview,
             cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
             slug: result.action.slug,
             origin: input.api.origin,

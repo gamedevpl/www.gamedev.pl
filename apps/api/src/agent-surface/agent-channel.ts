@@ -1,3 +1,5 @@
+import { knowledgeCapWarning } from './agent-knowledge-warning.js';
+import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES, MAX_SHOT_BYTES } from '@gamedevpl/contract';
@@ -13,9 +15,11 @@ import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
   readBearerToken,
+  STALE_AGENT_TOKEN_REASON,
   verifyAgentToken,
   type AgentTokenAccess,
 } from '../platform/agent-token.js';
+import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
 import {
   assertUploadTokenUnexpired,
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
@@ -43,12 +47,7 @@ import { canTransition, resolveJobState, type JobState } from '../creation/job-s
 import { createKitFileStore } from './kit-files.js';
 import { registerAgentChannelKitFileRoutes } from './agent-channel-kit-files.js';
 import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
-import type {
-  KnowledgeMode,
-  KnowledgeQueryResult,
-  KnowledgeScope,
-  QueryKnowledgeFn,
-} from '../creation/knowledge-search.js';
+import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
@@ -578,25 +577,6 @@ type RejectionReason =
 
 const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
 
-// Fail-open: a soft cap degrades to a warning, not an error.
-function knowledgeCapWarning(mode: KnowledgeMode, cap: number): KnowledgeQueryResult {
-  return {
-    mode,
-    fallback: false,
-    chunks: [],
-    repoPaths: [],
-    guidance: 'Verify exact API signatures via get_kit_api / read_kit_file rather than prose.',
-    truncated: false,
-    cached: false,
-    warnings: [
-      {
-        code: 'rate_limited',
-        message: `Per-round knowledge_query ${mode} cap reached (${cap}/hour) — try a narrower query or wait.`,
-      },
-    ],
-  };
-}
-
 /** Sliding-window limiter keyed by build. The token is the identity, not the IP. */
 function isRateLimited(buckets: Map<number, number[]>, key: number, currentTime: number, max: number): boolean {
   const windowMs = 60 * 60 * 1000;
@@ -690,7 +670,13 @@ export async function registerAgentChannelRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
     options: { allowTerminalReceipt?: boolean } = {},
-  ): Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null> {
+  ): Promise<{
+    jobId: number;
+    record: SubmissionRecord;
+    access: AgentTokenAccess;
+    actorUid?: string;
+    actorRevision?: number;
+  } | null> {
     if (!store || !agentTokenSecret) {
       reply.status(503).send({ error: 'the build channel is not configured' });
       return null;
@@ -720,13 +706,28 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
+    // Fences a round whose game changed hands.
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug), claims)) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      return null;
+    }
+
+    if (
+      record.slug &&
+      claims.actorUid &&
+      !(await memberCapabilityAllowed(store, record.slug, claims.actorUid, claims.actorRevision))
+    ) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      return null;
+    }
+
     try {
       if (options.allowTerminalReceipt) {
         const access = classifyAgentTokenAccess(claims, record, now());
-        return { jobId, record, access };
+        return { jobId, record, access, actorUid: claims.actorUid, actorRevision: claims.actorRevision };
       }
       assertAgentTokenActive(claims, record, now());
-      return { jobId, record, access: 'active' };
+      return { jobId, record, access: 'active', actorUid: claims.actorUid, actorRevision: claims.actorRevision };
     } catch (error) {
       if (!(error instanceof InvalidAgentTokenError)) throw error;
       // Stale/expired tokens are a strict 401 in every case — including terminal jobs.
@@ -781,6 +782,20 @@ export async function registerAgentChannelRoutes(
     const record = await store.getSubmission(jobId);
     if (!record) {
       reply.status(404).send({ error: 'unknown build' });
+      return null;
+    }
+
+    // An upload URL is a round capability too.
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug), upload)) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      return null;
+    }
+    if (
+      record.slug &&
+      upload.actorUid &&
+      !(await memberCapabilityAllowed(store, record.slug, upload.actorUid, upload.actorRevision))
+    ) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       return null;
     }
 
@@ -1063,7 +1078,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { jobId, record } = resolved;
+      const { jobId, record, actorUid, actorRevision } = resolved;
       if (!agentTokenSecret) {
         return reply.status(503).send({ error: 'the build channel is not configured' });
       }
@@ -1137,6 +1152,7 @@ export async function registerAgentChannelRoutes(
         kind: 'screenshot',
         ...(label ? { label } : {}),
         ...(mintedFor ? { version: mintedFor } : {}),
+        ...(actorUid ? { actorUid, actorRevision } : {}),
         now: issuedAt,
         ttlSeconds,
       });
@@ -1912,7 +1928,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { jobId, record } = resolved;
+      const { jobId, record, actorUid, actorRevision } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
@@ -2042,6 +2058,7 @@ export async function registerAgentChannelRoutes(
           ...(record.dispatch?.backend || record.builder
             ? { backend: record.dispatch?.backend ?? record.builder }
             : {}),
+          ...(actorUid ? { actorUid, actorRevision } : {}),
         });
         if (!delivery.accepted) {
           return reply.send({

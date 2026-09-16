@@ -9,7 +9,11 @@ export type NotificationType =
   | 'submission.published'
   | 'submission.needs_changes'
   /** The weekly summary of how a creator's games are doing. */
-  | 'creator.digest';
+  | 'creator.digest'
+  | 'share.offered'
+  | 'share.accepted'
+  | 'share.removed'
+  | 'share.left';
 
 export interface AppNotification {
   id: string;

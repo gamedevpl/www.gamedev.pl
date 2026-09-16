@@ -308,7 +308,10 @@ describe('repl turn loop', () => {
         write: (s) => lines.push(s),
       });
       expect(result.next).toBe('continue');
-      expect(lines.join('\n')).toContain('updated gamedevpl to 0.14.0');
+      expect(lines.join('\n')).toContain('Installed gamedevpl 0.14.0 on disk.');
+      expect(lines.join('\n')).toContain('This session is still running');
+      expect(lines.join('\n')).toContain('Use /exit, then start gamedevpl again');
+      expect(lines.join('\n')).not.toContain('updated gamedevpl');
       expect(readFileSync(customBin)).toEqual(bytes);
     } finally {
       globalThis.fetch = originalFetch;

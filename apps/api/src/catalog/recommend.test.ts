@@ -164,4 +164,59 @@ describe('rankRecommendations', () => {
     expect(ranked.find((item) => item.reason === 'continue')).toBeUndefined();
     expect(ranked.some((item) => item.slug === 'puzzle-two' && item.reason === 'for_you')).toBe(true);
   });
+
+  it('ranks by bake-time effort when that is the only signal', () => {
+    const ranked = rankRecommendations({
+      games: [
+        { slug: 'thin', genre: 'Arcade', effort: 0.2 },
+        { slug: 'rich', genre: 'Arcade', effort: 0.8 },
+      ],
+      scorecards: new Map(),
+      affinity: [],
+      recentHints: [],
+      nowMs,
+    });
+    expect(ranked.map((item) => item.slug)).toEqual(['rich', 'thin']);
+    expect(ranked.every((item) => item.reason === 'popular')).toBe(true);
+  });
+
+  it('ranks a high-effort low-play game above a low-effort peer with equal community score', () => {
+    const equal = signals({ sessions: 4, votesUp: 1 });
+    const ranked = rankRecommendations({
+      games: [
+        { slug: 'thin-hit', genre: 'Arcade', effort: 0.1 },
+        { slug: 'rich-quiet', genre: 'Arcade', effort: 0.9 },
+      ],
+      scorecards: new Map([
+        ['thin-hit', equal],
+        ['rich-quiet', equal],
+      ]),
+      affinity: [],
+      recentHints: [],
+      nowMs,
+    });
+    expect(ranked.map((item) => item.slug)).toEqual(['rich-quiet', 'thin-hit']);
+    expect(ranked.every((item) => item.reason === 'popular')).toBe(true);
+  });
+
+  it('keeps continue ahead of a higher-effort discovery', () => {
+    const ranked = rankRecommendations({
+      games: [
+        { slug: 'recent', genre: 'Puzzle', effort: 0.1 },
+        { slug: 'rich', genre: 'Arcade', effort: 1 },
+      ],
+      scorecards: new Map(),
+      affinity: [
+        {
+          slug: 'recent',
+          openCount: 1,
+          lastPlayedAt: new Date(nowMs - 60_000).toISOString(),
+        },
+      ],
+      recentHints: [],
+      nowMs,
+    });
+    expect(ranked[0]).toMatchObject({ slug: 'recent', reason: 'continue' });
+    expect(ranked[1]).toMatchObject({ slug: 'rich', reason: 'popular' });
+  });
 });

@@ -8,7 +8,7 @@ import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { isModerationBlock, rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { mintToken, verifyToken } from '../platform/submission-token.js';
 import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
@@ -104,7 +104,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
             return reply.status(403).send({ error: 'invalid active game' });
           }
           const record = await store.getSubmission(jobId);
-          if (!record || !(await ownsSubmissionOrSlug(store, record, uid))) {
+          if (!record || !(await canActOnSubmissionOrSlug(store, record, uid, 'build'))) {
             return reply.status(403).send({ error: 'invalid active game' });
           }
           if (supplied.checkoutSlug && supplied.checkoutSlug !== record.slug) {
@@ -274,7 +274,7 @@ async function loadConversation(
   uid: string,
   conversationId: string | undefined,
 ): Promise<CliChatRecord | null> {
-  const record = await store.getCliChat(uid);
+  const record = await store.getCliChat(uid, conversationId);
   if (!record) return null;
   if (conversationId && record.conversationId !== conversationId) return null;
   return record;

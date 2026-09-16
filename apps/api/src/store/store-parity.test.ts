@@ -204,7 +204,7 @@ describeStoreContract('oauth', (makeStore) => {
     });
     expect(await store.deleteOAuthAccessToken('token-1')).toBe(true);
     expect(await store.deleteOAuthAccessToken('token-1')).toBe(false);
-    expect(await store.getOAuthAccessToken('token-1')).toBeNull();
+    expect(await store.getAsAccessToken('token-1')).toBeNull();
   });
 });
 

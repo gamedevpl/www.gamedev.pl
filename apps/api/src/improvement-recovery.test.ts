@@ -103,7 +103,12 @@ it('lets the recipient open the first improvement round after a transfer', async
   await store.setSubmissionSlug(10, 'sky-dodge');
   await store.recordJobTransition(10, { to: 'published', at, by: 'operator' });
   await store.createGameTransferInvitation('sky-dodge', 'g:sender', 'g:recipient', 1, at);
-  await store.acceptGameTransferInvitation('sky-dodge', 'g:recipient', at);
+  await store.acceptGameTransferInvitation(
+    'sky-dodge',
+    'g:recipient',
+    at,
+    (await store.getActiveGameTransfer('sky-dodge', at))!.invitationId,
+  );
 
   const app = Fastify();
   const routes = await registerSubmissionRoutes(app, { store, submissionTokenSecret: 'test-secret' });

@@ -7,6 +7,43 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
+
+### Internal
+
+- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
+
+### Fixed
+
+- Hide Copilot protocol chatter while preserving replies, tool activity, and errors (#1386).
+
+### Added
+
+- Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
+
+- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
+
+## 0.16.0 — 2026-09-16
+
+### Added
+
+- Local Codex, Claude, and Copilot tasks receive MCP screenshot tools for the current preview without needing a browser inside the agent sandbox (#1375).
+- Type follow-up requests while a local agent works; Enter queues them for after the current task without interrupting it (#1369).
+- Interactive sessions restore recent conversation output and prompt history after restarting, separately for each account, server, and game (#1369).
+
+### Fixed
+
+- Interactive `/update` distinguishes the installed version from the running session and explains that a restart is required (#1369).
+- Delegated agents explicitly consider browser automation through shell commands and scripts without requiring a specific automation library (#1369).
+
+## 0.15.3 — 2026-09-15
+
+### Fixed
+
+- Delegated agents continue implementation without a connected browser and can use isolated temporary Playwright tooling for visual checks (#1364).
+
 ## 0.15.2 — 2026-09-13
 
 ### Fixed

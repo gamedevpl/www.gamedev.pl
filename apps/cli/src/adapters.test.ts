@@ -15,6 +15,7 @@ describe('adapter registry', () => {
       'cursor',
       'gemini',
       'muse',
+      'opencode',
       'vibe',
     ]);
   });

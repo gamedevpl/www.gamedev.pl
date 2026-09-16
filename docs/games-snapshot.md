@@ -124,8 +124,8 @@ merge to games-repo main
   → scoped/static/full games gate (one-game merges: scoped, no WebKit)
   → npm run snapshot:publish (only after a green gate, or immediately when
     the classified push needs no gate — a deletion, a docs-only dispatch)
-      (derives catalog.json from the games archive — including code-derived touch —
-       and writes it into the snapshot; the games repo does not commit catalog.json)
+      (derives catalog.json from the games archive — including code-derived touch
+       and effort — and writes it into the snapshot; the games repo does not commit catalog.json)
   → objects written, then current.json moves (only if every game baked cleanly)
   → running instances pick it up within the pointer TTL (~1 min)
 ```

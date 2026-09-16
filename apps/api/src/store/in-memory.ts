@@ -86,6 +86,11 @@ import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
 import { InMemoryGameTransferStore, MAX_REVOKED_ROUNDS_PER_TRANSFER } from './slices/game-transfer.js';
+import { InMemoryGameEditorInviteStore } from './slices/game-editor-invite.js';
+import { InMemoryGameMembershipStore, MAX_REVOKED_ROUNDS_PER_MEMBER } from './slices/game-membership.js';
+import { InMemoryGameQuotaStore } from './slices/game-quota.js';
+import { editorInviteDocId, isPendingEditorInvite } from './records/game-editor-invite.js';
+import { newMembershipAudit } from './records/game-membership-audit.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
@@ -105,12 +110,13 @@ import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
 import { InMemorySubmissionStore } from './slices/submission.js';
 import { InMemoryTelemetryStore } from './slices/telemetry.js';
+import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore extends SubmissionFacade implements Store {
-  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore((uid) =>
-    this.gameAccessStore.erasedAt.has(uid),
+  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore(
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
   );
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
@@ -118,7 +124,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     this.identityStore.users.has(uid),
   );
   protected gameTransferStore = new InMemoryGameTransferStore(
-    (uid) => this.gameAccessStore.erasedAt.has(uid),
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
@@ -140,10 +146,33 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       }
     },
   );
-  private roundsStore = new InMemoryRoundsStore(this.submissions);
+  protected gameEditorInviteStore = new InMemoryGameEditorInviteStore(
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
+    (slug) => this.gameAccessStore.access.get(slug) ?? null,
+    (uid) => this.identityStore.users.get(uid) ?? null,
+    (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
+    (slug, record) => this.gameAccessStore.access.set(slug, record),
+  );
+  private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
+  protected gameMembershipStore = new InMemoryGameMembershipStore(
+    (slug) => this.gameAccessStore.access.get(slug) ?? null,
+    (slug, record) => this.gameAccessStore.access.set(slug, record),
+    (slug, recipientUid, at) => {
+      const key = editorInviteDocId(slug, recipientUid);
+      const existing = this.gameEditorInviteStore.invites.get(key);
+      if (existing && isPendingEditorInvite(existing, at)) {
+        this.gameEditorInviteStore.invites.set(key, { ...existing, status: 'cancelled', respondedAt: at });
+      }
+    },
+    (slug, uid, cancelActive) => this.revokeMemberActor(slug, uid, cancelActive),
+    (slug, action, actorUid, subjectUid, at) => {
+      this.gameEditorInviteStore.audits.push(newMembershipAudit(slug, action, actorUid, subjectUid, at));
+    },
+  );
+  private gameQuotaStore = new InMemoryGameQuotaStore();
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private shelves = new Map<string, ShelfDocument>();
   protected shelfStore = new InMemoryShelfStore(
@@ -173,6 +202,29 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private gameAdmissionStore = new InMemoryGameAdmissionStore();
   private oauthStore = new InMemoryOAuthStore();
   private cliChatStore = new InMemoryCliChatStore();
+
+  private revokeMemberActor(slug: string, uid: string, cancelActive: boolean): void {
+    let released = false;
+    const onSlug = [...this.submissions.values()]
+      .filter((record) => record.slug === slug && record.ownerUid === uid)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
+      .slice(0, MAX_REVOKED_ROUNDS_PER_MEMBER);
+    for (const record of onSlug) {
+      const next = { ...record, roundGeneration: revokedRoundGeneration(record.roundGeneration) };
+      if (cancelActive && isActiveBuildRound(record)) {
+        next.state = 'canceled';
+        released = true;
+      }
+      this.submissions.set(record.jobId, next);
+    }
+    if (!released) return;
+    this.submissionStore.clearRecoveryAdmission(slug);
+    const key = this.gameAdmissionStore.gameAgentKeys.get(slug);
+    if (!key?.agentOpenRoundPending) return;
+    const copy = { ...key };
+    delete copy.agentOpenRoundPending;
+    this.gameAdmissionStore.gameAgentKeys.set(slug, copy);
+  }
 
   async getUser(uid: string): Promise<User | null> {
     return this.identityStore.getUser(uid);
@@ -257,6 +309,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
     await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    await this.gameEditorInviteStore.cancelPendingEditorInvitesForUid(uid, at);
     for (const [slug, record] of [...this.gameAdmissionStore.gameAgentKeys]) {
       if (record.ownerUid === uid) this.gameAdmissionStore.gameAgentKeys.delete(slug);
     }
@@ -751,6 +804,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.telemetryStore.appendTelemetryEvents(dateStr, events);
   }
 
+  async getTelemetryDaily(dateStr: string): Promise<DailyTelemetryAggregate | undefined> {
+    return this.telemetryStore.getTelemetryDaily(dateStr);
+  }
+
+  async putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void> {
+    return this.telemetryStore.putTelemetryDaily(dateStr, aggregate);
+  }
+
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
     return this.telemetryStore.listTelemetryEvents(dateStr, opts);
   }
@@ -825,6 +886,23 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }> {
     return this.quotaStore.checkAndIncrementQuota(uid, dateStr, limit, action);
+  }
+
+  async getGameUsage(slug: string, dateStr: string): Promise<UsageCounters> {
+    return this.gameQuotaStore.getGameUsage(slug, dateStr);
+  }
+
+  async checkAndIncrementGameQuota(
+    slug: string,
+    dateStr: string,
+    limit: number,
+    action: keyof UsageCounters,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.gameQuotaStore.checkAndIncrementGameQuota(slug, dateStr, limit, action);
+  }
+
+  async decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void> {
+    return this.gameQuotaStore.decrementGameQuota(slug, dateStr, action);
   }
 
   async getCreationLimits(): Promise<CreationLimits | null> {
@@ -1527,8 +1605,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.oauthStore.createOAuthAccessToken(record);
   }
 
-  async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    return this.oauthStore.getOAuthAccessToken(tokenId);
+  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
+    return this.oauthStore.getAsAccessToken(tokenId);
   }
 
   async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {
@@ -1569,6 +1647,6 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   waitlistEntries(): WaitlistEntry[] {
     return Array.from(this.accessStore.waitlist.values());
   }
-  getCliChat = (uid: string) => this.cliChatStore.getCliChat(uid);
+  getCliChat = (uid: string, conversationId?: string) => this.cliChatStore.getCliChat(uid, conversationId);
   putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

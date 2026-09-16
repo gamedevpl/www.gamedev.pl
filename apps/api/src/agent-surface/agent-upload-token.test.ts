@@ -32,6 +32,29 @@ describe('agent-upload-token', () => {
     assertUploadTokenUnexpired(claims, 1_700_000_000_000 + 60_000);
   });
 
+  it('binds the writer uid so a later membership check can refuse the URL', () => {
+    const token = mintUploadToken(secret, {
+      jobId: 55,
+      roundGeneration: 1,
+      kind: 'screenshot',
+      actorUid: 'g:bea',
+      now: 1_700_000_000_000,
+      ttlSeconds: 900,
+    });
+    expect(verifyUploadToken(token, secret).actorUid).toBe('g:bea');
+  });
+
+  it('round-trips an Apple uid on an upload URL', () => {
+    const appleUid = 'a:001234.abcdef.0000';
+    const token = mintUploadToken(secret, {
+      jobId: 55,
+      roundGeneration: 1,
+      kind: 'screenshot',
+      actorUid: appleUid,
+    });
+    expect(verifyUploadToken(token, secret).actorUid).toBe(appleUid);
+  });
+
   it('still accepts a URL the previous revision minted', () => {
     // A deploy leaves URLs in flight; 401 breaks live sessions.
     const exp = 1_700_000_000 + 900;

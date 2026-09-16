@@ -22,6 +22,34 @@ Releases tagged `cli-v*` (one `gamedevpl` asset). `gamedevpl update` uses the sa
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
 
+Interactive sessions save the last 200 output lines and 50 prompts locally under
+`~/.config/gamedevpl/history/`, with owner-only file permissions. History is separated
+by signed-in account, server, and game (or launch directory before selecting a game).
+Restarting restores the transcript and ↑/↓ prompt history without executing old commands
+or reconnecting old preview URLs. The platform conversation ID is also retained. The server keeps up to eight recent
+conversations per account within a bounded storage budget; older conversations start
+fresh when their IDs expire. This does not resume a delegated agent's own session. If the account cannot be verified,
+history stays in memory for that run. Set `GAMEDEV_HISTORY=off` to disable disk history;
+remove the history directory to erase saved conversations. Avoid putting secrets in prompts.
+
+While a local Codex or Muse task works, Enter sends your message into its active
+turn. The UI confirms acceptance only after the agent acknowledges it; this does not
+mean the requested change is already implemented. Ctrl+Q instead queues a separate
+request for after the task and its confirmation prompts finish.
+
+Claude, Copilot, Agy, Vibe, and other adapters currently support queued follow-ups
+only; their input says “Follow-up after this task” and Enter queues the request.
+Codex uses its app-server protocol and Muse uses MSP (`serve`); update the agent if
+its installed version does not support that protocol. A failed live run is never
+silently retried as a new task.
+
+Ctrl+O opens the preview while typing. Ctrl+C stops the task and clears its queue.
+Unsent text survives intermediate choice prompts. Pending requests are kept only
+for the current CLI run. Unconfirmed messages are saved in the transcript and
+prompt history without overwriting newer edits in the editor. If delivery times
+out or the connection closes, acceptance may be unknown: check the transcript
+before resending. Queued requests do not resume the agent's internal conversation.
+
 Until a release exists, from the repo root after a pull:
 
 ```bash
@@ -54,10 +82,19 @@ stays with the selected tool; its authentication errors are shown in the termina
 Runs use that tool's own credentials and billing.
 
 The bundled local adapters are `claude`, `codex`, `gemini`, `vibe`, `agy`, `cursor`,
-and `copilot`. Automatic MCP configuration is available for `claude`, `codex`, and
+`copilot`, `muse`, and `opencode`. Automatic MCP configuration is available for `claude`, `codex`, and
 `copilot`; the others use local files. Cursor runs `cursor-agent`, or `agent` only
 after its help identifies it as Cursor. The `cursor` editor launcher is listed
-separately and is never treated as a headless agent.
+separately and is never treated as a headless agent. Windsurf is also listed as an
+editor with manual MCP setup (`gamedevpl connect <slug> --manual`), not as a
+headless delegate. The builder picker only shows detected execution adapters.
+
+OpenCode uses [`opencode run --format json`](https://opencode.ai/docs/cli/).
+Choose a provider/model ID with `/model opencode`; provider-specific reasoning
+variants and permissions stay in OpenCode's settings. No blanket auto-approval
+is enabled. Prompts typed during a run are queued for the next task.
+Copilot output shows complete replies, tool activity, and failures; protocol
+deltas and lifecycle notifications stay out of the conversation.
 Custom local adapters can be configured in `~/.config/gamedevpl/adapters.json` (or
 `GAMEDEV_ADAPTERS`); they remain unsupported and do not gain automatic MCP wiring.
 
@@ -362,3 +399,34 @@ Canceling keeps the session attached to those local files. Use `/recover` to
 try again or `/connect` to retry connecting. Authentication and network failures
 do not trigger recovery. Explicit `gamedevpl recover <directory>` remains
 available for scripts and recovery under another slug.
+
+### Local browser tools for delegated tasks
+
+Interactive local delegation to Codex, Claude, and Copilot automatically connects a
+session-scoped `gamedevpl_local` MCP server when the CLI preview is available.
+`preview_status` reports build errors and freshness. `capture` starts a desktop or
+mobile screenshot; `capture_status` returns its PNG, rendered HTML revision, and
+browser console errors. Agents can inspect the returned image without launching a
+browser through their shell sandbox. Other adapters continue without these tools.
+
+The creator's CLI launches an installed system Chrome/Chromium (Chrome/Edge on Windows)
+with a temporary profile and its browser sandbox enabled. It does not install a browser.
+Capture uses CLI-owned code and a frozen preview document, not checkout npm scripts.
+The game stays in an iframe without `allow-same-origin`, with external connections
+blocked by CSP. Screenshot tools accept no URL, shell command, path, or JavaScript.
+They neither publish nor replace game media. This initial-state capture does not
+replace an interactive playtest or the Creator Kit's deterministic capture plan.
+
+The loopback MCP endpoint requires a random per-task credential, rejects foreign
+origins/hosts, limits requests and retained captures, and shuts down with the task.
+The agent's shell permissions are unchanged. Credentials/configuration are temporary;
+the normal remote gamedev.pl MCP connector is not changed. Ctrl+C cancels local capture.
+Existing previews from older CLI versions may need `/play --stop` followed by `/play`.
+
+### Editing beside a local preview
+
+In an interactive CLI session, `/play` opens the game with an **Edit game** overlay.
+You can send prompts, queue follow-ups, answer choices, read recent output and request
+Stop from the browser. Keep the terminal open; native agent permission handoffs still
+use it. Updates are applied manually and restart the game. Standalone `gamedevpl play`
+keeps its preview-only behavior. The panel is local to this computer.

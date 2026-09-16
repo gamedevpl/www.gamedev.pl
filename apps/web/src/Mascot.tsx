@@ -241,8 +241,8 @@ function cutoutsFor(emotion: MascotEmotion): ReactElement | null {
       return (
         <>
           {eyeSlits(
-            { cx: 33.5, cy: 4.8, rot: -24, rx: 2.3, ry: 1.35 },
-            { cx: 41.5, cy: 4.8, rot: -24, rx: 2.3, ry: 1.35 },
+            { cx: 33.4, cy: 4.9, rot: -32, rx: 2.5, ry: 1.05 },
+            { cx: 42.4, cy: 3.9, rot: -8, rx: 2.2, ry: 1.7 },
           )}
           <path className="mascot__mouth" d={MOUTH_THINK} />
         </>
@@ -468,6 +468,7 @@ export function Mascot({
   const cutouts = cutoutsFor(emotion);
   const isIdle = emotion === 'idle' || cutouts == null;
   const showWaveArm = emotion === 'wave' || emotion === 'excited';
+  const showThinkArm = emotion === 'thinking';
   const showPhone = scrolling !== undefined;
   // Keep the nudge small — past ~3px the mouth starts to clip the silhouette.
   const lookTransform =
@@ -519,6 +520,31 @@ export function Mascot({
         {showWaveArm ? (
           <g className="mascot__wave-arm" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <path d="M64 36 Q70 26 67 14" />
+          </g>
+        ) : null}
+
+        {showThinkArm ? (
+          <g className="mascot__think-arm" aria-hidden="true">
+            <path d="M62 50 Q46 38 36 24" fill="none" stroke="#0d1520" strokeWidth="5.4" strokeLinecap="round" />
+            <path d="M62 50 Q46 38 36 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+            <ellipse
+              className="mascot__think-fist"
+              cx="35"
+              cy="21"
+              rx="7.2"
+              ry="6"
+              fill="#0d1520"
+              stroke="currentColor"
+              strokeWidth="2"
+              transform="rotate(-18 35 21)"
+            />
+            <path
+              d="M31 17.5 L29.5 12.2 M35 16.6 L34.2 11.2 M38.6 17.2 L38.2 12.4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
           </g>
         ) : null}
 

@@ -15,7 +15,9 @@ import {
   type CatalogWorld,
 } from '@gamedevpl/contract';
 import { rememberBounded } from '../platform/bounded-map.js';
-import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
+import { parseOptionalEffort } from './catalog-effort.js';
+import { buildCatalogFromArchive } from './catalog-from-archive.js';
+import { type CatalogGameTouch } from './catalog-touch.js';
 import {
   DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
@@ -438,8 +440,8 @@ export interface GitHubClient {
   /**
    * Builds the game catalog for `ref`. Prefer, in order:
    * 1. Derive from an archive file source (`listPaths`) — used by the snapshot
-   *    bake; includes code-derived `touch` and does not need a committed
-   *    `catalog.json` in the games repo.
+   *    bake; includes code-derived `touch` and `effort` and does not need a
+   *    committed `catalog.json` in the games repo.
    * 2. A legacy committed `catalog.json` (older SHAs / non-archive callers).
    * 3. GraphQL SPEC + media fan-out (no `touch`).
    * Games with a missing or unparseable SPEC.md are skipped.
@@ -479,13 +481,14 @@ export interface GitHubClient {
  * always go to the API.
  *
  * `listPaths` is present on archive sources and lets `getCatalog` derive the
- * website catalog (including code-derived `touch`) without a committed
- * `catalog.json` in the games repo.
+ * website catalog (including code-derived `touch` and `effort`) without a
+ * committed `catalog.json` in the games repo.
  */
 export interface RepoFileSource {
   readText(path: string, ref: string): Promise<string | null>;
   readBytes(path: string, ref: string): Promise<Uint8Array | null>;
   listPaths?(): string[];
+  commitCounts?: ReadonlyMap<string, number>;
 }
 
 export interface GitHubClientOptions {
@@ -1541,7 +1544,10 @@ ${gameJs}`;
       // games repo no longer has to commit catalog.json onto a protected main.
       const listPaths = options.files?.listPaths;
       if (typeof listPaths === 'function') {
-        return buildCatalogFromArchive(ref, readRawFile, listPaths());
+        return buildCatalogFromArchive(ref, readRawFile, listPaths(), {
+          entryFromSpec: catalogEntryFromSpec,
+          commitCounts: options.files?.commitCounts,
+        });
       }
 
       // Legacy fast path: older SHAs still carry a committed catalog.json.
@@ -1638,63 +1644,6 @@ const SAFE_MEDIA_MP4 = /^[a-z0-9][a-z0-9-]*\.mp4$/;
 const CATALOG_TOUCH_VALUES = new Set<CatalogGameTouch>(CONTRACT_CATALOG_TOUCH_VALUES);
 
 /**
- * Builds the website catalog from a games-repo archive listing. Same fields as
- * the old committed catalog.json (including code-derived `touch`), but computed
- * at bake time from the tree being published — so a merge never has to push a
- * regenerated aggregate onto protected `main` first.
- */
-async function buildCatalogFromArchive(
-  ref: string,
-  readRawFile: (path: string, ref: string) => Promise<string | null>,
-  paths: readonly string[],
-): Promise<CatalogGameEntry[]> {
-  // One pass over the archive listing: slug set, per-slug .ts paths, path Set for
-  // media existence. Avoids O(paths × games) rescans inside the per-game loop.
-  const pathSet = new Set(paths);
-  const slugs = new Set<string>();
-  const tsPathsBySlug = new Map<string, string[]>();
-  for (const filePath of paths) {
-    const match = /^games\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(filePath);
-    if (!match) continue;
-    const slug = match[1];
-    const relative = match[2];
-    if (relative === 'SPEC.md') {
-      slugs.add(slug);
-    }
-    if (relative.endsWith('.ts')) {
-      const list = tsPathsBySlug.get(slug);
-      if (list) list.push(filePath);
-      else tsPathsBySlug.set(slug, [filePath]);
-    }
-  }
-
-  const entries: CatalogGameEntry[] = [];
-  for (const slug of [...slugs].sort()) {
-    const specMd = await readRawFile(`games/${slug}/SPEC.md`, ref);
-    if (specMd === null) continue;
-
-    const mediaPath = `games/${slug}/media/metadata.json`;
-    const mediaJson = pathSet.has(mediaPath) ? await readRawFile(mediaPath, ref) : null;
-    const entry = catalogEntryFromSpec(slug, specMd, (name) => (name === 'media/metadata.json' ? mediaJson : null));
-    if (!entry) continue;
-
-    if (entry.media) {
-      const screenshots = entry.media.screenshots.filter((shot) => pathSet.has(`games/${slug}/media/${shot.file}`));
-      const video =
-        entry.media.video && pathSet.has(`games/${slug}/media/${entry.media.video}`) ? entry.media.video : null;
-      entry.media = screenshots.length > 0 || video ? { screenshots, video } : null;
-    }
-
-    const tsPaths = tsPathsBySlug.get(slug) ?? [];
-    const sources = await Promise.all(tsPaths.map((filePath) => readRawFile(filePath, ref)));
-    entry.touch = classifyTouchSource(sources.filter((text): text is string => text !== null).join('\n'));
-
-    entries.push(entry);
-  }
-  return entries;
-}
-
-/**
  * Parses the games repo's committed catalog.json into catalog entries. The file
  * is CI-validated at the source, but everything is still re-checked here — the
  * media filenames it vouches for become servable URLs, and this process must
@@ -1731,6 +1680,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
 
     const orientationRaw = typeof candidate.orientation === 'string' ? candidate.orientation.trim().toLowerCase() : '';
     const touch = candidate.touch;
+    const effort = parseOptionalEffort(candidate.effort);
 
     const submittedByRaw =
       typeof candidate.submittedBy === 'string'
@@ -1760,6 +1710,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       ...(typeof touch === 'string' && CATALOG_TOUCH_VALUES.has(touch as CatalogGameTouch)
         ? { touch: touch as CatalogGameTouch }
         : {}),
+      ...(effort !== undefined ? { effort } : {}),
     });
   }
 

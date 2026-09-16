@@ -31,7 +31,9 @@ import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from '../creation/creator-profile-routes.js';
 import { registerRecipientCodeRoutes } from '../creation/recipient-code-routes.js';
-import { registerGameTransferRoutes } from '../creation/game-transfer-routes.js';
+import { registerGameTransferRoutes, type GameTransferRoutesOptions } from '../creation/game-transfer-routes.js';
+import { registerGameEditorInviteRoutes } from '../creation/game-editor-invite-routes.js';
+import { emitShareNotice } from '../notifications/notify-share.js';
 import { catalogEntryFromSpec } from '../catalog/github-client.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from '../catalog/game-page-routes.js';
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from '../notifications/game-follow-routes.js';
@@ -85,7 +87,7 @@ import { resolveLocalGamesDir } from '../catalog/local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from '../realtime/mp.js';
 import { createRelayClientFromEnv, isRelayOnly } from '../realtime/mp-relay.js';
 import { registerNotificationRoutes } from '../notifications/notifications.js';
-import { emitProposalNotification, emitReviewSweep } from '../notifications/notify.js';
+import { emitProposalNotification, emitReviewSweep, emitTransferOfferedNotification } from '../notifications/notify.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from '../community/player-feedback.js';
 import { registerAgentPlayRoutes } from '../community/agent-play-routes.js';
 import { registerReviewRoutes, type ReviewRoutesOptions } from '../community/review.js';
@@ -177,6 +179,7 @@ export interface BuildAppOptions {
   contactRoutes?: ContactRoutesOptions;
   /** Seams for the public game page (cache TTL / clock under test). */
   gamePageRoutes?: Partial<Omit<GamePageRoutesOptions, 'store'>>;
+  gameTransferRoutes?: Partial<Omit<GameTransferRoutesOptions, 'store'>>;
   /** Seams for per-game following. */
   gameFollowRoutes?: Partial<Omit<GameFollowRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
@@ -688,7 +691,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
   // The agent executor, withheld from every non-reviewer session.
   await registerAgentPlayRoutes(app, { reviewerUids, adminUids });
-  await registerReviewRoutes(app, {
+  const reviewRoutes = await registerReviewRoutes(app, {
     store,
     reviewerUids,
     adminUids,
@@ -1018,10 +1021,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
   await registerGameTransferRoutes(app, {
     store,
+    // The recipient cannot act on an invitation nobody told them about.
+    notifyTransferOffered: async (event) => {
+      await emitTransferOfferedNotification(submissionSeams.buildNotifyDeps(), event);
+    },
     invalidatePublishedGameCaches: (slug) => {
       submissionSeams.invalidatePublishedGameCaches(slug);
       gamePageRoute.invalidateGameCache(slug);
+      // The review queue caches who owns a slug; a handover retires that.
+      reviewRoutes.invalidateGameOwner(slug);
     },
+    ...options.gameTransferRoutes,
+  });
+
+  await registerGameEditorInviteRoutes(app, {
+    store,
+    notifyShare: (event) =>
+      emitShareNotice({ store, logError: (err, message) => app.log.error({ err }, message) }, event),
   });
 
   // Following a game: a subscription rather than a bookmark. The count is public,

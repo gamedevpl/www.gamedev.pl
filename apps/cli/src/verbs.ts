@@ -28,6 +28,7 @@ export async function dispatchReadVerb(input: {
   io: Io;
   env?: NodeJS.ProcessEnv;
   currentPath?: string;
+  runningVersion?: string;
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
@@ -101,7 +102,14 @@ export async function dispatchReadVerb(input: {
     const version = typeof flags.version === 'string' ? flags.version : undefined;
     const result = await updateCli({ dest, version });
     if (input.env) noteInstallChannel(input.env, 'update');
-    emit(io, asJson, result, `updated ${result.asset} to ${result.version}`);
+    emit(
+      io,
+      asJson,
+      result,
+      input.runningVersion
+        ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
+        : `updated ${result.asset} to ${result.version}`,
+    );
     return EXIT_GREEN;
   }
   return null;

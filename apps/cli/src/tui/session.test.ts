@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTuiSession, formatSessionIdentity } from './session.js';
 
 describe('tui session', () => {
@@ -133,4 +133,153 @@ describe('tui session', () => {
     session.moveDraftCursor(20);
     expect(session.get().draftCursor).toBe(3);
   });
+});
+
+it('queues a follow-up while working and does not use it to answer a choice', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  session.insertDraft('keep the camera');
+  session.queueDraft();
+  expect(session.get().queued).toEqual(['keep the camera']);
+  const choice = session.prompt(['Deliver', 'Keep editing']);
+  session.movePick(1);
+  session.submit();
+  expect(await choice).toBe('Keep editing');
+  expect(await session.prompt()).toBe('keep the camera');
+  expect(session.get().queued).toEqual([]);
+  session.close();
+});
+
+it('preserves an unfinished follow-up through a choice and clears queued work on stop', async () => {
+  const stop = vi.fn();
+  const session = createTuiSession('', stop);
+  session.setLocalTask('codex');
+  session.insertDraft('first');
+  session.queueDraft();
+  session.insertDraft('unfinished');
+  const choice = session.prompt(['Keep editing']);
+  session.submit();
+  await choice;
+  expect(await session.prompt()).toBe('first');
+  const prompt = session.prompt();
+  expect(session.get().draft).toBe('unfinished');
+  session.submit();
+  await prompt;
+  session.insertDraft('do not run');
+  session.queueDraft();
+  session.cancel();
+  expect(session.get().queued).toEqual([]);
+  expect(stop).toHaveBeenCalledOnce();
+  session.close();
+});
+
+it('keeps queued work and unfinished drafts out of a model ID question', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  session.insertDraft('add ramps');
+  session.queueDraft();
+  session.insertDraft('unfinished request');
+  const model = session.prompt([], 'Model ID');
+  expect(session.get().draft).toBe('');
+  expect(session.get().queued).toEqual(['add ramps']);
+  session.insertDraft('my-model');
+  session.submit();
+  expect(await model).toBe('my-model');
+  expect(await session.prompt()).toBe('add ramps');
+  const next = session.prompt();
+  expect(session.get().draft).toBe('unfinished request');
+  session.close();
+  await next;
+});
+
+it('requires agent acknowledgement, prevents duplicate sends, and preserves edits typed while sending', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  let ack!: () => void;
+  const send = vi.fn(
+    () =>
+      new Promise<void>((r) => {
+        ack = r;
+      }),
+  );
+  session.setSteering(send);
+  session.setDraft('correction');
+  const pending = session.sendDraft();
+  await session.sendDraft();
+  session.queueDraft();
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(session.get().queued).toEqual([]);
+  expect(session.get().draft).toBe('correction');
+  session.setDraft('another idea');
+  ack();
+  await pending;
+  expect(session.get().draft).toBe('another idea');
+  expect(session.get().sendStatus).toContain('Accepted');
+  expect(session.savedHistory().prompts).toContain('correction');
+});
+it('keeps refused messages and separates sending now from queued work', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  session.setSteering(async () => {
+    throw new Error('Turn ended');
+  });
+  session.setDraft('correction');
+  await session.sendDraft();
+  expect(session.get().draft).toBe('correction');
+  expect(session.get().sendStatus).toContain('Turn ended');
+  expect(session.savedHistory().prompts).toEqual(['correction']);
+  session.queueDraft();
+  expect(session.get().queued).toEqual(['correction']);
+  session.setSteering(undefined);
+  expect(session.get().canSteer).toBe(false);
+});
+it('does not repeat an acknowledged message after the task ends during delivery', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  let ack!: () => void;
+  session.setSteering(
+    () =>
+      new Promise<void>((r) => {
+        ack = r;
+      }),
+  );
+  session.setDraft('correction');
+  const sending = session.sendDraft();
+  session.setSteering(undefined);
+  session.setLocalTask('');
+  const next = session.prompt();
+  ack();
+  await sending;
+  expect(session.get().draft).toBe('');
+  expect(session.get().queued).toEqual([]);
+  session.close();
+  await next;
+});
+
+it('retains a failed in-flight message without overwriting a newer draft', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('muse');
+  let reject!: (error: Error) => void;
+  session.setSteering(
+    () =>
+      new Promise<void>((_, fail) => {
+        reject = fail;
+      }),
+  );
+  session.setDraft('original correction');
+  const sending = session.sendDraft();
+  session.setDraft('newer unfinished request');
+  reject(new Error('Delivery outcome unknown'));
+  await sending;
+  expect(session.get().draft).toBe('newer unfinished request');
+  expect(session.get().queued).toEqual([]);
+  expect(session.savedHistory().lines).toContain('› [delivery not confirmed] original correction');
+  expect(session.savedHistory().prompts).toContain('original correction');
+  const prompt = session.prompt();
+  session.historyPrev();
+  expect(session.get().draft).toBe('original correction');
+  session.historyNext();
+  expect(session.get().draft).toBe('newer unfinished request');
+  session.close();
+  await prompt;
 });

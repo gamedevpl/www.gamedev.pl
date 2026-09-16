@@ -67,10 +67,22 @@ export type NotificationType =
    * A proposal this person sent is live in the game. The watcher relationship starts
    * here: merged contributors get digest visibility, never approval rights.
    */
-  | 'proposal.merged';
+  | 'proposal.merged'
+  // Owner invited this person; access starts only after accept.
+  | 'share.offered'
+  // Invited editor accepted; the owner is told.
+  | 'share.accepted'
+  // Owner removed this person as an editor.
+  | 'share.removed'
+  // An editor left; the owner is told.
+  | 'share.left'
+  // A decision with a deadline, not news about a game.
+  | 'transfer.offered';
 
 /** The proposal family, split out for the same reason the submission one is. */
 export type ProposalNotificationType = Extract<NotificationType, `proposal.${string}`>;
+
+export type ShareNotificationType = Extract<NotificationType, `share.${string}`>;
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
@@ -81,6 +93,9 @@ export type ProposalNotificationType = Extract<NotificationType, `proposal.${str
  * second non-submission event has to be thought about.
  */
 export type SubmissionNotificationType = Extract<NotificationType, `submission.${string}`>;
+
+// Handovers, derived the same way. The family is the seam.
+export type TransferNotificationType = Extract<NotificationType, `transfer.${string}`>;
 
 /** The operator-facing half, derived the same way and for the same reason. */
 export type OperatorNotificationType = Extract<NotificationType, `operator.${string}`>;

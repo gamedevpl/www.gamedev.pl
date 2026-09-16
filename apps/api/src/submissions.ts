@@ -1,5 +1,6 @@
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
-import { ownsGame, resolveGameAccess } from './platform/game-access-resolve.js';
+import { canActOnGame } from './platform/game-access-permissions.js';
+import { resolveGameAccess } from './platform/game-access-resolve.js';
 import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -41,6 +42,8 @@ import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-conne
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { closeJob } from './creation/close-job.js';
 import { registerCliChatRoutes } from './creation/cli-chat-routes.js';
+import { collapseJobsToOwnerGames } from './creation/owner-games.js';
+import { reconcileTransferredOwnership } from './creation/studio-shelf-records.js';
 import { createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
 import {
   createSeedDispatchClientFromEnv,
@@ -315,6 +318,7 @@ export interface AgentSurfaceSeams {
     | 'dailyImprovementQuota'
     | 'dailyFeedbackQuota'
     | 'refuseShare'
+    | 'loadOwnerGames'
   >;
 }
 
@@ -819,7 +823,7 @@ export async function registerSubmissionRoutes(
       // Recheck ownership: a transfer may have landed while this lease was pending.
       const expectedOwnerUid = input.ownerUid ?? source.ownerUid;
       const access = await resolveGameAccess(store, slug);
-      if (access.source === 'canonical' && !ownsGame(access, expectedOwnerUid)) {
+      if (access.source === 'canonical' && !canActOnGame(access, expectedOwnerUid, 'build')) {
         throw Object.assign(new Error('Ownership of this game changed. Refresh before continuing.'), {
           statusCode: 409,
         });
@@ -953,7 +957,7 @@ export async function registerSubmissionRoutes(
       // Under the lease: a transfer may have committed first.
       if (record.slug && input.ownerUid) {
         const access = await resolveGameAccess(store, record.slug);
-        if (access.source === 'canonical' && !ownsGame(access, input.ownerUid)) {
+        if (access.source === 'canonical' && !canActOnGame(access, input.ownerUid, 'build')) {
           return { ok: false, reason: 'stale_owner' };
         }
       }
@@ -1909,6 +1913,13 @@ export async function registerSubmissionRoutes(
       dailyImprovementQuota,
       dailyFeedbackQuota,
       refuseShare,
+      loadOwnerGames: store
+        ? async (ownerUid: string) => {
+            const owned = await store.listSubmissionsByOwner(ownerUid);
+            const records = await reconcileTransferredOwnership(store, ownerUid, owned);
+            return collapseJobsToOwnerGames(records, 'shelf');
+          }
+        : undefined,
     },
   };
 

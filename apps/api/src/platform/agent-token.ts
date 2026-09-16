@@ -1,3 +1,6 @@
+import { ACTOR_UID_RE, encodeActorUidField, decodeActorUidField } from './actor-uid.js';
+export { ACTOR_UID_RE, encodeActorUidField, decodeActorUidField } from './actor-uid.js';
+import { bindCapabilityRevision, verifyCapabilityRevision } from './capability-revision.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export { readBearerToken } from './bearer.js';
@@ -52,6 +55,9 @@ export interface AgentTokenClaims {
   roundGeneration?: number;
   /** Unix seconds. Present with {@link roundGeneration}. */
   exp?: number;
+  // MCP inject may bind the writer.
+  actorUid?: string;
+  actorRevision?: number;
 }
 
 export interface MintAgentTokenOptions {
@@ -60,6 +66,9 @@ export interface MintAgentTokenOptions {
   now?: number;
   /** Override {@link selfBuildKeyTtlDays}; useful in tests. */
   ttlDays?: number;
+  // Writer uid; omitted on round keys.
+  actorUid?: string;
+  actorRevision?: number;
 }
 
 /**
@@ -81,8 +90,16 @@ function signLegacy(jobId: number, secret: string): string {
   return createHmac('sha256', secret).update(`${SCOPE}:${jobId}`).digest('hex');
 }
 
-function signRoundScoped(jobId: number, roundGeneration: number, exp: number, secret: string): string {
-  return createHmac('sha256', secret).update(`${SCOPE}:${jobId}:${roundGeneration}:${exp}`).digest('hex');
+function signRoundScoped(
+  jobId: number,
+  roundGeneration: number,
+  exp: number,
+  secret: string,
+  actorUid?: string,
+): string {
+  const base = `${SCOPE}:${jobId}:${roundGeneration}:${exp}`;
+  const payload = actorUid ? `${base}:${actorUid}` : base;
+  return createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 function signManagedMcpOpener(jobId: number, roundGeneration: number, exp: number, secret: string): string {
@@ -111,11 +128,19 @@ export function mintAgentToken(jobId: number, secret: string, options: MintAgent
   if (!Number.isSafeInteger(options.roundGeneration) || options.roundGeneration < 1) {
     throw new InvalidAgentTokenError('invalid round generation');
   }
+  if (options.actorUid && !ACTOR_UID_RE.test(options.actorUid)) {
+    throw new InvalidAgentTokenError('invalid actor uid');
+  }
   const nowMs = options.now ?? Date.now();
   const ttlDays = options.ttlDays ?? selfBuildKeyTtlDays();
   const exp = Math.floor(nowMs / 1000) + ttlDays * 24 * 60 * 60;
-  const signature = signRoundScoped(jobId, options.roundGeneration, exp, secret);
-  return Buffer.from(`${jobId}.${options.roundGeneration}.${exp}.${signature}`, 'utf8').toString('base64url');
+  const signature = signRoundScoped(jobId, options.roundGeneration, exp, secret, options.actorUid);
+  const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
+  return bindCapabilityRevision(
+    Buffer.from(`${jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`, 'utf8').toString('base64url'),
+    options.actorRevision,
+    secret,
+  );
 }
 
 export function mintManagedMcpOpener(jobId: number, secret: string, options: MintAgentTokenOptions): string {
@@ -184,7 +209,8 @@ export function mintLegacyAgentToken(jobId: number, secret: string): string {
  */
 export function verifyAgentToken(token: string, secret: string): AgentTokenClaims {
   try {
-    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    const envelope = verifyCapabilityRevision(token, secret);
+    const parts = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
 
     if (parts.length === 2) {
       const [jobIdRaw, signature] = parts;
@@ -201,8 +227,10 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
       return { jobId };
     }
 
-    if (parts.length === 4) {
-      const [jobIdRaw, generationRaw, expRaw, signature] = parts;
+    if (parts.length === 4 || parts.length === 5) {
+      const [jobIdRaw, generationRaw, expRaw, actorOrSig, maybeSig] = parts;
+      const actorUid = parts.length === 5 ? decodeActorUidField(actorOrSig ?? '') : undefined;
+      const signature = parts.length === 5 ? maybeSig : actorOrSig;
       if (
         !jobIdRaw ||
         !generationRaw ||
@@ -211,7 +239,8 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
         !/^\d+$/.test(jobIdRaw) ||
         !/^\d+$/.test(generationRaw) ||
         !/^\d+$/.test(expRaw) ||
-        !/^[a-f0-9]{64}$/i.test(signature)
+        !/^[a-f0-9]{64}$/i.test(signature) ||
+        (parts.length === 5 && actorUid === undefined)
       ) {
         throw new InvalidAgentTokenError();
       }
@@ -228,10 +257,16 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
       ) {
         throw new InvalidAgentTokenError();
       }
-      if (!safeEqualHex(signature, signRoundScoped(jobId, roundGeneration, exp, secret))) {
+      if (!safeEqualHex(signature, signRoundScoped(jobId, roundGeneration, exp, secret, actorUid))) {
         throw new InvalidAgentTokenError();
       }
-      return { jobId, roundGeneration, exp };
+      return {
+        jobId,
+        roundGeneration,
+        exp,
+        ...(envelope.actorRevision === undefined ? {} : { actorRevision: envelope.actorRevision }),
+        ...(actorUid ? { actorUid } : {}),
+      };
     }
 
     throw new InvalidAgentTokenError();

@@ -3,12 +3,21 @@ import type { GameAccessStore } from './slices/game-access.js';
 import type { GameAccessRecord } from './records/game-access.js';
 import type { GameTransferStore } from './slices/game-transfer.js';
 import type { GameTransferInvitation } from './records/game-transfer.js';
+import type {
+  EditorInviteAcceptResult,
+  EditorInviteCreateResult,
+  GameEditorInviteStore,
+} from './slices/game-editor-invite.js';
+import type { GameEditorInvitation } from './records/game-editor-invite.js';
+import type { GameMembershipStore, MembershipChangeResult } from './slices/game-membership.js';
 import type { SubmissionQueryStore } from './slices/submission-queries.js';
 import type { ShelfMirror } from '../creation/shelf-mirror.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
   protected abstract gameTransferStore: GameTransferStore;
+  protected abstract gameEditorInviteStore: GameEditorInviteStore;
+  protected abstract gameMembershipStore: GameMembershipStore;
   protected abstract submissionQueryStore: SubmissionQueryStore;
 
   // Mirrors the owner's rounds; see creation/shelf-mirror.ts.
@@ -173,27 +182,100 @@ export abstract class SubmissionFacade {
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
-    return this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at);
+    const result = await this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at, invitationId);
+    if (result && result !== 'busy' && result !== 'ineligible' && result !== 'stale_owner') {
+      await this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
+    }
+    return result;
   }
 
   async cancelGameTransferInvitation(
     slug: string,
     senderUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
-    return this.gameTransferStore.cancelGameTransferInvitation(slug, senderUid, at);
+    return this.gameTransferStore.cancelGameTransferInvitation(slug, senderUid, at, invitationId);
   }
 
   async rejectGameTransferInvitation(
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
-    return this.gameTransferStore.rejectGameTransferInvitation(slug, recipientUid, at);
+    return this.gameTransferStore.rejectGameTransferInvitation(slug, recipientUid, at, invitationId);
   }
 
   async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {
     return this.gameTransferStore.listPendingGameTransfersForRecipient(uid, at);
+  }
+
+  async getEditorInvite(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null> {
+    return this.gameEditorInviteStore.getEditorInvite(slug, recipientUid, at);
+  }
+
+  async createEditorInvitation(
+    slug: string,
+    senderUid: string,
+    recipientUid: string,
+    at: string,
+    recipientCode?: string,
+  ): Promise<EditorInviteCreateResult> {
+    return this.gameEditorInviteStore.createEditorInvitation(slug, senderUid, recipientUid, at, recipientCode);
+  }
+
+  async acceptEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<EditorInviteAcceptResult> {
+    return this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+  }
+
+  async cancelEditorInvitation(
+    slug: string,
+    senderUid: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<GameEditorInvitation | null> {
+    return this.gameEditorInviteStore.cancelEditorInvitation(slug, senderUid, recipientUid, at, inviteId);
+  }
+
+  async rejectEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<GameEditorInvitation | null> {
+    return this.gameEditorInviteStore.rejectEditorInvitation(slug, recipientUid, at, inviteId);
+  }
+
+  async listPendingEditorInvitesForRecipient(uid: string, at: string): Promise<GameEditorInvitation[]> {
+    return this.gameEditorInviteStore.listPendingEditorInvitesForRecipient(uid, at);
+  }
+
+  async listPendingEditorInvitesForSlug(slug: string, at: string): Promise<GameEditorInvitation[]> {
+    return this.gameEditorInviteStore.listPendingEditorInvitesForSlug(slug, at);
+  }
+
+  async cancelPendingEditorInvitesForSlug(slug: string, at: string): Promise<void> {
+    return this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
+  }
+
+  async cancelPendingEditorInvitesForUid(uid: string, at: string): Promise<void> {
+    return this.gameEditorInviteStore.cancelPendingEditorInvitesForUid(uid, at);
+  }
+
+  async removeEditor(slug: string, ownerUid: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
+    return this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+  }
+
+  async leaveGame(slug: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
+    return this.gameMembershipStore.leaveGame(slug, editorUid, at);
   }
 }

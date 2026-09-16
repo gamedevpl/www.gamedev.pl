@@ -246,3 +246,54 @@
   align-items: center;
   gap: 12px;
 }
+
+.studio-transfer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.studio-transfer-form input {
+  font-family: inherit;
+  letter-spacing: 0.08em;
+}
+
+.studio-transfer-who {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.studio-transfer-expiry {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.studio-transfer-inbox {
+  border-top: 1px solid #1f2937;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  /* The shelf is clipped to the viewport and only its game list scrolls. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.studio-transfer-invites {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.studio-transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}

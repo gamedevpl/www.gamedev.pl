@@ -18,6 +18,10 @@ export interface ResolvedGameAccess {
   // 0 means derived authority, which has no revision to fence with.
   accessRevision: number;
 
+  // Set once this game has changed hands at least once.
+  capabilitiesRevokedAtRevision?: number;
+  memberRevocations?: Record<string, { revision: number; at: string }>;
+
   source: 'canonical' | 'derived';
 }
 
@@ -50,6 +54,10 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
     owner: classifyOwnerUid(record.ownerUid),
     editorUids: [...record.editorUids],
     accessRevision: record.accessRevision,
+    memberRevocations: record.memberRevocations,
+    ...(record.capabilitiesRevokedAtRevision === undefined
+      ? {}
+      : { capabilitiesRevokedAtRevision: record.capabilitiesRevokedAtRevision }),
     source: 'canonical',
   };
 }
@@ -73,6 +81,49 @@ export async function currentOwnerUid(
 ): Promise<string | undefined> {
   const owner = (await resolveGameAccess(store, slug)).owner;
   return owner.kind === 'creator' ? owner.uid : fallback;
+}
+
+// Advisory reads take a blip as "unchanged", never as a failure.
+export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, fallback: string): Promise<string> {
+  try {
+    return (await currentOwnerUid(store, slug, fallback)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Stamped keys survive membership; a handover writes the revoke marker.
+
+// An owner comparison alone would revive rounds a transfer revoked,
+
+// A -> B -> A restores the uid, never the revoke marker.
+
+// A round predating the epoch falls back to the weaker owner check,
+
+// but only while the game has never changed hands.
+
+// Derived authority has no revision, so it is left alone.
+export function roundAuthorityCurrent(
+  record: { ownerUid: string; accessEpoch?: number },
+  access: ResolvedGameAccess,
+  credential?: { actorUid?: string; actorRevision?: number },
+): boolean {
+  if (access.source !== 'canonical') return true;
+  const actorUid = credential?.actorUid ?? record.ownerUid;
+  const revision = credential?.actorUid ? credential.actorRevision : record.accessEpoch;
+  const memberFence = access.memberRevocations?.[actorUid];
+  if (memberFence !== undefined && (revision === undefined || revision < memberFence.revision)) return false;
+  if (record.accessEpoch !== undefined) {
+    // Membership bumps revision; only a handover fences stamped keys.
+    const revokedAt = access.capabilitiesRevokedAtRevision;
+    if (revokedAt === undefined) return true;
+    return record.accessEpoch >= revokedAt;
+  }
+  // No epoch on a game that changed hands: fenced rather than guessed.
+  if (access.capabilitiesRevokedAtRevision !== undefined) return false;
+  if (sameOwner(classifyOwnerUid(actorUid), access.owner)) return true;
+  // Editor rounds stay current until handover or removal.
+  return access.owner.kind === 'creator' && access.editorUids.includes(actorUid);
 }
 
 // Editors are resolved but never admitted here: roles are GO-03.

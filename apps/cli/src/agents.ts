@@ -8,7 +8,10 @@ export type AgentAvailability = {
   mcp: boolean;
 };
 
-const DISCOVERY_ONLY = [{ name: 'cursor-editor', command: 'cursor' }];
+const DISCOVERY_ONLY = [
+  { name: 'cursor-editor', command: 'cursor' },
+  { name: 'windsurf-editor', command: 'windsurf' },
+];
 
 export function adapterMcpSupported(name: string): boolean {
   return name === 'claude' || name === 'codex' || name === 'copilot';
@@ -35,11 +38,12 @@ export function discoverAgents(
 export function formatAgents(agents: AgentAvailability[]): string {
   const lines = agents.map((agent) => {
     const modes = [agent.local ? 'local files' : '', agent.mcp ? 'MCP' : ''].filter(Boolean).join(' + ');
-    return `${agent.name}: ${agent.installed ? 'found' : 'not on PATH'} — ${modes || 'no execution adapter configured'}`;
+    return `${agent.name}: ${agent.installed ? 'found' : 'not on PATH'} — ${modes || (DISCOVERY_ONLY.some((row) => row.name === agent.name) ? 'editor; manual MCP setup via gamedevpl connect <slug> --manual' : 'no execution adapter configured')}`;
   });
   return [
     ...lines,
     '',
+    'Only detected local adapters appear in the builder picker. Cursor needs cursor-agent (or Cursor’s agent CLI) on PATH.',
     'Discovery checks executable files; launch verifies required CLI flags. Provider login is managed by the agent.',
     'Local files: gamedevpl delegate "<task>" --agent <name> inside a checkout.',
     'MCP: gamedevpl connect <slug> --agent <name>. The round must use builder self.',

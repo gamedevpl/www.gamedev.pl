@@ -112,7 +112,7 @@ describe('workshopTurn', () => {
     expect(calls[0]!.spec.name).toBe('claude');
     expect(calls[0]!.prompt).toContain('make the jump floatier');
     expect(calls[0]!.prompt).toContain('Floatier jump.');
-    expect(calls[0]!.prompt).toContain('gamedevpl submit');
+    expect(calls[0]!.prompt).toContain('gamedevpl push');
     expect(JSON.stringify(calls[0]!.env)).not.toMatch(/gdpl_oat_/);
     expect(lines.join('\n')).toContain('claude ▸ Made the jump floatier.');
     expect(lines.join('\n')).toContain('static ladder green');

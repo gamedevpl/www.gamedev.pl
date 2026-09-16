@@ -89,6 +89,23 @@ describe('creator takeover', () => {
       await app.close();
     }
   });
+  it('lets the current game owner take over a round recorded by a former owner', async () => {
+    const { app, store, headers: formerHeaders } = await setup();
+    try {
+      const at = new Date().toISOString();
+      await store.recordSettledOwner('sky-dodge', 'g:other', 11, at, at);
+      const headers = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:other', secret)}` };
+      const probe = await app.inject({ url, headers });
+      expect(probe.json()).toMatchObject({ locked: true, canTakeOver: true, generation: 1 });
+      const payload = { jobId: 10, generation: 1, stopAgent: true };
+      expect((await app.inject({ method: 'POST', url, headers: formerHeaders, payload })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'POST', url, headers, payload })).statusCode).toBe(200);
+      expect((await app.inject({ url, headers })).json().locked).toBe(false);
+      expect((await store.getSubmission(10))?.ownerUid).toBe('g:creator');
+    } finally {
+      await app.close();
+    }
+  });
   it('requires ownership, confirmation and the exact round seen by the creator', async () => {
     const { app, store, headers } = await setup();
     try {

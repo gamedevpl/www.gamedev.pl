@@ -1,9 +1,16 @@
 // GO-02 pending game-transfer invitation: one per slug at a time.
 
+import { randomUUID } from 'node:crypto';
+
 export type GameTransferStatus = 'pending' | 'accepted' | 'cancelled' | 'rejected' | 'expired';
 
 export interface GameTransferInvitation {
   slug: string;
+
+  // Identifies this invitation, not the slug it is about.
+
+  // A slug outlives any one offer; a response names one.
+  invitationId: string;
   senderUid: string;
   recipientUid: string;
   status: GameTransferStatus;
@@ -25,6 +32,7 @@ export function newTransferInvitation(
 ): GameTransferInvitation {
   return {
     slug,
+    invitationId: randomUUID(),
     senderUid,
     recipientUid,
     accessRevision,

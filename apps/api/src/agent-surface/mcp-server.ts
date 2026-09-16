@@ -1,3 +1,5 @@
+import { resolvePresenceJobId } from './mcp-presence-capability.js';
+import { memberCapabilityCurrent } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '@gamedevpl/contract';
 import {
@@ -30,6 +32,7 @@ import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourcePatchTools } from './mcp-source-patch-tools.js';
 import { createSourceSubmitTools } from './mcp-source-submit-tools.js';
 import { createGameCreateTools } from './mcp-game-create-tools.js';
+import { createAccountGamesTools, type LoadOwnerGamesFn } from './mcp-account-games-tools.js';
 import { createRoundReopenTools } from './mcp-round-reopen-tools.js';
 import { createSessionBasicsTools } from './mcp-session-basics-tools.js';
 
@@ -44,7 +47,7 @@ import {
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug } from './agent-game-key-resolve.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug, writerUidForSlug } from '../platform/game-access-permissions.js';
 import {
   JOINING_ROUND_PRESENCE,
   mcpPresenceKey,
@@ -54,6 +57,7 @@ import {
   shouldPulseMcpPresence,
   type McpPresencePulse,
 } from './mcp-presence.js';
+import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -233,6 +237,7 @@ export interface McpServerOptions {
   contentChecker?: ContentChecker;
   dailyImprovementQuota?: number;
   dailyFeedbackQuota?: number;
+  loadOwnerGames?: LoadOwnerGamesFn;
   // N1: community's proposal state machine, wired at the composition root.
   proposals: ProposalDomain;
   // N1: delivery's deliverable-path vocabulary, applied without importing it.
@@ -254,6 +259,9 @@ interface AuthedJob {
   /** Round-scoped agent token for channel inject (same generation as the capability). */
   channelToken: string;
   claims: Pick<AgentTokenClaims, 'jobId' | 'roundGeneration' | 'exp'>;
+  /** Session writer; job.ownerUid is historical authorship. */
+  actorUid: string;
+  actorRevision?: number;
 }
 
 function jsonRpcResult(id: string | number | null | undefined, result: unknown) {
@@ -266,25 +274,6 @@ function jsonRpcError(id: string | number | null | undefined, code: number, mess
     id: id ?? null,
     error: { code, message, ...(data !== undefined ? { data } : {}) },
   };
-}
-
-/** Job id for a coarse presence pulse — sessionKey preferred, else round Bearer. */
-function resolvePresenceJobId(sessionKey: string, bearer: string | null, secret: string): number | null {
-  if (sessionKey && looksLikeMcpSessionKey(sessionKey)) {
-    try {
-      return verifyMcpSessionKey(sessionKey, secret).jobId;
-    } catch {
-      return null;
-    }
-  }
-  if (bearer) {
-    try {
-      return verifyAgentToken(bearer, secret).jobId;
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function pruneHits(buckets: Map<string, number[]>, key: string, currentTime: number): number[] {
@@ -377,7 +366,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   "get_kit — keep engineRef for submit_sources and for get_kit_api. This platform and its Creator Kit are not on the public web: for what the kit can build (module names — party, zone, commons, presence, and the rest — or the API itself), call get_kit_api or the kit browse tools, never a web search; the digest and browse tools are the complete, authoritative reference, and a web search for gamedev.pl documentation will not find anything, or worse, finds an unrelated platform's docs that do not describe this kit. With shell egress, unpack via the returned one-liner and follow SKILL.md locally instead of either. Never dump the whole kit into context, and never call a tool this session did not advertise.",
   'Capability and "how do I…" questions: check get_kit_api first for exact kit-API surface (signatures, module names). knowledge_query is for everything get_kit_api does not cover — EditorKit internals, example-game patterns, docs/process, and broader capability questions — with citations and an indexedCommit; treat its prose as a pointer to verify via get_kit_api / read_kit_file, not a source of truth for exact signatures.',
   'Build the game — continuing the sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
-  'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
+  'Screenshots: without a shell or browser, skip mid-build shots — deliver mode=preview then end. On a later/resumed run call get_gate_verdict once (start does not surface preview_passed); if a preview verdict is already available, then get_gate_media (the gate captures with WebGL flags; do not call it right after submit). With a shell: launch headless Chromium with --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --enable-webgl --ignore-gpu-blocklist (never --disable-gpu; Chrome ≥150 may need --use-angle=swiftshader). Capture canvas.toDataURL("image/png") inside the same render callback (after compositing the default buffer is gone; preserveDrawingBuffer:true only in a disposable capture harness, never in shipped game source) — page.screenshot({path:"shot.png"}) writes PNG directly. Decode a data URL to disk in-process (fs.writeFileSync("shot.png", Buffer.from(dataUrl.split(",")[1], "base64")); never print or return the data URL). Keep PNG ≤700 KB, then screenshot_upload_url and curl --upload-file shot.png "$url". A black/blank frame means those WebGL flags were missing or the drawing buffer was already discarded. If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). There is no base64 send path — PNG bytes must never enter the model.',
   'While iterating: run only npm run typecheck -- <slug> locally, then prefer batch stage_upload_url({ paths: [...] }) (or stage_upload_url({ path }) for a single lone file) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model; ALWAYS mint URLs in batch with paths: [...] up to 50 paths per call, chunking into batches of 50 if staging more, rather than looping or calling stage_upload_url per file). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
   'Staging is already visible: once game.ts, GAME.json and markup are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Markup means GAME.json howToPlay carrying goal and hint, from which the body is generated — index.html is never accepted as a stage/patch/submit write, so do not author one. style.css is optional the same way: a GAME.json theme (accent/canvasBackground/canvasBorderColor/pixelArt) generates it when none is staged. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
@@ -393,7 +382,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // observed as Claude-family clients rarely calling it while ChatGPT, reading the loop
   // as advice, did. It is now tied to a verdict already in hand, which is a moment the
   // loop actually reaches, and it still forbids waiting for one.
-  "get_gate_media — whenever you already hold a publish verdict (green or red), call it once before you end. It attaches the gate's own frames as images: the only evidence of whether the game truly draws, and the thing to show the creator. On red especially, a frame often names what the report cannot describe. Never wait for a verdict in order to call it — if the gate is pending, end and let Studio show the result. Both lanes carry frames: a preview verdict has stills too, so you can see whether your game draws while you are still iterating. The reply says which lane took them (gate.lane) — a green preview means it typechecks, smokes and assembles, never that it is publish-ready.",
+  "get_gate_media — whenever you already hold a preview or publish verdict, call it once before you end. It attaches the gate's own frames as images: the only evidence of whether the game truly draws, and the thing to show the creator. On red especially, a frame often names what the report cannot describe. Never wait for a verdict in order to call it — if the gate is pending (including right after submit_sources), end and let Studio show the result. A later/resumed run calls get_gate_verdict once first (start does not surface preview_passed), then this if a verdict is already there. Both lanes carry frames: a preview verdict has stills too, so you can see whether your game draws while you are still iterating. The reply says which lane took them (gate.lane) — a green preview means it typechecks, smokes and assembles, never that it is publish-ready.",
   'red / preview_failed: read the report, fix, and submit_sources again on the SAME key (preview while iterating; publish when sealing). Honour warnings.code=must_fix_gate — staging/patching alone does NOT re-run the gate or update the creator card; the card stays on the refused delivery until you submit.',
   'kit_outdated: re-run get_kit for a fresh engineRef, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do NOT get_sources + re-stage the whole tree (burns tokens). Only pass files[] for paths you actually changed.',
   // Green closes the round before the next tool call; writes and non-receipt reads then
@@ -597,6 +586,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         bearerIsPlatformConnector ||
         bearerIsManagedOpener);
     let identity!: AuthedJob['identity'];
+    let sessionActorUid: string | undefined;
 
     if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
@@ -643,14 +633,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jobId: sessionClaims.jobId,
         roundGeneration: sessionClaims.roundGeneration,
         exp: sessionClaims.exp,
+        actorUid: sessionClaims.actorUid,
+        actorRevision: sessionClaims.actorRevision,
       };
-      // Ephemeral channel token for inject — same generation, short TTL. Not returned.
-      channelToken = mintAgentToken(sessionClaims.jobId, agentTokenSecret, {
-        roundGeneration: sessionClaims.roundGeneration,
-        now: now(),
-        ttlDays: 1,
-      });
       identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
+      sessionActorUid = sessionClaims.actorUid;
+      channelToken = '';
     } else if (bearerIsOAuth) {
       return toolErr(
         'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
@@ -687,6 +675,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (!record) {
       return toolErr('unknown build');
     }
+    // Fences a round whose game changed hands, however many rounds it has.
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug), claims)) {
+      return toolErr(FINISHED_REASON);
+    }
 
     let access: AgentTokenAccess;
     try {
@@ -702,12 +694,38 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(FINISHED_REASON);
     }
 
+    const actorUid = sessionActorUid ?? claims.actorUid ?? record.ownerUid;
+    if (record.slug && !(await canActOnSlug(store, record.slug, actorUid, 'build'))) {
+      return toolErr('this session can no longer write this game');
+    }
+    if (
+      record.slug &&
+      !memberCapabilityCurrent(
+        await resolveGameAccess(store, record.slug),
+        actorUid,
+        claims.actorRevision ?? (sessionActorUid ? undefined : record.accessEpoch),
+      )
+    ) {
+      return toolErr('this session can no longer write this game');
+    }
+    if (!channelToken) {
+      channelToken = mintAgentToken(claims.jobId, agentTokenSecret, {
+        roundGeneration: claims.roundGeneration ?? record.roundGeneration ?? 1,
+        now: now(),
+        ttlDays: 1,
+        actorUid,
+        actorRevision: claims.actorRevision,
+      });
+    }
+
     return {
       jobId: claims.jobId,
       record,
       access,
       identity,
       channelToken,
+      actorUid,
+      actorRevision: claims.actorRevision,
       claims: {
         jobId: claims.jobId,
         roundGeneration: claims.roundGeneration,
@@ -1044,7 +1062,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
         }
 
-        const bindActiveRound = async (active: SubmissionRecord): Promise<ToolResult> => {
+        const bindActiveRound = async (active: SubmissionRecord, actorUid: string): Promise<ToolResult> => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
           // Prefer the client's correlator when well-formed — even if this instance
@@ -1060,6 +1078,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             jobId,
             roundGeneration,
             now: now(),
+            actorUid,
+            actorRevision: active.slug ? (await resolveGameAccess(store, active.slug)).accessRevision : undefined,
           });
           const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 
@@ -1098,7 +1118,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             noteInvalidStart(ctx.request);
             return toolErr(resolved.reason);
           }
-          return await bindActiveRound(resolved.record);
+          return await bindActiveRound(resolved.record, resolved.claims.creatorUid);
         }
 
         if (!key && bearer && looksLikeAsAccessToken(bearer)) {
@@ -1110,13 +1130,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           if (!slugArg) {
             return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
           }
-
-          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+          const actorUid = await writerUidForSlug(store, slugArg, asAccess.ownerUid);
+          if (!actorUid) {
             noteInvalidStart(ctx.request);
             return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           }
-
-          const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
+          const active = await findActiveRoundForSlug(store, slugArg, actorUid);
           if (!active) {
             noteInvalidStart(ctx.request);
             return toolErr(NO_OPEN_ROUND_REASON);
@@ -1127,7 +1146,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr(PLATFORM_ROUND_REASON);
           }
 
-          return await bindActiveRound(active);
+          return await bindActiveRound(active, actorUid);
         }
 
         if (!key && bearer) {
@@ -1142,6 +1161,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             if (!active) {
               noteInvalidStart(ctx.request);
               return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
+            }
+            if (active.slug && !roundAuthorityCurrent(active, await resolveGameAccess(store, active.slug))) {
+              noteInvalidStart(ctx.request);
+              return toolErr(FINISHED_REASON);
             }
             try {
               if (classifyAgentTokenAccess(claims, active, now()) !== 'active') {
@@ -1161,7 +1184,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               noteInvalidStart(ctx.request);
               return toolErr('slug is required and must match this platform round');
             }
-            return await bindActiveRound(active);
+            return await bindActiveRound(active, active.ownerUid);
           }
         }
 
@@ -1200,13 +1223,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         let record: SubmissionRecord;
         let jobId: number;
         let roundGeneration: number;
+        let claims: AgentTokenClaims;
 
         if (looksLikeGameAgentKey(key)) {
           noteInvalidStart(ctx.request);
           return toolErr(RETIRED_GAME_KEY_REASON);
         } else {
           // Legacy round-scoped key — still accepted for in-flight rounds.
-          let claims: AgentTokenClaims;
           try {
             claims = verifyAgentToken(key, agentTokenSecret);
           } catch {
@@ -1218,6 +1241,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           if (!found) {
             noteInvalidStart(ctx.request);
             return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
+          }
+
+          if (found.slug && !roundAuthorityCurrent(found, await resolveGameAccess(store, found.slug), claims)) {
+            noteInvalidStart(ctx.request);
+            return toolErr(FINISHED_REASON);
           }
 
           let access: AgentTokenAccess;
@@ -1250,6 +1278,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           jobId,
           roundGeneration,
           now: now(),
+          actorUid: claims.actorUid ?? record.ownerUid,
+          actorRevision: claims.actorRevision ?? (claims.actorUid ? undefined : record.accessEpoch),
         });
         const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 
@@ -1281,6 +1311,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     ...createGameCreateTools({ store, agentTokenSecret, platformConnectorSecret, now, createGame }),
+    ...createAccountGamesTools({
+      store,
+      agentTokenSecret,
+      platformConnectorSecret,
+      now,
+      loadOwnerGames: options.loadOwnerGames,
+    }),
 
     ...createProposalTools({
       store,
@@ -1316,7 +1353,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createExampleTools({ resolveAuth, injectChannel }),
 
     ...createSourcePatchTools({ resolveAuth, injectChannel }),
-    ...createSourceSubmitTools({ resolveAuth, injectChannel, store }),
+    ...createSourceSubmitTools({ resolveAuth, injectChannel, store, gamesStore: options.gamesStore }),
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),

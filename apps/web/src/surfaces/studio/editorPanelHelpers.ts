@@ -7,31 +7,31 @@ import type {
   EditorLabel,
   EditorLayerSpec,
   EditorLayersDoc,
-  EditorParamValue,
   EditorPathSpec,
   EditorTilemapSpec,
   GameEditorState,
 } from '../../studioApi.js';
 import { defaultLayerKey, defaultLayerTileKey } from '../../editorContentTools.js';
+import { differsFromStored, fillDeclaredValues } from '../../editorContentDefaults.js';
 
 export function useLabel(): (label: EditorLabel) => string {
   const { i18n } = useTranslation();
   return useCallback((label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en), [i18n.language]);
 }
 
-// A saved draft over the game's current defaults.
-
-// Params added after the draft was saved must not come back missing.
-export function mergeDraft(loaded: GameEditorState): EditorContentDoc {
-  if (!loaded.draft) return loaded.content;
+// A saved draft over current defaults; fields declared since are filled.
+export function mergeDraft(loaded: GameEditorState): { content: EditorContentDoc; unsaved: boolean } {
+  if (!loaded.draft) return { content: loaded.content, unsaved: false };
   const merged: EditorContentDoc = { ...loaded.content, ...loaded.draft.content };
-  if (loaded.definition.params) {
-    merged.params = {
-      ...((loaded.content.params ?? {}) as Record<string, EditorParamValue>),
-      ...((loaded.draft.content.params ?? {}) as Record<string, EditorParamValue>),
-    };
+  // params and layers are the reserved sections, merged key by key.
+  for (const key of ['params', 'layers'] as const) {
+    if (!loaded.definition[key]) continue;
+    const shipped = (loaded.content[key] ?? {}) as Record<string, unknown>;
+    const saved = (loaded.draft.content[key] ?? {}) as Record<string, unknown>;
+    merged[key] = { ...shipped, ...saved } as EditorContentDoc[string];
   }
-  return merged;
+  const content = fillDeclaredValues(loaded.definition, merged);
+  return { content, unsaved: differsFromStored(loaded.draft.content, content) };
 }
 
 // A collection's items out of the mixed content document.

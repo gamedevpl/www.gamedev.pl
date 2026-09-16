@@ -243,4 +243,22 @@ describe('shared-world metadata', () => {
       ['e', null],
     ]);
   });
+
+  it('keeps bake-time effort in 0..1 and drops the rest', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { slug: 'a', title: 'A', genre: '', controls: '', status: 'published', effort: 0.81 },
+          { slug: 'b', title: 'B', genre: '', controls: '', status: 'published', effort: 1.4 },
+          { slug: 'c', title: 'C', genre: '', controls: '', status: 'published', effort: 'high' },
+        ]),
+      ),
+    );
+    const parsed = await fetchCatalog();
+    expect(parsed.map((game) => [game.slug, game.effort])).toEqual([
+      ['a', 0.81],
+      ['b', undefined],
+      ['c', undefined],
+    ]);
+  });
 });

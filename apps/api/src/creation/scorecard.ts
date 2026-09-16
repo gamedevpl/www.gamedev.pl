@@ -1,12 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
-import {
-  recentPartitions,
-  scanPartitions,
-  summarizeGameHealth,
-  type GameHealth,
-  type PartitionScanBudget,
-} from '../platform/telemetry-health.js';
+import { recentPartitions, type GameHealth, type PartitionScanBudget } from '../platform/telemetry-health.js';
+import { mergeDailyAggregates, readDailyWindow, sealedBefore } from '../platform/telemetry-daily.js';
 import {
   MAX_FEEDBACK_ROWS,
   MIN_FEEDBACK_FOR_THEMES,
@@ -14,7 +9,7 @@ import {
   type FeedbackTheme,
   type ThemeExtractor,
 } from '../platform/feedback-themes-contract.js';
-import type { Scorecard, Store, TelemetryEvent } from '../platform/store.js';
+import type { Scorecard, Store } from '../platform/store.js';
 import { toAggregateLog, type ScorecardAggregateLog } from './scorecard-aggregate-log.js';
 
 /**
@@ -42,7 +37,7 @@ import { toAggregateLog, type ScorecardAggregateLog } from './scorecard-aggregat
 export const SCORECARD_WINDOW_DAYS = 28;
 
 /**
- * Read budget for one sweep.
+ * Read budget for the days of one sweep that still need scanning.
  *
  * Wider than the operator page's, and deliberately so: this runs once a night and every
  * reader of every scorecard shares the cost, where the page pays per click. Still
@@ -50,6 +45,8 @@ export const SCORECARD_WINDOW_DAYS = 28;
  * the same as an outage. When it binds, `window.truncated` says so on every doc written,
  * so a floor is never mistaken for a total.
  */
+// Sealed days cost one document and no budget at all.
+
 const SWEEP_BUDGET: PartitionScanBudget = { perDay: 5_000, total: 50_000 };
 
 /**
@@ -75,6 +72,8 @@ export interface ScorecardSweepDeps {
   onError?: (slug: string, error: unknown) => void;
   /** Called when theme extraction failed for a game; the scorecard is still written without themes. */
   onThemeError?: (slug: string, error: unknown) => void;
+  // Called when a day's rollup could not be stored.
+  onDayError?: (dateStr: string, error: unknown) => void;
   // Called per scorecard written; the route owns the logger.
   onAggregate?: (line: ScorecardAggregateLog) => void;
 }
@@ -91,6 +90,11 @@ export interface ScorecardSweepResult {
   themed: number;
   /** True when `themeCallBudget` bound before every eligible game was summarized. */
   themesTruncated: boolean;
+  // Partitions read event by event this run.
+  rescanned: number;
+
+  // Partitions served by one rollup document each.
+  reused: number;
 }
 
 /**
@@ -158,6 +162,7 @@ export function buildScorecard(
  * with votes but no plays in the window gets no scorecard — acceptable while the loop's
  * entire purpose is reasoning about games that are actually played.
  */
+// Days come from telemetryDaily rollups; see docs/firestore-read-cost.md.
 export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<ScorecardSweepResult> {
   const { store } = deps;
   const now = deps.now ?? Date.now;
@@ -165,13 +170,21 @@ export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<Score
   const currentTime = now();
 
   const requested = recentPartitions(deps.windowDays ?? SCORECARD_WINDOW_DAYS, currentTime);
-  const { events, scanned, truncated } = await scanPartitions<TelemetryEvent>(requested, budget, (dateStr, limit) =>
-    store.listTelemetryEvents(dateStr, { limit }),
+  const computedAt = new Date(currentTime).toISOString();
+  const { days, scanned, truncated, rescanned, reused } = await readDailyWindow(
+    requested,
+    budget,
+    {
+      read: (dateStr, limit) => store.listTelemetryEvents(dateStr, { limit }),
+      get: (dateStr) => store.getTelemetryDaily(dateStr),
+      put: (dateStr, aggregate) => store.putTelemetryDaily(dateStr, aggregate),
+    },
+    { computedAt, sealedBefore: sealedBefore(currentTime) },
+    deps.onDayError,
   );
 
   const window = { days: scanned, truncated };
-  const computedAt = new Date(currentTime).toISOString();
-  const rows = summarizeGameHealth(events);
+  const rows = mergeDailyAggregates(days);
 
   const themeExtractor = deps.themeExtractor ?? new NoopThemeExtractor();
   const themeCallBudget = deps.themeCallBudget ?? THEME_CALL_BUDGET;
@@ -231,7 +244,7 @@ export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<Score
     }
   }
 
-  return { days: scanned, truncated, written, failed, themed, themesTruncated };
+  return { days: scanned, truncated, written, failed, themed, themesTruncated, rescanned, reused };
 }
 
 export interface ScorecardRoutesOptions {
@@ -274,6 +287,8 @@ export async function registerScorecardRoutes(app: FastifyInstance, options: Sco
           // has been failing every night is invisible in the result, where a game with
           // nothing to summarize looks exactly the same.
           onThemeError: (slug, error) => request.log.warn({ err: error, slug }, 'feedback theme extraction failed'),
+          // Warn: tonight is unaffected, next night pays.
+          onDayError: (dateStr, error) => request.log.warn({ err: error, dateStr }, 'telemetry rollup write failed'),
           // Only path by which an unattended reader sees these.
           onAggregate: (line) => request.log.info(line, 'scorecard aggregate'),
         });

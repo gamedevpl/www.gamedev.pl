@@ -8,13 +8,13 @@
 
 ## Sort modes
 
-| Mode        | Signal                                                                                                                 |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Recommended | Scorecards + signed-in play affinity / anonymous recent hints ([`recommend.ts`](../apps/api/src/catalog/recommend.ts)) |
-| Newest      | Submission `publishedAt` when known; otherwise reverse catalog order                                                   |
-| Most played | Scorecard session counts                                                                                               |
-| Last played | Signed-in play affinity timestamps, else device-local recent plays                                                     |
-| A–Z         | Title, case-insensitive                                                                                                |
+| Mode        | Signal                                                                                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Recommended | Scorecards + signed-in play affinity / anonymous recent hints, plus bake-time `effort` ([`recommend.ts`](../apps/api/src/catalog/recommend.ts), formula in [`catalog-effort.md`](./catalog-effort.md)) |
+| Newest      | Submission `publishedAt` when known; otherwise reverse catalog order                                                                                                                                   |
+| Most played | Scorecard session counts                                                                                                                                                                               |
+| Last played | Signed-in play affinity timestamps, else device-local recent plays                                                                                                                                     |
+| A–Z         | Title, case-insensitive                                                                                                                                                                                |
 
 ## Your games (merged into Games)
 
@@ -58,8 +58,17 @@ privacy notice, and erased with the account (`erase-player-signals.ts`).
 
 Automation accounts (`bot:` uids) do not write affinity and do not personalise.
 
-When Recommended has no scorecard evidence and no personal signal, that mode keeps
-games-repo order rather than inventing a shuffle.
+When Recommended has no scorecard evidence, no personal signal, and no bake-time
+`effort`, that mode keeps games-repo order rather than inventing a shuffle.
+
+Effort is a 0..1 catalog field computed at snapshot bake from loc, TRACE /
+ACCEPTANCE / PLAYTEST / media counts, and git history on `games/<slug>/`. It is
+the primary Recommended term; community score, genre affinity, and the replay
+penalty still apply, and continues still lead. Newest / most played / A–Z ignore
+it. Store-lane games have no repo tree, so they omit `effort`; they are merged on
+`/api/catalog` and are not rows in `/api/recommendations` (that list is the repo
+snapshot). Builder round counts are not in v1 — see
+[`catalog-effort.md`](./catalog-effort.md).
 
 ## API
 

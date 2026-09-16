@@ -8,6 +8,7 @@ import {
   type TelemetryEvent,
   type VisitEvent,
 } from '../records/telemetry.js';
+import type { DailyTelemetryAggregate } from '../../platform/telemetry-daily.js';
 
 export interface TelemetryStore {
   // Date-partitioned so a TTL policy expires a whole day at once.
@@ -19,6 +20,12 @@ export interface TelemetryStore {
   // Appends visit-level events to one day's partition.
   appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void>;
 
+  // One day's play rolled up, or undefined when unswept.
+  getTelemetryDaily(dateStr: string): Promise<DailyTelemetryAggregate | undefined>;
+
+  // Overwrites the day's rollup. Sealed days are written once.
+  putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void>;
+
   // One day's visit events -- funnel, depth, and acquisition reads.
   listVisitEvents(
     dateStr: string,
@@ -26,11 +33,25 @@ export interface TelemetryStore {
   ): Promise<VisitEvent[]>;
 }
 
+// One document per day, holding every game played.
+const DAILY_COLLECTION = 'telemetryDaily';
+
 export class InMemoryTelemetryStore implements TelemetryStore {
   // yyyymmdd -> events recorded that day
   private telemetry = new Map<string, TelemetryEvent[]>();
   // yyyymmdd -> visit events recorded that day
   private visits = new Map<string, VisitEvent[]>();
+  // yyyymmdd -> that day's rollup
+  private daily = new Map<string, DailyTelemetryAggregate>();
+
+  async getTelemetryDaily(dateStr: string): Promise<DailyTelemetryAggregate | undefined> {
+    const stored = this.daily.get(dateStr);
+    return stored ? structuredClone(stored) : undefined;
+  }
+
+  async putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void> {
+    this.daily.set(dateStr, structuredClone(aggregate));
+  }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
     const existing = this.telemetry.get(dateStr) ?? [];
@@ -73,6 +94,20 @@ export class FirestoreTelemetryStore implements TelemetryStore {
 
   private visitCollection(dateStr: string) {
     return this.db.collection('telemetry').doc(dateStr).collection(VISIT_COLLECTION);
+  }
+
+  // Its own collection, so a day's TTL sweep spares it.
+  private dailyDoc(dateStr: string) {
+    return this.db.collection(DAILY_COLLECTION).doc(dateStr);
+  }
+
+  async getTelemetryDaily(dateStr: string): Promise<DailyTelemetryAggregate | undefined> {
+    const snap = await this.dailyDoc(dateStr).get();
+    return snap.exists ? (snap.data() as DailyTelemetryAggregate) : undefined;
+  }
+
+  async putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void> {
+    await this.dailyDoc(dateStr).set(aggregate);
   }
 
   async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {

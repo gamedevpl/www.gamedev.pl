@@ -42,11 +42,11 @@ describeStoreContract('creator messages', (makeStore) => {
     // Real messages are buried behind proposals; a single buffer misses them.
     for (let i = 1; i <= 5; i += 1) {
       await store.appendCreatorMessage(13, `real ${i}`);
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, 2));
     }
     for (let i = 1; i <= 40; i += 1) {
       await store.appendCreatorMessage(13, `proposal ${i}`, { proposal: PROPOSAL });
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, 2));
     }
 
     const messages = await store.listCreatorMessages(13, { limit: 5, excludeProposals: true });

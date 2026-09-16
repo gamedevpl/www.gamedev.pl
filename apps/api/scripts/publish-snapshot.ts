@@ -35,6 +35,7 @@
 
 import { publishSnapshot } from '../src/catalog/game-snapshot-publish.js';
 import { createGcsSnapshotStore, type GameSnapshotWriter, type SnapshotPointer } from '../src/catalog/game-snapshot.js';
+import { withArchiveCommitCounts } from '../src/catalog/catalog-commit-counts.js';
 import { fetchGamesRepoArchive } from '../src/platform/games-repo-archive.js';
 import { createGitHubClient, type RepoFileSource } from '../src/catalog/github-client.js';
 
@@ -77,7 +78,6 @@ function fail(message: string): never {
   console.error(`snapshot publish: ${message}`);
   process.exit(1);
 }
-
 /** Counts what a real run would write, without touching the bucket. */
 function createDryRunWriter(): GameSnapshotWriter & { pointer: SnapshotPointer | null } {
   return {
@@ -107,7 +107,7 @@ async function main(): Promise<void> {
   let files: RepoFileSource | undefined;
   try {
     const archive = await fetchGamesRepoArchive({ repo, ref, token });
-    files = archive;
+    files = await withArchiveCommitCounts(archive, { repo, ref, token });
     console.log(
       `snapshot publish: archive ${repo}@${ref} — ${archive.fileCount} files, ` +
         `${(archive.byteCount / 1024 / 1024).toFixed(1)} MiB, 1 request`,

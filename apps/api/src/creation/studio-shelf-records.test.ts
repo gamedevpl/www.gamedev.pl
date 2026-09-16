@@ -62,8 +62,77 @@ describe('loadShelfRecords', () => {
     const senderShelf = await loadShelfRecords(store, 'g:sender', undefined, mint);
     expect(senderShelf.map((row) => row.slug)).not.toContain('sky-dodge');
 
+    const senderShelfBySlug = await loadShelfRecords(store, 'g:sender', 'sky-dodge', mint);
+    expect(senderShelfBySlug.map((row) => row.slug)).not.toContain('sky-dodge');
+
+    const senderShelfByToken = await loadShelfRecords(store, 'g:sender', mint(10), mint);
+    expect(senderShelfByToken.map((row) => row.slug)).not.toContain('sky-dodge');
+
     const recipientShelf = await loadShelfRecords(store, 'g:recipient', undefined, mint);
     expect(recipientShelf.map((row) => row.slug)).toContain('sky-dodge');
+
+    const recipientShelfBySlug = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', mint);
+    expect(recipientShelfBySlug.map((row) => row.slug)).toContain('sky-dodge');
+
+    const recipientShelfByToken = await loadShelfRecords(store, 'g:recipient', mint(10), mint);
+    expect(recipientShelfByToken.map((row) => row.slug)).toContain('sky-dodge');
+  });
+
+  it('does not let an abandoned newest round hide a live one from the recipient', async () => {
+    // A transferred game whose tip is an abandoned improvement round.
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.createSubmission(11, 'g:sender', 'Sky Dodge improve');
+    await store.setSubmissionSlug(11, 'sky-dodge');
+    await store.setSubmissionAbandoned(11, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+
+    store.listGameAccessByMember = async () => [];
+
+    const shelf = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', mint);
+    expect(shelf.map((row) => row.jobId)).toContain(10);
+  });
+
+  it('still refuses a deep link whose whole slug history is abandoned', async () => {
+    // Reached only when the owner query lags; otherwise the shelf has it.
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.createSubmission(12, 'g:sender', 'Gone');
+    await store.setSubmissionSlug(12, 'gone-game');
+    await store.ensureGameAccess('gone-game', 'g:sender', at, at);
+    await store.setSubmissionAbandoned(12, at);
+    store.listSubmissionsByOwner = async () => [];
+    store.listGameAccessByMember = async () => [];
+
+    const shelf = await loadShelfRecords(store, 'g:sender', 'gone-game', mint);
+    expect(shelf.map((row) => row.slug)).not.toContain('gone-game');
+  });
+
+  it('fills in a transferred game for the recipient when member queries lag', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+
+    store.listGameAccessByMember = async () => [];
+
+    const recipientShelfBySlug = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', mint);
+    expect(recipientShelfBySlug.map((row) => row.slug)).toContain('sky-dodge');
+
+    const recipientShelfByToken = await loadShelfRecords(store, 'g:recipient', mint(10), mint);
+    expect(recipientShelfByToken.map((row) => row.slug)).toContain('sky-dodge');
   });
 });
 
@@ -101,13 +170,15 @@ describe('reconcileTransferredOwnership', () => {
 
     // A -> B: B opens a newer round under their own uid.
     await store.createGameTransferInvitation('sky-dodge', 'g:a', 'g:b', 1, at);
-    await store.acceptGameTransferInvitation('sky-dodge', 'g:b', at);
+    const first = (await store.getActiveGameTransfer('sky-dodge', at))!;
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:b', at, first.invitationId);
     await store.createSubmission(11, 'g:b', 'Sky Dodge (B)');
     await store.setSubmissionSlug(11, 'sky-dodge');
 
     // B -> A: ownership boomerangs back.
     await store.createGameTransferInvitation('sky-dodge', 'g:b', 'g:a', 2, later);
-    await store.acceptGameTransferInvitation('sky-dodge', 'g:a', later);
+    const second = (await store.getActiveGameTransfer('sky-dodge', later))!;
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:a', later, second.invitationId);
 
     const owned = await store.listSubmissionsByOwner('g:a');
     const records = await reconcileTransferredOwnership(store, 'g:a', owned);

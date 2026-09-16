@@ -25,8 +25,6 @@ type HeroPromptSectionProps = {
   onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
   // Fires once the quota poll resolves.
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
-  // Click-to-fill prompt starters; unused on home, /create shows a few.
-  exampleChips?: string[];
   enableCatalogMatch?: boolean;
 };
 
@@ -75,7 +73,6 @@ export function HeroPromptSection({
   submissionError,
   onSubmitSpec,
   onPlatformBuilderAvailability,
-  exampleChips,
   enableCatalogMatch = true,
 }: HeroPromptSectionProps) {
   const { t, i18n } = useTranslation();
@@ -507,24 +504,6 @@ export function HeroPromptSection({
 
             <button type="submit" style={{ display: 'none' }} aria-hidden="true" disabled={isBusy} />
           </div>
-
-          {exampleChips && exampleChips.length > 0 && !isBusy && (
-            <div className="prompt-examples">
-              {exampleChips.map((example) => (
-                <button
-                  type="button"
-                  key={example}
-                  className="prompt-example-chip"
-                  onClick={() => {
-                    setPromptText(example);
-                    recordCreateStep('prompt_started');
-                  }}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-          )}
 
           {busyLabel ? (
             <p className="prompt-busy-status" role="status" aria-live="polite">
