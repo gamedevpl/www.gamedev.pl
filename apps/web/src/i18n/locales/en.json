@@ -1365,7 +1365,6 @@
     "headline": "Describe a game. An AI agent builds it for real.",
     "subhead": "Not a template and not a toy — actual HTML, CSS and JavaScript, written by a coding agent, reviewed by a human, then playable by anyone in a browser.",
     "stepsHeading": "What happens after you press Build",
-    "stepsHi": "Hey!",
     "step1Title": "A few quick questions",
     "step1Detail": "Name it, then pick the vibe — or skip and the AI decides. Takes a minute.",
     "step2Title": "An agent writes the code",

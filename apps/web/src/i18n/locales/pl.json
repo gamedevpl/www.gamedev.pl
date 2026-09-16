@@ -1379,7 +1379,6 @@
     "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
     "subhead": "To nie szablon ani zabawka — prawdziwy HTML, CSS i JavaScript, napisane przez agenta kodującego, sprawdzone przez człowieka, a potem grywalne w przeglądarce dla każdego.",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
-    "stepsHi": "Hej!",
     "step1Title": "Kilka szybkich pytań",
     "step1Detail": "Nadajemy nazwę i, jeśli trzeba, dopytujemy o klimat — albo pomiń, a AI zdecyduje. Zajmuje minutę.",
     "step2Title": "Agent pisze kod",

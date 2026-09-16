@@ -84,9 +84,11 @@ describe('CreatePage', () => {
 
     const steps = container.querySelectorAll('.create-step');
     expect(steps).toHaveLength(4);
-    expect(container.querySelectorAll('.create-step-scene')).toHaveLength(0);
-    expect(container.querySelectorAll('.create-steps-mascot .mascot--wave')).toHaveLength(1);
-    expect(container.querySelector('.create-steps-bubble')?.textContent).toBe('Hey!');
+    expect(container.querySelector('.create-step-scene.is-qa .mascot--thinking')).not.toBeNull();
+    expect(container.querySelector('.create-step-scene.is-code .mascot--busy')).not.toBeNull();
+    expect(container.querySelector('.create-step-scene.is-play .mascot--excited')).not.toBeNull();
+    expect(container.querySelector('.create-step-scene.is-live .mascot--proud')).not.toBeNull();
+    expect(container.querySelector('.create-steps-mascot')).toBeNull();
     expect(container.querySelectorAll('.create-builder-mark')).toHaveLength(2);
     expect(container.querySelector('.create-builder-progress')).not.toBeNull();
     expect(container.textContent).toContain('01');
