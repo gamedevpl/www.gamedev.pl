@@ -17,7 +17,7 @@ import type {
   PriorRoundHistory,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
-import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { currentOwnerUidSoft } from '../platform/game-access-resolve.js';
 import type {
   BuildPreviewSummary,
   BuildShotSummary,
@@ -339,9 +339,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (managedAvailabilityGate) {
       // The quota belongs to whoever owns the game now, not the author.
       const quotaUid =
-        store && record.slug
-          ? ((await currentOwnerUid(store, record.slug, record.ownerUid)) ?? record.ownerUid)
-          : record.ownerUid;
+        store && record.slug ? await currentOwnerUidSoft(store, record.slug, record.ownerUid) : record.ownerUid;
       next.platformBuilder = await managedAvailabilityGate.peek(quotaUid, new Date(now()).toISOString().slice(0, 10));
     }
 

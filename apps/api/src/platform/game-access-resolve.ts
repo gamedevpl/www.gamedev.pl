@@ -81,6 +81,15 @@ export async function currentOwnerUid(
   return owner.kind === 'creator' ? owner.uid : fallback;
 }
 
+// Advisory reads take a blip as "unchanged", never as a failure.
+export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, fallback: string): Promise<string> {
+  try {
+    return (await currentOwnerUid(store, slug, fallback)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // A round's keys answer to the revision it opened under.
 
 // An owner comparison alone would revive rounds a transfer revoked,
