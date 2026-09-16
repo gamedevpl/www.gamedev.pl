@@ -26,7 +26,7 @@ export function createSessionCommands(session: SessionController, limit = 1024) 
     if (previous) return previous.fingerprint === fingerprint ? { ...previous.result } : { id, status: 'conflict' };
     const state = session.get();
     const message = command.kind === 'queue' || (command.kind === 'input' && !state.question && !state.choices.length);
-    if (message && command.kind !== 'stop' && command.text.trimStart().startsWith('/'))
+    if (message && command.text.trimStart().startsWith('/'))
       return { id, status: 'invalid' };
     // Never evict a receipt and accidentally execute its retry again.
     if (receipts.size >= limit) return { id, status: 'capacity' };
