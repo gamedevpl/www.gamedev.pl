@@ -584,7 +584,7 @@
     "apps/web/src/EditorCollections.test.tsx": 595,
     "apps/web/src/editorContentDefaults.ts": 117,
     "apps/web/src/editorContentTools.layerDefaults.test.ts": 66,
-    "apps/web/src/editorContentTools.ts": 481,
+    "apps/web/src/editorContentTools.ts": 482,
     "apps/web/src/editorJsonLiveDiff.test.ts": 127,
     "apps/web/src/EditorPanel.test.tsx": 285,
     "apps/web/src/editorParamsScrub.test.ts": 115,
