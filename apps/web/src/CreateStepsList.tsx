@@ -161,12 +161,23 @@ export function CreateStepsList() {
             .filter(Boolean)
             .join(' ');
           return (
-            <li key={key} className="create-step">
-              <span className="create-step-index" aria-hidden="true">
+            <li
+              key={key}
+              className={[
+                'create-step',
+                throwing === index ? 'is-throwing' : null,
+                catching === index ? 'is-catching' : null,
+                missAt === index ? 'is-miss' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-current={catching === index ? 'step' : undefined}
+            >
+              <span className="create-step-index" aria-hidden="true" onClick={() => poke(index)}>
                 <span className="create-step-n">{String(index + 1).padStart(2, '0')}</span>
               </span>
               <div className="create-step-card">
-                <div className="create-step-body">
+                <div className="create-step-body" onClick={() => poke(index)}>
                   <h3 className="create-step-title">{t(`create.${key}Title`)}</h3>
                   <p className="create-step-detail">{t(`create.${key}Detail`)}</p>
                 </div>

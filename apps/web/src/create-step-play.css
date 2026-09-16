@@ -63,6 +63,85 @@ button.create-step-scene:active .mascot {
     0 0 16px var(--turquoise-glow);
 }
 
+.create-step-body,
+.create-step-index {
+  cursor: pointer;
+}
+
+.create-step .create-step-n,
+.create-step .create-step-title,
+.create-step .create-step-card,
+.create-step .create-step-index::after {
+  transition:
+    background 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.create-step:hover .create-step-n,
+.create-step:has(.create-step-scene:focus-visible) .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.28);
+}
+
+.create-step:hover:not(.is-miss) .create-step-title {
+  color: var(--turquoise);
+}
+
+.create-step.is-catching .create-step-card,
+.create-step.is-throwing .create-step-card,
+.create-steps-list.is-won .create-step-card {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(0, 228, 172, 0.14), transparent 78%);
+}
+
+.create-step.is-catching .create-step-title,
+.create-steps-list.is-won .create-step-title {
+  color: var(--turquoise);
+}
+
+.create-step.is-catching .create-step-n,
+.create-steps-list.is-won .create-step-n {
+  background: var(--turquoise);
+  color: #0d1520;
+}
+
+.create-step.is-throwing .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.35);
+}
+
+.create-step.is-catching .create-step-index::after,
+.create-step.is-throwing .create-step-index::after,
+.create-steps-list.is-won .create-step .create-step-index::after {
+  background: var(--turquoise);
+  box-shadow: 0 0 8px var(--turquoise-glow);
+}
+
+.create-step.is-miss .create-step-card {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.14), transparent 78%);
+}
+
+.create-step.is-miss .create-step-title {
+  color: #fca5a5;
+}
+
+.create-step.is-miss .create-step-n {
+  border-color: #f87171;
+  color: #f87171;
+}
+
+.create-step.is-miss .create-step-index::after {
+  background: linear-gradient(#f87171, rgba(248, 113, 113, 0.12));
+}
+
+.create-steps-list:not(.is-won)[data-combo-next='1'] .create-step:nth-child(2) .create-step-n,
+.create-steps-list:not(.is-won)[data-combo-next='2'] .create-step:nth-child(3) .create-step-n,
+.create-steps-list:not(.is-won)[data-combo-next='3'] .create-step:nth-child(4) .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.22);
+}
+
 .create-step-status {
   position: absolute;
   width: 1px;
@@ -123,7 +202,11 @@ button.create-step-scene:active .mascot {
   .create-step-spark,
   .create-step-scene.is-catching .mascot,
   .create-step-scene.is-miss .mascot,
-  button.create-step-scene:active .mascot {
+  button.create-step-scene:active .mascot,
+  .create-step .create-step-n,
+  .create-step .create-step-title,
+  .create-step .create-step-card,
+  .create-step .create-step-index::after {
     animation: none;
     transition: none;
     transform: none;

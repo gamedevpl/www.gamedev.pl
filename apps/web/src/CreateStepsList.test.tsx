@@ -37,11 +37,15 @@ describe('CreateStepsList', () => {
     expect(buttons).toHaveLength(4);
     expect(buttons[0]?.getAttribute('aria-label')).toMatch(/thinking/i);
 
+    const copy = container.querySelectorAll<HTMLElement>('.create-step-body');
     await act(async () => {
-      buttons[2]?.click();
+      copy[2]?.click();
       vi.advanceTimersByTime(1);
     });
+    const missRow = container.querySelector('.create-step.is-miss');
     expect(container.querySelector('.create-step-scene.is-miss .mascot--confused')).not.toBeNull();
+    expect(missRow).not.toBeNull();
+    expect(missRow?.querySelector('.create-step-title')?.textContent).toMatch(/play/i);
     expect(container.querySelector('.create-steps-list')?.getAttribute('data-combo-next')).toBe('0');
 
     await act(async () => {
@@ -59,6 +63,11 @@ describe('CreateStepsList', () => {
 
     const list = container.querySelector('.create-steps-list');
     expect(list?.classList.contains('is-won')).toBe(true);
+    expect(container.querySelectorAll('.create-steps-list.is-won .create-step')).toHaveLength(4);
+    const catching = container.querySelector('.create-step.is-catching');
+    expect(catching).not.toBeNull();
+    expect(catching?.getAttribute('aria-current')).toBe('step');
+    expect(catching?.querySelector('.mascot')).not.toBeNull();
     expect(container.querySelector('[role="status"]')?.textContent).toMatch(/tiny build/i);
     expect(container.querySelector('.create-step-scene.is-qa .mascot--excited')).not.toBeNull();
     expect(container.querySelector('.create-step-scene.is-live .mascot--proud')).not.toBeNull();
