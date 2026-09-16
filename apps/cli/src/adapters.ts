@@ -78,7 +78,11 @@ export function detectAdapter(
 }
 
 export function preflightAdapter(spec: AdapterSpec, env: NodeJS.ProcessEnv): void {
-  const args = ['codex', 'muse'].includes(spec.name) ? ['exec', '--help'] : ['--help'];
+  const args = ['codex', 'muse'].includes(spec.name)
+    ? ['exec', '--help']
+    : spec.name === 'opencode'
+      ? ['run', '--help']
+      : ['--help'];
   const help = probeHelp(spec.command, args, env);
   if (help === null) {
     throw new CliError(`cannot run ${spec.name} --help`, EXIT_REFUSED, `check ${spec.command} in your terminal`);
