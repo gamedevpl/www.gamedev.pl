@@ -428,7 +428,8 @@ Existing previews from older CLI versions may need `/play --stop` followed by `/
 In an interactive CLI session, `/play` opens the game with an **Edit game** overlay.
 You can send prompts, queue follow-ups, answer choices, read recent output and request
 Stop from the browser. Keep the terminal open; native agent permission handoffs still
-use it. Updates are applied manually and restart the game. Standalone `gamedevpl play`
+use it. Compatible game updates can preserve state; unsupported updates require an
+explicit restart. Standalone `gamedevpl play`
 keeps its preview-only behavior. The panel is local to this computer.
 
 ### Local progress and diagnostics

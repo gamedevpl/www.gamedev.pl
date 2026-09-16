@@ -1,9 +1,15 @@
+import { startPhonePreview } from './workbench-phone.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { createSessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
+
+vi.mock('./workbench-phone.js', async (original) => ({
+  ...(await original<typeof import('./workbench-phone.js')>()),
+  startPhonePreview: vi.fn(),
+}));
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -142,4 +148,31 @@ it('serves only explicitly bound preview snapshots and fences a switched source'
     hasPreview: false,
     sourceId: 2,
   });
+});
+
+it('answers a phone pairing race with 409 and closes the superseded listener', async () => {
+  const { server, url, headers } = await fixture();
+  server.setPreview(`http://127.0.0.1:54321/${'a'.repeat(48)}/`);
+  let finish!: (value: Awaited<ReturnType<typeof startPhonePreview>>) => void;
+  const close = vi.fn(async () => {});
+  vi.mocked(startPhonePreview).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const response = fetch(`${url.origin}/phone`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ address: '192.168.1.42' }),
+    signal: AbortSignal.timeout(2000),
+  });
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  server.clearPreview();
+  finish({ url: 'http://fixture.test/', expiresAt: '', qr: '', close });
+  const result = await response;
+  expect(result.status).toBe(409);
+  expect(await result.json()).toEqual({ error: 'Paired game changed' });
+  expect(close).toHaveBeenCalledOnce();
+  expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).not.toHaveProperty('phone');
 });

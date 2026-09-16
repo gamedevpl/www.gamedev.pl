@@ -205,6 +205,7 @@ export async function startSessionBrowser(session: SessionController, options: {
           if (stopped || preview !== pairingSource) {
             await phone?.close();
             phone = undefined;
+            reply(409, { error: 'Paired game changed' });
             return;
           }
           reply(200, { url: phone?.url, expiresAt: phone?.expiresAt });
