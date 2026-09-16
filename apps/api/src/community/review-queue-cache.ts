@@ -4,6 +4,7 @@ import type { AssessmentSource, ReviewSweepSource } from '@gamedevpl/contract';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { ReviewSweep, Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_SWEEP_GAMES } from './review-sweep.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 
 export interface ReviewCatalogMedia {
   screenshots: Array<{ name: string; file: string }>;
@@ -93,6 +94,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   // Same window as the badge: no new staleness bound to reason about.
   const handleCache = new Map<string, Windowed<string | null>>();
   const MAX_CACHED_HANDLES = 500;
+  const ownerCache = new Map<string, Windowed<string>>();
 
   // Bumped by each invalidation, so a read cannot seal in staleness.
   let generation = 0;
@@ -162,6 +164,23 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     return handle;
   }
 
+  // The creator shown is whoever owns the game now.
+
+  // Cached on the handles window, so a transfer costs one read.
+  async function ownerOf(record: SubmissionRecord): Promise<string> {
+    if (!record.slug) return record.ownerUid;
+    const hit = ownerCache.get(record.slug);
+    if (fresh(hit)) return hit.value;
+    let uid: string;
+    try {
+      uid = (await currentOwnerUid(store, record.slug, record.ownerUid)) ?? record.ownerUid;
+    } catch {
+      return record.ownerUid;
+    }
+    rememberBounded(ownerCache, record.slug, { value: uid, expiresAt: now() + BADGE_WINDOW_MS }, MAX_CACHED_HANDLES);
+    return uid;
+  }
+
   // One round trip per distinct creator, not one per queued draft.
   async function creatorHandles(ownerUids: string[]): Promise<Map<string, string | null>> {
     const distinct = [...new Set(ownerUids)];
@@ -197,13 +216,14 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
         drafts.push(record);
         if (items.length + drafts.length >= MAX_SWEEP_GAMES) break;
       }
-      const handles = await creatorHandles(drafts.map((record) => record.ownerUid));
-      for (const record of drafts) {
+      const owners = await Promise.all(drafts.map((record) => ownerOf(record)));
+      const handles = await creatorHandles(owners);
+      for (const [index, record] of drafts.entries()) {
         items.push({
           slug: record.slug!,
           title: titleFromSubmission(record),
           source: 'creator',
-          creatorHandle: handles.get(record.ownerUid) ?? null,
+          creatorHandle: handles.get(owners[index]!) ?? null,
           genre: null,
           jobId: record.jobId,
           media: null,
@@ -233,7 +253,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
       slug,
       title: titleFromSubmission(record),
       source: 'creator',
-      creatorHandle: await creatorHandle(record.ownerUid),
+      creatorHandle: await creatorHandle(await ownerOf(record)),
       genre: null,
       jobId: record.jobId,
       media: null,

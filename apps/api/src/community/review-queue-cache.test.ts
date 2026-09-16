@@ -5,6 +5,8 @@ import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { ContentChecker } from '../platform/moderation.js';
+import { createReviewQueueCache } from './review-queue-cache.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const allowAll: ContentChecker = {
   async check() {
@@ -301,5 +303,35 @@ describe('reviewer badge read windows', () => {
     expect(paused.statusCode).toBe(200);
 
     expect((await poll(app, reviewer)).remaining).toBe(0);
+  });
+});
+
+describe('review queue attribution after a transfer', () => {
+  it('shows the creator who owns the game now, not the row author', async () => {
+    const store = new InMemoryStore();
+    const at = '2026-01-01T00:00:00.000Z';
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    await store.claimHandle('g:ada', 'ada', at);
+    await store.claimHandle('g:grace', 'grace', at);
+
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:ada', 'Sky Dodge');
+    await store.setSubmissionSlug(jobId, 'sky-dodge');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+    await store.setDraftShared(jobId, at);
+    await store.ensureGameAccess('sky-dodge', 'g:ada', at, at);
+
+    const later = new Date(Date.now() + 1000).toISOString();
+    const code = (await store.ensureRecipientCode('g:grace', later))!;
+    const revision = (await store.getGameAccess('sky-dodge'))!.accessRevision;
+    await store.createGameTransferInvitation('sky-dodge', 'g:ada', 'g:grace', revision, later, code);
+    const invite = (await store.getActiveGameTransfer('sky-dodge', later))!;
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:grace', later, invite.invitationId);
+
+    const cache = createReviewQueueCache({ store, listCatalog: async () => [], now: () => Date.now() });
+    const item = await cache.findQueueItem('sky-dodge', await cache.loadReviewPools());
+
+    expect(item?.creatorHandle).toBe('grace');
   });
 });
