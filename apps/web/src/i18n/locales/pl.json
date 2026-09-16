@@ -858,7 +858,7 @@
       "notCheckedTitle": "Ta wersja nie została jeszcze sprawdzona."
     },
     "transfer": {
-      "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie.",
+      "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "loading": "Sprawdzam…",
       "codeLabel": "Kod odbiorcy",
       "codePlaceholder": "Jego kod",
@@ -2181,7 +2181,7 @@
   "studioShelf": {
     "transfer": {
       "title": "Przekazania",
-      "offer": "{{name}} przekazuje ci {{slug}}.",
+      "offer": "{{name}} przekazuje ci {{slug}}. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "accept": "Przyjmij",
       "reject": "Odrzuć",
       "yourCode": "Twój kod odbiorcy",
