@@ -68,7 +68,7 @@ describe('makeGotoHandler', () => {
       view,
     );
     expect(onGoto).not.toHaveBeenCalled();
-    expect(view.dispatch).toHaveBeenCalledWith({ selection: { anchor: 4, head: 8 } });
+    expect(view.dispatch).toHaveBeenCalledWith({ selection: { anchor: 4, head: 8 }, scrollIntoView: true });
   });
 });
 

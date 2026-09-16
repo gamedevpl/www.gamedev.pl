@@ -175,6 +175,7 @@ export function makeGotoHandler(onGotoDefinitionRef: { current: GotoDefinitionHa
           anchor: definition.textSpan.start,
           head: definition.textSpan.start + definition.textSpan.length,
         },
+        scrollIntoView: true,
       });
       return true;
     }
