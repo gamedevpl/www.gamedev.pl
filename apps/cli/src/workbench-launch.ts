@@ -1,7 +1,8 @@
+import { acquireStartupLock } from './workbench-startup-lock.js';
 import { CliError } from './exit-codes.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, mkdirSync, openSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { privatePlayDirectory, readPlayState } from './play-state.js';
@@ -85,11 +86,7 @@ export async function launchWorkbench(input: {
     throw Error(
       'Play process is still alive but not responding. Reconnect after it recovers; a second writer was not started.',
     );
-  try {
-    mkdirSync(lock, { mode: 0o700 });
-  } catch {
-    throw Error(`Play startup is already in progress. Retry shortly. Lock: ${lock}`);
-  }
+  const releaseStartup = acquireStartupLock(lock, existing?.pid);
   try {
     const journal: PlayJournal =
       existing && !existing.ended
@@ -129,7 +126,7 @@ export async function launchWorkbench(input: {
     }
     throw Error('Play is still starting. Run the same command to reconnect; do not launch a second writer.');
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    releaseStartup();
   }
 }
 export function journalApi(api: ApiClient, journal: PlayJournal, save: () => void): ApiClient {

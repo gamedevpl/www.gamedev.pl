@@ -20,10 +20,15 @@ export async function withCheckoutWriter<T>(root: string, run: () => Promise<T>)
       'Another CLI operation owns this checkout. If it crashed, confirm its child agent has exited before removing the writer lock.',
     );
   }
-  writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, instance, root: canonical }), {
-    flag: 'wx',
-    mode: 0o600,
-  });
+  try {
+    writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, instance, root: canonical }), {
+      flag: 'wx',
+      mode: 0o600,
+    });
+  } catch (error) {
+    rmSync(lock, { recursive: true, force: true });
+    throw error;
+  }
   const roots = new Set(transaction.getStore() ?? []);
   roots.add(canonical);
   try {

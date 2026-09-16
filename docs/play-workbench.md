@@ -98,6 +98,13 @@ working directory. If the old controller is still alive but unresponsive, the la
 refuses a second writer. Journals currently live in the OS temporary directory and are
 not a machine-reboot backup or an installed supervisor.
 
+Startup locks record the launcher PID and creation time. An orphaned startup lock is
+never removed just because its PID appears dead: inspect the adjacent journal/log and
+confirm the launcher, controller and any child agent have exited. Only then remove the
+exact lock directory printed by the launcher and repeat the same command. Legacy locks
+without owner records require the same process inspection; if ownership is uncertain,
+leave the lock in place. Failed owner-record writes clean up their own acquisition.
+
 ## Measurement and verification
 
 Creation and editing reuse the existing CLI `first_turn`, `build_requested`,
