@@ -96,7 +96,7 @@ function signRoundScoped(
 ): string {
   const base = `${SCOPE}:${jobId}:${roundGeneration}:${exp}`;
   const payload = actorUid ? `${base}:${actorUid}` : base;
-  return createHmac('sha256', secret).update(payload).digest('hex');
+  return createHmac('sha256', secret).update(payload).digest('hex'); // codeql[js/insufficient-password-hash]
 }
 
 function signManagedMcpOpener(jobId: number, roundGeneration: number, exp: number, secret: string): string {
