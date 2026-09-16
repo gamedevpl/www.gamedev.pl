@@ -5,6 +5,7 @@ import type {
   EditorEntitiesLayerSpec,
   EditorLayerConstraint,
   EditorLayerSpec,
+  EditorLayeredSpec,
   EditorLayersDoc,
   EditorItemContent,
   EditorLabel,
@@ -13,6 +14,7 @@ import type {
   EditorTilemapItemContent,
   EditorTilemapSpec,
 } from './studioApi.js';
+import { blankPathPoints, blankRows, declaredDefaults } from './editorContentDefaults.js';
 
 export type EditorPatchOperation = { path: Array<string | number>; value: unknown };
 
@@ -84,12 +86,32 @@ export function defaultLayerTileKey(layers: Record<string, EditorLayerSpec>, key
   return spec?.widget === 'tilemap' ? (spec.tiles[0]?.key ?? null) : null;
 }
 
+// A key check alone would hand a null to the painter.
 export function isTilemapItem(item: unknown): item is EditorTilemapItemContent {
-  return typeof item === 'object' && item !== null && !Array.isArray(item) && 'rows' in item;
+  if (!hasProperties(item)) return false;
+  const rows = (item as { rows?: unknown }).rows;
+  return Array.isArray(rows) && rows.every((row) => typeof row === 'string');
 }
 
 export function isPathItem(item: unknown): item is EditorPathItemContent {
-  return typeof item === 'object' && item !== null && !Array.isArray(item) && 'points' in item;
+  if (!hasProperties(item)) return false;
+  const points = (item as { points?: unknown }).points;
+  return Array.isArray(points) && points.every((point) => isPlainRecord(point) && isCoordinate(point));
+}
+
+// The painter draws these; a coordinate it cannot place breaks the SVG.
+function isCoordinate(point: Record<string, unknown>): boolean {
+  return (
+    typeof point.x === 'number' && typeof point.y === 'number' && Number.isFinite(point.x) && Number.isFinite(point.y)
+  );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasProperties(value: unknown): value is { properties: Record<string, unknown> } {
+  return isPlainRecord(value) && isPlainRecord(value.properties);
 }
 
 export type PathProblemMessages = {
@@ -175,8 +197,12 @@ export function itemProblems(
   name: (label: EditorLabel) => string,
   pathMessages?: PathProblemMessages,
 ) {
-  if (spec.widget === 'path' && isPathItem(item)) return pathProblems(spec, item, pathMessages);
-  if (spec.widget !== 'tilemap' || !isTilemapItem(item)) return [];
+  if (!hasProperties(item)) return ['Needs a property sheet'];
+  if (spec.widget === 'layered') return layeredItemProblems(spec, item, name, pathMessages);
+  if (spec.widget === 'path')
+    return isPathItem(item) ? pathProblems(spec, item, pathMessages) : ['Needs a list of points'];
+  if (spec.widget !== 'tilemap') return [];
+  if (!isTilemapItem(item)) return ['Needs a board of rows'];
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
   const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
   for (const row of item.rows) {
@@ -189,7 +215,10 @@ export function itemProblems(
     const tile = spec.tiles.find((entry) => entry.key === key);
     return tile ? name(tile.label) : key;
   };
-  const problems: string[] = [];
+  const problems: string[] = gridProblems(spec, item);
+  for (const char of item.rows.join('')) {
+    if (!charToKey.has(char)) problems.push(`Unknown tile "${char}"`);
+  }
   for (const rule of spec.constraints ?? []) {
     if ('reachable' in rule) {
       const missed = unreachableCount(spec, item, rule.reachable);
@@ -220,6 +249,20 @@ export function itemProblems(
     }
   }
   return problems;
+}
+
+// A layered item's checks are its layers' checks.
+function layeredItemProblems(
+  spec: EditorLayeredSpec,
+  item: EditorItemContent,
+  name: (label: EditorLabel) => string,
+  pathMessages?: PathProblemMessages,
+): string[] {
+  const layers = ((item as { layers?: EditorLayersDoc } | null)?.layers ?? {}) as EditorLayersDoc;
+  const problems = Object.entries(spec.layers).flatMap(([key, layerSpec]) =>
+    layerProblems(layerSpec, layers[key], name, pathMessages).map((problem) => `${name(layerSpec.label)}: ${problem}`),
+  );
+  return [...problems, ...layeredProblems(spec.layers, spec.constraints, layers)];
 }
 
 function pathProblems(spec: EditorPathSpec, item: EditorPathItemContent, messages?: PathProblemMessages): string[] {
@@ -255,16 +298,34 @@ function pathProblems(spec: EditorPathSpec, item: EditorPathItemContent, message
   return problems;
 }
 
-/** Entities' one rule (uniqueBy) is collection-wide — checked once, mirroring the server. */
-export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
-  if (spec.item.widget !== 'entities') return [];
+// The declared grid, which the server checks and the creator cannot see.
+function gridProblems(spec: EditorTilemapSpec, item: EditorTilemapItemContent): string[] {
   const problems: string[] = [];
+  const { minRows, maxRows, minCols, maxCols } = spec.grid;
+  if (item.rows.length < minRows || item.rows.length > maxRows) {
+    problems.push(`${item.rows.length} rows; expected ${minRows}-${maxRows}`);
+  }
+  const width = item.rows[0]?.length ?? 0;
+  if (width < minCols || width > maxCols) problems.push(`${width} wide; expected ${minCols}-${maxCols}`);
+  item.rows.forEach((row, index) => {
+    if (row.length !== width) problems.push(`Row ${index + 1} is ${row.length} wide, expected ${width}`);
+  });
+  return problems;
+}
+
+/** Collection-wide rules the server checks: how many items, and entities' uniqueBy. */
+export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
+  const problems: string[] = [];
+  if (items.length < spec.min || items.length > spec.max) {
+    problems.push(`has ${items.length} items; expected ${spec.min}-${spec.max}`);
+  }
+  if (spec.item.widget !== 'entities') return problems;
   for (const rule of spec.item.constraints ?? []) {
     if (!('uniqueBy' in rule)) continue;
     const seenAt = new Map<string, number>();
     items.forEach((entry, index) => {
-      const value = entry.properties[rule.uniqueBy];
-      const encoded = JSON.stringify(value);
+      if (!hasProperties(entry)) return;
+      const encoded = JSON.stringify(entry.properties[rule.uniqueBy]);
       if (encoded === undefined) return;
       const firstIndex = seenAt.get(encoded);
       if (firstIndex !== undefined) {
@@ -289,29 +350,14 @@ export function setCell(
 }
 
 export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
-  const properties: Record<string, unknown> = {};
-  for (const [name, propertySpec] of Object.entries(spec.properties ?? {})) {
-    if (propertySpec.type === 'text') properties[name] = '';
-    else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
-    else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
-    else properties[name] = false;
-  }
+  const properties = declaredDefaults(spec.properties);
   if (spec.widget === 'path') return { properties, points: blankPathPoints(spec) };
   if (spec.widget !== 'tilemap') return { properties };
-  // Smallest legal grid, all first-tile — the creator paints from there.
-  const fill = spec.tiles[0]?.char ?? '.';
-  return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
+  return { properties, rows: blankRows(spec) };
 }
 
 export function blankLayerEntity(spec: EditorEntitiesLayerSpec): EditorEntityItemContent {
-  const properties: Record<string, unknown> = {};
-  for (const [name, propertySpec] of Object.entries(spec.properties ?? {})) {
-    if (propertySpec.type === 'text') properties[name] = '';
-    else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
-    else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
-    else properties[name] = false;
-  }
-  return { properties };
+  return { properties: declaredDefaults(spec.properties) };
 }
 
 function layerEntityProblems(spec: EditorEntitiesLayerSpec, items: EditorEntityItemContent[]): string[] {
@@ -350,7 +396,7 @@ export function layerProblems(
 }
 
 function isPlainEntityItem(value: unknown): value is EditorEntityItemContent {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && 'properties' in value;
+  return hasProperties(value);
 }
 
 function layerRows(layers: Record<string, EditorLayerSpec>, content: EditorLayersDoc, key: string): string[] | null {
@@ -430,16 +476,4 @@ export function layeredProblems(
     }
   }
   return problems;
-}
-
-function blankPathPoints(spec: EditorPathSpec) {
-  const cells = Array.from({ length: spec.gridCols * spec.gridRows }, (_, index) => ({
-    x: index % spec.gridCols,
-    y: Math.floor(index / spec.gridCols),
-  }));
-  return Array.from({ length: spec.minPoints }, (_, index) => {
-    if (index < cells.length) return cells[index];
-    if (cells.length === 1) return cells[0];
-    return cells[1 + ((index - cells.length) % (cells.length - 1))];
-  });
 }
