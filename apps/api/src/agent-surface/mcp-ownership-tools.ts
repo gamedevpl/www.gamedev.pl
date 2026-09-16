@@ -163,7 +163,10 @@ export function createOwnershipTools(deps: OwnershipToolsDeps): Record<string, O
           idempotencyKey,
           at,
         });
-        if (!result.ok) return toolErr(result.reason === 'conflict' ? 'idempotency_conflict' : result.reason);
+        if (!result.ok) {
+          if (result.reason === 'ineligible') return toolErr(GAME_UNAVAILABLE);
+          return toolErr(result.reason === 'conflict' ? 'idempotency_conflict' : result.reason);
+        }
         const proposal = result.proposal;
         return toolOk({
           proposalId: proposal.proposalId,

@@ -312,6 +312,37 @@ describe('MCP ownership tools', () => {
     }
   });
 
+  it('hides an erased owner propose behind the same refusal', async () => {
+    const { app, store, bearer } = await ready();
+    await store.beginAccountErasure(OWNER, '2099-01-01T00:00:00.000Z');
+    const refused = await callTool(
+      app,
+      'propose_game_transfer',
+      { slug: SLUG, expectedAccessVersion: 'v1', idempotencyKey: 'k-erased' },
+      { authorization: `Bearer ${bearer}` },
+    );
+    expect(refused.structured).toMatchObject({ error: GAME_UNAVAILABLE });
+  });
+
+  it('lets a new key proceed after membership bumps the access version', async () => {
+    const { app, store, bearer } = await ready();
+    await callTool(
+      app,
+      'propose_game_transfer',
+      { slug: SLUG, expectedAccessVersion: 'v1', idempotencyKey: 'k1' },
+      { authorization: `Bearer ${bearer}` },
+    );
+    await acceptEditor(store);
+    const next = await callTool(
+      app,
+      'propose_game_transfer',
+      { slug: SLUG, expectedAccessVersion: 'v2', idempotencyKey: 'k2' },
+      { authorization: `Bearer ${bearer}` },
+    );
+    expect(next.isError).toBe(false);
+    expect(next.structured.accessVersion).toBe('v2');
+  });
+
   it('treats a recreated editor as a stranger until they are invited again', async () => {
     const { app, store } = await ready();
     await acceptEditor(store);

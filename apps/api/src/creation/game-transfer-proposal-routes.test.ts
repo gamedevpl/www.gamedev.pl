@@ -144,4 +144,31 @@ describe('game transfer proposal routes', () => {
     expect(res.json().error).toBe('recipient_ineligible');
     expect(await store.getActiveGameTransfer(SLUG, AT)).toBeNull();
   });
+
+  it('reports an invalidated proposal instead of an expiry', async () => {
+    const { store, app, proposalId } = await seeded();
+    await store.invalidateOpenTransferProposalsForSlug(SLUG, AT);
+    const res = await app.inject({
+      method: 'GET',
+      url: url(proposalId),
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().proposal.status).toBe('invalidated');
+  });
+
+  it('cancels the invitation when proposal confirm cannot finish', async () => {
+    const { store, app, code, proposalId } = await seeded();
+    store.confirmTransferProposal = async () => null;
+    const res = await app.inject({
+      method: 'POST',
+      url: url(proposalId),
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('expired');
+    const leftover = await store.getActiveGameTransfer(SLUG, AT);
+    expect(leftover?.status).toBe('cancelled');
+  });
 });

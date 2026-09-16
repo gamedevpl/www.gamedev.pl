@@ -4,6 +4,7 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { recordTransferStep } from '../../visitTelemetry.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { studioPath } from '../../core/router.js';
+import './studio-panel.css';
 
 interface ProposalSummary {
   proposalId: string;

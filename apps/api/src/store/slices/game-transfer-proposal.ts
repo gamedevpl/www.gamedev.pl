@@ -1,4 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
+import { fencedOut } from '../records/game-access.js';
 import {
   newTransferProposal,
   proposalIsOpen,
@@ -11,7 +12,24 @@ import {
 } from '../records/game-transfer-proposal.js';
 
 export type ProposeGameTransferResult =
-  { ok: true; proposal: GameTransferProposal } | { ok: false; reason: 'conflict' | 'busy' | 'stale_owner' | 'expired' };
+  | { ok: true; proposal: GameTransferProposal }
+  | { ok: false; reason: 'conflict' | 'busy' | 'stale_owner' | 'expired' | 'ineligible' };
+
+function erasedOwner(user: { createdAt?: string } | null, erasedAt: string | null): boolean {
+  if (erasedAt === null) return false;
+  return user?.createdAt === undefined || fencedOut(erasedAt, user.createdAt);
+}
+
+function openBlocks(
+  open: GameTransferProposal | null,
+  ownerUid: string,
+  accessRevision: number,
+  receiptKey: string,
+  at: string,
+): 'busy' | 'stale' | null {
+  if (!open || open.ownerUid !== ownerUid || !proposalIsOpen(open, at) || open.receiptKey === receiptKey) return null;
+  return open.accessRevision !== accessRevision ? 'stale' : 'busy';
+}
 
 export interface TransferProposalReceipt {
   status: TransferProposalReceiptStatus;
@@ -42,6 +60,11 @@ function retained(row: GameTransferProposal | undefined, at: string): GameTransf
 }
 
 export class InMemoryGameTransferProposalStore implements GameTransferProposalStore {
+  constructor(
+    private erasedAt: (uid: string) => string | null = () => null,
+    private owner: (uid: string) => { createdAt?: string } | null = () => null,
+  ) {}
+
   proposals = new Map<string, GameTransferProposal>();
   receipts = new Map<string, string>();
   openBySlug = new Map<string, string>();
@@ -64,10 +87,16 @@ export class InMemoryGameTransferProposalStore implements GameTransferProposalSt
       if (proposalReceiptStatus(existing, input.at) === 'invalidated') return { ok: false, reason: 'expired' };
       return { ok: true, proposal: clone(existing) };
     }
+    if (erasedOwner(this.owner(input.ownerUid), this.erasedAt(input.ownerUid))) {
+      return { ok: false, reason: 'ineligible' };
+    }
     const openId = this.openBySlug.get(input.slug);
     const open = openId ? retained(this.proposals.get(openId), input.at) : null;
-    if (open && open.ownerUid === input.ownerUid && proposalIsOpen(open, input.at) && open.receiptKey !== receiptKey) {
-      return { ok: false, reason: 'busy' };
+    const block = openBlocks(open, input.ownerUid, input.accessRevision, receiptKey, input.at);
+    if (block === 'busy') return { ok: false, reason: 'busy' };
+    if (block === 'stale' && open) {
+      this.proposals.set(open.proposalId, { ...open, invalidatedAt: input.at });
+      this.openBySlug.delete(input.slug);
     }
     const proposal = newTransferProposal(input);
     this.proposals.set(proposal.proposalId, proposal);
@@ -152,6 +181,8 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
       const receiptSnap = await tx.get(this.receiptDoc(receiptKey));
       const existingId = receiptSnap.exists ? (receiptSnap.data() as { proposalId: string }).proposalId : null;
       const existingSnap = existingId ? await tx.get(this.proposalDoc(existingId)) : null;
+      const fenceSnap = await tx.get(this.db.collection('erasedAccounts').doc(input.ownerUid));
+      const userSnap = await tx.get(this.db.collection('users').doc(input.ownerUid));
       const existing =
         existingSnap?.exists && proposalIsRetained(existingSnap.data() as GameTransferProposal, input.at)
           ? (existingSnap.data() as GameTransferProposal)
@@ -162,6 +193,9 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
         if (status === 'expired' || status === 'invalidated') return { ok: false as const, reason: 'expired' as const };
         return { ok: true as const, proposal: existing };
       }
+      const erasedAt = fenceSnap.exists ? ((fenceSnap.data() as { at?: string }).at ?? null) : null;
+      const user = userSnap.exists ? (userSnap.data() as { createdAt?: string }) : null;
+      if (erasedOwner(user, erasedAt)) return { ok: false as const, reason: 'ineligible' as const };
       const slugSnap = await tx.get(this.slugDoc(input.slug));
       const openId = slugSnap.exists ? (slugSnap.data() as { proposalId: string }).proposalId : null;
       const openSnap = openId ? await tx.get(this.proposalDoc(openId)) : null;
@@ -169,13 +203,10 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
         openSnap?.exists && proposalIsRetained(openSnap.data() as GameTransferProposal, input.at)
           ? (openSnap.data() as GameTransferProposal)
           : null;
-      if (
-        open &&
-        open.ownerUid === input.ownerUid &&
-        proposalIsOpen(open, input.at) &&
-        open.receiptKey !== receiptKey
-      ) {
-        return { ok: false as const, reason: 'busy' as const };
+      const block = openBlocks(open, input.ownerUid, input.accessRevision, receiptKey, input.at);
+      if (block === 'busy') return { ok: false as const, reason: 'busy' as const };
+      if (block === 'stale' && open) {
+        tx.set(this.proposalDoc(open.proposalId), { ...open, invalidatedAt: input.at });
       }
       const proposal = newTransferProposal(input);
       tx.set(this.proposalDoc(proposal.proposalId), proposal);

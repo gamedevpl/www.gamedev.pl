@@ -145,7 +145,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       }
     },
   );
-  protected gameTransferProposalStore = new InMemoryGameTransferProposalStore();
+  protected gameTransferProposalStore = new InMemoryGameTransferProposalStore(
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
+    (uid) => this.identityStore.users.get(uid) ?? null,
+  );
   protected gameEditorInviteStore = new InMemoryGameEditorInviteStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
     (slug) => this.gameAccessStore.access.get(slug) ?? null,

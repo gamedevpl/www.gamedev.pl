@@ -182,5 +182,51 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       const receipt = await store.getTransferProposalReceipt(A, 'k1', AT);
       expect(receipt.status).toBe('invalidated');
     });
+
+    it('refuses a new proposal from an erased owner', async () => {
+      const store = makeStore();
+      await seedOwner(store);
+      await store.beginAccountErasure(A, '2099-01-01T00:00:00.000Z');
+      const refused = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 1,
+        expectedAccessVersion: 'v1',
+        idempotencyKey: 'k-erased',
+        at: AT,
+      });
+      expect(refused).toEqual({ ok: false, reason: 'ineligible' });
+    });
+
+    it('clears a stale-revision open proposal so a new key can proceed', async () => {
+      const store = makeStore();
+      await seedOwner(store);
+      const first = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 1,
+        expectedAccessVersion: 'v1',
+        idempotencyKey: 'k1',
+        at: AT,
+      });
+      if (!first.ok) throw new Error('unreachable');
+      const editorCode = (await store.ensureRecipientCode(B, AT))!;
+      await store.createEditorInvitation(SLUG, A, B, AT, editorCode);
+      const invite = (await store.getEditorInvite(SLUG, B, AT))!;
+      await store.acceptEditorInvitation(SLUG, B, AT, invite.inviteId);
+      const next = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 2,
+        expectedAccessVersion: 'v2',
+        idempotencyKey: 'k2',
+        at: AT,
+      });
+      expect(next).toMatchObject({ ok: true });
+      if (!next.ok) throw new Error('unreachable');
+      expect(next.proposal.proposalId).not.toBe(first.proposal.proposalId);
+      const old = await store.getTransferProposalReceipt(A, 'k1', AT);
+      expect(old.status).toBe('invalidated');
+    });
   });
 }

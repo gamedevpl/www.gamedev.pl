@@ -5,7 +5,12 @@ import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isRecipientCodeShape } from '../platform/recipient-code.js';
 import { isCanonicalSlug } from '../platform/slug-policy.js';
 import type { Store } from '../platform/store.js';
-import { opaqueAccessVersion, parseAccessVersion, proposalIsOpen } from '../store/records/game-transfer-proposal.js';
+import {
+  opaqueAccessVersion,
+  parseAccessVersion,
+  proposalIsOpen,
+  proposalReceiptStatus,
+} from '../store/records/game-transfer-proposal.js';
 import { invalidateTransferInboxCache } from './transfer-inbox-cache.js';
 
 export interface GameTransferProposalRoutesOptions {
@@ -71,7 +76,7 @@ export async function registerGameTransferProposalRoutes(
         proposal: {
           proposalId: proposal.proposalId,
           slug,
-          status: proposalIsOpen(proposal, at) ? 'ready' : proposal.confirmedAt ? 'invalidated' : 'expired',
+          status: proposalReceiptStatus(proposal, at),
           expiresAt: proposal.expiresAt,
           accessVersion: opaqueAccessVersion(proposal.accessRevision),
           title: record?.title ?? slug,
@@ -128,7 +133,10 @@ export async function registerGameTransferProposalRoutes(
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
 
       const confirmed = await store.confirmTransferProposal(proposalId, uid, at);
-      if (!confirmed) return reply.status(409).send({ error: 'expired' });
+      if (!confirmed) {
+        await store.cancelGameTransferInvitation(slug, uid, at, result.invitationId);
+        return reply.status(409).send({ error: 'expired' });
+      }
       invalidateTransferInboxCache(store, recipient.uid);
       invalidatePublishedGameCaches?.(slug);
       if (notifyTransferOffered) {
