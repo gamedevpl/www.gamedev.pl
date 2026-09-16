@@ -125,4 +125,27 @@ describe('round authority across a handover', () => {
     expect(record.accessEpoch).toBeUndefined();
     expect(roundAuthorityCurrent(record, await resolveGameAccess(store, 'sky'))).toBe(false);
   });
+
+  it('lets a bump carry an inherited round into the new owner epoch', async () => {
+    // The row still names the sender, but reopening re-mints.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    const inherited = await store.allocateJobId();
+    await store.createSubmission(inherited, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(inherited, 'sky');
+    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
+    const after = new Date(Date.parse((await store.getSubmission(inherited))!.createdAt) + 1000).toISOString();
+    await handOverThroughStore(store, 'sky', 'g:ada', 'g:grace', after);
+
+    // A nudge alone must not: it keeps the old token alive.
+    await store.ensureRoundGeneration(inherited);
+    expect((await store.getSubmission(inherited))!.accessEpoch).toBeUndefined();
+
+    await store.bumpRoundGeneration(inherited);
+
+    const record = (await store.getSubmission(inherited))!;
+    expect(record.ownerUid).toBe('g:ada');
+    expect(roundAuthorityCurrent(record, await resolveGameAccess(store, 'sky'))).toBe(true);
+  });
 });
