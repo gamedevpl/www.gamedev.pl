@@ -27,6 +27,7 @@ function controls() {
 function render(next) {
   const old = state;
   state = next;
+  if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
   el('identity').textContent = state.identity;
   const transcript = el('transcript');
@@ -115,7 +116,7 @@ async function previewTick() {
 }
 async function tick() {
   try { const next = await api('/state'); online = true; render(next); }
-  catch { online = false; el('connection').textContent = 'Disconnected · keep the terminal open'; controls(); }
+  catch { online = false; el('connection').textContent = 'Disconnected · keep the terminal open'; el('task').textContent = 'Disconnected. Reopen /play from your terminal session.'; controls(); }
   setTimeout(tick, 1000);
 }
 tick(); previewTick();
