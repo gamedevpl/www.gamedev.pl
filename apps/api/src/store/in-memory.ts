@@ -110,8 +110,8 @@ import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore extends SubmissionFacade implements Store {
-  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore((uid) =>
-    this.gameAccessStore.erasedAt.has(uid),
+  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore(
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
   );
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();

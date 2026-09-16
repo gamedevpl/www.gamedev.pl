@@ -875,20 +875,34 @@ describe('FirestoreStore.ensureRecipientCode', () => {
   it('refuses to mint or rotate once the erasure fence is set, before cleanup runs', async () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);
-    await store.upsertUser({ uid: 'g:ada' });
-    await store.beginAccountErasure('g:ada', '2026-01-01T00:00:00.000Z');
+    // Erased from the moment it existed: the fence covers this incarnation.
+    const ada = await store.upsertUser({ uid: 'g:ada' });
+    await store.beginAccountErasure('g:ada', ada.createdAt);
 
     expect(await store.ensureRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
     expect(await store.rotateRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
   });
 
-  it('stops returning an existing code once erasure begins, before cleanup removes it', async () => {
+  it('lets an account that signed up again be handed a game', async () => {
+    // Erasure deletes the user record, so this uid is a new account now.
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);
     await store.upsertUser({ uid: 'g:ada' });
     await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+    await store.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z');
 
-    await store.beginAccountErasure('g:ada', '2026-01-02T00:00:00.000Z');
+    await store.upsertUser({ uid: 'g:ada' });
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-03-01T00:00:00.000Z')).toBeTruthy();
+  });
+
+  it('stops returning an existing code once erasure begins, before cleanup removes it', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    const ada = await store.upsertUser({ uid: 'g:ada' });
+    await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+
+    await store.beginAccountErasure('g:ada', ada.createdAt);
 
     expect(await store.ensureRecipientCode('g:ada', '2026-01-03T00:00:00.000Z')).toBeNull();
   });

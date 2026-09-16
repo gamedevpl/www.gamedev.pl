@@ -60,8 +60,9 @@ describe('recipient code store slice', () => {
   it('refuses to mint or rotate a code once erasure has begun, even before cleanup runs', async () => {
     // Not the full sweep: the user still exists, testing the fence alone.
     const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:ada' });
-    await store.beginAccountErasure('g:ada', '2026-01-01T00:00:00.000Z');
+    // Erased from the moment it existed: the fence covers this incarnation.
+    const ada = await store.upsertUser({ uid: 'g:ada' });
+    await store.beginAccountErasure('g:ada', ada.createdAt);
 
     expect(await store.ensureRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
     expect(await store.rotateRecipientCode('g:ada', '2026-01-02T00:00:00.000Z')).toBeNull();
@@ -69,12 +70,34 @@ describe('recipient code store slice', () => {
 
   it('stops returning an existing code once erasure begins, before cleanup removes it', async () => {
     const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:ada' });
+    const ada = await store.upsertUser({ uid: 'g:ada' });
     await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
 
-    await store.beginAccountErasure('g:ada', '2026-01-02T00:00:00.000Z');
+    await store.beginAccountErasure('g:ada', ada.createdAt);
 
     expect(await store.ensureRecipientCode('g:ada', '2026-01-03T00:00:00.000Z')).toBeNull();
+  });
+
+  it('lets an account that signed up again be handed a game', async () => {
+    // Erasure deletes the user record, so this uid is a new account now.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');
+    await store.deleteAccountIdentity('g:ada', '2026-01-02T00:00:00.000Z');
+
+    await store.upsertUser({ uid: 'g:ada' });
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-03-01T00:00:00.000Z')).toBeTruthy();
+  });
+
+  it('still refuses the incarnation the erasure was about', async () => {
+    // The fence is what stops a writer racing an erasure in flight.
+    const store = new InMemoryStore();
+    const ada = await store.upsertUser({ uid: 'g:ada' });
+    await store.beginAccountErasure('g:ada', ada.createdAt);
+
+    expect(await store.ensureRecipientCode('g:ada', '2026-06-02T00:00:00.000Z')).toBeNull();
+    expect(await store.rotateRecipientCode('g:ada', '2026-06-02T00:00:00.000Z')).toBeNull();
   });
 
   it('account erasure retires the recipient code', async () => {

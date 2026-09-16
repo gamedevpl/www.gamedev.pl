@@ -1,7 +1,25 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { generateRecipientCode } from '../../platform/recipient-code.js';
 import { stripUndefined } from '../firestore-util.js';
+import { fencedOut } from '../records/game-access.js';
 import type { User } from '../records/identity.js';
+
+/**
+ * Whether the erasure fence covers the account asking.
+ *
+ * The fence belongs to an incarnation, not to a uid. Erasure deletes the user
+ * record, so a uid that signs in again is a new account with a later
+ * `createdAt`; refusing it forever would leave a real creator permanently
+ * unable to be handed a game. Same rule the access writers use.
+ */
+function erasedIncarnation(user: User, erasedAt: string | null): boolean {
+  return fencedOut(erasedAt, user.createdAt);
+}
+
+// The fence document carries when the erasure began, or nothing.
+function fenceAt(snap: { exists: boolean; data: () => unknown }): string | null {
+  return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
+}
 
 // A collision is astronomically unlikely; retry rather than steal a code.
 const MAX_ATTEMPTS = 5;
@@ -17,12 +35,12 @@ export async function ensureRecipientCodeInMemory(
   codes: Map<string, RecipientCodeRecord>,
   uid: string,
   at: string,
-  isErased: (uid: string) => boolean = () => false,
+  erasedAt: (uid: string) => string | null = () => null,
 ): Promise<string | null> {
   const user = users.get(uid);
-  if (!user || isErased(uid)) return null;
+  if (!user || erasedIncarnation(user, erasedAt(uid))) return null;
   if (user.recipientCode) return user.recipientCode;
-  return rotateRecipientCodeInMemory(users, codes, uid, at, isErased);
+  return rotateRecipientCodeInMemory(users, codes, uid, at, erasedAt);
 }
 
 // Mints a fresh code and retires the old one.
@@ -31,10 +49,10 @@ export async function rotateRecipientCodeInMemory(
   codes: Map<string, RecipientCodeRecord>,
   uid: string,
   at: string,
-  isErased: (uid: string) => boolean = () => false,
+  erasedAt: (uid: string) => string | null = () => null,
 ): Promise<string | null> {
   const user = users.get(uid);
-  if (!user || isErased(uid)) return null;
+  if (!user || erasedIncarnation(user, erasedAt(uid))) return null;
 
   let code = generateRecipientCode();
   for (let attempt = 1; codes.has(code) && attempt < MAX_ATTEMPTS; attempt += 1) code = generateRecipientCode();
@@ -71,8 +89,9 @@ export async function ensureRecipientCodeFirestore(db: Firestore, uid: string, a
           tx.get(userRef),
           tx.get(db.collection('erasedAccounts').doc(uid)),
         ]);
-        if (!userSnap.exists || fenceSnap.exists) return null;
-        const existing = (userSnap.data() as User).recipientCode;
+        const user = userSnap.exists ? (userSnap.data() as User) : null;
+        if (!user || erasedIncarnation(user, fenceAt(fenceSnap))) return null;
+        const existing = user.recipientCode;
         if (existing) return existing;
 
         const codeSnap = await tx.get(codes.doc(candidate));
@@ -103,9 +122,9 @@ export async function rotateRecipientCodeFirestore(db: Firestore, uid: string, a
           tx.get(codes.doc(code)),
           tx.get(db.collection('erasedAccounts').doc(uid)),
         ]);
-        if (!userSnap.exists || fenceSnap.exists) return null;
+        const user = userSnap.exists ? (userSnap.data() as User) : null;
+        if (!user || erasedIncarnation(user, fenceAt(fenceSnap))) return null;
         if (codeSnap.exists) throw new Error('recipient code collision');
-        const user = userSnap.data() as User;
         const oldRef = user.recipientCode ? codes.doc(user.recipientCode) : null;
         tx.set(codes.doc(code), { uid, createdAt: at } satisfies RecipientCodeRecord);
         if (oldRef) tx.delete(oldRef);
