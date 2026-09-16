@@ -459,6 +459,8 @@ export interface AgentChannelOptions {
    * and the creator's next poll shows the update rather than a stale snapshot.
    */
   onEvent?: (jobId: number) => void;
+  // Called only for a shot/preview write, not ordinary progress.
+  onMediaEvent?: (jobId: number) => void;
   // Operator switch for concept proposals; absent means off.
   dreamingEnabled?: () => Promise<boolean>;
   onBuilderHandoffAcknowledged?: (input: {
@@ -1261,6 +1263,7 @@ export async function registerAgentChannelRoutes(
         stored = await store!.appendBuildShot(jobId, { data: body64, ...(label ? { label } : {}) });
       }
       options.onEvent?.(jobId);
+      options.onMediaEvent?.(jobId);
 
       return reply.send({
         accepted: true,
@@ -1337,6 +1340,7 @@ export async function registerAgentChannelRoutes(
       // has still delivered the thing the creator is waiting for.
       await store!.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
       options.onEvent?.(jobId);
+      options.onMediaEvent?.(jobId);
 
       return reply.send({
         accepted: true,

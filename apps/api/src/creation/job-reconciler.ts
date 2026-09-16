@@ -76,6 +76,8 @@ export interface JobReconcilerDeps {
     version: string;
     screenshotPath?: string;
   }) => Promise<void> | void;
+  // Fired after a gate screenshot lands, to bust the media cache.
+  onGateScreenshotPosted?: (jobId: number) => void;
 }
 
 export interface JobReconciler {
@@ -102,6 +104,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     probeGateCrash,
     postGateScreenshot,
     onPreviewGateGreen,
+    onGateScreenshotPosted,
   } = deps;
 
   // Asks the backend what happened to a job whose agent went quiet.
@@ -362,16 +365,19 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
 
         // The creator sees what the platform check saw, on the usual path.
         if (verdict.screenshot) {
-          await postGateScreenshot({
-            store,
-            gamesStore,
-            jobId: record.jobId,
-            slug: record.slug,
-            version: record.deliveredVersion,
-            screenshotPath: verdict.screenshot,
-          }).catch((error) => {
+          try {
+            await postGateScreenshot({
+              store,
+              gamesStore,
+              jobId: record.jobId,
+              slug: record.slug,
+              version: record.deliveredVersion,
+              screenshotPath: verdict.screenshot,
+            });
+            onGateScreenshotPosted?.(record.jobId);
+          } catch (error) {
             log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
-          });
+          }
         }
         return transition;
       }
@@ -403,16 +409,19 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       const recorded = await store.recordJobTransition(record.jobId, transition);
       if (!recorded) return null;
       if (preview.screenshot) {
-        await postGateScreenshot({
-          store,
-          gamesStore,
-          jobId: record.jobId,
-          slug: record.slug,
-          version,
-          screenshotPath: preview.screenshot,
-        }).catch((error) => {
+        try {
+          await postGateScreenshot({
+            store,
+            gamesStore,
+            jobId: record.jobId,
+            slug: record.slug,
+            version,
+            screenshotPath: preview.screenshot,
+          });
+          onGateScreenshotPosted?.(record.jobId);
+        } catch (error) {
           log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
-        });
+        }
       }
       return transition;
     } catch (error) {

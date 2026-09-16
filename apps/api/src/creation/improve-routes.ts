@@ -34,6 +34,8 @@ export interface ImproveRoutesOptions {
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   invalidateStatusCache: (jobId: number) => void;
+  // Narrower than invalidateStatusCache -- only fires for an actual shot write.
+  invalidateMedia: (jobId: number) => void;
   runChatAgent: ChatOrchestration['runChatAgent'];
   startImprovementRound: (input: {
     jobId: number;
@@ -63,6 +65,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia,
     runChatAgent,
     startImprovementRound,
   } = options;
@@ -170,6 +173,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       if (parsed.data.context?.screenshotPng) {
         try {
           shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
+          invalidateMedia(jobId);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
         }
@@ -179,6 +183,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
           const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
           referenceImageShotIds = stored.ids;
           referenceImages = stored.images;
+          invalidateMedia(jobId);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator reference images');
         }
@@ -287,6 +292,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       if (parsed.data.context?.referenceImages?.length) {
         try {
           await storeCreatorReferenceImages(store, started.jobId, parsed.data.context.referenceImages);
+          invalidateMedia(started.jobId);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator reference images on the new job');
         }

@@ -302,6 +302,7 @@ export interface AgentSurfaceSeams {
     | 'now'
     | 'sourceDelivery'
     | 'onEvent'
+    | 'onMediaEvent'
     | 'onBuilderHandoffAcknowledged'
     | 'onSourcesStaged'
     | 'onRegenerateSeed'
@@ -1095,6 +1096,7 @@ export async function registerSubmissionRoutes(
     backendFor,
     githubClient,
     publishedRef,
+    onPreviewPublished: (jobId: number) => buildStatus.invalidateMedia(jobId),
     ...(seedDispatch
       ? {
           handoff: (jobId: number, steer?: string) =>
@@ -1369,6 +1371,7 @@ export async function registerSubmissionRoutes(
     acknowledgeBuilderHandoff,
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
+    onGateScreenshotPosted: (jobId: number) => buildStatus.invalidateMedia(jobId),
   });
 
   /**
@@ -1649,6 +1652,7 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia: (jobId: number) => buildStatus.invalidateMedia(jobId),
     runChatAgent,
     resumeBuild,
   });
@@ -1666,6 +1670,7 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia: (jobId: number) => buildStatus.invalidateMedia(jobId),
     runChatAgent,
     startImprovementRound,
   });
@@ -1881,6 +1886,7 @@ export async function registerSubmissionRoutes(
         // minute-old stall next to fresh progress (submit auto-end + continue loop).
         invalidateStatusCache(jobId);
       },
+      onMediaEvent: (jobId) => buildStatus.invalidateMedia(jobId),
       onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
       ...(stagedPreviews ? { onSourcesStaged: ({ jobId }: { jobId: number }) => stagedPreviews.schedule(jobId) } : {}),
       onRegenerateSeed: regenerateSeed,
