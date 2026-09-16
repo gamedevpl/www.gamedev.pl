@@ -979,7 +979,7 @@ export function EditorPanel(props: {
                         pushLive(content, { collection: collectionKey, index });
                       }}
                     >
-                      {typeof entry.properties.name === 'string' && entry.properties.name
+                      {typeof entry?.properties?.name === 'string' && entry.properties.name
                         ? entry.properties.name
                         : `${name(spec.itemLabel)} ${index + 1}`}
                     </button>
@@ -1037,7 +1037,7 @@ export function EditorPanel(props: {
             <div className="editor-side-group">
               <h4>{t('studioPanel.editor.properties')}</h4>
               {Object.entries(spec.item.properties ?? {}).map(([propertyName, propertySpec]) => {
-                const value = item.properties[propertyName];
+                const value = item.properties?.[propertyName];
                 if (propertySpec.type === 'text') {
                   return (
                     <label key={propertyName} className="editor-prop">

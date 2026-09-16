@@ -69,11 +69,13 @@ export function useEditorDocument({ slug, onPush, autosaveMs = 1500 }: EditorDoc
     async (overwrite: boolean): Promise<boolean> => {
       setSaveState('saving');
       setSaveProblems([]);
+      const sent = contentRef.current;
       try {
-        const saved = await putEditorDraft(slug, contentRef.current, overwrite ? undefined : revisionRef.current);
+        const saved = await putEditorDraft(slug, sent, overwrite ? undefined : revisionRef.current);
         setRevision(saved.revision);
         revisionRef.current = saved.revision;
-        setSaveState('saved');
+        // An edit made in flight is not what the server holds.
+        setSaveState(contentRef.current === sent ? 'saved' : 'dirty');
         recordEditorStep('draft_saved');
         return true;
       } catch (error) {

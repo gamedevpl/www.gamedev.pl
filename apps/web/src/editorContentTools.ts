@@ -88,12 +88,15 @@ export function defaultLayerTileKey(layers: Record<string, EditorLayerSpec>, key
 
 // A key check alone would hand a null to the painter.
 export function isTilemapItem(item: unknown): item is EditorTilemapItemContent {
-  if (!isPlainRecord(item)) return false;
-  return Array.isArray(item.rows) && item.rows.every((row) => typeof row === 'string');
+  if (!hasProperties(item)) return false;
+  const rows = (item as { rows?: unknown }).rows;
+  return Array.isArray(rows) && rows.every((row) => typeof row === 'string');
 }
 
 export function isPathItem(item: unknown): item is EditorPathItemContent {
-  return isPlainRecord(item) && Array.isArray(item.points);
+  if (!hasProperties(item)) return false;
+  const points = (item as { points?: unknown }).points;
+  return Array.isArray(points) && points.every((point) => isPlainRecord(point));
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -187,6 +190,7 @@ export function itemProblems(
   name: (label: EditorLabel) => string,
   pathMessages?: PathProblemMessages,
 ) {
+  if (!hasProperties(item)) return ['Needs a property sheet'];
   if (spec.widget === 'layered') return layeredItemProblems(spec, item, name, pathMessages);
   if (spec.widget === 'path')
     return isPathItem(item) ? pathProblems(spec, item, pathMessages) : ['Needs a list of points'];

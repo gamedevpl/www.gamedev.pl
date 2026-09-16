@@ -138,3 +138,57 @@ describe('reset', () => {
     expect(latest!.saveState).toBe('dirty');
   });
 });
+
+describe('an edit made while a save is in flight', () => {
+  it('leaves the document dirty, so nothing treats it as persisted', async () => {
+    let finish: (value: { revision: number; updatedAt: string }) => void = () => {};
+    putEditorDraft.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mount();
+
+    act(() => latest!.setContent({ params: { name: 'first' } } as unknown as EditorContentDoc));
+    let inFlight: Promise<boolean> | null = null;
+    await act(async () => {
+      inFlight = latest!.saveNow();
+      await Promise.resolve();
+    });
+    act(() => latest!.setContent({ params: { name: 'second' } } as unknown as EditorContentDoc));
+
+    await act(async () => {
+      finish({ revision: 3, updatedAt: '2026-08-07T00:00:03.000Z' });
+      await inFlight;
+    });
+
+    expect(putEditorDraft.mock.calls[0][1]).toEqual({ params: { name: 'first' } });
+    expect(latest!.saveState).toBe('dirty');
+  });
+
+  it('still reports saved when nothing changed while it was in flight', async () => {
+    let finish: (value: { revision: number; updatedAt: string }) => void = () => {};
+    putEditorDraft.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mount();
+
+    act(() => latest!.setContent({ params: { name: 'only' } } as unknown as EditorContentDoc));
+    let inFlight: Promise<boolean> | null = null;
+    await act(async () => {
+      inFlight = latest!.saveNow();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      finish({ revision: 4, updatedAt: '2026-08-07T00:00:04.000Z' });
+      await inFlight;
+    });
+
+    expect(latest!.saveState).toBe('saved');
+  });
+});
