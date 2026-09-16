@@ -26,6 +26,11 @@ export interface GameAccessRecord {
   // epoch of its own is fenced, never guessed at.
   capabilitiesRevokedAtRevision?: number;
 
+  // When that handover happened. A round that began earlier keeps no
+
+  // epoch: its credentials were issued under the revoked authority.
+  capabilitiesRevokedAt?: string;
+
   // The job whose settled slug claim wrote this. Absent while still tentative.
   settledJobId?: number;
 

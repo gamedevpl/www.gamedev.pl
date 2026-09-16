@@ -104,4 +104,25 @@ describe('round authority across a handover', () => {
     expect(stale.accessEpoch).toBeUndefined();
     expect(roundAuthorityCurrent(stale, await resolveGameAccess(store, 'sky'))).toBe(false);
   });
+
+  it('does not let an undelivered nudge revive a round across a boomerang', async () => {
+    // The nudge keeps the token alive; stamping would revive it.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    const old = await store.allocateJobId();
+    await store.createSubmission(old, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(old, 'sky');
+    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
+    // The handovers happen after the round exists, as they do in life.
+    const after = new Date(Date.parse((await store.getSubmission(old))!.createdAt) + 1000).toISOString();
+    await handOverThroughStore(store, 'sky', 'g:ada', 'g:grace', after);
+    await handOverThroughStore(store, 'sky', 'g:grace', 'g:ada', after);
+
+    await store.ensureRoundGeneration(old);
+
+    const record = (await store.getSubmission(old))!;
+    expect(record.accessEpoch).toBeUndefined();
+    expect(roundAuthorityCurrent(record, await resolveGameAccess(store, 'sky'))).toBe(false);
+  });
 });

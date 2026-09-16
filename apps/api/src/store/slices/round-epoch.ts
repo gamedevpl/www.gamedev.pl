@@ -5,11 +5,15 @@ import type { SubmissionRecord } from '../records/submission.js';
 
 // The epoch a starting round takes, or undefined to leave it.
 
-// Only the current owner's own round may take the current revision.
+// Owner identity cannot decide this: A -> B -> A restores the uid, and
 
-// A previous owner's round picking one up would revive its keys.
+// an undelivered nudge reaches an old round without reminting its keys.
+
+// Only a round begun after the last handover may take it.
 export function epochForRound(record: SubmissionRecord, access: GameAccessRecord | null): number | undefined {
   if (!access || record.accessEpoch !== undefined) return undefined;
+  const revokedAt = access.capabilitiesRevokedAt;
+  if (revokedAt !== undefined && record.createdAt <= revokedAt) return undefined;
   if (record.ownerUid !== access.ownerUid) return undefined;
   return access.accessRevision;
 }

@@ -99,6 +99,7 @@ function transferredAccess(access: GameAccessRecord, newOwnerUid: string, at: st
     accessRevision,
     // Marks the game: an epoch-less round is refused.
     capabilitiesRevokedAtRevision: accessRevision,
+    capabilitiesRevokedAt: at,
     updatedAt: at,
   };
 }
