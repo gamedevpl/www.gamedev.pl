@@ -162,17 +162,17 @@ describe('handovers whose invitation row was overwritten', () => {
     expect(await backfillTransferMarkers(db)).toBe(0);
   });
 
-  it('scans the submissions once, not on every rescan', async () => {
+  it('catches a handover a rolled-back revision accepted after a pass', async () => {
     const { db } = fakeFirestore();
     let clock = Date.parse('2026-03-01T12:00:00.000Z');
     const now = () => clock;
     await backfillTransferMarkers(db, now);
 
+    // An old revision accepted without stamping, then hid the row.
     clock += TRANSFER_MARKER_RESCAN_INTERVAL_MS + 1;
     await seedOverwrittenHistory(db);
     await seedRound(db, 1, 'g:grace');
 
-    // The deep pass is spent; only a fresh accept is seen.
-    expect(await backfillTransferMarkers(db, now)).toBe(0);
+    expect(await backfillTransferMarkers(db, now)).toBe(1);
   });
 });
