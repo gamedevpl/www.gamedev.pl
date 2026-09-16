@@ -304,7 +304,7 @@ describe('GO-03 share flow over HTTP', () => {
     expect(await store.beginCheckoutRecovery(SLUG, 'c-lease', Date.now())).toBe(true);
   });
 
-  it('removing B mid-work revokes B and leaves C able to continue', async () => {
+  it('removing B mid-work revokes B and leaves the round for remaining members', async () => {
     const store = new InMemoryStore();
     await ownedGame(store);
     const app = await createApp(store);
@@ -330,7 +330,7 @@ describe('GO-03 share flow over HTTP', () => {
     expect(removed.statusCode).toBe(200);
 
     const bRound = await store.getSubmission(bJob);
-    expect(bRound?.state).toBe('canceled');
+    expect(bRound?.state).toBe('building');
     expect(bRound?.roundGeneration ?? 0).toBeGreaterThan(generationBefore);
 
     const feedback = await app.inject({
@@ -349,7 +349,9 @@ describe('GO-03 share flow over HTTP', () => {
     });
     expect(cMembers.statusCode).toBe(200);
     expect(cMembers.json().viewerRole).toBe('editor');
-    expect(await store.beginCheckoutRecovery(SLUG, 'c-after-b', Date.now())).toBe(true);
+    const cJob = await store.allocateJobId();
+    await store.createSubmission(cJob, C, 'Comet Courier');
+    expect(await store.claimSubmissionSlug(cJob, SLUG, bJob)).toBe(false);
   });
 
   it('C can leave, D never joins, and deleting B does not destroy the game', async () => {

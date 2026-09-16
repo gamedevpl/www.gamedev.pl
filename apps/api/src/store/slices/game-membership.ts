@@ -31,7 +31,7 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
     private getGameAccess: (slug: string) => GameAccessRecord | null,
     private writeGameAccess: (slug: string, record: GameAccessRecord) => void,
     private cancelInvite: (slug: string, recipientUid: string, at: string) => void,
-    private revokeActorRounds: (slug: string, uid: string) => void,
+    private revokeActorRounds: (slug: string, uid: string, cancelActive: boolean) => void,
     private writeAudit: (
       slug: string,
       action: 'editor_removed' | 'editor_left',
@@ -48,7 +48,7 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
     if (!next) return 'not_editor';
     this.writeGameAccess(slug, next);
     this.cancelInvite(slug, editorUid, at);
-    this.revokeActorRounds(slug, editorUid);
+    this.revokeActorRounds(slug, editorUid, false);
     this.writeAudit(slug, 'editor_removed', ownerUid, editorUid, at);
     return next;
   }
@@ -60,7 +60,7 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
     if (!next) return 'not_editor';
     this.writeGameAccess(slug, next);
     this.cancelInvite(slug, editorUid, at);
-    this.revokeActorRounds(slug, editorUid);
+    this.revokeActorRounds(slug, editorUid, true);
     this.writeAudit(slug, 'editor_left', editorUid, editorUid, at);
     return next;
   }
@@ -102,10 +102,12 @@ export class FirestoreGameMembershipStore implements GameMembershipStore {
       const actor = expectedOwnerUid ?? editorUid;
       tx.set(this.db.collection('gameMembershipAudit').doc(), newMembershipAudit(slug, action, actor, editorUid, at));
       let releasedLease = false;
+      // Owner-remove keeps the live round; leave cancels it.
+      const cancelActive = action === 'editor_left';
       for (const doc of newestOwnedRounds(activeSnap.docs, editorUid)) {
         const current = doc.data() as { roundGeneration?: number; state?: JobState; transitions?: JobTransition[] };
         const patch: Record<string, unknown> = { roundGeneration: revokedRoundGeneration(current.roundGeneration) };
-        if (isActiveBuildRound(current)) {
+        if (cancelActive && isActiveBuildRound(current)) {
           patch.state = 'canceled';
           releasedLease = true;
         }

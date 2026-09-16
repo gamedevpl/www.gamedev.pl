@@ -167,7 +167,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
         this.gameEditorInviteStore.invites.set(key, { ...existing, status: 'cancelled', respondedAt: at });
       }
     },
-    (slug, uid) => this.revokeMemberActor(slug, uid),
+    (slug, uid, cancelActive) => this.revokeMemberActor(slug, uid, cancelActive),
     (slug, action, actorUid, subjectUid, at) => {
       this.gameEditorInviteStore.audits.push(newMembershipAudit(slug, action, actorUid, subjectUid, at));
     },
@@ -203,7 +203,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private oauthStore = new InMemoryOAuthStore();
   private cliChatStore = new InMemoryCliChatStore();
 
-  private revokeMemberActor(slug: string, uid: string): void {
+  private revokeMemberActor(slug: string, uid: string, cancelActive: boolean): void {
     let released = false;
     const onSlug = [...this.submissions.values()]
       .filter((record) => record.slug === slug && record.ownerUid === uid)
@@ -211,7 +211,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       .slice(0, MAX_REVOKED_ROUNDS_PER_MEMBER);
     for (const record of onSlug) {
       const next = { ...record, roundGeneration: revokedRoundGeneration(record.roundGeneration) };
-      if (isActiveBuildRound(record)) {
+      // Owner-remove keeps the live round; leave cancels it.
+      if (cancelActive && isActiveBuildRound(record)) {
         next.state = 'canceled';
         released = true;
       }
