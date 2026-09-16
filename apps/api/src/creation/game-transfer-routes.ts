@@ -22,7 +22,7 @@ export interface GameTransferRoutesOptions {
 
 export interface TransferSummary {
   slug: string;
-  // Names the offer a response must answer, not the slug it is about.
+  // Names the offer a response must answer.
   invitationId: string;
   status: GameTransferInvitation['status'];
   you: 'sender' | 'recipient';
@@ -33,7 +33,7 @@ export interface TransferSummary {
 
 const TransferBody = z.object({ recipientCode: z.string().min(1).max(64) });
 
-// A response says which offer it answers; the slug alone outlives any one.
+// A response says which offer it answers.
 const RespondBody = z.object({ invitationId: z.string().min(1).max(128) });
 
 const SlugParams = z.object({ slug: z.string().max(61).refine(isCanonicalSlug) });

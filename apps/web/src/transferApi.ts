@@ -6,7 +6,7 @@ export type TransferStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' |
 
 export interface TransferSummary {
   slug: string;
-  // Names the offer a response must answer, not the slug it is about.
+  // Names the offer a response must answer.
   invitationId: string;
   status: TransferStatus;
   // Which side the viewer is on.

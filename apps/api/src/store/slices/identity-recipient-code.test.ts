@@ -79,7 +79,7 @@ describe('recipient code store slice', () => {
   });
 
   it('lets an account that signed up again be handed a game', async () => {
-    // Erasure deletes the user record, so this uid is a new account now.
+    // Erasure deletes the record; this uid is new now.
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:ada' });
     await store.ensureRecipientCode('g:ada', '2026-01-01T00:00:00.000Z');

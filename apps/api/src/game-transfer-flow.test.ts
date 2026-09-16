@@ -206,7 +206,7 @@ describe('after a transfer, the sender keeps nothing', () => {
 
     const after = await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers });
     expect(after.statusCode).toBe(401);
-    // The cap really did leave this round alone: authority is what refused it.
+    // The cap left this round alone; authority refused it.
     expect((await store.getSubmission(jobId))?.roundGeneration).toBe(generation);
   });
 

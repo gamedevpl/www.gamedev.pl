@@ -884,7 +884,7 @@ describe('FirestoreStore.ensureRecipientCode', () => {
   });
 
   it('lets an account that signed up again be handed a game', async () => {
-    // Erasure deletes the user record, so this uid is a new account now.
+    // Erasure deletes the record; this uid is new now.
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);
     await store.upsertUser({ uid: 'g:ada' });

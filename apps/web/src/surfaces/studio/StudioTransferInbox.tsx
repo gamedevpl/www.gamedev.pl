@@ -49,7 +49,7 @@ export function StudioTransferInbox({
     void load();
   }, [load]);
 
-  // Takes the invitation, not the slug: the answer has to name the offer.
+  // Takes the invitation: an answer must name the offer.
   async function respond(invite: TransferSummary, decision: 'accept' | 'reject'): Promise<void> {
     const slug = invite.slug;
     setBusySlug(slug);

@@ -722,7 +722,7 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
-    // Fences a round whose game changed hands, however many rounds it has.
+    // Fences a round whose game changed hands.
     if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug))) {
       reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       return null;
@@ -792,7 +792,7 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
-    // Same fence as the header path: an upload URL is a round capability too.
+    // An upload URL is a round capability too.
     if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug))) {
       reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       return null;

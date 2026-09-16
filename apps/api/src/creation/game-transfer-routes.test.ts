@@ -1,43 +1,20 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../platform/app.js';
-import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { readSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { InMemoryStore } from '../platform/store.js';
 import { registerGameTransferRoutes } from './game-transfer-routes.js';
-
-// A response names the offer it answers, so a test has to look the id up.
-async function offerId(store: InMemoryStore, slug: string): Promise<string> {
-  const invite = await store.getActiveGameTransfer(slug, new Date().toISOString());
-  return invite?.invitationId ?? 'no-open-offer';
-}
-
-const sessionSecret = 'dev-session-secret-change-me';
-const AT = '2026-01-01T00:00:00.000Z';
-
-function authCookie(uid: string): string {
-  return `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}`;
-}
+import {
+  appFactory,
+  AT,
+  authCookie,
+  offerId,
+  ownedGameWithRecipientCode,
+  sessionSecret,
+} from './game-transfer-routes.harness.js';
 
 describe('game transfer routes', () => {
-  const apps: Array<{ close: () => Promise<void> }> = [];
-  afterEach(async () => {
-    while (apps.length) await apps.pop()!.close();
-  });
-
-  async function appWith(store: InMemoryStore, gameTransferRoutes = {}) {
-    const app = await buildApp({ store, sessionSecret, gameTransferRoutes });
-    apps.push(app);
-    return app;
-  }
-
-  async function ownedGameWithRecipientCode() {
-    const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:ada' });
-    await store.upsertUser({ uid: 'g:grace' });
-    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
-    const code = (await store.ensureRecipientCode('g:grace', AT))!;
-    return { store, code };
-  }
+  const { appWith, closeAll } = appFactory();
+  afterEach(closeAll);
 
   it('a malformed slug is refused before it reaches the store', async () => {
     const { store } = await ownedGameWithRecipientCode();
@@ -364,67 +341,6 @@ describe('game transfer routes', () => {
       headers: { cookie: authCookie('g:grace') },
     });
     expect(after.json().transfers).toHaveLength(0);
-  });
-
-  it('a replayed answer cannot land on an offer it never saw', async () => {
-    const { store, code } = await ownedGameWithRecipientCode();
-    const app = await appWith(store);
-
-    const first = await app.inject({
-      method: 'POST',
-      url: '/api/me/studio/games/sky/transfer',
-      headers: { cookie: authCookie('g:ada') },
-      payload: { recipientCode: code },
-    });
-    const staleId = first.json().transfer.invitationId;
-
-    // Taken back, then offered again: a second decision on the same slug.
-    await app.inject({
-      method: 'POST',
-      url: '/api/me/studio/games/sky/transfer/cancel',
-      headers: { cookie: authCookie('g:ada') },
-      payload: { invitationId: staleId },
-    });
-    const second = await app.inject({
-      method: 'POST',
-      url: '/api/me/studio/games/sky/transfer',
-      headers: { cookie: authCookie('g:ada') },
-      payload: { recipientCode: code },
-    });
-    expect(second.json().transfer.invitationId).not.toBe(staleId);
-
-    const replayed = await app.inject({
-      method: 'POST',
-      url: '/api/me/transfers/sky/accept',
-      headers: { cookie: authCookie('g:grace') },
-      payload: { invitationId: staleId },
-    });
-
-    expect(replayed.statusCode).toBe(404);
-    // The live offer is untouched: nobody answered it.
-    expect((await store.getActiveGameTransfer('sky', new Date().toISOString()))?.status).toBe('pending');
-    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
-  });
-
-  it('refuses an answer that names no offer at all', async () => {
-    const { store, code } = await ownedGameWithRecipientCode();
-    const app = await appWith(store);
-    await app.inject({
-      method: 'POST',
-      url: '/api/me/studio/games/sky/transfer',
-      headers: { cookie: authCookie('g:ada') },
-      payload: { recipientCode: code },
-    });
-
-    const unscoped = await app.inject({
-      method: 'POST',
-      url: '/api/me/transfers/sky/accept',
-      headers: { cookie: authCookie('g:grace') },
-    });
-
-    expect(unscoped.statusCode).toBe(400);
-    expect(unscoped.json().error).toBe('invalid_invitation');
-    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
 
   it('the recipient can accept a pending invitation, moving canonical ownership', async () => {

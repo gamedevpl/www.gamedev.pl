@@ -32,7 +32,7 @@ export interface GameTransferStore {
     invitationId?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null>;
 
-  // Null when nothing pending, the caller did not send it, or the id differs.
+  // Null when not pending, not the sender, or another offer.
   cancelGameTransferInvitation(
     slug: string,
     senderUid: string,
@@ -40,7 +40,7 @@ export interface GameTransferStore {
     invitationId?: string,
   ): Promise<GameTransferInvitation | null>;
 
-  // Null when nothing pending, the caller is not its recipient, or the id differs.
+  // Null when not pending, not the recipient, or another offer.
   rejectGameTransferInvitation(
     slug: string,
     recipientUid: string,
@@ -54,13 +54,9 @@ export interface GameTransferStore {
 
 const clone = (invite: GameTransferInvitation): GameTransferInvitation => ({ ...invite });
 
-/**
- * Whether a response is answering the invitation it names.
- *
- * An id-less caller is admitted only against an id-less row, which is a
- * pre-migration invitation; those expire within the invitation TTL, after
- * which every row carries one and every response must name it.
- */
+// Whether a response is answering the invitation it names.
+
+// An id-less caller matches only a pre-migration row.
 function answersInvitation(invite: GameTransferInvitation, invitationId: string | undefined): boolean {
   if (invitationId === undefined) return invite.invitationId === undefined;
   return invite.invitationId === invitationId;

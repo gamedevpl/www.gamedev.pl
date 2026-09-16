@@ -3,7 +3,7 @@ import { InMemoryStore } from '../../platform/store.js';
 import { MAX_REVOKED_ROUNDS_PER_TRANSFER } from './game-transfer.js';
 import { revokedRoundGeneration } from '../../creation/job-state.js';
 
-// A response names the offer it answers, so a test has to look the id up.
+// A response names the offer, so tests look it up.
 async function offerId(store: InMemoryStore, slug: string, at: string): Promise<string> {
   const invite = await store.getActiveGameTransfer(slug, at);
   return invite?.invitationId ?? 'no-open-offer';

@@ -7,14 +7,9 @@ export type GameTransferStatus = 'pending' | 'accepted' | 'cancelled' | 'rejecte
 export interface GameTransferInvitation {
   slug: string;
 
-  /**
-   * Identifies this invitation, not the slug it is about.
-   *
-   * A slug outlives any one offer: cancel or reject, invite again, and the
-   * same slug names a different decision. Responses carry the id they are
-   * answering, so a replayed accept lands on the offer its sender saw or on
-   * nothing at all -- never on whatever is pending now.
-   */
+  // Identifies this invitation, not the slug it is about.
+
+  // A slug outlives any one offer; a response names one.
   invitationId: string;
   senderUid: string;
   recipientUid: string;

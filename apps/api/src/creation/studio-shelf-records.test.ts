@@ -91,7 +91,7 @@ describe('loadShelfRecords after a transfer', () => {
   }
 
   it('does not let a deep link put a given-away game back on the sender shelf', async () => {
-    // The row's ownerUid is its historical author, which a transfer never rewrites.
+    // ownerUid is the historical author; a transfer never rewrites it.
     const store = await handedOver();
 
     const plain = await loadShelfRecords(store, 'g:sender', undefined, (id) => mintToken(id, 'secret'));

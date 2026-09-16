@@ -4,14 +4,9 @@ import { stripUndefined } from '../firestore-util.js';
 import { fencedOut } from '../records/game-access.js';
 import type { User } from '../records/identity.js';
 
-/**
- * Whether the erasure fence covers the account asking.
- *
- * The fence belongs to an incarnation, not to a uid. Erasure deletes the user
- * record, so a uid that signs in again is a new account with a later
- * `createdAt`; refusing it forever would leave a real creator permanently
- * unable to be handed a game. Same rule the access writers use.
- */
+// The fence belongs to an incarnation, not to a uid.
+
+// Erasure deletes the record, so a later one is new.
 function erasedIncarnation(user: User, erasedAt: string | null): boolean {
   return fencedOut(erasedAt, user.createdAt);
 }

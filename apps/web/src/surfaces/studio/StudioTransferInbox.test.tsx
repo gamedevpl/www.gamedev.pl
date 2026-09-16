@@ -116,7 +116,7 @@ describe('StudioTransferInbox', () => {
   });
 
   it('answers the offer by id, not by slug', async () => {
-    // The slug outlives any one offer; a bare slug answers whichever is live.
+    // A bare slug answers whichever offer is live.
     const fetchMock = routed([OFFER]);
     vi.stubGlobal('fetch', fetchMock);
     const { host, root } = await mount();
