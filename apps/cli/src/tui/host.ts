@@ -18,7 +18,7 @@ import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
 import { agentHint, discoverAgents } from '../agents.js';
 import { createCliTelemetry } from '../telemetry.js';
 import { reportInstall } from '../main.js';
-import { openUrl } from '../open-url.js';
+import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
 
 export async function runInkRepl(input: {
@@ -101,9 +101,10 @@ export async function runInkRepl(input: {
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
+  const browser = sessionBrowserHost(session);
   const openPreview = (url: string): void => {
     telemetry.record('play_requested');
-    void openUrl(url).then((opened) => {
+    void browser.open(url).then((opened) => {
       if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
     });
   };
@@ -155,6 +156,7 @@ export async function runInkRepl(input: {
       onActivity: session.setActivity,
       onLocalTask: session.setLocalTask,
       onSteering: session.setSteering,
+      onLocalPreview: browser.registerPreview,
       interactiveRun,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
@@ -221,6 +223,8 @@ export async function runInkRepl(input: {
           telemetry,
           pendingExecution,
           interactiveRun,
+          openPreview: browser.open,
+          onLocalPreview: browser.registerPreview,
           onWorkshop: (opened) => {
             bindHistory(opened.slug);
             if (workshop?.slug !== opened.slug || workshop?.root !== opened.root) session.clearPreview();
@@ -228,6 +232,7 @@ export async function runInkRepl(input: {
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
             opened.onSteering = session.setSteering;
+            opened.onLocalPreview = browser.registerPreview;
             opened.interactiveRun = interactiveRun;
             opened.activityApi = input.api;
             if (token !== opened.token) {
@@ -260,6 +265,7 @@ export async function runInkRepl(input: {
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
         workshop.onSteering = session.setSteering;
+        workshop.onLocalPreview = browser.registerPreview;
         workshop.interactiveRun = interactiveRun;
         workshop.activityApi = input.api;
       }
@@ -279,6 +285,7 @@ export async function runInkRepl(input: {
     stopUpdateNotice();
     watch.stop();
     session.close();
+    await browser.close();
     host.instance?.unmount();
     await telemetry.flush();
   }

@@ -1,4 +1,4 @@
-import { localPreviewTools, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
+import { localPreviewTools, startWorkshopPreview, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
 import { defaultAdapterRun } from './workshop-runner.js';
@@ -12,7 +12,6 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
-import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
@@ -55,6 +54,7 @@ export type Workshop = {
   interactiveRun?: InteractiveRun;
   onLocalTask?: (agent: string) => void;
   onSteering?: (send: Steer | undefined) => void;
+  onLocalPreview?: (url: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -274,16 +274,15 @@ export async function runLocalBuild(input: {
     let previewUrl: string | undefined;
     if (!ws.runAdapter && !ws.unattended) {
       try {
-        const preview = await startLocalPlay({
+        previewUrl = await startWorkshopPreview({
           root: ws.root,
           slug: ws.slug,
           env: ws.env,
           write: input.write,
-          prepared: true,
           abort: controller.signal,
+          agent: spec.name,
+          onLocalPreview: ws.onLocalPreview,
         });
-        previewUrl = preview?.url;
-        if (preview) input.write(`live preview while ${spec.name} edits: ${preview.url}`);
       } catch (error) {
         input.write(formatError(error));
       }

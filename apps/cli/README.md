@@ -422,3 +422,11 @@ origins/hosts, limits requests and retained captures, and shuts down with the ta
 The agent's shell permissions are unchanged. Credentials/configuration are temporary;
 the normal remote gamedev.pl MCP connector is not changed. Ctrl+C cancels local capture.
 Existing previews from older CLI versions may need `/play --stop` followed by `/play`.
+
+### Editing beside a local preview
+
+In an interactive CLI session, `/play` opens the game with an **Edit game** overlay.
+You can send prompts, queue follow-ups, answer choices, read recent output and request
+Stop from the browser. Keep the terminal open; native agent permission handoffs still
+use it. Updates are applied manually and restart the game. Standalone `gamedevpl play`
+keeps its preview-only behavior. The panel is local to this computer.
