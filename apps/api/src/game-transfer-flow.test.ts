@@ -11,6 +11,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { GamesStore } from './delivery/games-store.js';
 import { currentOwnerUid } from './platform/game-access-resolve.js';
 import { InMemoryStore } from './platform/store.js';
+import type { ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
 
 // The transfer walked end to end, from both sides, and back again.
 
@@ -54,7 +55,7 @@ function stubBackend(): AgentBackend {
   };
 }
 
-async function createApp(store: InMemoryStore) {
+async function createApp(store: InMemoryStore, managedAvailabilityGate?: ManagedAvailabilityGate) {
   const app = await buildApp({
     store,
     sessionSecret: SESSION_SECRET,
@@ -64,6 +65,7 @@ async function createApp(store: InMemoryStore) {
       submissionTokenSecret: SECRET,
       agentBackend: stubBackend(),
       agentChannel: {} as { gamesStore?: GamesStore },
+      ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
     },
   });
   apps.push(app);
@@ -376,6 +378,34 @@ describe('after a transfer, preferences and counters follow the owner', () => {
       blocked: () => false,
     });
     expect(posted).toMatchObject({ posted: null, refusedBy: 'muted' });
+  });
+
+  it('reads the platform quota against the new owner, not the sender', async () => {
+    // Studio renders an unavailable answer as an inert switch control.
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    const asked: string[] = [];
+    const gate: ManagedAvailabilityGate = {
+      peek: async (uid) => {
+        asked.push(uid);
+        return { available: true };
+      },
+      checkAndSpend: async () => ({ available: true }),
+      resolveVendor: async () => undefined,
+    };
+    const app = await createApp(store, gate);
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    asked.length = 0;
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, SECRET)}`,
+      headers: session(RECIPIENT),
+    });
+    expect(status.statusCode).toBe(200);
+
+    expect(asked).toContain(RECIPIENT);
+    expect(asked).not.toContain(SENDER);
   });
 
   it('stops counting the sender’s round as their own work in flight', async () => {
