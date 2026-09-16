@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTuiSession, formatSessionIdentity } from './session.js';
 
 describe('tui session', () => {
@@ -133,4 +133,42 @@ describe('tui session', () => {
     session.moveDraftCursor(20);
     expect(session.get().draftCursor).toBe(3);
   });
+});
+
+it('queues a follow-up while working and does not use it to answer a choice', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  session.insertDraft('keep the camera');
+  session.queueDraft();
+  expect(session.get().queued).toEqual(['keep the camera']);
+  const choice = session.prompt(['Deliver', 'Keep editing']);
+  session.movePick(1);
+  session.submit();
+  expect(await choice).toBe('Keep editing');
+  expect(await session.prompt()).toBe('keep the camera');
+  expect(session.get().queued).toEqual([]);
+  session.close();
+});
+
+it('preserves an unfinished follow-up through a choice and clears queued work on stop', async () => {
+  const stop = vi.fn();
+  const session = createTuiSession('', stop);
+  session.setLocalTask('codex');
+  session.insertDraft('first');
+  session.queueDraft();
+  session.insertDraft('unfinished');
+  const choice = session.prompt(['Keep editing']);
+  session.submit();
+  await choice;
+  expect(await session.prompt()).toBe('first');
+  const prompt = session.prompt();
+  expect(session.get().draft).toBe('unfinished');
+  session.submit();
+  await prompt;
+  session.insertDraft('do not run');
+  session.queueDraft();
+  session.cancel();
+  expect(session.get().queued).toEqual([]);
+  expect(stop).toHaveBeenCalledOnce();
+  session.close();
 });

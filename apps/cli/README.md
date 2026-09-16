@@ -22,6 +22,21 @@ Releases tagged `cli-v*` (one `gamedevpl` asset). `gamedevpl update` uses the sa
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
 
+Interactive sessions save the last 200 output lines and 50 prompts locally under
+`~/.config/gamedevpl/history/`, with owner-only file permissions. History is separated
+by signed-in account, server, and game (or launch directory before selecting a game).
+Restarting restores the transcript and ↑/↓ prompt history without executing old commands
+or reconnecting old preview URLs. The platform conversation ID is also retained; this
+does not resume a delegated agent's own session. If the account cannot be verified,
+history stays in memory for that run. Set `GAMEDEV_HISTORY=off` to disable disk history;
+remove the history directory to erase saved conversations. Avoid putting secrets in prompts.
+
+While a local delegated agent works, type a follow-up and press Enter to queue it.
+Queued requests run after the current task and its confirmation prompts finish; they
+do not steer the running agent or resume its internal conversation. Ctrl+O opens the
+preview while typing. Ctrl+C stops the task and clears its queue. Unsent text survives
+intermediate choice prompts. Pending requests are kept only for the current CLI run.
+
 Until a release exists, from the repo root after a pull:
 
 ```bash
