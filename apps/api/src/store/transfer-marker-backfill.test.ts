@@ -89,3 +89,90 @@ describe('backfillTransferMarkers', () => {
     expect(roundAuthorityCurrent(round, access)).toBe(false);
   });
 });
+
+// A later offer replaced the accepted row on the same document.
+async function seedOverwrittenHistory(db: ReturnType<typeof fakeFirestore>['db'], ownerUid = 'g:ada') {
+  await db
+    .collection('gameAccess')
+    .doc('sky-dodge')
+    .set({
+      slug: 'sky-dodge',
+      ownerUid,
+      editorUids: [],
+      memberUids: [ownerUid],
+      accessRevision: 3,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-02-01T00:00:00.000Z',
+    });
+  await db.collection('gameTransfers').doc('sky-dodge').set({
+    slug: 'sky-dodge',
+    senderUid: ownerUid,
+    recipientUid: 'g:pixel',
+    status: 'cancelled',
+    accessRevision: 3,
+    createdAt: '2026-03-01T00:00:00.000Z',
+    expiresAt: '2026-03-08T00:00:00.000Z',
+    respondedAt: '2026-03-02T00:00:00.000Z',
+  });
+}
+
+async function seedRound(db: ReturnType<typeof fakeFirestore>['db'], jobId: number, ownerUid: string) {
+  await db
+    .collection('submissions')
+    .doc(String(jobId))
+    .set({
+      jobId,
+      ownerUid,
+      slug: 'sky-dodge',
+      title: `round ${jobId}`,
+      createdAt: '2026-01-05T00:00:00.000Z',
+      lastStatus: 'published',
+    });
+}
+
+describe('handovers whose invitation row was overwritten', () => {
+  it('marks a game whose rounds name an author who is not the owner', async () => {
+    const { db } = fakeFirestore();
+    await seedOverwrittenHistory(db);
+    await seedRound(db, 1, 'g:grace');
+    await seedRound(db, 2, 'g:ada');
+
+    expect(await backfillTransferMarkers(db)).toBe(1);
+
+    const access = (await db.collection('gameAccess').doc('sky-dodge').get()).data();
+    expect(access?.capabilitiesRevokedAtRevision).toBe(3);
+    expect(access?.capabilitiesRevokedAt).toBe('2026-02-01T00:00:00.000Z');
+  });
+
+  it('leaves a game whose rounds are all the owner alone', async () => {
+    const { db } = fakeFirestore();
+    await seedOverwrittenHistory(db);
+    await seedRound(db, 1, 'g:ada');
+
+    expect(await backfillTransferMarkers(db)).toBe(0);
+    expect((await db.collection('gameAccess').doc('sky-dodge').get()).data()?.capabilitiesRevokedAt).toBeUndefined();
+  });
+
+  it('leaves a platform-owned lane alone, where authors differ without a handover', async () => {
+    const { db } = fakeFirestore();
+    await seedOverwrittenHistory(db, 'bot:repo-lane');
+    await seedRound(db, 1, 'bot:other-lane');
+    await seedRound(db, 2, 'g:ada');
+
+    expect(await backfillTransferMarkers(db)).toBe(0);
+  });
+
+  it('scans the submissions once, not on every rescan', async () => {
+    const { db } = fakeFirestore();
+    let clock = Date.parse('2026-03-01T12:00:00.000Z');
+    const now = () => clock;
+    await backfillTransferMarkers(db, now);
+
+    clock += TRANSFER_MARKER_RESCAN_INTERVAL_MS + 1;
+    await seedOverwrittenHistory(db);
+    await seedRound(db, 1, 'g:grace');
+
+    // The deep pass is spent; only a fresh accept is seen.
+    expect(await backfillTransferMarkers(db, now)).toBe(0);
+  });
+});
