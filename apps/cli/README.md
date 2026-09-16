@@ -32,11 +32,22 @@ fresh when their IDs expire. This does not resume a delegated agent's own sessio
 history stays in memory for that run. Set `GAMEDEV_HISTORY=off` to disable disk history;
 remove the history directory to erase saved conversations. Avoid putting secrets in prompts.
 
-While a local delegated agent works, type a follow-up and press Enter to queue it.
-Queued requests run after the current task and its confirmation prompts finish; they
-do not steer the running agent or resume its internal conversation. Ctrl+O opens the
-preview while typing. Ctrl+C stops the task and clears its queue. Unsent text survives
-intermediate choice prompts. Pending requests are kept only for the current CLI run.
+While a local Codex or Muse task works, Enter sends your message into its active
+turn. The UI confirms acceptance only after the agent acknowledges it; this does not
+mean the requested change is already implemented. Ctrl+Q instead queues a separate
+request for after the task and its confirmation prompts finish.
+
+Claude, Copilot, Agy, Vibe, and other adapters currently support queued follow-ups
+only; their input says “Follow-up after this task” and Enter queues the request.
+Codex uses its app-server protocol and Muse uses MSP (`serve`); update the agent if
+its installed version does not support that protocol. A failed live run is never
+silently retried as a new task.
+
+Ctrl+O opens the preview while typing. Ctrl+C stops the task and clears its queue.
+Unsent text survives intermediate choice prompts. Pending requests are kept only
+for the current CLI run. Rejected messages stay in the editor. If delivery times
+out or the connection closes, acceptance may be unknown: check the transcript
+before resending. Queued requests do not resume the agent's internal conversation.
 
 Until a release exists, from the repo root after a pull:
 

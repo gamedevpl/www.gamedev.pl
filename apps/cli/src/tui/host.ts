@@ -154,6 +154,7 @@ export async function runInkRepl(input: {
       telemetry,
       onActivity: session.setActivity,
       onLocalTask: session.setLocalTask,
+      onSteering: session.setSteering,
       interactiveRun,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
@@ -226,6 +227,7 @@ export async function runInkRepl(input: {
             workshop = opened;
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
+            opened.onSteering = session.setSteering;
             opened.interactiveRun = interactiveRun;
             opened.activityApi = input.api;
             if (token !== opened.token) {
@@ -257,6 +259,7 @@ export async function runInkRepl(input: {
         workshop = result.workshop;
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
+        workshop.onSteering = session.setSteering;
         workshop.interactiveRun = interactiveRun;
         workshop.activityApi = input.api;
       }

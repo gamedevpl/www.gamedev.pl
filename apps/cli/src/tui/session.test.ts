@@ -191,3 +191,67 @@ it('keeps queued work and unfinished drafts out of a model ID question', async (
   session.close();
   await next;
 });
+
+it('requires agent acknowledgement, prevents duplicate sends, and preserves edits typed while sending', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  let ack!: () => void;
+  const send = vi.fn(
+    () =>
+      new Promise<void>((r) => {
+        ack = r;
+      }),
+  );
+  session.setSteering(send);
+  session.setDraft('correction');
+  const pending = session.sendDraft();
+  await session.sendDraft();
+  session.queueDraft();
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(session.get().queued).toEqual([]);
+  expect(session.get().draft).toBe('correction');
+  session.setDraft('another idea');
+  ack();
+  await pending;
+  expect(session.get().draft).toBe('another idea');
+  expect(session.get().sendStatus).toContain('Accepted');
+  expect(session.savedHistory().prompts).toContain('correction');
+});
+it('keeps refused messages and separates sending now from queued work', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  session.setSteering(async () => {
+    throw new Error('Turn ended');
+  });
+  session.setDraft('correction');
+  await session.sendDraft();
+  expect(session.get().draft).toBe('correction');
+  expect(session.get().sendStatus).toContain('Turn ended');
+  expect(session.savedHistory().prompts).toEqual([]);
+  session.queueDraft();
+  expect(session.get().queued).toEqual(['correction']);
+  session.setSteering(undefined);
+  expect(session.get().canSteer).toBe(false);
+});
+it('does not repeat an acknowledged message after the task ends during delivery', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('codex');
+  let ack!: () => void;
+  session.setSteering(
+    () =>
+      new Promise<void>((r) => {
+        ack = r;
+      }),
+  );
+  session.setDraft('correction');
+  const sending = session.sendDraft();
+  session.setSteering(undefined);
+  session.setLocalTask('');
+  const next = session.prompt();
+  ack();
+  await sending;
+  expect(session.get().draft).toBe('');
+  expect(session.get().queued).toEqual([]);
+  session.close();
+  await next;
+});

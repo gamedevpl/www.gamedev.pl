@@ -317,3 +317,33 @@ it('shows local ownership instead of a stale remote no-agent status', async () =
   await wait();
   expect(view.frame()).toContain('Studio: queued');
 });
+
+it.each([40, 110])('distinguishes live send and explicit queue at width %s', async (width) => {
+  const view = screen(width, 16);
+  let acknowledge!: () => void;
+  const send = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  view.session.setLocalTask('muse');
+  view.session.setSteering(send);
+  await wait();
+  view.input.write('change the ramps');
+  await wait();
+  view.input.write('\r');
+  await wait();
+  expect(send).toHaveBeenCalledWith('change the ramps');
+  expect(view.frame()).toContain('Message the active agent');
+  expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(16);
+  expect(view.session.get().queued).toEqual([]);
+  acknowledge();
+  await wait();
+  view.input.write('later task');
+  await wait();
+  view.input.write('\u0011');
+  await wait();
+  expect(view.session.get().queued).toEqual(['later task']);
+  expect(send).toHaveBeenCalledOnce();
+});
