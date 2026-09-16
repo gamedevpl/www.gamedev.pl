@@ -17,6 +17,7 @@ const RESPOND_REFUSALS: Record<string, string> = {
   recipient_ineligible: 'studioShelf.transfer.errors.ineligible',
   stale_owner: 'studioShelf.transfer.errors.staleOwner',
   not_found: 'studioShelf.transfer.errors.gone',
+  stale_client: 'studioShelf.transfer.errors.staleClient',
 };
 
 export function StudioTransferInbox({

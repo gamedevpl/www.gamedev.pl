@@ -70,7 +70,8 @@ describe('a transfer response names the offer it answers', () => {
       payload: {},
     });
 
-    expect(unscoped.statusCode).toBe(404);
+    expect(unscoped.statusCode).toBe(409);
+    expect(unscoped.json().error).toBe('stale_client');
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
 
@@ -95,5 +96,29 @@ describe('a transfer response names the offer it answers', () => {
 
     expect(accepted.statusCode).toBe(200);
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:grace');
+  });
+
+  it('tells a client left behind by a deploy to refresh, not that the offer is gone', async () => {
+    // A cached shell can create an invitation but answer without its id.
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const answered = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+      payload: {},
+    });
+
+    expect(answered.statusCode).toBe(409);
+    expect(answered.json().error).toBe('stale_client');
+    // Still refused: the offer did not move.
+    expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
 });

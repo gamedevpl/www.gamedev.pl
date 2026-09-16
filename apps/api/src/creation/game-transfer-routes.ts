@@ -77,6 +77,20 @@ async function toSummary(store: Store, invite: GameTransferInvitation, viewerUid
   };
 }
 
+// No offer named, but the live one has an id.
+
+// Says reload rather than "gone": the offer is still there.
+async function staleClientRefusal(
+  store: Store,
+  slug: string,
+  at: string,
+  invitationId: string | undefined,
+): Promise<boolean> {
+  if (invitationId !== undefined) return false;
+  const live = await store.getActiveGameTransfer(slug, at);
+  return Boolean(live && live.invitationId !== undefined);
+}
+
 export async function registerGameTransferRoutes(
   app: FastifyInstance,
   options: GameTransferRoutesOptions,
@@ -150,7 +164,10 @@ export async function registerGameTransferRoutes(
       if (!body.success) return reply.status(400).send({ error: 'invalid_invitation' });
       const at = new Date(now()).toISOString();
       const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at, body.data.invitationId);
-      if (!result) return reply.status(404).send({ error: 'not_found' });
+      if (!result) {
+        const stale = await staleClientRefusal(store, slug, at, body.data.invitationId);
+        return reply.status(stale ? 409 : 404).send({ error: stale ? 'stale_client' : 'not_found' });
+      }
       invalidateTransferInboxCache(store, result.recipientUid);
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
@@ -202,7 +219,10 @@ export async function registerGameTransferRoutes(
       if (result === 'busy') return reply.status(409).send({ error: 'busy' });
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
-      if (!result) return reply.status(404).send({ error: 'not_found' });
+      if (!result) {
+        const stale = await staleClientRefusal(store, slug, at, body.data.invitationId);
+        return reply.status(stale ? 409 : 404).send({ error: stale ? 'stale_client' : 'not_found' });
+      }
       invalidateTransferInboxCache(store, uid);
       invalidatePublishedGameCaches?.(slug);
       return reply.send({ transfer: await toSummary(store, result, uid) });
@@ -221,7 +241,10 @@ export async function registerGameTransferRoutes(
       if (!body.success) return reply.status(400).send({ error: 'invalid_invitation' });
       const at = new Date(now()).toISOString();
       const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at, body.data.invitationId);
-      if (!result) return reply.status(404).send({ error: 'not_found' });
+      if (!result) {
+        const stale = await staleClientRefusal(store, slug, at, body.data.invitationId);
+        return reply.status(stale ? 409 : 404).send({ error: stale ? 'stale_client' : 'not_found' });
+      }
       invalidateTransferInboxCache(store, result.recipientUid);
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
