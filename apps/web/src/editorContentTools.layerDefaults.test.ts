@@ -24,7 +24,10 @@ const bareEntities = {
   max: 8,
 } as unknown as EditorLayerSpec;
 
-const rows = ['....', '.S..', '....', '....'];
+// Fits the declared grid; the missing declarations are what matter.
+const rows = Array.from({ length: grid.minRows }, (_, index) =>
+  index === 1 ? `.S${'.'.repeat(grid.minCols - 2)}`.slice(0, grid.minCols) : '.'.repeat(grid.minCols),
+);
 
 describe('a spec that declares neither properties nor constraints', () => {
   it('reports no problems for a tilemap layer instead of throwing', () => {

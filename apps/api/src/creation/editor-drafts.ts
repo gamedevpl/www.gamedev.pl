@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { draftShapeProblems } from './editor-draft-shape.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   EDITOR_CONTENT_FILE,
@@ -235,7 +236,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       const items = content[key];
       if (!Array.isArray(items)) continue;
       for (const item of items) {
-        const properties = (item as { properties?: Record<string, unknown> }).properties;
+        const properties = (item as { properties?: Record<string, unknown> } | null)?.properties;
         if (!properties) continue;
         for (const name of textProps) {
           const value = properties[name];
@@ -322,13 +323,12 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         return reply.status(413).send({ error: 'draft is too large' });
       }
 
-      // The L4 validator — the same rules Check 31 enforces on delivery, so a
-      // draft that saves is a draft that can eventually pass the gate.
-      const problems = validateEditorContent(resolved.definition, body.data.content);
-      if (problems.length > 0) {
+      // Shape and bounds block; the level's own rules wait for Publish.
+      const shapeProblems = draftShapeProblems(resolved.definition, body.data.content);
+      if (shapeProblems.length > 0) {
         return reply
           .status(422)
-          .send({ error: "draft does not fit this game's content schema", problems: problems.slice(0, 20) });
+          .send({ error: "draft does not fit this game's content schema", problems: shapeProblems.slice(0, 20) });
       }
 
       // Declared text is shown to players once published, so it is moderated at
@@ -526,9 +526,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         return reply.status(409).send({ error: 'the draft could not be read — save it again' });
       }
 
-      // Validated again at the door even though the draft write validated it:
-      // the definition may have moved under the draft (a newer agent delivery
-      // changed the schema), and the gate is minutes of Cloud Build away.
+      // The L4 gate; a newer delivery can move the definition.
       const problems = validateEditorContent(resolved.definition, content);
       if (problems.length > 0) {
         return reply
