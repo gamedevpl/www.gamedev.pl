@@ -52,5 +52,36 @@ describe('notification email retry query', () => {
         }),
       ]);
     });
+
+    it(`does not let old rows fill the batch and hide newer pending rows (${name})`, async () => {
+      const store = makeStore();
+      for (let i = 0; i < 50; i += 1) {
+        await store.createNotification('g:old', {
+          id: `old-${i}`,
+          type: 'transfer.offered',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          titleKey: 'notifications.transfer.offered.title',
+          bodyKey: 'notifications.transfer.offered.body',
+          params: { title: 'Old', slug: 'old' },
+          link: '/studio',
+        });
+      }
+      await store.createNotification('g:recent', {
+        id: 'recent-visible',
+        type: 'transfer.offered',
+        createdAt: '2026-09-10T00:00:00.000Z',
+        titleKey: 'notifications.transfer.offered.title',
+        bodyKey: 'notifications.transfer.offered.body',
+        params: { title: 'Recent', slug: 'recent' },
+        link: '/studio',
+      });
+
+      const rows = await store.listPendingEmailNotifications({
+        createdAfter: '2026-09-01T00:00:00.000Z',
+        limit: 10,
+      });
+
+      expect(rows.map((row) => row.notification.id)).toContain('recent-visible');
+    });
   }
 });

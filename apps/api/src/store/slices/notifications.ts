@@ -236,17 +236,21 @@ export class FirestoreNotificationsStore implements NotificationsStore {
     createdAfter?: string;
   }): Promise<Array<{ uid: string; notification: StoredNotification }>> {
     const limit = opts?.limit ?? 200;
-    const scanLimit = Math.min(Math.max(limit * 4, limit), 1_000);
-    const snap = await this.db.collectionGroup('notifications').where('emailedAt', '==', null).limit(scanLimit).get();
+    const scanLimit = Math.min(Math.max(limit * 8, limit), 2_000);
+    const query = opts?.createdAfter
+      ? this.db.collectionGroup('notifications').where('createdAt', '>=', opts.createdAfter)
+      : this.db.collectionGroup('notifications');
+    const snap = await query.limit(scanLimit).get();
     const pending: Array<{ uid: string; notification: StoredNotification }> = [];
     for (const doc of snap.docs) {
       const uid = doc.ref.parent.parent?.id;
       if (!uid) continue;
       const notification = doc.data() as StoredNotification;
-      if (opts?.createdAfter && notification.createdAt < opts.createdAfter) continue;
+      if (notification.emailedAt !== null) continue;
       pending.push({ uid, notification });
       if (pending.length >= limit) break;
     }
+    pending.sort((a, b) => a.notification.createdAt.localeCompare(b.notification.createdAt));
     return pending;
   }
 

@@ -61,6 +61,24 @@ describe('notify sweep email retry', () => {
       params: { title: 'Sky Dodge', slug: 'sky-dodge' },
       link: '/studio',
     });
+    await store.createNotification('g:grace', {
+      id: 'follow-never-email',
+      type: 'game.new_version',
+      createdAt: '2026-09-15T11:00:00.000Z',
+      titleKey: 'notifications.game.new_version.title',
+      bodyKey: 'notifications.game.new_version.body',
+      params: { title: 'Sky Dodge' },
+      link: '/play/sky-dodge',
+    });
+    await store.createNotification('g:grace', {
+      id: 'share-retry',
+      type: 'share.offered',
+      createdAt: '2026-09-15T11:30:00.000Z',
+      titleKey: 'notifications.share.offered.title',
+      bodyKey: 'notifications.share.offered.body',
+      params: { title: 'Sky Dodge', actorName: 'Ada', slug: 'sky-dodge' },
+      link: '/studio',
+    });
     const sent: string[] = [];
     const mailer: Mailer = { name: 'recording', send: async (message) => void sent.push(message.subject) };
     const app = await buildSweepApp(store, {
@@ -75,18 +93,28 @@ describe('notify sweep email retry', () => {
       headers: { authorization: '******' },
     });
     expect(first.statusCode).toBe(200);
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2);
+    expect(first.json().emailRetry).toMatchObject({
+      scanned: 3,
+      retried: 2,
+      sent: 2,
+      skipped: 1,
+      failed: 0,
+      error: false,
+    });
 
     const notes = await store.listNotifications('g:grace');
     expect(notes.find((note) => note.id === 'transfer-recent')?.emailedAt).not.toBeNull();
     expect(notes.find((note) => note.id === 'transfer-old')?.emailedAt).toBeNull();
+    expect(notes.find((note) => note.id === 'follow-never-email')?.emailedAt).not.toBeNull();
+    expect(notes.find((note) => note.id === 'share-retry')?.emailedAt).not.toBeNull();
 
     await app.inject({
       method: 'POST',
       url: '/api/internal/notify-sweep',
       headers: { authorization: '******' },
     });
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2);
     await app.close();
   });
 });

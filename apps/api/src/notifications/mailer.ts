@@ -28,10 +28,9 @@ export interface SendResult {
   id?: string;
   provider: string;
 }
-
 export interface Mailer {
   readonly name: string;
-  send(message: EmailMessage): Promise<SendResult>;
+  send(message: EmailMessage, opts?: { idempotencyKey?: string }): Promise<SendResult>;
 }
 
 export class MailerError extends Error {
@@ -65,12 +64,13 @@ export class ResendMailer implements Mailer {
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
-  async send(message: EmailMessage): Promise<SendResult> {
+  async send(message: EmailMessage, opts?: { idempotencyKey?: string }): Promise<SendResult> {
     const res = await this.fetchImpl(RESEND_ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.opts.apiKey}`,
         'Content-Type': 'application/json',
+        ...(opts?.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: message.from ?? this.opts.from,

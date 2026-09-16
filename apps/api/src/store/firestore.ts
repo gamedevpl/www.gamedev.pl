@@ -1135,7 +1135,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   ): Promise<{ created: boolean; notification: StoredNotification }> {
     return this.notificationsStore.createNotification(uid, notification);
   }
-
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
     return this.notificationsStore.listNotifications(uid, opts);
   }
