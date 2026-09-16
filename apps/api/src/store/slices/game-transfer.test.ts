@@ -473,4 +473,41 @@ describe('acceptGameTransferInvitation', () => {
     expect(await accepting).toBeNull();
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
+
+  it('lets the new owner open a round on the game they were handed', async () => {
+    // Fail-closed must not lock the recipient out of their own game.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    const first = await store.allocateJobId();
+    await store.createSubmission(first, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(first, 'sky');
+    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
+    await handOverThroughStore(store, 'sky', 'g:ada', 'g:grace', AT);
+
+    const fresh = await store.allocateJobId();
+    await store.createSubmission(fresh, 'g:grace', 'Sky improve');
+    await store.setSubmissionSlug(fresh, 'sky');
+    await store.ensureRoundGeneration(fresh);
+
+    const record = (await store.getSubmission(fresh))!;
+    expect(roundAuthorityCurrent(record, await resolveGameAccess(store, 'sky'))).toBe(true);
+  });
+
+  it('does not let a previous owner round pick up the epoch that way', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:grace' });
+    const first = await store.allocateJobId();
+    await store.createSubmission(first, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(first, 'sky');
+    await store.ensureGameAccess('sky', 'g:ada', AT, AT);
+    await handOverThroughStore(store, 'sky', 'g:ada', 'g:grace', AT);
+
+    await store.ensureRoundGeneration(first);
+
+    const stale = (await store.getSubmission(first))!;
+    expect(stale.accessEpoch).toBeUndefined();
+    expect(roundAuthorityCurrent(stale, await resolveGameAccess(store, 'sky'))).toBe(false);
+  });
 });

@@ -104,6 +104,20 @@ function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVe
   );
 }
 
+/**
+ * The epoch to stamp on a round that is starting, or undefined to leave it.
+ *
+ * Only a round whose author is the game's current owner may take the current
+ * revision. A round left behind by a previous owner must never pick one up:
+ * that would hand its already-issued keys back the authority a handover
+ * revoked. Rounds that already carry an epoch keep it.
+ */
+function epochForRound(record: SubmissionRecord, access: GameAccessRecord | null): number | undefined {
+  if (!access || record.accessEpoch !== undefined) return undefined;
+  if (record.ownerUid !== access.ownerUid) return undefined;
+  return access.accessRevision;
+}
+
 export class InMemoryRoundsStore implements RoundsStore {
   constructor(
     private submissions: Map<number, SubmissionRecord>,
@@ -201,8 +215,13 @@ export class InMemoryRoundsStore implements RoundsStore {
   async ensureRoundGeneration(jobId: number): Promise<number | null> {
     const sub = this.submissions.get(jobId);
     if (!sub) return null;
-    if (sub.roundGeneration !== undefined) return sub.roundGeneration;
-    this.submissions.set(jobId, { ...sub, roundGeneration: 1 });
+    const epoch = epochForRound(sub, sub.slug ? (this.gameAccess.get(sub.slug) ?? null) : null);
+    if (sub.roundGeneration !== undefined) {
+      if (epoch === undefined) return sub.roundGeneration;
+      this.submissions.set(jobId, { ...sub, accessEpoch: epoch });
+      return sub.roundGeneration;
+    }
+    this.submissions.set(jobId, { ...sub, roundGeneration: 1, ...(epoch === undefined ? {} : { accessEpoch: epoch }) });
     return 1;
   }
 
@@ -402,8 +421,15 @@ export class FirestoreRoundsStore implements RoundsStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
-      if (current.roundGeneration !== undefined) return current.roundGeneration;
-      tx.set(ref, { roundGeneration: 1 }, { merge: true });
+      const accessSnap = current.slug ? await tx.get(this.db.collection('gameAccess').doc(current.slug)) : null;
+      const access = accessSnap?.exists ? (accessSnap.data() as GameAccessRecord) : null;
+      const epoch = epochForRound(current, access);
+      if (current.roundGeneration !== undefined) {
+        if (epoch === undefined) return current.roundGeneration;
+        tx.set(ref, { accessEpoch: epoch }, { merge: true });
+        return current.roundGeneration;
+      }
+      tx.set(ref, { roundGeneration: 1, ...(epoch === undefined ? {} : { accessEpoch: epoch }) }, { merge: true });
       return 1;
     });
   }
