@@ -1257,6 +1257,9 @@ export async function registerCreatorCodeRoutes(
       }
 
       const { targetVersion, mode } = parsed.data;
+      if (mode === 'publish' && !(await canActOnSlug(store, slug, request.user!.uid, 'publish'))) {
+        return reply.status(403).send({ error: 'not_owner' });
+      }
       const targetManifest = await gamesStore.getManifest(slug, targetVersion);
       if (!targetManifest) {
         return reply.status(404).send({ error: `target version ${targetVersion} not found` });

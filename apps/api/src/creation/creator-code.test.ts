@@ -1479,6 +1479,55 @@ describe('the Code surface routes (creator-code.ts)', () => {
       );
     });
 
+    it('refuses an editor revert that asks to publish', async () => {
+      const at = '2026-09-16T10:00:00.000Z';
+      await store.upsertUser({ uid: 'g:bea' });
+      await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
+      const code = (await store.ensureRecipientCode('g:bea', at))!;
+      await store.createEditorInvitation('sky-dodge', 'g:creator', 'g:bea', at, code);
+      await store.acceptEditorInvitation('sky-dodge', 'g:bea', at);
+
+      const { version } = await games.putCandidateSources({
+        slug: 'sky-dodge',
+        jobId: 10,
+        mode: 'preview',
+        files: [
+          { path: 'SPEC.md', content: '# Sky Dodge' },
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({
+              engine: { modules: [] },
+              howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+            }),
+          },
+          { path: 'game.ts', content: 'export function run() {}' },
+        ],
+      });
+
+      let delivered = 0;
+      const stubSourceDelivery: SourceDeliveryService = {
+        deliver: async (input) => {
+          delivered += 1;
+          return { accepted: true, slug: input.slug, version: 'v-reverted', mode: input.mode, gateStarted: true };
+        },
+      };
+
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/revert',
+            headers: { ...authHeaders('g:bea'), 'content-type': 'application/json' },
+            payload: { targetVersion: version, mode: 'publish', attestation: true },
+          });
+          expect(res.statusCode).toBe(403);
+          expect(res.json()).toMatchObject({ error: 'not_owner' });
+          expect(delivered).toBe(0);
+        },
+        { sourceDelivery: stubSourceDelivery },
+      );
+    });
+
     it('404s when target version does not exist', async () => {
       const stubSourceDelivery: SourceDeliveryService = {
         deliver: async () => ({ accepted: true, slug: 'sky-dodge', version: 'v2', mode: 'preview', gateStarted: true }),
