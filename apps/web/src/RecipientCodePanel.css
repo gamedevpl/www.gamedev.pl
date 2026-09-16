@@ -1,0 +1,18 @@
+/* Owned by the component, not the Studio chunk: account settings opens from
+   the global header, on routes that never load Studio's stylesheet. */
+
+.recipient-code-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.recipient-code-row code {
+  letter-spacing: 0.12em;
+}
+
+.recipient-code-label {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}

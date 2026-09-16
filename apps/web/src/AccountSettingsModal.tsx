@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AccountDeletionControl } from './AccountDeletionControl.js';
 import { PixelIcon } from './PixelIcon.js';
+import { RecipientCodePanel } from './RecipientCodePanel.js';
 import { StudioCreatorAgentKeyPanel } from './surfaces/studio/StudioCreatorAgentKeyPanel.js';
 import { StudioOAuthClientsPanel } from './surfaces/studio/StudioOAuthClientsPanel.js';
 import { StudioPatPanel } from './surfaces/studio/StudioPatPanel.js';
@@ -87,6 +88,7 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
             </div>
           </div>
           <div className="account-settings-panel" data-section="account" hidden={section !== 'account'}>
+            <RecipientCodePanel />
             <AccountDeletionControl labelledBy={`${headingId}-danger`} />
           </div>
         </div>

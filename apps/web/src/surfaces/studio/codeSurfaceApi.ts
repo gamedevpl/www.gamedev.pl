@@ -212,7 +212,7 @@ export async function typecheckCodeSurface(
   return (await response.json()) as CodeSurfaceTypecheckResult;
 }
 
-export type CodeSurfaceKitDeclaration = { engineRef: string; declaration: string };
+export type CodeSurfaceKitDeclaration = { engineRef: string; declaration: string; files?: Record<string, string> };
 
 // GA-01: advisory — null, not a throw, on any failure.
 export async function fetchCodeSurfaceKitDeclaration(slug: string): Promise<CodeSurfaceKitDeclaration | null> {

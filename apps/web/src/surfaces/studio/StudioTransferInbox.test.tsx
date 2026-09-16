@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
 import { StudioTransferInbox } from './StudioTransferInbox.js';
 
+vi.mock('../../visitTelemetry.js', () => ({ recordTransferStep: vi.fn() }));
+
 const OFFER = {
   slug: 'comet-courier',
   status: 'pending',
@@ -27,14 +29,17 @@ function routed(incoming: unknown[], code = 'MY-CODE') {
   });
 }
 
-async function mount(onAccepted?: () => void) {
+async function mount(onAccepted?: (slug: string) => void, props: Record<string, unknown> = {}) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(StudioTransferInbox, { onAccepted }));
-  });
-  return { host, root };
+  const render = async (next: Record<string, unknown> = {}) => {
+    await act(async () => {
+      root.render(createElement(StudioTransferInbox, { onAccepted, ...props, ...next }));
+    });
+  };
+  await render();
+  return { host, root, render };
 }
 
 function click(host: HTMLElement, testid: string) {
@@ -47,6 +52,7 @@ describe('StudioTransferInbox', () => {
   beforeEach(async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -62,17 +68,6 @@ describe('StudioTransferInbox', () => {
     const invite = host.querySelector('[data-testid="studio-transfer-invite-comet-courier"]');
     expect(invite?.textContent).toContain('Ada');
     expect(invite?.textContent).toContain('comet-courier');
-    await act(async () => root.unmount());
-  });
-
-  it('keeps the recipient code hidden until asked', async () => {
-    vi.stubGlobal('fetch', routed([]));
-    const { host, root } = await mount();
-
-    expect(host.querySelector('[data-testid="studio-recipient-code"]')?.textContent).not.toContain('MY-CODE');
-    const reveal = host.querySelectorAll('.link-btn')[0];
-    await act(async () => reveal?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(host.querySelector('[data-testid="studio-recipient-code"]')?.textContent).toBe('MY-CODE');
     await act(async () => root.unmount());
   });
 
@@ -119,32 +114,10 @@ describe('StudioTransferInbox', () => {
     await act(async () => root.unmount());
   });
 
-  it('shows an offer even when the viewer has no code yet', async () => {
+  it('renders nothing when no invitation is waiting', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => {
-        if (String(url).includes('/recipient-code')) {
-          return { ok: false, status: 404, json: async () => ({ error: 'not_found' }) } as unknown as Response;
-        }
-        return reply(url, { transfers: [OFFER] });
-      }),
-    );
-    const { host, root } = await mount();
-
-    expect(host.querySelector('[data-testid="studio-transfer-invite-comet-courier"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="studio-recipient-code"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it('renders nothing when there is no code and no offer', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (String(url).includes('/recipient-code')) {
-          return { ok: false, status: 404, json: async () => ({ error: 'not_found' }) } as unknown as Response;
-        }
-        return reply(url, { transfers: [] });
-      }),
+      vi.fn(async (url: string) => reply(url, { transfers: [] })),
     );
     const { host, root } = await mount();
 
@@ -228,5 +201,56 @@ describe('StudioTransferInbox', () => {
       document.body.innerHTML = '';
       vi.unstubAllGlobals();
     }
+  });
+
+  it('does not count an offer it renders where nobody can see it', async () => {
+    // A collapsed rail and an off-canvas drawer both keep this mounted.
+    const { recordTransferStep } = await import('../../visitTelemetry.js');
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const { root } = await mount(undefined, { visible: false });
+
+    expect(vi.mocked(recordTransferStep).mock.calls.map(([step]) => step)).not.toContain('offer_shown');
+    await act(async () => root.unmount());
+  });
+
+  it('counts it once the shelf actually shows it', async () => {
+    const { recordTransferStep } = await import('../../visitTelemetry.js');
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const { root } = await mount(undefined, { visible: true });
+
+    expect(vi.mocked(recordTransferStep).mock.calls.map(([step]) => step)).toContain('offer_shown');
+    await act(async () => root.unmount());
+  });
+
+  it('asks the shelf to open itself when the invitation would go unread', async () => {
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const onOffersPresent = vi.fn();
+    const { root } = await mount(undefined, { visible: false, onOffersPresent });
+
+    expect(onOffersPresent).toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it('leaves a shelf that already shows the offer alone', async () => {
+    // Forcing it open there costs the reader a collapse click.
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const onOffersPresent = vi.fn();
+    const { root } = await mount(undefined, { visible: true, onOffersPresent });
+
+    expect(onOffersPresent).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it('does not reopen a shelf the reader just collapsed', async () => {
+    // Collapsing flips visible to false; that is not an arrival.
+    vi.stubGlobal('fetch', routed([OFFER]));
+    const onOffersPresent = vi.fn();
+    const { root, render } = await mount(undefined, { visible: true, onOffersPresent });
+
+    expect(onOffersPresent).not.toHaveBeenCalled();
+    await render({ visible: false });
+
+    expect(onOffersPresent).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
   });
 });

@@ -66,6 +66,8 @@ export interface CatalogEntry {
   creatorHandle?: string | null;
   // Handles whose proposals were merged into the live version.
   contributorHandles?: string[];
+  // 0..1 bake-time development effort; absent when unknown.
+  effort?: number;
   // AI-generated punchy summary/taglines (e.g. from Flash-Lite).
   tagline?: { en?: string; pl?: string } | null;
   // AI-generated concise keybindings summary.

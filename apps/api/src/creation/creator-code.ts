@@ -36,7 +36,7 @@ import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '..
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
-import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
+import { studioKitFromTree } from './language-kit-sources.js';
 import { typeCheckGame } from './type-check.js';
 
 /**
@@ -866,16 +866,18 @@ export async function registerCreatorCodeRoutes(
       }
 
       let kitDeclaration: string | null = null;
+      let kitShared: Record<string, string> = {};
       if (kitFileStore) {
         try {
-          const tree = await kitFileStore.loadTree();
-          kitDeclaration = sharedSourcesFromKitTree(tree)['shared/game-kit.d.ts'] ?? null;
+          const kit = studioKitFromTree(await kitFileStore.loadTree());
+          kitDeclaration = kit.declaration;
+          kitShared = kit.files;
         } catch (error) {
           request.log.warn({ err: error, slug }, 'code surface typecheck: kit load failed, checking without it');
         }
       }
 
-      const result = typeCheckGame(sources, kitDeclaration);
+      const result = typeCheckGame(sources, kitDeclaration, kitShared);
       return reply.send(result);
     },
   );
@@ -956,12 +958,12 @@ export async function registerCreatorCodeRoutes(
       }
       try {
         const tree = await kitFileStore.loadTree();
-        const declaration = sharedSourcesFromKitTree(tree)['shared/game-kit.d.ts'] ?? null;
-        if (declaration === null) {
+        const kit = studioKitFromTree(tree);
+        if (kit.declaration === null) {
           return reply.status(404).send({ error: 'no kit published' });
         }
         reply.header('etag', `"${tree.engineRef}"`);
-        return reply.send({ engineRef: tree.engineRef, declaration });
+        return reply.send({ engineRef: tree.engineRef, declaration: kit.declaration, files: kit.files });
       } catch (error) {
         request.log.warn({ err: error, slug: resolved.slug }, 'code surface: kit declaration load failed');
         return reply.status(404).send({ error: 'no kit published' });

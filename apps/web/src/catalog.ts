@@ -193,6 +193,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
   ) {
     return null;
   }
+  const effort = parseCatalogEffort(entry.effort);
   return {
     slug: entry.slug,
     title: entry.title,
@@ -216,7 +217,13 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
           .map((handle) => parseCatalogCreatorHandle(handle))
           .filter((handle): handle is string => handle !== null)
       : undefined,
+    ...(effort !== undefined ? { effort } : {}),
   };
+}
+
+function parseCatalogEffort(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) return undefined;
+  return value;
 }
 
 function parseCatalogCreatorHandle(value: unknown): string | null {
