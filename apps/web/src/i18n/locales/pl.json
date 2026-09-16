@@ -1464,9 +1464,6 @@
   "create": {
     "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
     "subhead": "To nie szablon ani zabawka — prawdziwy HTML, CSS i JavaScript, napisane przez agenta kodującego, sprawdzone przez człowieka, a potem grywalne w przeglądarce dla każdego.",
-    "example1": "gra jak Cannon Fodder, ale z oddziałami kotów",
-    "example2": "labirynt z żyroskopem dla mojego młodszego brata",
-    "example3": "strategia 4X, którą skończę w 20 minut",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
     "step1Title": "Kilka szybkich pytań",
     "step1Detail": "Nadajemy nazwę i, jeśli trzeba, dopytujemy o klimat — albo pomiń, a AI zdecyduje. Zajmuje minutę.",
@@ -1486,7 +1483,12 @@
     "selfPoint1": "Instalacja jednym kliknięciem albo wklej konfigurację",
     "selfPoint2": "Twój agent, Twoje tokeny — bez naszego dziennego limitu",
     "anyMcpClient": "dowolny klient MCP",
-    "showcaseHeading": "Zrobione dokładnie tak"
+    "showcaseHeading": "Na żywo w katalogu",
+    "pokeQa": "Szturchnij pomysłowego Dobromira — podaj iskrę w dół",
+    "pokeCode": "Szturchnij maskotkę BRRR — podaj iskrę w dół",
+    "pokePlay": "Szturchnij maskotkę przy szkicu — podaj iskrę w dół",
+    "pokeLive": "Szturchnij maskotkę na żywo — dokończ mini-build",
+    "comboBuilt": "Cztery maskotki skończyły mini-build."
   },
   "ai": {
     "generatedBadge": "Gra wygenerowana przez AI",

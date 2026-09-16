@@ -1450,9 +1450,6 @@
   "create": {
     "headline": "Describe a game. An AI agent builds it for real.",
     "subhead": "Not a template and not a toy — actual HTML, CSS and JavaScript, written by a coding agent, reviewed by a human, then playable by anyone in a browser.",
-    "example1": "a game like Cannon Fodder, but with squads of cats",
-    "example2": "tilt maze for my little brother",
-    "example3": "4X strategy I can finish in 20 minutes",
     "stepsHeading": "What happens after you press Build",
     "step1Title": "A few quick questions",
     "step1Detail": "Name it, then pick the vibe — or skip and the AI decides. Takes a minute.",
@@ -1472,7 +1469,12 @@
     "selfPoint1": "One-click install, or paste the config",
     "selfPoint2": "Your agent, your tokens — no daily limit from us",
     "anyMcpClient": "any MCP client",
-    "showcaseHeading": "Made exactly this way"
+    "showcaseHeading": "Live in the catalog",
+    "pokeQa": "Poke the thinking mascot — pass the idea down",
+    "pokeCode": "Poke the BRRR mascot — pass the spark down",
+    "pokePlay": "Poke the play mascot — pass the spark down",
+    "pokeLive": "Poke the live mascot — finish the tiny build",
+    "comboBuilt": "The four mascots finished a tiny build."
   },
   "ai": {
     "generatedBadge": "AI-generated game",

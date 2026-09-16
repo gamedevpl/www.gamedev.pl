@@ -1,0 +1,217 @@
+/* Poke-the-pipeline: spark pass, combo win. */
+
+button.create-step-scene {
+  margin: 0;
+  padding: 0;
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.create-step-scene:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+button.create-step-scene:hover .mascot {
+  filter: brightness(1.1);
+}
+
+button.create-step-scene:active .mascot {
+  transform: scale(0.94, 0.9);
+}
+
+.create-step-spark {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  z-index: 2;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--turquoise);
+  box-shadow: 0 0 8px var(--turquoise-glow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.create-step-scene.is-throwing .create-step-spark {
+  animation: create-spark-throw 0.28s ease-in;
+}
+
+.create-step-scene.is-catching .create-step-spark {
+  animation: create-spark-catch 0.28s ease-out;
+}
+
+.create-step-scene.is-catching .mascot {
+  animation: create-mascot-catch 0.4s ease;
+}
+
+.create-step-scene.is-miss .mascot {
+  animation: create-mascot-miss 0.45s ease;
+}
+
+.create-steps-list.is-won .create-step-scene {
+  box-shadow:
+    0 0 0 2px var(--turquoise),
+    0 0 16px var(--turquoise-glow);
+}
+
+.create-step-body,
+.create-step-index {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.create-step .create-step-n,
+.create-step .create-step-title,
+.create-step .create-step-card,
+.create-step .create-step-index::after {
+  transition:
+    background 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.create-step:hover .create-step-n,
+.create-step:has(.create-step-scene:focus-visible) .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.28);
+}
+
+.create-step:hover:not(.is-miss) .create-step-title {
+  color: var(--turquoise);
+}
+
+.create-step.is-catching .create-step-card,
+.create-step.is-throwing .create-step-card,
+.create-steps-list.is-won .create-step-card {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(0, 228, 172, 0.28), transparent 72%);
+}
+
+.create-step.is-catching .create-step-title,
+.create-steps-list.is-won .create-step-title {
+  color: var(--turquoise);
+}
+
+.create-step.is-catching .create-step-n,
+.create-steps-list.is-won .create-step-n {
+  background: var(--turquoise);
+  color: #0d1520;
+}
+
+.create-step.is-throwing .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.35);
+}
+
+.create-step.is-catching .create-step-index::after,
+.create-step.is-throwing .create-step-index::after,
+.create-steps-list.is-won .create-step .create-step-index::after {
+  background: var(--turquoise);
+  box-shadow: 0 0 8px var(--turquoise-glow);
+}
+
+.create-step.is-miss .create-step-card {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.28), transparent 72%);
+}
+
+.create-step.is-miss .create-step-title {
+  color: #fca5a5;
+}
+
+.create-step.is-miss .create-step-n {
+  background: #f87171;
+  border-color: #f87171;
+  color: #0d1520;
+}
+
+.create-step.is-miss .create-step-index::after {
+  background: linear-gradient(#f87171, rgba(248, 113, 113, 0.12));
+}
+
+.create-steps-list:not(.is-won)[data-combo-next='1'] .create-step:nth-child(2) .create-step-n,
+.create-steps-list:not(.is-won)[data-combo-next='2'] .create-step:nth-child(3) .create-step-n,
+.create-steps-list:not(.is-won)[data-combo-next='3'] .create-step:nth-child(4) .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.22);
+}
+
+.create-step-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes create-spark-throw {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 18px);
+  }
+}
+
+@keyframes create-spark-catch {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -14px);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes create-mascot-catch {
+  0% {
+    transform: translateY(-5px) scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes create-mascot-miss {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-step-spark,
+  .create-step-scene.is-catching .mascot,
+  .create-step-scene.is-miss .mascot,
+  button.create-step-scene:active .mascot,
+  .create-step .create-step-n,
+  .create-step .create-step-title,
+  .create-step .create-step-card,
+  .create-step .create-step-index::after {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
