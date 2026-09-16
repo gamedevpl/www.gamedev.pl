@@ -1264,7 +1264,12 @@ describe('submission routes', () => {
     const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
       const result = await originalBegin(...args);
       // A concurrent accept must see this lease as busy.
-      acceptDuringWindow = await store.acceptGameTransferInvitation(job.slug!, 'g:recipient', at);
+      acceptDuringWindow = await store.acceptGameTransferInvitation(
+        job.slug!,
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer(job.slug!, at))!.invitationId,
+      );
       return result;
     });
     try {
@@ -1312,7 +1317,14 @@ describe('submission routes', () => {
     const at = new Date().toISOString();
     const access = await store.ensureGameAccess(job.slug!, 'g:test-user', at, at);
     await store.createGameTransferInvitation(job.slug!, 'g:test-user', 'g:recipient', access!.accessRevision, at);
-    expect(await store.acceptGameTransferInvitation(job.slug!, 'g:recipient', at)).toMatchObject({
+    expect(
+      await store.acceptGameTransferInvitation(
+        job.slug!,
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer(job.slug!, at))!.invitationId,
+      ),
+    ).toMatchObject({
       status: 'accepted',
     });
     const briefsBefore = briefs.length;
@@ -5826,6 +5838,7 @@ describe('games published from the store rather than the repo', () => {
       method: 'POST',
       url: '/api/me/transfers/comet-courier/accept',
       headers: getAuthHeaders('g:recipient'),
+      payload: { invitationId: initiate.json().transfer.invitationId },
     });
     expect(accept.statusCode).toBe(200);
 

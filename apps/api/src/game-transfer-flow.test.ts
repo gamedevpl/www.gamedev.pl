@@ -3,11 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import { mintToken } from './platform/submission-token.js';
+import { mintAgentToken } from './platform/agent-token.js';
+import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { MAX_REVOKED_ROUNDS_PER_TRANSFER } from './store/slices/game-transfer.js';
 import type { AgentBackend } from './agent-surface/agent-backend.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { GamesStore } from './delivery/games-store.js';
 import { currentOwnerUid } from './platform/game-access-resolve.js';
 import { InMemoryStore } from './platform/store.js';
+import type { ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
 
 // The transfer walked end to end, from both sides, and back again.
 
@@ -51,7 +55,7 @@ function stubBackend(): AgentBackend {
   };
 }
 
-async function createApp(store: InMemoryStore) {
+async function createApp(store: InMemoryStore, managedAvailabilityGate?: ManagedAvailabilityGate) {
   const app = await buildApp({
     store,
     sessionSecret: SESSION_SECRET,
@@ -61,6 +65,7 @@ async function createApp(store: InMemoryStore) {
       submissionTokenSecret: SECRET,
       agentBackend: stubBackend(),
       agentChannel: {} as { gamesStore?: GamesStore },
+      ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
     },
   });
   apps.push(app);
@@ -111,6 +116,7 @@ async function handOver(app: FastifyInstance, store: InMemoryStore, from: string
     method: 'POST',
     url: '/api/me/transfers/comet-courier/accept',
     headers: session(to),
+    payload: { invitationId: initiated.json().transfer.invitationId },
   });
   expect(accepted.statusCode).toBe(200);
 }
@@ -181,6 +187,57 @@ describe('after a transfer, the sender keeps nothing', () => {
     expect(after).toBeGreaterThan(generationBefore + 1);
   });
 
+  it('cannot reuse a round key from beyond the revocation cap', async () => {
+    // The cap rewrites the newest rounds only; a busy game outruns it.
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    for (let i = 0; i < MAX_REVOKED_ROUNDS_PER_TRANSFER + 4; i += 1) {
+      const later = await store.allocateJobId();
+      await store.createSubmission(later, SENDER, `Round ${i}`);
+      await store.setSubmissionSlug(later, 'comet-courier');
+      await store.bumpRoundGeneration(later);
+    }
+    const generation = (await store.bumpRoundGeneration(jobId)) ?? 1;
+    const app = await createApp(store);
+    const headers = { authorization: `Bearer ${mintAgentToken(jobId, SECRET, { roundGeneration: generation })}` };
+
+    const before = await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers });
+    expect(before.statusCode).toBe(200);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    const after = await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers });
+    expect(after.statusCode).toBe(401);
+    // The cap left this round alone; authority refused it.
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(generation);
+  });
+
+  it('cannot revive a revoked round key by being given the game back', async () => {
+    // A -> B -> A restores the uid, never the revision.
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    // Past the cap, so the generation bump cannot refuse it.
+    for (let i = 0; i < MAX_REVOKED_ROUNDS_PER_TRANSFER + 4; i += 1) {
+      const later = await store.allocateJobId();
+      await store.createSubmission(later, SENDER, `Round ${i}`);
+      await store.setSubmissionSlug(later, 'comet-courier');
+      await store.bumpRoundGeneration(later);
+    }
+    const app = await createApp(store);
+    const generation = (await store.bumpRoundGeneration(jobId)) ?? 1;
+    const headers = { authorization: `Bearer ${mintAgentToken(jobId, SECRET, { roundGeneration: generation })}` };
+    expect((await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers })).statusCode).toBe(200);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+    expect((await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers })).statusCode).toBe(401);
+
+    await handOver(app, store, RECIPIENT, SENDER, at);
+
+    // Owned again, but this round's revision is two behind: still refused.
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(generation);
+    expect((await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers })).statusCode).toBe(401);
+  });
+
   it('cannot start work through a concurrent accept: the lock holds both ways', async () => {
     const store = new InMemoryStore();
     const { at } = await gameWithHistory(store, { published: true });
@@ -198,7 +255,12 @@ describe('after a transfer, the sender keeps nothing', () => {
     let acceptDuringWindow: unknown;
     const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
       const held = await originalBegin(...args);
-      acceptDuringWindow = await store.acceptGameTransferInvitation('comet-courier', RECIPIENT, at);
+      acceptDuringWindow = await store.acceptGameTransferInvitation(
+        'comet-courier',
+        RECIPIENT,
+        at,
+        (await store.getActiveGameTransfer('comet-courier', at))!.invitationId,
+      );
       return held;
     });
     try {
@@ -318,6 +380,34 @@ describe('after a transfer, preferences and counters follow the owner', () => {
     expect(posted).toMatchObject({ posted: null, refusedBy: 'muted' });
   });
 
+  it('reads the platform quota against the new owner, not the sender', async () => {
+    // Studio renders an unavailable answer as an inert switch control.
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    const asked: string[] = [];
+    const gate: ManagedAvailabilityGate = {
+      peek: async (uid) => {
+        asked.push(uid);
+        return { available: true };
+      },
+      checkAndSpend: async () => ({ available: true }),
+      resolveVendor: async () => undefined,
+    };
+    const app = await createApp(store, gate);
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    asked.length = 0;
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, SECRET)}`,
+      headers: session(RECIPIENT),
+    });
+    expect(status.statusCode).toBe(200);
+
+    expect(asked).toContain(RECIPIENT);
+    expect(asked).not.toContain(SENDER);
+  });
+
   it('stops counting the sender’s round as their own work in flight', async () => {
     const store = new InMemoryStore();
     const { at } = await gameWithHistory(store);
@@ -353,6 +443,8 @@ describe('the transfer itself', () => {
       method: 'POST',
       url: '/api/me/transfers/comet-courier/accept',
       headers: session(RECIPIENT),
+      // The same answer to the same offer, replayed.
+      payload: { invitationId: (await store.getActiveGameTransfer('comet-courier', at))!.invitationId },
     });
 
     expect(again.statusCode).toBe(200);

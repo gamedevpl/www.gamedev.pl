@@ -389,7 +389,12 @@ describe('the Code surface routes (creator-code.ts)', () => {
         await store.upsertUser({ uid: 'g:recipient' });
         await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
         await store.createGameTransferInvitation('sky-dodge', 'g:creator', 'g:recipient', 1, at);
-        await store.acceptGameTransferInvitation('sky-dodge', 'g:recipient', at);
+        await store.acceptGameTransferInvitation(
+          'sky-dodge',
+          'g:recipient',
+          at,
+          (await store.getActiveGameTransfer('sky-dodge', at))!.invitationId,
+        );
 
         const res = await app.inject({
           method: 'PUT',

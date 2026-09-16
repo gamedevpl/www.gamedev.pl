@@ -80,10 +80,11 @@ export function StudioTransferPanel({ slug }: { slug: string }): JSX.Element {
   }
 
   async function cancel(): Promise<void> {
+    if (!transfer) return;
     setBusy(true);
     setError(null);
     try {
-      setTransfer(await cancelGameTransfer(slug));
+      setTransfer(await cancelGameTransfer(slug, transfer.invitationId));
       recordTransferStep('invite_cancelled');
     } catch (caught) {
       // Gone already: accepted elsewhere, or expired while this sat open.

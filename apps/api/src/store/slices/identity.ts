@@ -76,7 +76,7 @@ export class InMemoryIdentityStore implements IdentityStore {
   handles = new Map<string, HandleRecord>();
   recipientCodes = new Map<string, RecipientCodeRecord>();
 
-  constructor(private isErased: (uid: string) => boolean = () => false) {}
+  constructor(private erasedAt: (uid: string) => string | null = () => null) {}
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -229,11 +229,11 @@ export class InMemoryIdentityStore implements IdentityStore {
   }
 
   async ensureRecipientCode(uid: string, at: string): Promise<string | null> {
-    return ensureRecipientCodeInMemory(this.users, this.recipientCodes, uid, at, this.isErased);
+    return ensureRecipientCodeInMemory(this.users, this.recipientCodes, uid, at, this.erasedAt);
   }
 
   async rotateRecipientCode(uid: string, at: string): Promise<string | null> {
-    return rotateRecipientCodeInMemory(this.users, this.recipientCodes, uid, at, this.isErased);
+    return rotateRecipientCodeInMemory(this.users, this.recipientCodes, uid, at, this.erasedAt);
   }
 
   async getUserByRecipientCode(code: string): Promise<User | null> {

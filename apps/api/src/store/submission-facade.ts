@@ -173,24 +173,27 @@ export abstract class SubmissionFacade {
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
-    return this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at);
+    return this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at, invitationId);
   }
 
   async cancelGameTransferInvitation(
     slug: string,
     senderUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
-    return this.gameTransferStore.cancelGameTransferInvitation(slug, senderUid, at);
+    return this.gameTransferStore.cancelGameTransferInvitation(slug, senderUid, at, invitationId);
   }
 
   async rejectGameTransferInvitation(
     slug: string,
     recipientUid: string,
     at: string,
+    invitationId?: string,
   ): Promise<GameTransferInvitation | null> {
-    return this.gameTransferStore.rejectGameTransferInvitation(slug, recipientUid, at);
+    return this.gameTransferStore.rejectGameTransferInvitation(slug, recipientUid, at, invitationId);
   }
 
   async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {

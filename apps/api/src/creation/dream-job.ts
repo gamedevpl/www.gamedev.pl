@@ -289,12 +289,16 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         options,
         builder: record.builder === 'self' ? 'self' : 'platform',
       };
+      // The transaction re-reads the mute, so it needs the same owner.
+      const proposalOwnerUid = record.slug
+        ? ((await currentOwnerUid(store, record.slug, record.ownerUid)) ?? record.ownerUid)
+        : record.ownerUid;
       // Posted only if the claim still holds, in one transaction.
       const result = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
         textLocalized: PROPOSAL_TEXT_PL,
         locale: 'pl',
         proposal,
-        ownerUid: record.ownerUid,
+        ownerUid: proposalOwnerUid,
         roundGeneration: record.roundGeneration ?? 1,
         // Publishing is this job's cue; abandoning and cancelling are stops.
         blocked: (job) => Boolean(job.abandonedAt) || resolveJobState(job) === 'canceled',

@@ -19,6 +19,18 @@ export interface GameAccessRecord {
   // Bumped on every authority change; fences work admitted before a revocation.
   accessRevision: number;
 
+  // The revision a handover last revoked capabilities at.
+
+  // Present means this game has changed hands, so a round carrying no
+
+  // epoch of its own is fenced, never guessed at.
+  capabilitiesRevokedAtRevision?: number;
+
+  // When that handover happened. A round that began earlier keeps no
+
+  // epoch: its credentials were issued under the revoked authority.
+  capabilitiesRevokedAt?: string;
+
   // The job whose settled slug claim wrote this. Absent while still tentative.
   settledJobId?: number;
 

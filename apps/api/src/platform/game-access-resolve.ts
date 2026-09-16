@@ -18,6 +18,9 @@ export interface ResolvedGameAccess {
   // 0 means derived authority, which has no revision to fence with.
   accessRevision: number;
 
+  // Set once this game has changed hands at least once.
+  capabilitiesRevokedAtRevision?: number;
+
   source: 'canonical' | 'derived';
 }
 
@@ -50,6 +53,9 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
     owner: classifyOwnerUid(record.ownerUid),
     editorUids: [...record.editorUids],
     accessRevision: record.accessRevision,
+    ...(record.capabilitiesRevokedAtRevision === undefined
+      ? {}
+      : { capabilitiesRevokedAtRevision: record.capabilitiesRevokedAtRevision }),
     source: 'canonical',
   };
 }
@@ -73,6 +79,38 @@ export async function currentOwnerUid(
 ): Promise<string | undefined> {
   const owner = (await resolveGameAccess(store, slug)).owner;
   return owner.kind === 'creator' ? owner.uid : fallback;
+}
+
+// Advisory reads take a blip as "unchanged", never as a failure.
+export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, fallback: string): Promise<string> {
+  try {
+    return (await currentOwnerUid(store, slug, fallback)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// A round's keys answer to the revision it opened under.
+
+// An owner comparison alone would revive rounds a transfer revoked,
+
+// A -> B -> A restores the uid, never the revision.
+
+// A round predating the epoch falls back to the weaker owner check,
+
+// but only while the game has never changed hands.
+
+// Derived authority has no revision, so it is left alone.
+export function roundAuthorityCurrent(
+  record: { ownerUid: string; accessEpoch?: number },
+  access: ResolvedGameAccess,
+): boolean {
+  if (access.source !== 'canonical') return true;
+  // The epoch is what makes a revocation permanent.
+  if (record.accessEpoch !== undefined) return record.accessEpoch === access.accessRevision;
+  // No epoch on a game that changed hands: fenced rather than guessed.
+  if (access.capabilitiesRevokedAtRevision !== undefined) return false;
+  return sameOwner(classifyOwnerUid(record.ownerUid), access.owner);
 }
 
 // Editors are resolved but never admitted here: roles are GO-03.
