@@ -57,9 +57,9 @@ often enough to name up front:
    `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150
    may need `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')`
-   inside the same render callback (set `preserveDrawingBuffer:true` when creating
-   the GL context, not at capture time; after compositing the default buffer is
-   gone) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a data
+   inside the same render callback (after compositing the default buffer is gone;
+   `preserveDrawingBuffer:true` only in a disposable capture harness, never in
+   shipped game source) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a data
    URL to disk in-process (`fs.writeFileSync('shot.png',
 Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and

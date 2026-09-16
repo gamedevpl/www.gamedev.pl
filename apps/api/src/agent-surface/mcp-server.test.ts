@@ -495,7 +495,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
     expect(screenshotUpload?.description).toMatch(/canvas\.toDataURL/);
     expect(screenshotUpload?.description).toMatch(/preserveDrawingBuffer|render callback/);
-    expect(screenshotUpload?.description).toMatch(/when creating the GL context/);
+    expect(screenshotUpload?.description).toMatch(/disposable capture harness/);
     expect(screenshotUpload?.description).toMatch(/Buffer\.from|split\(","\)/);
     expect(screenshotUpload?.description).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
     expect(screenshotUpload?.description).toMatch(/mode=preview/);
@@ -1233,7 +1233,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/never --disable-gpu/);
     expect(joined).toMatch(/canvas\.toDataURL/);
     expect(joined).toMatch(/preserveDrawingBuffer|render callback/);
-    expect(joined).toMatch(/when creating the GL context/);
+    expect(joined).toMatch(/disposable capture harness/);
     expect(joined).toMatch(/Buffer\.from|split\(","\)/);
     expect(joined).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
     expect(joined).toMatch(/Without a shell or browser[\s\S]*get_gate_media/i);

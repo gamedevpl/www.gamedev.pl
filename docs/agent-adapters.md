@@ -78,9 +78,9 @@ preview verdict is already available — the gate already launches Chromium with
 Local agents that _do_ have a shell must pass
 `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
 --enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`) and capture
-`canvas.toDataURL` inside the same render callback (set
-`preserveDrawingBuffer:true` when creating the GL context, not at capture
-time); decode to `shot.png` in-process and never print the data URL.
+`canvas.toDataURL` inside the same render callback
+(`preserveDrawingBuffer:true` only in a disposable capture harness, never in
+shipped game source); decode to `shot.png` in-process and never print the data URL.
 `page.screenshot({path:'shot.png'})` writes PNG directly.
 A black frame means those flags were missing or the drawing buffer was discarded.
 
