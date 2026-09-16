@@ -228,9 +228,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     this.gameAdmissionStore.gameAgentKeys.set(slug, copy);
   }
 
-  async getUser(uid: string): Promise<User | null> {
-    return this.identityStore.getUser(uid);
-  }
+  getUser = (uid: string) => this.identityStore.getUser(uid);
 
   async getUserByHandle(handle: string): Promise<User | null> {
     return this.identityStore.getUserByHandle(handle);
