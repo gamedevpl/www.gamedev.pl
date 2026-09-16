@@ -7,8 +7,13 @@ export async function assessmentCreatorHandle(
   slug: string,
   listCatalog: () => Promise<ReviewCatalogEntry[]>,
 ): Promise<string | null> {
-  const access = await resolveGameAccess(store, slug);
-  if (access.owner.kind === 'creator') return (await store.getUser(access.owner.uid))?.handle ?? null;
-  if (access.source === 'canonical' || access.owner.reason !== 'no_owner') return null;
-  return (await listCatalog()).find((entry) => entry.slug === slug)?.creatorHandle ?? null;
+  try {
+    const access = await resolveGameAccess(store, slug);
+    if (access.owner.kind === 'creator') return (await store.getUser(access.owner.uid))?.handle ?? null;
+    if (access.source === 'canonical' || access.owner.reason !== 'no_owner') return null;
+    return (await listCatalog()).find((entry) => entry.slug === slug)?.creatorHandle ?? null;
+  } catch {
+    // Attribution failure must not discard a reviewer's completed assessment.
+    return null;
+  }
 }
