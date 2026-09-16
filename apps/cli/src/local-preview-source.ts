@@ -70,5 +70,5 @@ export const CAPTURE_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; frame-src about:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 export function capturePage(html: string): string {
   const document = JSON.stringify(html).replace(/</g, '\\u003c');
-  return `<!doctype html><html><head><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden}</style></head><body><iframe title="Game capture" sandbox="allow-scripts allow-pointer-lock"></iframe><script>document.querySelector('iframe').srcdoc=${document};</script></body></html>`;
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden}</style></head><body><iframe title="Game capture" sandbox="allow-scripts allow-pointer-lock"></iframe><script>document.querySelector('iframe').srcdoc=${document};</script></body></html>`;
 }

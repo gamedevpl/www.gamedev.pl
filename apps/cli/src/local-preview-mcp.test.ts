@@ -109,6 +109,7 @@ it('does not capture a failed build or let a game escape srcdoc', async () => {
   const page = capturePage('</script><script>bad()</script>');
   expect(page).not.toContain('</script><script>bad');
   expect(page).not.toContain('allow-same-origin');
+  expect(page).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
 });
 it.each(['codex', 'claude', 'copilot'])('adds ephemeral MCP configuration for %s', (name) => {
   const original = { name, headless: ['exec'], command: name } as AdapterSpec;
