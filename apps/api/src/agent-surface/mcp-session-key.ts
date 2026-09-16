@@ -52,7 +52,7 @@ function sign(
 ): string {
   const base = `${SCOPE}:${sessionId}:${jobId}:${roundGeneration}:${exp}`;
   const payload = actorUid ? `${base}:${actorUid}` : base;
-  return createHmac('sha256', secret).update(payload).digest('hex'); // codeql[js/insufficient-password-hash]
+  return createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 function safeEqualHex(actual: string, expected: string): boolean {

@@ -37,6 +37,21 @@ export function canActOnGame(access: ResolvedGameAccess, uid: string, action: Ga
   return EDITOR_ACTIONS.has(action);
 }
 
+// Return the GameAccess uid, never the candidate string.
+export function memberUidOnGame(access: ResolvedGameAccess, uid: string): string | null {
+  if (access.owner.kind === 'creator' && access.owner.uid === uid) return access.owner.uid;
+  for (const editorUid of access.editorUids) {
+    if (editorUid === uid) return editorUid;
+  }
+  return null;
+}
+
+export async function writerUidForSlug(store: GameOwnerLookup, slug: string, uid: string): Promise<string | null> {
+  const access = await resolveGameAccess(store, slug);
+  if (!canActOnGame(access, uid, 'build')) return null;
+  return memberUidOnGame(access, uid);
+}
+
 export async function canActOnSlug(
   store: GameOwnerLookup,
   slug: string,

@@ -1626,8 +1626,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.oauthStore.createOAuthAccessToken(record);
   }
 
-  async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    return this.oauthStore.getOAuthAccessToken(tokenId);
+  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
+    return this.oauthStore.getAsAccessToken(tokenId);
   }
 
   async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {

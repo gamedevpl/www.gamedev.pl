@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canActOnGame, isGameMember, memberKey, viewerRoleOnGame } from './game-access-permissions.js';
+import { canActOnGame, isGameMember, memberKey, memberUidOnGame, viewerRoleOnGame } from './game-access-permissions.js';
 import type { ResolvedGameAccess } from './game-access-resolve.js';
 
 function access(ownerUid: string, editorUids: string[] = []): ResolvedGameAccess {
@@ -54,6 +54,15 @@ describe('viewerRoleOnGame', () => {
     expect(viewerRoleOnGame(shared, 'g:dana')).toBeNull();
     expect(isGameMember(shared, 'g:bea')).toBe(true);
     expect(isGameMember(shared, 'g:dana')).toBe(false);
+  });
+});
+
+describe('memberUidOnGame', () => {
+  it('returns the GameAccess uid for owner and editor', () => {
+    const shared = access('g:ada', ['g:bea']);
+    expect(memberUidOnGame(shared, 'g:ada')).toBe('g:ada');
+    expect(memberUidOnGame(shared, 'g:bea')).toBe('g:bea');
+    expect(memberUidOnGame(shared, 'g:dana')).toBeNull();
   });
 });
 

@@ -26,7 +26,7 @@ export interface OAuthStore {
 
   createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void>;
 
-  getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null>;
+  getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null>;
 
   deleteOAuthAccessToken(tokenId: string): Promise<boolean>;
 
@@ -118,7 +118,7 @@ export class InMemoryOAuthStore implements OAuthStore {
     this.oauthAccessTokens.set(record.tokenId, { ...record });
   }
 
-  async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
+  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
     const record = this.oauthAccessTokens.get(tokenId);
     return record ? { ...record } : null;
   }
@@ -291,7 +291,7 @@ export class FirestoreOAuthStore implements OAuthStore {
     await this.db.collection('oauthAccessTokens').doc(record.tokenId).create(stripUndefined(record));
   }
 
-  async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
+  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
     const snap = await this.db.collection('oauthAccessTokens').doc(tokenId).get();
     if (!snap.exists) return null;
     return snap.data() as OAuthAccessTokenRecord;
