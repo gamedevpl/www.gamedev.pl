@@ -84,6 +84,7 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
     case 'studio':
     case 'studioWelcome':
     case 'studioConnect':
+    case 'studioTransferPropose':
       return ctx.studioTitle?.trim()
         ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
         : brandedPageTitle(ctx.copy.studio);

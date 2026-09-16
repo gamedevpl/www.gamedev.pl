@@ -7,6 +7,7 @@ import { isCanonicalSlug } from '../platform/slug-policy.js';
 import type { GameTransferInvitation } from '../platform/store.js';
 import type { Store } from '../platform/store.js';
 import { invalidateTransferInboxCache, readIncomingTransfersCached } from './transfer-inbox-cache.js';
+import { registerGameTransferProposalRoutes } from './game-transfer-proposal-routes.js';
 
 // Never the counterparty's raw uid -- a stable login identifier.
 
@@ -255,4 +256,6 @@ export async function registerGameTransferRoutes(
       return reply.send({ transfer: await toSummary(store, result, request.user!.uid) });
     },
   );
+
+  await registerGameTransferProposalRoutes(app, options);
 }

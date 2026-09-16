@@ -15,6 +15,7 @@ import {
   studioPath,
   studioWelcomePath,
   studioConnectPath,
+  studioTransferProposePath,
 } from './router.js';
 
 describe('parsePathRoute', () => {
@@ -156,6 +157,21 @@ describe('parsePathRoute', () => {
     });
     expect(studioConnectPath('tv-tycoon')).toBe('/studio/tv-tycoon/connect');
     expect(navUpTarget({ view: 'studioConnect', game: 'tv-tycoon' })).toEqual({
+      path: '/studio',
+      labelKey: 'upStudio',
+    });
+  });
+
+  it('parses a transfer proposal confirmation URL', () => {
+    const proposalId = '11111111-2222-4333-8444-555555555555';
+    expect(parsePathRoute(`/studio/sky-dodge/transfer/propose/${proposalId}`)).toEqual({
+      view: 'studioTransferPropose',
+      game: 'sky-dodge',
+      proposalId,
+    });
+    expect(studioTransferProposePath('sky-dodge', proposalId)).toBe(`/studio/sky-dodge/transfer/propose/${proposalId}`);
+    expect(canonicalPath(`/studio/sky-dodge/transfer/propose/${proposalId}`)).toBeNull();
+    expect(navUpTarget({ view: 'studioTransferPropose', game: 'sky-dodge', proposalId })).toEqual({
       path: '/studio',
       labelKey: 'upStudio',
     });

@@ -15,6 +15,7 @@ import { StageOverlay } from './StageOverlay.js';
 import { useSpecSubmissionFlow } from './useSpecSubmissionFlow.js';
 import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
 import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
+import { StudioTransferProposalConfirm } from './surfaces/studio/StudioTransferProposalConfirm.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
@@ -54,6 +55,7 @@ const CreatorStudioView = lazy(() =>
 );
 const ReviewDesk = lazy(() => import('./surfaces/review/ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
 const PartyPage = lazy(() => import('./surfaces/party/PartyPage.js').then((m) => ({ default: m.PartyPage })));
+const STUDIO_VIEWS = new Set(['studio', 'studioWelcome', 'studioConnect', 'studioTransferPropose']);
 
 export function App() {
   const { t } = useTranslation();
@@ -161,7 +163,7 @@ export function App() {
     // Matched on either address the URL can carry: a slug now, a capability token on
     // links minted before games had one.
     const studioTitle =
-      (route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect') && route.game
+      STUDIO_VIEWS.has(route.view) && 'game' in route && route.game
         ? (savedSpecs.find((spec) => spec.token === route.game || spec.slug === route.game)?.title ?? null)
         : null;
 
@@ -467,7 +469,7 @@ export function App() {
         {...navHeader}
         isOnCreate={route.view === 'create'}
         isOnParty={route.view === 'party'}
-        isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
+        isOnStudio={STUDIO_VIEWS.has(route.view)}
       />
 
       {/* Standalone PWA has no browser pull-to-refresh; this restores it on home only,
@@ -490,6 +492,8 @@ export function App() {
               <AdminConsole section={route.section} onNavigate={navigate} />
             ) : route.view === 'review' ? (
               <ReviewDesk />
+            ) : route.view === 'studioTransferPropose' ? (
+              <StudioTransferProposalConfirm slug={route.game} proposalId={route.proposalId} onOpenStudio={navigate} />
             ) : route.view === 'studioWelcome' ? (
               <StudioWelcomeView game={route.game} onOpenStudio={navigate} />
             ) : route.view === 'studioConnect' ? (
@@ -616,11 +620,7 @@ export function App() {
           and a footer scrolling underneath it is chrome nobody can reach anyway. */}
       {!stageContent && <SiteFooter />}
 
-      {/* Same reasoning, and then some: both of these are bottom-anchored bars, and a
-          bar over a running game is worse than merely unreachable. Mounting them here —
-          inside the signed-in app, past the join and splash early returns — is also what
-          keeps the install nudge away from controller guests (mobile-app-plan.md in the private ops repo, open
-          question 1) and from visitors who have not got in yet. */}
+      {/* Bottom bars stay off theaters, join, and the splash. */}
       {!stageContent && <InstallPrompt />}
       {!stageContent && <AppUpdateBanner />}
 

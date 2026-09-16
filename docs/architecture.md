@@ -267,7 +267,9 @@ its CODEOWNERS puts a human on the merge, and the snapshot bake republishes.
 A creator can point their own agent — Claude Code, Codex, any MCP-capable client — at the
 platform instead of waiting for the hosted builder. `agent-surface/` exposes the MCP server
 and the agent channel: the agent opens a round, reads the kit and brief, stages sources,
-submits, and gets a gate verdict. The loop and its rules are in the
+submits, and gets a gate verdict. An opt-in `ownership` OAuth scope can read current-member
+access and prepare a Studio transfer proposal; the agent cannot choose a recipient or
+complete the transfer. The loop and its rules are in the
 [`byoca-mcp`](../.claude/skills/byoca-mcp/SKILL.md) skill; the hosted alternative is
 [`managed-agent-backend.md`](./managed-agent-backend.md).
 

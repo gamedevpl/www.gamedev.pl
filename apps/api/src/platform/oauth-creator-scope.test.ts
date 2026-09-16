@@ -44,7 +44,7 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     app = await buildOAuthApp(new InMemoryStore());
     const res = await app.inject({ method: 'GET', url: OAUTH_AS_METADATA_PATH });
     expect(res.json()).toMatchObject({
-      scopes_supported: ['mcp', 'creator'],
+      scopes_supported: ['mcp', 'creator', 'ownership'],
       grant_types_supported: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code'],
     });
     expect(res.json().device_authorization_endpoint).toMatch(/\/oauth\/device$/);

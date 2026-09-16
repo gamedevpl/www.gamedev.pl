@@ -33,6 +33,7 @@ import { createSourcePatchTools } from './mcp-source-patch-tools.js';
 import { createSourceSubmitTools } from './mcp-source-submit-tools.js';
 import { createGameCreateTools } from './mcp-game-create-tools.js';
 import { createAccountGamesTools, type LoadOwnerGamesFn } from './mcp-account-games-tools.js';
+import { createOwnershipTools } from './mcp-ownership-tools.js';
 import { createRoundReopenTools } from './mcp-round-reopen-tools.js';
 import { createSessionBasicsTools } from './mcp-session-basics-tools.js';
 
@@ -1318,6 +1319,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       now,
       loadOwnerGames: options.loadOwnerGames,
     }),
+    ...createOwnershipTools({ store, platformConnectorSecret, now }),
 
     ...createProposalTools({
       store,

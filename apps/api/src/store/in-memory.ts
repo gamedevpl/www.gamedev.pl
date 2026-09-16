@@ -87,6 +87,7 @@ import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
 import { InMemoryGameTransferStore, MAX_REVOKED_ROUNDS_PER_TRANSFER } from './slices/game-transfer.js';
+import { InMemoryGameTransferProposalStore } from './slices/game-transfer-proposal.js';
 import { InMemoryGameEditorInviteStore } from './slices/game-editor-invite.js';
 import { InMemoryGameMembershipStore, MAX_REVOKED_ROUNDS_PER_MEMBER } from './slices/game-membership.js';
 import { InMemoryGameQuotaStore } from './slices/game-quota.js';
@@ -135,11 +136,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug) => this.gameAdmissionStore.gameAgentKeys.delete(slug),
     (slug) => this.contributionStore.gameAutonomy.delete(slug),
     (slug) => {
-      const onSlug = [...this.submissions.values()]
-        .filter((record) => record.slug === slug)
+      for (const record of [...this.submissions.values()]
+        .filter((row) => row.slug === slug)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
-        .slice(0, MAX_REVOKED_ROUNDS_PER_TRANSFER);
-      for (const record of onSlug) {
+        .slice(0, MAX_REVOKED_ROUNDS_PER_TRANSFER)) {
         this.submissions.set(record.jobId, {
           ...record,
           roundGeneration: revokedRoundGeneration(record.roundGeneration),
@@ -147,6 +147,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       }
     },
   );
+  protected gameTransferProposalStore = new InMemoryGameTransferProposalStore();
   protected gameEditorInviteStore = new InMemoryGameEditorInviteStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
@@ -282,10 +283,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     for (const [slug, transfer] of [...this.gameTransferStore.transfers]) {
       if (transfer.senderUid === uid || transfer.recipientUid === uid) {
         this.gameTransferStore.transfers.delete(slug);
-        // The recipient's cached inbox must drop this erased row too.
         invalidateTransferInboxCache(this, transfer.recipientUid);
       }
     }
+    await this.gameTransferProposalStore.eraseTransferProposalsForUid(uid, at);
     for (const [key, counters] of [...this.quotaStore.usage]) {
       void counters;
       if (key.startsWith(`${uid}:`)) this.quotaStore.usage.delete(key);

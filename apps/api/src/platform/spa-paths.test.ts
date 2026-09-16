@@ -65,6 +65,7 @@ describe('isKnownSpaShellPath', () => {
     '/studio/sky-dodge/code',
     '/studio/tok-abc/welcome',
     '/studio/tok-abc/connect',
+    '/studio/tok-abc/transfer/propose/11111111-2222-4333-8444-555555555555',
     '/admin',
     '/admin/queue',
     '/admin/costs',

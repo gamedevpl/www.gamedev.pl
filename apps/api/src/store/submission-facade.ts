@@ -3,6 +3,8 @@ import type { GameAccessStore } from './slices/game-access.js';
 import type { GameAccessRecord } from './records/game-access.js';
 import type { GameTransferStore } from './slices/game-transfer.js';
 import type { GameTransferInvitation } from './records/game-transfer.js';
+import type { GameTransferProposalStore } from './slices/game-transfer-proposal.js';
+import type { GameTransferProposal } from './records/game-transfer-proposal.js';
 import type {
   EditorInviteAcceptResult,
   EditorInviteCreateResult,
@@ -16,6 +18,7 @@ export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
   protected abstract gameTransferStore: GameTransferStore;
+  protected abstract gameTransferProposalStore: GameTransferProposalStore;
   protected abstract gameEditorInviteStore: GameEditorInviteStore;
   protected abstract gameMembershipStore: GameMembershipStore;
   protected abstract submissionQueryStore: SubmissionQueryStore;
@@ -187,6 +190,7 @@ export abstract class SubmissionFacade {
     const result = await this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at, invitationId);
     if (result && result !== 'busy' && result !== 'ineligible' && result !== 'stale_owner') {
       await this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
+      await this.gameTransferProposalStore.invalidateOpenTransferProposalsForSlug(slug, at);
     }
     return result;
   }
@@ -211,6 +215,24 @@ export abstract class SubmissionFacade {
 
   async listPendingGameTransfersForRecipient(uid: string, at: string): Promise<GameTransferInvitation[]> {
     return this.gameTransferStore.listPendingGameTransfersForRecipient(uid, at);
+  }
+
+  async proposeGameTransfer(
+    input: Parameters<GameTransferProposalStore['proposeGameTransfer']>[0],
+  ): Promise<Awaited<ReturnType<GameTransferProposalStore['proposeGameTransfer']>>> {
+    return this.gameTransferProposalStore.proposeGameTransfer(input);
+  }
+
+  async getTransferProposal(proposalId: string, at: string): Promise<GameTransferProposal | null> {
+    return this.gameTransferProposalStore.getTransferProposal(proposalId, at);
+  }
+
+  async getTransferProposalReceipt(ownerUid: string, idempotencyKey: string, at: string) {
+    return this.gameTransferProposalStore.getTransferProposalReceipt(ownerUid, idempotencyKey, at);
+  }
+
+  async confirmTransferProposal(proposalId: string, ownerUid: string, at: string) {
+    return this.gameTransferProposalStore.confirmTransferProposal(proposalId, ownerUid, at);
   }
 
   async getEditorInvite(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null> {
