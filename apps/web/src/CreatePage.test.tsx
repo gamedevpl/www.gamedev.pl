@@ -77,7 +77,7 @@ describe('CreatePage', () => {
 
     expect(container.querySelector('.create-headline')?.textContent).toBeTruthy();
     expect(container.querySelector('.create-mascot')).toBeNull();
-    // The composer is reused as-is; same input the home page ships. No starter chips.
+    // Same composer as home. No starter chips.
     expect(container.querySelector('.big-prompt-input')).not.toBeNull();
     expect(container.querySelector('.prompt-example-chip')).toBeNull();
     expect(container.querySelector('.prompt-examples')).toBeNull();
