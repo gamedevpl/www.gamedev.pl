@@ -35,18 +35,46 @@ function listConstNames(source: string): string[] {
   return uniqueSorted(names);
 }
 
-function stripExport(text: string): string {
-  return text.replace(/^export\s+/, '');
+function stripLineComments(text: string): string {
+  let quote: string | null = null;
+  let out = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const prev = i > 0 ? text[i - 1] : '';
+    if (quote) {
+      out += char;
+      if (char === quote && prev !== '\\') quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      out += char;
+      continue;
+    }
+    if (char === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i += 1;
+      if (i < text.length) out += '\n';
+      continue;
+    }
+    out += char;
+  }
+  return out;
 }
 
-export function extractNamedFunction(source: string, name: string): string | null {
-  const match = new RegExp(`(?:export\\s+)?function\\s+${name}\\s*\\(`).exec(source);
-  if (!match) return null;
-  const brace = source.indexOf('{', match.index);
-  if (brace < 0) return null;
+function normalizeExtract(text: string): string {
+  return stripLineComments(text)
+    .replace(/[ \t]+$/gm, '')
+    .replace(/^\s*\n/gm, '');
+}
+
+function stripExport(text: string): string {
+  return normalizeExtract(text.replace(/^export\s+/, ''));
+}
+
+function matchingPair(source: string, start: number, open: string, close: string): number {
   let depth = 0;
   let quote: string | null = null;
-  for (let index = brace; index < source.length; index += 1) {
+  for (let index = start; index < source.length; index += 1) {
     const char = source[index];
     const prev = index > 0 ? source[index - 1] : '';
     if (quote) {
@@ -57,13 +85,58 @@ export function extractNamedFunction(source: string, name: string): string | nul
       quote = char;
       continue;
     }
-    if (char === '{') depth += 1;
-    else if (char === '}') {
+    if (char === open) depth += 1;
+    else if (char === close) {
       depth -= 1;
-      if (depth === 0) return source.slice(match.index, index + 1);
+      if (depth === 0) return index;
     }
   }
-  return null;
+  return -1;
+}
+
+function skipWs(source: string, index: number): number {
+  while (index < source.length && /\s/.test(source[index])) index += 1;
+  return index;
+}
+
+export function extractNamedFunction(source: string, name: string): string | null {
+  const match = new RegExp(`(?:export\\s+)?function\\s+${name}\\s*\\(`).exec(source);
+  if (!match) return null;
+  const paramsClose = matchingPair(source, source.indexOf('(', match.index), '(', ')');
+  if (paramsClose < 0) return null;
+  let index = skipWs(source, paramsClose + 1);
+  if (source[index] === ':') {
+    index += 1;
+    let depth = 0;
+    let quote: string | null = null;
+    for (; index < source.length; index += 1) {
+      const char = source[index];
+      const prev = index > 0 ? source[index - 1] : '';
+      if (quote) {
+        if (char === quote && prev !== '\\') quote = null;
+        continue;
+      }
+      if (char === '"' || char === "'" || char === '`') {
+        quote = char;
+        continue;
+      }
+      if (char === '{' && depth === 0) {
+        const end = matchingPair(source, index, '{', '}');
+        if (end < 0) return null;
+        if (source[skipWs(source, end + 1)] === '{') {
+          index = end;
+          continue;
+        }
+        return source.slice(match.index, end + 1);
+      }
+      if (char === '{' || char === '(' || char === '[' || char === '<') depth += 1;
+      else if (char === '}' || char === ')' || char === ']' || char === '>') depth -= 1;
+    }
+    return null;
+  }
+  if (source[index] !== '{') return null;
+  const end = matchingPair(source, index, '{', '}');
+  return end < 0 ? null : source.slice(match.index, end + 1);
 }
 
 export function extractNamedConst(source: string, name: string): string | null {

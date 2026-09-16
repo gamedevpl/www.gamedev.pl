@@ -74,4 +74,28 @@ describe('Publish checks param and property values', () => {
     expect(container.textContent).toContain('80-200');
     expect(container.querySelector('.editor-prop.is-invalid')).not.toBeNull();
   });
+
+  it('marks a missing or null param invalid instead of scoring the default', async () => {
+    const editorState: GameEditorState = {
+      version: 'v1',
+      definition,
+      content: { params: { width: 140 } },
+      draft: {
+        content: { params: { width: null } } as unknown as GameEditorState['content'],
+        revision: 4,
+        updatedAt: '',
+      },
+    };
+    fetchGameEditor.mockResolvedValue(editorState);
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<EditorPanel game={game} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
+      await Promise.resolve();
+    });
+    expect(container.querySelector('.editor-prop.is-invalid')).not.toBeNull();
+    const publish = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes(i18n.t('studioPanel.editor.publish')),
+    );
+    expect(publish?.disabled).toBe(true);
+  });
 });

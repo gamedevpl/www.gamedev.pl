@@ -167,6 +167,7 @@ export function useEditorDraftBridge(
     }
 
     function post(content: EditorContentDoc, selection: EditorSelection | null) {
+      lastRevisionRef.current ??= 1;
       frameRef.current?.contentWindow?.postMessage(
         editorContentMessage(content, selection, lastRevisionRef.current),
         '*',
@@ -238,11 +239,7 @@ export function useEditorDraftBridge(
         failController(data.error ?? 'The game refused this content change.');
       } else if (data.t === 'editor:controller-error') {
         failController(data.error ?? 'The game editor stopped responding.');
-      } else if (data.t === 'editor:hello') {
-        // A non-controller editor still receives the declaration-driven content push.
-      } else {
-        return;
-      }
+      } else if (data.t !== 'editor:hello') return;
 
       if (data.t !== 'editor:hello') return;
 

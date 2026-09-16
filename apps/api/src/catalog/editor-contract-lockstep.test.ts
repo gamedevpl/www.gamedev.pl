@@ -14,6 +14,15 @@ describe('editor-contract lockstep fingerprint', () => {
     );
   });
 
+  it('skips an object return type when locating the function body', () => {
+    const source =
+      'export function parseEditorDefinition(source: string): { definition: null; errors: string[] } { return "body"; }';
+    expect(extractNamedFunction(source, 'parseEditorDefinition')).toContain('return "body"');
+    expect(extractNamedFunction(source, 'parseEditorDefinition')).not.toBe(
+      'export function parseEditorDefinition(source: string): { definition: null; errors: string[] }',
+    );
+  });
+
   it('joins parse, validate, and generate in a stable order', () => {
     const parse = 'export function parseEditorDefinition() { return "p"; }';
     const validate = 'export function validateEditorContent() { return "v"; }';
@@ -52,5 +61,13 @@ describe('editor-contract lockstep fingerprint', () => {
       'export function valueProblem() { return 1; }\nexport function validateEditorContent() { return 2; }';
     const local = 'function valueProblem() { return 1; }\nexport function validateEditorContent() { return 2; }';
     expect(editorContractFingerprint(exported)).toBe(editorContractFingerprint(local));
+  });
+
+  it('ignores comments inside a helper so the games-repo copy can keep them', () => {
+    const plain =
+      'export function unreachable() {\n  if (queue.length === 0) return [];\n  return missed;\n}\nexport function validateEditorContent() { return 1; }';
+    const commented =
+      'function unreachable() {\n  // No origin at all is a separate failure\n  if (queue.length === 0) return [];\n  return missed;\n}\nexport function validateEditorContent() { return 1; }';
+    expect(editorContractFingerprint(plain)).toBe(editorContractFingerprint(commented));
   });
 });

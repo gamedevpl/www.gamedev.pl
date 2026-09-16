@@ -786,7 +786,6 @@ export function EditorPanel(props: {
             )}
           </div>
         ) : null}
-
         <aside className="editor-side">
           {paramSpecs ? (
             <div className="editor-side-group">
@@ -835,8 +834,9 @@ export function EditorPanel(props: {
                 </p>
               ) : null}
               {Object.entries(paramSpecs).map(([paramName, paramSpec]) => {
-                const value = paramValues[paramName] ?? paramSpec.default;
-                const problem = valueProblem(paramSpec, value);
+                const stored = paramValues[paramName];
+                const value = stored ?? paramSpec.default;
+                const problem = valueProblem(paramSpec, stored);
                 if (paramSpec.type === 'int' || paramSpec.type === 'number') {
                   const step = paramSpec.type === 'int' ? 1 : (paramSpec.max - paramSpec.min) / 100;
                   const shown = typeof value === 'number' ? value : paramSpec.min;

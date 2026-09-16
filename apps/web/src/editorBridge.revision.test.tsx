@@ -107,4 +107,24 @@ describe('editor:check revision correlation', () => {
     act(() => pushRef.current?.({ levels: ['b'] } as unknown as EditorContentDoc));
     expect(posted.at(-1)).toMatchObject({ t: 'editor:content', revision: 2 });
   });
+
+  it('stamps a revision on the hello draft so a later push cannot accept that check', async () => {
+    studioApi.fetchGameEditor.mockResolvedValue({
+      definition: { version: 2, controller: true, content: {} },
+      draft: { content: { levels: ['hello'] }, revision: 1, updatedAt: '' },
+    });
+    mount();
+    send(frame({ t: 'editor:hello', controller: true }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(posted.some((message) => message.t === 'editor:content' && message.revision === 1)).toBe(true);
+    send(frame({ t: 'editor:ui', doc: { type: 'note', text: 'Ready' } }));
+    act(() => pushRef.current?.({ levels: ['next'] } as unknown as EditorContentDoc));
+    send(frame({ t: 'editor:check', ok: false, problems: ['from-hello'], revision: 1 }));
+    expect(latestController?.checks).toBeNull();
+    send(frame({ t: 'editor:check', ok: true, problems: [], revision: 2 }));
+    expect(latestController?.checks).toEqual({ ok: true, problems: [] });
+  });
 });
