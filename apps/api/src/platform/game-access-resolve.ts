@@ -90,11 +90,11 @@ export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, 
   }
 }
 
-// A round's keys answer to the revision it opened under.
+// Stamped keys survive membership; a handover writes the revoke marker.
 
 // An owner comparison alone would revive rounds a transfer revoked,
 
-// A -> B -> A restores the uid, never the revision.
+// A -> B -> A restores the uid, never the revoke marker.
 
 // A round predating the epoch falls back to the weaker owner check,
 
@@ -106,8 +106,12 @@ export function roundAuthorityCurrent(
   access: ResolvedGameAccess,
 ): boolean {
   if (access.source !== 'canonical') return true;
-  // The epoch is what makes a revocation permanent.
-  if (record.accessEpoch !== undefined) return record.accessEpoch === access.accessRevision;
+  if (record.accessEpoch !== undefined) {
+    // Membership bumps revision; only a handover fences stamped keys.
+    const revokedAt = access.capabilitiesRevokedAtRevision;
+    if (revokedAt === undefined) return true;
+    return record.accessEpoch >= revokedAt;
+  }
   // No epoch on a game that changed hands: fenced rather than guessed.
   if (access.capabilitiesRevokedAtRevision !== undefined) return false;
   if (sameOwner(classifyOwnerUid(record.ownerUid), access.owner)) return true;
