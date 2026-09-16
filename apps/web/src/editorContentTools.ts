@@ -192,7 +192,10 @@ export function itemProblems(
     const tile = spec.tiles.find((entry) => entry.key === key);
     return tile ? name(tile.label) : key;
   };
-  const problems: string[] = [];
+  const problems: string[] = gridProblems(spec, item);
+  for (const char of item.rows.join('')) {
+    if (!charToKey.has(char)) problems.push(`Unknown tile "${char}"`);
+  }
   for (const rule of spec.constraints ?? []) {
     if ('reachable' in rule) {
       const missed = unreachableCount(spec, item, rule.reachable);
@@ -272,10 +275,28 @@ function pathProblems(spec: EditorPathSpec, item: EditorPathItemContent, message
   return problems;
 }
 
-/** Entities' one rule (uniqueBy) is collection-wide — checked once, mirroring the server. */
-export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
-  if (spec.item.widget !== 'entities') return [];
+// The declared grid, which the server checks and the creator cannot see.
+function gridProblems(spec: EditorTilemapSpec, item: EditorTilemapItemContent): string[] {
   const problems: string[] = [];
+  const { minRows, maxRows, minCols, maxCols } = spec.grid;
+  if (item.rows.length < minRows || item.rows.length > maxRows) {
+    problems.push(`${item.rows.length} rows; expected ${minRows}-${maxRows}`);
+  }
+  const width = item.rows[0]?.length ?? 0;
+  if (width < minCols || width > maxCols) problems.push(`${width} wide; expected ${minCols}-${maxCols}`);
+  item.rows.forEach((row, index) => {
+    if (row.length !== width) problems.push(`Row ${index + 1} is ${row.length} wide, expected ${width}`);
+  });
+  return problems;
+}
+
+/** Collection-wide rules the server checks: how many items, and entities' uniqueBy. */
+export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
+  const problems: string[] = [];
+  if (items.length < spec.min || items.length > spec.max) {
+    problems.push(`has ${items.length} items; expected ${spec.min}-${spec.max}`);
+  }
+  if (spec.item.widget !== 'entities') return problems;
   for (const rule of spec.item.constraints ?? []) {
     if (!('uniqueBy' in rule)) continue;
     const seenAt = new Map<string, number>();
