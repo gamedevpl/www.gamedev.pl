@@ -121,4 +121,54 @@ describe('a transfer response names the offer it answers', () => {
     // Still refused: the offer did not move.
     expect((await store.getGameAccess('sky'))?.ownerUid).toBe('g:ada');
   });
+
+  it('tells a stranger nothing about whether a slug ever had a transfer', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    await store.upsertUser({ uid: 'g:stranger' });
+    const app = await appWith(store);
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const probe = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:stranger') },
+      payload: {},
+    });
+
+    // The same answer a slug with no transfer at all would give.
+    expect(probe.statusCode).toBe(404);
+    expect(probe.json().error).toBe('not_found');
+  });
+
+  it('calls a genuinely finished invitation gone, not stale', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    const app = await appWith(store);
+    const opened = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer/cancel',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { invitationId: opened.json().transfer.invitationId },
+    });
+
+    const late = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+      payload: {},
+    });
+
+    expect(late.statusCode).toBe(404);
+    expect(late.json().error).toBe('not_found');
+  });
 });

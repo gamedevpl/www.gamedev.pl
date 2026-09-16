@@ -77,18 +77,22 @@ async function toSummary(store: Store, invite: GameTransferInvitation, viewerUid
   };
 }
 
-// No offer named, but the live one has an id.
+// No offer named, but the caller's pending one has an id.
 
-// Says reload rather than "gone": the offer is still there.
+// Says reload rather than "gone": their offer is still there.
+
+// A stranger learns nothing: only a participant's pending row counts.
 async function staleClientRefusal(
   store: Store,
   slug: string,
+  uid: string,
   at: string,
   invitationId: string | undefined,
 ): Promise<boolean> {
   if (invitationId !== undefined) return false;
   const live = await store.getActiveGameTransfer(slug, at);
-  return Boolean(live && live.invitationId !== undefined);
+  if (!live || live.status !== 'pending' || live.invitationId === undefined) return false;
+  return live.senderUid === uid || live.recipientUid === uid;
 }
 
 export async function registerGameTransferRoutes(
@@ -165,7 +169,7 @@ export async function registerGameTransferRoutes(
       const at = new Date(now()).toISOString();
       const result = await store.cancelGameTransferInvitation(slug, request.user!.uid, at, body.data.invitationId);
       if (!result) {
-        const stale = await staleClientRefusal(store, slug, at, body.data.invitationId);
+        const stale = await staleClientRefusal(store, slug, request.user!.uid, at, body.data.invitationId);
         return reply.status(stale ? 409 : 404).send({ error: stale ? 'stale_client' : 'not_found' });
       }
       invalidateTransferInboxCache(store, result.recipientUid);
@@ -220,7 +224,7 @@ export async function registerGameTransferRoutes(
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
       if (!result) {
-        const stale = await staleClientRefusal(store, slug, at, body.data.invitationId);
+        const stale = await staleClientRefusal(store, slug, request.user!.uid, at, body.data.invitationId);
         return reply.status(stale ? 409 : 404).send({ error: stale ? 'stale_client' : 'not_found' });
       }
       invalidateTransferInboxCache(store, uid);
@@ -242,7 +246,7 @@ export async function registerGameTransferRoutes(
       const at = new Date(now()).toISOString();
       const result = await store.rejectGameTransferInvitation(slug, request.user!.uid, at, body.data.invitationId);
       if (!result) {
-        const stale = await staleClientRefusal(store, slug, at, body.data.invitationId);
+        const stale = await staleClientRefusal(store, slug, request.user!.uid, at, body.data.invitationId);
         return reply.status(stale ? 409 : 404).send({ error: stale ? 'stale_client' : 'not_found' });
       }
       invalidateTransferInboxCache(store, result.recipientUid);
