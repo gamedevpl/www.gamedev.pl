@@ -690,7 +690,12 @@ export async function registerAgentChannelRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
     options: { allowTerminalReceipt?: boolean } = {},
-  ): Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null> {
+  ): Promise<{
+    jobId: number;
+    record: SubmissionRecord;
+    access: AgentTokenAccess;
+    actorUid?: string;
+  } | null> {
     if (!store || !agentTokenSecret) {
       reply.status(503).send({ error: 'the build channel is not configured' });
       return null;
@@ -723,10 +728,10 @@ export async function registerAgentChannelRoutes(
     try {
       if (options.allowTerminalReceipt) {
         const access = classifyAgentTokenAccess(claims, record, now());
-        return { jobId, record, access };
+        return { jobId, record, access, actorUid: claims.actorUid };
       }
       assertAgentTokenActive(claims, record, now());
-      return { jobId, record, access: 'active' };
+      return { jobId, record, access: 'active', actorUid: claims.actorUid };
     } catch (error) {
       if (!(error instanceof InvalidAgentTokenError)) throw error;
       // Stale/expired tokens are a strict 401 in every case — including terminal jobs.
@@ -1912,7 +1917,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { jobId, record } = resolved;
+      const { jobId, record, actorUid } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
@@ -2042,6 +2047,7 @@ export async function registerAgentChannelRoutes(
           ...(record.dispatch?.backend || record.builder
             ? { backend: record.dispatch?.backend ?? record.builder }
             : {}),
+          ...(actorUid ? { actorUid } : {}),
         });
         if (!delivery.accepted) {
           return reply.send({

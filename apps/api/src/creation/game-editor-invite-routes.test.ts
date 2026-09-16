@@ -56,6 +56,9 @@ describe('game editor invite routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().invite).toMatchObject({ slug: 'sky', status: 'pending', you: 'sender' });
+    expect(res.json().invite.inviteId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
     expect(res.json().invite.counterparty).toEqual({ profileName: 'Bea' });
     expect(res.json().invite.memberKey).toBe(memberKey('sky', 'g:bea'));
     const body = JSON.stringify(res.json());
@@ -66,7 +69,7 @@ describe('game editor invite routes', () => {
   it('an editor cannot invite, and a stranger cannot list members', async () => {
     const { store, app, beaCode } = await party();
     await store.createEditorInvitation('sky', 'g:ada', 'g:bea', AT, beaCode);
-    await store.acceptEditorInvitation('sky', 'g:bea', AT);
+    await store.acceptEditorInvitation('sky', 'g:bea', AT, (await store.getEditorInvite('sky', 'g:bea', AT))!.inviteId);
 
     const invite = await app.inject({
       method: 'POST',
@@ -143,7 +146,7 @@ describe('game editor invite routes', () => {
   it('accept, reject, cancel, remove and leave cover the membership loop', async () => {
     const { store, app, beaCode, calCode } = await party();
 
-    await app.inject({
+    const beaInvite = await app.inject({
       method: 'POST',
       url: '/api/me/studio/games/sky/editors/invites',
       headers: { cookie: authCookie('g:ada') },
@@ -151,13 +154,13 @@ describe('game editor invite routes', () => {
     });
     const accepted = await app.inject({
       method: 'POST',
-      url: '/api/me/editor-invites/sky/accept',
+      url: `/api/me/editor-invites/${beaInvite.json().invite.inviteId}/accept`,
       headers: { cookie: authCookie('g:bea') },
     });
     expect(accepted.statusCode).toBe(200);
     expect(accepted.json().invite.status).toBe('accepted');
 
-    await app.inject({
+    const calInvite = await app.inject({
       method: 'POST',
       url: '/api/me/studio/games/sky/editors/invites',
       headers: { cookie: authCookie('g:ada') },
@@ -165,12 +168,12 @@ describe('game editor invite routes', () => {
     });
     const rejected = await app.inject({
       method: 'POST',
-      url: '/api/me/editor-invites/sky/reject',
+      url: `/api/me/editor-invites/${calInvite.json().invite.inviteId}/reject`,
       headers: { cookie: authCookie('g:cal') },
     });
     expect(rejected.json().invite.status).toBe('rejected');
 
-    await app.inject({
+    const calAgain = await app.inject({
       method: 'POST',
       url: '/api/me/studio/games/sky/editors/invites',
       headers: { cookie: authCookie('g:ada') },
@@ -178,7 +181,7 @@ describe('game editor invite routes', () => {
     });
     const cancelled = await app.inject({
       method: 'POST',
-      url: `/api/me/studio/games/sky/editors/invites/${memberKey('sky', 'g:cal')}/cancel`,
+      url: `/api/me/studio/games/sky/editors/invites/${calAgain.json().invite.inviteId}/cancel`,
       headers: { cookie: authCookie('g:ada') },
     });
     expect(cancelled.json().invite.status).toBe('cancelled');
@@ -199,7 +202,7 @@ describe('game editor invite routes', () => {
     expect(removed.statusCode).toBe(200);
 
     await store.createEditorInvitation('sky', 'g:ada', 'g:cal', AT, calCode);
-    await store.acceptEditorInvitation('sky', 'g:cal', AT);
+    await store.acceptEditorInvitation('sky', 'g:cal', AT, (await store.getEditorInvite('sky', 'g:cal', AT))!.inviteId);
     const left = await app.inject({
       method: 'POST',
       url: '/api/me/studio/games/sky/editors/leave',
@@ -259,7 +262,7 @@ describe('game editor invite routes', () => {
 
     await app.inject({
       method: 'POST',
-      url: '/api/me/editor-invites/sky/reject',
+      url: `/api/me/editor-invites/${first.json().invites[0].inviteId}/reject`,
       headers: { cookie: authCookie('g:bea') },
     });
     const after = await app.inject({
@@ -268,5 +271,39 @@ describe('game editor invite routes', () => {
       headers: { cookie: authCookie('g:bea') },
     });
     expect(after.json().invites).toHaveLength(0);
+  });
+
+  it('a replayed accept after cancel does not join the replacement invite', async () => {
+    const { app, beaCode } = await party();
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/editors/invites',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: beaCode },
+    });
+    const firstId = first.json().invite.inviteId as string;
+    await app.inject({
+      method: 'POST',
+      url: `/api/me/studio/games/sky/editors/invites/${firstId}/cancel`,
+      headers: { cookie: authCookie('g:ada') },
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/editors/invites',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: beaCode },
+    });
+    const replay = await app.inject({
+      method: 'POST',
+      url: `/api/me/editor-invites/${firstId}/accept`,
+      headers: { cookie: authCookie('g:bea') },
+    });
+    expect(replay.statusCode).toBe(404);
+    const accepted = await app.inject({
+      method: 'POST',
+      url: `/api/me/editor-invites/${second.json().invite.inviteId}/accept`,
+      headers: { cookie: authCookie('g:bea') },
+    });
+    expect(accepted.statusCode).toBe(200);
   });
 });

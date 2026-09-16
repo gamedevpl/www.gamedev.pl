@@ -649,14 +649,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         roundGeneration: sessionClaims.roundGeneration,
         exp: sessionClaims.exp,
       };
-      // Ephemeral channel token for inject — same generation, short TTL. Not returned.
-      channelToken = mintAgentToken(sessionClaims.jobId, agentTokenSecret, {
-        roundGeneration: sessionClaims.roundGeneration,
-        now: now(),
-        ttlDays: 1,
-      });
       identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
       sessionActorUid = sessionClaims.actorUid;
+      channelToken = '';
     } else if (bearerIsOAuth) {
       return toolErr(
         'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
@@ -711,6 +706,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     const actorUid = sessionActorUid ?? record.ownerUid;
     if (record.slug && !(await canActOnSlug(store, record.slug, actorUid, 'build'))) {
       return toolErr('this session can no longer write this game');
+    }
+    if (!channelToken) {
+      channelToken = mintAgentToken(claims.jobId, agentTokenSecret, {
+        roundGeneration: claims.roundGeneration ?? record.roundGeneration ?? 1,
+        now: now(),
+        ttlDays: 1,
+        actorUid,
+      });
     }
 
     return {
@@ -1337,7 +1340,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createExampleTools({ resolveAuth, injectChannel }),
 
     ...createSourcePatchTools({ resolveAuth, injectChannel }),
-    ...createSourceSubmitTools({ resolveAuth, injectChannel, store }),
+    ...createSourceSubmitTools({ resolveAuth, injectChannel, store, gamesStore: options.gamesStore }),
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),

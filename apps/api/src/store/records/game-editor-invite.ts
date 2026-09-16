@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 // GO-03 pending editor invitation: one per (slug, recipient).
 
 export type GameEditorInviteStatus = 'pending' | 'accepted' | 'cancelled' | 'rejected' | 'expired';
 
 export interface GameEditorInvitation {
+  inviteId: string;
   slug: string;
   senderUid: string;
   recipientUid: string;
@@ -26,6 +29,7 @@ export function newEditorInvitation(
   at: string,
 ): GameEditorInvitation {
   return {
+    inviteId: randomUUID(),
     slug,
     senderUid,
     recipientUid,

@@ -26,16 +26,27 @@ export interface GameEditorInviteStore {
     recipientCode?: string,
   ): Promise<EditorInviteCreateResult>;
 
-  acceptEditorInvitation(slug: string, recipientUid: string, at: string): Promise<EditorInviteAcceptResult>;
+  acceptEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<EditorInviteAcceptResult>;
 
   cancelEditorInvitation(
     slug: string,
     senderUid: string,
     recipientUid: string,
     at: string,
+    inviteId: string,
   ): Promise<GameEditorInvitation | null>;
 
-  rejectEditorInvitation(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null>;
+  rejectEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<GameEditorInvitation | null>;
 
   listPendingEditorInvitesForRecipient(uid: string, at: string): Promise<GameEditorInvitation[]>;
 
@@ -111,10 +122,15 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
     return clone(invite);
   }
 
-  async acceptEditorInvitation(slug: string, recipientUid: string, at: string): Promise<EditorInviteAcceptResult> {
+  async acceptEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<EditorInviteAcceptResult> {
     const key = editorInviteDocId(slug, recipientUid);
     const existing = this.invites.get(key) ?? null;
-    if (!existing || existing.recipientUid !== recipientUid) return null;
+    if (!existing || existing.recipientUid !== recipientUid || existing.inviteId !== inviteId) return null;
     if (existing.status === 'accepted') return clone(existing);
     if (!isPendingEditorInvite(existing, at)) return null;
 
@@ -140,20 +156,34 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
     senderUid: string,
     recipientUid: string,
     at: string,
+    inviteId: string,
   ): Promise<GameEditorInvitation | null> {
     const key = editorInviteDocId(slug, recipientUid);
     const existing = this.invites.get(key) ?? null;
-    if (!isPendingEditorInvite(existing, at) || existing.senderUid !== senderUid) return null;
+    if (!isPendingEditorInvite(existing, at) || existing.senderUid !== senderUid || existing.inviteId !== inviteId) {
+      return null;
+    }
     const updated: GameEditorInvitation = { ...existing, status: 'cancelled', respondedAt: at };
     this.invites.set(key, updated);
     this.audits.push(newMembershipAudit(slug, 'invite_cancelled', senderUid, recipientUid, at));
     return clone(updated);
   }
 
-  async rejectEditorInvitation(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null> {
+  async rejectEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<GameEditorInvitation | null> {
     const key = editorInviteDocId(slug, recipientUid);
     const existing = this.invites.get(key) ?? null;
-    if (!isPendingEditorInvite(existing, at) || existing.recipientUid !== recipientUid) return null;
+    if (
+      !isPendingEditorInvite(existing, at) ||
+      existing.recipientUid !== recipientUid ||
+      existing.inviteId !== inviteId
+    ) {
+      return null;
+    }
     const updated: GameEditorInvitation = { ...existing, status: 'rejected', respondedAt: at };
     this.invites.set(key, updated);
     this.audits.push(newMembershipAudit(slug, 'invite_rejected', recipientUid, recipientUid, at));
@@ -249,13 +279,18 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
     });
   }
 
-  async acceptEditorInvitation(slug: string, recipientUid: string, at: string): Promise<EditorInviteAcceptResult> {
+  async acceptEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<EditorInviteAcceptResult> {
     const ref = this.doc(slug, recipientUid);
     const accessRef = this.db.collection('gameAccess').doc(slug);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameEditorInvitation) : null;
-      if (!existing || existing.recipientUid !== recipientUid) return null;
+      if (!existing || existing.recipientUid !== recipientUid || existing.inviteId !== inviteId) return null;
       if (existing.status === 'accepted') return existing;
       if (!isPendingEditorInvite(existing, at)) return null;
 
@@ -288,12 +323,15 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
     senderUid: string,
     recipientUid: string,
     at: string,
+    inviteId: string,
   ): Promise<GameEditorInvitation | null> {
     const ref = this.doc(slug, recipientUid);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameEditorInvitation) : null;
-      if (!isPendingEditorInvite(existing, at) || existing.senderUid !== senderUid) return null;
+      if (!isPendingEditorInvite(existing, at) || existing.senderUid !== senderUid || existing.inviteId !== inviteId) {
+        return null;
+      }
       const updated: GameEditorInvitation = { ...existing, status: 'cancelled', respondedAt: at };
       tx.set(ref, updated);
       tx.set(this.auditRef(), newMembershipAudit(slug, 'invite_cancelled', senderUid, recipientUid, at));
@@ -301,12 +339,23 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
     });
   }
 
-  async rejectEditorInvitation(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null> {
+  async rejectEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<GameEditorInvitation | null> {
     const ref = this.doc(slug, recipientUid);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameEditorInvitation) : null;
-      if (!isPendingEditorInvite(existing, at) || existing.recipientUid !== recipientUid) return null;
+      if (
+        !isPendingEditorInvite(existing, at) ||
+        existing.recipientUid !== recipientUid ||
+        existing.inviteId !== inviteId
+      ) {
+        return null;
+      }
       const updated: GameEditorInvitation = { ...existing, status: 'rejected', respondedAt: at };
       tx.set(ref, updated);
       tx.set(this.auditRef(), newMembershipAudit(slug, 'invite_rejected', recipientUid, recipientUid, at));
@@ -351,7 +400,9 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
   async cancelPendingEditorInvitesForSlug(slug: string, at: string): Promise<void> {
     const pending = await this.listPendingEditorInvitesForSlug(slug, at);
     await Promise.all(
-      pending.map((invite) => this.cancelEditorInvitation(invite.slug, invite.senderUid, invite.recipientUid, at)),
+      pending.map((invite) =>
+        this.cancelEditorInvitation(invite.slug, invite.senderUid, invite.recipientUid, at, invite.inviteId),
+      ),
     );
   }
 
@@ -366,8 +417,10 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
       .map((doc) => doc.data() as GameEditorInvitation)
       .filter((row) => isPendingEditorInvite(row, at));
     await Promise.all([
-      ...incoming.map((invite) => this.rejectEditorInvitation(invite.slug, uid, at)),
-      ...outgoing.map((invite) => this.cancelEditorInvitation(invite.slug, uid, invite.recipientUid, at)),
+      ...incoming.map((invite) => this.rejectEditorInvitation(invite.slug, uid, at, invite.inviteId)),
+      ...outgoing.map((invite) =>
+        this.cancelEditorInvitation(invite.slug, uid, invite.recipientUid, at, invite.inviteId),
+      ),
     ]);
   }
 }

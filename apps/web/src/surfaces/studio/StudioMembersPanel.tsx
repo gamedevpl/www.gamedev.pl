@@ -76,11 +76,11 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
     }
   }
 
-  async function cancel(memberKey: string): Promise<void> {
+  async function cancel(inviteId: string): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      await cancelEditorInvite(slug, memberKey);
+      await cancelEditorInvite(slug, inviteId);
       recordShareStep('cancelled');
       setPayload(await fetchGameEditors(slug));
     } catch (caught) {
@@ -171,7 +171,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
       {isOwner
         ? pending.map((invite) => (
             <div
-              key={invite.memberKey}
+              key={invite.inviteId}
               className="studio-transfer-pending"
               data-testid={`studio-share-pending-${invite.memberKey}`}
             >
@@ -188,7 +188,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
                 type="button"
                 className="status-delete"
                 disabled={busy}
-                onClick={() => void cancel(invite.memberKey)}
+                onClick={() => void cancel(invite.inviteId)}
                 data-testid={`studio-share-cancel-${invite.memberKey}`}
               >
                 {busy ? t('studioPanel.share.cancelling') : t('studioPanel.share.cancel')}

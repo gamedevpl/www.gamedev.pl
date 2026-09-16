@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
+import { ACTOR_UID_RE, InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 
 /**
  * Short-lived MCP session capability (BY-05).
@@ -41,9 +41,6 @@ export interface MintMcpSessionKeyOptions {
   ttlHours?: number;
   actorUid?: string;
 }
-
-/** Uids are dotted-token fields; no `.` delimiter. */
-const ACTOR_UID_RE = /^[A-Za-z0-9:_-]+$/;
 
 function sign(
   sessionId: string,

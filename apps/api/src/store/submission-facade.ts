@@ -224,8 +224,13 @@ export abstract class SubmissionFacade {
     return this.gameEditorInviteStore.createEditorInvitation(slug, senderUid, recipientUid, at, recipientCode);
   }
 
-  async acceptEditorInvitation(slug: string, recipientUid: string, at: string): Promise<EditorInviteAcceptResult> {
-    return this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at);
+  async acceptEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<EditorInviteAcceptResult> {
+    return this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
   }
 
   async cancelEditorInvitation(
@@ -233,12 +238,18 @@ export abstract class SubmissionFacade {
     senderUid: string,
     recipientUid: string,
     at: string,
+    inviteId: string,
   ): Promise<GameEditorInvitation | null> {
-    return this.gameEditorInviteStore.cancelEditorInvitation(slug, senderUid, recipientUid, at);
+    return this.gameEditorInviteStore.cancelEditorInvitation(slug, senderUid, recipientUid, at, inviteId);
   }
 
-  async rejectEditorInvitation(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null> {
-    return this.gameEditorInviteStore.rejectEditorInvitation(slug, recipientUid, at);
+  async rejectEditorInvitation(
+    slug: string,
+    recipientUid: string,
+    at: string,
+    inviteId: string,
+  ): Promise<GameEditorInvitation | null> {
+    return this.gameEditorInviteStore.rejectEditorInvitation(slug, recipientUid, at, inviteId);
   }
 
   async listPendingEditorInvitesForRecipient(uid: string, at: string): Promise<GameEditorInvitation[]> {

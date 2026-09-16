@@ -7,6 +7,7 @@ import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
+import type { GamesStore } from '../delivery/games-store.js';
 import {
   toolOk,
   toolErr,
@@ -46,6 +47,7 @@ export interface SourceSubmitToolsDeps {
     body?: Record<string, unknown>,
   ) => Promise<{ statusCode: number; json: () => unknown }>;
   store: Store | undefined;
+  gamesStore?: GamesStore;
 }
 
 export interface SourceSubmitToolEntry {
@@ -56,9 +58,28 @@ export interface SourceSubmitToolEntry {
   handler: ToolHandler;
 }
 
-// Drop a staged path, then deliver sources to the gate.
+// Omitted mode fail-closes as publish unless the previous candidate was preview.
+async function effectiveSubmitMode(
+  explicit: 'preview' | 'publish' | undefined,
+  fromLatestDelivery: boolean,
+  record: SubmissionRecord,
+  gamesStore: GamesStore | undefined,
+): Promise<'preview' | 'publish'> {
+  if (explicit === 'preview' || explicit === 'publish') return explicit;
+  if (!fromLatestDelivery) return 'publish';
+  const slug = record.slug;
+  const version = record.previewVersion ?? record.deliveredVersion;
+  if (!slug || !version || !gamesStore) return 'publish';
+  try {
+    const manifest = await gamesStore.getManifest(slug, version);
+    return manifest?.deliveryMode === 'preview' ? 'preview' : 'publish';
+  } catch {
+    return 'publish';
+  }
+}
+
 export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<string, SourceSubmitToolEntry> {
-  const { resolveAuth, injectChannel, store } = deps;
+  const { resolveAuth, injectChannel, store, gamesStore } = deps;
 
   return {
     delete_source_file: {
@@ -290,10 +311,9 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
           return toolErr('kitEngineRef is required — send the engineRef from get_kit / kit.json');
         }
 
-        // Passed through only if set; omitted infers the previous lane.
-        const mode = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
-        const wantsPublish = mode === 'publish' || (mode === undefined && !fromLatestDelivery);
-        if (wantsPublish && auth.record.slug && store) {
+        const requestedMode = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
+        const mode = await effectiveSubmitMode(requestedMode, fromLatestDelivery, auth.record, gamesStore);
+        if (mode === 'publish' && auth.record.slug && store) {
           if (!(await canActOnSlug(store, auth.record.slug, auth.actorUid, 'publish'))) {
             return toolErr('only the owner can publish this game');
           }
@@ -344,7 +364,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
           ...(fromStaged ? { fromStaged: true } : {}),
           ...(fromLatestDelivery ? { fromLatestDelivery: true } : {}),
           kitEngineRef,
-          ...(mode ? { mode } : {}),
+          mode,
           ...(summary ? { summary } : {}),
         });
         const body = res.json() as {

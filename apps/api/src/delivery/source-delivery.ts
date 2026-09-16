@@ -47,7 +47,7 @@ export interface SourceDeliveryInput {
   summary?: string;
   // Caller identity is distinct from file authorship.
   actor?: 'agent' | 'creator';
-  // HTTP/MCP actor; job.ownerUid is still checked so a late callback cannot publish.
+  // Present on MCP inject; omitted on a leftover round key.
   actorUid?: string;
 }
 
@@ -297,14 +297,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
       if (record.slug && record.ownerUid) {
         const action = input.mode === 'publish' ? 'publish' : 'edit';
-        const actors = new Set([record.ownerUid, ...(input.actorUid ? [input.actorUid] : [])]);
-        let allowed = true;
-        for (const uid of actors) {
-          if (!(await canActOnSlug(options.store, record.slug, uid, action))) {
-            allowed = false;
-            break;
-          }
-        }
+        const actor = input.actorUid ?? record.ownerUid;
+        const allowed = await canActOnSlug(options.store, record.slug, actor, action);
         if (!allowed) {
           if (input.authority) {
             throw new SourceDeliveryAuthorityError('round_closed', 'managed delivery actor is no longer a member');

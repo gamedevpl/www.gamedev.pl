@@ -23,6 +23,7 @@ export interface ShareNotice {
 }
 
 export interface EditorInviteSummary {
+  inviteId: string;
   slug: string;
   status: GameEditorInvitation['status'];
   you: 'sender' | 'recipient';
@@ -35,6 +36,8 @@ export interface EditorInviteSummary {
 const InviteBody = z.object({ recipientCode: z.string().min(1).max(64) });
 const SlugParams = z.object({ slug: z.string().max(61).refine(isCanonicalSlug) });
 const MemberParams = SlugParams.extend({ memberKey: z.string().min(8).max(64) });
+const InviteIdParams = z.object({ inviteId: z.string().uuid() });
+const InviteCancelParams = SlugParams.extend({ inviteId: z.string().uuid() });
 
 function requireUser(
   request: { user?: { uid: string; tier?: string } | null },
@@ -65,6 +68,7 @@ async function toSummary(store: Store, invite: GameEditorInvitation, viewerUid: 
   const isSender = invite.senderUid === viewerUid;
   const counterpartyUid = isSender ? invite.recipientUid : invite.senderUid;
   return {
+    inviteId: invite.inviteId,
     slug: invite.slug,
     status: invite.status,
     you: isSender ? 'sender' : 'recipient',
@@ -178,19 +182,19 @@ export async function registerGameEditorInviteRoutes(
   );
 
   app.post(
-    '/api/me/studio/games/:slug/editors/invites/:memberKey/cancel',
+    '/api/me/studio/games/:slug/editors/invites/:inviteId/cancel',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      const params = MemberParams.safeParse(request.params);
+      const params = InviteCancelParams.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
-      const { slug, memberKey: key } = params.data;
+      const { slug, inviteId } = params.data;
       const uid = request.user!.uid;
       const at = new Date(now()).toISOString();
       const pending = await store.listPendingEditorInvitesForSlug(slug, at);
-      const match = pending.find((invite) => invite.senderUid === uid && memberKey(slug, invite.recipientUid) === key);
+      const match = pending.find((invite) => invite.senderUid === uid && invite.inviteId === inviteId);
       if (!match) return reply.status(404).send({ error: 'not_found' });
-      const result = await store.cancelEditorInvitation(slug, uid, match.recipientUid, at);
+      const result = await store.cancelEditorInvitation(slug, uid, match.recipientUid, at, inviteId);
       if (!result) return reply.status(404).send({ error: 'not_found' });
       invalidateEditorInviteInboxCache(store, result.recipientUid);
       return reply.send({ invite: await toSummary(store, result, uid) });
@@ -210,16 +214,19 @@ export async function registerGameEditorInviteRoutes(
   );
 
   app.post(
-    '/api/me/editor-invites/:slug/accept',
+    '/api/me/editor-invites/:inviteId/accept',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      const params = SlugParams.safeParse(request.params);
-      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
-      const { slug } = params.data;
+      const params = InviteIdParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid request' });
+      const { inviteId } = params.data;
       const uid = request.user!.uid;
       const at = new Date(now()).toISOString();
-      const result = await store.acceptEditorInvitation(slug, uid, at);
+      const incoming = await store.listPendingEditorInvitesForRecipient(uid, at);
+      const match = incoming.find((invite) => invite.inviteId === inviteId);
+      if (!match) return reply.status(404).send({ error: 'not_found' });
+      const result = await store.acceptEditorInvitation(match.slug, uid, at, inviteId);
       if (result === 'ineligible') return reply.status(400).send({ error: 'recipient_ineligible' });
       if (result === 'stale_owner') return reply.status(409).send({ error: 'stale_owner' });
       if (result === 'already_member') return reply.status(409).send({ error: 'already_member' });
@@ -229,8 +236,8 @@ export async function registerGameEditorInviteRoutes(
       await safeNotify(options.notifyShare, {
         type: 'share.accepted',
         uid: result.senderUid,
-        slug,
-        gameTitle: await gameTitle(store, slug),
+        slug: result.slug,
+        gameTitle: await gameTitle(store, result.slug),
         actorName: await describeParticipant(store, uid),
       });
       return reply.send({ invite: await toSummary(store, result, uid) });
@@ -238,18 +245,22 @@ export async function registerGameEditorInviteRoutes(
   );
 
   app.post(
-    '/api/me/editor-invites/:slug/reject',
+    '/api/me/editor-invites/:inviteId/reject',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
-      const params = SlugParams.safeParse(request.params);
-      if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
-      const { slug } = params.data;
+      const params = InviteIdParams.safeParse(request.params);
+      if (!params.success) return reply.status(400).send({ error: 'invalid request' });
+      const { inviteId } = params.data;
       const at = new Date(now()).toISOString();
-      const result = await store.rejectEditorInvitation(slug, request.user!.uid, at);
+      const uid = request.user!.uid;
+      const incoming = await store.listPendingEditorInvitesForRecipient(uid, at);
+      const match = incoming.find((invite) => invite.inviteId === inviteId);
+      if (!match) return reply.status(404).send({ error: 'not_found' });
+      const result = await store.rejectEditorInvitation(match.slug, uid, at, inviteId);
       if (!result) return reply.status(404).send({ error: 'not_found' });
       invalidateEditorInviteInboxCache(store, result.recipientUid);
-      return reply.send({ invite: await toSummary(store, result, request.user!.uid) });
+      return reply.send({ invite: await toSummary(store, result, uid) });
     },
   );
 

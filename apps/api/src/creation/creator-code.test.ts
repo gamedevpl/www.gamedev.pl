@@ -1485,7 +1485,12 @@ describe('the Code surface routes (creator-code.ts)', () => {
       await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
       const code = (await store.ensureRecipientCode('g:bea', at))!;
       await store.createEditorInvitation('sky-dodge', 'g:creator', 'g:bea', at, code);
-      await store.acceptEditorInvitation('sky-dodge', 'g:bea', at);
+      await store.acceptEditorInvitation(
+        'sky-dodge',
+        'g:bea',
+        at,
+        (await store.getEditorInvite('sky-dodge', 'g:bea', at))!.inviteId,
+      );
 
       const { version } = await games.putCandidateSources({
         slug: 'sky-dodge',

@@ -30,6 +30,18 @@ describe('agent build-channel token', () => {
     });
   });
 
+  it('binds an MCP writer uid into an ephemeral channel token', () => {
+    const token = mintAgentToken(42, secret, { roundGeneration: 1, now, ttlDays: 1, actorUid: 'g:bea' });
+    expect(verifyAgentToken(token, secret)).toMatchObject({
+      jobId: 42,
+      roundGeneration: 1,
+      actorUid: 'g:bea',
+    });
+    const decoded = Buffer.from(token, 'base64url').toString('utf8');
+    const tampered = Buffer.from(decoded.replace('g:bea', 'g:ada'), 'utf8').toString('base64url');
+    expect(() => verifyAgentToken(tampered, secret)).toThrow(InvalidAgentTokenError);
+  });
+
   it('keeps a managed MCP opener separate from the build-channel capability', () => {
     const opener = mintManagedMcpOpener(42, secret, { roundGeneration: 1, now, ttlDays: 14 });
     const channel = mintAgentToken(42, secret, { roundGeneration: 1, now, ttlDays: 14 });

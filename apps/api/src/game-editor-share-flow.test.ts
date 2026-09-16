@@ -36,6 +36,24 @@ function session(uid: string) {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, SESSION_SECRET)}` };
 }
 
+async function acceptInvite(store: Store, slug: string, uid: string, at: string) {
+  const invite = await store.getEditorInvite(slug, uid, at);
+  if (!invite) return null;
+  return store.acceptEditorInvitation(slug, uid, at, invite.inviteId);
+}
+
+async function rejectInvite(store: Store, slug: string, uid: string, at: string) {
+  const invite = await store.getEditorInvite(slug, uid, at);
+  if (!invite) return null;
+  return store.rejectEditorInvitation(slug, uid, at, invite.inviteId);
+}
+
+async function cancelInvite(store: Store, slug: string, sender: string, uid: string, at: string) {
+  const invite = await store.getEditorInvite(slug, uid, at);
+  if (!invite) return null;
+  return store.cancelEditorInvitation(slug, sender, uid, at, invite.inviteId);
+}
+
 function stubGitHub(): GitHubClient {
   return {
     getIssueState: async () => ({ state: 'open' as const }),
@@ -124,11 +142,11 @@ function describeStoreContract(): void {
           expect(await store.createEditorInvitation(SLUG, A, B, LATER, beaCode)).toBe('busy');
           expect((await store.getGameAccess(SLUG))?.editorUids).toEqual([]);
 
-          expect(await store.acceptEditorInvitation(SLUG, B, LATER)).toMatchObject({ status: 'accepted' });
+          expect(await acceptInvite(store, SLUG, B, LATER)).toMatchObject({ status: 'accepted' });
           expect((await store.getGameAccess(SLUG))?.editorUids).toEqual([B]);
 
           await store.createEditorInvitation(SLUG, A, C, LATER, calCode);
-          await store.acceptEditorInvitation(SLUG, C, LATER);
+          await acceptInvite(store, SLUG, C, LATER);
           expect(await store.removeEditor(SLUG, A, B, LATER)).toMatchObject({ editorUids: [C] });
           expect((await store.getGameAccess(SLUG))?.editorUids).toEqual([C]);
           expect(await store.leaveGame(SLUG, C, LATER)).toMatchObject({ editorUids: [] });
@@ -140,18 +158,19 @@ function describeStoreContract(): void {
           await store.ensureGameAccess(SLUG, A, AT, AT);
           const beaCode = (await store.ensureRecipientCode(B, AT))!;
           await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
-          expect(await store.rejectEditorInvitation(SLUG, B, LATER)).toMatchObject({ status: 'rejected' });
+          expect(await rejectInvite(store, SLUG, B, LATER)).toMatchObject({ status: 'rejected' });
           expect(await store.createEditorInvitation(SLUG, A, B, LATER, beaCode)).toMatchObject({ status: 'pending' });
 
-          await store.cancelEditorInvitation(SLUG, A, B, LATER);
+          await cancelInvite(store, SLUG, A, B, LATER);
           await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
-          expect(await store.acceptEditorInvitation(SLUG, B, AFTER_EXPIRY)).toBeNull();
+          expect(await acceptInvite(store, SLUG, B, AFTER_EXPIRY)).toBeNull();
           expect(await store.createEditorInvitation(SLUG, A, B, AFTER_EXPIRY, beaCode)).toMatchObject({
             status: 'pending',
           });
 
-          await store.cancelEditorInvitation(SLUG, A, B, AFTER_EXPIRY);
-          await store.createEditorInvitation(SLUG, A, B, AFTER_EXPIRY, beaCode);
+          await cancelInvite(store, SLUG, A, B, AFTER_EXPIRY);
+          const replayed = await store.createEditorInvitation(SLUG, A, B, AFTER_EXPIRY, beaCode);
+          expect(replayed).toMatchObject({ status: 'pending' });
           const access = await store.getGameAccess(SLUG);
           expect(
             await store.createGameTransferInvitation(SLUG, A, D, access!.accessRevision, AFTER_EXPIRY),
@@ -160,7 +179,27 @@ function describeStoreContract(): void {
             status: 'accepted',
           });
           // Transfer cancels leftover editor invites rather than leaving a stale sender.
-          expect(await store.acceptEditorInvitation(SLUG, B, AFTER_EXPIRY)).toBeNull();
+          expect(await acceptInvite(store, SLUG, B, AFTER_EXPIRY)).toBeNull();
+        });
+
+        it('refuses a replayed accept after cancel and reinvite', async () => {
+          const store = makeStore();
+          await seedUsers(store);
+          await store.ensureGameAccess(SLUG, A, AT, AT);
+          const beaCode = (await store.ensureRecipientCode(B, AT))!;
+          const first = await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
+          expect(first).toMatchObject({ status: 'pending' });
+          const firstId = (first as { inviteId: string }).inviteId;
+          await store.cancelEditorInvitation(SLUG, A, B, LATER, firstId);
+          const second = await store.createEditorInvitation(SLUG, A, B, LATER, beaCode);
+          expect(second).toMatchObject({ status: 'pending' });
+          expect(await store.acceptEditorInvitation(SLUG, B, LATER, firstId)).toBeNull();
+          expect((await store.getGameAccess(SLUG))?.editorUids).toEqual([]);
+          expect(
+            await store.acceptEditorInvitation(SLUG, B, LATER, (second as { inviteId: string }).inviteId),
+          ).toMatchObject({
+            status: 'accepted',
+          });
         });
       });
     }
@@ -175,12 +214,13 @@ describe('GO-03 share flow over HTTP', () => {
     const token = mintToken(jobId, SECRET);
     const beaCode = (await store.ensureRecipientCode(B, AT))!;
 
-    await app.inject({
+    const offered = await app.inject({
       method: 'POST',
       url: `/api/me/studio/games/${SLUG}/editors/invites`,
       headers: session(A),
       payload: { recipientCode: beaCode },
     });
+    const inviteId = offered.json().invite.inviteId as string;
 
     const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(B) });
     expect(before.json().events).toBeUndefined();
@@ -193,7 +233,7 @@ describe('GO-03 share flow over HTTP', () => {
 
     await app.inject({
       method: 'POST',
-      url: `/api/me/editor-invites/${SLUG}/accept`,
+      url: `/api/me/editor-invites/${inviteId}/accept`,
       headers: session(B),
     });
 
@@ -215,7 +255,7 @@ describe('GO-03 share flow over HTTP', () => {
     const token = mintToken(jobId, SECRET);
     const beaCode = (await store.ensureRecipientCode(B, AT))!;
     await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
-    await store.acceptEditorInvitation(SLUG, B, AT);
+    await acceptInvite(store, SLUG, B, AT);
 
     const seal = await app.inject({
       method: 'POST',
@@ -254,9 +294,9 @@ describe('GO-03 share flow over HTTP', () => {
     const beaCode = (await store.ensureRecipientCode(B, AT))!;
     const calCode = (await store.ensureRecipientCode(C, AT))!;
     await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
-    await store.acceptEditorInvitation(SLUG, B, AT);
+    await acceptInvite(store, SLUG, B, AT);
     await store.createEditorInvitation(SLUG, A, C, AT, calCode);
-    await store.acceptEditorInvitation(SLUG, C, AT);
+    await acceptInvite(store, SLUG, C, AT);
 
     expect(await store.beginCheckoutRecovery(SLUG, 'b-lease', Date.now())).toBe(true);
     expect(await store.beginCheckoutRecovery(SLUG, 'c-lease', Date.now())).toBe(false);
@@ -271,9 +311,9 @@ describe('GO-03 share flow over HTTP', () => {
     const beaCode = (await store.ensureRecipientCode(B, AT))!;
     const calCode = (await store.ensureRecipientCode(C, AT))!;
     await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
-    await store.acceptEditorInvitation(SLUG, B, AT);
+    await acceptInvite(store, SLUG, B, AT);
     await store.createEditorInvitation(SLUG, A, C, AT, calCode);
-    await store.acceptEditorInvitation(SLUG, C, AT);
+    await acceptInvite(store, SLUG, C, AT);
 
     const bJob = await store.allocateJobId();
     await store.createSubmission(bJob, B, 'Comet Courier');
@@ -319,9 +359,9 @@ describe('GO-03 share flow over HTTP', () => {
     const beaCode = (await store.ensureRecipientCode(B, AT))!;
     const calCode = (await store.ensureRecipientCode(C, AT))!;
     await store.createEditorInvitation(SLUG, A, B, AT, beaCode);
-    await store.acceptEditorInvitation(SLUG, B, AT);
+    await acceptInvite(store, SLUG, B, AT);
     await store.createEditorInvitation(SLUG, A, C, AT, calCode);
-    await store.acceptEditorInvitation(SLUG, C, AT);
+    await acceptInvite(store, SLUG, C, AT);
 
     const left = await app.inject({
       method: 'POST',
@@ -332,7 +372,7 @@ describe('GO-03 share flow over HTTP', () => {
 
     const dJoin = await app.inject({
       method: 'POST',
-      url: `/api/me/editor-invites/${SLUG}/accept`,
+      url: `/api/me/editor-invites/00000000-0000-4000-8000-000000000000/accept`,
       headers: session(D),
     });
     expect(dJoin.statusCode).toBe(404);
@@ -349,22 +389,23 @@ describe('GO-03 share flow over HTTP', () => {
     await ownedGame(store);
     const app = await createApp(store);
     const beaCode = (await store.ensureRecipientCode(B, AT))!;
-    await app.inject({
+    const offered = await app.inject({
       method: 'POST',
       url: `/api/me/studio/games/${SLUG}/editors/invites`,
       headers: session(A),
       payload: { recipientCode: beaCode },
     });
+    const inviteId = offered.json().invite.inviteId as string;
 
     const [accepted, cancelled] = await Promise.all([
       app.inject({
         method: 'POST',
-        url: `/api/me/editor-invites/${SLUG}/accept`,
+        url: `/api/me/editor-invites/${inviteId}/accept`,
         headers: session(B),
       }),
       app.inject({
         method: 'POST',
-        url: `/api/me/studio/games/${SLUG}/editors/invites/${memberKey(SLUG, B)}/cancel`,
+        url: `/api/me/studio/games/${SLUG}/editors/invites/${inviteId}/cancel`,
         headers: session(A),
       }),
     ]);

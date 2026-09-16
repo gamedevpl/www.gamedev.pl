@@ -94,7 +94,7 @@ async function seedSharedRound(store: InMemoryStore) {
   await store.ensureGameAccess(SLUG, OWNER, AT, AT);
   const code = (await store.ensureRecipientCode(EDITOR, AT))!;
   await store.createEditorInvitation(SLUG, OWNER, EDITOR, AT, code);
-  await store.acceptEditorInvitation(SLUG, EDITOR, AT);
+  await store.acceptEditorInvitation(SLUG, EDITOR, AT, (await store.getEditorInvite(SLUG, EDITOR, AT))!.inviteId);
 }
 
 describe('MCP editor session actor', () => {
@@ -172,5 +172,35 @@ describe('MCP editor session actor', () => {
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(brief.isError).toBe(true);
     expect((brief.structured as { error: string }).error).toMatch(/can no longer write this game/i);
+  });
+
+  it('refuses fromLatestDelivery without mode when the previous lane cannot be proven preview', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await seedSharedRound(store);
+
+    const minted = await app.inject({
+      method: 'GET',
+      url: '/api/me/creator-agent-key',
+      headers: authHeaders(EDITOR),
+    });
+    const creatorKey = minted.json().key as string;
+    const sessionId = await initialize(app);
+    const started = await callTool(
+      app,
+      'start',
+      { slug: SLUG },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${creatorKey}` },
+    );
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      { sessionKey, kitEngineRef: 'abcdef0123456789abcdef0123456789abcdef01', fromLatestDelivery: true },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(submitted.isError).toBe(true);
+    expect((submitted.structured as { error: string }).error).toMatch(/only the owner can publish/i);
   });
 });

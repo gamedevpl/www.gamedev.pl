@@ -28,7 +28,7 @@ export function StudioEditorInviteInbox({
 }): JSX.Element | null {
   const { t } = useTranslation();
   const [incoming, setIncoming] = useState<EditorInviteSummary[]>([]);
-  const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unreachable, setUnreachable] = useState(false);
 
@@ -45,21 +45,21 @@ export function StudioEditorInviteInbox({
     void load();
   }, [load]);
 
-  async function respond(slug: string, decision: 'accept' | 'reject'): Promise<void> {
-    setBusySlug(slug);
+  async function respond(invite: EditorInviteSummary, decision: 'accept' | 'reject'): Promise<void> {
+    setBusyId(invite.inviteId);
     setError(null);
     try {
-      await respondToEditorInvite(slug, decision);
+      await respondToEditorInvite(invite.inviteId, decision);
       recordShareStep(decision === 'accept' ? 'accepted' : 'declined');
-      setIncoming((current) => current.filter((invite) => invite.slug !== slug));
-      if (decision === 'accept') onAccepted?.(slug);
+      setIncoming((current) => current.filter((row) => row.inviteId !== invite.inviteId));
+      if (decision === 'accept') onAccepted?.(invite.slug);
     } catch (caught) {
       const reason = (caught as EditorInviteApiError)?.code;
       setError(
         reason && RESPOND_REFUSALS[reason] ? t(RESPOND_REFUSALS[reason]) : t('studioShelf.share.errors.respond'),
       );
     } finally {
-      setBusySlug(null);
+      setBusyId(null);
     }
   }
 
@@ -83,7 +83,7 @@ export function StudioEditorInviteInbox({
       {pending.length > 0 ? (
         <ul className="studio-transfer-invites">
           {pending.map((invite) => (
-            <li key={invite.slug} data-testid={`studio-share-invite-${invite.slug}`}>
+            <li key={invite.inviteId} data-testid={`studio-share-invite-${invite.slug}`}>
               <p className="studio-transfer-who">
                 <PixelIcon name="share" size={14} />
                 <span>
@@ -97,8 +97,8 @@ export function StudioEditorInviteInbox({
                 <button
                   type="button"
                   className="primary-btn"
-                  disabled={busySlug === invite.slug}
-                  onClick={() => void respond(invite.slug, 'accept')}
+                  disabled={busyId === invite.inviteId}
+                  onClick={() => void respond(invite, 'accept')}
                   data-testid={`studio-share-accept-${invite.slug}`}
                 >
                   {t('studioShelf.share.accept')}
@@ -106,8 +106,8 @@ export function StudioEditorInviteInbox({
                 <button
                   type="button"
                   className="status-delete"
-                  disabled={busySlug === invite.slug}
-                  onClick={() => void respond(invite.slug, 'reject')}
+                  disabled={busyId === invite.inviteId}
+                  onClick={() => void respond(invite, 'reject')}
                   data-testid={`studio-share-reject-${invite.slug}`}
                 >
                   {t('studioShelf.share.reject')}

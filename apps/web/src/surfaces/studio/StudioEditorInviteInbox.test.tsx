@@ -7,6 +7,7 @@ import i18n from '../../i18n/index.js';
 import { StudioEditorInviteInbox } from './StudioEditorInviteInbox.js';
 
 const OFFER = {
+  inviteId: '11111111-1111-4111-8111-111111111111',
   slug: 'comet-courier',
   status: 'pending',
   you: 'recipient',

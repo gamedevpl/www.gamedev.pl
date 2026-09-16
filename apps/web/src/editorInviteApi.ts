@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 export type EditorInviteStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
 
 export interface EditorInviteSummary {
+  inviteId: string;
   slug: string;
   status: EditorInviteStatus;
   you: 'sender' | 'recipient';
@@ -63,9 +64,9 @@ export async function inviteGameEditor(slug: string, recipientCode: string): Pro
   ).invite;
 }
 
-export async function cancelEditorInvite(slug: string, memberKey: string): Promise<EditorInviteSummary> {
+export async function cancelEditorInvite(slug: string, inviteId: string): Promise<EditorInviteSummary> {
   return (
-    await request<{ invite: EditorInviteSummary }>(`${forSlug(slug)}/invites/${encodeURIComponent(memberKey)}/cancel`, {
+    await request<{ invite: EditorInviteSummary }>(`${forSlug(slug)}/invites/${encodeURIComponent(inviteId)}/cancel`, {
       method: 'POST',
     })
   ).invite;
@@ -84,7 +85,10 @@ export async function fetchIncomingEditorInvites(): Promise<EditorInviteSummary[
   return Array.isArray(body.invites) ? (body.invites as EditorInviteSummary[]) : [];
 }
 
-export async function respondToEditorInvite(slug: string, decision: 'accept' | 'reject'): Promise<EditorInviteSummary> {
-  const path = `/api/me/editor-invites/${encodeURIComponent(slug)}/${decision}`;
+export async function respondToEditorInvite(
+  inviteId: string,
+  decision: 'accept' | 'reject',
+): Promise<EditorInviteSummary> {
+  const path = `/api/me/editor-invites/${encodeURIComponent(inviteId)}/${decision}`;
   return (await request<{ invite: EditorInviteSummary }>(path, { method: 'POST' })).invite;
 }
