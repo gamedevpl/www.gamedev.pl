@@ -23,7 +23,8 @@ vi.mock('../../submissionApi.js', async () => {
   return { ...actual, listMySubmissions, getSubmissionStatus };
 });
 
-vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
+const recordEditorStep = vi.hoisted(() => vi.fn());
+vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep }));
 
 import { EditorPanel } from './EditorPanel.js';
 
@@ -200,6 +201,117 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     );
 
     expect(publishButton().disabled).toBe(false);
+  });
+});
+
+describe('a failed draft save must not take the creator away from their edit', () => {
+  it('stays in the editor when the flush before a playtest is rejected', async () => {
+    const rejected = Object.assign(new Error('draft does not fit'), {
+      status: 422,
+      problems: ['needs exactly 1 goal'],
+    });
+    putEditorDraft.mockRejectedValue(rejected);
+    const onOpenPlaytest = vi.fn();
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: true, problems: [] } })}
+          onOpenPlaytest={onOpenPlaytest}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const slider = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(slider, '150');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const tryDraft = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes(i18n.t('studioPanel.editor.tryDraft')),
+    )!;
+    await act(async () => {
+      tryDraft.click();
+      await Promise.resolve();
+    });
+
+    // Navigating unmounts the panel, so this would have discarded the edit.
+    expect(putEditorDraft).toHaveBeenCalled();
+    expect(onOpenPlaytest).not.toHaveBeenCalled();
+  });
+});
+
+describe('a playtest never leaves unsaved work behind, whatever the save state', () => {
+  async function renderDirty(onOpenPlaytest: () => void) {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: true, problems: [] } })}
+          onOpenPlaytest={onOpenPlaytest}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+    const slider = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(slider, '150');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  function tryDraftButton() {
+    return Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes(i18n.t('studioPanel.editor.tryDraft')),
+    )!;
+  }
+
+  it('stays put when the autosave has already failed before the click', async () => {
+    vi.useFakeTimers();
+    try {
+      putEditorDraft.mockRejectedValue(
+        Object.assign(new Error('draft does not fit'), { status: 422, problems: ['too wide'] }),
+      );
+      const onOpenPlaytest = vi.fn();
+      await renderDirty(onOpenPlaytest);
+
+      // The debounced autosave fires first, so the click starts from 'error'.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      putEditorDraft.mockClear();
+
+      await act(async () => {
+        tryDraftButton().click();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(putEditorDraft).toHaveBeenCalled();
+      expect(onOpenPlaytest).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts a preview only once the playtest actually opens', async () => {
+    putEditorDraft.mockRejectedValue(Object.assign(new Error('nope'), { status: 422, problems: ['too wide'] }));
+    await renderDirty(vi.fn());
+    recordEditorStep.mockClear();
+
+    await act(async () => {
+      tryDraftButton().click();
+      await Promise.resolve();
+    });
+
+    expect(recordEditorStep).not.toHaveBeenCalledWith('previewed');
   });
 });
 
