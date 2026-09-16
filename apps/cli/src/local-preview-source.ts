@@ -45,7 +45,7 @@ export function previewSource(url: string, signal: AbortSignal) {
     while (Date.now() < deadline) {
       signal.throwIfAborted();
       const before = await status();
-      if (before.error && !before.busy && !before.stale) throw new Error(before.error);
+      if (before.error && !before.busy) throw new Error(before.error);
       if (!before.busy && !before.stale && before.revision) {
         const html = await read('game', 32 * 1024 * 1024);
         const after = await status();

@@ -104,6 +104,7 @@ it('waits for fresh builds and cancels without launching the browser', async () 
 it('does not capture a failed build or let a game escape srcdoc', async () => {
   const f = await fixture();
   f.state.error = 'Invalid source';
+  f.state.stale = true;
   await expect(previewSource(f.previewUrl, f.controller.signal).snapshot()).rejects.toThrow('Invalid source');
   expect(() => previewSource('http://example.com/', f.controller.signal)).toThrow();
   const page = capturePage('</script><script>bad()</script>');

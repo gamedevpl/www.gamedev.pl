@@ -115,7 +115,24 @@ export async function captureBrowser(input: {
           method?: string;
           params?: Record<string, unknown>;
         };
-        if (message.id !== undefined) {
+        if (message.method === 'Target.attachedToTarget') {
+          const attached = message.params?.sessionId;
+          const info = message.params?.targetInfo as { type?: string } | undefined;
+          if (typeof attached === 'string') {
+            void (async () => {
+              if (info?.type === 'iframe') {
+                await send('Runtime.enable', {}, attached);
+                await send('Log.enable', {}, attached);
+                await send(
+                  'Target.setAutoAttach',
+                  { autoAttach: true, waitForDebuggerOnStart: true, flatten: true },
+                  attached,
+                );
+              }
+              await send('Runtime.runIfWaitingForDebugger', {}, attached);
+            })().catch((error: Error) => fail(error));
+          }
+        } else if (message.id !== undefined) {
           const waiter = pending.get(message.id);
           if (waiter) {
             pending.delete(message.id);
@@ -126,7 +143,9 @@ export async function captureBrowser(input: {
         } else if (
           errors.length < 20 &&
           (message.method === 'Runtime.exceptionThrown' ||
-            (message.method === 'Runtime.consoleAPICalled' && message.params?.type === 'error'))
+            (message.method === 'Runtime.consoleAPICalled' && message.params?.type === 'error') ||
+            (message.method === 'Log.entryAdded' &&
+              (message.params?.entry as { level?: string } | undefined)?.level === 'error'))
         ) {
           errors.push(JSON.stringify(message.params).slice(0, 1000));
         }
@@ -159,6 +178,8 @@ export async function captureBrowser(input: {
     const call = (method: string, params: Record<string, unknown> = {}) => send(method, params, sessionId);
     await call('Page.enable');
     await call('Runtime.enable');
+    await call('Log.enable');
+    await call('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
     const [width, height] = input.viewport === 'mobile' ? [390, 844] : [960, 600];
     await call('Emulation.setDeviceMetricsOverride', {
       width,

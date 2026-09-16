@@ -11,7 +11,7 @@ import { execFile } from 'node:child_process';
 const [root, slug, statePath, key] = process.argv.slice(2);
 const token = randomBytes(24).toString('hex');
 let html = '', revision = '', error = 'Preparing the first playable build…';
-let builtFingerprint = '', fingerprint = '', dirtyAt = 0, busy = false, lastVisit = Date.now();
+let attemptedFingerprint = '', builtFingerprint = '', fingerprint = '', dirtyAt = 0, busy = false, lastVisit = Date.now();
 let origin, currentBuild;
 function treeStamp(dir) {
   try {
@@ -33,6 +33,7 @@ function assemble() {
   currentBuild = execFile(process.execPath, ['--import', pathToFileURL(join(root, 'node_modules/tsx/dist/loader.mjs')).href, '--input-type=module', '-e', source],
     { cwd: root, env: { ...process.env, GAMEDEV_REPO_ROOT: root }, timeout: 30000, maxBuffer: 32 * 1024 * 1024 }, (failure, stdout, stderr) => {
       busy = false;
+      attemptedFingerprint = buildingFingerprint;
       if (failure) { error = (stderr || failure.message).slice(-4000); return; }
       if (!stdout.trim()) { error = 'The assembler returned an empty game.'; return; }
       html = stdout;
@@ -54,7 +55,7 @@ const server = createServer((req, res) => {
   lastVisit = Date.now();
   if (req.method === 'POST' && path === base + 'stop') { res.end('stopped', shutdown); return; }
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
-  if (path === base + 'status') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ key, revision, error, busy, stale: builtFingerprint !== sourceStamp() })); return; }
+  if (path === base + 'status') { const stamp = sourceStamp(); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ key, revision, error: attemptedFingerprint === stamp ? error : '', busy, stale: builtFingerprint !== stamp })); return; }
   if (path === base + 'game') {
     // Game documents are only supplied to the trusted shell as inert text.
     res.setHeader('content-type', 'text/plain; charset=utf-8'); res.end(html); return;
