@@ -3,6 +3,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
+import { roundAuthorityCurrent, resolveGameAccess } from '../platform/game-access-resolve.js';
+import { verifyAgentToken } from '../platform/agent-token.js';
 import { createResumeBuild } from './resume-build.js';
 
 const log = { error: () => {} };
@@ -61,5 +63,50 @@ describe('managed quota on a transferred game', () => {
     expect(outcome.started).toBe(true);
     expect(checkAndSpend).toHaveBeenCalledTimes(1);
     expect(checkAndSpend.mock.calls[0]![0]).toBe('g:grace');
+  });
+});
+
+describe('undelivered resume authority', () => {
+  it.each([false, true])('remints a revoked round; transfer=%s', async (transferred) => {
+    const store = new InMemoryStore();
+    let jobId: number;
+    if (transferred) {
+      jobId = await transferredGame(store);
+    } else {
+      await store.upsertUser({ uid: 'g:ada' });
+      jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, 'g:ada', 'Sky Dodge');
+      await store.setSubmissionSlug(jobId, 'sky-dodge');
+    }
+    await store.ensureRoundGeneration(jobId);
+    const before = (await store.getSubmission(jobId))!;
+    const access = await resolveGameAccess(store, 'sky-dodge');
+    expect(roundAuthorityCurrent(before, access)).toBe(!transferred);
+    const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
+    const checkAndSpend = vi.fn(async () => ({ available: true as const }));
+    const resume = createResumeBuild({
+      store,
+      submissionTokenSecret: 'secret',
+      managedAvailabilityGate: { checkAndSpend },
+      now: Date.now,
+      notifyAppBaseUrl: 'https://example.test',
+      backendFor: async () => backend,
+      backendByStoredName: () => backend,
+      builderOf: () => 'platform',
+      recordSessionCost: async () => {},
+      releaseWorkspace: async () => {},
+      seedFromLatestDelivery: async () => undefined,
+    });
+    expect(await resume({ jobId, feedback: 'continue', locale: 'en', log, undelivered: true })).toEqual({
+      started: true,
+    });
+    const after = (await store.getSubmission(jobId))!;
+    expect(after.roundGeneration).toBe(before.roundGeneration! + (transferred ? 1 : 0));
+    expect(roundAuthorityCurrent(after, access)).toBe(true);
+    expect(checkAndSpend).not.toHaveBeenCalled();
+    const brief = dispatch.mock.calls[0]![0];
+    expect(verifyAgentToken(brief.channelToken, 'secret').roundGeneration).toBe(after.roundGeneration);
+    expect(after.ownerUid).toBe('g:ada');
   });
 });

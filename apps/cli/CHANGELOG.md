@@ -7,6 +7,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
+
+## 0.16.0 — 2026-09-16
+
 ### Added
 
 - Local Codex, Claude, and Copilot tasks receive MCP screenshot tools for the current preview without needing a browser inside the agent sandbox (#1375).

@@ -4,7 +4,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
-export type History = { lines: string[]; prompts: string[]; conversationId?: string };
+import type { SessionHistory } from '../session-controller.js';
+export type History = SessionHistory;
 const MAX_BYTES = 512_000;
 const clean = (text: string): string =>
   stripVTControlCharacters(text)

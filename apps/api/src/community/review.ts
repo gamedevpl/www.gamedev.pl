@@ -22,6 +22,7 @@ import {
 } from './assessment-resolution.js';
 import type { emitReviewSweep as EmitReviewSweep, EmitDeps } from '../notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
+import { assessmentCreatorHandle } from './assessment-attribution.js';
 import { createReviewQueueCache } from './review-queue-cache.js';
 import type { ReviewCatalogEntry, ReviewQueueItem } from './review-queue-cache.js';
 import {
@@ -340,7 +341,6 @@ export async function registerReviewRoutes(
     const verdict: AssessmentVerdict = body.data.verdict;
     const source: AssessmentSource = body.data.source;
     const title = body.data.title?.trim() || body.data.slug;
-    const creatorHandle = body.data.creatorHandle === undefined ? null : body.data.creatorHandle;
     const reviewerUid = request.user!.uid;
 
     // New rows need a released slug or an open re-review request.
@@ -364,7 +364,7 @@ export async function registerReviewRoutes(
       slug: body.data.slug,
       title,
       source,
-      creatorHandle,
+      creatorHandle: await assessmentCreatorHandle(store, body.data.slug, listCatalog),
       reviewerUid,
       verdict,
       note: sanitized,

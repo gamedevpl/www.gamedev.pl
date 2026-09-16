@@ -42,6 +42,16 @@ Clean up when done (`git worktree remove --force`, delete the temp branch/clone)
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
+## Keep flow tests independent of live conversation routing
+
+A transfer test calling `/improve` must inject a `chatAgent` whose `decide` returns
+`kind: 'build'`, plus a deterministic `contentChecker`. Otherwise the default conversation
+router can answer with chat instead of opening the round. A sandboxed run may fall back
+to building while a network-enabled run takes the chat branch, so the same ownership
+assertions pass alone and fail in the full gate. Check the response shape and keep the
+real authorization, store and admission path; stub only the unrelated model decisions.
+Derive handover times from the created record instead of dating them before its creation.
+
 ## Run the project's real gate
 
 Whatever the project's definition of green is — run all of it, in the isolated checkout:
@@ -344,6 +354,36 @@ Two concrete instances of that (observed 2026-07-23):
   (seal/editor/remix/proposal): those rewrite sources without a Kit store. Defer `/shared/`
   there (`kitShared: 'defer'`) or a green preview later `seal_failed`. A Set still
   fail-closes agent delivery.
+
+- **A field added to `setCreationLimits` merge but not the Firestore `get` mapper is a
+  silent production no-op.** Observed (#1299 review, 2026-09-12): `videoPaused` /
+  `mediaLean` / `anonymousPaused` were merged on write in both stores. `FirestoreQuotaStore.getCreationLimits`
+  still mapped field-by-field and dropped them, so the spend brake could write
+  `anonymousPaused: true` and every instance shed nothing. `InMemoryStore` returns the
+  merged object as-is, so an InMemory round-trip does not cover this. Walk get and set
+  together; a test that only uses `InMemoryStore` cannot see a mapper hole.
+
+- **An `onSend` hook that becomes `async` reopens Fastify 5 "already sent" on routes that
+  `reply.send()` without returning it.** Observed (#1299): `api-cache-policy` started
+  awaiting `isOpenToVisitors()`, and compression registered an `async` `onSend` too.
+  `/api/submissions/:token/preview` does `reply.send(value)` inside a helper and returns;
+  headers were no longer written on the same tick, Fastify sent again,
+  `ERR_HTTP_HEADERS_SENT`. The test that exists because that log showed up in Studio went
+  red. Keep default `onSend` sync (stash the boolean on the request in `preHandler`), or
+  `return reply.send(...)`. Drive preview/play through `buildApp`, not a bare Fastify.
+
+- **Reusing a wall for a new purpose inherits its exemptions.** Observed (#1299):
+  `anonymousPaused` raised the private-beta wall to stop a bandwidth bill;
+  `/api/games/:slug/media` and public-play documents stayed exempt. Catalog 401'd; the
+  posters and mp4 still flowed. Diff the exemption list against the new goal, not against
+  "same wall as beta."
+
+- **A request rewrite that does not change the URL poisons a public cache keyed on that
+  URL.** Observed (#1299): `mediaLean` set `query.w=96` while the client still requested
+  `?w=320`. Image 302s are `public, max-age=10800` (half of the 6h PNG TTL). Clearing the
+  rung left the 96px object on the 320 URL for three hours. Video 503 correctly set
+  `no-store`; the rewrite path did not. Redirect to the real width, or don't cache while
+  the rung is up. Assert bytes (or `Location`), not only that `request.query` changed.
 
 ## Read the diff against the spec
 

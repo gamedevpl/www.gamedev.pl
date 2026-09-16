@@ -474,6 +474,7 @@ const FILE_BUCKET = {
   votes: 'community',
   'player-feedback': 'community',
   'feedback-themes': 'community',
+  'assessment-attribution': 'community',
   'assessment-cli': 'community',
   'assessment-pagination': 'community',
   'assessment-resolution': 'community',
