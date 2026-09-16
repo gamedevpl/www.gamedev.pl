@@ -199,7 +199,7 @@ describe('POST /api/internal/notify-sweep', () => {
       headers: { authorization: 'Bearer scheduler-token' },
     });
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({
+    expect(first.json()).toMatchObject({
       scanned: 1,
       deferred: 0,
       closed: 0,
@@ -227,7 +227,7 @@ describe('POST /api/internal/notify-sweep', () => {
       url: '/api/internal/notify-sweep',
       headers: { authorization: 'Bearer scheduler-token' },
     });
-    expect(second.json()).toEqual({
+    expect(second.json()).toMatchObject({
       scanned: 0,
       deferred: 0,
       closed: 0,

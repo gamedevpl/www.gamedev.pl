@@ -70,7 +70,6 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
   } = deps;
 
   const cadence = createSweepCadence();
-
   // An alert id is stable, so a remembered hit is final.
   const alertsAlreadyEmitted = new Set<string>();
   const MAX_REMEMBERED_ALERTS = 2_000;
@@ -78,7 +77,6 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     if (alertsAlreadyEmitted.size >= MAX_REMEMBERED_ALERTS) alertsAlreadyEmitted.clear();
     alertsAlreadyEmitted.add(id);
   }
-
   // Scanning games every two minutes was most of the day's reads.
   const publicationsTtlMs = 10 * 60_000;
   let publicationsCache: { expiresAt: number; value: PublicationRecord[] } | null = null;
@@ -89,7 +87,6 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     publicationsCache = { expiresAt: now() + publicationsTtlMs, value };
     return value;
   }
-
   // Closed-tab backstop: Scheduler OIDC POST; hourly limit guards runaways.
   app.post(
     '/api/internal/notify-sweep',
@@ -315,13 +312,13 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           }
         }
       }
-      // Bounded floor under the shelf write-through; failures are counted, never thrown.
       const shelfRebuild = await runShelfRebuildPass({ store, now });
-      try {
-        await retryPendingNotificationEmails(buildNotifyDeps(), { nowMs: now() });
-      } catch (retryError) {
-        request.log.error({ err: retryError }, 'notification email retry sweep failed');
-      }
+      const emailRetry = await retryPendingNotificationEmails(buildNotifyDeps(), { nowMs: now() })
+        .then((result) => ({ ...result, error: false }))
+        .catch((retryError) => {
+          request.log.error({ err: retryError }, 'notification email retry sweep failed');
+          return { scanned: 0, retried: 0, sent: 0, skipped: 0, failed: 0, error: true };
+        });
 
       // Error level so a job nobody watches cannot fail quietly for weeks.
       const sweepLog =
@@ -340,6 +337,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           stalledCauses,
           healthResolved,
           unhealthy,
+          emailRetry,
           shelvesRebuilt: shelfRebuild.rebuilt,
           shelvesFailed: shelfRebuild.failed,
           ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),
@@ -360,6 +358,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         stalledCauses,
         healthResolved,
         unhealthy,
+        emailRetry,
         shelvesRebuilt: shelfRebuild.rebuilt,
         shelvesFailed: shelfRebuild.failed,
         ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),

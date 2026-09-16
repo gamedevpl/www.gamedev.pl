@@ -182,7 +182,7 @@ export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: 
                 );
 
     if (!message) return false;
-    await mailer.send(message);
+    await mailer.send(message, { idempotencyKey: `notification-email:${uid}:${notification.id}` });
     await deps.store.markNotificationEmailed(uid, notification.id);
     return true;
   } catch (err) {

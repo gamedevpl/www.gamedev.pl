@@ -5,7 +5,7 @@ import { shareNotificationMessage, sharePushContent } from './email-templates-sh
 import { normalizeLocale } from './email-templates.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import { mintUnsubscribeToken } from './unsubscribe-token.js';
-import type { ShareNotificationType, Store } from '../platform/store.js';
+import type { ShareNotificationType, Store, StoredNotification } from '../platform/store.js';
 
 export interface ShareNotice {
   type: ShareNotificationType;
@@ -35,14 +35,14 @@ async function sendEmail(
   type: ShareNotificationType,
   notification: { id: string; link: string; emailedAt: string | null },
   params: { title: string; actorName: string },
-): Promise<void> {
-  if (notification.emailedAt) return;
+): Promise<boolean> {
+  if (notification.emailedAt) return false;
   const mailer: Mailer | undefined = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
   const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
-  if (!mailer || !unsubscribeSecret) return;
+  if (!mailer || !unsubscribeSecret) return false;
   try {
     const user = await deps.store.getUser(uid);
-    if (!user?.email || user.emailUnsubscribedAt) return;
+    if (!user?.email || user.emailUnsubscribedAt) return false;
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
     const unsubscribeUrl = absoluteAppUrl(
@@ -56,11 +56,29 @@ async function sendEmail(
         actionUrl,
         unsubscribeUrl,
       }),
+      { idempotencyKey: `share-notification-email:${uid}:${notification.id}` },
     );
     await deps.store.markNotificationEmailed(uid, notification.id);
+    return true;
   } catch (err) {
     deps.logError?.(err, 'share notification email send failed');
+    return false;
   }
+}
+
+export async function retryShareNotificationEmail(
+  deps: EmitDeps,
+  uid: string,
+  notification: StoredNotification,
+): Promise<boolean> {
+  if (!notification.type.startsWith('share.')) return false;
+  const actorName = notification.params.actorName;
+  const title = notification.params.title;
+  if (!actorName || !title) {
+    await deps.store.markNotificationEmailed(uid, notification.id);
+    return false;
+  }
+  return sendEmail(deps, uid, notification.type as ShareNotificationType, notification, { actorName, title });
 }
 
 async function sendPush(
