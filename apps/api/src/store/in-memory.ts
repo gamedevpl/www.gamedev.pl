@@ -211,7 +211,6 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       .slice(0, MAX_REVOKED_ROUNDS_PER_MEMBER);
     for (const record of onSlug) {
       const next = { ...record, roundGeneration: revokedRoundGeneration(record.roundGeneration) };
-      // Owner-remove keeps the live round; leave cancels it.
       if (cancelActive && isActiveBuildRound(record)) {
         next.state = 'canceled';
         released = true;

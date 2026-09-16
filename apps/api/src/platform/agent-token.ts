@@ -52,7 +52,7 @@ export interface AgentTokenClaims {
   roundGeneration?: number;
   /** Unix seconds. Present with {@link roundGeneration}. */
   exp?: number;
-  // MCP inject tokens may bind the writer uid.
+  // MCP inject may bind the writer.
   actorUid?: string;
 }
 
@@ -62,11 +62,10 @@ export interface MintAgentTokenOptions {
   now?: number;
   /** Override {@link selfBuildKeyTtlDays}; useful in tests. */
   ttlDays?: number;
-  // Binds the MCP writer; omitted on round keys.
+  // Writer uid; omitted on round keys.
   actorUid?: string;
 }
 
-/** Uids are dotted-token fields; no `.` delimiter. */
 export const ACTOR_UID_RE = /^[A-Za-z0-9:_-]+$/;
 
 /**
