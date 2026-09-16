@@ -96,7 +96,14 @@ export function isTilemapItem(item: unknown): item is EditorTilemapItemContent {
 export function isPathItem(item: unknown): item is EditorPathItemContent {
   if (!hasProperties(item)) return false;
   const points = (item as { points?: unknown }).points;
-  return Array.isArray(points) && points.every((point) => isPlainRecord(point));
+  return Array.isArray(points) && points.every((point) => isPlainRecord(point) && isCoordinate(point));
+}
+
+// The painter draws these; a coordinate it cannot place breaks the SVG.
+function isCoordinate(point: Record<string, unknown>): boolean {
+  return (
+    typeof point.x === 'number' && typeof point.y === 'number' && Number.isFinite(point.x) && Number.isFinite(point.y)
+  );
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

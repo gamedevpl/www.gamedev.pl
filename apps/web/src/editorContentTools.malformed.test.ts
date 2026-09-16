@@ -123,3 +123,18 @@ describe('a guard that ignored properties let the item list crash', () => {
     expect(itemProblems(spec, { properties: {} } as never, name)).toEqual([]);
   });
 });
+
+describe('a path point the painter could not place', () => {
+  it('rejects points with no coordinates', () => {
+    expect(isPathItem({ properties: {}, points: [{}] })).toBe(false);
+  });
+
+  it('rejects non-numeric and non-finite coordinates', () => {
+    expect(isPathItem({ properties: {}, points: [{ x: 'oops', y: 1 }] })).toBe(false);
+    expect(isPathItem({ properties: {}, points: [{ x: Number.NaN, y: 1 }] })).toBe(false);
+  });
+
+  it('still accepts a coordinate outside the grid, which pathProblems reports', () => {
+    expect(isPathItem({ properties: {}, points: [{ x: 99, y: 99 }] })).toBe(true);
+  });
+});

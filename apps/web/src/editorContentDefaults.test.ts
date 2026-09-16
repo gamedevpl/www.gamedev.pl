@@ -43,10 +43,10 @@ describe('fillDeclaredValues', () => {
     expect(boards(filled)[0].properties).toEqual({ title: '', size: 1.5, kind: 'red', locked: false });
   });
 
-  it('keeps a falsy value the creator chose rather than resetting it', () => {
+  it('keeps a falsy value the creator chose, since falsy is not absent', () => {
     const definition = collectionOf({
       widget: 'entities',
-      properties: { title: { type: 'text', max: 4 }, size: { type: 'int', min: 2, max: 9 }, on: { type: 'bool' } },
+      properties: { title: { type: 'text', max: 4 }, size: { type: 'int', min: 0, max: 9 }, on: { type: 'bool' } },
       constraints: [],
     });
     const filled = fillDeclaredValues(definition, { boards: [{ properties: { title: '', size: 0, on: false } }] });
@@ -341,6 +341,86 @@ describe('a collection whose widget the delivery changed', () => {
   it('leaves a board that already fits alone', () => {
     const filled = fillDeclaredValues(asTilemap, { boards: [{ properties: {}, rows: ['....', '....'] }] });
     expect(boards(filled)[0]).toEqual({ properties: {}, rows: ['....', '....'] });
+  });
+});
+
+describe('a value the definition no longer accepts', () => {
+  const tightened: EditorDefinition = collectionOf({
+    widget: 'entities',
+    properties: {
+      speed: { type: 'int', min: 5, max: 9 },
+      kind: { type: 'enum', values: ['red', 'blue'] },
+      title: { type: 'text', max: 3 },
+    },
+    constraints: [],
+  } as unknown as EditorDefinition['content'][string]['item']);
+
+  it('replaces a number outside the declared bounds with the default', () => {
+    const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 1, kind: 'red', title: 'ab' } }] });
+    expect(boards(filled)[0].properties.speed).toBe(5);
+  });
+
+  it('replaces an enum value the definition dropped', () => {
+    const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 6, kind: 'gone', title: 'ab' } }] });
+    expect(boards(filled)[0].properties.kind).toBe('red');
+  });
+
+  it('replaces a value of the wrong type outright', () => {
+    const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 'six', kind: 'red', title: 7 } }] });
+    expect(boards(filled)[0].properties).toEqual({ speed: 5, kind: 'red', title: '' });
+  });
+
+  it('keeps a value that still fits', () => {
+    const filled = fillDeclaredValues(tightened, { boards: [{ properties: { speed: 7, kind: 'blue', title: 'ab' } }] });
+    expect(boards(filled)[0].properties).toEqual({ speed: 7, kind: 'blue', title: 'ab' });
+  });
+
+  it('replaces a param the definition retyped', () => {
+    const definition: EditorDefinition = {
+      version: 1,
+      content: {},
+      params: { mode: { type: 'enum', values: ['calm', 'wild'], label, default: 'calm' } },
+    };
+    expect(fillDeclaredValues(definition, { params: { mode: 3 } }).params).toEqual({ mode: 'calm' });
+  });
+});
+
+describe('a layer whose widget the delivery changed', () => {
+  const asTilemapLayer: EditorDefinition = {
+    version: 1,
+    content: {},
+    layers: {
+      terrain: {
+        widget: 'tilemap',
+        label,
+        grid: { minCols: 2, maxCols: 6, minRows: 2, maxRows: 6 },
+        tiles: [{ key: 'floor', char: '.', label }],
+        properties: {},
+        constraints: [],
+      },
+    },
+  };
+
+  it('rebuilds a layer saved as an entity list into the board it now declares', () => {
+    const filled = fillDeclaredValues(asTilemapLayer, { layers: { terrain: [] } });
+    expect(filled.layers).toEqual({ terrain: { properties: {}, rows: ['..', '..'] } });
+  });
+
+  it('rebuilds a layer saved as a board into the entity list it now declares', () => {
+    const asEntityLayer: EditorDefinition = {
+      version: 1,
+      content: {},
+      layers: {
+        spawns: { widget: 'entities', label, min: 0, max: 4, properties: {}, constraints: [] },
+      },
+    };
+    const filled = fillDeclaredValues(asEntityLayer, { layers: { spawns: { properties: {}, rows: ['..'] } } });
+    expect(filled.layers).toEqual({ spawns: [] });
+  });
+
+  it('leaves a layer that still matches alone', () => {
+    const filled = fillDeclaredValues(asTilemapLayer, { layers: { terrain: { properties: {}, rows: ['...'] } } });
+    expect(filled.layers).toEqual({ terrain: { properties: {}, rows: ['...'] } });
   });
 });
 

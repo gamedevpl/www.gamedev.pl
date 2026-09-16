@@ -59,7 +59,7 @@ function fillParams(specs: Record<string, EditorParamSpec>, values: unknown): Re
   const current = (isRecord(values) ? values : {}) as Record<string, EditorParamValue>;
   const filled: Record<string, EditorParamValue> = {};
   for (const [name, spec] of Object.entries(specs)) {
-    filled[name] = current[name] === undefined ? spec.default : current[name];
+    filled[name] = fitsSpec(spec, current[name]) ? (current[name] as EditorParamValue) : spec.default;
   }
   return filled;
 }
@@ -114,15 +114,17 @@ export function blankPathPoints(spec: EditorPathSpec) {
   });
 }
 
+// A saved layer that no longer matches its widget cannot serve.
 function fillLayerContent(spec: EditorLayerSpec, value: EditorLayerContent): EditorLayerContent {
   if (spec.widget === 'entities') {
-    if (!Array.isArray(value)) return value;
+    if (!Array.isArray(value)) return blankLayerContent(spec);
     return value.map((entity) =>
-      isRecord(entity) ? { ...entity, properties: withDeclared(spec.properties, entity.properties) } : entity,
+      isRecord(entity) ? { properties: withDeclared(spec.properties, entity.properties) } : entity,
     );
   }
-  if (!isRecord(value)) return value;
-  return { ...value, properties: withDeclared(spec.properties, value.properties) };
+  const rows = isRecord(value) ? (value as { rows?: unknown }).rows : undefined;
+  if (!Array.isArray(rows)) return blankLayerContent(spec);
+  return { properties: withDeclared(spec.properties, (value as { properties?: unknown }).properties), rows };
 }
 
 // Only absent values are filled; a chosen falsy value stays.
@@ -133,9 +135,19 @@ function withDeclared(
   const current = isRecord(properties) ? properties : {};
   const filled: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(specs ?? {})) {
-    filled[name] = current[name] === undefined ? defaultPropertyValue(spec) : current[name];
+    filled[name] = fitsSpec(spec, current[name]) ? current[name] : defaultPropertyValue(spec);
   }
   return filled;
+}
+
+// A kept value must still fit what is declared now.
+function fitsSpec(spec: EditorPropertySpec, value: unknown): boolean {
+  if (spec.type === 'text') return typeof value === 'string' && value.length <= spec.max;
+  if (spec.type === 'enum') return typeof value === 'string' && spec.values.includes(value);
+  if (spec.type === 'bool') return typeof value === 'boolean';
+  if (typeof value !== 'number' || !Number.isFinite(value)) return false;
+  if (spec.type === 'int' && !Number.isInteger(value)) return false;
+  return value >= spec.min && value <= spec.max;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
