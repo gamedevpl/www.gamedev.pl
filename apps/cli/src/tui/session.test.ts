@@ -227,7 +227,7 @@ it('keeps refused messages and separates sending now from queued work', async ()
   await session.sendDraft();
   expect(session.get().draft).toBe('correction');
   expect(session.get().sendStatus).toContain('Turn ended');
-  expect(session.savedHistory().prompts).toEqual([]);
+  expect(session.savedHistory().prompts).toEqual(['correction']);
   session.queueDraft();
   expect(session.get().queued).toEqual(['correction']);
   session.setSteering(undefined);
@@ -254,4 +254,32 @@ it('does not repeat an acknowledged message after the task ends during delivery'
   expect(session.get().queued).toEqual([]);
   session.close();
   await next;
+});
+
+it('retains a failed in-flight message without overwriting a newer draft', async () => {
+  const session = createTuiSession('');
+  session.setLocalTask('muse');
+  let reject!: (error: Error) => void;
+  session.setSteering(
+    () =>
+      new Promise<void>((_, fail) => {
+        reject = fail;
+      }),
+  );
+  session.setDraft('original correction');
+  const sending = session.sendDraft();
+  session.setDraft('newer unfinished request');
+  reject(new Error('Delivery outcome unknown'));
+  await sending;
+  expect(session.get().draft).toBe('newer unfinished request');
+  expect(session.get().queued).toEqual([]);
+  expect(session.savedHistory().lines).toContain('› [delivery not confirmed] original correction');
+  expect(session.savedHistory().prompts).toContain('original correction');
+  const prompt = session.prompt();
+  session.historyPrev();
+  expect(session.get().draft).toBe('original correction');
+  session.historyNext();
+  expect(session.get().draft).toBe('newer unfinished request');
+  session.close();
+  await prompt;
 });

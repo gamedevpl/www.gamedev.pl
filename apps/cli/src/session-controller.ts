@@ -161,9 +161,13 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
           ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
         };
       } catch (error) {
-        const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message kept.`;
-        savedLines = [...savedLines, status].slice(-200);
-        state = { ...state, lines: [...state.lines, status], sendStatus: status };
+        const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
+        const shown = `› [delivery not confirmed] ${text}`;
+        savedLines = [...savedLines, shown, status].slice(-200);
+        history.push(text);
+        if (history.length > 50) history.shift();
+        histIndex = history.length;
+        state = { ...state, lines: [...state.lines, shown, status], sendStatus: status };
       } finally {
         state = { ...state, sending: false };
         emit();

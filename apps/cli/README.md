@@ -45,7 +45,8 @@ silently retried as a new task.
 
 Ctrl+O opens the preview while typing. Ctrl+C stops the task and clears its queue.
 Unsent text survives intermediate choice prompts. Pending requests are kept only
-for the current CLI run. Rejected messages stay in the editor. If delivery times
+for the current CLI run. Unconfirmed messages are saved in the transcript and
+prompt history without overwriting newer edits in the editor. If delivery times
 out or the connection closes, acceptance may be unknown: check the transcript
 before resending. Queued requests do not resume the agent's internal conversation.
 
