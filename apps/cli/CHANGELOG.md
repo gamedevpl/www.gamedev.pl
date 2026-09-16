@@ -13,7 +13,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text.
+- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
 
 ## 0.16.0 — 2026-09-16
 

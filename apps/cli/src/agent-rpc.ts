@@ -70,10 +70,9 @@ export function agentRpc(input: {
     }
     try {
       for (;;) {
-        let body: Buffer;
         const end = buffer.indexOf('\n');
         if (end < 0) break;
-        body = buffer.subarray(0, end);
+        const body = buffer.subarray(0, end);
         buffer = buffer.subarray(end + 1);
         if (!body.length) continue;
         const message = JSON.parse(body.toString());
