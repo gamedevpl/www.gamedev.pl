@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Local Codex, Claude, and Copilot tasks receive MCP screenshot tools for the current preview without needing a browser inside the agent sandbox (#1375).
 - Type follow-up requests while a local agent works; Enter queues them for after the current task without interrupting it (#1369).
 - Interactive sessions restore recent conversation output and prompt history after restarting, separately for each account, server, and game (#1369).
 

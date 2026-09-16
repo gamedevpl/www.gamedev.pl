@@ -11,7 +11,7 @@ import { execFile } from 'node:child_process';
 const [root, slug, statePath, key] = process.argv.slice(2);
 const token = randomBytes(24).toString('hex');
 let html = '', revision = '', error = 'Preparing the first playable build…';
-let fingerprint = '', dirtyAt = 0, busy = false, lastVisit = Date.now();
+let attemptedFingerprint = '', builtFingerprint = '', fingerprint = '', dirtyAt = 0, busy = false, lastVisit = Date.now();
 let origin, currentBuild;
 function treeStamp(dir) {
   try {
@@ -23,15 +23,21 @@ function treeStamp(dir) {
     }).join('|');
   } catch { return ''; }
 }
+function sourceStamp() {
+  return [join(root, 'games', slug), join(root, 'shared'), join(root, 'starters'), join(root, 'templates'), join(root, 'tools')].filter(existsSync).map(treeStamp).join('|');
+}
 function assemble() {
   busy = true;
+  const buildingFingerprint = fingerprint;
   const source = 'import {assembleGame} from ' + JSON.stringify(pathToFileURL(join(root, 'tools/lib/assemble.ts')).href) + '; process.stdout.write(assembleGame(' + JSON.stringify(slug) + ').html);';
   currentBuild = execFile(process.execPath, ['--import', pathToFileURL(join(root, 'node_modules/tsx/dist/loader.mjs')).href, '--input-type=module', '-e', source],
     { cwd: root, env: { ...process.env, GAMEDEV_REPO_ROOT: root }, timeout: 30000, maxBuffer: 32 * 1024 * 1024 }, (failure, stdout, stderr) => {
       busy = false;
+      attemptedFingerprint = buildingFingerprint;
       if (failure) { error = (stderr || failure.message).slice(-4000); return; }
       if (!stdout.trim()) { error = 'The assembler returned an empty game.'; return; }
       html = stdout;
+      builtFingerprint = buildingFingerprint;
       revision = createHash('sha256').update(html).digest('hex');
       error = '';
     });
@@ -49,7 +55,7 @@ const server = createServer((req, res) => {
   lastVisit = Date.now();
   if (req.method === 'POST' && path === base + 'stop') { res.end('stopped', shutdown); return; }
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
-  if (path === base + 'status') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ key, revision, error, busy })); return; }
+  if (path === base + 'status') { const stamp = sourceStamp(); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ key, revision, error: attemptedFingerprint === stamp ? error : '', busy, stale: builtFingerprint !== stamp })); return; }
   if (path === base + 'game') {
     // Game documents are only supplied to the trusted shell as inert text.
     res.setHeader('content-type', 'text/plain; charset=utf-8'); res.end(html); return;
@@ -73,7 +79,7 @@ server.listen(0, '127.0.0.1', () => {
 server.on('error', () => process.exit(1));
 const timer = setInterval(() => {
   if (Date.now() - lastVisit > 30 * 60_000) return shutdown();
-  const next = [join(root, 'games', slug), join(root, 'shared'), join(root, 'starters'), join(root, 'templates'), join(root, 'tools')].filter(existsSync).map(treeStamp).join('|');
+  const next = sourceStamp();
   if (next !== fingerprint) { fingerprint = next; dirtyAt = Date.now(); }
   if (dirtyAt && !busy && Date.now() - dirtyAt >= 500) { dirtyAt = 0; assemble(); }
 }, 500);

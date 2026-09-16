@@ -378,3 +378,26 @@ Canceling keeps the session attached to those local files. Use `/recover` to
 try again or `/connect` to retry connecting. Authentication and network failures
 do not trigger recovery. Explicit `gamedevpl recover <directory>` remains
 available for scripts and recovery under another slug.
+
+### Local browser tools for delegated tasks
+
+Interactive local delegation to Codex, Claude, and Copilot automatically connects a
+session-scoped `gamedevpl_local` MCP server when the CLI preview is available.
+`preview_status` reports build errors and freshness. `capture` starts a desktop or
+mobile screenshot; `capture_status` returns its PNG, rendered HTML revision, and
+browser console errors. Agents can inspect the returned image without launching a
+browser through their shell sandbox. Other adapters continue without these tools.
+
+The creator's CLI launches an installed system Chrome/Chromium (Chrome/Edge on Windows)
+with a temporary profile and its browser sandbox enabled. It does not install a browser.
+Capture uses CLI-owned code and a frozen preview document, not checkout npm scripts.
+The game stays in an iframe without `allow-same-origin`, with external connections
+blocked by CSP. Screenshot tools accept no URL, shell command, path, or JavaScript.
+They neither publish nor replace game media. This initial-state capture does not
+replace an interactive playtest or the Creator Kit's deterministic capture plan.
+
+The loopback MCP endpoint requires a random per-task credential, rejects foreign
+origins/hosts, limits requests and retained captures, and shuts down with the task.
+The agent's shell permissions are unchanged. Credentials/configuration are temporary;
+the normal remote gamedev.pl MCP connector is not changed. Ctrl+C cancels local capture.
+Existing previews from older CLI versions may need `/play --stop` followed by `/play`.
