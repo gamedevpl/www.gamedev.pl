@@ -1378,9 +1378,6 @@
   "create": {
     "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
     "subhead": "To nie szablon ani zabawka — prawdziwy HTML, CSS i JavaScript, napisane przez agenta kodującego, sprawdzone przez człowieka, a potem grywalne w przeglądarce dla każdego.",
-    "example1": "gra jak Cannon Fodder, ale z oddziałami kotów",
-    "example2": "labirynt z żyroskopem dla mojego młodszego brata",
-    "example3": "strategia 4X, którą skończę w 20 minut",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
     "stepsHi": "Hej!",
     "step1Title": "Kilka szybkich pytań",

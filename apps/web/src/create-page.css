@@ -299,22 +299,6 @@
   flex-basis: 168px;
 }
 
-.create-page .prompt-example-chip {
-  animation: create-chip-in 0.45s ease both;
-}
-
-.create-page .prompt-example-chip:nth-child(1) {
-  animation-delay: 0.04s;
-}
-
-.create-page .prompt-example-chip:nth-child(2) {
-  animation-delay: 0.1s;
-}
-
-.create-page .prompt-example-chip:nth-child(3) {
-  animation-delay: 0.16s;
-}
-
 @keyframes create-progress-slide {
   0%,
   100% {
@@ -322,17 +306,6 @@
   }
   50% {
     transform: translateX(118%);
-  }
-}
-
-@keyframes create-chip-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -344,7 +317,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .create-builder-progress span,
-  .create-page .prompt-example-chip,
   .create-builder-lane {
     animation: none;
     transition: none;

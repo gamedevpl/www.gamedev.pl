@@ -4888,33 +4888,6 @@ button.builder-mode-selector:disabled {
   }
 }
 
-/* Click-to-fill prompt starters, shown only where a caller passes exampleChips. */
-.prompt-examples {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.5rem;
-  margin: 10px 8px 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.prompt-example-chip {
-  flex: 0 0 auto;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.8rem;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.prompt-example-chip:hover {
-  border-color: var(--turquoise);
-  color: var(--text);
-}
-
 /* Today's allowance, under the composer. */
 .quota-note {
   display: block;

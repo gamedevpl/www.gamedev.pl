@@ -38,8 +38,6 @@ export function CreatePage({
 }: CreatePageProps) {
   const { t } = useTranslation();
 
-  const exampleChips = useMemo(() => [t('create.example1'), t('create.example2'), t('create.example3')], [t]);
-
   const showcaseEntries = useMemo(() => catalogEntries.slice(0, SHOWCASE_LIMIT), [catalogEntries]);
 
   return (
@@ -58,7 +56,6 @@ export function CreatePage({
           submissionError={submissionError}
           onSubmitSpec={onSubmitSpec}
           onPlatformBuilderAvailability={onPlatformBuilderAvailability}
-          exampleChips={exampleChips}
         />
       </div>
 

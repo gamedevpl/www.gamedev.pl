@@ -77,17 +77,10 @@ describe('CreatePage', () => {
 
     expect(container.querySelector('.create-headline')?.textContent).toBeTruthy();
     expect(container.querySelector('.create-mascot')).toBeNull();
-    // The composer is reused as-is; same input the home page ships.
+    // The composer is reused as-is; same input the home page ships. No starter chips.
     expect(container.querySelector('.big-prompt-input')).not.toBeNull();
-
-    // Click-to-fill example chips actually fill the composer.
-    const chip = container.querySelector<HTMLButtonElement>('.prompt-example-chip');
-    expect(chip).not.toBeNull();
-    await act(async () => {
-      chip?.click();
-    });
-    const promptInput = container.querySelector<HTMLInputElement>('.big-prompt-input');
-    expect(promptInput?.value).toBe(chip?.textContent);
+    expect(container.querySelector('.prompt-example-chip')).toBeNull();
+    expect(container.querySelector('.prompt-examples')).toBeNull();
 
     const steps = container.querySelectorAll('.create-step');
     expect(steps).toHaveLength(4);
