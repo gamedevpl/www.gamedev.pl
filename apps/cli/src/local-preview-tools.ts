@@ -1,3 +1,4 @@
+import { startLocalPlay } from './play.js';
 import type { AdapterSpec } from './adapters.js';
 import { localPreviewAdapter, localPreviewSupported } from './local-preview-adapter.js';
 import { startLocalPreviewMcp } from './local-preview-mcp.js';
@@ -33,4 +34,21 @@ export async function localPreviewTools(input: {
     input.write(`Local browser tools unavailable: ${formatError(error)}`);
     return undefined;
   }
+}
+
+export async function startWorkshopPreview(input: {
+  root: string;
+  slug: string;
+  env: NodeJS.ProcessEnv;
+  write: (line: string) => void;
+  abort: AbortSignal;
+  agent: string;
+  onLocalPreview?: (url: string) => void;
+}): Promise<string | undefined> {
+  const preview = await startLocalPlay({ ...input, prepared: true });
+  if (preview) {
+    input.onLocalPreview?.(preview.url);
+    input.write(`live preview while ${input.agent} edits: ${preview.url}`);
+  }
+  return preview?.url;
 }
