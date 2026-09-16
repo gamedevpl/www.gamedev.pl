@@ -458,11 +458,11 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       reason:
         `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs packages/contract + editor-contract.ts): ` +
         `${describeTextDrift(remoteEditorContract, localEditorContract)}\n` +
-        `  parse/generate/validate function bodies must match the games-repo copy. ` +
+        `  parse/generate/validate helpers and limits must match the games-repo copy. ` +
         `Update both sides in one paired change.`,
     };
   }
-  log('  ✓ editor-contract (parse/generate/validate function bodies match)');
+  log('  ✓ editor-contract (parse/generate/validate helpers and limits match)');
 
   if (anyScanSource !== null) {
     const localAnyScan = stripLeadingDocComment(readLocalFile(LOCAL_TS_ANY_SCAN_PATH));

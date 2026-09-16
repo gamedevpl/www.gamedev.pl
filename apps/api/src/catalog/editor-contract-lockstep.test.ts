@@ -29,5 +29,28 @@ describe('editor-contract lockstep fingerprint', () => {
     expect(extractNamedFunction(source, 'parseEditorDefinition')).toBeTruthy();
     expect(extractNamedFunction(source, 'generateEditorContentModule')).toBeTruthy();
     expect(extractNamedFunction(source, 'validateEditorContent')).toContain('content must be an object');
+    expect(editorContractFingerprint(source)).toContain('function valueProblem');
+    expect(editorContractFingerprint(source)).toContain('MAX_TEXT_LENGTH = 240');
+  });
+
+  it('changes when a helper or limit used by the wrappers changes', () => {
+    const base = [
+      'export const MAX_TEXT_LENGTH = 240;',
+      'export function valueProblem() { return "old"; }',
+      'export function parseEditorDefinition() { return "p"; }',
+      'export function validateEditorContent() { return valueProblem(); }',
+      'export function generateEditorContentModule() { return "g"; }',
+    ].join('\n');
+    const helperChanged = base.replace('return "old"', 'return "new"');
+    const limitChanged = base.replace('MAX_TEXT_LENGTH = 240', 'MAX_TEXT_LENGTH = 99');
+    expect(editorContractFingerprint(base)).not.toBe(editorContractFingerprint(helperChanged));
+    expect(editorContractFingerprint(base)).not.toBe(editorContractFingerprint(limitChanged));
+  });
+
+  it('treats exported and local helper declarations as the same body', () => {
+    const exported =
+      'export function valueProblem() { return 1; }\nexport function validateEditorContent() { return 2; }';
+    const local = 'function valueProblem() { return 1; }\nexport function validateEditorContent() { return 2; }';
+    expect(editorContractFingerprint(exported)).toBe(editorContractFingerprint(local));
   });
 });
