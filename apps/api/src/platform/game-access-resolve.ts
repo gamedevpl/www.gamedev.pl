@@ -75,6 +75,24 @@ export async function currentOwnerUid(
   return owner.kind === 'creator' ? owner.uid : fallback;
 }
 
+/**
+ * Whether a round's capabilities still answer to the game's current authority.
+ *
+ * A transfer bumps `accessRevision` and rewrites `ownerUid`, but it can only
+ * rewrite `roundGeneration` on a bounded number of submission rows -- one
+ * transaction caps its writes. Rounds past that bound kept keys that still
+ * verified, so this is the game-wide fence every capability consumer checks
+ * instead: the round's owner must still be the game's owner.
+ *
+ * Derived authority is not fenced. It has no revision, and its owner is read
+ * off the newest live submission, so an older round would fail against it for
+ * reasons that have nothing to do with a transfer.
+ */
+export function roundAuthorityCurrent(record: { ownerUid: string }, access: ResolvedGameAccess): boolean {
+  if (access.source !== 'canonical') return true;
+  return sameOwner(classifyOwnerUid(record.ownerUid), access.owner);
+}
+
 // Editors are resolved but never admitted here: roles are GO-03.
 export function ownsGame(access: ResolvedGameAccess, uid: string): boolean {
   return access.owner.kind === 'creator' && access.owner.uid === uid;

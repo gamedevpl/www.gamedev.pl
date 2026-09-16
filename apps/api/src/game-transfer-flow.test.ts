@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import { mintToken } from './platform/submission-token.js';
+import { mintAgentToken } from './platform/agent-token.js';
+import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { MAX_REVOKED_ROUNDS_PER_TRANSFER } from './store/slices/game-transfer.js';
 import type { AgentBackend } from './agent-surface/agent-backend.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { GamesStore } from './delivery/games-store.js';
@@ -179,6 +182,31 @@ describe('after a transfer, the sender keeps nothing', () => {
     const after = (await store.getSubmission(jobId))?.roundGeneration ?? 0;
     // Past the terminal-receipt window too, not merely one ahead.
     expect(after).toBeGreaterThan(generationBefore + 1);
+  });
+
+  it('cannot reuse a round key from beyond the revocation cap', async () => {
+    // The cap rewrites the newest rounds only; a busy game outruns it.
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    for (let i = 0; i < MAX_REVOKED_ROUNDS_PER_TRANSFER + 4; i += 1) {
+      const later = await store.allocateJobId();
+      await store.createSubmission(later, SENDER, `Round ${i}`);
+      await store.setSubmissionSlug(later, 'comet-courier');
+      await store.bumpRoundGeneration(later);
+    }
+    const generation = (await store.bumpRoundGeneration(jobId)) ?? 1;
+    const app = await createApp(store);
+    const headers = { authorization: `Bearer ${mintAgentToken(jobId, SECRET, { roundGeneration: generation })}` };
+
+    const before = await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers });
+    expect(before.statusCode).toBe(200);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    const after = await app.inject({ method: 'GET', url: AGENT_CHANNEL_ROUTES.INBOX, headers });
+    expect(after.statusCode).toBe(401);
+    // The cap really did leave this round alone: authority is what refused it.
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(generation);
   });
 
   it('cannot start work through a concurrent accept: the lock holds both ways', async () => {

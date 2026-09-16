@@ -13,9 +13,11 @@ import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
   readBearerToken,
+  STALE_AGENT_TOKEN_REASON,
   verifyAgentToken,
   type AgentTokenAccess,
 } from '../platform/agent-token.js';
+import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
 import {
   assertUploadTokenUnexpired,
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
@@ -720,6 +722,12 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
+    // Fences a round whose game changed hands, however many rounds it has.
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug))) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
+      return null;
+    }
+
     try {
       if (options.allowTerminalReceipt) {
         const access = classifyAgentTokenAccess(claims, record, now());
@@ -781,6 +789,12 @@ export async function registerAgentChannelRoutes(
     const record = await store.getSubmission(jobId);
     if (!record) {
       reply.status(404).send({ error: 'unknown build' });
+      return null;
+    }
+
+    // Same fence as the header path: an upload URL is a round capability too.
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug))) {
+      reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       return null;
     }
 
