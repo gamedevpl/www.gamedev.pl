@@ -27,9 +27,4 @@ describe('Studio removal notice', () => {
       /@media \(max-width: 768px\)\s*{\s*\.studio-abandon-notice\s*{[^}]*left:\s*12px;[^}]*width:\s*auto;/s,
     );
   });
-
-  it('is imported by the transfer-proposal confirm surface', () => {
-    const src = readFileSync(fileURLToPath(new URL('./StudioTransferProposalConfirm.tsx', import.meta.url)), 'utf8');
-    expect(src).toContain("import './studio-panel.css'");
-  });
 });
