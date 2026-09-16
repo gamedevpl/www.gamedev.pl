@@ -868,7 +868,7 @@
       "notCheckedTitle": "This build hasn't been checked yet."
     },
     "transfer": {
-      "intro": "Hand this game to another creator. Nothing moves until they accept.",
+      "intro": "Hand this game to another creator. Nothing moves until they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
       "loading": "Checking…",
       "codeLabel": "Recipient code",
       "codePlaceholder": "Their code",
@@ -893,7 +893,7 @@
       "someone": "another creator"
     },
     "share": {
-      "intro": "Invite another creator as an editor. They see the project only after they accept.",
+      "intro": "Invite another creator as an editor. They see the project only after they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
       "loading": "Checking…",
       "codeLabel": "Recipient code",
       "codePlaceholder": "Their code",
@@ -2219,7 +2219,7 @@
   "studioShelf": {
     "transfer": {
       "title": "Transfers",
-      "offer": "{{name}} is handing you {{slug}}.",
+      "offer": "{{name}} is handing you {{slug}}. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
       "accept": "Accept",
       "reject": "Decline",
       "yourCode": "Your recipient code",
@@ -2244,7 +2244,7 @@
     },
     "share": {
       "title": "Editor invitations",
-      "offer": "{{name}} invited you to edit {{slug}}.",
+      "offer": "{{name}} invited you to edit {{slug}}. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
       "accept": "Accept",
       "reject": "Decline",
       "errors": {

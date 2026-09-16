@@ -878,7 +878,7 @@
       "notCheckedTitle": "Ta wersja nie została jeszcze sprawdzona."
     },
     "transfer": {
-      "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie.",
+      "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "loading": "Sprawdzam…",
       "codeLabel": "Kod odbiorcy",
       "codePlaceholder": "Jego kod",
@@ -903,7 +903,7 @@
       "someone": "inny twórca"
     },
     "share": {
-      "intro": "Zaproś innego twórcę jako edytora. Zobaczy projekt dopiero po przyjęciu.",
+      "intro": "Zaproś innego twórcę jako edytora. Zobaczy projekt dopiero po przyjęciu. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "loading": "Sprawdzam…",
       "codeLabel": "Kod odbiorcy",
       "codePlaceholder": "Jego kod",
@@ -2233,7 +2233,7 @@
   "studioShelf": {
     "transfer": {
       "title": "Przekazania",
-      "offer": "{{name}} przekazuje ci {{slug}}.",
+      "offer": "{{name}} przekazuje ci {{slug}}. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "accept": "Przyjmij",
       "reject": "Odrzuć",
       "yourCode": "Twój kod odbiorcy",
@@ -2258,7 +2258,7 @@
     },
     "share": {
       "title": "Zaproszenia do edycji",
-      "offer": "{{name}} zaprasza cię do edycji {{slug}}.",
+      "offer": "{{name}} zaprasza cię do edycji {{slug}}. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "accept": "Przyjmij",
       "reject": "Odrzuć",
       "errors": {
