@@ -54,17 +54,26 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
     turn = '',
     active = false,
     finished = false;
+  let inFlight = 0;
+  let completionCode = 1;
   let permissionSession: string | undefined;
   let complete: (code: number) => void;
   const done = new Promise<number>((resolve) => {
     complete = resolve;
   });
   const finish = (code: number) => {
-    if (finished) return;
+    if (finished) {
+      if (code !== 0) {
+        completionCode = code;
+        complete(code);
+      }
+      return;
+    }
+    completionCode = code;
     finished = true;
     active = false;
     input.onSteering?.(undefined);
-    complete(code);
+    if (code !== 0 || inFlight === 0) complete(code);
   };
   const line = (text: unknown) => {
     if (typeof text === 'string' && text) input.onLine?.(text);
@@ -152,16 +161,22 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
       input.onSteering?.(async (text) => {
         if (!active || finished || input.abort?.aborted)
           throw new Error('This task has ended; your message was not sent.');
-        const result = await rpc.request('turn/steer', {
-          [name === 'muse' ? 'sessionId' : 'threadId']: session,
-          expectedTurnId: turn,
-          input: [{ type: 'text', text }],
-          ...(name === 'muse' ? { commandId: uuid7() } : {}),
-        });
-        if (result.turnId !== turn)
-          throw new Error(
-            'Unexpected acknowledgement; delivery outcome unknown. Check the transcript before resending.',
-          );
+        inFlight++;
+        try {
+          const result = await rpc.request('turn/steer', {
+            [name === 'muse' ? 'sessionId' : 'threadId']: session,
+            expectedTurnId: turn,
+            input: [{ type: 'text', text }],
+            ...(name === 'muse' ? { commandId: uuid7() } : {}),
+          });
+          if (result.turnId !== turn)
+            throw new Error(
+              'Unexpected acknowledgement; delivery outcome unknown. Check the transcript before resending.',
+            );
+        } finally {
+          inFlight--;
+          if (finished && inFlight === 0) complete(completionCode);
+        }
       });
     const code = await done;
     return { code, permissionSession };

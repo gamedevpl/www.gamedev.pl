@@ -8,7 +8,7 @@ const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
-it.each(['codex', 'muse'])('steers the exact active %s turn and clears input on completion', async (name) => {
+it.each(['codex', 'muse'])('drains late acknowledgements for the exact active %s turn', async (name) => {
   const root = mkdtempSync(join(tmpdir(), 'gd-steer-test-'));
   roots.push(root);
   const command = join(root, 'agent');
@@ -27,8 +27,10 @@ it.each(['codex', 'muse'])('steers the exact active %s turn and clears input on 
  if(m.params.expectedTurnId!=='turn'||m.params.input[0].text!=='correction')process.exit(2);
  result={turnId:'turn',status:'accepted'};
  }
- send({id:m.id,result});
- if(m.method==='turn/steer') setTimeout(()=>send({method:'turn/completed',params:{threadId:'session',sessionId:'session',turn:{id:'turn',status:'completed'},turnId:'turn',terminal:'completed'}}),10);
+ if(m.method==='turn/steer') {
+ send({method:'turn/completed',params:{threadId:'session',sessionId:'session',turn:{id:'turn',status:'completed'},turnId:'turn',terminal:'completed'}});
+ setTimeout(()=>send({id:m.id,result}),100);
+ } else send({id:m.id,result});
  });`,
     { mode: 0o700 },
   );
@@ -58,7 +60,7 @@ it('keeps unknown adapter configurations on the existing queue path', () => {
   expect(liveArgs(loadAdapters().adapters.find((s) => s.name === 'claude')!)).toBeUndefined();
 });
 
-it.each(['reject', 'close', 'wrong-turn', 'abort', 'approval'])(
+it.each(['reject', 'close', 'wrong-turn', 'abort', 'completed-abort', 'approval'])(
   'handles %s without silently starting another task',
   async (behavior) => {
     const root = mkdtempSync(join(tmpdir(), 'gd-steer-failure-'));
@@ -77,6 +79,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
   const mode=${JSON.stringify(behavior)};
   if(mode==='close')return process.exit(0);
   if(mode==='abort')return;
+  if(mode==='completed-abort')return send({method:'turn/completed',params:{sessionId:'session',turnId:'turn',terminal:'completed'}});
   if(mode==='approval')return send({id:'approval',method:'approval/request',params:{sessionId:'session'}});
   if(mode==='reject')send({id:m.id,error:{message:'Turn no longer active'}});
   if(mode==='wrong-turn')send({id:m.id,result:{turnId:'other'}});
@@ -98,6 +101,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
         if (!fn) return;
         pending = fn('correction').catch((e) => e);
         if (behavior === 'abort') abort.abort();
+        if (behavior === 'completed-abort') setTimeout(() => abort.abort(), 100);
       },
     });
     expect(await pending).toBeInstanceOf(Error);
