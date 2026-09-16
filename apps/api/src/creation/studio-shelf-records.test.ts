@@ -62,8 +62,40 @@ describe('loadShelfRecords', () => {
     const senderShelf = await loadShelfRecords(store, 'g:sender', undefined, mint);
     expect(senderShelf.map((row) => row.slug)).not.toContain('sky-dodge');
 
+    const senderShelfBySlug = await loadShelfRecords(store, 'g:sender', 'sky-dodge', mint);
+    expect(senderShelfBySlug.map((row) => row.slug)).not.toContain('sky-dodge');
+
+    const senderShelfByToken = await loadShelfRecords(store, 'g:sender', mint(10), mint);
+    expect(senderShelfByToken.map((row) => row.slug)).not.toContain('sky-dodge');
+
     const recipientShelf = await loadShelfRecords(store, 'g:recipient', undefined, mint);
     expect(recipientShelf.map((row) => row.slug)).toContain('sky-dodge');
+
+    const recipientShelfBySlug = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', mint);
+    expect(recipientShelfBySlug.map((row) => row.slug)).toContain('sky-dodge');
+
+    const recipientShelfByToken = await loadShelfRecords(store, 'g:recipient', mint(10), mint);
+    expect(recipientShelfByToken.map((row) => row.slug)).toContain('sky-dodge');
+  });
+
+  it('fills in a transferred game for the recipient when member queries lag', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+
+    store.listGameAccessByMember = async () => [];
+
+    const recipientShelfBySlug = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', mint);
+    expect(recipientShelfBySlug.map((row) => row.slug)).toContain('sky-dodge');
+
+    const recipientShelfByToken = await loadShelfRecords(store, 'g:recipient', mint(10), mint);
+    expect(recipientShelfByToken.map((row) => row.slug)).toContain('sky-dodge');
   });
 });
 
