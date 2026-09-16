@@ -2,6 +2,7 @@ import { SubmissionFacade } from './submission-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
+import { eraseTransferRows } from './erase-transfer-rows.js';
 import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
@@ -343,20 +344,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     // Slug-keyed docs can be overwritten before this runs; re-check, don't blind-delete.
     const transferSlugs = new Set([...transfersSent.docs, ...transfersReceived.docs].map((doc) => doc.id));
     // The recipient's cached inbox must drop this erased row too.
-    const affectedRecipients = new Set<string>();
-    for (const slug of transferSlugs) {
-      const ref = this.db.collection('gameTransfers').doc(slug);
-      await this.db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
-        if (!snap.exists) return;
-        const invite = snap.data() as { senderUid?: string; recipientUid?: string };
-        if (invite.senderUid === uid || invite.recipientUid === uid) {
-          tx.delete(ref);
-          if (invite.recipientUid) affectedRecipients.add(invite.recipientUid);
-        }
-      });
+    for (const recipientUid of await eraseTransferRows(this.db, uid, transferSlugs)) {
+      invalidateTransferInboxCache(this, recipientUid);
     }
-    for (const recipientUid of affectedRecipients) invalidateTransferInboxCache(this, recipientUid);
 
     // Stay under Firestore's 500-op batch cap.
     const BATCH_SIZE = 450;

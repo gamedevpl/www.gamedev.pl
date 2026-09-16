@@ -162,6 +162,21 @@ describe('handovers whose invitation row was overwritten', () => {
     expect(await backfillTransferMarkers(db)).toBe(0);
   });
 
+  it('marks the game before erasure deletes the invitation row', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await seedBoomerang(db);
+    await store.upsertUser({ uid: 'g:grace' });
+
+    // Erasure deletes the row and rewrites the rounds it authored.
+    await store.deleteAccountIdentity('g:grace', '2026-04-01T00:00:00.000Z');
+
+    expect((await db.collection('gameTransfers').doc('sky-dodge').get()).exists).toBe(false);
+    const access = (await db.collection('gameAccess').doc('sky-dodge').get()).data();
+    expect(access?.capabilitiesRevokedAtRevision).toBe(3);
+    expect(access?.capabilitiesRevokedAt).toBe('2026-02-01T00:00:00.000Z');
+  });
+
   it('catches a handover a rolled-back revision accepted after a pass', async () => {
     const { db } = fakeFirestore();
     let clock = Date.parse('2026-03-01T12:00:00.000Z');

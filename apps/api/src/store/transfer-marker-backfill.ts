@@ -32,21 +32,29 @@ export async function backfillTransferMarkers(db: Firestore, now: () => number =
   for (const doc of offered.docs) {
     const invite = doc.data() as { slug?: string; status?: string; respondedAt?: string };
     if (!invite.slug) continue;
-    const access = await unmarkedAccess(db, invite.slug);
-    if (!access) continue;
-    if (invite.status === 'accepted') {
-      if (await markHandover(db, invite.slug, invite.respondedAt)) stamped += 1;
-      continue;
-    }
 
-    // The accept is gone, so the rounds have to say it happened.
-    if (!(await authorDisagrees(db, access))) continue;
-    if (await markHandover(db, invite.slug, access.updatedAt)) stamped += 1;
+    // A replaced accept leaves the rounds to say it happened.
+    if (await preserveHandoverMarker(db, invite.slug, invite)) stamped += 1;
   }
 
   // From the pass start, so an accept during it is re-checked.
   await marker.set({ at: startedAt, stamped, scanned: offered.docs.length });
   return stamped;
+}
+
+// Erasure deletes the row and rewrites the rounds it authored,
+
+// so the conclusion has to be drawn while the evidence is there.
+export async function preserveHandoverMarker(
+  db: Firestore,
+  slug: string,
+  invite: { status?: string; respondedAt?: string },
+): Promise<boolean> {
+  const access = await unmarkedAccess(db, slug);
+  if (!access) return false;
+  if (invite.status === 'accepted') return markHandover(db, slug, invite.respondedAt);
+  if (!(await authorDisagrees(db, access))) return false;
+  return markHandover(db, slug, access.updatedAt);
 }
 
 // Null when the game is marked, gone, or has no creator owner.
