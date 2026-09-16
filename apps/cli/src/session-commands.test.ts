@@ -80,6 +80,13 @@ describe('shared session commands', () => {
     const command = { id: 'first', kind: 'input' as const, promptId: session.get().promptId, text: 'hello' };
     expect(dispatch(command).status).toBe('accepted');
     expect(dispatch({ ...command, text: 'changed' }).status).toBe('conflict');
+    for (const text of ['', 'x'.repeat(8001), String.fromCharCode(27), '/quit']) {
+      expect(dispatch({ ...command, text }).status).toBe('conflict');
+      expect(dispatch({ ...command, id: 'unused', text }).status).toBe('invalid');
+    }
+    expect(dispatch({ ...command, promptId: -1 }).status).toBe('conflict');
+    expect(dispatch({ ...command, id: 'unused', promptId: -1 }).status).toBe('invalid');
+    expect(dispatch({ ...command, id: 'malformed id' }).status).toBe('invalid');
     expect(dispatch({ ...command, id: 'new' }).status).toBe('capacity');
     expect(dispatch(command).status).toBe('accepted');
     await pending;

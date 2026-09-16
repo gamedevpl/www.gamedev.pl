@@ -16,14 +16,14 @@ export function createSessionCommands(session: SessionController, limit = 1024) 
     const { id } = command;
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id)) return { id, status: 'invalid' };
     const generation = command.kind === 'input' ? command.promptId : command.taskId;
+    const fingerprint = JSON.stringify([command.kind, generation, command.kind === 'stop' ? null : command.text]);
+    const previous = receipts.get(id);
+    if (previous) return previous.fingerprint === fingerprint ? { ...previous.result } : { id, status: 'conflict' };
     if (!Number.isSafeInteger(generation) || generation < 0) return { id, status: 'invalid' };
     if (command.kind !== 'stop' && (!command.text.trim() || command.text.length > 8000))
       return { id, status: 'invalid' };
     if (command.kind !== 'stop' && [...command.text].some((ch) => /\p{Cc}/u.test(ch) && ch !== '\n' && ch !== '\t'))
       return { id, status: 'invalid' };
-    const fingerprint = JSON.stringify([command.kind, generation, command.kind === 'stop' ? null : command.text]);
-    const previous = receipts.get(id);
-    if (previous) return previous.fingerprint === fingerprint ? { ...previous.result } : { id, status: 'conflict' };
     const state = session.get();
     const message = command.kind === 'queue' || (command.kind === 'input' && !state.question && !state.choices.length);
     if (message && command.text.trimStart().startsWith('/'))
