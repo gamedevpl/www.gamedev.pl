@@ -385,6 +385,36 @@ Two concrete instances of that (observed 2026-07-23):
   `no-store`; the rewrite path did not. Redirect to the real width, or don't cache while
   the rung is up. Assert bytes (or `Location`), not only that `request.query` changed.
 
+- **A collection-group query that filters eligibility after `.limit()` is not the query
+  the InMemory store runs.** Observed (#1380 review, 2026-09-16): retry listed
+  `emailedAt == null` with `limit` on Firestore, then dropped old rows in JS. InMemory
+  filtered by age, sorted, then sliced. A 3-row fake-Firestore test agreed; a 50-row
+  probe of old ineligible rows plus one recent unsent returned the recent row in memory
+  and `[]` on Firestore. Never-email types (`game.new_version`), skip-forever paths
+  (`share.*`, `operator.*`, unsubscribed / no-address), and rows past the age bound all
+  stay `emailedAt: null` and keep occupying the snapshot. Once they fill `scanLimit`,
+  the advertised retry horizon is a no-op and the two-minute sweep still pays the scan.
+  Put the horizon and retry eligibility in the query (composite CG index, not a
+  single-field override), or stamp skips so they leave the index. The regression has to
+  fill the scan on `FirestoreStore(fake)`, not only InMemory.
+
+- **A sweep `try/catch` that still returns 200 hides a missing Firestore index from the
+  monitor that watches sweep HTTP status.** Same PR: `CG_INDEXES` in `setup-gcp.sh` is a
+  source guard, not a deploy. The live COLLECTION_GROUP index is created by re-running
+  step 7 and builds asynchronously. Until it exists the query throws
+  `FAILED_PRECONDITION` every tick; the handler logged it and answered 200, so A3
+  ("notify-sweep failing") stays quiet. Fail the sweep, or put the retry error on the
+  200 body that monitor already consumes. A log line nobody pages on is how a job fails
+  quietly for weeks.
+
+- **Automatic replay of `emailedAt === null` without a claim or provider idempotency key
+  turns a rare send-then-stamp race into a scheduler loop.** Same PR: incidental retry
+  was "re-invoke the emitter". A two-minute worker over every null row means overlapping
+  sweeps, the original emit racing the worker, or Resend accepting and the stamp failing,
+  all resend for the whole horizon (~10k copies). `ResendMailer` had no idempotency key.
+  Claim the row, or send with a stable notification-derived key, *before* the provider
+  call. Scanning "null" is also not "pending email" when skip-forever types never stamp.
+
 ## Membership revocation must outlive bounded cleanup
 
 Probe more rounds than the membership cleanup cap and include unstamped legacy rounds.
