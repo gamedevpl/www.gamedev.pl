@@ -232,6 +232,7 @@ export async function handleReplLine(input: {
           io: { stdout },
           env: input.env,
           currentPath: input.currentPath,
+          runningVersion: CLI_VERSION,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);
