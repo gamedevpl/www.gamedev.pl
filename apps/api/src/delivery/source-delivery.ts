@@ -22,7 +22,7 @@ import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.j
 import type { StagedPreviewPublisher } from './staged-preview.js';
 import type { ContentChecker, RejectCategory } from '../platform/moderation.js';
 import { createDeliveryModerationGate } from './delivery-moderation.js';
-import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { gameOwnerUid } from '../platform/game-access-resolve.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -300,7 +300,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       // Read-only: a delivery refused later costs the ceiling nothing.
       if (options.gateRunGate) {
         const dateStr = new Date(now()).toISOString().slice(0, 10);
-        const headroom = await options.gateRunGate.peek(record.ownerUid, dateStr);
+        // The ceiling belongs to whoever owns the game now.
+        const headroom = await options.gateRunGate.peek(await gameOwnerUid(options.store, record), dateStr);
         if (!headroom.allowed) return { accepted: false, rejected: 'gate_capacity' };
       }
 
@@ -344,9 +345,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       // Abuse concentrates on a person, so it must name the current one.
-      const moderatedUid = record.slug
-        ? ((await currentOwnerUid(options.store, record.slug, record.ownerUid)) ?? record.ownerUid)
-        : record.ownerUid;
+      const moderatedUid = await gameOwnerUid(options.store, record);
       // After every cap, so a flood cannot buy itself an inference call.
       const proseRefusal = await proseGate.refuse({
         files: input.files,

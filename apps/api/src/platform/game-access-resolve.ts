@@ -81,6 +81,19 @@ export async function currentOwnerUid(
   return owner.kind === 'creator' ? owner.uid : fallback;
 }
 
+// Who owns the game this round belongs to, right now.
+
+// Every person-question about a round goes through here, so no
+
+// call site has to remember that ownerUid is only its author.
+export async function gameOwnerUid(
+  store: GameOwnerLookup,
+  record: { slug?: string; ownerUid: string },
+): Promise<string> {
+  if (record.slug === undefined) return record.ownerUid;
+  return (await currentOwnerUid(store, record.slug, record.ownerUid)) ?? record.ownerUid;
+}
+
 // Advisory reads take a blip as "unchanged", never as a failure.
 export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, fallback: string): Promise<string> {
   try {

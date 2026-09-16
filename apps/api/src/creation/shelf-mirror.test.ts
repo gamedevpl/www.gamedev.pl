@@ -41,6 +41,19 @@ function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
     async deleteShelf() {
       // not exercised here
     },
+    // No canonical access here: the reconcile keeps every row.
+    async listGameAccessByMember() {
+      return [];
+    },
+    async getGameAccess() {
+      return null;
+    },
+    async listSubmissionsBySlug(slug: string) {
+      return state.rows.filter((row) => row.slug === slug);
+    },
+    async getSubmissionBySlug(slug: string) {
+      return state.rows.find((row) => row.slug === slug) ?? null;
+    },
   };
   return { state, store };
 }

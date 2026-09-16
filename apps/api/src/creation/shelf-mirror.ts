@@ -1,13 +1,12 @@
 import { buildShelfDocument, type ShelfDocument } from '../store/records/shelf.js';
-import type { SubmissionRecord } from '../store/records/submission.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-records.js';
 
 // Structural, not Pick<Store>: the store builds the mirror.
-export interface ShelfMirrorStore {
-  listSubmissionsByOwner(ownerUid: string): Promise<SubmissionRecord[]>;
-  getSubmission(jobId: number): Promise<SubmissionRecord | null>;
+export type ShelfMirrorStore = ShelfStore & {
   putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
-}
+};
 
 export interface ShelfMirrorOptions {
   store: ShelfMirrorStore;
@@ -36,7 +35,14 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   };
 
   async function rebuildNow(ownerUid: string): Promise<ShelfDocument | null> {
-    const records = await store.listSubmissionsByOwner(ownerUid);
+    const owned = await store.listSubmissionsByOwner(ownerUid);
+
+    // The same reconcile the shelf route reads through, or the
+
+    // mirror answers with games this creator no longer owns.
+
+    // A rebuild runs per job write, so it reads no game twice.
+    const records = await reconcileTransferredOwnership(store, ownerUid, owned, { bySlug: 'inherited' });
     const shelf = buildShelfDocument(records, new Date(now()).toISOString());
     await store.putShelf(ownerUid, shelf);
     return shelf;
@@ -76,7 +82,14 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
       try {
         const record = await store.getSubmission(jobId);
         if (!record?.ownerUid) return;
-        await rebuild(record.ownerUid);
+
+        // The author's shelf still lists it until it is rebuilt too.
+        const owners = new Set([record.ownerUid]);
+        if (record.slug) {
+          const owner = await currentOwnerUid(store, record.slug, record.ownerUid);
+          if (owner) owners.add(owner);
+        }
+        for (const ownerUid of owners) await rebuild(ownerUid);
       } catch (error) {
         report(error, { jobId });
       }

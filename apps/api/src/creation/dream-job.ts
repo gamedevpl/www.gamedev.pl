@@ -16,7 +16,7 @@ import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
-import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { currentOwnerUid, gameOwnerUid } from '../platform/game-access-resolve.js';
 
 // Two directions per proposal; a third would be a menu again.
 export const DREAM_OPTIONS = 2;
@@ -290,9 +290,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         builder: record.builder === 'self' ? 'self' : 'platform',
       };
       // The transaction re-reads the mute, so it needs the same owner.
-      const proposalOwnerUid = record.slug
-        ? ((await currentOwnerUid(store, record.slug, record.ownerUid)) ?? record.ownerUid)
-        : record.ownerUid;
+      const proposalOwnerUid = record.slug ? await gameOwnerUid(store, record) : record.ownerUid;
       // Posted only if the claim still holds, in one transaction.
       const result = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
         textLocalized: PROPOSAL_TEXT_PL,
