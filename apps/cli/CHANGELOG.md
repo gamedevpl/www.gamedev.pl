@@ -19,7 +19,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Create and edit in a detached Play workbench with state-preserving updates, local evidence attachments, phone playtesting, and guarded CLI/platform controls.
+- Create and edit in a detached Play workbench with state-preserving updates, local evidence attachments, phone playtesting, and guarded CLI/platform controls (#1388).
 
 - Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
 - Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
