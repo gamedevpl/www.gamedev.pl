@@ -8,6 +8,7 @@ import {
   type GameAccessRecord,
 } from '../records/game-access.js';
 import { DELETED_ACCOUNT_UID } from '../records/identity.js';
+import { TRANSFER_MARKER_RESCAN_INTERVAL_MS, backfillTransferMarkers } from '../transfer-marker-backfill.js';
 
 // Read plus conditional creates, each fenced against account erasure.
 export interface GameAccessStore {
@@ -197,7 +198,29 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return touched;
   }
 
+  private migration: Promise<unknown> | null = null;
+  private migratedAt = 0;
+
+  // A record read before the pass could answer a capability check unfenced.
+  private async migrated(): Promise<void> {
+    if (this.migration) {
+      await this.migration;
+      return;
+    }
+    if (Date.now() - this.migratedAt < TRANSFER_MARKER_RESCAN_INTERVAL_MS) return;
+    // A failed pass leaves migratedAt alone, so the next read retries it.
+    this.migration = backfillTransferMarkers(this.db)
+      .then(() => {
+        this.migratedAt = Date.now();
+      })
+      .finally(() => {
+        this.migration = null;
+      });
+    await this.migration;
+  }
+
   async getGameAccess(slug: string): Promise<GameAccessRecord | null> {
+    await this.migrated();
     const snap = await this.doc(slug).get();
     return snap.exists ? (snap.data() as GameAccessRecord) : null;
   }
