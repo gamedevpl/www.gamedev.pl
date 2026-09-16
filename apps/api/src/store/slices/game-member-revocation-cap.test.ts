@@ -35,6 +35,19 @@ for (const [name, make] of implementations)
       const after = (await store.getSubmission(jobs[0]!))!;
       expect(after.roundGeneration).toBe(before.roundGeneration);
       expect(roundAuthorityCurrent(after, await resolveGameAccess(store, 'many-rounds'))).toBe(false);
+      const access = await resolveGameAccess(store, 'many-rounds');
+      expect(
+        roundAuthorityCurrent(after, access, {
+          actorUid: 'g:owner',
+          actorRevision: access.accessRevision,
+        }),
+      ).toBe(true);
+      expect(
+        roundAuthorityCurrent(after, access, {
+          actorUid: 'g:editor',
+          actorRevision: before.accessEpoch,
+        }),
+      ).toBe(false);
       const again = await store.createEditorInvitation('many-rounds', 'g:owner', 'g:editor', removedAt);
       await store.acceptEditorInvitation(
         'many-rounds',

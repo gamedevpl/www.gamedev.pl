@@ -393,6 +393,9 @@ re-inviting an editor must not revive old MCP sessions or upload URLs bound to a
 created by another actor. Test fresh credentials separately, and mutate the durable
 actor fence to prove the regression fails. Persistent erasure markers must date the
 account incarnation and original invitation, not permanently ban a recreated UID.
+Also remove the author of the currently active round, then continue it with fresh owner
+credentials. Actor fences must not classify every future credential by the row author.
+Reminting a session from a channel key must preserve its actor and revocation revision.
 
 ## Read the diff against the spec
 

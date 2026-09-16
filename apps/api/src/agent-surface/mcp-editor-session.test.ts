@@ -4,6 +4,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { buildApp } from '../platform/app.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
 import { InMemoryStore } from '../platform/store.js';
+import { mintAgentToken } from '../platform/agent-token.js';
 import { verifyMcpSessionKey } from './mcp-session-key.js';
 
 const secret = 'mcp-editor-session-secret';
@@ -86,12 +87,12 @@ async function callTool(
   return { structured, isError: Boolean(body.result?.isError) };
 }
 
-async function seedSharedRound(store: InMemoryStore) {
-  await store.createSubmission(55, OWNER, 'Comet Courier');
+async function seedSharedRound(store: InMemoryStore, author = OWNER) {
+  await store.ensureGameAccess(SLUG, OWNER, AT, AT);
+  await store.createSubmission(55, author, 'Comet Courier');
   await store.setSubmissionSlug(55, SLUG);
   await store.setRoundBuilder(55, 'self');
   await store.recordJobTransition(55, { to: 'dispatched', at: AT, by: 'system' });
-  await store.ensureGameAccess(SLUG, OWNER, AT, AT);
   const code = (await store.ensureRecipientCode(EDITOR, AT))!;
   await store.createEditorInvitation(SLUG, OWNER, EDITOR, AT, code);
   await store.acceptEditorInvitation(SLUG, EDITOR, AT, (await store.getEditorInvite(SLUG, EDITOR, AT))!.inviteId);
@@ -103,6 +104,60 @@ describe('MCP editor session actor', () => {
   afterEach(async () => {
     await app?.close();
     app = null;
+  });
+
+  it('lets the owner continue an active round authored by a removed editor', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await seedSharedRound(store, EDITOR);
+    await store.ensureRoundGeneration(55);
+    const sessionId = await initialize(app);
+    const startAs = async (uid: string) => {
+      const minted = await app!.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders(uid) });
+      return callTool(
+        app!,
+        'start',
+        { slug: SLUG },
+        {
+          'mcp-session-id': sessionId,
+          authorization: `Bearer ${minted.json().key}`,
+        },
+      );
+    };
+    const editor = await startAs(EDITOR);
+    expect(editor.isError).toBe(false);
+    expect(await store.removeEditor(SLUG, OWNER, EDITOR, AT)).toMatchObject({ editorUids: [] });
+    const owner = await startAs(OWNER);
+    expect(owner.isError).toBe(false);
+    const sessionKey = (owner.structured as { sessionKey: string }).sessionKey;
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(brief.isError).toBe(false);
+    const games = await callTool(app, 'list_account_games', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(games.isError).toBe(false);
+    const oldKey = (editor.structured as { sessionKey: string }).sessionKey;
+    expect((await callTool(app, 'get_brief', { sessionKey: oldKey }, { 'mcp-session-id': sessionId })).isError).toBe(
+      true,
+    );
+    expect((await store.getSubmission(55))?.ownerUid).toBe(EDITOR);
+  });
+
+  it('preserves the actor when opening a session with an actor-bound channel key', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await seedSharedRound(store);
+    const generation = await store.ensureRoundGeneration(55);
+    const key = mintAgentToken(55, secret, {
+      roundGeneration: generation!,
+      actorUid: EDITOR,
+      actorRevision: (await store.getGameAccess(SLUG))!.accessRevision,
+    });
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    expect(verifyMcpSessionKey((started.structured as { sessionKey: string }).sessionKey, secret)).toMatchObject({
+      actorUid: EDITOR,
+      actorRevision: (await store.getGameAccess(SLUG))!.accessRevision,
+    });
   });
 
   it('binds the editor uid into start() sessionKey and refuses publish', async () => {
@@ -171,7 +226,7 @@ describe('MCP editor session actor', () => {
 
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(brief.isError).toBe(true);
-    expect((brief.structured as { error: string }).error).toMatch(/can no longer write this game/i);
+    expect((brief.structured as { error: string }).error).toMatch(/can no longer write this game|finished/i);
   });
 
   it('keeps old sessions and uploads revoked after re-inviting the same editor', async () => {

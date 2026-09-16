@@ -126,7 +126,7 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
             assertAgentTokenActive(claims, job, now());
             const access = job.slug ? await resolveGameAccess(store, job.slug) : null;
             // A round key stops naming its creator once the game changes hands.
-            if (access && !roundAuthorityCurrent(job, access)) {
+            if (access && !roundAuthorityCurrent(job, access, claims)) {
               return toolErr('invalid sessionKey — call start() again');
             }
             const actorUid = claims.actorUid ?? job.ownerUid;

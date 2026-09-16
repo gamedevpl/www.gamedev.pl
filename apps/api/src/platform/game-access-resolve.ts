@@ -106,11 +106,13 @@ export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, 
 export function roundAuthorityCurrent(
   record: { ownerUid: string; accessEpoch?: number },
   access: ResolvedGameAccess,
+  credential?: { actorUid?: string; actorRevision?: number },
 ): boolean {
   if (access.source !== 'canonical') return true;
-  const memberFence = access.memberRevocations?.[record.ownerUid];
-  if (memberFence !== undefined && (record.accessEpoch === undefined || record.accessEpoch < memberFence.revision))
-    return false;
+  const actorUid = credential?.actorUid ?? record.ownerUid;
+  const revision = credential?.actorUid ? credential.actorRevision : record.accessEpoch;
+  const memberFence = access.memberRevocations?.[actorUid];
+  if (memberFence !== undefined && (revision === undefined || revision < memberFence.revision)) return false;
   if (record.accessEpoch !== undefined) {
     // Membership bumps revision; only a handover fences stamped keys.
     const revokedAt = access.capabilitiesRevokedAtRevision;
@@ -119,9 +121,9 @@ export function roundAuthorityCurrent(
   }
   // No epoch on a game that changed hands: fenced rather than guessed.
   if (access.capabilitiesRevokedAtRevision !== undefined) return false;
-  if (sameOwner(classifyOwnerUid(record.ownerUid), access.owner)) return true;
+  if (sameOwner(classifyOwnerUid(actorUid), access.owner)) return true;
   // Editor rounds stay current until handover or removal.
-  return access.owner.kind === 'creator' && access.editorUids.includes(record.ownerUid);
+  return access.owner.kind === 'creator' && access.editorUids.includes(actorUid);
 }
 
 // Editors are resolved but never admitted here: roles are GO-03.
