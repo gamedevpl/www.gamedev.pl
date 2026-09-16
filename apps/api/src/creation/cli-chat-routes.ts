@@ -274,7 +274,7 @@ async function loadConversation(
   uid: string,
   conversationId: string | undefined,
 ): Promise<CliChatRecord | null> {
-  const record = await store.getCliChat(uid);
+  const record = await store.getCliChat(uid, conversationId);
   if (!record) return null;
   if (conversationId && record.conversationId !== conversationId) return null;
   return record;

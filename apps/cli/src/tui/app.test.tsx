@@ -36,6 +36,24 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
 }
 
 describe('TUI feedback', () => {
+  it.each([40, 110])('accepts a queued follow-up during a local task at width %s', async (width) => {
+    const openPreview = vi.fn();
+    const view = screen(width, 16, openPreview);
+    view.session.setLocalTask('codex');
+    view.session.writeLine('local live preview: http://127.0.0.1:1234/test/');
+    await wait();
+    view.input.write('more ramps');
+    await wait();
+    expect(view.session.get().draft).toBe('more ramps');
+    expect(openPreview).not.toHaveBeenCalled();
+    view.input.write('\r');
+    await wait();
+    expect(view.session.get().queued).toEqual(['more ramps']);
+    expect(view.frame()).toContain('1 queued');
+    view.input.write('\u000f');
+    await wait();
+    expect(openPreview).toHaveBeenCalledOnce();
+  });
   it('shows the selected model and effort in a narrow picker', async () => {
     const view = screen(40, 12);
     void view.session.prompt(

@@ -1641,6 +1641,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }): Promise<OAuthGrantRecord | null> {
     return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
-  getCliChat = (uid: string) => this.cliChatStore.getCliChat(uid);
+  getCliChat = (uid: string, conversationId?: string) => this.cliChatStore.getCliChat(uid, conversationId);
   putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

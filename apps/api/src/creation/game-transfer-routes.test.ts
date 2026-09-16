@@ -426,4 +426,45 @@ describe('game transfer routes', () => {
     });
     expect(accept.statusCode).toBe(404);
   });
+
+  it('transferred game disappears from sender studio shelf even when requested directly', async () => {
+    const { store, code } = await ownedGameWithRecipientCode();
+    await store.createSubmission(10, 'g:ada', 'Sky');
+    await store.setSubmissionSlug(10, 'sky');
+    const app = await appWith(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/me/studio/games/sky/transfer',
+      headers: { cookie: authCookie('g:ada') },
+      payload: { recipientCode: code },
+    });
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/me/transfers/sky/accept',
+      headers: { cookie: authCookie('g:grace') },
+      payload: { invitationId: await offerId(store, 'sky') },
+    });
+    // Without this the shelf assertions would pass for the wrong reason.
+    expect(accepted.statusCode).toBe(200);
+
+    const senderStudio = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio?game=sky',
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(senderStudio.statusCode).toBe(200);
+    const senderGames = senderStudio.json().games as Array<{ slug?: string }>;
+    expect(senderGames.map((g) => g.slug)).not.toContain('sky');
+
+    const recipientStudio = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio?game=sky',
+      headers: { cookie: authCookie('g:grace') },
+    });
+    expect(recipientStudio.statusCode).toBe(200);
+    const recipientGames = recipientStudio.json().games as Array<{ slug?: string }>;
+    expect(recipientGames.map((g) => g.slug)).toContain('sky');
+  });
 });

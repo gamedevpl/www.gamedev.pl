@@ -49,11 +49,23 @@ export function ReplApp({
   }, [stdout]);
   useInput((input, key) => {
     if (state.mode === 'busy') {
+      if (key.ctrl && input === 'c') {
+        session.cancel();
+        return;
+      }
+      if (state.localTask) {
+        if (key.ctrl && input === 'o' && state.previewUrl) openPreview?.(state.previewUrl);
+        else if (key.return) session.queueDraft();
+        else if (key.leftArrow) session.moveDraftCursor(-1);
+        else if (key.rightArrow) session.moveDraftCursor(1);
+        else if (key.backspace || key.delete) session.deleteLast();
+        else if (!key.ctrl && !key.meta && input) session.insertDraft(input);
+        return;
+      }
       if (!key.ctrl && !key.meta && input.toLowerCase() === 'o' && state.previewUrl) {
         openPreview?.(state.previewUrl);
         return;
       }
-      if (key.ctrl && input === 'c') session.cancel();
       return;
     }
     if ((key.escape || (!key.ctrl && !key.meta)) && completion.handleKey(key)) return;
@@ -114,7 +126,8 @@ export function ReplApp({
   );
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
   const panelRows =
-    suggestionRows + (state.mode === 'pick' ? choiceCount + selectedRows + 2 : state.mode === 'busy' ? 2 : 3);
+    suggestionRows +
+    (state.mode === 'pick' ? choiceCount + selectedRows + 2 : state.mode === 'busy' ? (state.localTask ? 6 : 2) : 3);
   const live = state.localTask
     ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
     : state.live;
@@ -142,6 +155,7 @@ export function ReplApp({
           lastOutputAt={state.lastOutputAt}
           color={color}
           previewAvailable={Boolean(state.previewUrl)}
+          previewKey={state.localTask ? 'Ctrl+O' : 'o'}
         />
       ) : (
         <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
@@ -183,6 +197,14 @@ export function ReplApp({
           )}
         </Box>
       )}
+      {state.mode === 'busy' && state.localTask && (
+        <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
+          <Text dimColor>Follow-up after this task · {state.queued.length} queued</Text>
+          <Text wrap="truncate-start">
+            {prompt} {draft.before}█{draft.after}
+          </Text>
+        </Box>
+      )}
       {suggestionRows > 0 && (
         <CommandSuggestions
           suggestions={completion.suggestions}
@@ -198,7 +220,9 @@ export function ReplApp({
             ? completion.suggestions.length
               ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
               : 'Enter send · / commands · Tab fill · ←→ cursor · ↑↓ history'
-            : 'Working — input paused'}
+            : state.localTask
+              ? 'Enter queue · Ctrl+O preview · Ctrl+C stop and clear queue'
+              : 'Working — input paused'}
       </Text>
       <Text dimColor wrap="truncate-end">
         <RichText text={footer} color={color} />

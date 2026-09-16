@@ -34,7 +34,13 @@ export function appFactory(): {
   const apps: Array<{ close: () => Promise<void> }> = [];
   return {
     appWith: async (store, gameTransferRoutes = {}) => {
-      const app = await buildApp({ store, sessionSecret, gameTransferRoutes });
+      const app = await buildApp({
+        store,
+        sessionSecret,
+        gameTransferRoutes,
+        // The shelf route mints status tokens, so it needs the secret.
+        submissionRoutes: { submissionTokenSecret: 'dev-token-secret' },
+      });
       apps.push(app);
       return app;
     },

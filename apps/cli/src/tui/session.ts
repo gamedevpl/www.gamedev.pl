@@ -1,3 +1,4 @@
+import type { History } from './history.js';
 export type TuiMode = 'prompt' | 'pick' | 'busy';
 
 export type TuiState = {
@@ -16,6 +17,7 @@ export type TuiState = {
   draftFromHistory: boolean;
   choices: string[];
   pickIndex: number;
+  queued: string[];
 };
 
 export type TuiSession = {
@@ -38,6 +40,9 @@ export type TuiSession = {
   submit: () => void;
   cancel: () => void;
   close: () => void;
+  queueDraft: () => void;
+  restoreHistory: (saved: History) => void;
+  savedHistory: () => History;
 };
 
 export function formatSessionIdentity(who: string, slug: string): string {
@@ -61,18 +66,42 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     draftFromHistory: false,
     choices: [],
     pickIndex: 0,
+    queued: [],
   };
   const listeners = new Set<(next: TuiState) => void>();
   let pending: ((line: string) => void) | null = null;
   const history: string[] = [];
+  let savedLines: string[] = [];
   let histIndex = 0;
   let stash = '';
+  let followupDraft = '';
 
   const emit = (): void => {
     for (const listener of listeners) listener(state);
   };
 
   return {
+    queueDraft() {
+      const text = state.draft.trim();
+      if (state.mode !== 'busy' || !state.localTask || !text) return;
+      state = { ...state, queued: [...state.queued, text], draft: '', draftCursor: 0 };
+      emit();
+    },
+    restoreHistory(saved) {
+      history.splice(0, history.length, ...saved.prompts);
+      histIndex = history.length;
+      savedLines = [...saved.lines];
+      if (saved.lines.length) {
+        state = {
+          ...state,
+          lines: [...state.lines, 'Previous conversation (local history):', ...saved.lines, 'Current session:'],
+        };
+        emit();
+      }
+    },
+    savedHistory() {
+      return { lines: savedLines, prompts: [...history] };
+    },
     get() {
       return state;
     },
@@ -84,6 +113,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       };
     },
     writeLine(text) {
+      savedLines = [...savedLines, ...text.split('\n')].slice(-200);
       const preview = /^(?:local live preview|live preview while .* edits): (https?:\/\/\S+)/m.exec(text)?.[1];
       const previewStopped = /^(?:local preview stopped|no local preview is running)$/m.test(text);
       state = {
@@ -191,6 +221,18 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       emit();
     },
     prompt(choices, question) {
+      const nextTurn = choices === undefined && question === undefined;
+      if (state.mode === 'busy' && state.draft) followupDraft = state.draft;
+      if (nextTurn && state.queued.length) {
+        const [line, ...queued] = state.queued;
+        state = { ...state, queued };
+        savedLines = [...savedLines, `› ${line}`].slice(-200);
+        history.push(line!);
+        if (history.length > 50) history.shift();
+        state = { ...state, lines: [...state.lines, `› ${line}`] };
+        emit();
+        return Promise.resolve(line!);
+      }
       if (pending) {
         const stale = pending;
         pending = null;
@@ -206,10 +248,11 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
           choices: choices ?? [],
           question: question ?? '',
           pickIndex: 0,
-          draft: '',
-          draftCursor: 0,
+          draft: nextTurn ? followupDraft : '',
+          draftCursor: nextTurn ? [...followupDraft].length : 0,
           draftFromHistory: false,
         };
+        if (nextTurn) followupDraft = '';
         emit();
       });
     },
@@ -219,6 +262,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       const resolve = pending;
       pending = null;
       const spoken = line.trim() ? [...state.lines, `› ${line}`] : state.lines;
+      if (line.trim()) savedLines = [...savedLines, `› ${line}`].slice(-200);
       if (line.trim() && history[history.length - 1] !== line.trim()) {
         history.push(line.trim());
         if (history.length > 50) history.shift();
@@ -248,6 +292,8 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
         return;
       }
       if (!pending) {
+        state = { ...state, queued: [] };
+        emit();
         onBusyCancel?.();
         return;
       }

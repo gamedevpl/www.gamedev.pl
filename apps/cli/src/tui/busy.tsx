@@ -9,12 +9,14 @@ export function BusyPanel({
   lastOutputAt,
   color,
   previewAvailable,
+  previewKey = 'o',
 }: {
   activity: string;
   since: number;
   lastOutputAt: number;
   color: boolean;
   previewAvailable: boolean;
+  previewKey?: string;
 }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -37,8 +39,8 @@ export function BusyPanel({
       </Box>
       <Text dimColor={silent < 30} color={color && silent >= 30 ? 'yellow' : undefined} wrap="truncate-end">
         {silent >= 30
-          ? `No new output for ${silent}s — ${previewAvailable ? 'o open preview · ' : ''}Ctrl+C to stop`
-          : `${previewAvailable ? 'o open preview · ' : ''}Ctrl+C to stop / exit`}
+          ? `No new output for ${silent}s — ${previewAvailable ? `${previewKey} open preview · ` : ''}Ctrl+C to stop`
+          : `${previewAvailable ? `${previewKey} open preview · ` : ''}Ctrl+C to stop / exit`}
       </Text>
     </Box>
   );
