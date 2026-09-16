@@ -26,16 +26,16 @@ export function declaredDefaults(specs: Record<string, EditorPropertySpec> | und
   return Object.fromEntries(Object.entries(specs ?? {}).map(([name, spec]) => [name, defaultPropertyValue(spec)]));
 }
 
-// A draft saved before a field was declared has a hole.
+// Every container the definition declares exists once this has run.
 export function fillDeclaredValues(definition: EditorDefinition, doc: EditorContentDoc): EditorContentDoc {
   const filled: EditorContentDoc = { ...doc };
   for (const [key, spec] of Object.entries(definition.content)) {
-    const items = doc[key];
-    if (Array.isArray(items)) filled[key] = items.map((item) => fillItem(spec.item, item));
+    const items = Array.isArray(doc[key]) ? (doc[key] as EditorItemContent[]) : spec.defaults;
+    filled[key] = items.map((item) => fillItem(spec.item, item));
   }
-  const layers = doc[LAYERS_KEY];
-  if (definition.layers && isRecord(layers)) {
-    filled[LAYERS_KEY] = fillLayers(definition.layers, layers as EditorLayersDoc);
+  if (definition.layers) {
+    const layers = doc[LAYERS_KEY];
+    filled[LAYERS_KEY] = fillLayers(definition.layers, isRecord(layers) ? (layers as EditorLayersDoc) : {});
   }
   if (definition.params) filled.params = fillParams(definition.params, doc.params);
   return filled;
@@ -72,12 +72,21 @@ function fillItem(spec: EditorCollectionItemSpec, item: EditorItemContent): Edit
   return { ...raw, properties, layers } as unknown as EditorItemContent;
 }
 
+// A layer declared later has nothing to fill from.
 function fillLayers(specs: Record<string, EditorLayerSpec>, layers: EditorLayersDoc): EditorLayersDoc {
   const filled: EditorLayersDoc = { ...layers };
   for (const [key, spec] of Object.entries(specs)) {
-    if (layers[key] !== undefined) filled[key] = fillLayerContent(spec, layers[key]);
+    filled[key] = layers[key] === undefined ? blankLayerContent(spec) : fillLayerContent(spec, layers[key]);
   }
   return filled;
+}
+
+// The smallest legal board, so the creator has something to paint on.
+export function blankLayerContent(spec: EditorLayerSpec): EditorLayerContent {
+  if (spec.widget !== 'tilemap') return [];
+  const fill = spec.tiles[0]?.char ?? '.';
+  const properties = declaredDefaults(spec.properties);
+  return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
 }
 
 function fillLayerContent(spec: EditorLayerSpec, value: EditorLayerContent): EditorLayerContent {

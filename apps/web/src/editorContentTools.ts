@@ -5,6 +5,7 @@ import type {
   EditorEntitiesLayerSpec,
   EditorLayerConstraint,
   EditorLayerSpec,
+  EditorLayeredSpec,
   EditorLayersDoc,
   EditorItemContent,
   EditorLabel,
@@ -177,6 +178,7 @@ export function itemProblems(
   pathMessages?: PathProblemMessages,
 ) {
   if (spec.widget === 'path' && isPathItem(item)) return pathProblems(spec, item, pathMessages);
+  if (spec.widget === 'layered') return layeredItemProblems(spec, item, name, pathMessages);
   if (spec.widget !== 'tilemap' || !isTilemapItem(item)) return [];
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
   const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
@@ -221,6 +223,20 @@ export function itemProblems(
     }
   }
   return problems;
+}
+
+// A layered item's checks are its layers' checks.
+function layeredItemProblems(
+  spec: EditorLayeredSpec,
+  item: EditorItemContent,
+  name: (label: EditorLabel) => string,
+  pathMessages?: PathProblemMessages,
+): string[] {
+  const layers = ((item as { layers?: EditorLayersDoc } | null)?.layers ?? {}) as EditorLayersDoc;
+  const problems = Object.entries(spec.layers).flatMap(([key, layerSpec]) =>
+    layerProblems(layerSpec, layers[key], name, pathMessages).map((problem) => `${name(layerSpec.label)}: ${problem}`),
+  );
+  return [...problems, ...layeredProblems(spec.layers, spec.constraints, layers)];
 }
 
 function pathProblems(spec: EditorPathSpec, item: EditorPathItemContent, messages?: PathProblemMessages): string[] {

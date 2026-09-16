@@ -214,6 +214,60 @@ describe('a root layer the delivery added after the draft was saved', () => {
   });
 });
 
+describe('a layer added inside a layered collection item', () => {
+  const tile = (key: string, char: string) => ({ key, char, label });
+  const layerSpec = (key: string, char: string) => ({
+    widget: 'tilemap' as const,
+    label,
+    grid: { minCols: 2, maxCols: 4, minRows: 1, maxRows: 4 },
+    tiles: [tile(key, char)],
+    properties: {},
+    constraints: [],
+  });
+  const perItem: EditorDefinition = {
+    version: 1,
+    content: {
+      levels: {
+        widget: 'collection',
+        label,
+        itemLabel: label,
+        min: 0,
+        max: 4,
+        defaults: [],
+        item: {
+          widget: 'layered',
+          properties: {},
+          constraints: [],
+          layers: { terrain: layerSpec('floor', '.'), fog: layerSpec('clear', ' ') },
+        },
+      },
+    },
+  };
+
+  it('is materialised as the smallest legal board, not dropped', () => {
+    const filled = fillDeclaredValues(perItem, {
+      levels: [{ properties: {}, layers: { terrain: { properties: {}, rows: ['..'] } } }],
+    });
+    const item = (filled.levels as EditorItemContent[])[0] as { layers: Record<string, unknown> };
+    expect(item.layers.terrain).toEqual({ properties: {}, rows: ['..'] });
+    expect(item.layers.fog).toEqual({ properties: {}, rows: ['  '] });
+  });
+
+  it('makes the draft unsaved, so the new layer reaches the server', () => {
+    const loaded: GameEditorState = {
+      version: '6',
+      definition: perItem,
+      content: { levels: [] },
+      draft: {
+        content: { levels: [{ properties: {}, layers: { terrain: { properties: {}, rows: ['..'] } } }] },
+        revision: 7,
+        updatedAt: '',
+      },
+    };
+    expect(mergeDraft(loaded).unsaved).toBe(true);
+  });
+});
+
 describe('differsFromStored', () => {
   it('is false for the same document', () => {
     const stored = { boards: [{ properties: { name: 'a', speed: 6 } }] };
