@@ -237,6 +237,7 @@ export const CLI_ADAPTERS = [
   'cursor',
   'copilot',
   'muse',
+  'opencode',
   'custom',
 ] as const;
 export type CliAdapter = (typeof CLI_ADAPTERS)[number];

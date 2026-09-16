@@ -82,10 +82,19 @@ stays with the selected tool; its authentication errors are shown in the termina
 Runs use that tool's own credentials and billing.
 
 The bundled local adapters are `claude`, `codex`, `gemini`, `vibe`, `agy`, `cursor`,
-and `copilot`. Automatic MCP configuration is available for `claude`, `codex`, and
+`copilot`, `muse`, and `opencode`. Automatic MCP configuration is available for `claude`, `codex`, and
 `copilot`; the others use local files. Cursor runs `cursor-agent`, or `agent` only
 after its help identifies it as Cursor. The `cursor` editor launcher is listed
-separately and is never treated as a headless agent.
+separately and is never treated as a headless agent. Windsurf is also listed as an
+editor with manual MCP setup (`gamedevpl connect <slug> --manual`), not as a
+headless delegate. The builder picker only shows detected execution adapters.
+
+OpenCode uses [`opencode run --format json`](https://opencode.ai/docs/cli/).
+Choose a provider/model ID with `/model opencode`; provider-specific reasoning
+variants and permissions stay in OpenCode's settings. No blanket auto-approval
+is enabled. Prompts typed during a run are queued for the next task.
+Copilot output shows complete replies, tool activity, and failures; protocol
+deltas and lifecycle notifications stay out of the conversation.
 Custom local adapters can be configured in `~/.config/gamedevpl/adapters.json` (or
 `GAMEDEV_ADAPTERS`); they remain unsupported and do not gain automatic MCP wiring.
 

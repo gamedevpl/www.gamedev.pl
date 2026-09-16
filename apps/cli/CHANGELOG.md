@@ -11,7 +11,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
 
+### Fixed
+
+- Hide Copilot protocol chatter while preserving replies, tool activity, and errors.
+
 ### Added
+
+- Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery.
 
 - Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
 

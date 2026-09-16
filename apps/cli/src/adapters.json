@@ -130,6 +130,21 @@
         "success": [0],
         "failure": [1]
       }
+    },
+    {
+      "name": "opencode",
+      "command": "opencode",
+      "versionFlag": "--version",
+      "headless": ["run", "--format", "json"],
+      "events": {
+        "flag": "--format",
+        "dialect": "ndjson"
+      },
+      "cwd": "game-dir",
+      "exit": {
+        "success": [0],
+        "failure": [1]
+      }
     }
   ]
 }
