@@ -26,8 +26,9 @@ Interactive sessions save the last 200 output lines and 50 prompts locally under
 `~/.config/gamedevpl/history/`, with owner-only file permissions. History is separated
 by signed-in account, server, and game (or launch directory before selecting a game).
 Restarting restores the transcript and ↑/↓ prompt history without executing old commands
-or reconnecting old preview URLs. The platform conversation ID is also retained; this
-does not resume a delegated agent's own session. If the account cannot be verified,
+or reconnecting old preview URLs. The platform conversation ID is also retained. The server keeps up to eight recent
+conversations per account within a bounded storage budget; older conversations start
+fresh when their IDs expire. This does not resume a delegated agent's own session. If the account cannot be verified,
 history stays in memory for that run. Set `GAMEDEV_HISTORY=off` to disable disk history;
 remove the history directory to erase saved conversations. Avoid putting secrets in prompts.
 
