@@ -68,6 +68,8 @@ export interface BuildStatusAssembler {
   ): Promise<SubmissionStatusResponse>;
   // Drops the cached channel events for a job that just received one.
   invalidateEvents(jobId: number): void;
+  // Drops previews/shots for a job whose media just changed.
+  invalidateMedia(jobId: number): void;
 }
 
 function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
@@ -125,6 +127,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   // The channel prunes on write; only a little history is ever wanted.
   const maxPreviewsShown = 4;
   const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
+  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
+  // Bumped by invalidateMedia; a read started before it must not write after.
+  const mediaGeneration = new Map<number, number>();
 
   async function loadBuildPreviews(jobId: number): Promise<BuildPreviewSummary[]> {
     if (!store) return [];
@@ -133,13 +138,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    const generation = mediaGeneration.get(jobId) ?? 0;
     const value = await store.listBuildPreviews(jobId, { limit: maxPreviewsShown });
-    previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+    if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+      previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+    }
     return value;
   }
 
   const maxShotsShown = 12;
-  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
 
   async function loadBuildShots(jobId: number): Promise<BuildShotSummary[]> {
     if (!store) return [];
@@ -148,8 +155,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    const generation = mediaGeneration.get(jobId) ?? 0;
     const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
-    shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+    if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+      shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+    }
     return value;
   }
 
@@ -415,9 +425,13 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   function invalidateEvents(jobId: number): void {
     eventsCache.delete(jobId);
+  }
+
+  function invalidateMedia(jobId: number): void {
+    mediaGeneration.set(jobId, (mediaGeneration.get(jobId) ?? 0) + 1);
     previewsCache.delete(jobId);
     shotsCache.delete(jobId);
   }
 
-  return { attachBuildEvents, invalidateEvents };
+  return { attachBuildEvents, invalidateEvents, invalidateMedia };
 }

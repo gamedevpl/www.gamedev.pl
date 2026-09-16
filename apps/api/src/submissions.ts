@@ -302,6 +302,7 @@ export interface AgentSurfaceSeams {
     | 'now'
     | 'sourceDelivery'
     | 'onEvent'
+    | 'onMediaEvent'
     | 'onBuilderHandoffAcknowledged'
     | 'onSourcesStaged'
     | 'onRegenerateSeed'
@@ -1095,7 +1096,7 @@ export async function registerSubmissionRoutes(
     backendFor,
     githubClient,
     publishedRef,
-    onPreviewPublished: (jobId: number) => invalidateStatusCache(jobId),
+    onPreviewPublished: (jobId: number) => buildStatus.invalidateMedia(jobId),
     ...(seedDispatch
       ? {
           handoff: (jobId: number, steer?: string) =>
@@ -1135,15 +1136,7 @@ export async function registerSubmissionRoutes(
   // Bumped on invalidate so a refresh that started on a stale snapshot cannot
   // repopulate the cache after feedback/handoff cleared it.
   const statusCacheEpoch = new Map<number, number>();
-  /**
-   * Drop every locale variant so the next poll rebuilds from the job record.
-   *
-   * Also busts buildStatus's own previews/shots cache: every caller here is saying
-   * "something about this job's status changed," and a creator-uploaded screenshot
-   * or a gate-posted frame is exactly that kind of change -- without this, a route
-   * that writes a shot/preview and calls only invalidateStatusCache (feedback,
-   * handoff, draft lifecycle) would leave the 30s media cache serving stale media.
-   */
+  /** Drop every locale variant so the next poll rebuilds from the job record. */
   function invalidateStatusCache(jobId: number): void {
     for (const key of [...statusCache.keys()]) {
       if (key.startsWith(`${jobId}:`)) statusCache.delete(key);
@@ -1152,7 +1145,6 @@ export async function registerSubmissionRoutes(
       if (key.startsWith(`${jobId}:`)) statusRefreshes.delete(key);
     }
     statusCacheEpoch.set(jobId, (statusCacheEpoch.get(jobId) ?? 0) + 1);
-    buildStatus.invalidateEvents(jobId);
   }
 
   const buildStatus = createBuildStatusAssembler({
@@ -1379,7 +1371,7 @@ export async function registerSubmissionRoutes(
     acknowledgeBuilderHandoff,
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
-    onGateScreenshotPosted: invalidateStatusCache,
+    onGateScreenshotPosted: (jobId: number) => buildStatus.invalidateMedia(jobId),
   });
 
   /**
@@ -1660,6 +1652,7 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia: (jobId: number) => buildStatus.invalidateMedia(jobId),
     runChatAgent,
     resumeBuild,
   });
@@ -1677,6 +1670,7 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia: (jobId: number) => buildStatus.invalidateMedia(jobId),
     runChatAgent,
     startImprovementRound,
   });
@@ -1892,6 +1886,7 @@ export async function registerSubmissionRoutes(
         // minute-old stall next to fresh progress (submit auto-end + continue loop).
         invalidateStatusCache(jobId);
       },
+      onMediaEvent: (jobId) => buildStatus.invalidateMedia(jobId),
       onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
       ...(stagedPreviews ? { onSourcesStaged: ({ jobId }: { jobId: number }) => stagedPreviews.schedule(jobId) } : {}),
       onRegenerateSeed: regenerateSeed,

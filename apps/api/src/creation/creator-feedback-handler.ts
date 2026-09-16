@@ -43,6 +43,8 @@ export interface FeedbackRoutesOptions {
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   invalidateStatusCache: (jobId: number) => void;
+  // Narrower than invalidateStatusCache -- only fires for an actual shot write.
+  invalidateMedia: (jobId: number) => void;
   runChatAgent: ChatOrchestration['runChatAgent'];
   resumeBuild: (input: {
     jobId: number;
@@ -107,6 +109,7 @@ export async function handleCreatorFeedback(
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia,
     runChatAgent,
     resumeBuild,
   } = options;
@@ -188,6 +191,7 @@ export async function handleCreatorFeedback(
   if (store && parsed.data.context?.screenshotPng) {
     try {
       shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
+      invalidateMedia(jobId);
     } catch (shotError) {
       request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
     }
@@ -197,6 +201,7 @@ export async function handleCreatorFeedback(
       const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
       referenceImageShotIds = stored.ids;
       referenceImages = stored.images;
+      invalidateMedia(jobId);
     } catch (shotError) {
       request.log.error({ err: shotError }, 'failed to store creator reference images');
     }
