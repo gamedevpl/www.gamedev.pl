@@ -553,6 +553,7 @@ const FILE_BUCKET = {
   contact: 'notifications',
   'operator-alerts': 'notifications',
   'uncollected-feedback': 'notifications',
+  'notification-email-retry': 'notifications',
   'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,

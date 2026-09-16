@@ -1152,6 +1152,13 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.notificationsStore.markNotificationEmailed(uid, id, at);
   }
 
+  async listPendingEmailNotifications(opts?: {
+    limit?: number;
+    createdAfter?: string;
+  }): Promise<Array<{ uid: string; notification: StoredNotification }>> {
+    return this.notificationsStore.listPendingEmailNotifications(opts);
+  }
+
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
     return this.notificationsStore.savePushSubscription(uid, subscription);
   }

@@ -17,6 +17,7 @@ import type { PublicationRecord } from '../delivery/games-store.js';
 import type { SubmissionStatus, SubmissionStatusResponse } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
+import { retryPendingNotificationEmails } from './notification-email-retry.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { uncollectedFeedbackCause, type UncollectedFeedbackCause } from './uncollected-feedback.js';
 
@@ -89,11 +90,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     return value;
   }
 
-  // Closed-tab backstop: Cloud Scheduler POSTs an OIDC token here.
-
-  // Reuses the status poll derivation and its idempotent emit.
-
-  // OIDC authenticates the caller; the hourly ceiling only guards runaways.
+  // Closed-tab backstop: Scheduler OIDC POST; hourly limit guards runaways.
   app.post(
     '/api/internal/notify-sweep',
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
@@ -321,6 +318,11 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
 
       // Bounded floor under the shelf write-through; failures are counted, never thrown.
       const shelfRebuild = await runShelfRebuildPass({ store, now });
+      try {
+        await retryPendingNotificationEmails(buildNotifyDeps(), { nowMs: now() });
+      } catch (retryError) {
+        request.log.error({ err: retryError }, 'notification email retry sweep failed');
+      }
 
       // Error level so a job nobody watches cannot fail quietly for weeks.
       const sweepLog =
