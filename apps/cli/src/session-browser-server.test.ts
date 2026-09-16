@@ -67,6 +67,14 @@ it('shares receipts, questions and Stop across clients without exposing terminal
   const command = { id: 'browser-1', kind: 'input', promptId: snapshot.promptId, text: 'Add ramps' };
   expect(await post(command).then((r) => r.json())).toMatchObject({ status: 'accepted' });
   expect(await post(command).then((r) => r.json())).toMatchObject({ status: 'accepted' });
+  for (const changed of [
+    { ...command, text: '' },
+    { ...command, text: 'x'.repeat(8001) },
+    { ...command, promptId: -1 },
+  ]) {
+    expect(await post(changed).then((r) => r.json())).toMatchObject({ status: 'conflict' });
+    expect(await post({ ...changed, id: 'unused' }).then((r) => r.json())).toMatchObject({ status: 'invalid' });
+  }
   expect(await first).toBe('Add ramps');
   session.setLocalTask('codex');
   const taskId = session.get().taskId;

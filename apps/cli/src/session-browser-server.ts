@@ -8,10 +8,10 @@ import { previewSource } from './local-preview-source.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
-const generation = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const generation = z.number();
 const command = z.discriminatedUnion('kind', [
-  z.object({ id, kind: z.literal('input'), promptId: generation, text: z.string().max(8000) }).strict(),
-  z.object({ id, kind: z.literal('queue'), taskId: generation, text: z.string().max(8000) }).strict(),
+  z.object({ id, kind: z.literal('input'), promptId: generation, text: z.string() }).strict(),
+  z.object({ id, kind: z.literal('queue'), taskId: generation, text: z.string() }).strict(),
   z.object({ id, kind: z.literal('stop'), taskId: generation }).strict(),
 ]);
 const envelope = z.object({ version: z.literal(1), sessionId: z.string().uuid(), command }).strict();
