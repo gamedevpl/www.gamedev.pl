@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreateStepsList } from './CreateStepsList.js';
-import { SETTLE_MS, SPARK_MS } from './create-step-play.js';
+import { MISS_HOLD_MS, SPARK_MS } from './create-step-play.js';
 import i18n from './i18n/index.js';
 
 async function flushEffects() {
@@ -49,8 +49,9 @@ describe('CreateStepsList', () => {
     expect(container.querySelector('.create-steps-list')?.getAttribute('data-combo-next')).toBe('0');
 
     await act(async () => {
-      vi.advanceTimersByTime(SPARK_MS + SETTLE_MS + 20);
+      vi.advanceTimersByTime(SPARK_MS + MISS_HOLD_MS + 20);
     });
+    expect(container.querySelector('.create-step.is-miss')).toBeNull();
 
     for (const index of [0, 1, 2, 3]) {
       await act(async () => {

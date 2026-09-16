@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Mascot, type MascotEmotion, type MascotLook } from './Mascot.js';
 import {
   GLANCE_EVERY_MS,
+  MISS_HOLD_MS,
   POKE_REACTION,
   SETTLE_MS,
   SPARK_MS,
@@ -121,7 +122,7 @@ export function CreateStepsList() {
       });
     });
 
-    later(chain.length * SPARK_MS + SETTLE_MS, () => {
+    later(result.miss ? SPARK_MS + MISS_HOLD_MS : chain.length * SPARK_MS + SETTLE_MS, () => {
       if (result.won) return;
       busy.current = false;
       setThrowing(null);

@@ -27,6 +27,7 @@ export const WIN_REACTION: Record<StepScene, MascotEmotion> = {
 
 export const SPARK_MS = 280;
 export const SETTLE_MS = 720;
+export const MISS_HOLD_MS = 1400;
 export const WIN_HOLD_MS = 1600;
 export const GLANCE_EVERY_MS = 7000;
 

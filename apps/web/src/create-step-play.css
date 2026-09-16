@@ -66,6 +66,8 @@ button.create-step-scene:active .mascot {
 .create-step-body,
 .create-step-index {
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .create-step .create-step-n,
@@ -93,7 +95,7 @@ button.create-step-scene:active .mascot {
 .create-step.is-throwing .create-step-card,
 .create-steps-list.is-won .create-step-card {
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(0, 228, 172, 0.14), transparent 78%);
+  background: linear-gradient(90deg, rgba(0, 228, 172, 0.28), transparent 72%);
 }
 
 .create-step.is-catching .create-step-title,
@@ -120,7 +122,7 @@ button.create-step-scene:active .mascot {
 
 .create-step.is-miss .create-step-card {
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(248, 113, 113, 0.14), transparent 78%);
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.28), transparent 72%);
 }
 
 .create-step.is-miss .create-step-title {
@@ -128,8 +130,9 @@ button.create-step-scene:active .mascot {
 }
 
 .create-step.is-miss .create-step-n {
+  background: #f87171;
   border-color: #f87171;
-  color: #f87171;
+  color: #0d1520;
 }
 
 .create-step.is-miss .create-step-index::after {
