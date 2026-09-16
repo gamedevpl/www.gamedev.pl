@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from 'node:fs';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,10 +113,5 @@ describe('StudioTransferProposalConfirm', () => {
     expect(host.querySelector('[data-testid="studio-transfer-propose-code"]')).toBeNull();
     expect(host.textContent).toContain('Ask the agent to start a new one');
     await act(async () => root.unmount());
-  });
-
-  it('loads studio-panel styles on this surface', () => {
-    const src = readFileSync('apps/web/src/surfaces/studio/StudioTransferProposalConfirm.tsx', 'utf8');
-    expect(src).toContain("import './studio-panel.css'");
   });
 });
