@@ -7,23 +7,21 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.17.0 — 2026-09-16
+
 ### Added
 
 - Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
-
-### Internal
-
-- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
+- Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
+- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
 
 ### Fixed
 
 - Hide Copilot protocol chatter while preserving replies, tool activity, and errors (#1386).
 
-### Added
+### Internal
 
-- Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
-
-- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
+- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
 
 ## 0.16.0 — 2026-09-16
 
