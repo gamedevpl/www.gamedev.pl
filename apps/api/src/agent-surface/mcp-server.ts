@@ -130,12 +130,10 @@ import type { ContentChecker } from '../platform/moderation.js';
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
-/** Self-explaining stale/finished copy (matches channel; Studio is the fix). */
 const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
 
 const SESSION_HEADER = 'mcp-session-id';
 
-// Callable for REST clients, never advertised, never named to a model.
 export const MCP_UNADVERTISED_TOOLS: readonly string[] = Object.freeze([
   'open_proposal_round',
   'submit_proposal',

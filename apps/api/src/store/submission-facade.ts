@@ -235,6 +235,14 @@ export abstract class SubmissionFacade {
     return this.gameTransferProposalStore.confirmTransferProposal(proposalId, ownerUid, at);
   }
 
+  async invalidateOpenTransferProposalsForSlug(slug: string, at: string): Promise<void> {
+    return this.gameTransferProposalStore.invalidateOpenTransferProposalsForSlug(slug, at);
+  }
+
+  async eraseTransferProposalsForUid(uid: string, at: string): Promise<void> {
+    return this.gameTransferProposalStore.eraseTransferProposalsForUid(uid, at);
+  }
+
   async getEditorInvite(slug: string, recipientUid: string, at: string): Promise<GameEditorInvitation | null> {
     return this.gameEditorInviteStore.getEditorInvite(slug, recipientUid, at);
   }

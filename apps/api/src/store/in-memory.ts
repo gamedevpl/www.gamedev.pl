@@ -140,10 +140,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
         .filter((row) => row.slug === slug)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
         .slice(0, MAX_REVOKED_ROUNDS_PER_TRANSFER)) {
-        this.submissions.set(record.jobId, {
-          ...record,
-          roundGeneration: revokedRoundGeneration(record.roundGeneration),
-        });
+        const gen = revokedRoundGeneration(record.roundGeneration);
+        this.submissions.set(record.jobId, { ...record, roundGeneration: gen });
       }
     },
   );

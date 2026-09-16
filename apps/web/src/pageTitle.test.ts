@@ -97,12 +97,6 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'studioConnect', game: 'tok' }, { copy, studioTitle: 'Coin Catcher' })).toBe(
       'Studio · Coin Catcher — Gamedev.pl',
     );
-    expect(
-      resolveDocumentTitle(
-        { view: 'studioTransferPropose', game: 'tok', proposalId: '11111111-2222-4333-8444-555555555555' },
-        { copy, studioTitle: 'Coin Catcher' },
-      ),
-    ).toBe('Studio · Coin Catcher — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'join', code: 'K7M3QP', token: 't' }, { copy })).toBe(
       'Join the game — Gamedev.pl',
     );

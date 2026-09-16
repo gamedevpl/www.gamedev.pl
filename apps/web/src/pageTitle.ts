@@ -3,10 +3,7 @@ import type { AppRoute } from './core/router.js';
 /** Brand suffix used on every non-home tab title. */
 export const SITE_BRAND = 'Gamedev.pl';
 
-/**
- * Build a tab title as `{page} — Gamedev.pl`. Empty/whitespace falls back to the
- * brand alone so we never emit a dangling em dash.
- */
+/** `{page} — Gamedev.pl`; blank input is the brand alone. */
 export function brandedPageTitle(page: string): string {
   const trimmed = page.trim();
   return trimmed ? `${trimmed} — ${SITE_BRAND}` : SITE_BRAND;
