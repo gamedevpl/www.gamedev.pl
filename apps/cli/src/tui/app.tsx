@@ -55,8 +55,11 @@ export function ReplApp({
       }
       if (state.localTask) {
         if (key.ctrl && input === 'o' && state.previewUrl) openPreview?.(state.previewUrl);
-        else if (key.return) session.queueDraft();
-        else if (key.leftArrow) session.moveDraftCursor(-1);
+        else if (key.ctrl && input === 'q') session.queueDraft();
+        else if (key.return) {
+          if (state.canSteer) void session.sendDraft();
+          else session.queueDraft();
+        } else if (key.leftArrow) session.moveDraftCursor(-1);
         else if (key.rightArrow) session.moveDraftCursor(1);
         else if (key.backspace || key.delete) session.deleteLast();
         else if (!key.ctrl && !key.meta && input) session.insertDraft(input);
@@ -127,7 +130,13 @@ export function ReplApp({
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
   const panelRows =
     suggestionRows +
-    (state.mode === 'pick' ? choiceCount + selectedRows + 2 : state.mode === 'busy' ? (state.localTask ? 6 : 2) : 3);
+    (state.mode === 'pick'
+      ? choiceCount + selectedRows + 2
+      : state.mode === 'busy'
+        ? state.localTask
+          ? 6 + Number(Boolean(state.sendStatus))
+          : 2
+        : 3);
   const live = state.localTask
     ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
     : state.live;
@@ -199,7 +208,10 @@ export function ReplApp({
       )}
       {state.mode === 'busy' && state.localTask && (
         <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
-          <Text dimColor>Follow-up after this task · {state.queued.length} queued</Text>
+          <Text dimColor>
+            {state.canSteer ? 'Message the active agent' : 'Follow-up after this task'} · {state.queued.length} queued
+          </Text>
+          {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
           <Text wrap="truncate-start">
             {prompt} {draft.before}█{draft.after}
           </Text>
@@ -221,7 +233,9 @@ export function ReplApp({
               ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
               : 'Enter send · / commands · Tab fill · ←→ cursor · ↑↓ history'
             : state.localTask
-              ? 'Enter queue · Ctrl+O preview · Ctrl+C stop and clear queue'
+              ? state.canSteer
+                ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+C stop'
+                : 'Enter queue · Ctrl+O preview · Ctrl+C stop and clear queue'
               : 'Working — input paused'}
       </Text>
       <Text dimColor wrap="truncate-end">

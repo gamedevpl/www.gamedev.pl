@@ -1,3 +1,4 @@
+import type { Steer } from './live-agent.js';
 export type SessionHistory = { lines: string[]; prompts: string[]; conversationId?: string };
 export type SessionMode = 'prompt' | 'pick' | 'busy';
 
@@ -18,6 +19,9 @@ export type SessionState = {
   choices: string[];
   pickIndex: number;
   queued: string[];
+  canSteer: boolean;
+  sending: boolean;
+  sendStatus: string;
   promptId: number;
   taskId: number;
 };
@@ -43,6 +47,8 @@ export type SessionController = {
   cancel: () => void;
   close: () => void;
   queueDraft: () => void;
+  setSteering: (send: Steer | undefined) => void;
+  sendDraft: () => Promise<void>;
   acceptInput: (text: string, promptId: number) => boolean;
   enqueueInput: (text: string, taskId: number) => boolean;
   stopTask: (taskId: number) => boolean;
@@ -72,6 +78,9 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     choices: [],
     pickIndex: 0,
     queued: [],
+    canSteer: false,
+    sending: false,
+    sendStatus: '',
     promptId: 0,
     taskId: 0,
   };
@@ -82,6 +91,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
   let histIndex = 0;
   let stash = '';
   let followupDraft = '';
+  let steer: Steer | undefined;
   let closed = false;
   let stopping = false;
 
@@ -126,6 +136,43 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
   };
 
   return {
+    setSteering(send) {
+      steer = send;
+      state = { ...state, canSteer: Boolean(send) };
+      emit();
+    },
+    async sendDraft() {
+      const text = state.draft.trim();
+      const send = steer;
+      if (closed || stopping || !send || !text || state.sending || state.mode !== 'busy') return;
+      state = { ...state, sending: true, sendStatus: 'Sending to the active agent…' };
+      emit();
+      try {
+        await send(text);
+        const shown = `› [sent to active agent] ${text}`;
+        savedLines = [...savedLines, shown].slice(-200);
+        history.push(text);
+        if (history.length > 50) history.shift();
+        if (followupDraft.trim() === text) followupDraft = '';
+        state = {
+          ...state,
+          lines: [...state.lines, shown],
+          sendStatus: 'Accepted by the agent',
+          ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
+        };
+      } catch (error) {
+        const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
+        const shown = `› [delivery not confirmed] ${text}`;
+        savedLines = [...savedLines, shown, status].slice(-200);
+        history.push(text);
+        if (history.length > 50) history.shift();
+        histIndex = history.length;
+        state = { ...state, lines: [...state.lines, shown, status], sendStatus: status };
+      } finally {
+        state = { ...state, sending: false };
+        emit();
+      }
+    },
     acceptInput(text, promptId) {
       if (closed || !pending || promptId !== state.promptId) return false;
       if (state.mode === 'pick' && !state.choices.includes(text)) return false;
@@ -153,7 +200,16 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     },
     queueDraft() {
       const text = state.draft.trim();
-      if (closed || stopping || state.mode !== 'busy' || !state.localTask || !text || state.queued.length >= 50) return;
+      if (
+        closed ||
+        stopping ||
+        state.sending ||
+        state.mode !== 'busy' ||
+        !state.localTask ||
+        !text ||
+        state.queued.length >= 50
+      )
+        return;
       state = { ...state, queued: [...state.queued, text], draft: '', draftCursor: 0 };
       emit();
     },
@@ -201,7 +257,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     },
     setLocalTask(localTask) {
       stopping = false;
-      state = { ...state, localTask, taskId: state.taskId + 1 };
+      state = { ...state, localTask, sendStatus: '', taskId: state.taskId + 1 };
       emit();
     },
     setLive(live) {

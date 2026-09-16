@@ -1,7 +1,8 @@
 import { localPreviewTools, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
-import { runMuseWithApprovals } from './muse-approval.js';
+import { defaultAdapterRun } from './workshop-runner.js';
+import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
@@ -13,12 +14,11 @@ import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
 import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { changedPaths, localGameFiles, formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
-import { childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
+import { childEnv, createDelegateStream } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { deliverySession } from './submit-session.js';
@@ -37,6 +37,7 @@ export type AdapterRun = (input: {
   abort?: AbortSignal;
   onLine?: (line: string) => void;
   authCheck?: Promise<void>;
+  onSteering?: (send: Steer | undefined) => void;
 }) => Promise<{ code: number | null; permissionSession?: string }>;
 
 type VerifyRun = NonNullable<Parameters<typeof runLadder>[0]['run']>;
@@ -53,6 +54,7 @@ export type Workshop = {
   activityApi?: ApiClient;
   interactiveRun?: InteractiveRun;
   onLocalTask?: (agent: string) => void;
+  onSteering?: (send: Steer | undefined) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -77,23 +79,6 @@ export function detectLocalAdapters(
     const spec = detectAdapter(row.name, which, file);
     return spec ? [spec] : [];
   });
-}
-
-async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): ReturnType<AdapterRun> {
-  return runMuseWithApprovals(input, spawnLocalAdapter);
-}
-
-async function spawnLocalAdapter(input: Parameters<AdapterRun>[0]): ReturnType<AdapterRun> {
-  const child = await spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
-  for (const stream of [child.stdout, child.stderr]) {
-    if (stream) createInterface({ input: stream }).on('line', (line: string) => input.onLine?.(line));
-  }
-  return {
-    code: await new Promise<number | null>((resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', resolve);
-    }),
-  };
 }
 
 export function describeAdapters(adapters: AdapterSpec[], all = loadAdapters().adapters): string {
@@ -334,6 +319,7 @@ export async function runLocalBuild(input: {
           spec,
           prompt,
           authCheck,
+          onSteering: ws.unattended ? undefined : ws.onSteering,
           cwd,
           env: childEnv(ws.env, ''),
           abort: controller.signal,
@@ -393,6 +379,7 @@ export async function runLocalBuild(input: {
     });
     return success;
   } finally {
+    ws.onSteering?.(undefined);
     await localTools?.close();
     output.flush();
     await presence?.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
