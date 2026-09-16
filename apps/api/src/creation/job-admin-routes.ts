@@ -11,7 +11,7 @@ import {
 } from './job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublishableMode } from '../platform/publication-state.js';
-import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import { gameOwnerUid, resolveGameAccess } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
 import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
@@ -209,7 +209,7 @@ export async function registerJobAdminRoutes(
 
       const clearance = await resolveEditorialPublish({
         editorialClearance: options.editorialClearance,
-        ownerUid: record.ownerUid,
+        ownerUid: await gameOwnerUid(store, record),
         slug: record.slug,
         body: request.body,
       });
