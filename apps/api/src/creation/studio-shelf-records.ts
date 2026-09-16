@@ -61,12 +61,17 @@ export async function reconcileTransferredOwnership(
 
   // Every job on the slug, not just this owner's historical rows.
   const authored = new Set(records.flatMap((record) => (record.slug ? [record.slug] : [])));
+  const hasEligible = (slug: string) =>
+    records.some((r) => r.slug === slug && !r.abandonedAt && r.state !== 'canceled');
   const inherited = opts?.bySlug === 'inherited';
-  const read = [...canonicalSlugs].filter((slug) => !inherited || !authored.has(slug));
+  const read = [...canonicalSlugs].filter((slug) => !inherited || !authored.has(slug) || !hasEligible(slug));
   const canonicalJobs = await Promise.all(read.map((slug) => store.listSubmissionsBySlug(slug)));
 
   // As read: this owner's rows on a game they still own.
-  const own = inherited ? records.filter((r) => r.slug !== undefined && canonicalSlugs.has(r.slug)) : [];
+  const readSlugs = new Set(read);
+  const own = inherited
+    ? records.filter((r) => r.slug !== undefined && canonicalSlugs.has(r.slug) && !readSlugs.has(r.slug))
+    : [];
 
   return [...canonicalJobs.flat(), ...own, ...kept];
 }
