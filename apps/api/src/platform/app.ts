@@ -32,6 +32,8 @@ import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from '../creation/creator-profile-routes.js';
 import { registerRecipientCodeRoutes } from '../creation/recipient-code-routes.js';
 import { registerGameTransferRoutes, type GameTransferRoutesOptions } from '../creation/game-transfer-routes.js';
+import { registerGameEditorInviteRoutes } from '../creation/game-editor-invite-routes.js';
+import { emitShareNotice } from '../notifications/notify-share.js';
 import { catalogEntryFromSpec } from '../catalog/github-client.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from '../catalog/game-page-routes.js';
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from '../notifications/game-follow-routes.js';
@@ -1030,6 +1032,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       reviewRoutes.invalidateGameOwner(slug);
     },
     ...options.gameTransferRoutes,
+  });
+
+  await registerGameEditorInviteRoutes(app, {
+    store,
+    notifyShare: (event) =>
+      emitShareNotice({ store, logError: (err, message) => app.log.error({ err }, message) }, event),
   });
 
   // Following a game: a subscription rather than a bookmark. The count is public,

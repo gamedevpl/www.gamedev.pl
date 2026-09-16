@@ -23,6 +23,7 @@ import {
   VISIT_ROUTE_KINDS,
   FRAMED_PLAY_STEPS,
   WAITLIST_STEPS,
+  SHARE_STEPS,
 } from './visit-vocab.js';
 
 describe('visit vocab', () => {
@@ -76,6 +77,10 @@ describe('visit vocab', () => {
 
   it('lists waitlist steps', () => {
     expect(WAITLIST_STEPS).toEqual(['cta_clicked', 'joined']);
+  });
+
+  it('lists share steps in membership order', () => {
+    expect(SHARE_STEPS).toEqual(['offered', 'accepted', 'declined', 'cancelled', 'expired', 'removed', 'left']);
   });
 
   it('lists framed-play interstitial steps in order', () => {

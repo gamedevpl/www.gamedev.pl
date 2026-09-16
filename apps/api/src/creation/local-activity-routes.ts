@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { verifyToken } from '../platform/submission-token.js';
 
@@ -27,7 +27,7 @@ export async function registerLocalActivityRoutes(app: FastifyInstance, store: S
         return reply.code(404).send({ error: 'not found' });
       }
       const record = await store.getSubmission(jobId);
-      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user.uid))) {
+      if (!record || !(await canActOnSubmissionOrSlug(store, record, request.user.uid, 'build'))) {
         return reply.code(404).send({ error: 'not found' });
       }
       reply.header('cache-control', 'no-store');

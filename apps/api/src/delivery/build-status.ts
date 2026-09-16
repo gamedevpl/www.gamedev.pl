@@ -5,7 +5,7 @@ import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
-import { creatorOwnsSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -233,7 +233,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   ): Promise<PriorRoundHistory[]> {
     if (!store || !record.slug) return [];
     // Earlier rounds carry private chat, and a status token names no one.
-    if (!viewerUid || !(await creatorOwnsSlug(store, record.slug, viewerUid))) return [];
+    if (!viewerUid || !(await canActOnSlug(store, record.slug, viewerUid, 'read'))) return [];
     const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
@@ -309,7 +309,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
     // State is a receipt the token carries; what was said is not.
-    const viewerOwns = Boolean(store && record && viewerUid && (await ownsSubmissionOrSlug(store, record, viewerUid)));
+    const viewerOwns = Boolean(
+      store && record && viewerUid && (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read')),
+    );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {

@@ -1,5 +1,11 @@
+import { bindCapabilityRevision, verifyCapabilityRevision } from '../platform/capability-revision.js';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
+import {
+  InvalidAgentTokenError,
+  STALE_AGENT_TOKEN_REASON,
+  decodeActorUidField,
+  encodeActorUidField,
+} from '../platform/agent-token.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS } from '../delivery/gcs-sign.js';
 
 // Short-lived PUT URLs for curl --upload-file.
@@ -24,6 +30,9 @@ export interface UploadTokenClaims {
   // Unix seconds.
   exp: number;
   nonce: string;
+  // Writer who minted the URL; omitted on in-flight URLs.
+  actorUid?: string;
+  actorRevision?: number;
 }
 
 export interface MintUploadTokenOptions {
@@ -33,6 +42,9 @@ export interface MintUploadTokenOptions {
   path?: string;
   label?: string;
   version?: string;
+  // Writer uid bound into the signature.
+  actorUid?: string;
+  actorRevision?: number;
   // Epoch ms; defaults to Date.now().
   now?: number;
   // Override TTL seconds (tests).
@@ -49,6 +61,26 @@ function decodeOptional(raw: string): string | undefined {
 }
 
 function sign(
+  jobId: number,
+  roundGeneration: number,
+  kind: UploadKind,
+  path: string | undefined,
+  label: string | undefined,
+  version: string | undefined,
+  actorUid: string | undefined,
+  exp: number,
+  nonce: string,
+  secret: string,
+): string {
+  return createHmac('sha256', secret)
+    .update(
+      `${SCOPE}:${jobId}:${roundGeneration}:${kind}:${path ?? ''}:${label ?? ''}:${version ?? ''}:${actorUid ?? ''}:${exp}:${nonce}`,
+    )
+    .digest('hex');
+}
+
+// Version bound, no writer uid: URLs minted before actor binding.
+function signWithoutActor(
   jobId: number,
   roundGeneration: number,
   kind: UploadKind,
@@ -108,32 +140,36 @@ export function mintUploadToken(secret: string, options: MintUploadTokenOptions)
   const path = options.path?.trim() || undefined;
   const label = options.label?.trim() || undefined;
   const version = options.version?.trim() || undefined;
-  const signature = sign(
-    options.jobId,
-    options.roundGeneration,
-    options.kind,
-    path,
-    label,
-    version,
-    exp,
-    nonce,
+  const actorUid = options.actorUid?.trim() || undefined;
+  const signature = actorUid
+    ? sign(options.jobId, options.roundGeneration, options.kind, path, label, version, actorUid, exp, nonce, secret)
+    : signWithoutActor(options.jobId, options.roundGeneration, options.kind, path, label, version, exp, nonce, secret);
+  const actorField = actorUid ? `.${encodeActorUidField(actorUid)}` : '';
+  return bindCapabilityRevision(
+    Buffer.from(
+      `${options.jobId}.${options.roundGeneration}.${options.kind}.${encodeOptional(path)}.${encodeOptional(label)}.${encodeOptional(version)}${actorField}.${exp}.${nonce}.${signature}`,
+      'utf8',
+    ).toString('base64url'),
+    options.actorRevision,
     secret,
   );
-  return Buffer.from(
-    `${options.jobId}.${options.roundGeneration}.${options.kind}.${encodeOptional(path)}.${encodeOptional(label)}.${encodeOptional(version)}.${exp}.${nonce}.${signature}`,
-    'utf8',
-  ).toString('base64url');
 }
 
 export function verifyUploadToken(token: string, secret: string): UploadTokenClaims {
   try {
-    const raw = Buffer.from(token, 'base64url').toString('utf8').split('.');
-    if (raw.length !== 9 && raw.length !== 8) {
+    const envelope = verifyCapabilityRevision(token, secret);
+    const raw = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
+    if (raw.length !== 10 && raw.length !== 9 && raw.length !== 8) {
       throw new InvalidAgentTokenError();
     }
+    const withActor = raw.length === 10;
     const legacy = raw.length === 8;
-    const parts = legacy ? [...raw.slice(0, 5), '', ...raw.slice(5)] : raw;
-    const [jobIdRaw, generationRaw, kindRaw, pathRaw, labelRaw, versionRaw, expRaw, nonce, signature] = parts;
+    const parts = withActor
+      ? raw
+      : legacy
+        ? [...raw.slice(0, 5), '', '', ...raw.slice(5)]
+        : [...raw.slice(0, 6), '', ...raw.slice(6)];
+    const [jobIdRaw, generationRaw, kindRaw, pathRaw, labelRaw, versionRaw, actorRaw, expRaw, nonce, signature] = parts;
     if (
       !jobIdRaw ||
       !generationRaw ||
@@ -141,6 +177,7 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
       pathRaw === undefined ||
       labelRaw === undefined ||
       versionRaw === undefined ||
+      actorRaw === undefined ||
       !expRaw ||
       !nonce ||
       !signature ||
@@ -160,6 +197,10 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
     const path = decodeOptional(pathRaw);
     const label = decodeOptional(labelRaw);
     const version = decodeOptional(versionRaw);
+    const actorUid = actorRaw ? decodeActorUidField(actorRaw) : undefined;
+    if (actorRaw && actorUid === undefined) {
+      throw new InvalidAgentTokenError();
+    }
     if (
       !Number.isSafeInteger(jobId) ||
       jobId <= 0 ||
@@ -172,7 +213,9 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
     }
     const expected = legacy
       ? signWithoutVersion(jobId, roundGeneration, kind, path, label, exp, nonce, secret)
-      : sign(jobId, roundGeneration, kind, path, label, version, exp, nonce, secret);
+      : withActor
+        ? sign(jobId, roundGeneration, kind, path, label, version, actorUid, exp, nonce, secret)
+        : signWithoutActor(jobId, roundGeneration, kind, path, label, version, exp, nonce, secret);
     if (!safeEqualHex(signature, expected)) {
       throw new InvalidAgentTokenError();
     }
@@ -183,6 +226,8 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
       ...(path ? { path } : {}),
       ...(label ? { label } : {}),
       ...(version ? { version } : {}),
+      ...(actorUid ? { actorUid } : {}),
+      ...(envelope.actorRevision === undefined ? {} : { actorRevision: envelope.actorRevision }),
       exp,
       nonce,
     };

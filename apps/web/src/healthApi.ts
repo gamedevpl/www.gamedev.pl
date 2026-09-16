@@ -51,6 +51,7 @@ export interface VisitFunnel {
   creating: Array<{ step: string; visits: number }>;
   /** Closed-beta waitlist funnel in step order, every step present even at zero. */
   waitlist: Array<{ step: string; visits: number }>;
+  sharing?: Array<{ step: string; visits: number }>;
   // Framed /play/ interstitial. Optional: old payloads omit it.
   framedPlay?: Array<{ step: string; visits: number }>;
   invites?: Array<{ step: string; visits: number }>;

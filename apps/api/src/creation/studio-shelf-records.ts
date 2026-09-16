@@ -1,6 +1,6 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
-import { ownsGame, resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
+import { canActOnSubmissionOrSlug, isGameMember } from '../platform/game-access-permissions.js';
 
 export type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'> &
   GameAccessResolveStore &
@@ -39,14 +39,14 @@ export async function reconcileTransferredOwnership(
   records: SubmissionRecord[],
 ): Promise<SubmissionRecord[]> {
   const memberAccess = await store.listGameAccessByMember(ownerUid);
-  const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
+  const canonicalSlugs = new Set(memberAccess.map((a) => a.slug));
 
   const nonCanonical = records.filter((r) => !r.slug || !canonicalSlugs.has(r.slug));
   const stillOwned = await Promise.all(
     nonCanonical.map(async (record) => {
       if (!record.slug) return true;
       const access = await resolveGameAccess(store, record.slug);
-      return access.source !== 'canonical' || ownsGame(access, ownerUid);
+      return access.source !== 'canonical' || isGameMember(access, ownerUid);
     }),
   );
   const kept = nonCanonical.filter((_, i) => stillOwned[i]);
@@ -74,7 +74,7 @@ export async function loadShelfRecords(
 
   const extra = await lookupRequested(store, requested, mintStatusToken);
   if (!extra) return records;
-  if (!(await ownsSubmissionOrSlug(store, extra, ownerUid))) return records;
+  if (!(await canActOnSubmissionOrSlug(store, extra, ownerUid, 'read'))) return records;
   if (extra.slug) {
     const slugJobs = await store.listSubmissionsBySlug(extra.slug);
     const jobs = slugJobs.length > 0 ? slugJobs : [extra];

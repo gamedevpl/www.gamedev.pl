@@ -24,6 +24,7 @@ export {
   STUDIO_STEPS,
   VISIT_ROUTE_KINDS,
   WAITLIST_STEPS,
+  SHARE_STEPS,
   FRAMED_PLAY_STEPS,
   type AssistStep,
   type BetaWelcomeStep,
@@ -50,5 +51,6 @@ export {
   type StudioStepDetail,
   type VisitRouteKind,
   type WaitlistStep,
+  type ShareStep,
   type FramedPlayStep,
 } from './visit-vocab.js';

@@ -385,6 +385,18 @@ Two concrete instances of that (observed 2026-07-23):
   `no-store`; the rewrite path did not. Redirect to the real width, or don't cache while
   the rung is up. Assert bytes (or `Location`), not only that `request.query` changed.
 
+## Membership revocation must outlive bounded cleanup
+
+Probe more rounds than the membership cleanup cap and include unstamped legacy rounds.
+A per-round generation sweep is cleanup, not an authorization fence. Removing and then
+re-inviting an editor must not revive old MCP sessions or upload URLs bound to a round
+created by another actor. Test fresh credentials separately, and mutate the durable
+actor fence to prove the regression fails. Persistent erasure markers must date the
+account incarnation and original invitation, not permanently ban a recreated UID.
+Also remove the author of the currently active round, then continue it with fresh owner
+credentials. Actor fences must not classify every future credential by the row author.
+Reminting a session from a channel key must preserve its actor and revocation revision.
+
 ## Read the diff against the spec
 
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.

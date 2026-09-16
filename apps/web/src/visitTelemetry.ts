@@ -22,6 +22,7 @@ import {
   type RemixControl,
   type RemixPaintedVia,
   type RemixStep,
+  type ShareStep,
   type StudioStep,
   type StudioStepDetail,
   type VisitRouteKind,
@@ -52,6 +53,7 @@ export type {
   RemixControl,
   RemixPaintedVia,
   RemixStep,
+  ShareStep,
   StudioStep,
   StudioStepDetail,
   TransferStep,
@@ -116,6 +118,7 @@ export type VisitEvent =
   | { type: 'create_step'; step: CreateStep; builder?: BuilderDimension }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
+  | { type: 'share_step'; step: ShareStep }
   // Framed /play/ interstitial: shown, then which exit they took.
   | { type: 'framed_play_step'; step: FramedPlayStep }
   | { type: 'invite_step'; step: InviteStep }
@@ -414,6 +417,14 @@ export function recordWaitlistStep(step: WaitlistStep): void {
   currentSession.record({ type: 'waitlist_step', step });
 }
 
+let recordedShareSteps = new Set<ShareStep>();
+
+export function recordShareStep(step: ShareStep): void {
+  if (!currentSession || recordedShareSteps.has(step)) return;
+  recordedShareSteps.add(step);
+  currentSession.record({ type: 'share_step', step });
+}
+
 let recordedFramedPlaySteps = new Set<FramedPlayStep>();
 
 export function recordFramedPlayStep(step: FramedPlayStep): void {
@@ -624,6 +635,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedShareSteps = new Set();
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
   recordedTransferSteps = new Set();
@@ -668,6 +680,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedShareSteps = new Set();
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
   recordedTransferSteps = new Set();

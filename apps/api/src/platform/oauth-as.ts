@@ -667,7 +667,7 @@ export function registerOAuthAuthorizationServerRoutes(
     } else if (looksLikeAsAccessToken(token)) {
       try {
         const parsed = parseAsAccessToken(token);
-        const access = await store.getOAuthAccessToken(parsed.tokenId);
+        const access = await store.getAsAccessToken(parsed.tokenId);
         grantId = access?.grantId ?? null;
       } catch {
         grantId = null;

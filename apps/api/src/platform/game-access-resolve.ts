@@ -20,6 +20,7 @@ export interface ResolvedGameAccess {
 
   // Set once this game has changed hands at least once.
   capabilitiesRevokedAtRevision?: number;
+  memberRevocations?: Record<string, { revision: number; at: string }>;
 
   source: 'canonical' | 'derived';
 }
@@ -53,6 +54,7 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
     owner: classifyOwnerUid(record.ownerUid),
     editorUids: [...record.editorUids],
     accessRevision: record.accessRevision,
+    memberRevocations: record.memberRevocations,
     ...(record.capabilitiesRevokedAtRevision === undefined
       ? {}
       : { capabilitiesRevokedAtRevision: record.capabilitiesRevokedAtRevision }),
@@ -90,11 +92,11 @@ export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, 
   }
 }
 
-// A round's keys answer to the revision it opened under.
+// Stamped keys survive membership; a handover writes the revoke marker.
 
 // An owner comparison alone would revive rounds a transfer revoked,
 
-// A -> B -> A restores the uid, never the revision.
+// A -> B -> A restores the uid, never the revoke marker.
 
 // A round predating the epoch falls back to the weaker owner check,
 
@@ -104,13 +106,24 @@ export async function currentOwnerUidSoft(store: GameOwnerLookup, slug: string, 
 export function roundAuthorityCurrent(
   record: { ownerUid: string; accessEpoch?: number },
   access: ResolvedGameAccess,
+  credential?: { actorUid?: string; actorRevision?: number },
 ): boolean {
   if (access.source !== 'canonical') return true;
-  // The epoch is what makes a revocation permanent.
-  if (record.accessEpoch !== undefined) return record.accessEpoch === access.accessRevision;
+  const actorUid = credential?.actorUid ?? record.ownerUid;
+  const revision = credential?.actorUid ? credential.actorRevision : record.accessEpoch;
+  const memberFence = access.memberRevocations?.[actorUid];
+  if (memberFence !== undefined && (revision === undefined || revision < memberFence.revision)) return false;
+  if (record.accessEpoch !== undefined) {
+    // Membership bumps revision; only a handover fences stamped keys.
+    const revokedAt = access.capabilitiesRevokedAtRevision;
+    if (revokedAt === undefined) return true;
+    return record.accessEpoch >= revokedAt;
+  }
   // No epoch on a game that changed hands: fenced rather than guessed.
   if (access.capabilitiesRevokedAtRevision !== undefined) return false;
-  return sameOwner(classifyOwnerUid(record.ownerUid), access.owner);
+  if (sameOwner(classifyOwnerUid(actorUid), access.owner)) return true;
+  // Editor rounds stay current until handover or removal.
+  return access.owner.kind === 'creator' && access.editorUids.includes(actorUid);
 }
 
 // Editors are resolved but never admitted here: roles are GO-03.

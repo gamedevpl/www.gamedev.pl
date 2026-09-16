@@ -187,6 +187,13 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     sat unread for months, and this entry described the write side in enough detail to
     look finished while nothing could read it. Writing the vocabulary entry is not the
     instrumentation; the aggregate is.
+  - ~~Editor-invite sharing funnel unmeasured~~ — **closed 2026-09-15 (GO-03)**:
+    `share_step` (`offered` → `accepted` / `declined` / `cancelled` / `expired` /
+    `removed` / `left`) lives in `visit-vocab.ts` like the other step vocabularies,
+    is recorded from Studio members/inbox with no slug (the visit stream stays
+    unjoinable), rolls up as `sharing` in `summarizeVisitFunnel`, and renders as
+    the Sharing block on `VisitFunnelPanel` (percent of offered). Membership
+    changes also write a separate operational audit trail, never this stream.
   - ~~Framed `/play/` interstitial handoff unmeasured~~ — **closed 2026-09-12**: a
     framed visit used to look like a bounce (the card) or a new "direct" visit (the
     new tab), with no way to tell an embed click-through from a dead landing.

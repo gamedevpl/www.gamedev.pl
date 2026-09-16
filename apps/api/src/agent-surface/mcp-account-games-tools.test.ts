@@ -321,6 +321,44 @@ describe('list_account_games MCP tool', () => {
     expect(slugs).not.toContain('kept-by-sender');
   });
 
+  it('lists the session writer, not the round author, for an editor key', async () => {
+    const store = new InMemoryStore();
+    const app = await createApp(store);
+    const JOB_ID = 7100;
+    const at = new Date().toISOString();
+    await store.createSubmission(JOB_ID, OWNER, 'Shared Game');
+    await store.setSubmissionSlug(JOB_ID, 'cyber-racer');
+    await store.ensureGameAccess('cyber-racer', OWNER, at, at);
+    const code = (await store.ensureRecipientCode(OTHER, at))!;
+    await store.createEditorInvitation('cyber-racer', OWNER, OTHER, at, code);
+    await store.acceptEditorInvitation(
+      'cyber-racer',
+      OTHER,
+      at,
+      (await store.getEditorInvite('cyber-racer', OTHER, at))!.inviteId,
+    );
+    const kept = await store.allocateJobId();
+    await store.createSubmission(kept, OWNER, 'Owner Private');
+    await store.setSubmissionSlug(kept, 'owner-private');
+    const editorOwn = await store.allocateJobId();
+    await store.createSubmission(editorOwn, OTHER, 'Editor Own');
+    await store.setSubmissionSlug(editorOwn, 'editor-own');
+
+    const sessionKey = mintMcpSessionKey(secret, {
+      sessionId: 'session-editor-1234567',
+      jobId: JOB_ID,
+      roundGeneration: 1,
+      now: Date.now(),
+      actorUid: OTHER,
+    });
+
+    const { structured, isError } = await callListAccountGames(app, { sessionKey });
+    expect(isError).toBe(false);
+    const slugs = (structured as { games: Array<{ slug: string | null }> }).games.map((game) => game.slug);
+    expect(slugs).toContain('editor-own');
+    expect(slugs).not.toContain('owner-private');
+  });
+
   it('respects limit parameter', async () => {
     const store = new InMemoryStore();
     const app = await createApp(store);

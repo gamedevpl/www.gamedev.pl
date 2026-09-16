@@ -12,8 +12,11 @@ import type { SubmissionRecord } from '../records/submission.js';
 // Only a round begun after the last handover may take it.
 export function epochForRound(record: SubmissionRecord, access: GameAccessRecord | null): number | undefined {
   if (!access || record.accessEpoch !== undefined) return undefined;
+  const memberRevokedAt = access.memberRevocations?.[record.ownerUid]?.at;
+  if (memberRevokedAt !== undefined && record.createdAt <= memberRevokedAt) return undefined;
   const revokedAt = access.capabilitiesRevokedAt;
   if (revokedAt !== undefined && record.createdAt <= revokedAt) return undefined;
-  if (record.ownerUid !== access.ownerUid) return undefined;
+  const currentBuilder = record.ownerUid === access.ownerUid || access.editorUids.includes(record.ownerUid);
+  if (!currentBuilder) return undefined;
   return access.accessRevision;
 }

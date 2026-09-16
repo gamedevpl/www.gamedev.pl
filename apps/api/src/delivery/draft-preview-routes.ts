@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createSharedDraftGate, sharedDraftVersion } from './draft-share-gate.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
-import { listAuthorizedRoundsForSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GamesStore } from './games-store.js';
@@ -72,7 +73,7 @@ export async function registerDraftPreviewRoutes(
     }
     if (!record || record.abandonedAt) return null;
     // The owner sees their own red build; a stranger never does.
-    if (uid && (await ownsSubmissionOrSlug(store, record, uid))) return { jobId: record.jobId };
+    if (uid && (await canActOnSubmissionOrSlug(store, record, uid, 'read'))) return { jobId: record.jobId };
     // A pulled game is not re-opened by flipping the switch.
     if (record.moderationBlockedAt) return null;
     if (!record.draftSharedAt) return null;

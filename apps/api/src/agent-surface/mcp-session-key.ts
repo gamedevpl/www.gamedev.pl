@@ -1,11 +1,19 @@
+export { looksLikeMcpSessionKey } from './mcp-session-shape.js';
+import { bindCapabilityRevision, verifyCapabilityRevision } from '../platform/capability-revision.js';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
+import {
+  ACTOR_UID_RE,
+  decodeActorUidField,
+  encodeActorUidField,
+  InvalidAgentTokenError,
+  STALE_AGENT_TOKEN_REASON,
+} from '../platform/agent-token.js';
 
 /**
  * Short-lived MCP session capability (BY-05).
  *
  * Issued by `start({ key })` after the round key validates. Signed over
- * `(sessionId, jobId, roundGeneration, exp)` so every later tool call can
+ * `(sessionId, jobId, roundGeneration, exp[, actorUid])` so later tools can
  * authenticate independently — the transport `Mcp-Session-Id` header is never
  * authority (MCP streamable-HTTP spec). Distinct scope from the round key so
  * neither capability can be mistaken for the other.
@@ -28,6 +36,8 @@ export interface McpSessionKeyClaims {
   roundGeneration: number;
   /** Unix seconds. */
   exp: number;
+  actorUid?: string;
+  actorRevision?: number;
 }
 
 export interface MintMcpSessionKeyOptions {
@@ -38,10 +48,21 @@ export interface MintMcpSessionKeyOptions {
   now?: number;
   /** Override TTL hours; useful in tests. */
   ttlHours?: number;
+  actorUid?: string;
+  actorRevision?: number;
 }
 
-function sign(sessionId: string, jobId: number, roundGeneration: number, exp: number, secret: string): string {
-  return createHmac('sha256', secret).update(`${SCOPE}:${sessionId}:${jobId}:${roundGeneration}:${exp}`).digest('hex');
+function sign(
+  sessionId: string,
+  jobId: number,
+  roundGeneration: number,
+  exp: number,
+  secret: string,
+  actorUid?: string,
+): string {
+  const base = `${SCOPE}:${sessionId}:${jobId}:${roundGeneration}:${exp}`;
+  const payload = actorUid ? `${base}:${actorUid}` : base;
+  return createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 function safeEqualHex(actual: string, expected: string): boolean {
@@ -82,36 +103,21 @@ export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOpti
   if (!Number.isSafeInteger(options.roundGeneration) || options.roundGeneration < 1) {
     throw new InvalidAgentTokenError('invalid round generation');
   }
+  if (options.actorUid && !ACTOR_UID_RE.test(options.actorUid)) {
+    throw new InvalidAgentTokenError('invalid actor uid');
+  }
   const nowMs = options.now ?? Date.now();
   const ttlHours = options.ttlHours ?? mcpSessionKeyTtlHours();
   const exp = Math.floor(nowMs / 1000) + ttlHours * 60 * 60;
-  const signature = sign(options.sessionId, options.jobId, options.roundGeneration, exp, secret);
-  return Buffer.from(
-    `${options.sessionId}.${options.jobId}.${options.roundGeneration}.${exp}.${signature}`,
-    'utf8',
-  ).toString('base64url');
-}
-
-/**
- * Shape-only classifier: does this string carry a sessionKey's wire format?
- *
- * Never a stand-in for {@link verifyMcpSessionKey} — no signature is checked, so this
- * decides only *which credential the caller supplied*, never whether it is valid. It
- * exists so `start` can tell an agent that presented a sessionKey that it presented
- * the wrong kind of key, rather than the generic "key is required", which reads as
- * "you sent nothing" when in fact something was sent.
- */
-export function looksLikeMcpSessionKey(candidate: string): boolean {
-  const parts = Buffer.from(candidate, 'base64url').toString('utf8').split('.');
-  if (parts.length !== 5) return false;
-  const [sessionId, jobIdRaw, generationRaw, expRaw, signature] = parts;
-  return (
-    Boolean(sessionId) &&
-    SESSION_ID_RE.test(sessionId) &&
-    /^\d+$/.test(jobIdRaw ?? '') &&
-    /^\d+$/.test(generationRaw ?? '') &&
-    /^\d+$/.test(expRaw ?? '') &&
-    /^[a-f0-9]{64}$/i.test(signature ?? '')
+  const signature = sign(options.sessionId, options.jobId, options.roundGeneration, exp, secret, options.actorUid);
+  const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
+  return bindCapabilityRevision(
+    Buffer.from(
+      `${options.sessionId}.${options.jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`,
+      'utf8',
+    ).toString('base64url'),
+    options.actorRevision,
+    secret,
   );
 }
 
@@ -121,11 +127,17 @@ export function looksLikeMcpSessionKey(candidate: string): boolean {
  */
 export function verifyMcpSessionKey(token: string, secret: string): McpSessionKeyClaims {
   try {
-    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
-    if (parts.length !== 5) {
+    const envelope = verifyCapabilityRevision(token, secret);
+    const parts = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
+    if (parts.length !== 5 && parts.length !== 6) {
       throw new InvalidAgentTokenError();
     }
-    const [sessionId, jobIdRaw, generationRaw, expRaw, signature] = parts;
+    const sessionId = parts[0];
+    const jobIdRaw = parts[1];
+    const generationRaw = parts[2];
+    const expRaw = parts[3];
+    const actorUid = parts.length === 6 ? decodeActorUidField(parts[4] ?? '') : undefined;
+    const signature = parts.length === 6 ? parts[5] : parts[4];
     if (
       !sessionId ||
       !jobIdRaw ||
@@ -136,6 +148,7 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
       !/^\d+$/.test(jobIdRaw) ||
       !/^\d+$/.test(generationRaw) ||
       !/^\d+$/.test(expRaw) ||
+      (parts.length === 6 && actorUid === undefined) ||
       !/^[a-f0-9]{64}$/i.test(signature)
     ) {
       throw new InvalidAgentTokenError();
@@ -153,10 +166,17 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
     ) {
       throw new InvalidAgentTokenError();
     }
-    if (!safeEqualHex(signature, sign(sessionId, jobId, roundGeneration, exp, secret))) {
+    if (!safeEqualHex(signature, sign(sessionId, jobId, roundGeneration, exp, secret, actorUid))) {
       throw new InvalidAgentTokenError();
     }
-    return { sessionId, jobId, roundGeneration, exp };
+    return {
+      sessionId,
+      jobId,
+      roundGeneration,
+      exp,
+      ...(envelope.actorRevision === undefined ? {} : { actorRevision: envelope.actorRevision }),
+      ...(actorUid ? { actorUid } : {}),
+    };
   } catch (error) {
     if (error instanceof InvalidAgentTokenError) {
       throw error;
