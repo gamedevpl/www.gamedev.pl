@@ -5,10 +5,7 @@ import {
   validateLayerContent,
   validateLayerReachable,
   valueProblem,
-  type CollectionItemSpec,
-  type CollectionSpec,
   type EditorDefinition,
-  type EditorLayerSpec as ContractLayerSpec,
 } from '@gamedevpl/contract';
 import type {
   EditorCollectionSpec,
@@ -23,6 +20,7 @@ import type {
   EditorPathItemContent,
   EditorTilemapItemContent,
 } from './studioApi.js';
+import { asCollectionSpec, asDefinition, asItemSpec, asLayerSpec } from './editorContentSpec.js';
 import { blankPathPoints, blankRows, declaredDefaults } from './editorContentDefaults.js';
 
 export { valueProblem };
@@ -130,38 +128,6 @@ export type PathProblemMessages = {
   repeatedEnd: () => string;
 };
 
-function asLayerSpec(spec: EditorLayerSpec): ContractLayerSpec {
-  return {
-    ...spec,
-    properties: spec.properties ?? {},
-    constraints: spec.constraints ?? [],
-    ...(spec.widget === 'entities' ? { min: spec.min ?? 0, max: spec.max ?? 64 } : {}),
-  } as ContractLayerSpec;
-}
-
-function asItemSpec(spec: EditorCollectionSpec['item']): CollectionItemSpec {
-  if (spec.widget === 'layered') {
-    return {
-      ...spec,
-      properties: spec.properties ?? {},
-      constraints: spec.constraints ?? [],
-      layers: Object.fromEntries(Object.entries(spec.layers ?? {}).map(([key, layer]) => [key, asLayerSpec(layer)])),
-    } as CollectionItemSpec;
-  }
-  if (spec.widget === 'path') return { ...spec, properties: spec.properties ?? {} } as CollectionItemSpec;
-  return { ...spec, properties: spec.properties ?? {}, constraints: spec.constraints ?? [] } as CollectionItemSpec;
-}
-
-function asCollectionSpec(spec: EditorCollectionSpec): CollectionSpec {
-  return {
-    ...spec,
-    min: spec.min ?? 0,
-    max: spec.max ?? 32,
-    item: asItemSpec(spec.item),
-    defaults: spec.defaults ?? [],
-  } as CollectionSpec;
-}
-
 function stripWhere(message: string, where: string): string {
   const prefix = `${where}: `;
   return message.startsWith(prefix) ? message.slice(prefix.length) : message;
@@ -203,7 +169,7 @@ export function layeredProblems(
 }
 
 export function documentProblems(definition: EditorDefinition, content: EditorContentDoc): string[] {
-  return validateEditorContent(definition, content);
+  return validateEditorContent(asDefinition(definition), content);
 }
 
 export function specFieldClass(problem: string | null, extra = ''): string {
