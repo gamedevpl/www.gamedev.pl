@@ -20,4 +20,14 @@ describe('editor content bridge payload', () => {
       selection: { collection: 'maps', index: 15 },
     });
   });
+
+  it('echoes a document revision so a later check can be matched', () => {
+    expect(editorContentMessage({ maps: [] }, null, 7)).toEqual({
+      ns: 'gdp',
+      v: 1,
+      t: 'editor:content',
+      content: { maps: [] },
+      revision: 7,
+    });
+  });
 });

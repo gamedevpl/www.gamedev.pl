@@ -76,7 +76,12 @@ describe('EditorKit controller protocol', () => {
     ['fractional property index', { type: 'propertySheet', layer: 'actors', index: 0.5 }],
     [
       'nonfinite field value',
-      { type: 'propertySheet', layer: 'actors', index: 0, fields: [{ name: 'x', label: 'X', type: 'number', value: Infinity }] },
+      {
+        type: 'propertySheet',
+        layer: 'actors',
+        index: 0,
+        fields: [{ name: 'x', label: 'X', type: 'number', value: Infinity }],
+      },
     ],
     ['oversized toolbar', { type: 'toolbar', tools: Array(33).fill('paint') }],
     ['invalid toolbar selection', { type: 'toolbar', tools: ['paint'], active: 2 }],
@@ -132,5 +137,30 @@ describe('EditorKit controller protocol', () => {
     ['numeric id', 3],
   ])('rejects an invalid change id: %s', (_name, id) => {
     expect(parseEditorControllerEnvelope(envelope({ t: 'editor:change', id, patch: {} }))).toBeNull();
+  });
+
+  it('keeps an editor:check without revision, so older games still answer', () => {
+    expect(parseEditorControllerEnvelope(envelope({ t: 'editor:check', ok: true, problems: [] }))).toEqual({
+      ns: 'gdp',
+      v: 1,
+      t: 'editor:check',
+      ok: true,
+      problems: [],
+    });
+  });
+
+  it('echoes a non-negative integer revision on editor:check', () => {
+    expect(
+      parseEditorControllerEnvelope(envelope({ t: 'editor:check', ok: false, problems: ['x'], revision: 4 })),
+    ).toMatchObject({ t: 'editor:check', revision: 4 });
+  });
+
+  it('rejects a fractional or negative check revision', () => {
+    expect(
+      parseEditorControllerEnvelope(envelope({ t: 'editor:check', ok: true, problems: [], revision: 1.5 })),
+    ).toBeNull();
+    expect(
+      parseEditorControllerEnvelope(envelope({ t: 'editor:check', ok: true, problems: [], revision: -1 })),
+    ).toBeNull();
   });
 });

@@ -59,7 +59,7 @@ function fillParams(specs: Record<string, EditorParamSpec>, values: unknown): Re
   const current = (isRecord(values) ? values : {}) as Record<string, EditorParamValue>;
   const filled: Record<string, EditorParamValue> = {};
   for (const [name, spec] of Object.entries(specs)) {
-    filled[name] = fitsSpec(spec, current[name]) ? (current[name] as EditorParamValue) : spec.default;
+    filled[name] = current[name] === undefined ? spec.default : current[name];
   }
   return filled;
 }
@@ -135,19 +135,9 @@ function withDeclared(
   const current = isRecord(properties) ? properties : {};
   const filled: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(specs ?? {})) {
-    filled[name] = fitsSpec(spec, current[name]) ? current[name] : defaultPropertyValue(spec);
+    filled[name] = current[name] === undefined ? defaultPropertyValue(spec) : current[name];
   }
   return filled;
-}
-
-// A kept value must still fit what is declared now.
-function fitsSpec(spec: EditorPropertySpec, value: unknown): boolean {
-  if (spec.type === 'text') return typeof value === 'string' && value.length <= spec.max;
-  if (spec.type === 'enum') return typeof value === 'string' && spec.values.includes(value);
-  if (spec.type === 'bool') return typeof value === 'boolean';
-  if (typeof value !== 'number' || !Number.isFinite(value)) return false;
-  if (spec.type === 'int' && !Number.isInteger(value)) return false;
-  return value >= spec.min && value <= spec.max;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
