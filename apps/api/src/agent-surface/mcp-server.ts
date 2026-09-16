@@ -1,3 +1,5 @@
+import { resolvePresenceJobId } from './mcp-presence-capability.js';
+import { memberCapabilityCurrent } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '@gamedevpl/contract';
 import {
@@ -259,6 +261,7 @@ interface AuthedJob {
   claims: Pick<AgentTokenClaims, 'jobId' | 'roundGeneration' | 'exp'>;
   /** Session writer; job.ownerUid is historical authorship. */
   actorUid: string;
+  actorRevision?: number;
 }
 
 function jsonRpcResult(id: string | number | null | undefined, result: unknown) {
@@ -271,25 +274,6 @@ function jsonRpcError(id: string | number | null | undefined, code: number, mess
     id: id ?? null,
     error: { code, message, ...(data !== undefined ? { data } : {}) },
   };
-}
-
-/** Job id for a coarse presence pulse — sessionKey preferred, else round Bearer. */
-function resolvePresenceJobId(sessionKey: string, bearer: string | null, secret: string): number | null {
-  if (sessionKey && looksLikeMcpSessionKey(sessionKey)) {
-    try {
-      return verifyMcpSessionKey(sessionKey, secret).jobId;
-    } catch {
-      return null;
-    }
-  }
-  if (bearer) {
-    try {
-      return verifyAgentToken(bearer, secret).jobId;
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function pruneHits(buckets: Map<string, number[]>, key: string, currentTime: number): number[] {
@@ -649,6 +633,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jobId: sessionClaims.jobId,
         roundGeneration: sessionClaims.roundGeneration,
         exp: sessionClaims.exp,
+        actorRevision: sessionClaims.actorRevision,
       };
       identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
       sessionActorUid = sessionClaims.actorUid;
@@ -712,12 +697,23 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (record.slug && !(await canActOnSlug(store, record.slug, actorUid, 'build'))) {
       return toolErr('this session can no longer write this game');
     }
+    if (
+      record.slug &&
+      !memberCapabilityCurrent(
+        await resolveGameAccess(store, record.slug),
+        actorUid,
+        claims.actorRevision ?? (sessionActorUid ? undefined : record.accessEpoch),
+      )
+    ) {
+      return toolErr('this session can no longer write this game');
+    }
     if (!channelToken) {
       channelToken = mintAgentToken(claims.jobId, agentTokenSecret, {
         roundGeneration: claims.roundGeneration ?? record.roundGeneration ?? 1,
         now: now(),
         ttlDays: 1,
         actorUid,
+        actorRevision: claims.actorRevision,
       });
     }
 
@@ -728,6 +724,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       identity,
       channelToken,
       actorUid,
+      actorRevision: claims.actorRevision,
       claims: {
         jobId: claims.jobId,
         roundGeneration: claims.roundGeneration,
@@ -1081,6 +1078,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             roundGeneration,
             now: now(),
             actorUid,
+            actorRevision: active.slug ? (await resolveGameAccess(store, active.slug)).accessRevision : undefined,
           });
           const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 

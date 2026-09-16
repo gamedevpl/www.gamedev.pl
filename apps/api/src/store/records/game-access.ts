@@ -26,6 +26,9 @@ export interface GameAccessRecord {
   // epoch of its own is fenced, never guessed at.
   capabilitiesRevokedAtRevision?: number;
 
+  // Per-actor fences survive re-invitation and bounded round cleanup.
+  memberRevocations?: Record<string, { revision: number; at: string }>;
+
   // When that handover happened. A round that began earlier keeps no
 
   // epoch: its credentials were issued under the revoked authority.
@@ -106,6 +109,7 @@ export function withEditorRemoved(record: GameAccessRecord, uid: string, at: str
     editorUids,
     memberUids: membersOf(record.ownerUid, editorUids),
     accessRevision: record.accessRevision + 1,
+    memberRevocations: { ...record.memberRevocations, [uid]: { revision: record.accessRevision + 1, at } },
     updatedAt: at,
   };
 }
@@ -147,6 +151,7 @@ export function withMemberErased(
     editorUids,
     memberUids: membersOf(ownerUid, editorUids),
     accessRevision: record.accessRevision + 1,
+    memberRevocations: { ...record.memberRevocations, [uid]: { revision: record.accessRevision + 1, at } },
     updatedAt: at,
   };
 }

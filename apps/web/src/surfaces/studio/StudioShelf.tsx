@@ -122,7 +122,7 @@ export function StudioShelfList({
                 {game.viewerRole === 'editor' ? (
                   <span className="studio-shelf-role" data-testid={`studio-shelf-role-${game.token}`}>
                     {t('studioPanel.shelf.editorRole', {
-                      name: game.ownerProfileName ?? t('studioPanel.share.ownerUnknown'),
+                      name: game.ownerProfileName ?? t('studioPanel.members.ownerUnknown'),
                     })}
                   </span>
                 ) : null}

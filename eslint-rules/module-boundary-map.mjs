@@ -189,6 +189,8 @@ const FILE_BUCKET = {
   // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
   // node:crypto over a caller-supplied secret, with no agent-surface state at all.
   'agent-token': 'platform',
+  'capability-revision': 'platform',
+  'actor-uid': 'platform',
   // Slug minting and claim settlement. Pure aside from caller-supplied probes, and
   // read by creation, catalog and the backfill CLI alike.
   slug: 'platform',
@@ -333,6 +335,9 @@ const FILE_BUCKET = {
   'agent-channel-kit': 'agent-surface',
   'agent-channel-gate-media': 'agent-surface',
   'mcp-server': 'agent-surface',
+  'mcp-presence-capability': 'agent-surface',
+  'mcp-session-shape': 'agent-surface',
+  'agent-knowledge-warning': 'agent-surface',
   'mcp-tool-support': 'agent-surface',
   'mcp-example-tools': 'agent-surface',
   'mcp-concept-tools': 'agent-surface',

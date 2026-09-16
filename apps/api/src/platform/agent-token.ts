@@ -1,3 +1,6 @@
+import { ACTOR_UID_RE, encodeActorUidField, decodeActorUidField } from './actor-uid.js';
+export { ACTOR_UID_RE, encodeActorUidField, decodeActorUidField } from './actor-uid.js';
+import { bindCapabilityRevision, verifyCapabilityRevision } from './capability-revision.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export { readBearerToken } from './bearer.js';
@@ -54,6 +57,7 @@ export interface AgentTokenClaims {
   exp?: number;
   // MCP inject may bind the writer.
   actorUid?: string;
+  actorRevision?: number;
 }
 
 export interface MintAgentTokenOptions {
@@ -64,23 +68,7 @@ export interface MintAgentTokenOptions {
   ttlDays?: number;
   // Writer uid; omitted on round keys.
   actorUid?: string;
-}
-
-// Apple `sub` values contain dots; encode them on the wire.
-export const ACTOR_UID_RE = /^[A-Za-z0-9:._-]+$/;
-
-export function encodeActorUidField(uid: string): string {
-  return Buffer.from(uid, 'utf8').toString('base64url');
-}
-
-export function decodeActorUidField(raw: string): string | undefined {
-  if (!raw || !/^[A-Za-z0-9_-]+$/.test(raw)) return undefined;
-  try {
-    const uid = Buffer.from(raw, 'base64url').toString('utf8');
-    return ACTOR_UID_RE.test(uid) ? uid : undefined;
-  } catch {
-    return undefined;
-  }
+  actorRevision?: number;
 }
 
 /**
@@ -148,8 +136,10 @@ export function mintAgentToken(jobId: number, secret: string, options: MintAgent
   const exp = Math.floor(nowMs / 1000) + ttlDays * 24 * 60 * 60;
   const signature = signRoundScoped(jobId, options.roundGeneration, exp, secret, options.actorUid);
   const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
-  return Buffer.from(`${jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`, 'utf8').toString(
-    'base64url',
+  return bindCapabilityRevision(
+    Buffer.from(`${jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`, 'utf8').toString('base64url'),
+    options.actorRevision,
+    secret,
   );
 }
 
@@ -219,7 +209,8 @@ export function mintLegacyAgentToken(jobId: number, secret: string): string {
  */
 export function verifyAgentToken(token: string, secret: string): AgentTokenClaims {
   try {
-    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    const envelope = verifyCapabilityRevision(token, secret);
+    const parts = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
 
     if (parts.length === 2) {
       const [jobIdRaw, signature] = parts;
@@ -269,7 +260,13 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
       if (!safeEqualHex(signature, signRoundScoped(jobId, roundGeneration, exp, secret, actorUid))) {
         throw new InvalidAgentTokenError();
       }
-      return { jobId, roundGeneration, exp, ...(actorUid ? { actorUid } : {}) };
+      return {
+        jobId,
+        roundGeneration,
+        exp,
+        ...(envelope.actorRevision === undefined ? {} : { actorRevision: envelope.actorRevision }),
+        ...(actorUid ? { actorUid } : {}),
+      };
     }
 
     throw new InvalidAgentTokenError();

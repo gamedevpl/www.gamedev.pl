@@ -147,7 +147,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     },
   );
   protected gameEditorInviteStore = new InMemoryGameEditorInviteStore(
-    (uid) => this.gameAccessStore.erasedAt.has(uid),
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,

@@ -52,6 +52,7 @@ interface AuthedStageJob {
   claims: Pick<AgentTokenClaims, 'roundGeneration'>;
   channelToken: string;
   actorUid: string;
+  actorRevision?: number;
 }
 
 export interface SourceStageToolsDeps {
@@ -269,6 +270,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             kind: 'stage',
             path,
             actorUid: auth.actorUid,
+            actorRevision: auth.actorRevision,
             now: issuedAt,
             ttlSeconds,
           });
@@ -290,6 +292,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             kind: 'stage',
             path,
             actorUid: auth.actorUid,
+            actorRevision: auth.actorRevision,
             now: issuedAt,
             ttlSeconds,
           });

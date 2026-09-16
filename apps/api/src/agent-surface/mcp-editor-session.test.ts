@@ -174,6 +174,69 @@ describe('MCP editor session actor', () => {
     expect((brief.structured as { error: string }).error).toMatch(/can no longer write this game/i);
   });
 
+  it('keeps old sessions and uploads revoked after re-inviting the same editor', async () => {
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await seedSharedRound(store);
+
+    const minted = await app.inject({
+      method: 'GET',
+      url: '/api/me/creator-agent-key',
+      headers: authHeaders(EDITOR),
+    });
+    const creatorKey = minted.json().key as string;
+    const sessionId = await initialize(app);
+    const started = await callTool(
+      app,
+      'start',
+      { slug: SLUG },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${creatorKey}` },
+    );
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const issued = await callTool(
+      app,
+      'screenshot_upload_url',
+      { sessionKey, caption: 'before remove' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(issued.isError).toBe(false);
+    const url = (issued.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+
+    expect(await store.removeEditor(SLUG, OWNER, EDITOR, AT)).toMatchObject({ editorUids: [] });
+    const next = await store.createEditorInvitation(SLUG, OWNER, EDITOR, AT);
+    expect(next).toMatchObject({ status: 'pending' });
+    await store.acceptEditorInvitation(SLUG, EDITOR, AT, (next as { inviteId: string }).inviteId);
+    const oldBrief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(oldBrief.isError).toBe(true);
+    const fresh = await callTool(
+      app,
+      'start',
+      { slug: SLUG },
+      {
+        'mcp-session-id': sessionId,
+        authorization: `Bearer ${creatorKey}`,
+      },
+    );
+    expect(fresh.isError).toBe(false);
+    const freshKey = (fresh.structured as { sessionKey: string }).sessionKey;
+    expect((await callTool(app, 'get_brief', { sessionKey: freshKey }, { 'mcp-session-id': sessionId })).isError).toBe(
+      false,
+    );
+
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const put = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { 'content-type': 'image/png' },
+      payload: pngBytes,
+    });
+    expect(put.statusCode).toBe(401);
+    expect(put.json()).toMatchObject({ error: expect.stringMatching(/finished/i) });
+  });
   it('refuses a leftover editor upload URL after the owner removes them', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);

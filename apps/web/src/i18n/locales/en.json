@@ -892,7 +892,7 @@
       },
       "someone": "another creator"
     },
-    "share": {
+    "members": {
       "intro": "Invite another creator as an editor. They see the project only after they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
       "loading": "Checking…",
       "codeLabel": "Recipient code",

@@ -76,3 +76,19 @@ export async function listMemberRoundsForSlug(store: Store, uid: string, slug: s
   if (!(await canActOnSlug(store, slug, uid, 'read'))) return [];
   return store.listSubmissionsBySlug(slug);
 }
+
+// A removed actor needs fresh credentials even after being invited again.
+export function memberCapabilityCurrent(access: ResolvedGameAccess, uid: string, revision?: number): boolean {
+  const floor = access.memberRevocations?.[uid];
+  return floor === undefined || (revision !== undefined && revision >= floor.revision);
+}
+
+export async function memberCapabilityAllowed(
+  store: GameOwnerLookup,
+  slug: string,
+  uid: string,
+  revision?: number,
+): Promise<boolean> {
+  const access = await resolveGameAccess(store, slug);
+  return canActOnGame(access, uid, 'edit') && memberCapabilityCurrent(access, uid, revision);
+}

@@ -1,5 +1,11 @@
 import type { Firestore } from '@google-cloud/firestore';
-import { MAX_GAME_MEMBERS, membersOf, withEditorAdded, type GameAccessRecord } from '../records/game-access.js';
+import {
+  fencedOut,
+  MAX_GAME_MEMBERS,
+  membersOf,
+  withEditorAdded,
+  type GameAccessRecord,
+} from '../records/game-access.js';
 import {
   editorInviteDocId,
   effectiveEditorInviteStatus,
@@ -59,6 +65,14 @@ export interface GameEditorInviteStore {
 
 const clone = (invite: GameEditorInvitation): GameEditorInvitation => ({ ...invite });
 
+function erasedIncarnation(user: { createdAt?: string } | null, erasedAt: string | null): boolean {
+  return erasedAt !== null && (!user?.createdAt || fencedOut(erasedAt, user.createdAt));
+}
+
+function fenceAt(snap: { exists: boolean; data: () => unknown }): string | null {
+  return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
+}
+
 function recipientEligible(recipient: { tier: string; deletionScheduledFor?: string } | null): boolean {
   if (!recipient) return true;
   return recipient.tier !== 'blocked' && !recipient.deletionScheduledFor;
@@ -81,9 +95,10 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
   audits: GameMembershipAuditRecord[] = [];
 
   constructor(
-    private isErased: (uid: string) => boolean = () => false,
+    private erasedAt: (uid: string) => string | null = () => null,
     private getGameAccess: (slug: string) => GameAccessRecord | null = () => null,
-    private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string } | null = () => null,
+    private getUser: (uid: string) => { tier: string; deletionScheduledFor?: string; createdAt?: string } | null = () =>
+      null,
     private getRecipientCodeOwner: (code: string) => string | null = () => null,
     private writeGameAccess: (slug: string, record: GameAccessRecord) => void = () => {},
   ) {}
@@ -105,7 +120,8 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
     at: string,
     recipientCode?: string,
   ): Promise<EditorInviteCreateResult> {
-    if (this.isErased(senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if ([senderUid, recipientUid].some((uid) => erasedIncarnation(this.getUser(uid), this.erasedAt(uid))))
+      return 'ineligible';
     if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
     if (recipientCode !== undefined && this.getRecipientCodeOwner(recipientCode) !== recipientUid) return 'ineligible';
     const access = this.getGameAccess(slug);
@@ -134,7 +150,8 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
     if (existing.status === 'accepted') return clone(existing);
     if (!isPendingEditorInvite(existing, at)) return null;
 
-    if (this.isErased(existing.senderUid) || this.isErased(recipientUid)) return 'ineligible';
+    if ([existing.senderUid, recipientUid].some((uid) => fencedOut(this.erasedAt(uid), existing.createdAt)))
+      return 'ineligible';
     if (!recipientEligible(this.getUser(recipientUid))) return 'ineligible';
 
     const access = this.getGameAccess(slug);
@@ -250,18 +267,22 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
     const recipientRef = this.db.collection('users').doc(recipientUid);
     const codeRef = recipientCode !== undefined ? this.db.collection('recipientCodes').doc(recipientCode) : null;
     return this.db.runTransaction(async (tx) => {
-      const [snap, senderFence, recipientFence, accessSnap, recipientSnap, codeSnap] = await Promise.all([
+      const [snap, senderFence, recipientFence, accessSnap, recipientSnap, codeSnap, senderSnap] = await Promise.all([
         tx.get(ref),
         tx.get(this.erasureFence(senderUid)),
         tx.get(this.erasureFence(recipientUid)),
         tx.get(accessRef),
         tx.get(recipientRef),
         codeRef ? tx.get(codeRef) : Promise.resolve(null),
+        tx.get(this.db.collection('users').doc(senderUid)),
       ]);
-      if (senderFence.exists || recipientFence.exists) return 'ineligible';
+
       const recipient = recipientSnap.exists
-        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
+        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string; createdAt?: string })
         : null;
+      const sender = senderSnap.exists ? (senderSnap.data() as { createdAt?: string }) : null;
+      if (erasedIncarnation(sender, fenceAt(senderFence)) || erasedIncarnation(recipient, fenceAt(recipientFence)))
+        return 'ineligible';
       if (!recipientEligible(recipient)) return 'ineligible';
       if (codeSnap && (!codeSnap.exists || (codeSnap.data() as { uid: string }).uid !== recipientUid)) {
         return 'ineligible';
@@ -300,9 +321,10 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
         tx.get(this.db.collection('users').doc(recipientUid)),
         tx.get(accessRef),
       ]);
-      if (senderFence.exists || recipientFence.exists) return 'ineligible';
+      if (fencedOut(fenceAt(senderFence), existing.createdAt) || fencedOut(fenceAt(recipientFence), existing.createdAt))
+        return 'ineligible';
       const recipient = recipientSnap.exists
-        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string })
+        ? (recipientSnap.data() as { tier: string; deletionScheduledFor?: string; createdAt?: string })
         : null;
       if (!recipientEligible(recipient)) return 'ineligible';
       const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;

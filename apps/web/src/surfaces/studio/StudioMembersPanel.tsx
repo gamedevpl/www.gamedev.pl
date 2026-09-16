@@ -15,14 +15,14 @@ import {
 } from '../../editorInviteApi.js';
 
 const REFUSALS: Record<string, string> = {
-  invalid_code: 'studioPanel.share.errors.invalidCode',
-  cannot_invite_self: 'studioPanel.share.errors.self',
-  recipient_ineligible: 'studioPanel.share.errors.ineligible',
-  stale_owner: 'studioPanel.share.errors.staleOwner',
-  not_owner: 'studioPanel.share.errors.notOwner',
-  already_member: 'studioPanel.share.errors.alreadyMember',
-  member_cap: 'studioPanel.share.errors.memberCap',
-  busy: 'studioPanel.share.errors.alreadyOut',
+  invalid_code: 'studioPanel.members.errors.invalidCode',
+  cannot_invite_self: 'studioPanel.members.errors.self',
+  recipient_ineligible: 'studioPanel.members.errors.ineligible',
+  stale_owner: 'studioPanel.members.errors.staleOwner',
+  not_owner: 'studioPanel.members.errors.notOwner',
+  already_member: 'studioPanel.members.errors.alreadyMember',
+  member_cap: 'studioPanel.members.errors.memberCap',
+  busy: 'studioPanel.members.errors.alreadyOut',
 };
 
 export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: () => void }): JSX.Element {
@@ -38,7 +38,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
     try {
       setPayload(await fetchGameEditors(slug));
     } catch {
-      setError(t('studioPanel.share.errors.load'));
+      setError(t('studioPanel.members.errors.load'));
     } finally {
       setLoading(false);
     }
@@ -50,7 +50,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
 
   function explain(caught: unknown): string {
     const reason = (caught as EditorInviteApiError)?.code;
-    return reason && REFUSALS[reason] ? t(REFUSALS[reason]) : t('studioPanel.share.errors.generic');
+    return reason && REFUSALS[reason] ? t(REFUSALS[reason]) : t('studioPanel.members.errors.generic');
   }
 
   async function send(event: React.FormEvent): Promise<void> {
@@ -67,7 +67,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
     } catch (caught) {
       if ((caught as EditorInviteApiError)?.code === 'busy') {
         setPayload(await fetchGameEditors(slug).catch(() => payload));
-        setError(t('studioPanel.share.errors.alreadyOut'));
+        setError(t('studioPanel.members.errors.alreadyOut'));
       } else {
         setError(explain(caught));
       }
@@ -129,8 +129,8 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
 
   return (
     <div className="studio-transfer" data-testid="studio-members">
-      <p className="studio-rail-credentials-hint">{t('studioPanel.share.intro')}</p>
-      {loading ? <p className="studio-connect-state">{t('studioPanel.share.loading')}</p> : null}
+      <p className="studio-rail-credentials-hint">{t('studioPanel.members.intro')}</p>
+      {loading ? <p className="studio-connect-state">{t('studioPanel.members.loading')}</p> : null}
 
       {!loading && owner ? (
         <ul className="studio-transfer-invites" data-testid="studio-members-list">
@@ -138,8 +138,8 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
             <p className="studio-transfer-who">
               <PixelIcon name="user" size={14} />
               <span>
-                {t('studioPanel.share.owner', { name: owner.profileName })}
-                {owner.you ? ` ${t('studioPanel.share.you')}` : ''}
+                {t('studioPanel.members.owner', { name: owner.profileName })}
+                {owner.you ? ` ${t('studioPanel.members.you')}` : ''}
               </span>
             </p>
           </li>
@@ -148,8 +148,8 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
               <p className="studio-transfer-who">
                 <PixelIcon name="share" size={14} />
                 <span>
-                  {t('studioPanel.share.editor', { name: member.profileName })}
-                  {member.you ? ` ${t('studioPanel.share.you')}` : ''}
+                  {t('studioPanel.members.editor', { name: member.profileName })}
+                  {member.you ? ` ${t('studioPanel.members.you')}` : ''}
                 </span>
               </p>
               {isOwner && !member.you ? (
@@ -160,7 +160,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
                   onClick={() => void remove(member)}
                   data-testid={`studio-member-remove-${member.memberKey}`}
                 >
-                  {t('studioPanel.share.remove')}
+                  {t('studioPanel.members.remove')}
                 </button>
               ) : null}
             </li>
@@ -177,10 +177,10 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
             >
               <p className="studio-transfer-who">
                 <PixelIcon name="share" size={14} />
-                <span>{t('studioPanel.share.pending', { name: invite.counterparty.profileName })}</span>
+                <span>{t('studioPanel.members.pending', { name: invite.counterparty.profileName })}</span>
               </p>
               <p className="studio-transfer-expiry">
-                {t('studioPanel.share.expires', {
+                {t('studioPanel.members.expires', {
                   when: formatRelativeTime(Date.parse(invite.expiresAt), i18n.language),
                 })}
               </p>
@@ -191,7 +191,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
                 onClick={() => void cancel(invite.inviteId)}
                 data-testid={`studio-share-cancel-${invite.memberKey}`}
               >
-                {busy ? t('studioPanel.share.cancelling') : t('studioPanel.share.cancel')}
+                {busy ? t('studioPanel.members.cancelling') : t('studioPanel.members.cancel')}
               </button>
             </div>
           ))
@@ -199,21 +199,21 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
 
       {isOwner ? (
         <form className="studio-transfer-form" onSubmit={(event) => void send(event)}>
-          <label htmlFor="studio-share-code">{t('studioPanel.share.codeLabel')}</label>
+          <label htmlFor="studio-share-code">{t('studioPanel.members.codeLabel')}</label>
           <input
             id="studio-share-code"
             type="text"
             autoComplete="off"
             spellCheck={false}
             value={code}
-            placeholder={t('studioPanel.share.codePlaceholder')}
+            placeholder={t('studioPanel.members.codePlaceholder')}
             onChange={(event) => setCode(event.target.value)}
             disabled={busy}
             data-testid="studio-share-code"
           />
-          <p className="studio-transfer-expiry">{t('studioPanel.share.codeHint')}</p>
+          <p className="studio-transfer-expiry">{t('studioPanel.members.codeHint')}</p>
           <button type="submit" className="primary-btn" disabled={busy || code.trim().length === 0}>
-            {busy ? t('studioPanel.share.sending') : t('studioPanel.share.send')}
+            {busy ? t('studioPanel.members.sending') : t('studioPanel.members.send')}
           </button>
         </form>
       ) : null}
@@ -226,7 +226,7 @@ export function StudioMembersPanel({ slug, onLeft }: { slug: string; onLeft?: ()
           disabled={busy}
           data-testid="studio-share-leave"
         >
-          {busy ? t('studioPanel.share.leaving') : t('studioPanel.share.leave')}
+          {busy ? t('studioPanel.members.leaving') : t('studioPanel.members.leave')}
         </button>
       ) : null}
 

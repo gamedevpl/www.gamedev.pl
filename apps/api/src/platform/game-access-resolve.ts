@@ -20,6 +20,7 @@ export interface ResolvedGameAccess {
 
   // Set once this game has changed hands at least once.
   capabilitiesRevokedAtRevision?: number;
+  memberRevocations?: Record<string, { revision: number; at: string }>;
 
   source: 'canonical' | 'derived';
 }
@@ -53,6 +54,7 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
     owner: classifyOwnerUid(record.ownerUid),
     editorUids: [...record.editorUids],
     accessRevision: record.accessRevision,
+    memberRevocations: record.memberRevocations,
     ...(record.capabilitiesRevokedAtRevision === undefined
       ? {}
       : { capabilitiesRevokedAtRevision: record.capabilitiesRevokedAtRevision }),
@@ -106,6 +108,9 @@ export function roundAuthorityCurrent(
   access: ResolvedGameAccess,
 ): boolean {
   if (access.source !== 'canonical') return true;
+  const memberFence = access.memberRevocations?.[record.ownerUid];
+  if (memberFence !== undefined && (record.accessEpoch === undefined || record.accessEpoch < memberFence.revision))
+    return false;
   if (record.accessEpoch !== undefined) {
     // Membership bumps revision; only a handover fences stamped keys.
     const revokedAt = access.capabilitiesRevokedAtRevision;

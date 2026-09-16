@@ -1,3 +1,5 @@
+export { looksLikeMcpSessionKey } from './mcp-session-shape.js';
+import { bindCapabilityRevision, verifyCapabilityRevision } from '../platform/capability-revision.js';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   ACTOR_UID_RE,
@@ -35,6 +37,7 @@ export interface McpSessionKeyClaims {
   /** Unix seconds. */
   exp: number;
   actorUid?: string;
+  actorRevision?: number;
 }
 
 export interface MintMcpSessionKeyOptions {
@@ -46,6 +49,7 @@ export interface MintMcpSessionKeyOptions {
   /** Override TTL hours; useful in tests. */
   ttlHours?: number;
   actorUid?: string;
+  actorRevision?: number;
 }
 
 function sign(
@@ -107,39 +111,13 @@ export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOpti
   const exp = Math.floor(nowMs / 1000) + ttlHours * 60 * 60;
   const signature = sign(options.sessionId, options.jobId, options.roundGeneration, exp, secret, options.actorUid);
   const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
-  return Buffer.from(
-    `${options.sessionId}.${options.jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`,
-    'utf8',
-  ).toString('base64url');
-}
-
-/**
- * Shape-only classifier: does this string carry a sessionKey's wire format?
- *
- * Never a stand-in for {@link verifyMcpSessionKey} — no signature is checked, so this
- * decides only *which credential the caller supplied*, never whether it is valid. It
- * exists so `start` can tell an agent that presented a sessionKey that it presented
- * the wrong kind of key, rather than the generic "key is required", which reads as
- * "you sent nothing" when in fact something was sent.
- */
-export function looksLikeMcpSessionKey(candidate: string): boolean {
-  const parts = Buffer.from(candidate, 'base64url').toString('utf8').split('.');
-  if (parts.length !== 5 && parts.length !== 6) return false;
-  const sessionId = parts[0];
-  const jobIdRaw = parts[1];
-  const generationRaw = parts[2];
-  const expRaw = parts[3];
-  const actorOrSig = parts[4];
-  const signature = parts.length === 6 ? parts[5] : actorOrSig;
-  const actorOk = parts.length === 5 || decodeActorUidField(actorOrSig ?? '') !== undefined;
-  return (
-    Boolean(sessionId) &&
-    SESSION_ID_RE.test(sessionId) &&
-    /^\d+$/.test(jobIdRaw ?? '') &&
-    /^\d+$/.test(generationRaw ?? '') &&
-    /^\d+$/.test(expRaw ?? '') &&
-    actorOk &&
-    /^[a-f0-9]{64}$/i.test(signature ?? '')
+  return bindCapabilityRevision(
+    Buffer.from(
+      `${options.sessionId}.${options.jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`,
+      'utf8',
+    ).toString('base64url'),
+    options.actorRevision,
+    secret,
   );
 }
 
@@ -149,7 +127,8 @@ export function looksLikeMcpSessionKey(candidate: string): boolean {
  */
 export function verifyMcpSessionKey(token: string, secret: string): McpSessionKeyClaims {
   try {
-    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    const envelope = verifyCapabilityRevision(token, secret);
+    const parts = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
     if (parts.length !== 5 && parts.length !== 6) {
       throw new InvalidAgentTokenError();
     }
@@ -190,7 +169,14 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
     if (!safeEqualHex(signature, sign(sessionId, jobId, roundGeneration, exp, secret, actorUid))) {
       throw new InvalidAgentTokenError();
     }
-    return { sessionId, jobId, roundGeneration, exp, ...(actorUid ? { actorUid } : {}) };
+    return {
+      sessionId,
+      jobId,
+      roundGeneration,
+      exp,
+      ...(envelope.actorRevision === undefined ? {} : { actorRevision: envelope.actorRevision }),
+      ...(actorUid ? { actorUid } : {}),
+    };
   } catch (error) {
     if (error instanceof InvalidAgentTokenError) {
       throw error;

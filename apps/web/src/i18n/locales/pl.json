@@ -902,7 +902,7 @@
       },
       "someone": "inny twórca"
     },
-    "share": {
+    "members": {
       "intro": "Zaproś innego twórcę jako edytora. Zobaczy projekt dopiero po przyjęciu. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "loading": "Sprawdzam…",
       "codeLabel": "Kod odbiorcy",

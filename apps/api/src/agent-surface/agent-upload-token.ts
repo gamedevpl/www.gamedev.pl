@@ -1,3 +1,4 @@
+import { bindCapabilityRevision, verifyCapabilityRevision } from '../platform/capability-revision.js';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   InvalidAgentTokenError,
@@ -31,6 +32,7 @@ export interface UploadTokenClaims {
   nonce: string;
   // Writer who minted the URL; omitted on in-flight URLs.
   actorUid?: string;
+  actorRevision?: number;
 }
 
 export interface MintUploadTokenOptions {
@@ -42,6 +44,7 @@ export interface MintUploadTokenOptions {
   version?: string;
   // Writer uid bound into the signature.
   actorUid?: string;
+  actorRevision?: number;
   // Epoch ms; defaults to Date.now().
   now?: number;
   // Override TTL seconds (tests).
@@ -142,15 +145,20 @@ export function mintUploadToken(secret: string, options: MintUploadTokenOptions)
     ? sign(options.jobId, options.roundGeneration, options.kind, path, label, version, actorUid, exp, nonce, secret)
     : signWithoutActor(options.jobId, options.roundGeneration, options.kind, path, label, version, exp, nonce, secret);
   const actorField = actorUid ? `.${encodeActorUidField(actorUid)}` : '';
-  return Buffer.from(
-    `${options.jobId}.${options.roundGeneration}.${options.kind}.${encodeOptional(path)}.${encodeOptional(label)}.${encodeOptional(version)}${actorField}.${exp}.${nonce}.${signature}`,
-    'utf8',
-  ).toString('base64url');
+  return bindCapabilityRevision(
+    Buffer.from(
+      `${options.jobId}.${options.roundGeneration}.${options.kind}.${encodeOptional(path)}.${encodeOptional(label)}.${encodeOptional(version)}${actorField}.${exp}.${nonce}.${signature}`,
+      'utf8',
+    ).toString('base64url'),
+    options.actorRevision,
+    secret,
+  );
 }
 
 export function verifyUploadToken(token: string, secret: string): UploadTokenClaims {
   try {
-    const raw = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    const envelope = verifyCapabilityRevision(token, secret);
+    const raw = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
     if (raw.length !== 10 && raw.length !== 9 && raw.length !== 8) {
       throw new InvalidAgentTokenError();
     }
@@ -219,6 +227,7 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
       ...(label ? { label } : {}),
       ...(version ? { version } : {}),
       ...(actorUid ? { actorUid } : {}),
+      ...(envelope.actorRevision === undefined ? {} : { actorRevision: envelope.actorRevision }),
       exp,
       nonce,
     };
