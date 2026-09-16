@@ -79,6 +79,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
+  // Previews and shots change rarely during a build; 30s matches prior rounds.
+  const mediaCacheTtlMs = 30_000;
   // Past the window, a count is asked before the page.
   const eventsProbeWindowMs = 60_000;
   const maxEventsShown = 20;
@@ -131,7 +133,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       return cached.value;
     }
     const value = await store.listBuildPreviews(jobId, { limit: maxPreviewsShown });
-    previewsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
     return value;
   }
 
@@ -146,7 +148,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       return cached.value;
     }
     const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
-    shotsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
     return value;
   }
 
@@ -229,14 +231,17 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     record: SubmissionRecord,
     locale: string,
     viewerUid?: string,
+    viewerOwnsSlug = false,
   ): Promise<PriorRoundHistory[]> {
-    if (!store || !record.slug) return [];
+    if (!store || !record.slug || !viewerUid) return [];
     // Earlier rounds carry private chat, and a status token names no one.
-    if (!viewerUid || !(await creatorOwnsSlug(store, record.slug, viewerUid))) return [];
     const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
     if (cached && cached.expiresAt > currentTime) return cached.value;
+
+    const owns = viewerOwnsSlug || (await creatorOwnsSlug(store, record.slug, viewerUid));
+    if (!owns) return [];
 
     // Started before this one, whoever built them: the slug's own history.
     const siblings = (await store.listSubmissionsBySlug(record.slug))
@@ -379,11 +384,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     }
 
     // Soft: sibling history must not 500 the live thread poll.
-    try {
-      const priorRounds = await loadPriorRounds(record, locale, viewerUid);
-      if (priorRounds.length > 0) next.priorRounds = priorRounds;
-      else delete next.priorRounds;
-    } catch {
+    if (viewerOwns) {
+      try {
+        const priorRounds = await loadPriorRounds(record, locale, viewerUid, true);
+        if (priorRounds.length > 0) next.priorRounds = priorRounds;
+        else delete next.priorRounds;
+      } catch {
+        delete next.priorRounds;
+      }
+    } else {
       delete next.priorRounds;
     }
 
@@ -405,6 +414,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   function invalidateEvents(jobId: number): void {
     eventsCache.delete(jobId);
+    previewsCache.delete(jobId);
+    shotsCache.delete(jobId);
   }
 
   return { attachBuildEvents, invalidateEvents };

@@ -436,13 +436,23 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     jobId: number,
     opts?: { limit?: number; excludeProposals?: boolean },
   ): Promise<CreatorMessage[]> {
-    // Slices the newest `limit` off an oldest-first sort, matching InMemory.
-    const snap = await this.messagesCollection(jobId).get();
+    const limit = opts?.limit ?? 20;
+    // Newest messages first without a full scan.
+    if (!opts?.excludeProposals) {
+      const snap = await this.messagesCollection(jobId).orderBy('createdAt', 'desc').limit(limit).get();
+      return snap.docs
+        .map((doc) => doc.data() as CreatorMessage)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    }
+
+    // Buffered fetch so filtering proposals still yields requested limit.
+    const bufferLimit = Math.max(limit * 2, limit + 20);
+    const snap = await this.messagesCollection(jobId).orderBy('createdAt', 'desc').limit(bufferLimit).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .filter((message) => !(opts?.excludeProposals && message.proposal))
-      .slice(-(opts?.limit ?? 20));
+      .filter((message) => !message.proposal)
+      .slice(0, limit)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
 
   async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {

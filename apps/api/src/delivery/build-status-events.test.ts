@@ -117,3 +117,56 @@ describe('build event reads under a three-second poll', () => {
     expect(list.mock.calls.filter((c) => c[1]?.limit === 20)).toHaveLength(2);
   });
 });
+
+describe('build media reads under status polling', () => {
+  it('serves previews and shots from 30s cache rather than re-reading every poll', async () => {
+    const { store, assembler, tick } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+    await store.appendBuildShot(JOB, { label: 'Shot 1' });
+
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews');
+    const listShots = vi.spyOn(store, 'listBuildShots');
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // After 6s, events probe expires (5s) but media cache (30s) stays cached
+    tick(6_000);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // After 31s, media cache expires and is re-read
+    tick(25_000);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(2);
+    expect(listShots).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidates previews and shots on invalidateEvents', async () => {
+    const { store, assembler, tick } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+    await store.appendBuildShot(JOB, { label: 'Shot 1' });
+
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews');
+    const listShots = vi.spyOn(store, 'listBuildShots');
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // Inside the 30s window, invalidateEvents clears media cache
+    tick(5_000);
+    assembler.invalidateEvents(JOB);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(2);
+    expect(listShots).toHaveBeenCalledTimes(2);
+  });
+});
