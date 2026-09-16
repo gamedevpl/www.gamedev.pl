@@ -18,6 +18,9 @@ export interface ResolvedGameAccess {
   // 0 means derived authority, which has no revision to fence with.
   accessRevision: number;
 
+  // Set once this game has changed hands at least once.
+  capabilitiesRevokedAtRevision?: number;
+
   source: 'canonical' | 'derived';
 }
 
@@ -50,6 +53,9 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
     owner: classifyOwnerUid(record.ownerUid),
     editorUids: [...record.editorUids],
     accessRevision: record.accessRevision,
+    ...(record.capabilitiesRevokedAtRevision === undefined
+      ? {}
+      : { capabilitiesRevokedAtRevision: record.capabilitiesRevokedAtRevision }),
     source: 'canonical',
   };
 }
@@ -81,7 +87,9 @@ export async function currentOwnerUid(
 
 // A -> B -> A restores the uid, never the revision.
 
-// Rounds predating the epoch fall back to that weaker owner check.
+// A round predating the epoch falls back to the weaker owner check,
+
+// but only while the game has never changed hands.
 
 // Derived authority has no revision, so it is left alone.
 export function roundAuthorityCurrent(
@@ -91,6 +99,8 @@ export function roundAuthorityCurrent(
   if (access.source !== 'canonical') return true;
   // The epoch is what makes a revocation permanent.
   if (record.accessEpoch !== undefined) return record.accessEpoch === access.accessRevision;
+  // No epoch on a game that changed hands: fenced rather than guessed.
+  if (access.capabilitiesRevokedAtRevision !== undefined) return false;
   return sameOwner(classifyOwnerUid(record.ownerUid), access.owner);
 }
 

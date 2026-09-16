@@ -90,12 +90,15 @@ function recipientEligible(recipient: { tier: string; deletionScheduledFor?: str
 
 // Default: the former owner loses management access (editors are GO-03 scope).
 function transferredAccess(access: GameAccessRecord, newOwnerUid: string, at: string): GameAccessRecord {
+  const accessRevision = access.accessRevision + 1;
   return {
     ...access,
     ownerUid: newOwnerUid,
     editorUids: [],
     memberUids: membersOf(newOwnerUid, []),
-    accessRevision: access.accessRevision + 1,
+    accessRevision,
+    // Marks the game: an epoch-less round is refused.
+    capabilitiesRevokedAtRevision: accessRevision,
     updatedAt: at,
   };
 }
@@ -190,6 +193,10 @@ export class InMemoryGameTransferStore implements GameTransferStore {
 
     // Idle only: a live build/write or opening round blocks this.
     if (this.hasActiveBuildRound(slug) || (await this.hasActiveCheckoutRecovery(slug, Date.parse(at)))) return 'busy';
+
+    // The await let other writers in; `existing` may be stale.
+    const current = this.transfers.get(slug) ?? null;
+    if (current !== existing || !isPending(current, at)) return null;
 
     this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
     this.retireGameAgentKey(slug);
