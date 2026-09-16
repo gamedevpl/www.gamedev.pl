@@ -55,7 +55,8 @@ the session budget is 128 MB and 100 artifacts. Generated names, SHA-256 hashes,
 revision, device and capture time keep evidence associated with the shown build.
 References and intended game assets are separate choices; uploading does not change
 source files. Draft text, staged references and uncertain command receipts survive a
-browser refresh within the same session.
+browser refresh within the same session. Attachments remain staged until explicitly removed,
+including across assistant clarification turns and subsequent tasks.
 
 Screenshots use Studio's canvas/media composite; DOM overlays may be absent. Video
 records the largest canvas without audio, in independent eight-second segments; the

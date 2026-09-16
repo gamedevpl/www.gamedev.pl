@@ -1,3 +1,4 @@
+import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -103,4 +104,24 @@ it('cancels after preparation without replacing the active kit', async () => {
   await expect(updateKit({ ...input, abort: controller.signal })).rejects.toThrow();
   expect(readFileSync(join(root, 'tools/check.ts'), 'utf8')).toBe('old');
   expect(existsSync(join(root, '.gamedev/kit-update.pid'))).toBe(false);
+});
+
+it('uses the checkout writer lock when invoked from a game subdirectory', async () => {
+  const { input, root } = fixture();
+  let release!: () => void;
+  const writer = withCheckoutWriter(
+    root,
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  try {
+    await expect(updateKit({ ...input, cwd: join(root, 'games', 'airtime') })).rejects.toThrow('owns this checkout');
+    expect(prepareWorkspace).not.toHaveBeenCalled();
+    expect(input.api.request).not.toHaveBeenCalled();
+  } finally {
+    release();
+    await writer;
+  }
 });

@@ -69,7 +69,7 @@ async function deliver() {
     const result = await api('/commands', pending.envelope);
     if (result.status === 'accepted') {
       if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
-      else { if (pending.clearDraft && draft.value === pending.text) {draft.value = '';attachments=attachments.filter(a=>!pending.attachmentIds.includes(a.id));sessionStorage.removeItem('play-draft');tray();} el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task.' : 'Request accepted.'; }
+      else { if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');tray();} el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task.' : 'Request accepted. Staged attachments stay available until removed.'; }
     } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
     pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {

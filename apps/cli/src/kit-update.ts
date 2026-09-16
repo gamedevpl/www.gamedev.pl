@@ -176,6 +176,8 @@ export async function offerKitUpdate(input: Input): Promise<void> {
   await updateKit({ ...input, release });
 }
 
-export function updateKit(input: Parameters<typeof updateKitUnlocked>[0]): ReturnType<typeof updateKitUnlocked> {
-  return withCheckoutWriter(input.cwd, () => updateKitUnlocked(input));
+export async function updateKit(input: Parameters<typeof updateKitUnlocked>[0]): ReturnType<typeof updateKitUnlocked> {
+  const root = input.release?.root ?? findCheckout(input.cwd)?.root;
+  if (!root) throw new CliError('Open a game checkout to update its Creator Kit.', EXIT_INPUT);
+  return withCheckoutWriter(root, () => updateKitUnlocked({ ...input, cwd: root }));
 }

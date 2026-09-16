@@ -136,7 +136,9 @@ export function journalApi(api: ApiClient, journal: PlayJournal, save: () => voi
   return {
     ...api,
     async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-      if (method === 'GET') return api.request(method, path, body, signal);
+      // Presence is best effort and cannot consume or clear a delivery receipt.
+      if (method === 'GET' || (method === 'POST' && /^\/api\/me\/studio\/local-activity\/[^/?#]+$/.test(path)))
+        return api.request(method, path, body, signal);
       if (journal.pending)
         throw Error(
           'A previous platform request has an unknown outcome. Inspect Studio before starting more platform mutations. Local play and read-only status remain available.',

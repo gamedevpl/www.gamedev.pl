@@ -140,7 +140,7 @@ it('source checkpoints preserve binary bytes and keep a recovery tree when resto
 });
 it('all shipped browser scripts parse as JavaScript', () => {
   for (const page of [SESSION_BROWSER_PAGE, PHONE_PAGE]) {
-    const source = page.match(/<script>([\s\S]*)<\/script>/)?.[1];
+    const source = page.match(/<script>([\s\S]*)<\/script>/i)?.[1];
     expect(source).toBeTruthy();
     expect(() => new Script(source!)).not.toThrow();
   }
@@ -163,3 +163,27 @@ it('writer transactions reject unrelated concurrent edits and allow nested domai
   await first;
   await expect(withCheckoutWriter(root, async () => 42)).resolves.toBe(42);
 });
+
+it.each(['timeout', 'server'])(
+  'presence %s failures never fence delivery or clear an existing unknown outcome',
+  async (failure) => {
+    const error = failure === 'timeout' ? Error('Timed out') : new CliError('Unavailable', EXIT_REFUSED);
+    if (error instanceof CliError) error.httpStatus = 503;
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path.startsWith('/api/me/studio/local-activity/')) throw error;
+      return { delivered: true };
+    });
+    const state: PlayJournal = { version: 1, instance: 'presence', cwd: '/tmp' };
+    const save = vi.fn();
+    const api = journalApi({ origin: 'https://example.test', request, requestBytes: vi.fn() }, state, save);
+    await expect(api.request('POST', '/api/me/studio/local-activity/round', { phase: 'editing' })).rejects.toThrow();
+    expect(state.pending).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    await expect(api.request('POST', '/api/submissions/round/stage', {})).resolves.toEqual({ delivered: true });
+    const pending = { path: '/api/submissions', hash: 'unknown', startedAt: new Date().toISOString() };
+    state.pending = pending;
+    await expect(api.request('POST', '/api/me/studio/local-activity/round', { phase: 'done' })).rejects.toThrow();
+    expect(state.pending).toEqual(pending);
+    await expect(api.request('POST', '/api/submissions', {})).rejects.toThrow('unknown outcome');
+  },
+);

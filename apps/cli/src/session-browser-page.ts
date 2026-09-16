@@ -41,7 +41,7 @@ textarea{resize:vertical;min-height:72px;max-height:20vh;width:100%;color:inheri
 <label>Attach file <input id="upload" type="file" multiple accept="image/png,image/jpeg,image/webp,video/webm,video/mp4,application/json,text/plain"></label>
 <div class="actions"><button id="screenshot">Screenshot</button><button id="trace">Trace</button></div>
 <div class="actions"><button id="record">Enable recording</button><button id="clip">Attach recent clip</button></div>
-<p class="hint">Media is stored locally. Local agents can inspect these files using their supported tools. Video and DOM overlays may not be supported by every agent.</p>
+<p class="hint">Attachments remain staged until you remove them, including during clarification. Media is stored locally. Local agents can inspect these files using their supported tools. Video and DOM overlays may not be supported by every agent.</p>
 <div id="attachments"></div><div id="devices"></div></details>
 <form id="composer"><p id="question"></p><div id="choices"></div><label id="prompt-label" for="prompt">Your request</label><textarea id="prompt" maxlength="8000" placeholder="Describe what to change…"></textarea>
 <div id="actions" class="actions"><button id="send" class="primary" type="submit" disabled>Send</button><button id="stop" type="button" disabled>Stop task</button></div>
