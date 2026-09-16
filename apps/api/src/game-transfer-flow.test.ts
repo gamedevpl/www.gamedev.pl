@@ -65,6 +65,7 @@ async function createApp(store: InMemoryStore, managedAvailabilityGate?: Managed
       submissionTokenSecret: SECRET,
       agentBackend: stubBackend(),
       agentChannel: {} as { gamesStore?: GamesStore },
+      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
       ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
     },
   });
