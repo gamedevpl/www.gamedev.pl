@@ -46,7 +46,16 @@ const MAX_PROGRESS_LABELS = 8;
  */
 const MAX_TRACKED_LABELS_PER_SESSION = 20;
 
+// The midnight seam: docs/firestore-read-cost.md.
+export const CONTINUATION_GRACE_MS = 15 * 60_000;
+
+export interface SummarizeOptions {
+  partitionStartMs?: number;
+}
+
 interface SessionState {
+  opened: boolean;
+  firstAtMs: number;
   playSeconds: number;
   closed: boolean;
   /** Previous event's position, for deciding whether the next tick is continuous. */
@@ -100,7 +109,36 @@ function median(values: number[]): number | null {
  * session before the continuity checks, because "the previous event" is only meaningful
  * in time order and Firestore returns documents in id order.
  */
+export interface GameHealthDetail extends GameHealth {
+  samples: {
+    playSeconds: number[];
+    fps: number[];
+    bestScores: number[];
+    errorTally: { message: string; count: number }[];
+    labelTally: { label: string; sessions: number }[];
+  };
+}
+
+// The tallies are handed over whole; the rollup owns the cut.
+
+// No open, and starting as the partition does: yesterday's.
+export function isContinuation(sessionEvents: TelemetryEvent[], partitionStartMs?: number): boolean {
+  if (partitionStartMs === undefined || sessionEvents.length === 0) return false;
+  if (sessionEvents.some((event) => event.type === 'game_opened')) return false;
+  const firstAtMs = Math.min(...sessionEvents.map((event) => Date.parse(event.at)).filter(Number.isFinite));
+  if (!Number.isFinite(firstAtMs)) return false;
+  return firstAtMs - partitionStartMs <= CONTINUATION_GRACE_MS;
+}
+
 export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
+  return summarizeGameHealthDetailed(events).map(({ samples: _samples, ...row }) => row);
+}
+
+// Same pass, one row wider.
+export function summarizeGameHealthDetailed(
+  events: TelemetryEvent[],
+  options: SummarizeOptions = {},
+): GameHealthDetail[] {
   const bySlug = new Map<string, TelemetryEvent[]>();
   for (const event of events) {
     const bucket = bySlug.get(event.slug);
@@ -108,7 +146,7 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
     else bySlug.set(event.slug, [event]);
   }
 
-  const rows: GameHealth[] = [];
+  const rows: GameHealthDetail[] = [];
   for (const [slug, slugEvents] of bySlug) {
     const sessions = new Map<string, SessionState>();
     const errorCounts = new Map<string, number>();
@@ -133,7 +171,11 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       const ordered = [...unordered].sort(
         (a, b) => (a.msSinceOpen ?? 0) - (b.msSinceOpen ?? 0) || a.at.localeCompare(b.at),
       );
+      // Skipped whole: the day that opened it absorbs it.
+      if (isContinuation(ordered, options.partitionStartMs)) continue;
       const state: SessionState = {
+        opened: ordered.some((event) => event.type === 'game_opened'),
+        firstAtMs: Date.parse(ordered[0].at),
         playSeconds: 0,
         closed: false,
         lastOffsetMs: undefined,
@@ -225,7 +267,9 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       }
     }
 
-    const sessionStates = [...sessions.values()];
+    const all = [...sessions.values()];
+    const sessionStates = all;
+
     for (const state of sessionStates) {
       for (const label of state.labels) labelSessions.set(label, (labelSessions.get(label) ?? 0) + 1);
     }
@@ -252,18 +296,22 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       if (state.gfxBackend) gfxBackends[state.gfxBackend] += 1;
     }
 
+    const errorTally = [...errorCounts.entries()]
+      .map(([message, count]) => ({ message, count }))
+      .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message));
+    const labelTally = [...labelSessions.entries()]
+      .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
+      .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label));
+
     rows.push({
       slug,
-      sessions: sessions.size,
+      sessions: sessionStates.length,
       bounces: playPerSession.filter((seconds) => seconds === 0).length,
       closes: sessionStates.filter((state) => state.closed).length,
       medianPlaySeconds: median(playPerSession) ?? 0,
       totalPlaySeconds: playPerSession.reduce((sum, seconds) => sum + seconds, 0),
       errors,
-      errorSamples: [...errorCounts.entries()]
-        .map(([message, count]) => ({ message, count }))
-        .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message))
-        .slice(0, MAX_ERROR_SAMPLES),
+      errorSamples: errorTally.slice(0, MAX_ERROR_SAMPLES),
       aliveTicks,
       stalledTicks,
       stallRate: aliveTicks === 0 ? 0 : stalledTicks / aliveTicks,
@@ -277,14 +325,18 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
       // this file follows and the operator page renders as an em dash. A game with no
       // zone and a zone that never connects must not read the same.
       zoneJoinRate: zoneAdmitted === 0 ? null : zoneJoined / zoneAdmitted,
-      finishRate: sessions.size === 0 ? 0 : sessionsWithEnding / sessions.size,
+      finishRate: sessionStates.length === 0 ? 0 : sessionsWithEnding / sessionStates.length,
       winRate: decided === 0 ? null : outcomes.won / decided,
       medianBestScore: median(bestScores),
-      progressLabels: [...labelSessions.entries()]
-        .map(([label, sessionCount]) => ({ label, sessions: sessionCount }))
-        .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label))
-        .slice(0, MAX_PROGRESS_LABELS),
+      progressLabels: labelTally.slice(0, MAX_PROGRESS_LABELS),
       gfxBackends,
+      samples: {
+        playSeconds: playPerSession,
+        fps: fpsSamples,
+        bestScores,
+        errorTally,
+        labelTally,
+      },
     });
   }
 

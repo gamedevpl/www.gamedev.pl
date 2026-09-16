@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { CreatorHealthResponse, CreatorScorecardsResponse, CreatorStudioGame } from './creator-studio.js';
@@ -456,6 +456,59 @@ describe('GET /api/me/studio/health', () => {
     expect(body.totalGames).toBe(3);
     expect(body.gamesTruncated).toBe(false);
 
+    await app.close();
+  });
+
+  it('scans telemetry once per window, not once per mount', async () => {
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.setSubmissionPublishedAt(10, `${today}T12:00:00.000Z`);
+    const scan = vi.spyOn(store, 'listTelemetryEvents');
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+
+    const call = () =>
+      app.inject({ method: 'GET', url: '/api/me/studio/health?days=7', headers: authHeaders('g:creator') });
+
+    const first = await call();
+    const scannedOnce = scan.mock.calls.length;
+    const second = await call();
+
+    expect(scannedOnce).toBeGreaterThan(0);
+    expect(scan.mock.calls.length).toBe(scannedOnce);
+    expect(second.json()).toEqual(first.json());
+
+    scan.mockRestore();
+    await app.close();
+  });
+
+  it('re-scans as soon as a newly published game joins the shelf', async () => {
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.setSubmissionPublishedAt(10, `${today}T12:00:00.000Z`);
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+    const call = () =>
+      app.inject({ method: 'GET', url: '/api/me/studio/health?days=7', headers: authHeaders('g:creator') });
+
+    await call();
+    await store.createSubmission(11, 'g:creator', 'Cave Run');
+    await store.setSubmissionSlug(11, 'cave-run');
+    await store.setSubmissionPublishedAt(11, `${today}T12:00:00.000Z`);
+
+    const scan = vi.spyOn(store, 'listTelemetryEvents');
+    await call();
+
+    expect(scan.mock.calls.length).toBeGreaterThan(0);
+    scan.mockRestore();
     await app.close();
   });
 });
