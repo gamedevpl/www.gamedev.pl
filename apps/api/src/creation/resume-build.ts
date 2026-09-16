@@ -132,7 +132,8 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       // A legacy job still needs the field written for the reminted key.
 
       // A handover revoked the token the nudge would keep.
-      const revoked = record !== undefined && access !== null && !roundAuthorityCurrent(record, access);
+      const revoked =
+        record !== null && record !== undefined && access !== null && !roundAuthorityCurrent(record, access);
       const roundGeneration =
         input.undelivered && !revoked
           ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
