@@ -14,7 +14,7 @@ import type {
   EditorTilemapItemContent,
   EditorTilemapSpec,
 } from './studioApi.js';
-import { declaredDefaults } from './editorContentDefaults.js';
+import { blankPathPoints, blankRows, declaredDefaults } from './editorContentDefaults.js';
 
 export type EditorPatchOperation = { path: Array<string | number>; value: unknown };
 
@@ -346,9 +346,7 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
   const properties = declaredDefaults(spec.properties);
   if (spec.widget === 'path') return { properties, points: blankPathPoints(spec) };
   if (spec.widget !== 'tilemap') return { properties };
-  // Smallest legal grid, all first-tile — the creator paints from there.
-  const fill = spec.tiles[0]?.char ?? '.';
-  return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
+  return { properties, rows: blankRows(spec) };
 }
 
 export function blankLayerEntity(spec: EditorEntitiesLayerSpec): EditorEntityItemContent {
@@ -471,16 +469,4 @@ export function layeredProblems(
     }
   }
   return problems;
-}
-
-function blankPathPoints(spec: EditorPathSpec) {
-  const cells = Array.from({ length: spec.gridCols * spec.gridRows }, (_, index) => ({
-    x: index % spec.gridCols,
-    y: Math.floor(index / spec.gridCols),
-  }));
-  return Array.from({ length: spec.minPoints }, (_, index) => {
-    if (index < cells.length) return cells[index];
-    if (cells.length === 1) return cells[0];
-    return cells[1 + ((index - cells.length) % (cells.length - 1))];
-  });
 }

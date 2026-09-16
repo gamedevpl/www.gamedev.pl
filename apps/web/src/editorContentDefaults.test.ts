@@ -298,6 +298,52 @@ describe('a layer added inside a layered collection item', () => {
   });
 });
 
+describe('a collection whose widget the delivery changed', () => {
+  const asTilemap: EditorDefinition = collectionOf({
+    widget: 'tilemap',
+    grid: { minCols: 3, maxCols: 6, minRows: 2, maxRows: 6 },
+    tiles: [{ key: 'floor', char: '.', label }],
+    properties: {},
+    constraints: [],
+  } as unknown as EditorDefinition['content'][string]['item']);
+
+  const asPath: EditorDefinition = collectionOf({
+    widget: 'path',
+    gridCols: 4,
+    gridRows: 4,
+    minPoints: 2,
+    maxPoints: 8,
+    closed: false,
+    properties: {},
+  } as unknown as EditorDefinition['content'][string]['item']);
+
+  it('gives an old entities item the board its new widget needs', () => {
+    const filled = fillDeclaredValues(asTilemap, { boards: [{ properties: {} }] });
+    expect(boards(filled)[0]).toEqual({ properties: {}, rows: ['...', '...'] });
+  });
+
+  it('gives an old entities item the points its new widget needs', () => {
+    const filled = fillDeclaredValues(asPath, { boards: [{ properties: {} }] });
+    const item = boards(filled)[0] as { points: unknown[] };
+    expect(item.points).toHaveLength(2);
+  });
+
+  it('reports the rebuilt item as unsaved, so the painter has something stored', () => {
+    const loaded: GameEditorState = {
+      version: '9',
+      definition: asTilemap,
+      content: { boards: [] },
+      draft: { content: { boards: [{ properties: {} }] }, revision: 10, updatedAt: '' },
+    };
+    expect(mergeDraft(loaded).unsaved).toBe(true);
+  });
+
+  it('leaves a board that already fits alone', () => {
+    const filled = fillDeclaredValues(asTilemap, { boards: [{ properties: {}, rows: ['....', '....'] }] });
+    expect(boards(filled)[0]).toEqual({ properties: {}, rows: ['....', '....'] });
+  });
+});
+
 describe('differsFromStored', () => {
   it('is false for the same document', () => {
     const stored = { boards: [{ properties: { name: 'a', speed: 6 } }] };

@@ -8,7 +8,9 @@ import type {
   EditorLayersDoc,
   EditorParamSpec,
   EditorParamValue,
+  EditorPathSpec,
   EditorPropertySpec,
+  EditorTilemapSpec,
 } from './studioApi.js';
 
 const LAYERS_KEY = 'layers';
@@ -67,8 +69,14 @@ function fillItem(spec: EditorCollectionItemSpec, item: EditorItemContent): Edit
   if (!isRecord(item)) return item;
   const raw = item as unknown as Record<string, unknown>;
   const properties = withDeclared(spec.properties, raw.properties);
-  if (spec.widget === 'tilemap') return { properties, rows: raw.rows } as unknown as EditorItemContent;
-  if (spec.widget === 'path') return { properties, points: raw.points } as unknown as EditorItemContent;
+  if (spec.widget === 'tilemap') {
+    const rows = Array.isArray(raw.rows) ? raw.rows : blankRows(spec);
+    return { properties, rows } as unknown as EditorItemContent;
+  }
+  if (spec.widget === 'path') {
+    const points = Array.isArray(raw.points) ? raw.points : blankPathPoints(spec);
+    return { properties, points } as unknown as EditorItemContent;
+  }
   if (spec.widget !== 'layered') return { properties } as unknown as EditorItemContent;
   const layers = fillLayers(spec.layers, (isRecord(raw.layers) ? raw.layers : {}) as EditorLayersDoc);
   return { properties, layers } as unknown as EditorItemContent;
@@ -86,9 +94,24 @@ function fillLayers(specs: Record<string, EditorLayerSpec>, layers: EditorLayers
 // The smallest legal board, so the creator has something to paint on.
 export function blankLayerContent(spec: EditorLayerSpec): EditorLayerContent {
   if (spec.widget !== 'tilemap') return [];
+  return { properties: declaredDefaults(spec.properties), rows: blankRows(spec) };
+}
+
+export function blankRows(spec: EditorTilemapSpec): string[] {
   const fill = spec.tiles[0]?.char ?? '.';
-  const properties = declaredDefaults(spec.properties);
-  return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
+  return Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols));
+}
+
+export function blankPathPoints(spec: EditorPathSpec) {
+  const cells = Array.from({ length: spec.gridCols * spec.gridRows }, (_, index) => ({
+    x: index % spec.gridCols,
+    y: Math.floor(index / spec.gridCols),
+  }));
+  return Array.from({ length: spec.minPoints }, (_, index) => {
+    if (index < cells.length) return cells[index];
+    if (cells.length === 1) return cells[0];
+    return cells[1 + ((index - cells.length) % (cells.length - 1))];
+  });
 }
 
 function fillLayerContent(spec: EditorLayerSpec, value: EditorLayerContent): EditorLayerContent {
