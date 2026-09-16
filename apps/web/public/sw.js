@@ -163,9 +163,7 @@ function isServerRenderedRoute(url) {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // Non-GET, cross-origin and API traffic go to the network exactly as if this worker
-  // were not installed. Returning early (rather than calling respondWith with a fetch)
-  // keeps the request on the browser's own path, preserving redirects and streaming.
+  // Transfer refusals can recover bundles predating invitation identities.
   const transferUrl = new URL(request.url);
   if (
     request.method === 'POST' &&
