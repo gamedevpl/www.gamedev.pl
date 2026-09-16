@@ -18,6 +18,7 @@ export function acquireStartupLock(path: string, childPid?: number): () => void 
         'If startup is still running, wait and retry. For crash recovery, inspect the session journal and log ' +
         'and confirm the launcher, controller and child agent have all exited before removing this lock directory. ' +
         'Then rerun the same launch command. Never remove a live or unverified lock.',
+      { cause: error },
     );
   }
   try {
