@@ -86,12 +86,22 @@ export function defaultLayerTileKey(layers: Record<string, EditorLayerSpec>, key
   return spec?.widget === 'tilemap' ? (spec.tiles[0]?.key ?? null) : null;
 }
 
+// A key check alone would hand a null to the painter.
 export function isTilemapItem(item: unknown): item is EditorTilemapItemContent {
-  return typeof item === 'object' && item !== null && !Array.isArray(item) && 'rows' in item;
+  if (!isPlainRecord(item)) return false;
+  return Array.isArray(item.rows) && item.rows.every((row) => typeof row === 'string');
 }
 
 export function isPathItem(item: unknown): item is EditorPathItemContent {
-  return typeof item === 'object' && item !== null && !Array.isArray(item) && 'points' in item;
+  return isPlainRecord(item) && Array.isArray(item.points);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasProperties(value: unknown): value is { properties: Record<string, unknown> } {
+  return isPlainRecord(value) && isPlainRecord(value.properties);
 }
 
 export type PathProblemMessages = {
@@ -177,9 +187,11 @@ export function itemProblems(
   name: (label: EditorLabel) => string,
   pathMessages?: PathProblemMessages,
 ) {
-  if (spec.widget === 'path' && isPathItem(item)) return pathProblems(spec, item, pathMessages);
   if (spec.widget === 'layered') return layeredItemProblems(spec, item, name, pathMessages);
-  if (spec.widget !== 'tilemap' || !isTilemapItem(item)) return [];
+  if (spec.widget === 'path')
+    return isPathItem(item) ? pathProblems(spec, item, pathMessages) : ['Needs a list of points'];
+  if (spec.widget !== 'tilemap') return [];
+  if (!isTilemapItem(item)) return ['Needs a board of rows'];
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
   const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
   for (const row of item.rows) {
@@ -301,8 +313,8 @@ export function collectionProblems(spec: EditorCollectionSpec, items: EditorItem
     if (!('uniqueBy' in rule)) continue;
     const seenAt = new Map<string, number>();
     items.forEach((entry, index) => {
-      const value = entry.properties[rule.uniqueBy];
-      const encoded = JSON.stringify(value);
+      if (!hasProperties(entry)) return;
+      const encoded = JSON.stringify(entry.properties[rule.uniqueBy]);
       if (encoded === undefined) return;
       const firstIndex = seenAt.get(encoded);
       if (firstIndex !== undefined) {
@@ -375,7 +387,7 @@ export function layerProblems(
 }
 
 function isPlainEntityItem(value: unknown): value is EditorEntityItemContent {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && 'properties' in value;
+  return hasProperties(value);
 }
 
 function layerRows(layers: Record<string, EditorLayerSpec>, content: EditorLayersDoc, key: string): string[] | null {
