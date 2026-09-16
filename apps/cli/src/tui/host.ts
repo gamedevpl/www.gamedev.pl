@@ -203,6 +203,7 @@ export async function runInkRepl(input: {
         spoke = true;
         telemetry.record('first_turn');
       }
+      const turnScope = historyScope;
       let result;
       try {
         result = await handleReplLine({
@@ -264,7 +265,9 @@ export async function runInkRepl(input: {
         slug = result.slug;
         paintIdentity();
       }
-      if (result.conversationId !== undefined) conversationId = result.conversationId;
+      if (result.conversationId !== undefined && (result.conversationId !== '' || historyScope === turnScope)) {
+        conversationId = result.conversationId;
+      }
       saveHistory();
       if (result.next === 'quit') break;
     }
