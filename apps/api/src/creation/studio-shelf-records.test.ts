@@ -78,6 +78,43 @@ describe('loadShelfRecords', () => {
     expect(recipientShelfByToken.map((row) => row.slug)).toContain('sky-dodge');
   });
 
+  it('does not let an abandoned newest round hide a live one from the recipient', async () => {
+    // A transferred game whose tip is an abandoned improvement round.
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.upsertUser({ uid: 'g:recipient' });
+
+    await store.createSubmission(10, 'g:sender', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:sender', at, at);
+    await store.createSubmission(11, 'g:sender', 'Sky Dodge improve');
+    await store.setSubmissionSlug(11, 'sky-dodge');
+    await store.setSubmissionAbandoned(11, at);
+    await store.recordSettledOwner('sky-dodge', 'g:recipient', 999, at, at);
+
+    store.listGameAccessByMember = async () => [];
+
+    const shelf = await loadShelfRecords(store, 'g:recipient', 'sky-dodge', mint);
+    expect(shelf.map((row) => row.jobId)).toContain(10);
+  });
+
+  it('still refuses a deep link whose whole slug history is abandoned', async () => {
+    // Reached only when the owner query lags; otherwise the shelf has it.
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:sender' });
+    await store.createSubmission(12, 'g:sender', 'Gone');
+    await store.setSubmissionSlug(12, 'gone-game');
+    await store.ensureGameAccess('gone-game', 'g:sender', at, at);
+    await store.setSubmissionAbandoned(12, at);
+    store.listSubmissionsByOwner = async () => [];
+    store.listGameAccessByMember = async () => [];
+
+    const shelf = await loadShelfRecords(store, 'g:sender', 'gone-game', mint);
+    expect(shelf.map((row) => row.slug)).not.toContain('gone-game');
+  });
+
   it('fills in a transferred game for the recipient when member queries lag', async () => {
     const at = '2026-01-01T00:00:00.000Z';
     const store = new InMemoryStore();
