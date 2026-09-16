@@ -93,6 +93,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Old bundles cannot handle stale_client; refresh only the submitting window.
+const refreshingTransferClients = new Set();
+
+async function refreshStaleTransferClient(response, clientId) {
+  if (response.status !== 409 || !clientId || refreshingTransferClients.has(clientId)) return;
+  const body = await response.clone().json();
+  if (body.error !== 'stale_client') return;
+  refreshingTransferClients.add(clientId);
+  try {
+    const client = await self.clients.get(clientId);
+    if (client && typeof client.navigate === 'function') await client.navigate(client.url);
+  } finally {
+    refreshingTransferClients.delete(clientId);
+  }
+}
+
 /** The two cached files that are ever returned as the answer to a navigation. */
 function isDocument(url) {
   return url === SHELL_URL || url === OFFLINE_URL;
@@ -150,6 +166,21 @@ self.addEventListener('fetch', (event) => {
   // Non-GET, cross-origin and API traffic go to the network exactly as if this worker
   // were not installed. Returning early (rather than calling respondWith with a fetch)
   // keeps the request on the browser's own path, preserving redirects and streaming.
+  const transferUrl = new URL(request.url);
+  if (
+    request.method === 'POST' &&
+    transferUrl.origin === self.location.origin &&
+    (/^\/api\/me\/transfers\/[^/]+\/(accept|reject)$/.test(transferUrl.pathname) ||
+      /^\/api\/me\/studio\/games\/[^/]+\/transfer\/cancel$/.test(transferUrl.pathname))
+  ) {
+    const response = fetch(request).then(async (result) => {
+      await refreshStaleTransferClient(result, event.clientId).catch(() => {});
+      return result;
+    });
+    event.respondWith(response);
+    event.waitUntil(response.catch(() => {}));
+    return;
+  }
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
