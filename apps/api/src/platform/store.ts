@@ -25,6 +25,10 @@ export type { GameAccessStore };
 import type { GameAccessRecord, GameAccessRole } from '../store/records/game-access.js';
 import type { GameTransferStore } from '../store/slices/game-transfer.js';
 export type { GameTransferStore };
+import type { GameTransferProposalStore } from '../store/slices/game-transfer-proposal.js';
+export type { GameTransferProposalStore };
+import type { GameTransferProposal } from '../store/records/game-transfer-proposal.js';
+export type { GameTransferProposal };
 import type { GameTransferInvitation, GameTransferStatus } from '../store/records/game-transfer.js';
 export type { GameTransferInvitation, GameTransferStatus };
 export type { GameAccessRecord, GameAccessRole };
@@ -279,6 +283,7 @@ export interface Store
     CatalogEnrichmentStore,
     GameAccessStore,
     GameTransferStore,
+    GameTransferProposalStore,
     GameEditorInviteStore,
     GameMembershipStore,
     GameQuotaStore,

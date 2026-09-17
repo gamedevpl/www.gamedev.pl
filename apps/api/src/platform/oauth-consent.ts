@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Locale } from '@gamedevpl/contract';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
-import { CREATOR_SCOPE, MCP_SCOPE, scopeIncludes } from './oauth-scopes.js';
+import { CREATOR_SCOPE, MCP_SCOPE, OWNERSHIP_SCOPE, scopeIncludes } from './oauth-scopes.js';
 import { AS_REFRESH_TOKEN_TTL_MS } from './oauth-tokens.js';
 
 const INACTIVITY_DAYS = Math.round(AS_REFRESH_TOKEN_TTL_MS / (24 * 60 * 60 * 1000));
@@ -32,7 +32,11 @@ function mcpCopy(lang: Locale, client: string): ConsentCopy {
           'Publikować nowe wersje w katalogu',
         ],
         cannotTitle: 'Nie będzie mógł',
-        cannot: ['Dotykać gier, których nie jesteś właścicielem', 'Zmieniać Twojego konta ani logowania'],
+        cannot: [
+          'Dotykać gier, których nie jesteś właścicielem',
+          'Zmieniać Twojego konta ani logowania',
+          'Przenieść gry bez Twojego potwierdzenia w Studio',
+        ],
         redirect: 'Wrócisz na',
         redirectHint: 'To powinien być agent, którego przed chwilą użyłeś. Jeśli go nie rozpoznajesz — odmów.',
         duration: `Dostęp trwa, dopóki go nie cofniesz w Studio — albo dopóki agent nie połączy się przez ${INACTIVITY_DAYS} dni.`,
@@ -52,7 +56,11 @@ function mcpCopy(lang: Locale, client: string): ConsentCopy {
           'Publish new versions to the catalog',
         ],
         cannotTitle: 'It will not be able to',
-        cannot: ['Touch games you do not own', 'Change your account or how you sign in'],
+        cannot: [
+          'Touch games you do not own',
+          'Change your account or how you sign in',
+          'Transfer a game without your confirmation in Studio',
+        ],
         redirect: "You'll be sent back to",
         redirectHint: 'This should be the agent you just used. If you do not recognise it, deny.',
         duration: `Access lasts until you revoke it in Studio, or until the agent goes ${INACTIVITY_DAYS} days without connecting.`,
@@ -88,7 +96,7 @@ function creatorCopy(lang: Locale, client: string): ConsentCopy {
       };
 }
 
-interface ConsentCopy {
+export interface ConsentCopy {
   title: string;
   lead: string;
   as: string;
@@ -104,13 +112,55 @@ interface ConsentCopy {
   bail: string;
 }
 
-function copyForScope(lang: Locale, client: string, scope: string): ConsentCopy {
+function ownershipCopy(lang: Locale, client: string): { can: string[]; cannot: string[]; lead: string } {
+  return lang === 'pl'
+    ? {
+        lead: `${client} prosi o odczyt dostępu do Twoich gier i przygotowanie propozycji transferu.`,
+        can: [
+          'Czytać, kto ma dziś dostęp do gier, do których należysz',
+          'Przygotować propozycję transferu do potwierdzenia w Studio',
+        ],
+        cannot: [
+          'Wybrać odbiorcy, zaakceptować, odrzucić ani dokończyć transferu',
+          'Zobaczyć kodów odbiorcy ani cudzych danych konta',
+        ],
+      }
+    : {
+        lead: `${client} is asking to read access on your games and prepare a transfer proposal.`,
+        can: [
+          'Read who currently has access to games you belong to',
+          'Prepare a transfer proposal for you to confirm in Studio',
+        ],
+        cannot: [
+          'Choose a recipient, or accept, reject or complete a transfer',
+          'See recipient codes or other people’s account data',
+        ],
+      };
+}
+
+export function copyForScope(lang: Locale, client: string, scope: string): ConsentCopy {
   const mcp = scopeIncludes(scope, MCP_SCOPE);
   const creator = scopeIncludes(scope, CREATOR_SCOPE);
-  if (creator && !mcp) return creatorCopy(lang, client);
+  const ownership = scopeIncludes(scope, OWNERSHIP_SCOPE);
+  if (ownership && !mcp && !creator) {
+    const own = ownershipCopy(lang, client);
+    return { ...mcpCopy(lang, client), lead: own.lead, can: own.can, cannot: own.cannot };
+  }
+  if (creator && !mcp) {
+    const copy = creatorCopy(lang, client);
+    if (ownership) {
+      const own = ownershipCopy(lang, client);
+      copy.can = [...copy.can, ...own.can];
+      copy.cannot = [...own.cannot, ...copy.cannot];
+    }
+    return copy;
+  }
   const copy = mcpCopy(lang, client);
-  if (creator && mcp) {
-    copy.can = [...creatorCopy(lang, client).can, ...copy.can];
+  if (creator) copy.can = [...creatorCopy(lang, client).can, ...copy.can];
+  if (ownership) {
+    const own = ownershipCopy(lang, client);
+    copy.can = [...copy.can, ...own.can];
+    copy.cannot = [...own.cannot, ...copy.cannot];
   }
   return copy;
 }

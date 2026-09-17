@@ -75,6 +75,9 @@ export const KIT_ENGINE_REF_PROP = {
 export const MCP_VISIBLE_TOOLS = new Set([
   'create_game',
   'list_account_games',
+  'get_game_access',
+  'propose_game_transfer',
+  'get_game_transfer_proposal_receipt',
   'start',
   'open_round',
   'continue_draft',

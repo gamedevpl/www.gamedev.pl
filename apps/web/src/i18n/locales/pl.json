@@ -902,6 +902,15 @@
       },
       "someone": "inny twórca"
     },
+    "transferPropose": {
+      "intro": "Potwierdź ten transfer w Studio. Nic się nie zmienia, dopóki nie wybierzesz odbiorcy i on nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
+      "confirm": "Wyślij zaproszenie",
+      "game": "Przekaż {{title}}",
+      "missing": "Ta propozycja transferu zniknęła albo nie jest twoja.",
+      "expired": "Ta propozycja wygasła. Poproś agenta o nową.",
+      "sent": "To zaproszenie zostało już wysłane.",
+      "back": "Wróć do Studio"
+    },
     "members": {
       "intro": "Zaproś innego twórcę jako edytora. Zobaczy projekt dopiero po przyjęciu. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
       "loading": "Sprawdzam…",

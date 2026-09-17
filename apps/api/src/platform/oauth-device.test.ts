@@ -144,6 +144,80 @@ describe('OAuth device authorization (CL-08)', () => {
     expect(grants.json()).toEqual([expect.objectContaining({ clientLabel: 'gamedevpl CLI on headless-box' })]);
   });
 
+  it('shows ownership permissions on the device page before approve', async () => {
+    await setup();
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator ownership' },
+    });
+    expect(issued.statusCode).toBe(200);
+    const body = issued.json() as { device_code: string; user_code: string };
+    const page = await app!.inject({
+      method: 'GET',
+      url: `/device?user_code=${encodeURIComponent(body.user_code)}`,
+      headers: { cookie: sessionCookie('g:boss') },
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('Prepare a transfer proposal');
+    expect(page.body).toContain('Choose a recipient, or accept, reject or complete a transfer');
+    expect(page.body).toContain('name="disclosed_scope"');
+    expect(page.body).toContain('creator ownership');
+  });
+
+  it('does not grant ownership until the device page has disclosed it', async () => {
+    await setup();
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator ownership' },
+    });
+    const body = issued.json() as { device_code: string; user_code: string };
+    const hidden = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        user_code: body.user_code,
+        action: 'approve',
+        consent_token: deviceConsent(),
+      }).toString(),
+    });
+    expect(hidden.statusCode).toBe(200);
+    expect(hidden.body).toMatch(/Review the permissions/i);
+    expect(hidden.body).toContain('Prepare a transfer proposal');
+    expect(hidden.body).not.toMatch(/Approved/i);
+
+    const pendingPoll = await app!.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: DEVICE_GRANT_TYPE,
+        device_code: body.device_code,
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+      }).toString(),
+    });
+    expect(pendingPoll.statusCode).toBe(400);
+    expect(pendingPoll.json()).toEqual({ error: 'authorization_pending' });
+
+    const approve = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        user_code: body.user_code,
+        action: 'approve',
+        consent_token: deviceConsent(),
+        disclosed_scope: 'creator ownership',
+      }).toString(),
+    });
+    expect(approve.statusCode).toBe(200);
+    expect(approve.body).toMatch(/Approved/i);
+  });
+
   it('does not approve a device code unless action is approve', async () => {
     await setup();
     const issued = await app!.inject({

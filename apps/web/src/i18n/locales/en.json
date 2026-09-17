@@ -892,6 +892,15 @@
       },
       "someone": "another creator"
     },
+    "transferPropose": {
+      "intro": "Confirm this transfer in Studio. Nothing moves until you choose a recipient and they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
+      "confirm": "Send invitation",
+      "game": "Transfer {{title}}",
+      "missing": "This transfer proposal is gone or is not yours.",
+      "expired": "This proposal expired. Ask the agent to start a new one.",
+      "sent": "This invitation was already sent.",
+      "back": "Back to Studio"
+    },
     "members": {
       "intro": "Invite another creator as an editor. They see the project only after they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
       "loading": "Checking…",
