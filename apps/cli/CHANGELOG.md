@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace.
+
+### Added
+
+- Play offers command search, slash completion and shared prompt history.
+
 ## 0.18.0 — 2026-09-17
 
 ### Added

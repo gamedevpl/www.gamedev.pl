@@ -12,7 +12,7 @@ async function upload(file){
   if(file.size>16000000)throw Error('File exceeds 16 MB');
   await attach(file.name,file.type||'text/plain',base64(new Uint8Array(await file.arrayBuffer())),el('purpose').value);
 }
-async function attempt(fn){try{await fn();}catch(e){el('feedback').textContent=e.message;}}
+async function attempt(fn){try{await fn();}catch(e){el('feedback').textContent=e.message;el('notice').textContent=e.message;}}
 el('upload').onchange=()=>attempt(async()=>{for(const file of el('upload').files)await upload(file);el('upload').value='';});
 panel.addEventListener('paste',e=>{const files=[...e.clipboardData.files];if(files.length){e.preventDefault();void attempt(async()=>{for(const file of files)await upload(file);});}});
 el('screenshot').onclick=()=>attempt(async()=>{const shown=revision;const png=await baseCapture();await attach('screenshot.png','image/png',png,'diagnostic',shown);});
@@ -31,14 +31,14 @@ let deviceFingerprint='';
 tray();
 const labels={checkout:'Open checkout',connect:'Connect to game',share:'Game link',handle:'Set account handle',update:'Update CLI (next launch)',publish:'Verify and submit for publication',takeover:'Take over and deliver', 'cancel-round':'Cancel platform round','share-draft':'Share draft publicly','unshare-draft':'Disable public draft sharing',play:'Open local game',status:'Platform status',diff:'Inspect changes',pull:'Pull platform changes',submit:'Verify and deliver preview',push:'Push preview',logs:'Task logs',agents:'Available agents',model:'Agent settings',kit:'Creator Kit status','kit-update':'Update Creator Kit','builder-local':'Use local builder','builder-platform':'Use platform builder',retry:'Retry pending task',games:'My games',quota:'Account limits',notifications:'Notifications',profile:'Profile',recover:'Recover checkout',verify:'Verify local sources',checkpoint:'Save source checkpoint','restore-checkpoint':'Restore source checkpoint',login:'Sign in','end-session':'End session'};
 for(const [value,label] of Object.entries(labels)){const option=document.createElement('option');option.value=value;option.textContent=label;el('operation').append(option);}
-el('run-operation').onclick=()=>{
+function runAction(action,argument,clearDraft=false){
   if(!state||state.mode!=='prompt'||state.question||pending)return;
-  const action=el('operation').value;
   if(['pull','submit','push','builder-platform','recover','restore-checkpoint','end-session','publish','takeover','cancel-round','share-draft'].includes(action)&&!confirm('Run '+labels[action]+'? This may change the checkout or platform round.'))return;
-  const argument=el('operation-argument').value.trim();
-  send({kind:'action',promptId:state.promptId,action,...(['checkout','connect','share','handle'].includes(action)?{argument}: {})});
+  if(['checkout','connect','share','handle'].includes(action)&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(argument)){el('feedback').textContent='Provide a valid game slug or account handle.';drawer('commands',labels[action]);el('operation-argument').focus();return;}
+  send({kind:'action',promptId:state.promptId,action,...(['checkout','connect','share','handle'].includes(action)?{argument}: {})},clearDraft);drawer('details','Session output');
 };
-el('clean').onclick=()=>{el('tools').hidden=true;el('reveal').hidden=false;};
+el('run-operation').onclick=()=>runAction(el('operation').value,el('operation-argument').value.trim());
+el('clean').onclick=()=>{closeChat();el('workbench-tools').hidden=true;el('tools').hidden=true;el('reveal').hidden=false;};
 el('reveal').onclick=()=>{el('tools').hidden=false;el('reveal').hidden=true;};
 el('restart').onclick=()=>{if(confirm('Restart the game with the new build? Current gameplay progress will be lost.'))void apply(true);};
 `;

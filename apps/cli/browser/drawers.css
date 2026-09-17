@@ -1,0 +1,71 @@
+.drawer-scroll {
+  padding: 18px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.drawer-scroll section {
+  display: grid;
+  gap: 12px;
+}
+.drawer-scroll p {
+  margin: 0;
+  line-height: 1.5;
+}
+.drawer-scroll label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.drawer-tabs {
+  padding: 12px 18px;
+  border-top: 1px solid var(--panel-border);
+}
+#command-list,
+#prompt-history,
+#command-suggestions {
+  display: grid;
+  gap: 6px;
+  max-height: 34vh;
+  overflow: auto;
+}
+#command-list button,
+#prompt-history button,
+#command-suggestions button {
+  text-align: left;
+  justify-content: start;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+#transcript {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+#devices {
+  display: grid;
+  gap: 12px;
+}
+#devices img {
+  max-width: 100%;
+}
+.upload-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 70px;
+  border: 1px dashed var(--muted);
+  border-radius: 12px;
+}
+.upload-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.upload-button:focus-within {
+  outline: 2px solid var(--turquoise);
+}

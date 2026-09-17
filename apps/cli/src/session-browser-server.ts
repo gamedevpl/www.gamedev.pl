@@ -99,7 +99,7 @@ export async function startSessionBrowser(session: SessionController, options: {
     res.setHeader('referrer-policy', 'no-referrer');
     res.setHeader(
       'content-security-policy',
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; connect-src 'self'; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src 'self'; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     );
     const reply = (status: number, value: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -135,6 +135,8 @@ export async function startSessionBrowser(session: SessionController, options: {
           sourceId,
           hasPreview: Boolean(preview),
           actions: Object.keys(WORKBENCH_ACTIONS),
+          actionCommands: WORKBENCH_ACTIONS,
+          history: session.savedHistory().prompts.slice(-50).map(clean),
           addresses: lanAddresses(),
           phone: phone && { url: phone.url, expiresAt: phone.expiresAt, qr: phone.qr },
           reports,
