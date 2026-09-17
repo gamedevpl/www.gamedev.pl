@@ -317,7 +317,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         .then((result) => ({ ...result, error: false }))
         .catch((retryError) => {
           request.log.error({ err: retryError }, 'notification email retry sweep failed');
-          return { scanned: 0, retried: 0, sent: 0, skipped: 0, failed: 0, error: true };
+          return { scanned: 0, retried: 0, sent: 0, skipped: 0, failed: 0, unconfigured: false, error: true };
         });
 
       // Error level so a job nobody watches cannot fail quietly for weeks.
@@ -346,7 +346,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           ? 'creator feedback undelivered past the stall threshold — no agent has collected it'
           : 'notify sweep complete',
       );
-      return reply.send({
+      return reply.status(emailRetry.error ? 500 : 200).send({
         scanned: active.length,
         deferred,
         closed,

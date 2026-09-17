@@ -390,6 +390,9 @@ describe('emitSubmissionNotification email fan-out', () => {
     await emitSubmissionNotification({ store }, event);
 
     expect(fetchSpy).toHaveBeenCalledWith('https://api.resend.com/emails', expect.anything());
+    expect((fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'notification-email:g:owner:sub-9-published',
+    );
     expect((await store.listNotifications('g:owner'))[0].emailedAt).not.toBeNull();
     vi.unstubAllEnvs();
     fetchSpy.mockRestore();
@@ -462,6 +465,41 @@ describe('digest opt-out', () => {
     );
 
     expect(sent).toHaveLength(1);
+  });
+
+  it('does not email a digest to someone who opted out', async () => {
+    const store = new InMemoryStore();
+    const mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+    await store.setDigestOptOut('g:owner', '2026-07-20T00:00:00.000Z');
+
+    await emitDigestNotification(
+      { store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' },
+      digestEvent,
+    );
+
+    expect(mailer.sent).toHaveLength(0);
+  });
+
+  it('still emails a build notification after a digest opt-out', async () => {
+    const store = new InMemoryStore();
+    const mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+    await store.setDigestOptOut('g:owner', '2026-07-20T00:00:00.000Z');
+
+    await emitSubmissionNotification(
+      { store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' },
+      {
+        uid: 'g:owner',
+        type: 'submission.published',
+        jobId: 42,
+        gameTitle: 'Sky Dodge',
+        statusToken: 'tok',
+        slug: 'sky-dodge',
+      },
+    );
+
+    expect(mailer.sent).toHaveLength(1);
   });
 });
 
