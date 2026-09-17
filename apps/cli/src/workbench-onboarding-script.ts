@@ -13,7 +13,7 @@ function updateOnboarding(next){
   document.body.dataset.intake=String(intake);
   document.body.dataset.preview=String(!!next.hasPreview);
   draft.placeholder=intake?'Describe the game you want to make…':'What would you like to change?';
-  el('composer-hint').textContent=next.hasPreview?'Type / for commands · Click the game to play':'Type / for commands · Add an image for reference';
+  el('composer-hint').textContent=next.hasPreview?(innerWidth<=600?'Close Chat or press Esc to play':'Type / for commands · Click the game to play'):'Type / for commands · Add an image for reference';
   el('panel-title').textContent=intake?'Create your game':'Conversation';
   el('workspace-home').hidden=mode!=='home'||intakeSelected||next.hasPreview||!!next.question||next.mode!=='prompt';
   if(!el('workspace-home').hidden)el('empty').hidden=true;

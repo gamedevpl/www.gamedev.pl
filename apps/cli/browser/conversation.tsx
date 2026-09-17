@@ -1,3 +1,4 @@
+import { agentTranscriptLine } from '../src/transcript-line.js';
 import { useEffect, useRef, useState } from 'react';
 
 type Snapshot = { lines: string[]; workspace?: { mode: string } };
@@ -20,16 +21,21 @@ export function Conversation() {
   useEffect(() => {
     if (follow.current && box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [lines]);
-  const messages: Array<{ text: string; kind: 'user' | 'assistant' | 'output' }> = [];
+  const messages: Array<{ text: string; author?: string; kind: 'user' | 'assistant' | 'output' }> = [];
   let output: string[] = [];
   const flush = () => {
     if (output.length) messages.push({ text: output.join('\n'), kind: 'output' });
     output = [];
   };
   for (const line of lines) {
-    if (/^(› |◆ |.* ▸ )/.test(line)) {
+    const agent = agentTranscriptLine(line);
+    if (/^(› |◆ )/.test(line) || (agent && !agent.tool)) {
       flush();
-      messages.push({ text: line.replace(/^[›◆] /, ''), kind: line.startsWith('› ') ? 'user' : 'assistant' });
+      messages.push({
+        text: agent?.text ?? line.replace(/^[›◆] /, ''),
+        author: agent?.author,
+        kind: line.startsWith('› ') ? 'user' : 'assistant',
+      });
     } else if (line.trim()) output.push(line);
   }
   flush();
@@ -52,7 +58,7 @@ export function Conversation() {
           </details>
         ) : (
           <article key={i} className={'message ' + message.kind}>
-            <span className="message-author">{message.kind === 'user' ? 'You' : 'gamedev.pl'}</span>
+            <span className="message-author">{message.kind === 'user' ? 'You' : (message.author ?? 'gamedev.pl')}</span>
             <p>{message.text}</p>
           </article>
         ),

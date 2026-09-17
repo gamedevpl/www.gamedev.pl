@@ -1,4 +1,5 @@
 export const WORKBENCH_NAVIGATION_SCRIPT = String.raw`
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{document.body.style.setProperty('--notice-space',el('notice').textContent.trim()?(el('notice').getBoundingClientRect().height+28)+'px':'0px');}).observe(el('notice'));
 let historyIndex=-1, historyDraft='', lastHistory='', firstWorkspace=true, lastQuestion='';
 function openChat(){document.exitPointerLock?.();panel.hidden=false;el('edit').setAttribute('aria-expanded','true');draft.focus();}
 function closeChat(){panel.hidden=true;leaveOnboarding();el('edit').setAttribute('aria-expanded','false');frame.focus();}

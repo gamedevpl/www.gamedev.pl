@@ -1,15 +1,5 @@
-/**
- * Pixel-art icon set, drawn as crisp SVG rectangles on a 15×15 grid.
- *
- * Why not emoji: emoji render differently on every OS/browser (and often clash with
- * the site's flat, retro aesthetic). These are hand-drawn on a pixel grid, use
- * `currentColor` so they inherit the surrounding text/button color, and render with
- * shape-rendering:crispEdges so the pixels stay sharp at any size.
- *
- * Each glyph is a 15-row map: '#' = filled pixel, anything else = empty. To tweak an
- * icon, edit its map — what you see in the string is what renders.
- */
-
+// Shared with CLI Play; changes require a CLI changelog.
+// Each 15-row glyph maps '#' to a currentColor pixel.
 import type { ReactElement } from 'react';
 
 export type PixelIconName =

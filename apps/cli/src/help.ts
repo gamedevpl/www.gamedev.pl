@@ -4,7 +4,7 @@ import { SLASH_VERBS, type SlashVerb } from './argv.js';
 
 export const BLURB: Record<SlashVerb, string> = {
   recover: 'recover local sources after cancellation/deletion — recover [dir] [--slug <name>] --yes',
-  play: 'open the game; live reload in a checkout — play [slug] [--no-open|--stop]',
+  play: 'open the browser workbench — play [slug]; --preview for raw preview; --stop to stop preview',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',
   model: 'view or choose delegated model and effort — model [agent]',
@@ -33,7 +33,10 @@ export const BLURB: Record<SlashVerb, string> = {
 
 export function formatHelp(slash = false): string {
   const prefix = slash ? '/' : '';
-  const rows = SLASH_VERBS.map((verb) => `  ${(prefix + verb).padEnd(18)}${BLURB[verb]}`);
+  const rows = SLASH_VERBS.map(
+    (verb) =>
+      `  ${(prefix + verb).padEnd(18)}${slash && verb === 'play' ? 'open the current game with live preview' : BLURB[verb]}`,
+  );
   const intro = slash
     ? [
         `${CLI_BIN} ${CLI_VERSION}`,

@@ -108,7 +108,7 @@ el('retry').onclick = deliver;
 el('edit').onclick = () => openChat();
 el('close').onclick = () => closeChat();
 el('fullscreen').onclick = () => { const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); request.catch(() => { el('notice').textContent = 'Fullscreen is unavailable in this browser.'; }); };
-function viewport() { document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
+function viewport() { document.body.dataset.compact=String((window.visualViewport?.height||window.innerHeight)<=520); document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
 window.visualViewport?.addEventListener('resize', viewport); viewport();
 async function apply(force=false,automatic=false) {
   if (loading) return;

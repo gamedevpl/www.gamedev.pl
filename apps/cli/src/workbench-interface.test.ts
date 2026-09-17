@@ -1,5 +1,6 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, expect, it, vi } from 'vitest';
+import { PLAY_STYLE } from './generated/play-ui.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 
 const windows: JSDOM[] = [];
@@ -130,4 +131,22 @@ it('transitions from creation conversation to the game workspace without remount
   expect(doc.getElementById('workspace-home')!.hidden).toBe(true);
   expect(doc.getElementById('game')).toBe(frame);
   expect(doc.getElementById('panel-title')!.textContent).toBe('Conversation');
+});
+
+it('keeps tool output collapsed and labels the actual agent reply', async () => {
+  const { doc, state } = fixture();
+  state.lines = ['› Fix steering', 'codex ▸ ⚙ cat game.ts', 'codex ▸ ✓ MCP tool', 'codex ▸ I improved the controls.'];
+  await vi.waitFor(() =>
+    expect(doc.querySelector('.message.assistant p')?.textContent).toBe('I improved the controls.'),
+  );
+  expect(doc.querySelector('.message.assistant .message-author')?.textContent).toBe('codex');
+  expect(doc.querySelectorAll('.message.assistant')).toHaveLength(1);
+  expect(doc.querySelector('.session-output')?.textContent).toContain('⚙ cat game.ts');
+  expect(doc.querySelector('.session-output')?.hasAttribute('open')).toBe(false);
+});
+
+it('embeds only the two WOFF2 font weights used by Play', () => {
+  expect(PLAY_STYLE.match(/@font-face/g)).toHaveLength(2);
+  expect(PLAY_STYLE).not.toMatch(/font-weight:300|format\(["']?woff["']?\)/);
+  expect(PLAY_STYLE.length).toBeLessThan(120_000);
 });

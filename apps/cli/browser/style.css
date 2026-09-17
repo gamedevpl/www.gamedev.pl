@@ -153,8 +153,10 @@ button:disabled {
   top: 12px;
 }
 #notice {
+  z-index: 7;
+  margin: 0;
   position: fixed;
-  bottom: max(14px, env(safe-area-inset-bottom));
+  top: calc(var(--height) - var(--notice-space, 0px) + 14px);
   left: 14px;
   max-width: min(560px, calc(100% - 28px));
   border: 1px solid var(--panel-border);
@@ -164,7 +166,7 @@ button:disabled {
   color: var(--muted);
   white-space: pre-wrap;
   font: inherit;
-  max-height: 20vh;
+  max-height: min(80px, 15vh);
   overflow: auto;
 }
 #notice:empty,
@@ -182,7 +184,7 @@ button:disabled {
   top: 84px;
   right: 12px;
   bottom: auto;
-  height: calc(var(--height) - 98px);
+  height: calc(var(--height) - 98px - var(--notice-space, 0px));
   width: min(390px, calc(100vw - 24px));
   display: flex;
   flex-direction: column;
@@ -419,6 +421,8 @@ textarea {
   .game-badge {
     padding: 8px;
     max-width: 40%;
+    min-width: 0;
+    flex-shrink: 1;
     gap: 6px;
   }
   .game-badge > svg {
@@ -429,6 +433,8 @@ textarea {
   }
   .stage-actions {
     gap: 0;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
   }
   .stage-actions button {
     padding: 8px;
@@ -442,25 +448,34 @@ textarea {
     top: 78px;
     right: 8px;
     width: calc(100vw - 16px);
-    height: calc(var(--height) - 86px);
+    height: calc(var(--height) - 86px - var(--notice-space, 0px));
   }
 }
-@media (max-height: 520px) {
-  #composer {
-    padding: 8px;
-    gap: 6px;
-  }
-  #composer > .hint,
-  .eyebrow,
-  #identity {
-    display: none;
-  }
-  .panel-head {
-    padding: 8px 12px;
-  }
-  textarea {
-    min-height: 50px;
-  }
+body[data-compact='true'] #panel {
+  overflow: auto;
+}
+body[data-compact='true'] #conversation {
+  flex: none;
+  max-height: 100px;
+}
+body[data-compact='true'] #composer {
+  max-height: none;
+  overflow: visible;
+  padding: 8px;
+  gap: 6px;
+}
+body[data-compact='true'] :is(.eyebrow, #identity) {
+  display: none;
+}
+body[data-compact='true'] .panel-head {
+  padding: 8px 12px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+body[data-compact='true'] textarea {
+  min-height: 50px;
 }
 
 body[data-dock='left'] :is(#panel, #workbench-tools) {

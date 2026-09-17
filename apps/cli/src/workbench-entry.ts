@@ -55,7 +55,7 @@ export function workerEntry(journal: PlayJournal) {
   };
 }
 export function assertRequestedGame(existing: PlayJournal | undefined, entry?: WorkbenchEntry) {
-  const current = existing?.slug ?? existing?.checkout?.slug;
+  const current = existing?.slug ?? existing?.checkout?.slug ?? existing?.launch?.slug;
   if (existing && (!existing.ended || existing.pending) && entry?.mode === 'game' && current && current !== entry.slug)
     throw Error(
       `This session now edits ${current}. Use its Commands to open ${entry.slug}, or end that session before launching another. The active task was not interrupted.`,

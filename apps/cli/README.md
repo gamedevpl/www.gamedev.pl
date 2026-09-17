@@ -58,7 +58,7 @@ npm run bundle -w @gamedevpl/cli
 node apps/cli/dist/gamedevpl.mjs help
 ```
 
-`ink` is a workspace dependency. Skipping `npm install` makes esbuild fail with `Could not resolve "ink"`. The bundled script inlines Ink. `gamedevpl` with no verb is that TUI.
+`ink` is a workspace dependency. Skipping `npm install` makes esbuild fail with `Could not resolve "ink"`. The bundled script inlines Ink. Interactive `gamedevpl` opens the browser workspace. Use `gamedevpl --terminal` for the TUI.
 
 ## Verbs
 

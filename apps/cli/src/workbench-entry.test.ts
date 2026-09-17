@@ -86,3 +86,17 @@ it('never infers an existing checkout for new-game intake and resumes known crea
     'now edits other-game',
   );
 });
+
+it('guards game identity before the worker checkpoints its checkout', () => {
+  expect(() =>
+    assertRequestedGame(
+      {
+        version: 1,
+        instance: 'starting',
+        cwd: '/tmp',
+        launch: { mode: 'game', slug: 'first' },
+      },
+      { mode: 'game', slug: 'second' },
+    ),
+  ).toThrow('now edits first');
+});
