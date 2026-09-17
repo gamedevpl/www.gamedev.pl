@@ -215,6 +215,10 @@ button.create-step-scene .mascot {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  button.create-step-scene,
+  button.create-step-scene:hover,
+  button.create-step-scene:active,
+  button.create-step-scene .mascot,
   .create-step-spark,
   .create-step-scene.is-catching .mascot,
   .create-step-scene.is-miss .mascot,

@@ -14,14 +14,13 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
-  if (!Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')) {
-    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: () => {}, writable: true });
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
   }
 });
 
 afterEach(() => {
   act(() => root?.unmount());
-  root = null;
   container.remove();
 });
 
