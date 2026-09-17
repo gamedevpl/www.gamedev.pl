@@ -6,7 +6,10 @@ export function BottomCta() {
   const { t } = useTranslation();
 
   function scrollToComposer() {
-    document.getElementById('hero-prompt')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const composer = document.getElementById('hero-prompt');
+    composer?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const input = composer?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.big-prompt-input');
+    input?.focus({ preventScroll: true });
   }
 
   return (

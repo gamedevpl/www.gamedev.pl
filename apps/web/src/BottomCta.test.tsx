@@ -29,6 +29,11 @@ describe('BottomCta', () => {
   it('scrolls the composer into view when the action is pressed', () => {
     const composer = document.createElement('div');
     composer.id = 'hero-prompt';
+    const input = document.createElement('textarea');
+    input.className = 'big-prompt-input';
+    const focusSpy = vi.fn();
+    input.focus = focusSpy;
+    composer.appendChild(input);
     document.body.appendChild(composer);
     const scrollIntoView = vi.fn();
     composer.scrollIntoView = scrollIntoView;
@@ -43,6 +48,7 @@ describe('BottomCta', () => {
       container.querySelector<HTMLButtonElement>('.bottom-cta-action')!.click();
     });
     expect(scrollIntoView).toHaveBeenCalled();
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
 
     composer.remove();
   });

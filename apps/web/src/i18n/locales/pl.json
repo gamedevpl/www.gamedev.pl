@@ -1466,13 +1466,13 @@
     "subhead": "Prawdziwy kod od agenta AI, sprawdzony przez człowieka i gotowy do gry w przeglądarce.",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
     "step1Title": "Krótki wywiad",
-    "step1Detail": "Doprecyzuj klimat i mechanikę — lub pomiń i zdaj się na AI.",
+    "step1Detail": "Doprecyzuj klimat i mechanikę lub zdaj się na AI.",
     "step2Title": "Agent pisze kod",
-    "step2Detail": "Obserwuj postępy w Studio na żywo i sugeruj zmiany w locie.",
+    "step2Detail": "Śledź postępy w Studio na żywo i sugeruj zmiany w locie.",
     "step3Title": "Grywalny szkic",
-    "step3Detail": "Wypróbuj wczesną wersję w przeglądarce i poproś o poprawki.",
+    "step3Detail": "Wypróbuj wczesną wersję gry i poproś o poprawki.",
     "step4Title": "Weryfikacja i publikacja",
-    "step4Detail": "Po recenzji gra trafia do katalogu dla wszystkich graczy.",
+    "step4Detail": "Po recenzji gra trafia prosto do katalogu.",
     "notifyNote": "Możesz zamknąć kartę — powiadomimy Cię, gdy szkic będzie gotowy do gry.",
     "buildersHeading": "Kto to zbuduje?",
     "buildersSub": "Wybór w ostatnim kroku — z możliwością zmiany w każdej rundzie.",
@@ -1768,7 +1768,7 @@
     "legend": "Kto buduje tę rundę?",
     "platform": {
       "title": "Agent Gamedev.pl",
-      "detail": "Nasz agent w chmurze — postęp śledzisz bezpośrednio w Studio.",
+      "detail": "Nasz agent w chmurze — postępy widzisz w Studio.",
       "unavailable": {
         "badge": {
           "coming_soon": "Już wkrótce",
