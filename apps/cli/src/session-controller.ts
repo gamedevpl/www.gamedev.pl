@@ -266,7 +266,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     },
     setActivity(activity) {
       if (state.mode !== 'busy') return;
-      state = { ...state, activity };
+      state = { ...state, activity, lastOutputAt: Date.now() };
       emit();
     },
     setIdentity(identity) {

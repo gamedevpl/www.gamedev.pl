@@ -39,12 +39,14 @@ it.each(['codex', 'muse'])('drains late acknowledgements for the exact active %s
     command,
     selection: { model: 'test-model', effort: 'high' },
   };
+  const diagnostics: string[] = [];
   let send: Steer | undefined, pending: Promise<void> | undefined;
   const result = await runLiveAgent({
     spec,
     cwd: root,
     env: process.env,
     prompt: 'original',
+    onDiagnostic: (line) => diagnostics.push(line),
     onSteering: (fn) => {
       send = fn;
       if (fn) pending = fn('correction');
@@ -53,6 +55,7 @@ it.each(['codex', 'muse'])('drains late acknowledgements for the exact active %s
   await pending;
   expect(result.code).toBe(0);
   expect(send).toBeUndefined();
+  expect(diagnostics.some((line) => line.includes('turn/completed'))).toBe(true);
 });
 it('keeps unknown adapter configurations on the existing queue path', () => {
   const muse = loadAdapters().adapters.find((s) => s.name === 'muse')!;

@@ -1,3 +1,4 @@
+import { progressTool, progressReporter } from './local-progress.js';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -57,14 +58,16 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 export async function startLocalPreviewMcp(input: {
-  previewUrl: string;
+  previewUrl?: string;
+  progress?: (text: string, blocked: boolean) => void;
   abort: AbortSignal;
   write: (line: string) => void;
   capture?: typeof captureBrowser;
 }) {
   const controller = new AbortController();
   const signal = AbortSignal.any([input.abort, controller.signal]);
-  const source = previewSource(input.previewUrl, signal);
+  const source = input.previewUrl ? previewSource(input.previewUrl, signal) : undefined;
+  const report = progressReporter(input.progress ?? ((text) => input.write(text)));
   const key = randomBytes(32).toString('hex');
   const renderKey = randomBytes(32).toString('hex');
   const jobs = new Map<string, Job>();
@@ -75,7 +78,7 @@ export async function startLocalPreviewMcp(input: {
   async function execute(job: Job, viewport: CaptureViewport): Promise<void> {
     try {
       input.write('Local capture: waiting for the current build…');
-      const snapshot = await source.snapshot();
+      const snapshot = await source!.snapshot();
       signal.throwIfAborted();
       job.revision = snapshot.revision;
       job.state = 'capturing';
@@ -101,6 +104,8 @@ export async function startLocalPreviewMcp(input: {
     if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid arguments.');
     const value = args as Record<string, unknown>;
     const keys = Object.keys(value);
+    if (name === 'report_progress') return { content: [text(report(value))] };
+    if (!source) throw new Error('No local preview is available.');
     if (name === 'preview_status' && keys.length === 0) return { content: [text(await source.status())] };
     if (name === 'capture' && keys.every((item) => item === 'viewport')) {
       const viewport = value.viewport ?? 'desktop';
@@ -189,7 +194,7 @@ export async function startLocalPreviewMcp(input: {
           serverInfo: { name: 'gamedevpl-local', version: '1.0.0' },
         };
       } else if (message.method === 'ping') result = {};
-      else if (message.method === 'tools/list') result = { tools: TOOLS };
+      else if (message.method === 'tools/list') result = { tools: [progressTool, ...(source ? TOOLS : [])] };
       else if (message.method === 'tools/call') {
         const params = message.params as { name?: unknown; arguments?: unknown } | undefined;
         try {

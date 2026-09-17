@@ -1,3 +1,4 @@
+import { taskLogTail } from '../task-log.js';
 import { startUpdateNotice } from '../update-notice.js';
 import { runInteractive, type InteractiveRun } from '../agy-interactive.js';
 import { offerKitUpdate } from '../kit-update.js';
@@ -108,8 +109,10 @@ export async function runInkRepl(input: {
       if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
     });
   };
+  let workshop: Workshop | undefined;
+  const readLogs = () => taskLogTail(workshop?.lastLog);
   const mount = (historyOffset = 0) => {
-    host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview }), {
+    host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview, readLogs }), {
       stdin: input.io.stdin,
       stdout: input.io.stdout,
       exitOnCtrlC: false,
@@ -135,7 +138,6 @@ export async function runInkRepl(input: {
     session.setIdentity(formatSessionIdentity(who, slug));
   };
   paintIdentity();
-  let workshop: Workshop | undefined;
   const pendingExecution: PendingExecution = {};
   if (!input.checkout) {
     const hint = agentHint(discoverAgents(input.env));

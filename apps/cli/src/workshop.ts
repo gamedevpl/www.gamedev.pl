@@ -1,3 +1,4 @@
+import { PROGRESS_INSTRUCTIONS } from './local-progress.js';
 import { localPreviewTools, startWorkshopPreview, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
@@ -35,6 +36,7 @@ export type AdapterRun = (input: {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  onDiagnostic?: (line: string) => void;
   authCheck?: Promise<void>;
   onSteering?: (send: Steer | undefined) => void;
 }) => Promise<{ code: number | null; permissionSession?: string }>;
@@ -232,7 +234,7 @@ export async function runLocalBuild(input: {
 }): Promise<boolean> {
   const { ws } = input;
   let spec = configureAdapter(input.spec, ws.env);
-  const output = taskOutput(input.write);
+  const output = taskOutput(input.write, ws.onActivity);
   ws.lastLog = output.path;
   input = { ...input, write: output.write };
   input.write(`\n── ${ws.slug} · local task ──`);
@@ -287,7 +289,13 @@ export async function runLocalBuild(input: {
         input.write(formatError(error));
       }
     }
-    localTools = await localPreviewTools({ spec, previewUrl, abort: controller.signal, write: input.write });
+    localTools = await localPreviewTools({
+      spec,
+      previewUrl,
+      abort: controller.signal,
+      write: input.write,
+      progress: output.progress,
+    });
     if (localTools) spec = localTools.spec;
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
@@ -298,7 +306,7 @@ export async function runLocalBuild(input: {
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
     success = await repairLoop({
-      brief: `${input.brief}\n${localTools ? LOCAL_PREVIEW_INSTRUCTIONS : ''}${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
+      brief: `${input.brief}\n${PROGRESS_INSTRUCTIONS}\n${localTools && previewUrl ? LOCAL_PREVIEW_INSTRUCTIONS : ''}${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
@@ -322,15 +330,14 @@ export async function runLocalBuild(input: {
           cwd,
           env: childEnv(ws.env, ''),
           abort: controller.signal,
+          onDiagnostic: output.raw,
           onLine: (line) => {
+            output.raw(line);
             failure.observe(line);
             if (line.startsWith('Muse needs your approval')) ws.onActivity?.('Muse needs your approval');
             conversation = agyConversation(line) ?? conversation;
             if (permissionBlocked(line)) blocked = true;
             for (const shown of stream(line)) {
-              if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · running a tool — /logs after completion`);
-              if (shown.includes('Waiting for model response'))
-                ws.onActivity?.(`${spec.name} · waiting for model response`);
               input.write(shown);
             }
           },

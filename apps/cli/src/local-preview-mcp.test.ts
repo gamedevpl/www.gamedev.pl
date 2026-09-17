@@ -57,6 +57,7 @@ it('captures a fixed game snapshot and returns an image with the actual rendered
   const f = await bridge();
   expect((await f.rpc('initialize')).data.result.capabilities).toEqual({ tools: {} });
   expect((await f.rpc('tools/list')).data.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+    'report_progress',
     'preview_status',
     'capture',
     'capture_status',
@@ -125,4 +126,32 @@ it.each(['codex', 'claude', 'copilot'])('adds ephemeral MCP configuration for %s
     expect(existsSync(arg)).toBe(false);
   }
   wired.cleanup();
+});
+
+it('reports validated, deduplicated progress without requiring a preview', async () => {
+  const progress = vi.fn();
+  const mcp = await startLocalPreviewMcp({ abort: new AbortController().signal, write: vi.fn(), progress });
+  cleanup.push(() => mcp.close());
+  const rpc = async (method: string, params = {}) =>
+    (
+      await fetch(mcp.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: mcp.authorization },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      })
+    ).json();
+  expect((await rpc('tools/list')).result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+    'report_progress',
+  ]);
+  for (let i = 0; i < 2; i++)
+    await rpc('tools/call', { name: 'report_progress', arguments: { stage: 'editing', summary: 'Adding ramps' } });
+  expect(progress).toHaveBeenCalledExactlyOnceWith('editing: Adding ramps', false);
+  for (const args of [
+    { stage: 'done', summary: 'Published' },
+    { stage: 'editing', summary: 'x'.repeat(241) },
+    { stage: 'editing', summary: '\u001b[2J' },
+  ])
+    expect((await rpc('tools/call', { name: 'report_progress', arguments: args })).result.isError).toBe(true);
+  expect((await rpc('tools/call', { name: 'capture' })).result.isError).toBe(true);
+  expect(progress).toHaveBeenCalledTimes(1);
 });

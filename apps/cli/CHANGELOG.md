@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local agents with MCP can report meaningful task progress even without a running preview (#1392).
+
+### Fixed
+
+- Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task (#1392).
+
 ## 0.17.0 — 2026-09-16
 
 ### Added

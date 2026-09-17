@@ -10,6 +10,7 @@ export type LiveRunInput = {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  onDiagnostic?: (line: string) => void;
   onSteering?: (send: Steer | undefined) => void;
 };
 function uuid7() {
@@ -84,6 +85,7 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
     args,
     stderr: line,
     event(method, params, id) {
+      input.onDiagnostic?.(JSON.stringify({ method, params }));
       if (method === 'transport/closed') {
         line(params.message);
         finish(1);

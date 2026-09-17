@@ -1,3 +1,4 @@
+import { TaskDebug } from './debug.js';
 import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
 import { useEffect, useState } from 'react';
@@ -29,13 +30,16 @@ export function ReplApp({
   color,
   historyOffset = 0,
   openPreview,
+  readLogs,
 }: {
   session: TuiSession;
   color: boolean;
   historyOffset?: number;
   openPreview?: (url: string) => void;
+  readLogs?: () => string[];
 }) {
   const [state, setState] = useState<TuiState>(session.get);
+  const [debug, setDebug] = useState(false);
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
   const [rows, setRows] = useState(stdout.rows || 24);
@@ -48,6 +52,19 @@ export function ReplApp({
     };
   }, [stdout]);
   useInput((input, key) => {
+    if (debug) {
+      if (key.ctrl && input === 'c') session.cancel();
+      return;
+    }
+    if (key.ctrl && input === 'l' && readLogs) {
+      setDebug(true);
+      return;
+    }
+    if (key.return && state.mode === 'prompt' && !state.question && state.draft.trim() === '/logs' && readLogs) {
+      session.setDraft('');
+      setDebug(true);
+      return;
+    }
     if (state.mode === 'busy') {
       if (key.ctrl && input === 'c') {
         session.cancel();
@@ -57,6 +74,11 @@ export function ReplApp({
         if (key.ctrl && input === 'o' && state.previewUrl) openPreview?.(state.previewUrl);
         else if (key.ctrl && input === 'q') session.queueDraft();
         else if (key.return) {
+          if (state.draft.trim() === '/logs' && readLogs) {
+            session.setDraft('');
+            setDebug(true);
+            return;
+          }
           if (state.canSteer) void session.sendDraft();
           else session.queueDraft();
         } else if (key.leftArrow) session.moveDraftCursor(-1);
@@ -150,97 +172,100 @@ export function ReplApp({
           <TranscriptLine key={index} line={line} previous={state.lines[historyOffset + index - 1]} color={color} />
         )}
       </Static>
-      <Box flexDirection="column" height={liveRows} flexShrink={0}>
-        {live.slice(0, liveRows).map((line, index) => (
-          <Text key={`live:${index}:${line.slice(0, 32)}`} color={color ? 'blue' : undefined} wrap="truncate-end">
-            {line}
-          </Text>
-        ))}
-      </Box>
-      {state.mode === 'busy' ? (
-        <BusyPanel
-          activity={state.activity}
-          since={state.busySince}
-          lastOutputAt={state.lastOutputAt}
-          color={color}
-          previewAvailable={Boolean(state.previewUrl)}
-          previewKey={state.localTask ? 'Ctrl+O' : 'o'}
-        />
-      ) : (
-        <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
-          {state.mode === 'pick' ? (
-            <>
-              <Text bold color={accent} wrap="truncate-end">
-                {state.question || 'Choose an option'}
-              </Text>
-              {state.choices.slice(choiceStart, choiceStart + choiceCount).map((choice, offset) => {
-                const index = choiceStart + offset;
-                return (
-                  <Text
-                    wrap={index === state.pickIndex ? 'wrap' : 'truncate-end'}
-                    bold={index === state.pickIndex}
-                    key={`pick:${index}:${choice}`}
-                    color={index === state.pickIndex ? accent : undefined}
-                  >
-                    {index === state.pickIndex ? '▸ ' : '  '}
-                    {index + 1}. {choice}
-                  </Text>
-                );
-              })}
-            </>
-          ) : (
-            <Text wrap="truncate-start">
-              <Text color={accent} bold>
-                {prompt}
-              </Text>{' '}
-              {state.draft ? (
-                <>
-                  {draft.hiddenBefore ? '…' : ''}
-                  {draft.before}█{draft.after}
-                  {draft.hiddenAfter ? '…' : ''}
-                </>
-              ) : (
-                <Text dimColor>What would you like to do? /help</Text>
-              )}
+      {debug && readLogs && <TaskDebug read={readLogs} rows={rows} close={() => setDebug(false)} />}
+      <Box flexDirection="column" display={debug ? 'none' : 'flex'}>
+        <Box flexDirection="column" height={liveRows} flexShrink={0}>
+          {live.slice(0, liveRows).map((line, index) => (
+            <Text key={`live:${index}:${line.slice(0, 32)}`} color={color ? 'blue' : undefined} wrap="truncate-end">
+              {line}
             </Text>
-          )}
+          ))}
         </Box>
-      )}
-      {state.mode === 'busy' && state.localTask && (
-        <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
-          <Text dimColor>
-            {state.canSteer ? 'Message the active agent' : 'Follow-up after this task'} · {state.queued.length} queued
-          </Text>
-          {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
-          <Text wrap="truncate-start">
-            {prompt} {draft.before}█{draft.after}
-          </Text>
-        </Box>
-      )}
-      {suggestionRows > 0 && (
-        <CommandSuggestions
-          suggestions={completion.suggestions}
-          selected={completion.selected}
-          count={suggestionRows}
-          color={color}
-        />
-      )}
-      <Text dimColor wrap="truncate-end">
-        {state.mode === 'pick'
-          ? `↑↓ select · Enter · Esc · ${state.pickIndex + 1}/${state.choices.length}`
-          : state.mode === 'prompt'
-            ? completion.suggestions.length
-              ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
-              : 'Enter send · / commands · Tab fill · ←→ cursor · ↑↓ history'
-            : state.localTask
-              ? state.canSteer
-                ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+C stop'
-                : 'Enter queue · Ctrl+O preview · Ctrl+C stop and clear queue'
-              : 'Working — input paused'}
-      </Text>
-      <Text dimColor wrap="truncate-end">
-        <RichText text={footer} color={color} />
-      </Text>
+        {state.mode === 'busy' ? (
+          <BusyPanel
+            activity={state.activity}
+            since={state.busySince}
+            lastOutputAt={state.lastOutputAt}
+            color={color}
+            previewAvailable={Boolean(state.previewUrl)}
+            previewKey={state.localTask ? 'Ctrl+O' : 'o'}
+          />
+        ) : (
+          <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
+            {state.mode === 'pick' ? (
+              <>
+                <Text bold color={accent} wrap="truncate-end">
+                  {state.question || 'Choose an option'}
+                </Text>
+                {state.choices.slice(choiceStart, choiceStart + choiceCount).map((choice, offset) => {
+                  const index = choiceStart + offset;
+                  return (
+                    <Text
+                      wrap={index === state.pickIndex ? 'wrap' : 'truncate-end'}
+                      bold={index === state.pickIndex}
+                      key={`pick:${index}:${choice}`}
+                      color={index === state.pickIndex ? accent : undefined}
+                    >
+                      {index === state.pickIndex ? '▸ ' : '  '}
+                      {index + 1}. {choice}
+                    </Text>
+                  );
+                })}
+              </>
+            ) : (
+              <Text wrap="truncate-start">
+                <Text color={accent} bold>
+                  {prompt}
+                </Text>{' '}
+                {state.draft ? (
+                  <>
+                    {draft.hiddenBefore ? '…' : ''}
+                    {draft.before}█{draft.after}
+                    {draft.hiddenAfter ? '…' : ''}
+                  </>
+                ) : (
+                  <Text dimColor>What would you like to do? /help</Text>
+                )}
+              </Text>
+            )}
+          </Box>
+        )}
+        {state.mode === 'busy' && state.localTask && (
+          <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
+            <Text dimColor>
+              {state.canSteer ? 'Message the active agent' : 'Follow-up after this task'} · {state.queued.length} queued
+            </Text>
+            {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
+            <Text wrap="truncate-start">
+              {prompt} {draft.before}█{draft.after}
+            </Text>
+          </Box>
+        )}
+        {suggestionRows > 0 && (
+          <CommandSuggestions
+            suggestions={completion.suggestions}
+            selected={completion.selected}
+            count={suggestionRows}
+            color={color}
+          />
+        )}
+        <Text dimColor wrap="truncate-end">
+          {state.mode === 'pick'
+            ? `↑↓ select · Enter · Esc · ${state.pickIndex + 1}/${state.choices.length}`
+            : state.mode === 'prompt'
+              ? completion.suggestions.length
+                ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
+                : 'Enter send · / commands · Tab fill · ←→ cursor · ↑↓ history'
+              : state.localTask
+                ? state.canSteer
+                  ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop'
+                  : 'Enter queue · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop and clear queue'
+                : 'Working — input paused'}
+        </Text>
+        <Text dimColor wrap="truncate-end">
+          <RichText text={footer} color={color} />
+        </Text>
+      </Box>
     </Box>
   );
 }
