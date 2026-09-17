@@ -2,6 +2,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { expect, it } from 'vitest';
 import { taskOutput } from './task-output.js';
+import { createDelegateStream } from './delegate.js';
 
 it('keeps full details privately while showing readable tools and setup errors', () => {
   const shown: string[] = [];
@@ -68,6 +69,26 @@ it('keeps Muse chatter out of conversation and preserves milestone status across
     output.progress('blocked: Need access', true);
     expect(shown).toEqual(['Agent blocked: blocked: Need access']);
     expect(readFileSync(output.path, 'utf8')).toContain('tool:read_file');
+  } finally {
+    rmSync(dirname(output.path), { recursive: true, force: true });
+  }
+});
+
+it('keeps successful MCP completion in diagnostics and failed MCP calls visible', () => {
+  const shown: string[] = [];
+  const output = taskOutput((line) => shown.push(line));
+  const stream = createDelegateStream('codex');
+  try {
+    for (const status of ['completed', 'failed']) {
+      const raw = JSON.stringify({
+        type: 'item.completed',
+        item: { type: 'mcp_tool_call', server: 'gamedevpl_local', tool: 'report_progress', status },
+      });
+      output.raw(raw);
+      for (const line of stream(raw)) output.write(line);
+    }
+    expect(shown).toEqual(['codex ▸ Tool failed: gamedevpl_local / report_progress']);
+    expect(readFileSync(output.path, 'utf8')).toContain('✓ gamedevpl_local / report_progress');
   } finally {
     rmSync(dirname(output.path), { recursive: true, force: true });
   }

@@ -371,3 +371,17 @@ it.each([40, 110])('opens live logs at width %s without sending or queuing /logs
   await wait(100);
   expect(view.frame()).not.toContain('Task diagnostics');
 });
+
+it('keeps diagnostics out of conversation history after a task', async () => {
+  const view = screen(110, 24, undefined, () => ['private diagnostic detail']);
+  void view.session.prompt();
+  view.session.setDraft('/logs');
+  await wait();
+  view.input.write('\r');
+  await wait(100);
+  expect(view.frame()).toContain('Task diagnostics');
+  expect(view.session.savedHistory().lines.join('\n')).not.toContain('private diagnostic detail');
+  view.input.write('\u001b');
+  await wait(100);
+  expect(view.session.get().mode).toBe('prompt');
+});

@@ -438,7 +438,8 @@ Replies, questions, errors, and blockers remain visible. Press Ctrl+L to view th
 live diagnostic tail while the agent works, or type /logs and Enter during a task.
 Arrow keys scroll and pause the tail; return to the bottom to follow updates.
 Esc closes diagnostics without interrupting the task. The private temporary log
-includes protocol events (bounded per event); /logs after the task prints the log.
+includes protocol events (bounded per event). In the TUI, /logs after the task
+opens the same diagnostic view without copying it into conversation history.
 
 Codex, Claude, and Copilot receive the authenticated local report_progress MCP
 tool independently of preview availability. Reports update a single task status;

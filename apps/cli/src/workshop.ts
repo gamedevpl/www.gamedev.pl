@@ -36,6 +36,7 @@ export type AdapterRun = (input: {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  onDiagnostic?: (line: string) => void;
   authCheck?: Promise<void>;
   onSteering?: (send: Steer | undefined) => void;
 }) => Promise<{ code: number | null; permissionSession?: string }>;
@@ -329,6 +330,7 @@ export async function runLocalBuild(input: {
           cwd,
           env: childEnv(ws.env, ''),
           abort: controller.signal,
+          onDiagnostic: output.raw,
           onLine: (line) => {
             output.raw(line);
             failure.observe(line);

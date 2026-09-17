@@ -60,6 +60,11 @@ export function ReplApp({
       setDebug(true);
       return;
     }
+    if (key.return && state.mode === 'prompt' && !state.question && state.draft.trim() === '/logs' && readLogs) {
+      session.setDraft('');
+      setDebug(true);
+      return;
+    }
     if (state.mode === 'busy') {
       if (key.ctrl && input === 'c') {
         session.cancel();
