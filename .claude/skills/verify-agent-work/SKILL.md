@@ -396,7 +396,12 @@ Two concrete instances of that (observed 2026-07-23):
   the advertised retry horizon is a no-op and the two-minute sweep still pays the scan.
   Put the horizon and retry eligibility in the query (composite CG index, not a
   single-field override), or stamp skips so they leave the index. The regression has to
-  fill the scan on `FirestoreStore(fake)`, not only InMemory.
+  fill the scan on `FirestoreStore(fake)`, not only InMemory. The follow-up (`d41543c`)
+  inverted the filter (`createdAt >=` in the query, `emailedAt !== null` after
+  `.limit()`) and copied the old-rows probe, which the new predicate excludes, so it
+  went green. Re-probing with 90 *recent already-emailed* rows plus one recent unsent
+  still returned `[]` on Firestore and the unsent row in memory. A follow-up that
+  reuses the original probe after changing the predicate is the BY-25 door.
 
 - **A sweep `try/catch` that still returns 200 hides a missing Firestore index from the
   monitor that watches sweep HTTP status.** Same PR: `CG_INDEXES` in `setup-gcp.sh` is a
