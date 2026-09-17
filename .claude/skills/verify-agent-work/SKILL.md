@@ -328,6 +328,16 @@ Two concrete instances of that (observed 2026-07-23):
   `node tools/gate-attest.mjs expected` (or the Actions log's `Required command:`) for
   the SHA you are opening; do not "correct" a static attest down to `check:game` just
   because a `games/<slug>/` path is in the diff. `check:pr` remains an accepted alias.
+- **A DIRTY games-repo PR is often rebaseable without hand-merging the game.** Observed
+  (bridge-builder / www.gamedev.pl-games#1492, 2026-09-17): `merge-tree` flagged
+  `bridge.ts` plus every media binary, but `git rebase origin/main -X theirs` replayed
+  all 20 commits cleanly — sequential replay is not the final-tree merge. Main had only
+  deleted unused lattice helpers and recaptured media for encoder/editor-hash churn.
+  After rebase, drop helpers the 3D rewrite still never calls (`nodeCount` stayed;
+  `isDeckNode` / `cursorRowCol` went), refresh Check 10 with a one-slug sourceHash
+  rewrite (not a wholesale `git checkout -- media/`), then `npm run check:game -- <slug>`
+  and paste the new `gate-attest` SHA. The owner merged within seconds of validate
+  flipping green.
 
 - **Mocked tool calls can hide a schema/parser mismatch.** Observed in CLI chat
   (#1187): one model tool advertised optional `slug` and `request` fields together,
