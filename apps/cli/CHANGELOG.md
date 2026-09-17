@@ -11,7 +11,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Local agents with MCP can report meaningful task progress even without a running preview.
+- Local agents with MCP can report meaningful task progress even without a running preview (#1392).
 
 - Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
 - Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
@@ -19,7 +19,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task.
+- Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task (#1392).
 
 - Hide Copilot protocol chatter while preserving replies, tool activity, and errors (#1386).
 

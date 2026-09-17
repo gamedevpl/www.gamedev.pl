@@ -353,9 +353,11 @@ it.each([40, 110])('distinguishes live send and explicit queue at width %s', asy
   expect(send).toHaveBeenCalledOnce();
 });
 
-it('opens live logs during a task without sending or queuing /logs', async () => {
-  const view = screen(110, 24, undefined, () => ['diagnostic detail']);
+it.each([40, 110])('opens live logs at width %s without sending or queuing /logs', async (width) => {
+  const view = screen(width, 24, undefined, () => ['diagnostic detail']);
   view.session.setLocalTask('muse');
+  const send = vi.fn(async () => {});
+  view.session.setSteering(send);
   view.session.setDraft('/logs');
   await wait();
   view.input.write('\r');
@@ -363,6 +365,7 @@ it('opens live logs during a task without sending or queuing /logs', async () =>
   expect(view.frame()).toContain('Task diagnostics');
   expect(view.frame()).toContain('diagnostic detail');
   expect(view.session.get().queued).toEqual([]);
+  expect(send).not.toHaveBeenCalled();
   expect(view.session.get().draft).toBe('');
   view.input.write('\u001b');
   await wait(100);
