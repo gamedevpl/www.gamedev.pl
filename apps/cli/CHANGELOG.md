@@ -9,11 +9,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace.
+- Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace (#1396).
 
 ### Added
 
-- Play offers command search, slash completion and shared prompt history.
+- Play offers command search, slash completion and shared prompt history (#1396).
 
 ## 0.18.0 — 2026-09-17
 
