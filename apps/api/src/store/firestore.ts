@@ -1137,7 +1137,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   ): Promise<{ created: boolean; notification: StoredNotification }> {
     return this.notificationsStore.createNotification(uid, notification);
   }
-
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
     return this.notificationsStore.listNotifications(uid, opts);
   }
@@ -1152,6 +1151,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
     return this.notificationsStore.markNotificationEmailed(uid, id, at);
+  }
+
+  async listPendingEmailNotifications(opts?: { limit?: number; createdAfter?: string }) {
+    return this.notificationsStore.listPendingEmailNotifications(opts);
   }
 
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {

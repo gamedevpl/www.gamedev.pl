@@ -127,24 +127,23 @@ async function createNotification(
  * user has no address or has unsubscribed, or the notification was already emailed.
  * A send failure leaves emailedAt null so the next sweep retries. Never throws.
  */
-async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
-  if (notification.emailedAt) return;
+export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<boolean> {
+  if (notification.emailedAt) return false;
   // Operator alerts have their own send (see `emitOperatorAlert`): they carry no
   // unsubscribe and must not be silenced by one. Guarded here rather than left to the
   // call sites so a future caller cannot accidentally route one through creator mail.
-  if (isOperatorNotification(notification.type) || notification.type.startsWith('share.')) return;
-
+  if (isOperatorNotification(notification.type) || notification.type.startsWith('share.')) return false;
   // Explicit deps win (tests inject them). Otherwise fall back to env config so
   // the default call sites send email in prod with no extra wiring: a real mailer
   // only when RESEND_API_KEY is set (no false "sent" via the console fake), and
   // the unsubscribe secret from SESSION_SECRET.
   const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
   const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
-  if (!mailer || !unsubscribeSecret) return;
-
+  if (!mailer || !unsubscribeSecret) return false;
   try {
     const user = await deps.store.getUser(uid);
-    if (!user?.email || user.emailUnsubscribedAt) return;
+    if (!user?.email || user.emailUnsubscribedAt) return false;
+    if (notification.type === 'creator.digest' && user.digestOptOutAt) return false;
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
@@ -182,11 +181,13 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
                   emailParams,
                 );
 
-    if (!message) return;
-    await mailer.send(message);
+    if (!message) return false;
+    await mailer.send(message, { idempotencyKey: `notification-email:${uid}:${notification.id}` });
     await deps.store.markNotificationEmailed(uid, notification.id);
+    return true;
   } catch (err) {
     deps.logError?.(err, 'notification email send failed');
+    return false;
   }
 }
 

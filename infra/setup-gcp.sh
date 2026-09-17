@@ -192,6 +192,44 @@ for ENTRY in $CG_INDEXES; do
   echo "    ${CG_GROUP}.${CG_FIELD} COLLECTION_GROUP index: creating (builds asynchronously)."
 done
 
+# Multi-field COLLECTION_GROUP queries need a composite index. Single-field overrides
+# above cannot satisfy `emailedAt == null` AND `createdAt >= …` ORDER BY createdAt —
+# that is the pending-email retry scan. `gcloud firestore indexes composite create`
+# is the right tool here (it rejects only *single-field* composites).
+# group:field:ORDER+field:ORDER
+CG_COMPOSITE_INDEXES="notifications:emailedAt:ASCENDING+createdAt:ASCENDING"
+for ENTRY in $CG_COMPOSITE_INDEXES; do
+  CG_GROUP="${ENTRY%%:*}"
+  CG_SPEC="${ENTRY#*:}"
+  INDEXES_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/${CG_GROUP}/indexes"
+  FIELDS_JSON="["
+  FIRST_FIELD=1
+  IFS='+' read -r -a CG_FIELD_ENTRIES <<< "$CG_SPEC"
+  for FIELD_ENTRY in "${CG_FIELD_ENTRIES[@]}"; do
+    CG_FIELD="${FIELD_ENTRY%%:*}"
+    CG_ORDER="${FIELD_ENTRY#*:}"
+    if [ "$FIRST_FIELD" -eq 0 ]; then
+      FIELDS_JSON="${FIELDS_JSON},"
+    fi
+    FIRST_FIELD=0
+    FIELDS_JSON="${FIELDS_JSON}{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"${CG_ORDER}\"}"
+  done
+  FIELDS_JSON="${FIELDS_JSON}]"
+  HTTP_CODE="$(curl -s -o /tmp/cg-composite-index.json -w '%{http_code}' -X POST "$INDEXES_URL" \
+    -H "Authorization: Bearer ${FIELD_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"queryScope\":\"COLLECTION_GROUP\",\"fields\":${FIELDS_JSON}}")"
+  if [ "$HTTP_CODE" = "409" ] || grep -q 'ALREADY_EXISTS' /tmp/cg-composite-index.json 2>/dev/null; then
+    echo "    ${CG_GROUP} composite ${CG_SPEC}: already present."
+  elif [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo "    ${CG_GROUP} composite ${CG_SPEC}: creating (builds asynchronously)."
+  else
+    echo "    ERROR: ${CG_GROUP} composite ${CG_SPEC} failed HTTP ${HTTP_CODE}" >&2
+    cat /tmp/cg-composite-index.json >&2 || true
+    exit 1
+  fi
+done
+
 # Pre-assembled published games (apps/api/src/game-snapshot.ts). The bucket sits in
 # the Cloud Run region, not the Firestore one: it is read on the play path, and a
 # cross-region read would put the latency back that baking was meant to remove.
