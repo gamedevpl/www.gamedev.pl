@@ -67,6 +67,7 @@ async function createApp(store: InMemoryStore, managedAvailabilityGate?: Managed
       agentBackend: stubBackend(),
       chatAgent: { decide: async () => ({ kind: 'build', text: 'On it.' }) },
       agentChannel: {} as { gamesStore?: GamesStore },
+      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
       ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
     },
   });
@@ -164,6 +165,12 @@ describe('after a transfer, the sender keeps nothing', () => {
     // State is a receipt the token carries; what was said is not.
     expect(status.json().status).toBeDefined();
     expect(status.json().priorRounds).toBeUndefined();
+
+    const recipientShelf = await store.getShelf(RECIPIENT);
+    expect(recipientShelf?.rounds.map((r) => r.jobId)).toEqual([jobId]);
+    const senderShelf = await store.getShelf(SENDER);
+    expect(senderShelf?.rounds ?? []).toEqual([]);
+
     expect(status.json().events).toBeUndefined();
     expect(status.json().media).toBeUndefined();
 

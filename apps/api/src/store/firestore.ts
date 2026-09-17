@@ -1,6 +1,7 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
+import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import { eraseTransferRows } from './erase-transfer-rows.js';
 import type { ShelfDocument } from './records/shelf.js';
@@ -435,7 +436,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async countSubmissionsByOwner(ownerUid: string): Promise<number> {
-    return this.shelfStore.countSubmissionsByOwner(ownerUid);
+    const access = await this.listGameAccessByMember(ownerUid);
+    if (!access.length) return this.shelfStore.countSubmissionsByOwner(ownerUid);
+    return (await reconcileTransferredOwnership(this, ownerUid, await this.listSubmissionsByOwner(ownerUid))).length;
   }
 
   async listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]> {

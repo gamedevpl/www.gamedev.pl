@@ -24,7 +24,7 @@ import {
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { invalidateNotificationCache } from './notification-cache.js';
 import type { JobAlert } from './operator-alerts.js';
-import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { gameOwnerUid } from '../platform/game-access-resolve.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
   NotificationType,
@@ -696,9 +696,7 @@ export async function notifyOnTransition(
   if (prevEvent === event) return { emitted: false };
 
   // Canonical ownership, not the stale ownerUid a transfer leaves behind.
-  const recipientUid = submission.slug
-    ? ((await currentOwnerUid(deps.store, submission.slug, submission.ownerUid)) ?? submission.ownerUid)
-    : submission.ownerUid;
+  const recipientUid = submission.slug ? await gameOwnerUid(deps.store, submission) : submission.ownerUid;
 
   await emitSubmissionNotification(deps, {
     uid: recipientUid,

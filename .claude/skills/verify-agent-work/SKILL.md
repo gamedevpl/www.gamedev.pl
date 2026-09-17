@@ -412,7 +412,7 @@ Two concrete instances of that (observed 2026-07-23):
   was "re-invoke the emitter". A two-minute worker over every null row means overlapping
   sweeps, the original emit racing the worker, or Resend accepting and the stamp failing,
   all resend for the whole horizon (~10k copies). `ResendMailer` had no idempotency key.
-  Claim the row, or send with a stable notification-derived key, *before* the provider
+  Claim the row, or send with a stable notification-derived key, _before_ the provider
   call. Scanning "null" is also not "pending email" when skip-forever types never stamp.
 
 ## Membership revocation must outlive bounded cleanup

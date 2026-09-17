@@ -118,7 +118,7 @@ describe('agent source inheritance across rounds', () => {
       },
     });
     expect(patched.json()).toMatchObject({ accepted: true, baseFrom: 'delivery' });
-    expect(historyReads).toHaveBeenCalledOnce();
+    expect(historyReads).toHaveBeenCalledTimes(2);
 
     const submitted = await app.inject({
       method: 'POST',

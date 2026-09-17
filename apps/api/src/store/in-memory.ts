@@ -1,5 +1,6 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
+import { countCanonicalSubmissions } from './canonical-shelf-count.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import type { ShelfDocument } from './records/shelf.js';
@@ -175,9 +176,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private gameQuotaStore = new InMemoryGameQuotaStore();
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private shelves = new Map<string, ShelfDocument>();
-  protected shelfStore = new InMemoryShelfStore(
-    this.shelves,
-    (ownerUid) => [...this.submissions.values()].filter((record) => record.ownerUid === ownerUid).length,
+  protected shelfStore = new InMemoryShelfStore(this.shelves, (uid) =>
+    countCanonicalSubmissions(uid, this.submissions.values(), this.gameAccessStore.access),
   );
   private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
     this.quotaStore.getCreationLimits(),

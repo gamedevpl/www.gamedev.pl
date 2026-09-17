@@ -51,7 +51,6 @@ export async function reconcileTransferredOwnership(
   );
   const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
-  // Every job on the slug, not just this owner's historical rows.
   const canonicalJobs = await Promise.all([...canonicalSlugs].map((slug) => store.listSubmissionsBySlug(slug)));
 
   return [...canonicalJobs.flat(), ...kept];
