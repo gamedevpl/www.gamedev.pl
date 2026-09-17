@@ -83,5 +83,42 @@ describe('notification email retry query', () => {
 
       expect(rows.map((row) => row.notification.id)).toContain('recent-visible');
     });
+
+    it(`does not let already-emailed in-window rows hide a newer unsent row (${name})`, async () => {
+      const store = makeStore();
+      for (let i = 0; i < 90; i += 1) {
+        await store.createNotification('g:sent', {
+          id: `sent-${i}`,
+          type: 'transfer.offered',
+          createdAt: '2026-09-10T00:00:00.000Z',
+          titleKey: 'notifications.transfer.offered.title',
+          bodyKey: 'notifications.transfer.offered.body',
+          params: { title: 'Sent', slug: 'sent' },
+          link: '/studio',
+        });
+        await store.markNotificationEmailed('g:sent', `sent-${i}`, '2026-09-10T00:01:00.000Z');
+      }
+      await store.createNotification('g:recent', {
+        id: 'recent-unsent',
+        type: 'transfer.offered',
+        createdAt: '2026-09-10T00:02:00.000Z',
+        titleKey: 'notifications.transfer.offered.title',
+        bodyKey: 'notifications.transfer.offered.body',
+        params: { title: 'Recent', slug: 'recent' },
+        link: '/studio',
+      });
+
+      const rows = await store.listPendingEmailNotifications({
+        createdAfter: '2026-09-01T00:00:00.000Z',
+        limit: 10,
+      });
+
+      expect(rows).toEqual([
+        expect.objectContaining({
+          uid: 'g:recent',
+          notification: expect.objectContaining({ id: 'recent-unsent', emailedAt: null }),
+        }),
+      ]);
+    });
   }
 });

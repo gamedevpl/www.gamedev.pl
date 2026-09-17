@@ -3,7 +3,7 @@ import { buildApp } from './platform/app.js';
 import type { GitHubClient } from './catalog/github-client.js';
 import { InMemoryStore } from './platform/store.js';
 import type { InternalAuthVerifier } from './platform/internal-auth.js';
-import type { Mailer } from './notifications/mailer.js';
+import { ConsoleMailer, type Mailer } from './notifications/mailer.js';
 
 const secret = 'submission-secret';
 const acceptAll: InternalAuthVerifier = { verify: async () => true };
@@ -100,6 +100,7 @@ describe('notify sweep email retry', () => {
       sent: 2,
       skipped: 1,
       failed: 0,
+      unconfigured: false,
       error: false,
     });
 
@@ -115,6 +116,113 @@ describe('notify sweep email retry', () => {
       headers: { authorization: '******' },
     });
     expect(sent).toHaveLength(2);
+    await app.close();
+  });
+
+  it('stamps a digest skip when the creator opted out of the weekly summary', async () => {
+    const nowMs = Date.parse('2026-09-16T12:00:00.000Z');
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:grace', email: 'grace@example.com' });
+    await store.setDigestOptOut('g:grace', '2026-09-15T00:00:00.000Z');
+    await store.createNotification('g:grace', {
+      id: 'digest-2026-W38',
+      type: 'creator.digest',
+      createdAt: '2026-09-15T10:00:00.000Z',
+      titleKey: 'notifications.creator.digest.title',
+      bodyKey: 'notifications.creator.digest.body',
+      params: { games: '1', sessions: '4', votesUp: '0', votesDown: '0', feedback: '0' },
+      link: '/',
+    });
+    const sent: string[] = [];
+    const mailer: Mailer = { name: 'recording', send: async (message) => void sent.push(message.subject) };
+    const app = await buildSweepApp(store, {
+      now: () => nowMs,
+      notifyMailer: mailer,
+      unsubscribeSecret: 'test-secret',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: '******' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(sent).toHaveLength(0);
+    expect(res.json().emailRetry).toMatchObject({
+      scanned: 1,
+      retried: 0,
+      sent: 0,
+      skipped: 1,
+      failed: 0,
+      unconfigured: false,
+      error: false,
+    });
+    expect((await store.listNotifications('g:grace'))[0]?.emailedAt).not.toBeNull();
+    await app.close();
+  });
+
+  it('does not scan or count failures when the mailer is the console fake', async () => {
+    const nowMs = Date.parse('2026-09-16T12:00:00.000Z');
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:grace', email: 'grace@example.com' });
+    await store.createNotification('g:grace', {
+      id: 'transfer-pending',
+      type: 'transfer.offered',
+      createdAt: '2026-09-15T10:00:00.000Z',
+      titleKey: 'notifications.transfer.offered.title',
+      bodyKey: 'notifications.transfer.offered.body',
+      params: { title: 'Sky Dodge', slug: 'sky-dodge' },
+      link: '/studio',
+    });
+    const mailer = new ConsoleMailer(() => {});
+    const app = await buildSweepApp(store, {
+      now: () => nowMs,
+      notifyMailer: mailer,
+      unsubscribeSecret: 'test-secret',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: '******' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mailer.sent).toHaveLength(0);
+    expect(res.json().emailRetry).toMatchObject({
+      scanned: 0,
+      retried: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      unconfigured: true,
+      error: false,
+    });
+    expect((await store.listNotifications('g:grace'))[0]?.emailedAt).toBeNull();
+    await app.close();
+  });
+
+  it('fails the sweep when the pending-email query throws', async () => {
+    const nowMs = Date.parse('2026-09-16T12:00:00.000Z');
+    class QueryFailStore extends InMemoryStore {
+      async listPendingEmailNotifications(): Promise<never> {
+        throw Object.assign(new Error('9 FAILED_PRECONDITION: requires an index'), { code: 9 });
+      }
+    }
+    const store = new QueryFailStore();
+    const mailer: Mailer = { name: 'recording', send: async () => ({ provider: 'recording' }) };
+    const app = await buildSweepApp(store, {
+      now: () => nowMs,
+      notifyMailer: mailer,
+      unsubscribeSecret: 'test-secret',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: '******' },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json().emailRetry).toMatchObject({ error: true, scanned: 0 });
     await app.close();
   });
 });

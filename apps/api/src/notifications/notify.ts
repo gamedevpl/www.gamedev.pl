@@ -132,7 +132,6 @@ export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: 
   // Operator alerts have their own send (see `emitOperatorAlert`): they carry no
   // unsubscribe and must not be silenced by one. Guarded here rather than left to the
   // call sites so a future caller cannot accidentally route one through creator mail.
-<<<<<<< HEAD
   if (isOperatorNotification(notification.type) || notification.type.startsWith('share.')) return false;
   // Explicit deps win (tests inject them). Otherwise fall back to env config so
   // the default call sites send email in prod with no extra wiring: a real mailer
@@ -144,6 +143,7 @@ export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: 
   try {
     const user = await deps.store.getUser(uid);
     if (!user?.email || user.emailUnsubscribedAt) return false;
+    if (notification.type === 'creator.digest' && user.digestOptOutAt) return false;
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
