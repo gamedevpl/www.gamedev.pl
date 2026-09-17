@@ -426,14 +426,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async countSubmissionsByOwner(ownerUid: string): Promise<number> {
-    const memberAccess = await this.listGameAccessByMember(ownerUid);
-    const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
-    if (canonicalSlugs.size === 0 && memberAccess.length === 0) {
-      return this.shelfStore.countSubmissionsByOwner(ownerUid);
-    }
-    const owned = await this.listSubmissionsByOwner(ownerUid);
-    const reconciled = await reconcileTransferredOwnership(this, ownerUid, owned);
-    return reconciled.length;
+    const access = await this.listGameAccessByMember(ownerUid);
+    if (!access.length) return this.shelfStore.countSubmissionsByOwner(ownerUid);
+    return (await reconcileTransferredOwnership(this, ownerUid, await this.listSubmissionsByOwner(ownerUid))).length;
   }
 
   async listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]> {
