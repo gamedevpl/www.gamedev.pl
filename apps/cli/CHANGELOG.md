@@ -13,6 +13,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Make the Play browser type-check reject undeclared side-effect imports (#1396).
+
 - Keep tool logs collapsed, name agent replies, and keep update notices and the composer accessible on short phone screens (#1396).
 
 - Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace (#1396).
