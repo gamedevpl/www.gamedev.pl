@@ -87,12 +87,12 @@ describe('round watch', () => {
     });
     await holder.current.run;
 
-    // First 20 polls (the fingerprint has not yet repeated 20 times) stay at the live cadence.
+    // Twenty unchanged polls retain the live cadence.
     expect(delays.slice(0, 20)).toEqual(Array(20).fill(3000));
-    // Past that, the delay doubles every 20 unchanged polls...
+    // Then the delay doubles every twenty polls.
     expect(delays[20]).toBe(6000);
     expect(delays[40]).toBe(12_000);
-    // ...until it hits the ceiling, where an orphaned watch settles rather than climbing forever.
+    // Orphaned watches settle at the ceiling.
     expect(delays.at(-1)).toBe(30_000);
   });
 

@@ -5,8 +5,7 @@ import { getStatus, isTerminalStatus, latestProposal, previewUrl, studioUrl, typ
 import type { ApiClient } from './api.js';
 import type { CliTelemetry } from './telemetry.js';
 
-// A watch left running against a wedged or abandoned round would otherwise poll
-// every 3s forever. Past this many polls with no visible change, back off.
+// Back off unchanged active watches to bound orphaned polling.
 const ACTIVE_BACKOFF_AFTER_POLLS = 20;
 const ACTIVE_BACKOFF_CAP_MS = 30_000;
 

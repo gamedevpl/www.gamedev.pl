@@ -57,7 +57,7 @@ describe('status watch', () => {
     expect(statusWatchDelayMs({ status: 'building' }, 39)).toBe(6000);
     expect(statusWatchDelayMs({ status: 'building' }, 40)).toBe(12_000);
     expect(statusWatchDelayMs({ status: 'building' }, 1000)).toBe(30_000);
-    // Idle statuses already poll at the slow cadence; the backoff has nothing to add.
+    // Idle statuses already use the slow cadence.
     expect(statusWatchDelayMs({ status: 'needs_changes' }, 1000)).toBe(10_000);
   });
 
