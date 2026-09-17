@@ -41,6 +41,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
+async function recoverPendingTransfer(slug: string): Promise<TransferSummary | null> {
+  const open = await fetchGameTransfer(slug).catch(() => null);
+  return open?.status === 'pending' ? open : null;
+}
+
+function closedProposalCopy(status: string): string {
+  if (status === 'expired') return 'studioPanel.transferPropose.expired';
+  if (status === 'confirmed') return 'studioPanel.transferPropose.sent';
+  return 'studioPanel.transferPropose.missing';
+}
+
 export function StudioTransferProposalConfirm({
   slug,
   proposalId,
@@ -65,13 +76,17 @@ export function StudioTransferProposalConfirm({
       const body = await request<{ proposal: ProposalSummary }>(path);
       setProposal(body.proposal);
       setError(null);
+      if (body.proposal.status === 'confirmed') {
+        const open = await recoverPendingTransfer(slug);
+        if (open) setTransfer(open);
+      }
     } catch {
       setProposal(null);
       setError(t('studioPanel.transferPropose.missing'));
     } finally {
       setLoading(false);
     }
-  }, [path, t]);
+  }, [path, slug, t]);
 
   useEffect(() => {
     void load();
@@ -96,8 +111,8 @@ export function StudioTransferProposalConfirm({
       // Creating refuses as busy only when an invitation is already out.
       const reason = (caught as TransferApiError)?.code;
       if (reason === 'busy') {
-        const open = await fetchGameTransfer(slug).catch(() => null);
-        if (open?.status === 'pending') {
+        const open = await recoverPendingTransfer(slug);
+        if (open) {
           setTransfer(open);
           setCode('');
         } else {
@@ -121,13 +136,7 @@ export function StudioTransferProposalConfirm({
         </p>
       ) : null}
       {!loading && proposal && !transfer && proposal.status !== 'ready' ? (
-        <p className="studio-connect-state">
-          {t(
-            proposal.status === 'expired'
-              ? 'studioPanel.transferPropose.expired'
-              : 'studioPanel.transferPropose.missing',
-          )}
-        </p>
+        <p className="studio-connect-state">{t(closedProposalCopy(proposal.status))}</p>
       ) : null}
       {!loading && proposal && !transfer && proposal.status === 'ready' ? (
         <form className="studio-transfer-form" onSubmit={(event) => void confirm(event)}>

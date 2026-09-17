@@ -908,6 +908,7 @@
       "game": "Przekaż {{title}}",
       "missing": "Ta propozycja transferu zniknęła albo nie jest twoja.",
       "expired": "Ta propozycja wygasła. Poproś agenta o nową.",
+      "sent": "To zaproszenie zostało już wysłane.",
       "back": "Wróć do Studio"
     },
     "members": {

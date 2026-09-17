@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 
-export type TransferProposalReceiptStatus = 'not_found' | 'pending' | 'ready' | 'expired' | 'invalidated';
+export type TransferProposalReceiptStatus = 'not_found' | 'pending' | 'ready' | 'expired' | 'invalidated' | 'confirmed';
 
 export interface GameTransferProposal {
   proposalId: string;
@@ -77,7 +77,8 @@ export function proposalReceiptStatus(
   proposal: GameTransferProposal,
   at: string,
 ): Exclude<TransferProposalReceiptStatus, 'not_found' | 'pending'> {
-  if (proposal.confirmedAt || proposal.invalidatedAt) return 'invalidated';
+  if (proposal.confirmedAt) return 'confirmed';
+  if (proposal.invalidatedAt) return 'invalidated';
   if (proposal.expiresAt <= at) return 'expired';
   return 'ready';
 }

@@ -898,6 +898,7 @@
       "game": "Transfer {{title}}",
       "missing": "This transfer proposal is gone or is not yours.",
       "expired": "This proposal expired. Ask the agent to start a new one.",
+      "sent": "This invitation was already sent.",
       "back": "Back to Studio"
     },
     "members": {

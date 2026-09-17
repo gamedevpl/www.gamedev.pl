@@ -264,6 +264,24 @@ describe('MCP ownership tools', () => {
     });
   });
 
+  it('reports a confirmed proposal instead of treating it as invalidated', async () => {
+    const { app, store, bearer } = await ready();
+    const proposed = await callTool(
+      app,
+      'propose_game_transfer',
+      { slug: SLUG, expectedAccessVersion: 'v1', idempotencyKey: 'k-sent' },
+      { authorization: `Bearer ${bearer}` },
+    );
+    await store.confirmTransferProposal(String(proposed.structured.proposalId), OWNER, AT);
+    const receipt = await callTool(
+      app,
+      'get_game_transfer_proposal_receipt',
+      { idempotencyKey: 'k-sent' },
+      { authorization: `Bearer ${bearer}` },
+    );
+    expect(receipt.structured).toEqual({ status: 'confirmed' });
+  });
+
   it('conflicts when the same key is reused after access changes', async () => {
     const { app, store, bearer } = await ready();
     await callTool(

@@ -426,3 +426,33 @@ describe('transfer proposal slug pointer', () => {
     expect((await inner.getTransferProposalReceipt(B, 'k2', AT)).status).toBe('ready');
   });
 });
+
+describe('game transfer proposal confirm status', () => {
+  it('keeps a confirmed receipt distinct from an invalidated one', async () => {
+    const store = new InMemoryStore();
+    await seedOwner(store);
+    const proposed = await store.proposeGameTransfer({
+      slug: SLUG,
+      ownerUid: A,
+      accessRevision: 1,
+      expectedAccessVersion: 'v1',
+      idempotencyKey: 'k1',
+      at: AT,
+    });
+    if (!proposed.ok) throw new Error('unreachable');
+    expect(await store.confirmTransferProposal(proposed.proposal.proposalId, A, AT)).toMatchObject({
+      confirmedAt: AT,
+    });
+    expect((await store.getTransferProposalReceipt(A, 'k1', AT)).status).toBe('confirmed');
+    expect(
+      await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 1,
+        expectedAccessVersion: 'v1',
+        idempotencyKey: 'k1',
+        at: AT,
+      }),
+    ).toEqual({ ok: false, reason: 'expired' });
+  });
+});

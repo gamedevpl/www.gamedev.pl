@@ -199,4 +199,64 @@ describe('StudioTransferProposalConfirm', () => {
     );
     await act(async () => root.unmount());
   });
+
+  it('recovers a pending invitation when a confirmed proposal is reopened', async () => {
+    const pending = {
+      slug: 'sky',
+      status: 'pending',
+      you: 'sender',
+      counterparty: { profileName: 'Ada' },
+      createdAt: PROPOSAL.expiresAt,
+      expiresAt: PROPOSAL.expiresAt,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/propose/')) {
+          return { ok: true, json: async () => ({ proposal: { ...PROPOSAL, status: 'confirmed' } }) };
+        }
+        return { ok: true, json: async () => ({ transfer: pending }) };
+      }),
+    );
+    const { host, root } = mount();
+    await act(async () => {
+      root.render(
+        createElement(StudioTransferProposalConfirm, {
+          slug: 'sky',
+          proposalId: PROPOSAL.proposalId,
+          onOpenStudio: vi.fn(),
+        }),
+      );
+    });
+    expect(host.querySelector('[data-testid="studio-transfer-propose-code"]')).toBeNull();
+    expect(host.querySelector('[data-testid="studio-transfer-propose-sent"]')?.textContent).toContain('Ada');
+    expect(host.textContent).not.toContain('gone or is not yours');
+    await act(async () => root.unmount());
+  });
+
+  it('says the invitation was sent when a confirmed proposal has no open offer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/propose/')) {
+          return { ok: true, json: async () => ({ proposal: { ...PROPOSAL, status: 'confirmed' } }) };
+        }
+        return { ok: true, json: async () => ({ transfer: null }) };
+      }),
+    );
+    const { host, root } = mount();
+    await act(async () => {
+      root.render(
+        createElement(StudioTransferProposalConfirm, {
+          slug: 'sky',
+          proposalId: PROPOSAL.proposalId,
+          onOpenStudio: vi.fn(),
+        }),
+      );
+    });
+    expect(host.querySelector('[data-testid="studio-transfer-propose-code"]')).toBeNull();
+    expect(host.textContent).toContain('already sent');
+    expect(host.textContent).not.toContain('gone or is not yours');
+    await act(async () => root.unmount());
+  });
 });

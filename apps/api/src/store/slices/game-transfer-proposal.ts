@@ -93,8 +93,7 @@ export class InMemoryGameTransferProposalStore implements GameTransferProposalSt
     const existing = existingId ? retained(this.proposals.get(existingId), input.at) : null;
     if (existing) {
       if (existing.requestHash !== requestHash) return { ok: false, reason: 'conflict' };
-      if (proposalReceiptStatus(existing, input.at) === 'expired') return { ok: false, reason: 'expired' };
-      if (proposalReceiptStatus(existing, input.at) === 'invalidated') return { ok: false, reason: 'expired' };
+      if (proposalReceiptStatus(existing, input.at) !== 'ready') return { ok: false, reason: 'expired' };
       return { ok: true, proposal: clone(existing) };
     }
     if (erasedOwner(this.owner(input.ownerUid), this.erasedAt(input.ownerUid))) {
@@ -202,8 +201,9 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
           : null;
       if (existing) {
         if (existing.requestHash !== requestHash) return { ok: false as const, reason: 'conflict' as const };
-        const status = proposalReceiptStatus(existing, input.at);
-        if (status === 'expired' || status === 'invalidated') return { ok: false as const, reason: 'expired' as const };
+        if (proposalReceiptStatus(existing, input.at) !== 'ready') {
+          return { ok: false as const, reason: 'expired' as const };
+        }
         return { ok: true as const, proposal: existing };
       }
       const erasedAt = fenceSnap.exists ? ((fenceSnap.data() as { at?: string }).at ?? null) : null;

@@ -39,6 +39,8 @@ describe('transfer proposal records', () => {
     });
     const created = Date.parse(AT);
     expect(proposalIsOpen(row, AT)).toBe(true);
+    expect(proposalReceiptStatus({ ...row, confirmedAt: AT }, AT)).toBe('confirmed');
+    expect(proposalReceiptStatus({ ...row, invalidatedAt: AT }, AT)).toBe('invalidated');
     expect(proposalReceiptStatus(row, new Date(created + TRANSFER_PROPOSAL_TTL_MS).toISOString())).toBe('expired');
     expect(proposalIsRetained(row, new Date(created + TRANSFER_PROPOSAL_TTL_MS).toISOString())).toBe(true);
     expect(proposalIsRetained(row, new Date(created + TRANSFER_PROPOSAL_TOMBSTONE_MS).toISOString())).toBe(false);

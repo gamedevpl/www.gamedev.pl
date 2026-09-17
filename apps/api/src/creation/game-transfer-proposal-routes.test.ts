@@ -94,6 +94,13 @@ describe('game transfer proposal routes', () => {
     expect(post.json().transfer).toMatchObject({ slug: SLUG, status: 'pending', you: 'sender' });
     expect(JSON.stringify(post.json())).not.toContain('g:grace');
     expect(JSON.stringify(post.json())).not.toContain(code);
+    const again = await app.inject({
+      method: 'GET',
+      url: url(proposalId),
+      headers: { cookie: authCookie('g:ada') },
+    });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().proposal.status).toBe('confirmed');
   });
 
   it('refuses a cross-site cookie POST', async () => {
