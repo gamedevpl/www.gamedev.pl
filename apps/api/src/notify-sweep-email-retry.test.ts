@@ -225,4 +225,47 @@ describe('notify sweep email retry', () => {
     expect(res.json().emailRetry).toMatchObject({ error: true, scanned: 0 });
     await app.close();
   });
+
+  it('fails the sweep when every retried send fails', async () => {
+    const nowMs = Date.parse('2026-09-16T12:00:00.000Z');
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:grace', email: 'grace@example.com' });
+    await store.createNotification('g:grace', {
+      id: 'transfer-pending',
+      type: 'transfer.offered',
+      createdAt: '2026-09-15T10:00:00.000Z',
+      titleKey: 'notifications.transfer.offered.title',
+      bodyKey: 'notifications.transfer.offered.body',
+      params: { title: 'Sky Dodge', slug: 'sky-dodge' },
+      link: '/studio',
+    });
+    const mailer: Mailer = {
+      name: 'throwing',
+      send: async () => {
+        throw new Error('resend 401');
+      },
+    };
+    const app = await buildSweepApp(store, {
+      now: () => nowMs,
+      notifyMailer: mailer,
+      unsubscribeSecret: 'test-secret',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: '******' },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json().emailRetry).toMatchObject({
+      scanned: 1,
+      retried: 1,
+      sent: 0,
+      failed: 1,
+      unconfigured: false,
+      error: true,
+    });
+    expect((await store.listNotifications('g:grace'))[0]?.emailedAt).toBeNull();
+    await app.close();
+  });
 });
