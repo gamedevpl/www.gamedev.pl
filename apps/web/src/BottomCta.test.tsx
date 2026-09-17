@@ -27,16 +27,12 @@ afterEach(() => {
 
 describe('BottomCta', () => {
   it('scrolls the composer into view when the action is pressed', () => {
-    const composer = document.createElement('div');
-    composer.id = 'hero-prompt';
-    const input = document.createElement('textarea');
-    input.className = 'big-prompt-input';
-    const focusSpy = vi.fn();
-    input.focus = focusSpy;
-    composer.appendChild(input);
+    const [focusSpy, scrollIntoView] = [vi.fn(), vi.fn()];
+    const composer = Object.assign(document.createElement('div'), { id: 'hero-prompt', scrollIntoView });
+    composer.appendChild(
+      Object.assign(document.createElement('textarea'), { className: 'big-prompt-input', focus: focusSpy }),
+    );
     document.body.appendChild(composer);
-    const scrollIntoView = vi.fn();
-    composer.scrollIntoView = scrollIntoView;
 
     root = createRoot(container);
     act(() => {
@@ -49,7 +45,6 @@ describe('BottomCta', () => {
     });
     expect(scrollIntoView).toHaveBeenCalled();
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
-
     composer.remove();
   });
 
