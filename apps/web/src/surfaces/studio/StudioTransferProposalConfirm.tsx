@@ -4,6 +4,7 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { recordTransferStep } from '../../visitTelemetry.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { studioPath } from '../../core/router.js';
+import { fetchGameTransfer, type TransferApiError, type TransferSummary } from '../../transferApi.js';
 import './studio-panel.css';
 
 interface ProposalSummary {
@@ -14,20 +15,12 @@ interface ProposalSummary {
   title: string;
 }
 
-interface TransferSummary {
-  invitationId?: string;
-  status: string;
-  counterparty: { profileName: string | null };
-  expiresAt: string;
-}
-
 const REFUSALS: Record<string, string> = {
   invalid_code: 'studioPanel.transfer.errors.invalidCode',
   cannot_transfer_to_self: 'studioPanel.transfer.errors.self',
   recipient_ineligible: 'studioPanel.transfer.errors.ineligible',
   stale_owner: 'studioPanel.transfer.errors.staleOwner',
   not_owner: 'studioPanel.transfer.errors.notOwner',
-  busy: 'studioPanel.transfer.errors.busy',
   expired: 'studioPanel.transferPropose.expired',
 };
 
@@ -100,8 +93,19 @@ export function StudioTransferProposalConfirm({
       setCode('');
       recordTransferStep('invite_sent');
     } catch (caught) {
-      const code = (caught as { code?: string }).code;
-      setError(code && REFUSALS[code] ? t(REFUSALS[code]) : t('studioPanel.transfer.errors.generic'));
+      // Creating refuses as busy only when an invitation is already out.
+      const reason = (caught as TransferApiError)?.code;
+      if (reason === 'busy') {
+        const open = await fetchGameTransfer(slug).catch(() => null);
+        if (open?.status === 'pending') {
+          setTransfer(open);
+          setCode('');
+        } else {
+          setError(t('studioPanel.transfer.errors.alreadyOut'));
+        }
+      } else {
+        setError(reason && REFUSALS[reason] ? t(REFUSALS[reason]) : t('studioPanel.transfer.errors.generic'));
+      }
     } finally {
       setBusy(false);
     }
@@ -111,7 +115,11 @@ export function StudioTransferProposalConfirm({
     <main className="studio-transfer" data-testid="studio-transfer-propose">
       <p className="studio-rail-credentials-hint">{t('studioPanel.transferPropose.intro')}</p>
       {loading ? <p className="studio-connect-state">{t('studioPanel.transfer.loading')}</p> : null}
-      {error ? <p className="studio-connect-state">{error}</p> : null}
+      {error ? (
+        <p className="studio-connect-state" role="alert" data-testid="studio-transfer-propose-error">
+          {error}
+        </p>
+      ) : null}
       {!loading && proposal && !transfer && proposal.status !== 'ready' ? (
         <p className="studio-connect-state">
           {t(

@@ -114,4 +114,89 @@ describe('StudioTransferProposalConfirm', () => {
     expect(host.textContent).toContain('Ask the agent to start a new one');
     await act(async () => root.unmount());
   });
+
+  it('shows the invitation already out instead of blaming a build round', async () => {
+    const pending = {
+      slug: 'sky',
+      status: 'pending',
+      you: 'sender',
+      counterparty: { profileName: 'Ada' },
+      createdAt: PROPOSAL.expiresAt,
+      expiresAt: PROPOSAL.expiresAt,
+    };
+    let sent = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          sent = true;
+          return { ok: false, status: 409, json: async () => ({ error: 'busy' }) };
+        }
+        if (String(url).includes('/propose/')) {
+          return { ok: true, json: async () => ({ proposal: PROPOSAL }) };
+        }
+        return { ok: true, json: async () => ({ transfer: sent ? pending : null }) };
+      }),
+    );
+    const { host, root } = mount();
+    await act(async () => {
+      root.render(
+        createElement(StudioTransferProposalConfirm, {
+          slug: 'sky',
+          proposalId: PROPOSAL.proposalId,
+          onOpenStudio: vi.fn(),
+        }),
+      );
+    });
+    const input = host.querySelector<HTMLInputElement>('[data-testid="studio-transfer-propose-code"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'ADA-CODE');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(host.querySelector('[data-testid="studio-transfer-propose-sent"]')?.textContent).toContain('Ada');
+    expect(host.querySelector('[data-testid="studio-transfer-propose-error"]')).toBeNull();
+    expect(host.textContent).not.toContain('build round');
+    await act(async () => root.unmount());
+  });
+
+  it('falls back to a plain message when busy but no invitation comes back', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          return { ok: false, status: 409, json: async () => ({ error: 'busy' }) };
+        }
+        if (String(url).includes('/propose/')) {
+          return { ok: true, json: async () => ({ proposal: PROPOSAL }) };
+        }
+        return { ok: true, json: async () => ({ transfer: null }) };
+      }),
+    );
+    const { host, root } = mount();
+    await act(async () => {
+      root.render(
+        createElement(StudioTransferProposalConfirm, {
+          slug: 'sky',
+          proposalId: PROPOSAL.proposalId,
+          onOpenStudio: vi.fn(),
+        }),
+      );
+    });
+    const input = host.querySelector<HTMLInputElement>('[data-testid="studio-transfer-propose-code"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'ADA-CODE');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(host.querySelector('[data-testid="studio-transfer-propose-error"]')?.textContent).toContain('already out');
+    expect(host.querySelector('[data-testid="studio-transfer-propose-error"]')?.textContent).not.toContain(
+      'build round',
+    );
+    await act(async () => root.unmount());
+  });
 });
