@@ -351,8 +351,8 @@
     "withContributions": "ze zmianami od"
   },
   "bottomCta": {
-    "headline": "Masz własny pomysł?",
-    "sub": "Opisz go powyżej, a agent AI zbuduje go naprawdę — gotowego do gry dla wszystkich.",
+    "headline": "Masz własny pomysł na grę?",
+    "sub": "Opisz go powyżej, a agent AI zbuduje grywalną wersję w przeglądarce.",
     "action": "Opisz swój pomysł"
   },
   "recommendations": {
@@ -1463,25 +1463,25 @@
   },
   "create": {
     "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
-    "subhead": "To nie szablon ani zabawka — prawdziwy HTML, CSS i JavaScript, napisane przez agenta kodującego, sprawdzone przez człowieka, a potem grywalne w przeglądarce dla każdego.",
+    "subhead": "Prawdziwy kod od agenta AI, sprawdzony przez człowieka i gotowy do gry w przeglądarce.",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
-    "step1Title": "Kilka szybkich pytań",
-    "step1Detail": "Nadajemy nazwę i, jeśli trzeba, dopytujemy o klimat — albo pomiń, a AI zdecyduje. Zajmuje minutę.",
+    "step1Title": "Krótki wywiad",
+    "step1Detail": "Doprecyzuj klimat i mechanikę lub zdaj się na AI.",
     "step2Title": "Agent pisze kod",
-    "step2Detail": "Możesz obserwować pracę w Studio i mówić, co zmienić, w trakcie budowy.",
-    "step3Title": "Najpierw zagrasz w szkic",
-    "step3Detail": "Grywalny podgląd pojawia się, zanim gra jest ukończona. Wypróbuj ją, poproś o zmiany.",
-    "step4Title": "Człowiek sprawdza, potem gra jest na żywo",
-    "step4Detail": "Gdy przejdzie ocenę, trafia do katalogu i każdy może w nią zagrać.",
-    "notifyNote": "Możesz zamknąć kartę. Budowa trwa tyle, ile trzeba — powiadomimy Cię, gdy będzie szkic do zagrania, a wątek zostaje w Studio.",
+    "step2Detail": "Śledź postępy w Studio na żywo i sugeruj zmiany w locie.",
+    "step3Title": "Grywalny szkic",
+    "step3Detail": "Wypróbuj wczesną wersję gry i poproś o poprawki.",
+    "step4Title": "Weryfikacja i publikacja",
+    "step4Detail": "Po pomyślnej recenzji gra trafia prosto do katalogu.",
+    "notifyNote": "Możesz zamknąć kartę — powiadomimy Cię, gdy szkic będzie gotowy do gry.",
     "buildersHeading": "Kto to zbuduje?",
-    "buildersSub": "Wybierasz w ostatnim kroku — i możesz zmienić przy każdej rundzie.",
+    "buildersSub": "Wybór w ostatnim kroku — z możliwością zmiany w każdej rundzie.",
     "defaultBadge": "Domyślne",
     "freeBadge": "Bezpłatne",
-    "platformPoint1": "Nic do instalowania ani konfigurowania",
-    "platformPoint2": "Liczy się do Twojego dziennego limitu",
-    "selfPoint1": "Instalacja jednym kliknięciem albo wklej konfigurację",
-    "selfPoint2": "Twój agent, Twoje tokeny — bez naszego dziennego limitu",
+    "platformPoint1": "Zero instalacji i konfiguracji",
+    "platformPoint2": "Wliczone w dzienny limit konta",
+    "selfPoint1": "Szybka instalacja lub konfiguracja MCP",
+    "selfPoint2": "Własny agent i tokeny — bez dziennego limitu",
     "anyMcpClient": "dowolny klient MCP",
     "showcaseHeading": "Na żywo w katalogu",
     "pokeQa": "Szturchnij pomysłowego Dobromira — podaj iskrę w dół",
@@ -1768,7 +1768,7 @@
     "legend": "Kto buduje tę rundę?",
     "platform": {
       "title": "Agent Gamedev.pl",
-      "detail": "Przypisujemy agenta i postęp widać tutaj.",
+      "detail": "Nasz agent w chmurze — postępy widzisz w Studio.",
       "unavailable": {
         "badge": {
           "coming_soon": "Już wkrótce",
@@ -1792,7 +1792,7 @@
     },
     "self": {
       "title": "Mój własny agent",
-      "detail": "Podłączasz Claude Code, Codex, Cursor albo innego agenta."
+      "detail": "Podłączasz własnego agenta przez protokół MCP."
     },
     "badge": {
       "self": "Twój agent",

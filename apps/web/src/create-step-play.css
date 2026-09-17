@@ -3,13 +3,17 @@
 button.create-step-scene {
   margin: 0;
   padding: 0;
-  border: none;
+  border: 1px solid rgba(45, 212, 191, 0.15);
   appearance: none;
   -webkit-appearance: none;
   font: inherit;
   color: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 button.create-step-scene:focus-visible {
@@ -17,12 +21,24 @@ button.create-step-scene:focus-visible {
   outline-offset: 2px;
 }
 
-button.create-step-scene:hover .mascot {
-  filter: brightness(1.1);
+button.create-step-scene:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 212, 191, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 228, 172, 0.18);
 }
 
-button.create-step-scene:active .mascot {
-  transform: scale(0.94, 0.9);
+button.create-step-scene:hover .mascot {
+  filter: drop-shadow(0 2px 6px rgba(0, 228, 172, 0.3)) brightness(1.06);
+}
+
+button.create-step-scene:active {
+  transform: translateY(0) scale(0.96);
+}
+
+button.create-step-scene .mascot {
+  transition:
+    transform 0.2s ease,
+    filter 0.2s ease;
 }
 
 .create-step-spark {
@@ -57,13 +73,30 @@ button.create-step-scene:active .mascot {
   animation: create-mascot-miss 0.45s ease;
 }
 
+.create-step-scene.is-catching,
+.create-step-scene.is-throwing {
+  border-color: var(--turquoise);
+  box-shadow: 0 0 16px rgba(0, 228, 172, 0.35);
+}
+
+.create-step-scene.is-miss {
+  border-color: rgba(248, 113, 113, 0.55);
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.2);
+}
+
 .create-steps-list.is-won .create-step-scene {
+  border-color: var(--turquoise);
   box-shadow:
     0 0 0 2px var(--turquoise),
     0 0 16px var(--turquoise-glow);
 }
 
-.create-step-body,
+.create-step-body {
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .create-step-index {
   cursor: pointer;
   user-select: none;
@@ -82,31 +115,19 @@ button.create-step-scene:active .mascot {
     box-shadow 0.18s ease;
 }
 
-.create-step:hover .create-step-n,
+.create-step-index:hover .create-step-n,
+.create-step:has(.create-step-scene:hover) .create-step-n,
 .create-step:has(.create-step-scene:focus-visible) .create-step-n {
-  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.28);
-}
-
-.create-step:hover:not(.is-miss) .create-step-title {
-  color: var(--turquoise);
-}
-
-.create-step.is-catching .create-step-card,
-.create-step.is-throwing .create-step-card,
-.create-steps-list.is-won .create-step-card {
-  border-radius: 10px;
-  background: linear-gradient(90deg, rgba(0, 228, 172, 0.28), transparent 72%);
-}
-
-.create-step.is-catching .create-step-title,
-.create-steps-list.is-won .create-step-title {
-  color: var(--turquoise);
+  border-color: var(--turquoise);
+  box-shadow: 0 0 10px rgba(0, 228, 172, 0.25);
 }
 
 .create-step.is-catching .create-step-n,
 .create-steps-list.is-won .create-step-n {
-  background: var(--turquoise);
-  color: #0d1520;
+  background: rgba(0, 228, 172, 0.16);
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  box-shadow: 0 0 8px rgba(0, 228, 172, 0.25);
 }
 
 .create-step.is-throwing .create-step-n {
@@ -120,19 +141,11 @@ button.create-step-scene:active .mascot {
   box-shadow: 0 0 8px var(--turquoise-glow);
 }
 
-.create-step.is-miss .create-step-card {
-  border-radius: 10px;
-  background: linear-gradient(90deg, rgba(248, 113, 113, 0.28), transparent 72%);
-}
-
-.create-step.is-miss .create-step-title {
-  color: #fca5a5;
-}
-
 .create-step.is-miss .create-step-n {
-  background: #f87171;
+  background: rgba(248, 113, 113, 0.14);
   border-color: #f87171;
-  color: #0d1520;
+  color: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.2);
 }
 
 .create-step.is-miss .create-step-index::after {
@@ -202,6 +215,10 @@ button.create-step-scene:active .mascot {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  button.create-step-scene,
+  button.create-step-scene:hover,
+  button.create-step-scene:active,
+  button.create-step-scene .mascot,
   .create-step-spark,
   .create-step-scene.is-catching .mascot,
   .create-step-scene.is-miss .mascot,

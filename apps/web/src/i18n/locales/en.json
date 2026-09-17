@@ -351,8 +351,8 @@
     "withContributions": "with contributions from"
   },
   "bottomCta": {
-    "headline": "Have your own idea?",
-    "sub": "Describe it above and an AI agent builds it for real — live for everyone to play.",
+    "headline": "Have your own game idea?",
+    "sub": "Describe it above and an AI agent will build it live for everyone to play.",
     "action": "Describe your idea"
   },
   "recommendations": {
@@ -1449,25 +1449,25 @@
   },
   "create": {
     "headline": "Describe a game. An AI agent builds it for real.",
-    "subhead": "Not a template and not a toy — actual HTML, CSS and JavaScript, written by a coding agent, reviewed by a human, then playable by anyone in a browser.",
+    "subhead": "Real code written by an AI agent, reviewed by a human, playable in the browser.",
     "stepsHeading": "What happens after you press Build",
-    "step1Title": "A few quick questions",
-    "step1Detail": "Name it, then pick the vibe — or skip and the AI decides. Takes a minute.",
-    "step2Title": "An agent writes the code",
-    "step2Detail": "You can watch it work in Studio, and say what to change while it builds.",
-    "step3Title": "You play a draft first",
-    "step3Detail": "A playable preview appears before the game is finished. Try it, ask for changes.",
-    "step4Title": "A human reviews, then it's live",
-    "step4Detail": "Once it passes review it joins the catalog and everyone can play it.",
-    "notifyNote": "Close the tab if you like. Builds take as long as they take — we'll notify you when there's a draft to play, and Studio keeps the thread.",
+    "step1Title": "Quick questions",
+    "step1Detail": "Fine-tune the theme and mechanics, or skip and let AI decide.",
+    "step2Title": "Agent writes code",
+    "step2Detail": "Watch live progress in Studio and request changes on the fly.",
+    "step3Title": "Playable draft",
+    "step3Detail": "Test an early build right in your browser and ask for tweaks.",
+    "step4Title": "Review and publish",
+    "step4Detail": "Once it passes review, your game goes live in the catalog.",
+    "notifyNote": "You can close the tab — we'll notify you when a playable draft is ready.",
     "buildersHeading": "Who builds it?",
     "buildersSub": "You choose at the last step — and can change it per round.",
     "defaultBadge": "Default",
     "freeBadge": "Free to use",
-    "platformPoint1": "Nothing to install, nothing to configure",
-    "platformPoint2": "Counts against your daily allowance",
-    "selfPoint1": "One-click install, or paste the config",
-    "selfPoint2": "Your agent, your tokens — no daily limit from us",
+    "platformPoint1": "Zero install, zero configuration",
+    "platformPoint2": "Included in your daily allowance",
+    "selfPoint1": "Quick install or custom MCP config",
+    "selfPoint2": "Your agent and tokens — no daily allowance limit",
     "anyMcpClient": "any MCP client",
     "showcaseHeading": "Live in the catalog",
     "pokeQa": "Poke the thinking mascot — pass the idea down",
@@ -1754,7 +1754,7 @@
     "legend": "Who builds this round?",
     "platform": {
       "title": "Gamedev.pl coding agent",
-      "detail": "We assign a coding agent and you watch progress here.",
+      "detail": "Our cloud coding agent — follow live progress in Studio.",
       "unavailable": {
         "badge": {
           "coming_soon": "Coming soon",
@@ -1778,7 +1778,7 @@
     },
     "self": {
       "title": "My own coding agent",
-      "detail": "You connect Claude Code, Codex, Cursor, or another agent."
+      "detail": "Connect your own agent via the MCP protocol."
     },
     "badge": {
       "self": "Your agent",

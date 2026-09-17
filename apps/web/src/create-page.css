@@ -19,8 +19,9 @@
 .create-subhead {
   color: var(--muted);
   font-size: 1.05rem;
-  max-width: 38rem;
+  max-width: 44rem;
   margin: 0 auto;
+  text-wrap: balance;
 }
 
 .create-section-heading {
@@ -226,6 +227,7 @@
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .create-notify-note {
@@ -346,6 +348,7 @@
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .create-builder-lane-list {

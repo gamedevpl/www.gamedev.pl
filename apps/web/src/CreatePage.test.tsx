@@ -93,7 +93,7 @@ describe('CreatePage', () => {
     expect(container.querySelectorAll('.create-builder-mark')).toHaveLength(2);
     expect(container.querySelector('.create-builder-progress')).not.toBeNull();
     expect(container.textContent).toContain('01');
-    expect(container.textContent).toContain("A human reviews, then it's live");
+    expect(container.textContent).toContain('Review and publish');
 
     const laneTitles = Array.from(container.querySelectorAll('.create-builder-lane-title')).map((el) =>
       el.textContent?.trim(),
