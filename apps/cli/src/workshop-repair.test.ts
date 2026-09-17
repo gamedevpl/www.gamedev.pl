@@ -33,7 +33,8 @@ it('repairs editor validation in the same workspace and keeps ownership through 
   const ws = workshop({
     onLocalTask: (agent) => local.push(agent),
     runAdapter: async (input) => {
-      expect(input.spec).toMatchObject(spec);
+      expect(input.spec).toMatchObject({ ...spec, headless: expect.arrayContaining(spec.headless) });
+      expect(input.spec.headless.join(' ')).toContain('mcp_servers.gamedevpl_local.url');
       expect(input.cwd).toBe(join(ws.root, 'games/game'));
       prompts.push(input.prompt);
       writeFileSync(join(input.cwd, 'game.ts'), String(prompts.length));

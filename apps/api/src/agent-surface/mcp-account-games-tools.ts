@@ -4,6 +4,7 @@ import { looksLikeGameAgentKey, SESSION_KEY_IS_NOT_AN_OPENER_REASON } from './ag
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { assertMcpSessionKeyUnexpired, looksLikeMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
+import { isGameMember } from '../platform/game-access-permissions.js';
 import { assertAgentTokenActive, InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { isActiveBuildRound, resolveJobState } from '../creation/job-state.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -125,15 +126,18 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
             assertAgentTokenActive(claims, job, now());
             const access = job.slug ? await resolveGameAccess(store, job.slug) : null;
             // A round key stops naming its creator once the game changes hands.
-            if (access && !roundAuthorityCurrent(job, access)) {
+            if (access && !roundAuthorityCurrent(job, access, claims)) {
               return toolErr('invalid sessionKey — call start() again');
             }
-            // The account is whoever owns the game now.
+            const actorUid = claims.actorUid ?? job.ownerUid;
+            if (access && claims.actorUid && !isGameMember(access, actorUid)) {
+              return toolErr('invalid sessionKey — call start() again');
+            }
+            // Bound writer keeps their account; a former owner does not.
+            const stillMember = !access || isGameMember(access, actorUid);
             const owner = access?.owner;
             const current = owner?.kind === 'creator' ? owner.uid : undefined;
-            if (current ?? job.ownerUid) {
-              creatorUid = current ?? job.ownerUid;
-            }
+            creatorUid = claims.actorUid ? actorUid : stillMember ? job.ownerUid : (current ?? job.ownerUid);
           } catch (error) {
             if (error instanceof InvalidAgentTokenError) {
               return toolErr(

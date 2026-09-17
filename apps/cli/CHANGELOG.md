@@ -9,6 +9,36 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Local agents with MCP can report meaningful task progress even without a running preview (#1392).
+- Create and edit in a detached Play workbench with state-preserving updates, local evidence attachments, phone playtesting, and guarded CLI/platform controls (#1388).
+
+### Fixed
+
+- Recover Play after session changes without replaying uncertain operations, and remove expired phone links (#1388).
+- Keep Play usable after preparation timeouts, preserve staged evidence while answering questions, and ignore superseded reloads (#1388).
+- Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task (#1392).
+
+## 0.17.0 — 2026-09-16
+
+### Added
+
+- Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
+- Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
+- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
+
+### Fixed
+
+- Hide Copilot protocol chatter while preserving replies, tool activity, and errors (#1386).
+
+### Internal
+
+- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
+
+## 0.16.0 — 2026-09-16
+
+### Added
+
+- Local Codex, Claude, and Copilot tasks receive MCP screenshot tools for the current preview without needing a browser inside the agent sandbox (#1375).
 - Type follow-up requests while a local agent works; Enter queues them for after the current task without interrupting it (#1369).
 - Interactive sessions restore recent conversation output and prompt history after restarting, separately for each account, server, and game (#1369).
 

@@ -227,8 +227,15 @@
   color: var(--accent-blue);
 }
 
-.studio-shelf-title {
+.studio-shelf-copy {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.studio-shelf-title {
   min-width: 0;
   display: block;
   font-size: 0.92rem;
@@ -237,6 +244,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.25;
+}
+
+.studio-shelf-role {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .studio-shelf-meta {

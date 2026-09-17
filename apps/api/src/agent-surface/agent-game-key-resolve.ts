@@ -18,6 +18,7 @@ import {
 import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import { isActiveBuildRound } from '../creation/job-state.js';
 import type { GameAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { creatorOwnsSlug } from '../platform/slug-ownership.js';
 
 export type ResolveGameKeyResult =
@@ -35,7 +36,7 @@ export type ResolveGameKeyForOpenRoundResult =
 
 // Canonical owner: the whole slug, not just their own past rounds.
 async function widenIfTransferred(store: Store, slug: string, creatorUid: string): Promise<SubmissionRecord[]> {
-  if (!(await creatorOwnsSlug(store, slug, creatorUid))) return [];
+  if (!(await canActOnSlug(store, slug, creatorUid, 'read'))) return [];
   return store.listSubmissionsBySlug(slug);
 }
 

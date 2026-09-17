@@ -188,6 +188,46 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('25%');
   });
 
+  it('renders sharing accepts as a share of offered, not of all visits', () => {
+    const text = render(
+      response({
+        visits: 10,
+        sharing: [
+          { step: 'offered', visits: 4 },
+          { step: 'accepted', visits: 2 },
+          { step: 'declined', visits: 1 },
+          { step: 'cancelled', visits: 0 },
+          { step: 'expired', visits: 0 },
+          { step: 'removed', visits: 0 },
+          { step: 'left', visits: 0 },
+        ],
+      }),
+    );
+    expect(text).toContain('Sharing');
+    expect(text).toContain('sent an editor invite');
+    expect(text).toContain('accepted an editor invite');
+    expect(text).toContain('50%');
+    expect(text).toContain('25%');
+  });
+
+  it('says so when nobody shared a game', () => {
+    const text = render(
+      response({
+        visits: 3,
+        sharing: [
+          { step: 'offered', visits: 0 },
+          { step: 'accepted', visits: 0 },
+          { step: 'declined', visits: 0 },
+          { step: 'cancelled', visits: 0 },
+          { step: 'expired', visits: 0 },
+          { step: 'removed', visits: 0 },
+          { step: 'left', visits: 0 },
+        ],
+      }),
+    );
+    expect(text).toContain('Nobody shared a game in this window');
+  });
+
   it('says so when nobody landed in a framed play', () => {
     const text = render(
       response({

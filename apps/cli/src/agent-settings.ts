@@ -74,6 +74,9 @@ export function configureAdapter(spec: AdapterSpec, env: NodeJS.ProcessEnv, over
       if (!arg.includes('=')) i += 1;
     } else base.push(arg);
   }
-  const headless = base[0] === 'exec' ? ['exec', ...args, ...base.slice(1)] : [...args, ...base];
+  const headless =
+    base[0] === 'exec' || (spec.name === 'opencode' && base[0] === 'run')
+      ? [base[0], ...args, ...base.slice(1)]
+      : [...args, ...base];
   return { ...spec, headless, selection };
 }

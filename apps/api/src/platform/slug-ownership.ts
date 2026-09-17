@@ -1,4 +1,5 @@
 import { ownsGame, resolveGameAccess, type GameOwnerLookup } from './game-access-resolve.js';
+import { canActOnSlug } from './game-access-permissions.js';
 import { mintGameSlug } from './slug.js';
 import type { Store, SubmissionRecord } from './store.js';
 
@@ -86,7 +87,7 @@ export async function listAuthorizedRoundsForSlug(
   uid: string,
   slug: string,
 ): Promise<SubmissionRecord[]> {
-  if (!(await creatorOwnsSlug(store, slug, uid))) return [];
+  if (!(await canActOnSlug(store, slug, uid, 'read'))) return [];
   // Every round — an intervening owner's round may be the tip.
   return store.listSubmissionsBySlug(slug);
 }

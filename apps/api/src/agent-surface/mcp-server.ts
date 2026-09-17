@@ -1,3 +1,5 @@
+import { resolvePresenceJobId } from './mcp-presence-capability.js';
+import { memberCapabilityCurrent } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '@gamedevpl/contract';
 import {
@@ -45,7 +47,7 @@ import {
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug } from './agent-game-key-resolve.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug, writerUidForSlug } from '../platform/game-access-permissions.js';
 import {
   JOINING_ROUND_PRESENCE,
   mcpPresenceKey,
@@ -257,6 +259,9 @@ interface AuthedJob {
   /** Round-scoped agent token for channel inject (same generation as the capability). */
   channelToken: string;
   claims: Pick<AgentTokenClaims, 'jobId' | 'roundGeneration' | 'exp'>;
+  /** Session writer; job.ownerUid is historical authorship. */
+  actorUid: string;
+  actorRevision?: number;
 }
 
 function jsonRpcResult(id: string | number | null | undefined, result: unknown) {
@@ -269,25 +274,6 @@ function jsonRpcError(id: string | number | null | undefined, code: number, mess
     id: id ?? null,
     error: { code, message, ...(data !== undefined ? { data } : {}) },
   };
-}
-
-/** Job id for a coarse presence pulse — sessionKey preferred, else round Bearer. */
-function resolvePresenceJobId(sessionKey: string, bearer: string | null, secret: string): number | null {
-  if (sessionKey && looksLikeMcpSessionKey(sessionKey)) {
-    try {
-      return verifyMcpSessionKey(sessionKey, secret).jobId;
-    } catch {
-      return null;
-    }
-  }
-  if (bearer) {
-    try {
-      return verifyAgentToken(bearer, secret).jobId;
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function pruneHits(buckets: Map<string, number[]>, key: string, currentTime: number): number[] {
@@ -600,6 +586,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         bearerIsPlatformConnector ||
         bearerIsManagedOpener);
     let identity!: AuthedJob['identity'];
+    let sessionActorUid: string | undefined;
 
     if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
@@ -646,14 +633,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jobId: sessionClaims.jobId,
         roundGeneration: sessionClaims.roundGeneration,
         exp: sessionClaims.exp,
+        actorUid: sessionClaims.actorUid,
+        actorRevision: sessionClaims.actorRevision,
       };
-      // Ephemeral channel token for inject — same generation, short TTL. Not returned.
-      channelToken = mintAgentToken(sessionClaims.jobId, agentTokenSecret, {
-        roundGeneration: sessionClaims.roundGeneration,
-        now: now(),
-        ttlDays: 1,
-      });
       identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
+      sessionActorUid = sessionClaims.actorUid;
+      channelToken = '';
     } else if (bearerIsOAuth) {
       return toolErr(
         'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
@@ -691,7 +676,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr('unknown build');
     }
     // Fences a round whose game changed hands, however many rounds it has.
-    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug))) {
+    if (record.slug && !roundAuthorityCurrent(record, await resolveGameAccess(store, record.slug), claims)) {
       return toolErr(FINISHED_REASON);
     }
 
@@ -709,12 +694,38 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(FINISHED_REASON);
     }
 
+    const actorUid = sessionActorUid ?? claims.actorUid ?? record.ownerUid;
+    if (record.slug && !(await canActOnSlug(store, record.slug, actorUid, 'build'))) {
+      return toolErr('this session can no longer write this game');
+    }
+    if (
+      record.slug &&
+      !memberCapabilityCurrent(
+        await resolveGameAccess(store, record.slug),
+        actorUid,
+        claims.actorRevision ?? (sessionActorUid ? undefined : record.accessEpoch),
+      )
+    ) {
+      return toolErr('this session can no longer write this game');
+    }
+    if (!channelToken) {
+      channelToken = mintAgentToken(claims.jobId, agentTokenSecret, {
+        roundGeneration: claims.roundGeneration ?? record.roundGeneration ?? 1,
+        now: now(),
+        ttlDays: 1,
+        actorUid,
+        actorRevision: claims.actorRevision,
+      });
+    }
+
     return {
       jobId: claims.jobId,
       record,
       access,
       identity,
       channelToken,
+      actorUid,
+      actorRevision: claims.actorRevision,
       claims: {
         jobId: claims.jobId,
         roundGeneration: claims.roundGeneration,
@@ -1051,7 +1062,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
         }
 
-        const bindActiveRound = async (active: SubmissionRecord): Promise<ToolResult> => {
+        const bindActiveRound = async (active: SubmissionRecord, actorUid: string): Promise<ToolResult> => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
           // Prefer the client's correlator when well-formed — even if this instance
@@ -1067,6 +1078,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             jobId,
             roundGeneration,
             now: now(),
+            actorUid,
+            actorRevision: active.slug ? (await resolveGameAccess(store, active.slug)).accessRevision : undefined,
           });
           const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 
@@ -1105,7 +1118,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             noteInvalidStart(ctx.request);
             return toolErr(resolved.reason);
           }
-          return await bindActiveRound(resolved.record);
+          return await bindActiveRound(resolved.record, resolved.claims.creatorUid);
         }
 
         if (!key && bearer && looksLikeAsAccessToken(bearer)) {
@@ -1117,13 +1130,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           if (!slugArg) {
             return toolErr('slug is required when using OAuth — pass the game slug for your open build round');
           }
-
-          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+          const actorUid = await writerUidForSlug(store, slugArg, asAccess.ownerUid);
+          if (!actorUid) {
             noteInvalidStart(ctx.request);
             return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           }
-
-          const active = await findActiveRoundForSlug(store, slugArg, asAccess.ownerUid);
+          const active = await findActiveRoundForSlug(store, slugArg, actorUid);
           if (!active) {
             noteInvalidStart(ctx.request);
             return toolErr(NO_OPEN_ROUND_REASON);
@@ -1134,7 +1146,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr(PLATFORM_ROUND_REASON);
           }
 
-          return await bindActiveRound(active);
+          return await bindActiveRound(active, actorUid);
         }
 
         if (!key && bearer) {
@@ -1172,7 +1184,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               noteInvalidStart(ctx.request);
               return toolErr('slug is required and must match this platform round');
             }
-            return await bindActiveRound(active);
+            return await bindActiveRound(active, active.ownerUid);
           }
         }
 
@@ -1211,13 +1223,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         let record: SubmissionRecord;
         let jobId: number;
         let roundGeneration: number;
+        let claims: AgentTokenClaims;
 
         if (looksLikeGameAgentKey(key)) {
           noteInvalidStart(ctx.request);
           return toolErr(RETIRED_GAME_KEY_REASON);
         } else {
           // Legacy round-scoped key — still accepted for in-flight rounds.
-          let claims: AgentTokenClaims;
           try {
             claims = verifyAgentToken(key, agentTokenSecret);
           } catch {
@@ -1231,7 +1243,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
           }
 
-          if (found.slug && !roundAuthorityCurrent(found, await resolveGameAccess(store, found.slug))) {
+          if (found.slug && !roundAuthorityCurrent(found, await resolveGameAccess(store, found.slug), claims)) {
             noteInvalidStart(ctx.request);
             return toolErr(FINISHED_REASON);
           }
@@ -1266,6 +1278,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           jobId,
           roundGeneration,
           now: now(),
+          actorUid: claims.actorUid ?? record.ownerUid,
+          actorRevision: claims.actorRevision ?? (claims.actorUid ? undefined : record.accessEpoch),
         });
         const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
 
@@ -1339,7 +1353,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createExampleTools({ resolveAuth, injectChannel }),
 
     ...createSourcePatchTools({ resolveAuth, injectChannel }),
-    ...createSourceSubmitTools({ resolveAuth, injectChannel, store }),
+    ...createSourceSubmitTools({ resolveAuth, injectChannel, store, gamesStore: options.gamesStore }),
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),

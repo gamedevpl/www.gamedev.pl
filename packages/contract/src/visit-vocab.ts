@@ -48,6 +48,10 @@ export type CreateStep = (typeof CREATE_STEPS)[number];
 export const WAITLIST_STEPS = ['cta_clicked', 'joined'] as const;
 export type WaitlistStep = (typeof WAITLIST_STEPS)[number];
 
+// Game sharing: invite and membership outcomes. No slug on the visit stream.
+export const SHARE_STEPS = ['offered', 'accepted', 'declined', 'cancelled', 'expired', 'removed', 'left'] as const;
+export type ShareStep = (typeof SHARE_STEPS)[number];
+
 // Framed /play/ interstitial: shown, then which exit they took.
 export const FRAMED_PLAY_STEPS = ['shown', 'open_new', 'open_here'] as const;
 export type FramedPlayStep = (typeof FRAMED_PLAY_STEPS)[number];
@@ -237,6 +241,7 @@ export const CLI_ADAPTERS = [
   'cursor',
   'copilot',
   'muse',
+  'opencode',
   'custom',
 ] as const;
 export type CliAdapter = (typeof CLI_ADAPTERS)[number];

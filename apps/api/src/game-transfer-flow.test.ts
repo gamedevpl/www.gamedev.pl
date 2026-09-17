@@ -59,11 +59,13 @@ async function createApp(store: InMemoryStore, managedAvailabilityGate?: Managed
   const app = await buildApp({
     store,
     sessionSecret: SESSION_SECRET,
+    contentChecker: { check: async () => ({ allowed: true }), checkFields: async () => ({ allowed: true }) },
     submissionRoutes: {
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: SECRET,
       agentBackend: stubBackend(),
+      chatAgent: { decide: async () => ({ kind: 'build', text: 'On it.' }) },
       agentChannel: {} as { gamesStore?: GamesStore },
       chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
       ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
@@ -75,11 +77,11 @@ async function createApp(store: InMemoryStore, managedAvailabilityGate?: Managed
 
 // A game owned by SENDER, with a round's history behind it.
 async function gameWithHistory(store: InMemoryStore, opts?: { published?: boolean }) {
-  const at = '2026-01-01T00:00:00.000Z';
   await store.upsertUser({ uid: SENDER });
   await store.upsertUser({ uid: RECIPIENT });
   const jobId = await store.allocateJobId();
   await store.createSubmission(jobId, SENDER, 'Comet Courier');
+  const at = (await store.getSubmission(jobId))!.createdAt;
   await store.setSubmissionSlug(jobId, 'comet-courier');
   await store.setSubmissionDeliveredVersion(jobId, 'v1');
   await store.appendCreatorMessage(jobId, 'Make the asteroids slower.');

@@ -50,11 +50,15 @@ describe('a guard that lied about the shape let a malformed document reach the p
 describe('malformed content is reported, not thrown on', () => {
   it('reports a board whose rows are not there', () => {
     expect(() => itemProblems(tilemap, { properties: {}, rows: null } as never, name)).not.toThrow();
-    expect(itemProblems(tilemap, { properties: {}, rows: null } as never, name)).toEqual(['Needs a board of rows']);
+    expect(itemProblems(tilemap, { properties: {}, rows: null } as never, name).join()).toContain(
+      '"rows" must be an array of strings',
+    );
   });
 
   it('reports a path whose points are not there', () => {
-    expect(itemProblems(path, { properties: {}, points: null } as never, name)).toEqual(['Needs a list of points']);
+    expect(itemProblems(path, { properties: {}, points: null } as never, name).join()).toContain(
+      '"points" must be an array',
+    );
   });
 
   it('reports a nested layer whose rows are not there, rather than throwing', () => {
@@ -75,7 +79,7 @@ describe('malformed content is reported, not thrown on', () => {
     } as unknown as EditorCollectionSpec['item'];
     const item = { properties: {}, layers: { terrain: { properties: {}, rows: null } } };
     expect(() => itemProblems(layered, item as never, name)).not.toThrow();
-    expect(itemProblems(layered, item as never, name).join()).toContain('needs a tilemap document');
+    expect(itemProblems(layered, item as never, name).join()).toContain('"rows" must be an array of strings');
   });
 
   it('skips a collection entity with no properties object instead of throwing', () => {
@@ -93,7 +97,7 @@ describe('malformed content is reported, not thrown on', () => {
       properties: {},
       constraints: [],
     } as unknown as EditorLayerSpec;
-    expect(layerProblems(spec, [{ properties: null }], name)).toEqual(['Layer needs an entity list']);
+    expect(layerProblems(spec, [{ properties: null }], name).join()).toContain('"properties" must be an object');
   });
 });
 
@@ -113,13 +117,13 @@ describe('a guard that ignored properties let the item list crash', () => {
 
   it('does not throw on a path holding a null point', () => {
     expect(() => itemProblems(path, { properties: {}, points: [null] } as never, name)).not.toThrow();
-    expect(itemProblems(path, { properties: {}, points: [null] } as never, name)).toEqual(['Needs a list of points']);
+    expect(itemProblems(path, { properties: {}, points: [null] } as never, name).join()).toContain('point 1');
   });
 
   it('reports an entity item that is not a property sheet', () => {
     const spec = { widget: 'entities', properties: {}, constraints: [] } as unknown as EditorCollectionSpec['item'];
-    expect(itemProblems(spec, null as never, name)).toEqual(['Needs a property sheet']);
-    expect(itemProblems(spec, { properties: null } as never, name)).toEqual(['Needs a property sheet']);
+    expect(itemProblems(spec, null as never, name)).toEqual(['must be an object']);
+    expect(itemProblems(spec, { properties: null } as never, name)).toEqual(['"properties" must be an object']);
     expect(itemProblems(spec, { properties: {} } as never, name)).toEqual([]);
   });
 });

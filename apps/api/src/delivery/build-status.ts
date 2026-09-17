@@ -5,7 +5,7 @@ import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
-import { creatorOwnsSlug, ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -68,6 +68,8 @@ export interface BuildStatusAssembler {
   ): Promise<SubmissionStatusResponse>;
   // Drops the cached channel events for a job that just received one.
   invalidateEvents(jobId: number): void;
+  // Drops previews/shots for a job whose media just changed.
+  invalidateMedia(jobId: number): void;
 }
 
 function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
@@ -80,6 +82,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
+  // Previews and shots change rarely during a build; 30s matches prior rounds.
+  const mediaCacheTtlMs = 30_000;
   // Past the window, a count is asked before the page.
   const eventsProbeWindowMs = 60_000;
   const maxEventsShown = 20;
@@ -123,6 +127,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   // The channel prunes on write; only a little history is ever wanted.
   const maxPreviewsShown = 4;
   const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
+  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
+  // Bumped by invalidateMedia; a read started before it must not write after.
+  const mediaGeneration = new Map<number, number>();
 
   async function loadBuildPreviews(jobId: number): Promise<BuildPreviewSummary[]> {
     if (!store) return [];
@@ -131,13 +138,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    const generation = mediaGeneration.get(jobId) ?? 0;
     const value = await store.listBuildPreviews(jobId, { limit: maxPreviewsShown });
-    previewsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+      previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+    }
     return value;
   }
 
   const maxShotsShown = 12;
-  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
 
   async function loadBuildShots(jobId: number): Promise<BuildShotSummary[]> {
     if (!store) return [];
@@ -146,8 +155,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    const generation = mediaGeneration.get(jobId) ?? 0;
     const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
-    shotsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+      shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+    }
     return value;
   }
 
@@ -230,10 +242,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     record: SubmissionRecord,
     locale: string,
     viewerUid?: string,
+    viewerOwnsSlug = false,
   ): Promise<PriorRoundHistory[]> {
-    if (!store || !record.slug) return [];
+    if (!store || !record.slug || !viewerUid) return [];
     // Earlier rounds carry private chat, and a status token names no one.
-    if (!viewerUid || !(await creatorOwnsSlug(store, record.slug, viewerUid))) return [];
+    if (!viewerOwnsSlug && !(await canActOnSlug(store, record.slug, viewerUid, 'read'))) return [];
     const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
@@ -309,7 +322,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
     // State is a receipt the token carries; what was said is not.
-    const viewerOwns = Boolean(store && record && viewerUid && (await ownsSubmissionOrSlug(store, record, viewerUid)));
+    const viewerOwns = Boolean(
+      store && record && viewerUid && (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read')),
+    );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
@@ -380,11 +395,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     }
 
     // Soft: sibling history must not 500 the live thread poll.
-    try {
-      const priorRounds = await loadPriorRounds(record, locale, viewerUid);
-      if (priorRounds.length > 0) next.priorRounds = priorRounds;
-      else delete next.priorRounds;
-    } catch {
+    if (viewerOwns) {
+      try {
+        const priorRounds = await loadPriorRounds(record, locale, viewerUid, true);
+        if (priorRounds.length > 0) next.priorRounds = priorRounds;
+        else delete next.priorRounds;
+      } catch {
+        delete next.priorRounds;
+      }
+    } else {
       delete next.priorRounds;
     }
 
@@ -408,5 +427,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     eventsCache.delete(jobId);
   }
 
-  return { attachBuildEvents, invalidateEvents };
+  function invalidateMedia(jobId: number): void {
+    mediaGeneration.set(jobId, (mediaGeneration.get(jobId) ?? 0) + 1);
+    previewsCache.delete(jobId);
+    shotsCache.delete(jobId);
+  }
+
+  return { attachBuildEvents, invalidateEvents, invalidateMedia };
 }

@@ -147,7 +147,7 @@ export async function verifyAsAccessToken(
     return null;
   }
 
-  const record = await store.getOAuthAccessToken(parsed.tokenId);
+  const record = await store.getAsAccessToken(parsed.tokenId);
   if (!record) return null;
   if (!verifyAsTokenSecret(parsed.secretHalf, record.secretHash)) return null;
   if (isAsAccessTokenExpired(record.expiresAt, nowMs)) {

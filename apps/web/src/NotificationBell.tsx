@@ -29,6 +29,10 @@ const FALLBACK: Record<NotificationType, { title: string; body: string }> = {
     title: 'Your games this week',
     body: 'Sessions: {{sessions}} · Games: {{games}} · {{votesUp}}👍 {{votesDown}}👎 · Notes from players: {{feedback}}',
   },
+  'share.offered': { title: 'You were invited to edit a game', body: '{{actorName}} invited you to edit “{{title}}”.' },
+  'share.accepted': { title: 'An editor joined your game', body: '{{actorName}} accepted the invite for “{{title}}”.' },
+  'share.removed': { title: 'You were removed from a game', body: '{{actorName}} removed you from “{{title}}”.' },
+  'share.left': { title: 'An editor left your game', body: '{{actorName}} left “{{title}}”.' },
 };
 
 export function NotificationBell() {

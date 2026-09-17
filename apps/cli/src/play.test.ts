@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { playGame, startLocalPlay } from './play.js';
+import { previewSource } from './local-preview-source.js';
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function eventually(
@@ -68,8 +69,13 @@ describe('play', () => {
       writeFileSync(source, 'broken');
       const red = await eventually(first!.url, (state) => state.error.includes('compile failed'));
       expect(red.revision).toBe(b.revision);
+      expect(red.stale).toBe(true);
+      await expect(previewSource(first!.url, AbortSignal.timeout(2000)).snapshot()).rejects.toThrow('compile failed');
       expect(await fetch(first!.url + 'game').then((r) => r.text())).toContain('Second');
       writeFileSync(source, '<!doctype html><h1>Recovered</h1>');
+      const changed = await fetch(first!.url + 'status').then((r) => r.json());
+      expect(changed.error).toBe('');
+      expect(changed.stale).toBe(true);
       await eventually(first!.url, (state) => !state.error && state.revision !== b.revision);
       const recovered = await eventually(first!.url, (state) => !state.error);
       writeFileSync(join(root, 'templates/title.txt'), 'template changed');

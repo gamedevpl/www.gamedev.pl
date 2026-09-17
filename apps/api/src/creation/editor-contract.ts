@@ -1,219 +1,114 @@
-/**
- * MIRROR of the games repo's `tools/lib/editor-contract.ts` — EditorKit L0/L4.
- *
- * The games repo is the authority (its Check 31 validates every delivery); this
- * copy validates Studio drafts on write and regenerates the L1 content module
- * on publish, so the two files must stay byte-equivalent below the header.
- * `editor-contract.test.ts` pins the generator's output against a fixture so a
- * drift here fails CI rather than turning every editor publish into a gate
- * failure. Update both files in one paired change, like assemble-contract.
- */
+// Types and L4 validation live in @gamedevpl/contract.
 
-export const EDITOR_FILE = 'EDITOR.json';
-export const EDITOR_CONTENT_FILE = 'EDITOR.content.json';
-/** Where the generated L1 module lands inside a game dir. */
-export const GENERATED_CONTENT_PATH = 'game/editor-content.ts';
-/** SPEC.md frontmatter key that declares an editable game (rides the catalog). */
-export const EDITOR_SPEC_KEY = 'editor';
-export const EDITOR_SPEC_VALUE = 'content';
+export {
+  EDITOR_CONTENT_FILE,
+  EDITOR_FILE,
+  EDITOR_SPEC_KEY,
+  EDITOR_SPEC_VALUE,
+  GENERATED_CONTENT_PATH,
+  LAYERS_KEY,
+  MAX_COLLECTIONS,
+  MAX_COLLECTION_ITEMS,
+  MAX_CONSTRAINTS,
+  MAX_EDITOR_JSON_BYTES,
+  MAX_ENUM_VALUES,
+  MAX_GRID_COLS,
+  MAX_GRID_ROWS,
+  MAX_LAYER_ITEMS,
+  MAX_LAYER_TOTAL_CELLS,
+  MAX_LAYERS,
+  MAX_PARAMS,
+  MAX_PATH_POINTS,
+  MAX_PROPERTIES,
+  MAX_TEXT_LENGTH,
+  MAX_TILES,
+  PARAMS_KEY,
+  isPlainObject,
+  propertyValueErrors,
+  validateCollectionContent,
+  validateEditorContent,
+  validateItemContent,
+  validateLayerContent,
+  type CollectionItemSpec,
+  type CollectionSpec,
+  type EditorConstraint,
+  type EditorContentDocument,
+  type EditorDefinition,
+  type EditorLabel,
+  type EditorLayerConstraint,
+  type EditorLayerContent,
+  type EditorLayerSpec,
+  type EditorLayersContent,
+  type EditorVersion,
+  type EntitiesItemSpec,
+  type EntitiesLayerSpec,
+  type EntityItemContent,
+  type LayerTileRef,
+  type LayeredItemContent,
+  type LayeredItemSpec,
+  type ParamSpec,
+  type ParamValue,
+  type PathItemContent,
+  type PathItemSpec,
+  type PathPoint,
+  type PropertySpec,
+  type TileSpec,
+  type TilemapItemContent,
+  type TilemapItemSpec,
+  type TilemapLayerSpec,
+} from '@gamedevpl/contract';
 
-/** Hard ceiling on the declaration file, defaults included. */
-export const MAX_EDITOR_JSON_BYTES = 64 * 1024;
-export const MAX_COLLECTIONS = 4;
-export const MAX_COLLECTION_ITEMS = 32;
-export const MAX_TILES = 16;
-export const MAX_CONSTRAINTS = 8;
-/** Property limits — same numbers as world.fields (Check 22 / website world-schema). */
-export const MAX_PROPERTIES = 12;
-export const MAX_TEXT_LENGTH = 240;
-export const MAX_ENUM_VALUES = 16;
-export const MAX_GRID_COLS = 64;
-export const MAX_GRID_ROWS = 64;
-export const MAX_PATH_POINTS = 256;
-/** Game-wide scalar tunables ("params") — same property vocabulary, one value each. */
-export const MAX_PARAMS = 16;
-export const MAX_LAYERS = 8;
-export const MAX_LAYER_ITEMS = 64;
-export const MAX_LAYER_TOTAL_CELLS = 16_384;
-/** Reserved content-document key param values ride under; illegal as a collection name. */
-export const PARAMS_KEY = 'params';
-export const LAYERS_KEY = 'layers';
+import {
+  EDITOR_CONTENT_FILE,
+  LAYERS_KEY,
+  MAX_COLLECTIONS,
+  MAX_COLLECTION_ITEMS,
+  MAX_CONSTRAINTS,
+  MAX_EDITOR_JSON_BYTES,
+  MAX_ENUM_VALUES,
+  MAX_GRID_COLS,
+  MAX_GRID_ROWS,
+  MAX_LAYER_ITEMS,
+  MAX_LAYER_TOTAL_CELLS,
+  MAX_LAYERS,
+  MAX_PARAMS,
+  MAX_PATH_POINTS,
+  MAX_PROPERTIES,
+  MAX_TEXT_LENGTH,
+  MAX_TILES,
+  PARAMS_KEY,
+  isPlainObject,
+  validateCollectionContent,
+  valueProblem,
+  type CollectionItemSpec,
+  type CollectionSpec,
+  type EditorConstraint,
+  type EditorContentDocument,
+  type EditorDefinition,
+  type EditorLabel,
+  type EditorLayerConstraint,
+  type EditorLayerSpec,
+  type EntitiesItemSpec,
+  type EntityItemContent,
+  type LayerTileRef,
+  type LayeredItemSpec,
+  type ParamSpec,
+  type ParamValue,
+  type PathItemContent,
+  type PathItemSpec,
+  type PropertySpec,
+  type TileSpec,
+  type TilemapItemContent,
+  type TilemapItemSpec,
+  type TilemapLayerSpec,
+} from '@gamedevpl/contract';
+
+export { valueProblem };
 
 const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{0,23}$/;
 const TILE_KEY_PATTERN = /^[a-z][a-z0-9-]{0,15}$/;
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 const PROPERTY_TYPES = ['text', 'int', 'number', 'enum', 'bool'] as const;
-
-export interface EditorLabel {
-  en: string;
-  pl: string;
-}
-
-export interface TileSpec {
-  key: string;
-  /** Single printable ASCII character used in a map's `rows` strings. */
-  char: string;
-  label: EditorLabel;
-  /**
-   * How this tile looks in the Studio's painter, as `#rrggbb`.
-   *
-   * Optional, and the reason it exists: without it the editor invents a generic
-   * palette, so a creator paints in one set of colors and plays in another —
-   * and two tiles the *game* draws distinctly can land on near-identical greys.
-   * The game already knows its own art direction, so it declares it here and
-   * the painter matches what the player will see. The platform still owns the
-   * chrome; this is the one piece of look the game is authoritative about.
-   */
-  color?: string;
-}
-
-export type PropertySpec =
-  | { type: 'text'; max: number }
-  | { type: 'int'; min: number; max: number }
-  | { type: 'number'; min: number; max: number }
-  | { type: 'enum'; values: string[] }
-  | { type: 'bool' };
-
-export type ParamValue = string | number | boolean;
-
-/**
- * A game-wide scalar tunable: one declared property plus the default players
- * get. The bilingual label is load-bearing, not cosmetic — it is how the
- * Studio's Tuning panel names the slider and how the assist router resolves
- * "the dog" to `dogScale`, so it must say what the value means in the game.
- */
-export type ParamSpec = PropertySpec & { label: EditorLabel; default: ParamValue };
-
-/**
- * A rule the Studio checks live and the gate checks on publish.
- *
- * `reachable` is the one that is not about counting, and it exists because
- * counting could not catch the failure that matters most: a map whose goal is
- * walled off is schema-valid, gate-green, and unplayable. The pilot shipped
- * exactly that — two seeds sealed behind hedges — and nothing in the pipeline
- * noticed, because reachability is the one structural property of a tilemap
- * that a game cannot express as a tile count.
- *
- * It stays game-agnostic: the game says which tile kind you start from, which
- * kinds block movement, and which kinds must be reachable. The platform runs a
- * four-way flood fill and knows nothing else about the game.
- */
-export type EditorConstraint =
-  | { tile: string; min?: number; max?: number; exactly?: number }
-  | { equalCounts: [string, string] }
-  | { reachable: { from: string; blockedBy: string[]; require: string[] } }
-  | { uniqueBy: string };
-
-export interface TilemapItemSpec {
-  widget: 'tilemap';
-  grid: { minCols: number; maxCols: number; minRows: number; maxRows: number };
-  tiles: TileSpec[];
-  properties: Record<string, PropertySpec>;
-  constraints: EditorConstraint[];
-}
-
-export interface EntitiesItemSpec {
-  widget: 'entities';
-  properties: Record<string, PropertySpec>;
-  constraints: EditorConstraint[];
-}
-
-export interface PathItemSpec {
-  widget: 'path';
-  gridCols: number;
-  gridRows: number;
-  minPoints: number;
-  maxPoints: number;
-  closed: boolean;
-  properties: Record<string, PropertySpec>;
-}
-
-export interface LayeredItemSpec {
-  widget: 'layered';
-  layers: Record<string, EditorLayerSpec>;
-  constraints: EditorLayerConstraint[];
-  properties: Record<string, PropertySpec>;
-}
-
-export type CollectionItemSpec = TilemapItemSpec | EntitiesItemSpec | PathItemSpec | LayeredItemSpec;
-
-export interface CollectionSpec {
-  widget: 'collection';
-  label: EditorLabel;
-  itemLabel: EditorLabel;
-  min: number;
-  max: number;
-  item: CollectionItemSpec;
-  defaults: Array<TilemapItemContent | EntityItemContent | PathItemContent | LayeredItemContent>;
-}
-
-export interface TilemapLayerSpec extends TilemapItemSpec {
-  label: EditorLabel;
-}
-
-export interface EntitiesLayerSpec extends EntitiesItemSpec {
-  label: EditorLabel;
-  min: number;
-  max: number;
-}
-
-export type EditorLayerSpec = TilemapLayerSpec | EntitiesLayerSpec;
-
-export type LayerTileRef = { layer: string; tile: string };
-
-export type EditorLayerConstraint = {
-  reachable: { from: LayerTileRef; blockedBy: LayerTileRef[]; require: LayerTileRef[] };
-};
-
-export interface TilemapItemContent {
-  properties: Record<string, unknown>;
-  rows: string[];
-}
-
-export interface EntityItemContent {
-  properties: Record<string, unknown>;
-}
-
-export interface PathPoint {
-  x: number;
-  y: number;
-}
-
-export interface PathItemContent {
-  properties: Record<string, unknown>;
-  points: PathPoint[];
-}
-
-export interface LayeredItemContent {
-  properties: Record<string, unknown>;
-  layers: EditorLayersContent;
-}
-
-export type EditorLayerContent = TilemapItemContent | EntityItemContent[];
-export type EditorLayersContent = Record<string, EditorLayerContent>;
-
-export type EditorContentDocument = Record<
-  string,
-  | Array<TilemapItemContent | EntityItemContent | PathItemContent | LayeredItemContent>
-  | Record<string, ParamValue>
-  | EditorLayersContent
->;
-
-export type EditorVersion = 1 | 2;
-
-export interface EditorDefinition {
-  version: EditorVersion;
-  params?: Record<string, ParamSpec>;
-  content: Record<string, CollectionSpec>;
-  layers?: Record<string, EditorLayerSpec>;
-  constraints?: EditorLayerConstraint[];
-  controller?: true;
-  validate?: true;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isLabel(value: unknown): value is EditorLabel {
   return (
@@ -286,35 +181,6 @@ function validateProperties(owner: string, raw: unknown, errors: string[]): Reco
     }
   }
   return out;
-}
-
-/**
- * One value against one declared property/param type. Returns the problem's
- * tail ("must be …") or null; callers prefix who the value belongs to. Shared
- * between item properties, param defaults, and param values so all three
- * refuse a value with the same words.
- */
-function valueProblem(spec: PropertySpec, value: unknown): string | null {
-  if (spec.type === 'text') {
-    if (typeof value !== 'string' || value.length > spec.max) {
-      return `must be a string of at most ${spec.max} characters`;
-    }
-  } else if (spec.type === 'int') {
-    if (!Number.isInteger(value) || (value as number) < spec.min || (value as number) > spec.max) {
-      return `must be an integer ${spec.min}-${spec.max}`;
-    }
-  } else if (spec.type === 'number') {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < spec.min || value > spec.max) {
-      return `must be a number ${spec.min}-${spec.max}`;
-    }
-  } else if (spec.type === 'enum') {
-    if (typeof value !== 'string' || !spec.values.includes(value)) {
-      return `must be one of ${spec.values.join(', ')}`;
-    }
-  } else if (typeof value !== 'boolean') {
-    return 'must be a boolean';
-  }
-  return null;
 }
 
 function validateParams(raw: unknown, errors: string[], requireDefaults: boolean): Record<string, ParamSpec> {
@@ -893,498 +759,6 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     },
     errors,
   };
-}
-
-/**
- * Four-way flood fill from every `from` tile, refusing to cross `blockedBy`
- * tiles, reporting any `require` tile it never reaches.
- *
- * Walking onto a required tile is what collecting it means in every game this
- * serves, so required tiles are themselves walkable unless the game also
- * declared them blocking — the rule reads "can the player get to it", not "can
- * the player walk past it".
- */
-function unreachable(
-  rule: { from: string; blockedBy: string[]; require: string[] },
-  rows: string[],
-  charToKey: Map<string, string>,
-  where: string,
-): string[] {
-  const height = rows.length;
-  const width = height > 0 ? rows[0].length : 0;
-  const keyAt = (row: number, col: number) => charToKey.get(rows[row][col]);
-  const blocked = new Set(rule.blockedBy);
-  const required = new Set(rule.require);
-
-  const seen = new Set<number>();
-  const queue: number[] = [];
-  for (let row = 0; row < height; row += 1) {
-    for (let col = 0; col < width; col += 1) {
-      if (keyAt(row, col) !== rule.from) continue;
-      const index = row * width + col;
-      seen.add(index);
-      queue.push(index);
-    }
-  }
-  // No origin at all is a separate failure the count rules already describe
-  // (`exactly 1 start`), so this rule stays quiet rather than piling on.
-  if (queue.length === 0) return [];
-
-  while (queue.length > 0) {
-    const index = queue.shift() as number;
-    const row = Math.floor(index / width);
-    const col = index % width;
-    for (const [dr, dc] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const nextRow = row + dr;
-      const nextCol = col + dc;
-      if (nextRow < 0 || nextCol < 0 || nextRow >= height || nextCol >= width) continue;
-      if (rows[nextRow].length !== width) continue;
-      const key = keyAt(nextRow, nextCol);
-      if (key === undefined || blocked.has(key)) continue;
-      const nextIndex = nextRow * width + nextCol;
-      if (seen.has(nextIndex)) continue;
-      seen.add(nextIndex);
-      queue.push(nextIndex);
-    }
-  }
-
-  const missed: string[] = [];
-  for (let row = 0; row < height; row += 1) {
-    for (let col = 0; col < width; col += 1) {
-      const key = keyAt(row, col);
-      if (key === undefined || !required.has(key)) continue;
-      if (!seen.has(row * width + col)) missed.push(`${key} at row ${row + 1}, column ${col + 1}`);
-    }
-  }
-  if (missed.length === 0) return [];
-  return [
-    `${where}: walled off from "${rule.from}" — ${missed.join('; ')}. ` +
-      'Every required tile must be reachable, or the game cannot be finished.',
-  ];
-}
-
-function validateEntityItemContent(spec: EntitiesItemSpec, item: unknown, where: string): string[] {
-  const errors: string[] = [];
-  if (!isPlainObject(item)) return [`${where}: must be an object`];
-  const unknown = Object.keys(item).filter((key) => key !== 'properties');
-  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
-  const properties = item.properties;
-  if (!isPlainObject(properties)) return [...errors, `${where}: "properties" must be an object`];
-  for (const name of Object.keys(properties)) {
-    if (!(name in spec.properties)) errors.push(`${where}: undeclared property "${name}"`);
-  }
-  for (const [name, propertySpec] of Object.entries(spec.properties)) {
-    const value = properties[name];
-    if (value === undefined) {
-      errors.push(`${where}: missing property "${name}"`);
-      continue;
-    }
-    const problem = valueProblem(propertySpec, value);
-    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
-  }
-  return errors;
-}
-
-function validatePathItemContent(spec: PathItemSpec, item: unknown, where: string): string[] {
-  const errors: string[] = [];
-  if (!isPlainObject(item)) return [`${where}: must be an object`];
-  const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== 'points');
-  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
-  const points = item.points;
-  if (!Array.isArray(points)) {
-    errors.push(`${where}: "points" must be an array`);
-  } else {
-    if (points.length < spec.minPoints || points.length > spec.maxPoints) {
-      errors.push(`${where}: has ${points.length} points (allowed ${spec.minPoints}-${spec.maxPoints})`);
-    }
-    for (const [index, point] of points.entries()) {
-      if (
-        !isPlainObject(point) ||
-        Object.keys(point).some((key) => key !== 'x' && key !== 'y') ||
-        !Number.isInteger(point.x) ||
-        !Number.isInteger(point.y) ||
-        (point.x as number) < 0 ||
-        (point.x as number) >= spec.gridCols ||
-        (point.y as number) < 0 ||
-        (point.y as number) >= spec.gridRows
-      ) {
-        errors.push(
-          `${where}: point ${index + 1} must contain integer x/y inside 0-${spec.gridCols - 1} by 0-${spec.gridRows - 1}`,
-        );
-      }
-    }
-    if (spec.closed && points.length > 0) {
-      const validPoints = points.filter(
-        (point): point is PathPoint => isPlainObject(point) && Number.isInteger(point.x) && Number.isInteger(point.y),
-      );
-      const distinct = new Set(validPoints.map((point) => `${point.x},${point.y}`));
-      if (distinct.size < 3) errors.push(`${where}: a closed path needs at least 3 distinct points`);
-      const first = validPoints[0];
-      const last = validPoints[validPoints.length - 1];
-      if (first && last && first.x === last.x && first.y === last.y) {
-        errors.push(`${where}: a closed path must not repeat its first point at the end; closure is implicit`);
-      }
-    }
-  }
-  const properties = item.properties;
-  if (!isPlainObject(properties)) return [...errors, `${where}: "properties" must be an object`];
-  for (const name of Object.keys(properties)) {
-    if (!(name in spec.properties)) errors.push(`${where}: undeclared property "${name}"`);
-  }
-  for (const [name, propertySpec] of Object.entries(spec.properties)) {
-    const value = properties[name];
-    if (value === undefined) {
-      errors.push(`${where}: missing property "${name}"`);
-      continue;
-    }
-    const problem = valueProblem(propertySpec, value);
-    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
-  }
-  return errors;
-}
-
-// Declared property values, checked the same way whatever widget owns them.
-function propertyValueErrors(specs: Record<string, PropertySpec>, properties: unknown, where: string): string[] {
-  if (!isPlainObject(properties)) return [`${where}: "properties" must be an object`];
-  const errors: string[] = [];
-  for (const name of Object.keys(properties)) {
-    if (!(name in specs)) errors.push(`${where}: undeclared property "${name}"`);
-  }
-  for (const [name, spec] of Object.entries(specs)) {
-    const value = properties[name];
-    if (value === undefined) {
-      errors.push(`${where}: missing property "${name}"`);
-      continue;
-    }
-    const problem = valueProblem(spec, value);
-    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
-  }
-  return errors;
-}
-
-// Each item owns a stack, so its rules are checked per item.
-function validateLayeredItemContent(spec: LayeredItemSpec, item: unknown, where: string): string[] {
-  if (!isPlainObject(item)) return [`${where}: must be an object`];
-  const errors: string[] = [];
-  const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== LAYERS_KEY);
-  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
-  errors.push(...propertyValueErrors(spec.properties, item.properties, where));
-
-  const layers = item[LAYERS_KEY];
-  if (!isPlainObject(layers)) return [...errors, `${where}: "layers" must be an object of layer values`];
-  for (const key of Object.keys(layers)) {
-    if (!(key in spec.layers)) errors.push(`${where}: undeclared layer "${key}"`);
-  }
-  for (const [key, layerSpec] of Object.entries(spec.layers)) {
-    if (layers[key] === undefined) {
-      errors.push(`${where}: missing layer "${key}"`);
-      continue;
-    }
-    errors.push(...validateLayerContent(layerSpec, layers[key], `${where}.${key}`));
-  }
-  for (const [index, rule] of spec.constraints.entries()) {
-    errors.push(...validateLayerReachable(rule.reachable, spec.layers, layers, `${where} constraints[${index}]`));
-  }
-  return errors;
-}
-
-function validateItemContent(spec: CollectionItemSpec, item: unknown, where: string): string[] {
-  if (spec.widget === 'entities') return validateEntityItemContent(spec, item, where);
-  if (spec.widget === 'path') return validatePathItemContent(spec, item, where);
-  if (spec.widget === 'layered') return validateLayeredItemContent(spec, item, where);
-  const errors: string[] = [];
-  if (!isPlainObject(item)) return [`${where}: must be an object`];
-  const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== 'rows');
-  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
-
-  const rows = item.rows;
-  if (!Array.isArray(rows) || rows.some((row) => typeof row !== 'string')) {
-    errors.push(`${where}: "rows" must be an array of strings`);
-  } else {
-    if (rows.length < spec.grid.minRows || rows.length > spec.grid.maxRows) {
-      errors.push(`${where}: has ${rows.length} rows (allowed ${spec.grid.minRows}-${spec.grid.maxRows})`);
-    }
-    const width = rows.length > 0 ? (rows[0] as string).length : 0;
-    if (width < spec.grid.minCols || width > spec.grid.maxCols) {
-      errors.push(`${where}: rows are ${width} wide (allowed ${spec.grid.minCols}-${spec.grid.maxCols})`);
-    }
-    const chars = new Set(spec.tiles.map((tile) => tile.char));
-    const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
-    const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
-    for (const [index, row] of (rows as string[]).entries()) {
-      if (row.length !== width) {
-        errors.push(`${where}: row ${index + 1} is ${row.length} wide, expected ${width}`);
-        continue;
-      }
-      for (const char of row) {
-        if (!chars.has(char)) {
-          errors.push(`${where}: row ${index + 1} uses undeclared tile character "${char}"`);
-          break;
-        }
-        const key = charToKey.get(char) as string;
-        counts.set(key, (counts.get(key) as number) + 1);
-      }
-    }
-    for (const rule of spec.constraints) {
-      if ('equalCounts' in rule) {
-        const [a, b] = rule.equalCounts;
-        if (counts.get(a) !== counts.get(b)) {
-          errors.push(`${where}: needs the same number of "${a}" and "${b}" (${counts.get(a)} vs ${counts.get(b)})`);
-        }
-        continue;
-      }
-      if ('reachable' in rule) {
-        errors.push(...unreachable(rule.reachable, rows as string[], charToKey, where));
-        continue;
-      }
-      if ('uniqueBy' in rule) continue;
-      const count = counts.get(rule.tile) ?? 0;
-      if (rule.exactly !== undefined && count !== rule.exactly) {
-        errors.push(`${where}: needs exactly ${rule.exactly} "${rule.tile}" (has ${count})`);
-      }
-      if (rule.min !== undefined && count < rule.min) {
-        errors.push(`${where}: needs at least ${rule.min} "${rule.tile}" (has ${count})`);
-      }
-      if (rule.max !== undefined && count > rule.max) {
-        errors.push(`${where}: allows at most ${rule.max} "${rule.tile}" (has ${count})`);
-      }
-    }
-  }
-
-  const properties = item.properties;
-  if (!isPlainObject(properties)) {
-    errors.push(`${where}: "properties" must be an object`);
-    return errors;
-  }
-  const declared = spec.properties;
-  for (const name of Object.keys(properties)) {
-    if (!(name in declared)) errors.push(`${where}: undeclared property "${name}"`);
-  }
-  for (const [name, propertySpec] of Object.entries(declared)) {
-    const value = properties[name];
-    if (value === undefined) {
-      errors.push(`${where}: missing property "${name}"`);
-      continue;
-    }
-    const problem = valueProblem(propertySpec, value);
-    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
-  }
-  return errors;
-}
-
-function validateCollectionContent(spec: CollectionSpec, items: unknown): string[] {
-  if (!Array.isArray(items)) return ['must be an array of items'];
-  const errors: string[] = [];
-  if (items.length < spec.min || items.length > spec.max) {
-    errors.push(`has ${items.length} items (allowed ${spec.min}-${spec.max})`);
-  }
-  for (const [index, item] of items.entries()) {
-    errors.push(...validateItemContent(spec.item, item, `item ${index + 1}`));
-  }
-  if (spec.item.widget === 'entities') {
-    for (const rule of spec.item.constraints) {
-      if (!('uniqueBy' in rule)) continue;
-      const firstByValue = new Map<string, number>();
-      for (const [index, rawItem] of items.entries()) {
-        if (!isPlainObject(rawItem) || !isPlainObject(rawItem.properties)) continue;
-        const value = rawItem.properties[rule.uniqueBy];
-        const encoded = JSON.stringify(value);
-        if (encoded === undefined) continue;
-        const firstIndex = firstByValue.get(encoded);
-        if (firstIndex !== undefined) {
-          errors.push(`item ${index + 1}: property "${rule.uniqueBy}" duplicates item ${firstIndex + 1}`);
-        } else {
-          firstByValue.set(encoded, index);
-        }
-      }
-    }
-  }
-  return errors;
-}
-
-function validateLayerContent(spec: EditorLayerSpec, value: unknown, where: string): string[] {
-  if (spec.widget === 'tilemap') return validateItemContent(spec, value, where);
-  return validateCollectionContent(
-    {
-      widget: 'collection',
-      label: spec.label,
-      itemLabel: spec.label,
-      min: spec.min,
-      max: spec.max,
-      item: spec,
-      defaults: [],
-    },
-    value,
-  ).map((message) => `${where}: ${message}`);
-}
-
-function layerRows(
-  layers: Record<string, EditorLayerSpec>,
-  content: Record<string, unknown>,
-  layer: string,
-): string[] | null {
-  const spec = layers[layer];
-  const value = content[layer];
-  if (!spec || spec.widget !== 'tilemap' || !isPlainObject(value) || !Array.isArray(value.rows)) return null;
-  return value.rows.every((row) => typeof row === 'string') ? (value.rows as string[]) : null;
-}
-
-function validateLayerReachable(
-  rule: EditorLayerConstraint['reachable'],
-  layers: Record<string, EditorLayerSpec>,
-  content: Record<string, unknown>,
-  where: string,
-): string[] {
-  const fromRows = layerRows(layers, content, rule.from.layer);
-  if (!fromRows) return [];
-  const tilemaps = new Map<string, string[]>();
-  for (const ref of [rule.from, ...rule.blockedBy, ...rule.require]) {
-    const rows = layerRows(layers, content, ref.layer);
-    if (rows) tilemaps.set(ref.layer, rows);
-  }
-  const height = fromRows.length;
-  const width = height > 0 ? fromRows[0].length : 0;
-  if (
-    width === 0 ||
-    [...tilemaps.values()].some((rows) => rows.length !== height || rows.some((row) => row.length !== width))
-  ) {
-    return [`${where}: all referenced layers must have the same grid dimensions`];
-  }
-  const tileChar = new Map<string, Map<string, string>>();
-  for (const ref of [rule.from, ...rule.blockedBy, ...rule.require]) {
-    const spec = layers[ref.layer];
-    if (spec?.widget !== 'tilemap') continue;
-    if (!tileChar.has(ref.layer)) tileChar.set(ref.layer, new Map(spec.tiles.map((tile) => [tile.key, tile.char])));
-  }
-  const positions = (ref: LayerTileRef): Set<number> => {
-    const rows = tilemaps.get(ref.layer);
-    const char = tileChar.get(ref.layer)?.get(ref.tile);
-    const result = new Set<number>();
-    if (!rows || !char) return result;
-    rows.forEach((row, y) => {
-      for (let x = 0; x < row.length; x += 1) if (row[x] === char) result.add(y * width + x);
-    });
-    return result;
-  };
-  const blocked = new Set<number>();
-  for (const ref of rule.blockedBy) for (const position of positions(ref)) blocked.add(position);
-  const seen = new Set<number>();
-  const queue = [...positions(rule.from)];
-  for (const position of queue) seen.add(position);
-  while (queue.length > 0) {
-    const position = queue.shift() as number;
-    const row = Math.floor(position / width);
-    const col = position % width;
-    for (const [dr, dc] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const nextRow = row + dr;
-      const nextCol = col + dc;
-      if (nextRow < 0 || nextCol < 0 || nextRow >= height || nextCol >= width) continue;
-      const next = nextRow * width + nextCol;
-      if (blocked.has(next) || seen.has(next)) continue;
-      seen.add(next);
-      queue.push(next);
-    }
-  }
-  const missed = rule.require.flatMap((ref) =>
-    [...positions(ref)]
-      .filter((position) => !seen.has(position))
-      .map((position) => {
-        const row = Math.floor(position / width) + 1;
-        const col = (position % width) + 1;
-        return `${ref.layer}.${ref.tile} at row ${row}, column ${col}`;
-      }),
-  );
-  return missed.length === 0
-    ? []
-    : [
-        `${where}: walled off from "${rule.from.layer}.${rule.from.tile}" — ${missed.join('; ')}. ` +
-          'Every required tile must be reachable, or the game cannot be finished.',
-      ];
-}
-
-/**
- * Validate a full content document (what a Studio draft or a publish carries)
- * against a definition. Shape: `{ <collectionKey>: EditorItemContent[] }`.
- */
-export function validateEditorContent(definition: EditorDefinition, content: unknown): string[] {
-  if (!isPlainObject(content)) return ['content must be an object'];
-  const errors: string[] = [];
-  const declared = Object.keys(definition.content);
-  const declaredLayers = Object.keys(definition.layers ?? {});
-  for (const key of Object.keys(content)) {
-    if (key === PARAMS_KEY) {
-      if (!definition.params) errors.push(`undeclared collection "${key}"`);
-      continue;
-    }
-    if (key === LAYERS_KEY) {
-      if (!definition.layers) errors.push(`undeclared content "${key}"`);
-      continue;
-    }
-    if (!declared.includes(key)) errors.push(`undeclared collection "${key}"`);
-  }
-  if (definition.params) {
-    const values = content[PARAMS_KEY];
-    if (values === undefined) {
-      errors.push('missing "params" values');
-    } else if (!isPlainObject(values)) {
-      errors.push('params: must be an object of values');
-    } else {
-      for (const name of Object.keys(values)) {
-        if (!(name in definition.params)) errors.push(`params: undeclared param "${name}"`);
-      }
-      for (const [name, spec] of Object.entries(definition.params)) {
-        const value = values[name];
-        if (value === undefined) {
-          errors.push(`params: missing "${name}"`);
-          continue;
-        }
-        const problem = valueProblem(spec, value);
-        if (problem) errors.push(`params: "${name}" ${problem}`);
-      }
-    }
-  }
-  for (const key of declared) {
-    const items = content[key];
-    if (items === undefined) {
-      errors.push(`missing collection "${key}"`);
-      continue;
-    }
-    errors.push(...validateCollectionContent(definition.content[key], items).map((message) => `${key}: ${message}`));
-  }
-  if (definition.layers) {
-    const layers = content[LAYERS_KEY];
-    if (layers === undefined) {
-      errors.push('missing "layers" values');
-    } else if (!isPlainObject(layers)) {
-      errors.push('layers: must be an object of layer values');
-    } else {
-      for (const key of Object.keys(layers)) {
-        if (!declaredLayers.includes(key)) errors.push(`layers: undeclared layer "${key}"`);
-      }
-      for (const [key, spec] of Object.entries(definition.layers)) {
-        const value = layers[key];
-        if (value === undefined) {
-          errors.push(`layers: missing "${key}"`);
-          continue;
-        }
-        errors.push(...validateLayerContent(spec, value, `layers.${key}`));
-      }
-      for (const rule of definition.constraints ?? []) {
-        errors.push(...validateLayerReachable(rule.reachable, definition.layers, layers, 'layers'));
-      }
-    }
-  }
-  return errors;
 }
 
 function typeName(key: string): string {

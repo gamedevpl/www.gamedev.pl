@@ -28,9 +28,13 @@
  * demand that the fetch happened, and it did.
  */
 
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  defaultReadLocalFile,
+  editorContractFingerprint,
+  readLocalEditorContract,
+} from './editor-contract-lockstep.js';
 import {
   DELIVERY_CONTRACT_PATH,
   DELIVERY_CONTRACT_VERSION,
@@ -55,10 +59,6 @@ import {
 } from '../platform/games-repo-contract.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 
-const LOCAL_EDITOR_CONTRACT_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../creation/editor-contract.ts',
-);
 const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../delivery/ts-any-scan.ts');
 
 export type ContractCheckOutcome =
@@ -449,20 +449,20 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   }
   log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
 
-  const readLocalFile = options.readLocalFile ?? ((filePath: string) => readFileSync(filePath, 'utf8'));
-  const localEditorContract = stripLeadingDocComment(readLocalFile(LOCAL_EDITOR_CONTRACT_PATH));
-  const remoteEditorContract = stripLeadingDocComment(editorContractSource);
+  const readLocalFile = options.readLocalFile ?? defaultReadLocalFile;
+  const localEditorContract = editorContractFingerprint(readLocalEditorContract(readLocalFile));
+  const remoteEditorContract = editorContractFingerprint(editorContractSource);
   if (localEditorContract !== remoteEditorContract) {
     return {
       kind: 'drift',
       reason:
-        `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs apps/api/src/creation/editor-contract.ts): ` +
+        `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs packages/contract + editor-contract.ts): ` +
         `${describeTextDrift(remoteEditorContract, localEditorContract)}\n` +
-        `  The two files must stay byte-equivalent below their own header comments — EditorKit L0/L4 ` +
-        `is a lockstep, not an asymmetric rollout contract. Update both files in one paired change.`,
+        `  parse/generate/validate helpers, limits, and contract constants must match the games-repo copy. ` +
+        `Update both sides in one paired change.`,
     };
   }
-  log('  ✓ editor-contract (EditorKit L0/L4, byte-equivalent below the header)');
+  log('  ✓ editor-contract (parse/generate/validate helpers and limits match)');
 
   if (anyScanSource !== null) {
     const localAnyScan = stripLeadingDocComment(readLocalFile(LOCAL_TS_ANY_SCAN_PATH));

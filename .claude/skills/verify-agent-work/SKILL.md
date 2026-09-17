@@ -42,6 +42,16 @@ Clean up when done (`git worktree remove --force`, delete the temp branch/clone)
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
+## Keep flow tests independent of live conversation routing
+
+A transfer test calling `/improve` must inject a `chatAgent` whose `decide` returns
+`kind: 'build'`, plus a deterministic `contentChecker`. Otherwise the default conversation
+router can answer with chat instead of opening the round. A sandboxed run may fall back
+to building while a network-enabled run takes the chat branch, so the same ownership
+assertions pass alone and fail in the full gate. Check the response shape and keep the
+real authorization, store and admission path; stub only the unrelated model decisions.
+Derive handover times from the created record instead of dating them before its creation.
+
 ## Run the project's real gate
 
 Whatever the project's definition of green is — run all of it, in the isolated checkout:
@@ -344,6 +354,78 @@ Two concrete instances of that (observed 2026-07-23):
   (seal/editor/remix/proposal): those rewrite sources without a Kit store. Defer `/shared/`
   there (`kitShared: 'defer'`) or a green preview later `seal_failed`. A Set still
   fail-closes agent delivery.
+
+- **A field added to `setCreationLimits` merge but not the Firestore `get` mapper is a
+  silent production no-op.** Observed (#1299 review, 2026-09-12): `videoPaused` /
+  `mediaLean` / `anonymousPaused` were merged on write in both stores. `FirestoreQuotaStore.getCreationLimits`
+  still mapped field-by-field and dropped them, so the spend brake could write
+  `anonymousPaused: true` and every instance shed nothing. `InMemoryStore` returns the
+  merged object as-is, so an InMemory round-trip does not cover this. Walk get and set
+  together; a test that only uses `InMemoryStore` cannot see a mapper hole.
+
+- **An `onSend` hook that becomes `async` reopens Fastify 5 "already sent" on routes that
+  `reply.send()` without returning it.** Observed (#1299): `api-cache-policy` started
+  awaiting `isOpenToVisitors()`, and compression registered an `async` `onSend` too.
+  `/api/submissions/:token/preview` does `reply.send(value)` inside a helper and returns;
+  headers were no longer written on the same tick, Fastify sent again,
+  `ERR_HTTP_HEADERS_SENT`. The test that exists because that log showed up in Studio went
+  red. Keep default `onSend` sync (stash the boolean on the request in `preHandler`), or
+  `return reply.send(...)`. Drive preview/play through `buildApp`, not a bare Fastify.
+
+- **Reusing a wall for a new purpose inherits its exemptions.** Observed (#1299):
+  `anonymousPaused` raised the private-beta wall to stop a bandwidth bill;
+  `/api/games/:slug/media` and public-play documents stayed exempt. Catalog 401'd; the
+  posters and mp4 still flowed. Diff the exemption list against the new goal, not against
+  "same wall as beta."
+
+- **A request rewrite that does not change the URL poisons a public cache keyed on that
+  URL.** Observed (#1299): `mediaLean` set `query.w=96` while the client still requested
+  `?w=320`. Image 302s are `public, max-age=10800` (half of the 6h PNG TTL). Clearing the
+  rung left the 96px object on the 320 URL for three hours. Video 503 correctly set
+  `no-store`; the rewrite path did not. Redirect to the real width, or don't cache while
+  the rung is up. Assert bytes (or `Location`), not only that `request.query` changed.
+
+- **A collection-group query that filters eligibility after `.limit()` is not the query
+  the InMemory store runs.** Observed (#1380 review, 2026-09-16): retry listed
+  `emailedAt == null` with `limit` on Firestore, then dropped old rows in JS. InMemory
+  filtered by age, sorted, then sliced. A 3-row fake-Firestore test agreed; a 50-row
+  probe of old ineligible rows plus one recent unsent returned the recent row in memory
+  and `[]` on Firestore. Never-email types (`game.new_version`), skip-forever paths
+  (`share.*`, `operator.*`, unsubscribed / no-address), and rows past the age bound all
+  stay `emailedAt: null` and keep occupying the snapshot. Once they fill `scanLimit`,
+  the advertised retry horizon is a no-op and the two-minute sweep still pays the scan.
+  Put the horizon and retry eligibility in the query (composite CG index, not a
+  single-field override), or stamp skips so they leave the index. The regression has to
+  fill the scan on `FirestoreStore(fake)`, not only InMemory.
+
+- **A sweep `try/catch` that still returns 200 hides a missing Firestore index from the
+  monitor that watches sweep HTTP status.** Same PR: `CG_INDEXES` in `setup-gcp.sh` is a
+  source guard, not a deploy. The live COLLECTION_GROUP index is created by re-running
+  step 7 and builds asynchronously. Until it exists the query throws
+  `FAILED_PRECONDITION` every tick; the handler logged it and answered 200, so A3
+  ("notify-sweep failing") stays quiet. Fail the sweep, or put the retry error on the
+  200 body that monitor already consumes. A log line nobody pages on is how a job fails
+  quietly for weeks.
+
+- **Automatic replay of `emailedAt === null` without a claim or provider idempotency key
+  turns a rare send-then-stamp race into a scheduler loop.** Same PR: incidental retry
+  was "re-invoke the emitter". A two-minute worker over every null row means overlapping
+  sweeps, the original emit racing the worker, or Resend accepting and the stamp failing,
+  all resend for the whole horizon (~10k copies). `ResendMailer` had no idempotency key.
+  Claim the row, or send with a stable notification-derived key, _before_ the provider
+  call. Scanning "null" is also not "pending email" when skip-forever types never stamp.
+
+## Membership revocation must outlive bounded cleanup
+
+Probe more rounds than the membership cleanup cap and include unstamped legacy rounds.
+A per-round generation sweep is cleanup, not an authorization fence. Removing and then
+re-inviting an editor must not revive old MCP sessions or upload URLs bound to a round
+created by another actor. Test fresh credentials separately, and mutate the durable
+actor fence to prove the regression fails. Persistent erasure markers must date the
+account incarnation and original invitation, not permanently ban a recreated UID.
+Also remove the author of the currently active round, then continue it with fresh owner
+credentials. Actor fences must not classify every future credential by the row author.
+Reminting a session from a channel key must preserve its actor and revocation revision.
 
 ## Read the diff against the spec
 

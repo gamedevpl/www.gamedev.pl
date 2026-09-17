@@ -23,6 +23,7 @@ import {
   VISIT_ROUTE_KINDS,
   FRAMED_PLAY_STEPS,
   WAITLIST_STEPS,
+  SHARE_STEPS,
 } from './visit-vocab.js';
 
 describe('visit vocab', () => {
@@ -76,6 +77,10 @@ describe('visit vocab', () => {
 
   it('lists waitlist steps', () => {
     expect(WAITLIST_STEPS).toEqual(['cta_clicked', 'joined']);
+  });
+
+  it('lists share steps in membership order', () => {
+    expect(SHARE_STEPS).toEqual(['offered', 'accepted', 'declined', 'cancelled', 'expired', 'removed', 'left']);
   });
 
   it('lists framed-play interstitial steps in order', () => {
@@ -241,7 +246,18 @@ describe('visit vocab', () => {
   it('lists cli dimension vocabularies', () => {
     expect(CLI_INSTALL_CHANNELS).toEqual(['curl', 'ps1', 'update']);
     expect(CLI_PLATFORM_OS).toEqual(['linux', 'darwin', 'win32']);
-    expect(CLI_ADAPTERS).toEqual(['claude', 'codex', 'gemini', 'vibe', 'agy', 'cursor', 'copilot', 'muse', 'custom']);
+    expect(CLI_ADAPTERS).toEqual([
+      'claude',
+      'codex',
+      'gemini',
+      'vibe',
+      'agy',
+      'cursor',
+      'copilot',
+      'muse',
+      'opencode',
+      'custom',
+    ]);
     expect(CLI_VERIFY_STAGES).toEqual(['typecheck', 'check_static', 'check_game']);
   });
 });

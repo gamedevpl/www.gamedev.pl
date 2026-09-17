@@ -12,7 +12,7 @@ import {
 } from '../creation/typecheck-preflight.js';
 
 const JOB = 941;
-const SLUG = 'sky-dodge';
+const SLUG = 'sky-dodge-quota';
 
 const FILES: SourceFile[] = [
   { path: 'SPEC.md', content: '---\ntitle: Sky Dodge\n---\nSteer the glider home.' },
@@ -67,7 +67,14 @@ describe('the gate-run ceiling on a transferred game', () => {
       gateRunGate: { peek },
     });
 
-    await service.deliver({ jobId: JOB, slug: SLUG, files: FILES, mode: 'preview' });
+    const outcome = await service.deliver({
+      jobId: JOB,
+      slug: SLUG,
+      files: FILES,
+      mode: 'preview',
+      actorUid: 'g:grace',
+    });
+    expect(outcome).toMatchObject({ accepted: true });
 
     expect(peek).toHaveBeenCalledTimes(1);
     expect(peek.mock.calls[0]![0]).toBe('g:grace');

@@ -26,6 +26,7 @@ export function executionSettingsLabel(spec: AdapterSpec, env: NodeJS.ProcessEnv
 }
 
 export async function chooseExecution(input: {
+  localOnly?: boolean;
   env: NodeJS.ProcessEnv;
   pick: PickChoice;
   workshop?: Workshop;
@@ -33,7 +34,19 @@ export async function chooseExecution(input: {
   write?: (line: string) => void;
 }): Promise<ExecutionChoice | null> {
   const adapters = input.workshop?.adapters ?? detectLocalAdapters(input.env);
-  if (!adapters.length) return { builder: 'platform' };
+  if (!adapters.length && input.localOnly) {
+    input.write?.('Local attachments require an installed local agent. Files remain in this Play session.');
+    return null;
+  }
+  if (!adapters.length) {
+    if (
+      input.env.GAMEDEV_PLAY_WORKBENCH === '1' &&
+      (await input.pick(['Use platform quota', 'Cancel'], 'No local agent is available. Use the platform builder?')) !==
+        'Use platform quota'
+    )
+      return null;
+    return { builder: 'platform' };
+  }
   if (input.workshop?.selectedAgent) {
     const spec = adapters.find((row) => row.name === input.workshop!.selectedAgent);
     if (spec) return { builder: 'self', spec, mode: 'local' };
@@ -43,7 +56,12 @@ export async function chooseExecution(input: {
   const configure = 'Configure agent model and effort…';
   while (true) {
     const local = adapters.map((spec) => {
-      const mode = input.workshop ? 'local' : adapterMcpSupported(spec.name) ? 'mcp' : 'local';
+      const mode =
+        input.workshop || input.env.GAMEDEV_PLAY_WORKBENCH === '1'
+          ? 'local'
+          : adapterMcpSupported(spec.name)
+            ? 'mcp'
+            : 'local';
       const where = mode === 'mcp' ? 'MCP' : input.workshop ? 'this checkout' : 'download a checkout';
       return {
         choice: { builder: 'self' as const, spec, mode: mode as 'local' | 'mcp' },
@@ -51,7 +69,7 @@ export async function chooseExecution(input: {
       };
     });
     const chosen = await input.pick(
-      [...local.map((row) => row.label), configure, platform],
+      [...local.map((row) => row.label), configure, ...(input.localOnly ? [] : [platform]), 'Cancel'],
       'Who should build this task? (* agent defaults may not be reported)',
     );
     if (chosen === configure) {

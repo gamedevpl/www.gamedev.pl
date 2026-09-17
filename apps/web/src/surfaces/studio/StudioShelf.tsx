@@ -117,7 +117,16 @@ export function StudioShelfList({
               >
                 {studioGameInitials(game.title)}
               </span>
-              <span className="studio-shelf-title">{game.title}</span>
+              <span className="studio-shelf-copy">
+                <span className="studio-shelf-title">{game.title}</span>
+                {game.viewerRole === 'editor' ? (
+                  <span className="studio-shelf-role" data-testid={`studio-shelf-role-${game.token}`}>
+                    {t('studioPanel.shelf.editorRole', {
+                      name: game.ownerProfileName ?? t('studioPanel.members.ownerUnknown'),
+                    })}
+                  </span>
+                ) : null}
+              </span>
               <span className="studio-sr-only">
                 {status ? t(`statusView.states.${status}.label`) : t('myGames.checking')} ·{' '}
                 {formatRelativeTime(Date.parse(game.createdAt), locale)}

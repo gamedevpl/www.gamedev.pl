@@ -83,6 +83,9 @@ import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGameAccessStore } from './slices/game-access.js';
 import { FirestoreGameTransferStore } from './slices/game-transfer.js';
+import { FirestoreGameEditorInviteStore } from './slices/game-editor-invite.js';
+import { FirestoreGameMembershipStore } from './slices/game-membership.js';
+import { FirestoreGameQuotaStore } from './slices/game-quota.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
@@ -130,6 +133,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private publicationStore: FirestorePublicationStore;
   protected gameAccessStore: FirestoreGameAccessStore;
   protected gameTransferStore: FirestoreGameTransferStore;
+  protected gameEditorInviteStore: FirestoreGameEditorInviteStore;
+  protected gameMembershipStore: FirestoreGameMembershipStore;
+  private gameQuotaStore: FirestoreGameQuotaStore;
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
@@ -165,6 +171,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.publicationStore = new FirestorePublicationStore(this.db);
     this.gameAccessStore = new FirestoreGameAccessStore(this.db);
     this.gameTransferStore = new FirestoreGameTransferStore(this.db);
+    this.gameEditorInviteStore = new FirestoreGameEditorInviteStore(this.db);
+    this.gameMembershipStore = new FirestoreGameMembershipStore(this.db);
+    this.gameQuotaStore = new FirestoreGameQuotaStore(this.db);
     this.roundsStore = new FirestoreRoundsStore(this.db);
     this.roundBudgetStore = new FirestoreRoundBudgetStore(this.db);
     this.dispatchStore = new FirestoreDispatchStore(this.db);
@@ -271,6 +280,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
     // After the fence, so a record created mid-erasure is either refused or seen here.
     await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    await this.gameEditorInviteStore.cancelPendingEditorInvitesForUid(uid, at);
 
     // Refresh rows may lack ownerUid; join them through owned grants.
     const grantIds = new Set(oauthGrants.docs.map((doc) => doc.id));
@@ -904,6 +914,23 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }> {
     return this.quotaStore.checkAndIncrementQuota(uid, dateStr, limit, action);
+  }
+
+  async getGameUsage(slug: string, dateStr: string): Promise<UsageCounters> {
+    return this.gameQuotaStore.getGameUsage(slug, dateStr);
+  }
+
+  async checkAndIncrementGameQuota(
+    slug: string,
+    dateStr: string,
+    limit: number,
+    action: keyof UsageCounters,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.gameQuotaStore.checkAndIncrementGameQuota(slug, dateStr, limit, action);
+  }
+
+  async decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void> {
+    return this.gameQuotaStore.decrementGameQuota(slug, dateStr, action);
   }
 
   async getCreationLimits(): Promise<CreationLimits | null> {
@@ -1596,8 +1623,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.oauthStore.createOAuthAccessToken(record);
   }
 
-  async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    return this.oauthStore.getOAuthAccessToken(tokenId);
+  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
+    return this.oauthStore.getAsAccessToken(tokenId);
   }
 
   async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {

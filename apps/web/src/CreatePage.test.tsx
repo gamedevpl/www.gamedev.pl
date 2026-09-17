@@ -76,20 +76,22 @@ describe('CreatePage', () => {
     });
 
     expect(container.querySelector('.create-headline')?.textContent).toBeTruthy();
-    // The composer is reused as-is; same input the home page ships.
+    expect(container.querySelector('.create-mascot')).toBeNull();
+    // Same composer as home. No starter chips.
     expect(container.querySelector('.big-prompt-input')).not.toBeNull();
-
-    // Click-to-fill example chips actually fill the composer.
-    const chip = container.querySelector<HTMLButtonElement>('.prompt-example-chip');
-    expect(chip).not.toBeNull();
-    await act(async () => {
-      chip?.click();
-    });
-    const promptInput = container.querySelector<HTMLInputElement>('.big-prompt-input');
-    expect(promptInput?.value).toBe(chip?.textContent);
+    expect(container.querySelector('.prompt-example-chip')).toBeNull();
+    expect(container.querySelector('.prompt-examples')).toBeNull();
 
     const steps = container.querySelectorAll('.create-step');
     expect(steps).toHaveLength(4);
+    expect(container.querySelector('.create-step-scene.is-qa .mascot--thinking')).not.toBeNull();
+    expect(container.querySelector('.create-step-scene.is-code .mascot--busy')).not.toBeNull();
+    expect(container.querySelector('.create-step-scene.is-play .mascot--excited')).not.toBeNull();
+    expect(container.querySelector('.create-step-scene.is-live .mascot--proud')).not.toBeNull();
+    expect(container.querySelector('button.create-step-scene.is-qa')).not.toBeNull();
+    expect(container.querySelector('.create-steps-mascot')).toBeNull();
+    expect(container.querySelectorAll('.create-builder-mark')).toHaveLength(2);
+    expect(container.querySelector('.create-builder-progress')).not.toBeNull();
     expect(container.textContent).toContain('01');
     expect(container.textContent).toContain("A human reviews, then it's live");
 
@@ -102,10 +104,15 @@ describe('CreatePage', () => {
     expect(container.textContent).toContain('Free to use');
     expect(container.textContent).toContain('Claude Code');
 
-    // The showcase is real catalog entries, not invented ones.
-    expect(container.textContent).toContain('Made exactly this way');
+    // Proof sits after the process, not under the composer.
+    expect(container.textContent).toContain('Live in the catalog');
     expect(container.textContent).toContain('Sky Dodge');
     expect(container.textContent).toContain('Arena Tag');
+    const html = container.innerHTML;
+    expect(html.indexOf('create-steps')).toBeGreaterThan(-1);
+    expect(html.indexOf('create-builders')).toBeGreaterThan(-1);
+    expect(html.indexOf('create-steps')).toBeLessThan(html.indexOf('catalog-rail-section'));
+    expect(html.indexOf('create-builders')).toBeLessThan(html.indexOf('catalog-rail-section'));
 
     // A wide median build time reads as "give up" — never state one.
     expect(container.textContent).not.toMatch(/\b(median|ETA)\b/i);

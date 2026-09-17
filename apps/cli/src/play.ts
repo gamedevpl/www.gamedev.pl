@@ -176,6 +176,7 @@ export async function playGame(input: {
   write: (line: string) => void;
   telemetry?: CliTelemetry;
   open?: typeof openUrl;
+  onLocalPreview?: (url: string) => void;
 }): Promise<{ url?: string; mode: 'local' | 'remote' }> {
   const checkout = findCheckout(input.cwd);
   const slug = input.slug ?? checkout?.slug;
@@ -193,6 +194,7 @@ export async function playGame(input: {
     });
     if (!session) return { mode };
     url = session.url;
+    input.onLocalPreview?.(url);
   } else {
     if (input.stop) throw new CliError('no matching local checkout to stop', EXIT_INPUT);
     url = `${input.origin}/play/${encodeURIComponent(slug)}`;

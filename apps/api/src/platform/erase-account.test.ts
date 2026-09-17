@@ -57,7 +57,7 @@ describe('eraseAccount', () => {
     expect(await store.getAccessToken('token-1')).toBeNull();
     expect(await store.getCreatorAgentKey(uid)).toBeNull();
     expect(await store.getGameAgentKey('published-game')).toBeNull();
-    expect(await store.getOAuthAccessToken('oauth-1')).toBeNull();
+    expect(await store.getAsAccessToken('oauth-1')).toBeNull();
     expect(await store.listOAuthGrantsByOwner(uid)).toEqual([]);
 
     expect(await store.getSubmission(1)).toMatchObject({

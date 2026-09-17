@@ -1,0 +1,173 @@
+// Fingerprint editor-contract helpers, limits, and entry points.
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { stripLeadingDocComment } from '../platform/games-repo-contract.js';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+export const LOCAL_EDITOR_CONTRACT_PATH = path.join(HERE, '../creation/editor-contract.ts');
+const REPO_ROOT = path.join(HERE, '../../../..');
+const LOCAL_VALIDATE_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-validate.ts');
+const LOCAL_VALIDATE_REACH_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-validate-reach.ts');
+const LOCAL_KIT_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-kit.ts');
+
+const FN_NAME_RE = /(?:export\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+const CONST_NAME_RE = /(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*=/g;
+
+function uniqueSorted(names: Iterable<string>): string[] {
+  return [...new Set(names)].sort();
+}
+
+function listFunctionNames(source: string): string[] {
+  const names: string[] = [];
+  FN_NAME_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = FN_NAME_RE.exec(source)) !== null) names.push(match[1]);
+  return uniqueSorted(names);
+}
+
+function listConstNames(source: string): string[] {
+  const names: string[] = [];
+  CONST_NAME_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = CONST_NAME_RE.exec(source)) !== null) names.push(match[1]);
+  return uniqueSorted(names);
+}
+
+function stripLineComments(text: string): string {
+  let quote: string | null = null;
+  let out = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const prev = i > 0 ? text[i - 1] : '';
+    if (quote) {
+      out += char;
+      if (char === quote && prev !== '\\') quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      out += char;
+      continue;
+    }
+    if (char === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i += 1;
+      if (i < text.length) out += '\n';
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
+function normalizeExtract(text: string): string {
+  return stripLineComments(text)
+    .replace(/[ \t]+$/gm, '')
+    .replace(/^\s*\n/gm, '');
+}
+
+function stripExport(text: string): string {
+  return normalizeExtract(text.replace(/^export\s+/, ''));
+}
+
+function matchingPair(source: string, start: number, open: string, close: string): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    const prev = index > 0 ? source[index - 1] : '';
+    if (quote) {
+      if (char === quote && prev !== '\\') quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === open) depth += 1;
+    else if (char === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function skipWs(source: string, index: number): number {
+  while (index < source.length && /\s/.test(source[index])) index += 1;
+  return index;
+}
+
+export function extractNamedFunction(source: string, name: string): string | null {
+  const match = new RegExp(`(?:export\\s+)?function\\s+${name}\\s*\\(`).exec(source);
+  if (!match) return null;
+  const paramsClose = matchingPair(source, source.indexOf('(', match.index), '(', ')');
+  if (paramsClose < 0) return null;
+  let index = skipWs(source, paramsClose + 1);
+  if (source[index] === ':') {
+    index += 1;
+    let depth = 0;
+    let quote: string | null = null;
+    for (; index < source.length; index += 1) {
+      const char = source[index];
+      const prev = index > 0 ? source[index - 1] : '';
+      if (quote) {
+        if (char === quote && prev !== '\\') quote = null;
+        continue;
+      }
+      if (char === '"' || char === "'" || char === '`') {
+        quote = char;
+        continue;
+      }
+      if (char === '{' && depth === 0) {
+        const end = matchingPair(source, index, '{', '}');
+        if (end < 0) return null;
+        if (source[skipWs(source, end + 1)] === '{') {
+          index = end;
+          continue;
+        }
+        return source.slice(match.index, end + 1);
+      }
+      if (char === '{' || char === '(' || char === '[' || char === '<') depth += 1;
+      else if (char === '}' || char === ')' || char === ']' || char === '>') depth -= 1;
+    }
+    return null;
+  }
+  if (source[index] !== '{') return null;
+  const end = matchingPair(source, index, '{', '}');
+  return end < 0 ? null : source.slice(match.index, end + 1);
+}
+
+export function extractNamedConst(source: string, name: string): string | null {
+  const match = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*=\\s*[^;]+;`).exec(source);
+  return match ? match[0] : null;
+}
+
+const ENTRY_FNS = ['parseEditorDefinition', 'validateEditorContent', 'generateEditorContentModule'];
+
+export function editorContractFingerprint(source: string): string {
+  const hasEntry = ENTRY_FNS.some((name) => extractNamedFunction(source, name));
+  if (!hasEntry) return stripLeadingDocComment(source);
+  const consts = listConstNames(source)
+    .map((name) => extractNamedConst(source, name))
+    .filter((part): part is string => part !== null)
+    .map(stripExport);
+  const fns = listFunctionNames(source)
+    .map((name) => extractNamedFunction(source, name))
+    .filter((part): part is string => part !== null)
+    .map(stripExport);
+  return [...consts, ...fns].join('\n\n');
+}
+
+export function readLocalEditorContract(readLocalFile: (filePath: string) => string): string {
+  const api = readLocalFile(LOCAL_EDITOR_CONTRACT_PATH);
+  const extras = [LOCAL_VALIDATE_PATH, LOCAL_VALIDATE_REACH_PATH, LOCAL_KIT_PATH].map((filePath) => {
+    const text = readLocalFile(filePath);
+    return text === api ? '' : text;
+  });
+  return [api, ...extras].filter((text) => text.length > 0).join('\n');
+}
+
+export function defaultReadLocalFile(filePath: string): string {
+  return readFileSync(filePath, 'utf8');
+}

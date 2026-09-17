@@ -19,7 +19,7 @@ import {
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug } from './agent-game-key-resolve.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import type { CreatorAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
 
@@ -98,7 +98,7 @@ export async function resolveCreatorAgentKeyForStart(
   const verified = await verifyDurableCreatorAgentKey(store, key, secret, nowMs);
   if (!verified.ok) return verified;
 
-  if (!(await creatorOwnsSlug(store, slug, verified.claims.creatorUid))) {
+  if (!(await canActOnSlug(store, slug, verified.claims.creatorUid, 'build'))) {
     return { ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON };
   }
 
@@ -156,7 +156,7 @@ export async function resolveOwnedSlugForOpenRound(
   | { ok: true; publishedRecord: SubmissionRecord; activeRound: SubmissionRecord | null; slug: string }
   | { ok: false; reason: string }
 > {
-  if (!(await creatorOwnsSlug(store, slug, creatorUid))) {
+  if (!(await canActOnSlug(store, slug, creatorUid, 'build'))) {
     return { ok: false, reason: SLUG_NOT_ON_ACCOUNT_REASON };
   }
 

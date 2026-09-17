@@ -47,6 +47,8 @@ export function formatHelp(slash = false): string {
         `${CLI_BIN} ${CLI_VERSION} — Studio from a terminal`,
         '',
         `  ${CLI_BIN.padEnd(24)}interactive conversation`,
+        `  ${CLI_BIN} create --play [idea]   create from a browser; terminal may close`,
+        `  ${CLI_BIN} play --edit            open a detached browser workbench`,
         `  ${`${CLI_BIN} repl <slug>`.padEnd(24)}interactive session for an existing game`,
         `  ${`${CLI_BIN} <verb>`.padEnd(24)}one-shot command`,
         '',

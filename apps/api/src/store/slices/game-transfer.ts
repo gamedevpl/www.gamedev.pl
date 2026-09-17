@@ -1,5 +1,5 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
-import { membersOf, type GameAccessRecord } from '../records/game-access.js';
+import { transferredAccess, type GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
   isPending,
@@ -86,22 +86,6 @@ function fenceAt(snap: { exists: boolean; data: () => unknown }): string | null 
 function recipientEligible(recipient: { tier: string; deletionScheduledFor?: string } | null): boolean {
   if (!recipient) return true;
   return recipient.tier !== 'blocked' && !recipient.deletionScheduledFor;
-}
-
-// Default: the former owner loses management access (editors are GO-03 scope).
-function transferredAccess(access: GameAccessRecord, newOwnerUid: string, at: string): GameAccessRecord {
-  const accessRevision = access.accessRevision + 1;
-  return {
-    ...access,
-    ownerUid: newOwnerUid,
-    editorUids: [],
-    memberUids: membersOf(newOwnerUid, []),
-    accessRevision,
-    // Marks the game: an epoch-less round is refused.
-    capabilitiesRevokedAtRevision: accessRevision,
-    capabilitiesRevokedAt: at,
-    updatedAt: at,
-  };
 }
 
 // Bounded because one transaction caps its writes, and round keys expire anyway.
