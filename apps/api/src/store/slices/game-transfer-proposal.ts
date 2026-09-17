@@ -27,8 +27,9 @@ function openBlocks(
   receiptKey: string,
   at: string,
 ): 'busy' | 'stale' | null {
-  if (!open || open.ownerUid !== ownerUid || !proposalIsOpen(open, at) || open.receiptKey === receiptKey) return null;
-  return open.accessRevision !== accessRevision ? 'stale' : 'busy';
+  if (!open || !proposalIsOpen(open, at) || open.receiptKey === receiptKey) return null;
+  if (open.ownerUid !== ownerUid || open.accessRevision !== accessRevision) return 'stale';
+  return 'busy';
 }
 
 export interface TransferProposalReceipt {
@@ -248,9 +249,12 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
       if (!proposalIsRetained(existing, at) || existing.ownerUid !== ownerUid) return null;
       if (existing.confirmedAt) return existing;
       if (!proposalIsOpen(existing, at)) return null;
+      const slugSnap = await tx.get(this.slugDoc(existing.slug));
       const confirmed: GameTransferProposal = { ...existing, confirmedAt: at };
       tx.set(this.proposalDoc(proposalId), confirmed);
-      tx.delete(this.slugDoc(existing.slug));
+      if (slugSnap.exists && (slugSnap.data() as { proposalId: string }).proposalId === proposalId) {
+        tx.delete(this.slugDoc(existing.slug));
+      }
       return confirmed;
     });
   }
@@ -274,8 +278,18 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
     for (const doc of snap.docs) {
       const row = doc.data() as GameTransferProposal;
       if (!proposalIsOpen(row, at)) continue;
-      await doc.ref.set({ ...row, invalidatedAt: at });
-      await this.slugDoc(row.slug).delete();
+      await this.db.runTransaction(async (tx) => {
+        const current = await tx.get(doc.ref);
+        if (!current.exists) return;
+        const latest = current.data() as GameTransferProposal;
+        if (!proposalIsOpen(latest, at)) return;
+        const slugRef = this.slugDoc(latest.slug);
+        const slugSnap = await tx.get(slugRef);
+        tx.set(doc.ref, { ...latest, invalidatedAt: at });
+        if (slugSnap.exists && (slugSnap.data() as { proposalId: string }).proposalId === latest.proposalId) {
+          tx.delete(slugRef);
+        }
+      });
     }
   }
 }

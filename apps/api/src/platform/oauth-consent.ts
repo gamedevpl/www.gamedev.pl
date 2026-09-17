@@ -96,7 +96,7 @@ function creatorCopy(lang: Locale, client: string): ConsentCopy {
       };
 }
 
-interface ConsentCopy {
+export interface ConsentCopy {
   title: string;
   lead: string;
   as: string;
@@ -138,7 +138,7 @@ function ownershipCopy(lang: Locale, client: string): { can: string[]; cannot: s
       };
 }
 
-function copyForScope(lang: Locale, client: string, scope: string): ConsentCopy {
+export function copyForScope(lang: Locale, client: string, scope: string): ConsentCopy {
   const mcp = scopeIncludes(scope, MCP_SCOPE);
   const creator = scopeIncludes(scope, CREATOR_SCOPE);
   const ownership = scopeIncludes(scope, OWNERSHIP_SCOPE);

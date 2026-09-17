@@ -228,7 +228,9 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     this.gameAdmissionStore.gameAgentKeys.set(slug, copy);
   }
 
-  getUser = (uid: string) => this.identityStore.getUser(uid);
+  getUser(uid: string) {
+    return this.identityStore.getUser(uid);
+  }
 
   async getUserByHandle(handle: string): Promise<User | null> {
     return this.identityStore.getUserByHandle(handle);
@@ -1644,9 +1646,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
 
-  waitlistEntries(): WaitlistEntry[] {
-    return Array.from(this.accessStore.waitlist.values());
-  }
+  waitlistEntries = () => Array.from(this.accessStore.waitlist.values());
   getCliChat = (uid: string, conversationId?: string) => this.cliChatStore.getCliChat(uid, conversationId);
   putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

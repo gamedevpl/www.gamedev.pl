@@ -4,9 +4,16 @@ import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
-import { consentToken, consentTokenValid } from './oauth-consent.js';
+import { consentToken, consentTokenValid, copyForScope } from './oauth-consent.js';
 import { isGamedevCliClient, sanitizeDeviceName, GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
-import { CREATOR_SCOPE, formatOAuthScope, MAX_OAUTH_GRANTS_PER_UID, parseOAuthScopes } from './oauth-scopes.js';
+import {
+  CREATOR_SCOPE,
+  formatOAuthScope,
+  MAX_OAUTH_GRANTS_PER_UID,
+  OWNERSHIP_SCOPE,
+  parseOAuthScopes,
+  scopeIncludes,
+} from './oauth-scopes.js';
 import {
   AS_REFRESH_TOKEN_TTL_MS,
   buildAsAccessTokenRecord,
@@ -76,8 +83,25 @@ function deviceConsent(uid: string, secret: string): string {
   return consentToken({ uid, clientId: GAMEDEV_CLI_CLIENT_ID, codeChallenge: 'device', secret });
 }
 
-function devicePage(input: { userCode: string; consentToken: string; error?: string }): string {
+function livePending(userCode: string, nowMs: number): DeviceAuth | undefined {
+  const row = pending.get(userCode);
+  return row && row.expiresAt > nowMs ? row : undefined;
+}
+
+function devicePage(input: { userCode: string; consentToken: string; error?: string; scope?: string }): string {
   const error = input.error ? `<p class="hint">${escapeHtml(input.error)}</p>` : '';
+  const copy = input.scope ? copyForScope('en', 'gamedevpl CLI', input.scope) : null;
+  const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const permissions = copy
+    ? `<p class="lead">${escapeHtml(copy.lead)}</p>
+    <h2>${escapeHtml(copy.canTitle)}</h2>
+    <ul class="can">${list(copy.can)}</ul>
+    <h2>${escapeHtml(copy.cannotTitle)}</h2>
+    <ul class="cannot">${list(copy.cannot)}</ul>`
+    : '<p class="lead">Enter the code shown in your terminal.</p>';
+  const disclosed = input.scope
+    ? `<input type="hidden" name="disclosed_scope" value="${escapeHtml(input.scope)}" />`
+    : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -90,10 +114,11 @@ function devicePage(input: { userCode: string; consentToken: string; error?: str
   <main>
     <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
     <h1>Approve gamedevpl CLI</h1>
-    <p class="lead">Enter the code shown in your terminal.</p>
+    ${permissions}
     ${error}
     <form method="post" action="/device">
       <input type="hidden" name="consent_token" value="${escapeHtml(input.consentToken)}" />
+      ${disclosed}
       <label>Code <input name="user_code" value="${escapeHtml(input.userCode)}" autocomplete="off" /></label>
       <div class="actions">
         <button type="submit" name="action" value="approve" class="approve">Approve</button>
@@ -170,7 +195,13 @@ export function registerOAuthDeviceRoutes(
       typeof (request.query as { user_code?: string }).user_code === 'string'
         ? (request.query as { user_code: string }).user_code.trim().toUpperCase()
         : '';
-    return reply.type('text/html').send(devicePage({ userCode, consentToken: deviceConsent(uid, sessionSecret) }));
+    return reply.type('text/html').send(
+      devicePage({
+        userCode,
+        consentToken: deviceConsent(uid, sessionSecret),
+        scope: userCode ? livePending(userCode, now())?.scope : undefined,
+      }),
+    );
   });
 
   app.post('/device', async (request, reply) => {
@@ -180,26 +211,34 @@ export function registerOAuthDeviceRoutes(
       return reply.redirect(`${canonicalAppBaseUrl()}/studio?oauth_return=/device`);
     }
     const expected = deviceConsent(uid, sessionSecret);
-    const body = (request.body ?? {}) as { user_code?: string; action?: string; consent_token?: string };
+    const body = (request.body ?? {}) as {
+      user_code?: string;
+      action?: string;
+      consent_token?: string;
+      disclosed_scope?: string;
+    };
     const userCode = typeof body.user_code === 'string' ? body.user_code.trim().toUpperCase() : '';
-    const page = (error?: string, code = userCode) =>
-      reply.type('text/html').send(devicePage({ userCode: code, consentToken: expected, error }));
+    const page = (error?: string, code = userCode, scope?: string) =>
+      reply.type('text/html').send(devicePage({ userCode: code, consentToken: expected, error, scope }));
     if (!consentTokenValid(typeof body.consent_token === 'string' ? body.consent_token : '', expected)) {
       return page('Refresh this page and try again.');
     }
-    const row = pending.get(userCode);
-    if (!row || row.expiresAt <= now()) {
+    const row = livePending(userCode, now());
+    if (!row) {
       return page('That code is unknown or expired.');
     }
     if (body.action === 'deny') {
       row.denied = true;
-      return page('Denied. You can close this page.', '');
+      return page('Denied. You can close this page.', '', row.scope);
     }
     if (body.action !== 'approve') {
-      return page('Choose Approve or Deny to continue.');
+      return page('Choose Approve or Deny to continue.', userCode, row.scope);
+    }
+    if (scopeIncludes(row.scope, OWNERSHIP_SCOPE) && body.disclosed_scope !== row.scope) {
+      return page('Review the permissions below, then approve.', userCode, row.scope);
     }
     row.uid = uid;
-    return page('Approved. Return to your terminal.', '');
+    return page('Approved. Return to your terminal.', '', row.scope);
   });
 }
 
