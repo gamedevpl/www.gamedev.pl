@@ -1,10 +1,24 @@
 # Local Play workbench
 
-`gamedevpl create --play "A tabletop racer"` opens a browser session before creation
-or build setup. Omit the idea to start intake in the browser. `gamedevpl play --edit`
-opens the same workbench for a checkout. `--no-open` prints its URL. The launcher exits;
-the session stays alive until **Commands → End session**. Repeating the launch from the
-same directory reconnects to the existing instance. Interactive terminal `/play`
+In an interactive terminal, `gamedevpl` opens a browser home with Open and Create.
+`gamedevpl play [slug]` opens the matching game (the current checkout when omitted);
+`gamedevpl create [idea]` opens a separate creation conversation. Opening home or
+choosing Create without submitting an idea does not start an agent. Once a checkout
+opens, Play starts automatically; required recovery and account questions appear in
+that same browser session.
+
+Use `gamedevpl --terminal`, explicit `repl`, or `connect` for terminal conversation.
+`play --preview` retains raw preview. JSON, redirected/non-TTY and `play --stop` keep
+their previous behavior. Explicit `create --play` and `play --edit` also launch a
+browser without a TTY; they cannot be combined with JSON, stop or raw-preview flags.
+`--no-open` prints the complete session URL instead of opening it.
+
+The launcher exits and the session stays alive until **Commands → End session**.
+Repeated launches resume the matching session without replaying a supplied idea.
+New-game intake never inherits the launch directory's existing checkout. An unknown
+legacy mutation blocks a new create until reconciled; existing recovery journals and
+acknowledged game identities remain authoritative. Explicit `play --edit` without a
+slug retains the legacy directory journal for recovery. Interactive terminal `/play`
 remains attached to that terminal's lifetime.
 
 ## Edit and operate

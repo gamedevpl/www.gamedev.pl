@@ -33,6 +33,8 @@ export async function runInkRepl(input: {
   checkout?: { slug: string; root: string };
   currentPath?: string;
   browserOnly?: boolean;
+  entryMode?: 'home' | 'create' | 'game';
+  suggestedSlug?: string;
   onReady?: (url: string) => void;
   login?: (write: (line: string) => void) => Promise<void>;
   onCheckpoint?: (state: { token: string | null; slug: string; checkout?: { root: string; slug: string } }) => void;
@@ -93,7 +95,14 @@ export async function runInkRepl(input: {
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
-  const browser = sessionBrowserHost(session, input.browserOnly);
+  let token = input.token;
+  let slug = input.checkout?.slug ?? input.slug ?? '';
+  let initialLine = input.initialLine;
+  const browser = sessionBrowserHost(session, input.browserOnly, () => ({
+    mode: slug ? 'game' : (input.entryMode ?? 'home'),
+    slug,
+    suggestedSlug: input.suggestedSlug,
+  }));
   if (input.browserOnly) {
     input.onReady?.(await browser.start());
     session.writeLine('Play session ready. Closing the terminal does not stop this session.');
@@ -120,7 +129,7 @@ export async function runInkRepl(input: {
     who = 'account unavailable';
   }
 
-  if (input.browserOnly && !uid && input.login) {
+  if (input.browserOnly && !uid && input.login && !input.checkout) {
     const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
     if (answer === 'Sign in') {
       try {
@@ -164,9 +173,7 @@ export async function runInkRepl(input: {
       mount(offset);
     }
   };
-  let token = input.token;
-  let slug = input.checkout?.slug ?? input.slug ?? '';
-  let initialLine = input.initialLine;
+  if (input.browserOnly && !uid && input.checkout) initialLine = '/play';
   const paintIdentity = (): void => {
     bindHistory(slug);
     session.setIdentity(formatSessionIdentity(who, slug));
@@ -238,6 +245,7 @@ export async function runInkRepl(input: {
   try {
     for (;;) {
       const line = initialLine ?? (await session.prompt());
+      if (initialLine && !line.startsWith('/')) session.writeLine('› ' + line);
       initialLine = undefined;
       if (!spoke && (!input.checkout || token) && line.trim() && !line.trim().startsWith('/')) {
         spoke = true;
@@ -248,6 +256,7 @@ export async function runInkRepl(input: {
           await input.login(session.writeLine);
           await refreshAccount();
           paintIdentity();
+          if (input.browserOnly && input.checkout && !workshop) initialLine = '/checkout ' + input.checkout.slug;
         } catch (error) {
           session.writeLine(formatError(error));
         }
@@ -326,6 +335,7 @@ export async function runInkRepl(input: {
         slug = result.slug;
         paintIdentity();
       }
+      if (input.browserOnly && result.workshop && /^\/(checkout|connect)(?:\s|$)/.test(line)) initialLine = '/play';
       if (result.conversationId !== undefined && (result.conversationId !== '' || historyScope === turnScope)) {
         conversationId = result.conversationId;
       }

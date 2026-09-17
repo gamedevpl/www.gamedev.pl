@@ -60,7 +60,10 @@ async function body(req: IncomingMessage, limit = 40_000): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-export async function startSessionBrowser(session: SessionController, options: { detached?: boolean } = {}) {
+export async function startSessionBrowser(
+  session: SessionController,
+  options: { detached?: boolean; workspace?: () => { mode: string; slug: string; suggestedSlug?: string } } = {},
+) {
   const sessionId = randomUUID();
   const token = randomBytes(32).toString('hex');
   const artifacts = workbenchArtifacts();
@@ -129,6 +132,7 @@ export async function startSessionBrowser(session: SessionController, options: {
         const state = session.get();
         reply(200, {
           version: 1,
+          workspace: options.workspace?.(),
           detached: options.detached === true,
           sessionId,
           sequence,

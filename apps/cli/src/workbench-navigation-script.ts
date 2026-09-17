@@ -1,7 +1,7 @@
 export const WORKBENCH_NAVIGATION_SCRIPT = String.raw`
 let historyIndex=-1, historyDraft='', lastHistory='', firstWorkspace=true, lastQuestion='';
 function openChat(){document.exitPointerLock?.();panel.hidden=false;el('edit').setAttribute('aria-expanded','true');draft.focus();}
-function closeChat(){panel.hidden=true;el('edit').setAttribute('aria-expanded','false');frame.focus();}
+function closeChat(){panel.hidden=true;leaveOnboarding();el('edit').setAttribute('aria-expanded','false');frame.focus();}
 function drawer(section,title){document.exitPointerLock?.();el('workbench-tools').hidden=false;el('drawer-title').textContent=title;for(const key of ['commands','media','devices','history','details'])el(key+'-section').hidden=key!==section;el(section==='commands'?'command-search':'drawer-close').focus();}
 el('dock').onclick=()=>{const left=document.body.dataset.dock!=='left';document.body.dataset.dock=left?'left':'right';el('dock').setAttribute('aria-label',left?'Move conversation right':'Move conversation left');};
 el('drawer-close').onclick=()=>{el('workbench-tools').hidden=true;el('edit').focus();};
@@ -46,6 +46,7 @@ function updateWorkspace(next){
   const encoded=JSON.stringify(next.history??[]);if(encoded!==lastHistory){lastHistory=encoded;const box=el('prompt-history');box.replaceChildren();for(const text of [...(next.history??[])].reverse()){const button=document.createElement('button');button.type='button';button.textContent=text;button.onclick=()=>{if(draft.value.trim()&&!confirm('Replace the current draft with this prompt?'))return;setDraft(text);el('workbench-tools').hidden=true;openChat();};box.append(button);}if(!box.children.length)box.textContent='Your sent prompts will appear here.';}
 }
 function showConnectionError(error){
+  el('workspace-home').hidden=true;document.body.dataset.intake='false';
   const access=/\(401\)|\(403\)/.test(error.message);
   el('connection').textContent=access?'Session access required':'Connection lost';
   const detail=access?'This tab has no valid session access. Reopen Play from the CLI using the complete launch link.':'The local session is unavailable. Reopen /play in your terminal, or run gamedevpl play --edit from the game checkout.';

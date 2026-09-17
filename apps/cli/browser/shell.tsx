@@ -1,3 +1,4 @@
+import { WorkspaceHome } from './home.js';
 import { PixelIcon, type PixelIconName } from '../../web/src/PixelIcon.js';
 import { Conversation } from './conversation.js';
 
@@ -8,6 +9,7 @@ function Icon({ name }: { name: PixelIconName }) {
 export function PlayShell() {
   return (
     <>
+      <WorkspaceHome />
       <nav id="tools" aria-label="Play controls">
         <div className="game-badge">
           <Icon name="gamepad" />
@@ -111,7 +113,9 @@ export function PlayShell() {
           <button id="retry" type="button" hidden>
             Retry same request
           </button>
-          <p className="hint">Type / for commands · Click the game to play</p>
+          <p id="composer-hint" className="hint">
+            Type / for commands · Click the game to play
+          </p>
         </form>
       </aside>
       <aside id="workbench-tools" hidden aria-labelledby="drawer-title">

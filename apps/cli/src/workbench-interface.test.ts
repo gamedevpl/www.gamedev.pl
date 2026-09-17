@@ -6,9 +6,10 @@ const windows: JSDOM[] = [];
 afterEach(() => {
   for (const dom of windows.splice(0)) dom.window.close();
 });
-function fixture(status = 200) {
+function fixture(status = 200, mode?: string) {
   const state = {
     sessionId: 'one',
+    workspace: mode ? { mode, slug: mode === 'game' ? 'racer' : '', suggestedSlug: 'racer' } : undefined,
     sourceId: 0,
     hasPreview: false,
     mode: 'prompt',
@@ -102,4 +103,31 @@ it('does not reopen a dismissed question or close its attachment drawer on each 
   (doc.getElementById('close') as HTMLButtonElement).click();
   await new Promise((resolve) => setTimeout(resolve, 1100));
   expect(doc.getElementById('panel')!.hidden).toBe(true);
+});
+
+it('opens a home and lets the user choose intake without dispatching an agent', async () => {
+  const { doc, requests } = fixture(200, 'home');
+  await vi.waitFor(() => expect(doc.getElementById('workspace-home')!.hidden).toBe(false));
+  expect(doc.getElementById('home-continue-label')!.textContent).toContain('racer');
+  (doc.getElementById('home-create') as HTMLButtonElement).click();
+  expect(doc.body.dataset.intake).toBe('true');
+  expect(doc.getElementById('panel')!.hidden).toBe(false);
+  expect(doc.getElementById('workspace-home')!.hidden).toBe(true);
+  expect(requests.filter((path) => path === '/commands')).toHaveLength(0);
+  expect((doc.getElementById('prompt') as HTMLTextAreaElement).placeholder).toContain('make');
+  (doc.getElementById('close') as HTMLButtonElement).click();
+  expect(doc.getElementById('workspace-home')!.hidden).toBe(false);
+  expect(doc.body.dataset.intake).toBe('false');
+});
+it('transitions from creation conversation to the game workspace without remounting the stage', async () => {
+  const { doc, state } = fixture(200, 'create');
+  const frame = doc.getElementById('game');
+  await vi.waitFor(() => expect(doc.body.dataset.intake).toBe('true'));
+  state.workspace!.mode = 'game';
+  state.workspace!.slug = 'new-game';
+  state.hasPreview = true;
+  await vi.waitFor(() => expect(doc.body.dataset.intake).toBe('false'), { timeout: 2000 });
+  expect(doc.getElementById('workspace-home')!.hidden).toBe(true);
+  expect(doc.getElementById('game')).toBe(frame);
+  expect(doc.getElementById('panel-title')!.textContent).toBe('Conversation');
 });

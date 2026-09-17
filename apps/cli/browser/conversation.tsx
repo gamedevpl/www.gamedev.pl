@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
-type Snapshot = { lines: string[] };
+type Snapshot = { lines: string[]; workspace?: { mode: string } };
 
 export function Conversation() {
+  const [game, setGame] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => {
     const update = (event: Event) => {
-      const next = (event as CustomEvent<Snapshot>).detail.lines;
+      const data = (event as CustomEvent<Snapshot>).detail;
+      const next = data.lines;
+      setGame(data.workspace?.mode === 'game');
       setLines((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next));
     };
     window.addEventListener('play-session', update);
@@ -17,7 +20,19 @@ export function Conversation() {
   useEffect(() => {
     if (follow.current && box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [lines]);
-  const messages = lines.filter((line) => /^(› |◆ |.* ▸ )/.test(line));
+  const messages: Array<{ text: string; kind: 'user' | 'assistant' | 'output' }> = [];
+  let output: string[] = [];
+  const flush = () => {
+    if (output.length) messages.push({ text: output.join('\n'), kind: 'output' });
+    output = [];
+  };
+  for (const line of lines) {
+    if (/^(› |◆ |.* ▸ )/.test(line)) {
+      flush();
+      messages.push({ text: line.replace(/^[›◆] /, ''), kind: line.startsWith('› ') ? 'user' : 'assistant' });
+    } else if (line.trim()) output.push(line);
+  }
+  flush();
   return (
     <div
       id="conversation"
@@ -29,17 +44,27 @@ export function Conversation() {
         follow.current = node.scrollTop + node.clientHeight >= node.scrollHeight - 40;
       }}
     >
-      {messages.length ? (
-        messages.map((line, i) => (
-          <article key={i} className={line.startsWith('› ') ? 'message user' : 'message assistant'}>
-            <span className="message-author">{line.startsWith('› ') ? 'You' : 'gamedev.pl'}</span>
-            <p>{line.replace(/^[›◆] /, '')}</p>
+      {messages.map((message, i) =>
+        message.kind === 'output' ? (
+          <details key={i} className="message session-output">
+            <summary>{message.text.split('\n')[0]?.slice(0, 140)}</summary>
+            <pre>{message.text}</pre>
+          </details>
+        ) : (
+          <article key={i} className={'message ' + message.kind}>
+            <span className="message-author">{message.kind === 'user' ? 'You' : 'gamedev.pl'}</span>
+            <p>{message.text}</p>
           </article>
-        ))
-      ) : (
+        ),
+      )}
+      {!messages.some((message) => message.kind !== 'output') && (
         <div className="conversation-welcome">
-          <h2>What shall we change?</h2>
-          <p>Play a little, then describe your idea or capture a moment. Your game stays open.</p>
+          <h2>{game ? 'What shall we change?' : 'What would you like to make?'}</h2>
+          <p>
+            {game
+              ? 'Play a little, then describe your idea or capture a moment. Your game stays open.'
+              : 'Describe a game or add a reference. We will work through the idea and choose a builder before execution.'}
+          </p>
         </div>
       )}
     </div>

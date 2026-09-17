@@ -1,3 +1,4 @@
+import { workbenchScope, workerEntry, assertRequestedGame, type WorkbenchEntry } from './workbench-entry.js';
 import { acquireStartupLock } from './workbench-startup-lock.js';
 import { CliError } from './exit-codes.js';
 import { spawn } from 'node:child_process';
@@ -17,6 +18,7 @@ export type PlayJournal = {
   pid?: number;
   url?: string;
   initial?: string;
+  launch?: WorkbenchEntry;
   token?: string | null;
   slug?: string;
   checkout?: { root: string; slug: string };
@@ -82,16 +84,23 @@ export async function launchWorkbench(input: {
   entry: string;
   env: NodeJS.ProcessEnv;
   idea?: string;
+  launch?: WorkbenchEntry;
   noOpen: boolean;
   write: (line: string) => void;
 }) {
   const cwd = realpathSync(input.cwd),
     base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
   privatePlayDirectory(base);
-  const key = createHash('sha256').update(cwd).digest('hex'),
+  const key = createHash('sha256').update(workbenchScope(cwd, input.launch)).digest('hex'),
     path = join(base, `${key}.json`),
     lock = join(base, `${key}.lock`);
+  const legacy = journalAt(join(base, createHash('sha256').update(cwd).digest('hex') + '.json'));
+  if (input.launch?.mode === 'create' && legacy?.pending)
+    throw Error(
+      'A previous request in this directory has an unknown outcome. Reopen gamedevpl play --edit and reconcile it before creating another game.',
+    );
   const existing = journalAt(path);
+  assertRequestedGame(existing, input.launch);
   if (existing && (await health(existing))) {
     input.write(`Existing Play session: ${existing.url}`);
     if (input.idea) input.write('The supplied idea was not sent. Review the active session and enter it in Play.');
@@ -105,6 +114,7 @@ export async function launchWorkbench(input: {
   const releaseStartup = acquireStartupLock(lock, existing?.pid);
   try {
     const journal = nextPlayJournal(existing, cwd, input.idea, input.write);
+    if (!existing || (existing.ended && !existing.pending)) journal.launch = input.launch;
     savePlayJournal(path, journal);
     const log = openSync(join(base, `${key}.log`), 'a', 0o600);
     let child;
@@ -216,8 +226,7 @@ export async function runPlayWorker(input: {
   save();
   const api = journalApi(input.api, journal, save);
   const { runInkRepl } = await import('./tui/host.js');
-  const checkout = journal.checkout ?? findCheckout(journal.cwd) ?? undefined;
-  const initial = journal.initial;
+  const start = workerEntry(journal);
   delete journal.initial;
   save();
   try {
@@ -226,19 +235,11 @@ export async function runPlayWorker(input: {
       env: { ...input.env, GAMEDEV_PLAY_WORKBENCH: '1' },
       io: { stdin: process.stdin, stdout: process.stdout },
       browserOnly: true,
+      entryMode: journal.launch?.mode,
+      suggestedSlug: journal.launch?.mode === 'home' ? findCheckout(journal.cwd)?.slug : undefined,
       currentPath: input.entry,
       token: journal.token ?? null,
-      checkout,
-      slug: journal.slug,
-      initialLine:
-        initial ??
-        (checkout && !journal.token
-          ? `/connect ${checkout.slug}`
-          : checkout
-            ? '/play'
-            : journal.slug
-              ? `/connect ${journal.slug}`
-              : undefined),
+      ...start,
       login: input.login,
       onReady: (url) => {
         journal.url = url;

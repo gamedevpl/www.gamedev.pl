@@ -1,3 +1,4 @@
+import { WORKBENCH_ONBOARDING_SCRIPT } from './workbench-onboarding-script.js';
 import { WORKBENCH_PLAYER_SCRIPT } from './workbench-player-script.js';
 import { WORKBENCH_NAVIGATION_SCRIPT } from './workbench-navigation-script.js';
 import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
@@ -49,7 +50,7 @@ function render(next) {
   el('identity').textContent = state.identity;
   el('game-name').textContent = state.identity || 'gamedev.pl';
   el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
-  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines}}));
+  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,workspace:state.workspace}}));
   const transcript = el('transcript');
   const bottom = transcript.scrollTop + transcript.clientHeight >= transcript.scrollHeight - 30;
   const text = state.lines.join('\n');
@@ -72,6 +73,7 @@ function render(next) {
     swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
   }
   controls();
+  updateOnboarding(next);
 }
 async function deliver() {
   if (!pending || sending) return;
@@ -145,5 +147,6 @@ async function tick() {
 ${WORKBENCH_PLAYER_SCRIPT}
 ${WORKBENCH_TOOLS_SCRIPT}
 ${WORKBENCH_NAVIGATION_SCRIPT}
+${WORKBENCH_ONBOARDING_SCRIPT}
 tick(); previewTick();
 `;

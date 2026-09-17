@@ -4,7 +4,11 @@ import { openUrl } from './open-url.js';
 import type { SessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
 
-export function sessionBrowserHost(session: SessionController, headless = false) {
+export function sessionBrowserHost(
+  session: SessionController,
+  headless = false,
+  workspace?: () => { mode: string; slug: string; suggestedSlug?: string },
+) {
   let preview = '';
   let opening: ReturnType<typeof startSessionBrowser> | undefined;
   let closed = false;
@@ -15,7 +19,7 @@ export function sessionBrowserHost(session: SessionController, headless = false)
     }
   });
   const start = () =>
-    (opening ??= startSessionBrowser(session, { detached: headless }).catch((error: unknown) => {
+    (opening ??= startSessionBrowser(session, { detached: headless, workspace }).catch((error: unknown) => {
       opening = undefined;
       throw error;
     }));
@@ -40,7 +44,7 @@ export function sessionBrowserHost(session: SessionController, headless = false)
     async open(url: string): Promise<boolean> {
       if (closed) return false;
       if (!preview || preview !== url) return openUrl(url);
-      opening ??= startSessionBrowser(session, { detached: headless }).catch((error: unknown) => {
+      opening ??= startSessionBrowser(session, { detached: headless, workspace }).catch((error: unknown) => {
         opening = undefined;
         throw error;
       });
