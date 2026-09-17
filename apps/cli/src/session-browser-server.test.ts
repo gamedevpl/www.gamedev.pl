@@ -169,7 +169,7 @@ it('answers a phone pairing race with 409 and closes the superseded listener', a
   });
   await vi.waitFor(() => expect(finish).toBeDefined());
   server.clearPreview();
-  finish({ url: 'http://fixture.test/', expiresAt: '', qr: '', close });
+  finish({ url: 'http://fixture.test/', expiresAt: '', qr: '', closed: false, close });
   const result = await response;
   expect(result.status).toBe(409);
   expect(await result.json()).toEqual({ error: 'Paired game changed' });
@@ -221,3 +221,27 @@ it.each(['/commands', '/artifacts', '/phone'])(
     await prompt;
   },
 );
+
+it('stops advertising expired phone pairing and allows a replacement', async () => {
+  const { server, url, headers } = await fixture();
+  server.setPreview(`http://127.0.0.1:54321/${'a'.repeat(48)}/`);
+  const pairing = { url: 'http://phone.test/', expiresAt: '', qr: 'qr', closed: false, close: vi.fn(async () => {}) };
+  vi.mocked(startPhonePreview).mockResolvedValueOnce(pairing);
+  const pair = () =>
+    fetch(`${url.origin}/phone`, { method: 'POST', headers, body: JSON.stringify({ address: '192.168.1.42' }) });
+  expect((await pair()).status).toBe(200);
+  expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).toHaveProperty(
+    'phone.url',
+    pairing.url,
+  );
+  pairing.closed = true;
+  expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).not.toHaveProperty('phone');
+  expect(pairing.close).toHaveBeenCalledOnce();
+  const replacement = { ...pairing, closed: false, url: 'http://replacement.test/' };
+  vi.mocked(startPhonePreview).mockResolvedValueOnce(replacement);
+  expect((await pair()).status).toBe(200);
+  expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).toHaveProperty(
+    'phone.url',
+    replacement.url,
+  );
+});

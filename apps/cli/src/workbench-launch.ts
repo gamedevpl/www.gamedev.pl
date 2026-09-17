@@ -62,6 +62,21 @@ function running(pid: number | undefined): boolean {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH';
   }
 }
+export function nextPlayJournal(
+  existing: PlayJournal | undefined,
+  cwd: string,
+  idea: string | undefined,
+  write: (line: string) => void,
+): PlayJournal {
+  if (existing && (!existing.ended || existing.pending)) {
+    if (idea)
+      write(
+        'Resuming the previous Play session. The supplied idea was not sent; review the previous work and enter it in Play.',
+      );
+    return { ...existing, ended: false, pid: undefined, url: undefined, initial: undefined };
+  }
+  return { version: 1, instance: randomUUID(), cwd, initial: idea };
+}
 export async function launchWorkbench(input: {
   cwd: string;
   entry: string;
@@ -79,6 +94,7 @@ export async function launchWorkbench(input: {
   const existing = journalAt(path);
   if (existing && (await health(existing))) {
     input.write(`Existing Play session: ${existing.url}`);
+    if (input.idea) input.write('The supplied idea was not sent. Review the active session and enter it in Play.');
     if (!input.noOpen) await openUrl(existing.url!);
     return existing.url!;
   }
@@ -88,10 +104,7 @@ export async function launchWorkbench(input: {
     );
   const releaseStartup = acquireStartupLock(lock, existing?.pid);
   try {
-    const journal: PlayJournal =
-      existing && !existing.ended
-        ? { ...existing, pid: undefined, url: undefined, initial: undefined }
-        : { version: 1, instance: randomUUID(), cwd, initial: input.idea };
+    const journal = nextPlayJournal(existing, cwd, input.idea, input.write);
     savePlayJournal(path, journal);
     const log = openSync(join(base, `${key}.log`), 'a', 0o600);
     let child;

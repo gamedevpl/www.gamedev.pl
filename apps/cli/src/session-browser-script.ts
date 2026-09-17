@@ -21,8 +21,8 @@ async function api(path, data, timeout = 6000) {
   return response.json();
 }
 function controls() {
-  el('run-operation').disabled = !online || state?.mode !== 'prompt' || !!state?.question || !!pending;
-  const ready = online && state && !pending;
+  el('run-operation').disabled = !online || state?.mode !== 'prompt' || !!state?.question || !!pending || sending;
+  const ready = online && state && !pending && !sending;
   el('send').disabled = !ready || state.mode === 'pick' || (state.mode === 'busy' && !state.localTask);
   el('send').textContent = state?.mode === 'busy' ? 'Queue request' : 'Send';
   el('stop').disabled = !online || !state?.localTask || state.mode !== 'busy' || stopping === state.taskId || Boolean(pending);
@@ -30,7 +30,14 @@ function controls() {
   for (const button of el('choices').children) button.disabled = !ready;
   el('retry').hidden = !pending || sending;
 }
+function reconcilePending(sessionId) {
+  if(pending&&pending.envelope.sessionId!==sessionId) {
+    pending=undefined;sessionStorage.removeItem('play-pending');
+    el('feedback').textContent='Session changed. The previous request was not resent. Your draft and staged attachments are preserved; check the previous outcome before sending again.';
+  }
+}
 function render(next) {
+  reconcilePending(next.sessionId);
   const old = state;
   state = next;
   el('session-lifetime').textContent=state.detached?'This session runs independently. Use End session in Tools to stop it.':'Shared with your terminal. Keep the terminal session open.';
@@ -64,21 +71,24 @@ function render(next) {
 }
 async function deliver() {
   if (!pending || sending) return;
+  const attempt = pending;
   sending = true; controls();
   try {
-    const result = await api('/commands', pending.envelope);
+    const result = await api('/commands', attempt.envelope);
+    if(pending!==attempt)return;
     if (result.status === 'accepted') {
       if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
       else { if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');tray();} el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task.' : 'Request accepted. Staged attachments stay available until removed.'; }
     } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
     pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {
+    if(pending!==attempt)return;
     online = false;
     el('feedback').textContent = 'No receipt received. Retry keeps the same request ID and cannot enqueue twice.';
   } finally { sending = false; controls(); }
 }
 function send(command) {
-  if (!online || !state || pending) return;
+  if (!online || !state || pending || sending) return;
   pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&command.kind!=='action'};
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }

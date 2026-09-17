@@ -43,6 +43,7 @@ let phone: Awaited<ReturnType<typeof startPhonePreview>> | undefined;
 afterEach(async () => {
   await phone?.close();
   phone = undefined;
+  vi.useRealTimers();
 });
 it('phone capability can read and report but cannot execute editor operations', async () => {
   const reports: PhoneReport[] = [];
@@ -109,4 +110,31 @@ it('refuses public and unselected bind addresses', async () => {
       reports: [],
     }),
   ).rejects.toThrow('private LAN');
+});
+
+it('closes the phone listener after thirty minutes and exposes its closed state', async () => {
+  phone = await startPhonePreview({
+    address: '192.168.1.42',
+    snapshot: async () => ({}),
+    status: async () => ({}),
+    artifact: () => ({ id: '' }),
+    reports: [],
+  });
+  expect(phone.closed).toBe(false);
+  await phone.close();
+  expect(phone.closed).toBe(true);
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  phone = await startPhonePreview({
+    address: '192.168.1.42',
+    snapshot: async () => ({}),
+    status: async () => ({}),
+    artifact: () => ({ id: '' }),
+    reports: [],
+  });
+  expect(phone.closed).toBe(false);
+  await vi.advanceTimersByTimeAsync(30 * 60_000);
+  expect(phone.closed).toBe(true);
+  const url = new URL(phone.url);
+  await expect(fetch(`http://127.0.0.1:${url.port}/`, { headers: { Host: url.host } })).rejects.toThrow();
+  await phone.close();
 });

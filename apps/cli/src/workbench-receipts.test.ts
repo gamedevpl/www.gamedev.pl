@@ -56,3 +56,78 @@ it.each(['ordinary', 'question', 'choice'])('retains staged evidence across a %s
     }),
   ]);
 });
+
+it.each(['restored', 'late acceptance', 'late failure'])(
+  'releases a stale session receipt while preserving the draft (%s)',
+  async (mode) => {
+    let finish!: (value: { status: string }) => void;
+    let fail!: (error: Error) => void;
+    const api = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            finish = resolve;
+            fail = reject;
+          }),
+      )
+      .mockResolvedValue({ status: 'accepted' });
+    const fields = new Map<string, { textContent: string; disabled: boolean; children: never[] }>();
+    const context = {
+      pending: {
+        envelope: { sessionId: 'old', command: { kind: 'input' } },
+        text: 'Keep this draft',
+        clearDraft: true,
+      } as unknown,
+      sending: false,
+      online: true,
+      stopping: -1,
+      state: { sessionId: 'new', mode: 'prompt', question: '', choices: [], promptId: 2 },
+      draft: { value: 'Keep this draft' },
+      attachments: [{ id: 'image' }],
+      api,
+      sessionStorage: { removeItem: vi.fn(), setItem: vi.fn() },
+      crypto: { randomUUID: () => 'fresh-command' },
+      tray: vi.fn(),
+      el: (id: string) => {
+        if (!fields.has(id)) fields.set(id, { textContent: '', disabled: false, children: [] });
+        return fields.get(id)!;
+      },
+    };
+    const helpers = SESSION_BROWSER_SCRIPT.slice(
+      SESSION_BROWSER_SCRIPT.indexOf('function controls()'),
+      SESSION_BROWSER_SCRIPT.indexOf('function render('),
+    );
+    const start = SESSION_BROWSER_SCRIPT.indexOf('async function deliver()');
+    runInNewContext(
+      helpers + SESSION_BROWSER_SCRIPT.slice(start, SESSION_BROWSER_SCRIPT.indexOf("el('composer').onsubmit", start)),
+      context,
+    );
+    const client = context as typeof context & {
+      reconcilePending(id: string): void;
+      controls(): void;
+      deliver(): Promise<void>;
+      send(command: unknown): void;
+    };
+    client.reconcilePending('old');
+    expect(context.pending).toBeDefined();
+    const delivery = mode === 'restored' ? undefined : client.deliver();
+    client.reconcilePending('new');
+    expect(context.pending).toBeUndefined();
+    expect(context.sessionStorage.removeItem).toHaveBeenCalledWith('play-pending');
+    if (mode === 'late acceptance') finish({ status: 'accepted' });
+    if (mode === 'late failure') fail(Error('Session unavailable (409)'));
+    await delivery;
+    client.controls();
+    expect(context.draft.value).toBe('Keep this draft');
+    expect(context.attachments).toEqual([{ id: 'image' }]);
+    expect(context.online).toBe(true);
+    expect(context.el('send').disabled).toBe(false);
+    expect(context.el('run-operation').disabled).toBe(false);
+    expect(context.el('feedback').textContent).toContain('previous request was not resent');
+    if (mode === 'restored') api.mockReset().mockResolvedValue({ status: 'accepted' });
+    client.send({ kind: 'input', promptId: 2, text: context.draft.value });
+    await vi.waitFor(() => expect(context.pending).toBeUndefined());
+    expect(api.mock.calls.at(-1)?.[1]).toMatchObject({ sessionId: 'new', command: { id: 'fresh-command' } });
+  },
+);

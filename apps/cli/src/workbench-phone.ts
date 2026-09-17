@@ -157,7 +157,15 @@ export async function startPhonePreview(input: {
   expiry.unref();
   const url = `${origin}/#${secret}`;
   try {
-    return { url, expiresAt, close, qr: await QRCode.toDataURL(url, { width: 240, margin: 1 }) };
+    return {
+      url,
+      expiresAt,
+      close,
+      get closed() {
+        return closed;
+      },
+      qr: await QRCode.toDataURL(url, { width: 240, margin: 1 }),
+    };
   } catch (error) {
     await close();
     throw error;

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { workbenchArtifacts } from './workbench-artifacts.js';
 import { createSessionController } from './session-controller.js';
 import { createSessionCommands } from './session-commands.js';
-import { journalApi, type PlayJournal } from './workbench-launch.js';
+import { journalApi, nextPlayJournal, savePlayJournal, type PlayJournal } from './workbench-launch.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
 import { checkpointFiles, workbenchLocalAction } from './workbench-checkpoints.js';
@@ -225,4 +225,39 @@ it.each([
   );
   await expect(api.request('POST', path, body)).rejects.toThrow('Timeout');
   expect(state.pending).toMatchObject({ path });
+});
+
+it('keeps an unknown create fenced across quit, persisted journal and relaunch', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'play-relaunch-'));
+  cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, 'session.json');
+  const request = vi.fn().mockRejectedValue(Error('Response lost'));
+  const raw = { origin: '', request, requestBytes: vi.fn() };
+  const journal: PlayJournal = { version: 1, instance: 'old', cwd: root, token: 'token', slug: 'race' };
+  const api = journalApi(raw, journal, () => savePlayJournal(path, journal));
+  await expect(api.request('POST', '/api/submissions', { title: 'Race' })).rejects.toThrow('Response lost');
+  journal.ended = true;
+  savePlayJournal(path, journal);
+  const write = vi.fn();
+  const resumed = nextPlayJournal(JSON.parse(readFileSync(path, 'utf8')), root, 'Another idea', write);
+  expect(resumed).toMatchObject({ pending: journal.pending, token: 'token', slug: 'race', ended: false });
+  expect(resumed.initial).toBeUndefined();
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('idea was not sent'));
+  await expect(journalApi(raw, resumed, vi.fn()).request('POST', '/api/submissions', {})).rejects.toThrow(
+    'unknown outcome',
+  );
+  expect(request).toHaveBeenCalledOnce();
+});
+it('warns about ignored ideas on crash recovery and accepts them for a fresh session', () => {
+  const old: PlayJournal = { version: 1, instance: 'old', cwd: '/tmp', pid: 123, url: 'old-url' };
+  const write = vi.fn();
+  expect(nextPlayJournal(old, '/tmp', 'New idea', write)).toMatchObject({
+    instance: 'old',
+    initial: undefined,
+    pid: undefined,
+    url: undefined,
+  });
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('idea was not sent'));
+  expect(nextPlayJournal({ ...old, ended: true }, '/tmp', 'New idea', vi.fn())).toMatchObject({ initial: 'New idea' });
+  expect(nextPlayJournal(undefined, '/tmp', 'First idea', vi.fn())).toMatchObject({ initial: 'First idea' });
 });

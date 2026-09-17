@@ -14,6 +14,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Recover Play after session changes without replaying uncertain operations, and remove expired phone links (#1388).
 - Keep Play usable after preparation timeouts, preserve staged evidence while answering questions, and ignore superseded reloads (#1388).
 - Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task (#1392).
 

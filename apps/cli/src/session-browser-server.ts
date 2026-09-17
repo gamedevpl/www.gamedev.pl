@@ -125,6 +125,7 @@ export async function startSessionBrowser(session: SessionController, options: {
     }
     try {
       if (req.method === 'GET' && req.url === '/state') {
+        if (phone?.closed) revokePhone();
         const state = session.get();
         reply(200, {
           version: 1,

@@ -1,4 +1,6 @@
 import { mkdtempSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -71,5 +73,41 @@ it.each(['EACCES', 'ENOSPC', 'EEXIST'])('preserves writer mkdir error %s', async
     expect(run).not.toHaveBeenCalled();
   } finally {
     vi.mocked(mkdirSync).mockImplementation(fs.mkdirSync);
+  }
+});
+
+it.each([false, true])(
+  'missing ownership during cleanup preserves the operation outcome (failure: %s)',
+  async (fails) => {
+    const path = root();
+    const lock = join(
+      tmpdir(),
+      `gamedev-writers-${process.getuid?.() ?? 'user'}`,
+      createHash('sha256').update(realpathSync(path)).digest('hex'),
+    );
+    const failure = Error('real operation failure');
+    const result = withCheckoutWriter(path, async () => {
+      rmSync(lock, { recursive: true });
+      if (fails) throw failure;
+      return 42;
+    });
+    if (fails) await expect(result).rejects.toBe(failure);
+    else await expect(result).resolves.toBe(42);
+  },
+);
+it('does not remove a replacement lock owned by another writer', async () => {
+  const path = root();
+  const lock = join(
+    tmpdir(),
+    `gamedev-writers-${process.getuid?.() ?? 'user'}`,
+    createHash('sha256').update(realpathSync(path)).digest('hex'),
+  );
+  try {
+    await withCheckoutWriter(path, async () => {
+      writeFileSync(join(lock, 'owner.json'), JSON.stringify({ instance: 'replacement' }));
+    });
+    expect(existsSync(lock)).toBe(true);
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
   }
 });

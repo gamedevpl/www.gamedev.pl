@@ -36,7 +36,15 @@ export async function withCheckoutWriter<T>(root: string, run: () => Promise<T>)
   try {
     return await transaction.run(roots, run);
   } finally {
+    releaseWriter(lock, instance);
+  }
+}
+
+function releaseWriter(lock: string, instance: string): void {
+  try {
     const owner = JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8')) as { instance: string };
     if (owner.instance === instance) rmSync(lock, { recursive: true, force: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 }
