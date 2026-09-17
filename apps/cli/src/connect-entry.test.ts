@@ -89,7 +89,7 @@ describe('connect entry points', () => {
   });
 });
 
-it.each([{ args: [] }, { args: ['repl', 'sky'] }, { args: ['connect', 'sky'] }])(
+it.each([{ args: ['--terminal'] }, { args: ['repl', 'sky'] }, { args: ['connect', 'sky'] }])(
   'opens orphan recovery inside the TUI for $args',
   async ({ args }) => {
     const parent = mkdtempSync(join(tmpdir(), 'entry space '));

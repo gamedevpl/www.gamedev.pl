@@ -4,7 +4,7 @@ import { SLASH_VERBS, type SlashVerb } from './argv.js';
 
 export const BLURB: Record<SlashVerb, string> = {
   recover: 'recover local sources after cancellation/deletion — recover [dir] [--slug <name>] --yes',
-  play: 'open the game; live reload in a checkout — play [slug] [--no-open|--stop]',
+  play: 'open the browser workbench — play [slug]; --preview for raw preview; --stop to stop preview',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',
   model: 'view or choose delegated model and effort — model [agent]',
@@ -33,7 +33,10 @@ export const BLURB: Record<SlashVerb, string> = {
 
 export function formatHelp(slash = false): string {
   const prefix = slash ? '/' : '';
-  const rows = SLASH_VERBS.map((verb) => `  ${(prefix + verb).padEnd(18)}${BLURB[verb]}`);
+  const rows = SLASH_VERBS.map(
+    (verb) =>
+      `  ${(prefix + verb).padEnd(18)}${slash && verb === 'play' ? 'open the current game with live preview' : BLURB[verb]}`,
+  );
   const intro = slash
     ? [
         `${CLI_BIN} ${CLI_VERSION}`,
@@ -46,9 +49,12 @@ export function formatHelp(slash = false): string {
     : [
         `${CLI_BIN} ${CLI_VERSION} — Studio from a terminal`,
         '',
-        `  ${CLI_BIN.padEnd(24)}interactive conversation`,
-        `  ${CLI_BIN} create --play [idea]   create from a browser; terminal may close`,
-        `  ${CLI_BIN} play --edit            open a detached browser workbench`,
+        `  ${CLI_BIN.padEnd(24)}open your browser workspace`,
+        `  ${CLI_BIN} create [idea]          create in the browser (interactive)`,
+        `  ${CLI_BIN} play [slug]            open a game in the browser (interactive)`,
+        `  ${CLI_BIN} --terminal           interactive conversation in the terminal`,
+        `  ${CLI_BIN} play --preview       open the raw game preview`,
+        `  ${CLI_BIN} create --play [idea]  explicit browser launch without a TTY`,
         `  ${`${CLI_BIN} repl <slug>`.padEnd(24)}interactive session for an existing game`,
         `  ${`${CLI_BIN} <verb>`.padEnd(24)}one-shot command`,
         '',

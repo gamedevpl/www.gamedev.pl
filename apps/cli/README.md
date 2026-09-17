@@ -58,7 +58,7 @@ npm run bundle -w @gamedevpl/cli
 node apps/cli/dist/gamedevpl.mjs help
 ```
 
-`ink` is a workspace dependency. Skipping `npm install` makes esbuild fail with `Could not resolve "ink"`. The bundled script inlines Ink. `gamedevpl` with no verb is that TUI.
+`ink` is a workspace dependency. Skipping `npm install` makes esbuild fail with `Could not resolve "ink"`. The bundled script inlines Ink. Interactive `gamedevpl` opens the browser workspace. Use `gamedevpl --terminal` for the TUI.
 
 ## Verbs
 
@@ -189,17 +189,20 @@ Installed Claude, Codex, agy, Vibe, and Copilot flags were checked against `--he
 
 ## Play while building
 
-`gamedevpl play` in a checkout opens a local game and reloads it after successful
+Interactive `gamedevpl play [slug]` opens the browser workbench described below.
+The raw-preview path is available with `--preview` (and remains the default without a TTY).
+
+`gamedevpl play --preview` in a checkout opens a local game and reloads it after successful
 source changes. The pinned Creator Kit assembles the document; a separate preview
 process keeps watching while your agent edits or after its command exits. Interactive local
 CLI delegation starts this preview automatically and prints its URL.
 
-- `gamedevpl play [slug]` reuses the running preview for the matching checkout.
+- `gamedevpl play --preview [slug]` reuses the running preview for the matching checkout.
 - `--no-open` prints the URL without launching a browser; `--stop` stops it.
 - `/play` opens the active
   game in the REPL without sending a build request. Mixed editing requests still
   go through the ordinary conversation.
-- Outside a matching checkout, `play <slug>` opens the remote `/play/<slug>` page.
+- Outside a matching checkout, `play --preview <slug>` opens the remote `/play/<slug>` page.
   The browser uses its existing gamedev.pl sign-in; no token goes into the link.
 - Compilation errors appear above the last successful game. Fixing the source
   resumes reload automatically. “Pause reload” holds the current game until resumed.
@@ -429,8 +432,8 @@ In an interactive CLI session, `/play` opens the game with an **Edit game** over
 You can send prompts, queue follow-ups, answer choices, read recent output and request
 Stop from the browser. Keep the terminal open; native agent permission handoffs still
 use it. Compatible game updates can preserve state; unsupported updates require an
-explicit restart. Standalone `gamedevpl play`
-keeps its preview-only behavior. The panel is local to this computer.
+explicit restart. `gamedevpl play --preview` retains the raw preview; interactive
+`gamedevpl play` opens the detached workbench. The panel is local to this computer.
 
 ### Local progress and diagnostics
 
@@ -451,9 +454,12 @@ implemented. Task diagnostics and progress text stay local, outside telemetry.
 
 ### Browser-first creation and editing
 
-Run `gamedevpl create --play "Your game idea"` to open browser intake, or
-`gamedevpl play --edit` inside a checkout. The session runs independently of the
-terminal. Use Tools for CLI/platform operations, local attachments, screenshots,
+In an interactive terminal, run `gamedevpl` for Open/Create, `gamedevpl create "Your game idea"`
+for intake, or `gamedevpl play [slug]` for a game. Use `--terminal` for terminal chat
+and `play --preview` for raw preview. Non-TTY browser launches use explicit
+`create --play` or `play --edit`; JSON and stop retain their previous behavior.
+The session runs independently of the terminal. Use Commands, Attachments and Devices for
+CLI/platform operations, local attachments, screenshots,
 recording, diagnostic traces and phone pairing on trusted Wi-Fi. Compatible game
 updates can preserve state; unsupported updates require an explicit restart.
 

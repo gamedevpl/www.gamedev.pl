@@ -1,3 +1,4 @@
+import './build-play-ui.mjs';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { chmodSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';

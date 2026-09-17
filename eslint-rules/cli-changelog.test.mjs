@@ -125,6 +125,13 @@ describe('releaseNotes', () => {
 describe('cliSourceTouched', () => {
   it('counts shipped CLI code and adapters, not tests or docs', () => {
     expect(cliSourceTouched(['apps/cli/src/main.ts'])).toBe(true);
+    for (const path of [
+      'apps/cli/browser/style.css',
+      'apps/cli/browser/shell.tsx',
+      'apps/web/src/PixelIcon.tsx',
+      'apps/web/src/core/styles/tokens.css',
+    ])
+      expect(cliSourceTouched([path])).toBe(true);
     expect(cliSourceTouched(['apps/cli/adapters.json'])).toBe(true);
     expect(cliSourceTouched(['apps/cli/scripts/build-binary.mjs'])).toBe(true);
     expect(cliSourceTouched(['apps/cli/src/main.test.ts'])).toBe(false);

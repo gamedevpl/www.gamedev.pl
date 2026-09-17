@@ -1,3 +1,4 @@
+import { agentTranscriptLine } from '../transcript-line.js';
 import { Box, Text } from 'ink';
 import { linkifyTerminalText } from './links.js';
 import { isMascotLine, MASCOT_COLOR } from './mascot.js';
@@ -20,9 +21,9 @@ export function lineStyle(line: string): { label: string; tone?: string; quiet?:
   )
     return { label: '!', tone: 'yellow' };
   if (/^verifying|^preparing|^Preparing|^installing/.test(line)) return { label: 'CHECK', tone: 'yellow', space: true };
-  if (/^[\w-]+ · (?:Running|Tool:|\+\d+ more)/.test(line) || /^[\w-]+ ▸ [⚙✓]/.test(line))
+  if (/^[\w-]+ · (?:Running|Tool:|\+\d+ more)/.test(line) || agentTranscriptLine(line)?.tool)
     return { label: '·', tone: 'blue', quiet: true };
-  if (/^[\w-]+ ▸ /.test(line)) return { label: '●', tone: 'magenta' };
+  if (agentTranscriptLine(line)) return { label: '●', tone: 'magenta' };
   if (/^[\w-]+ · model:/.test(line)) return { label: 'AGENT', tone: 'magenta' };
   if (/^(?:Settings:|Full (?:transcript|diagnostics):|base |local-only:)/.test(line))
     return { label: '·', quiet: true };

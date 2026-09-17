@@ -1,13 +1,46 @@
 # Local Play workbench
 
-`gamedevpl create --play "A tabletop racer"` opens a browser session before creation
-or build setup. Omit the idea to start intake in the browser. `gamedevpl play --edit`
-opens the same workbench for a checkout. `--no-open` prints its URL. The launcher exits;
-the session stays alive until **Tools → End session**. Repeating the launch from the
-same directory reconnects to the existing instance. Interactive terminal `/play`
+In an interactive terminal, `gamedevpl` opens a browser home with Open and Create.
+`gamedevpl play [slug]` opens the matching game (the current checkout when omitted);
+`gamedevpl create [idea]` opens a separate creation conversation. Opening home or
+choosing Create without submitting an idea does not start an agent. Once a checkout
+opens, Play starts automatically; required recovery and account questions appear in
+that same browser session.
+
+Use `gamedevpl --terminal`, explicit `repl`, or `connect` for terminal conversation.
+`play --preview` retains raw preview. JSON, redirected/non-TTY and `play --stop` keep
+their previous behavior. Explicit `create --play` and `play --edit` also launch a
+browser without a TTY; they cannot be combined with JSON, stop or raw-preview flags.
+`--no-open` prints the complete session URL instead of opening it.
+
+The launcher exits and the session stays alive until **Commands → End session**.
+Repeated launches resume the matching session without replaying a supplied idea.
+New-game intake never inherits the launch directory's existing checkout. An unknown
+legacy mutation blocks a new create until reconciled; existing recovery journals and
+acknowledged game identities remain authoritative. Explicit `play --edit` without a
+slug retains the legacy directory journal for recovery. Interactive terminal `/play`
 remains attached to that terminal's lifetime.
 
 ## Edit and operate
+
+Chat opens a nonmodal React panel using the website's fonts, tokens and icons.
+The game stays mounted and interactive outside the panel. Click the stage to return
+keyboard control to the game; typing focuses the composer. The panel can move to
+either side or close without resetting the game. Hide controls also closes the panels.
+
+The composer names the session assistant as the initial recipient; builder selection
+happens in the existing execution flow. During a local task it labels follow-ups as
+queued for the assistant after that task. Opening Chat does not start an agent.
+Commands are searchable and typing `/` offers the server's supported action map;
+Tab completes a suggestion. Prompt history is shared with the terminal. Up recalls
+history at the start of the composer; the history button also supports touch access.
+Unsupported slash input stays in the draft with guidance rather than being sent as
+an ordinary prompt. Current choices and questions keep their existing semantics.
+
+Screenshot is beside the composer. Other attachments, Devices and Session details
+open separate panels; build IDs and raw session output live in details. A missing
+session credential and an offline controller have explicit recovery screens and never
+appear as a new-game form. Use the complete CLI launch link to authorize a fresh tab.
 
 The overlay shares the CLI controller, guarded command receipts, choice prompts and
 follow-up queue. Requests made during an agent task are queued for a fresh task. Stop
@@ -69,7 +102,7 @@ unsupported formats. No claim is made that every adapter can interpret video.
 
 ## Phone testing
 
-Tools offers two access models:
+Devices and Commands offer two access models:
 
 - Existing authenticated platform Play/Studio links remain available for delivered
   builds. Delivery is explicit; local file saves do not publish or run a platform gate.

@@ -1,4 +1,6 @@
+import { WORKBENCH_ONBOARDING_SCRIPT } from './workbench-onboarding-script.js';
 import { WORKBENCH_PLAYER_SCRIPT } from './workbench-player-script.js';
+import { WORKBENCH_NAVIGATION_SCRIPT } from './workbench-navigation-script.js';
 import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
 export const SESSION_BROWSER_SCRIPT = String.raw`
 const el = id => document.getElementById(id);
@@ -26,7 +28,7 @@ function controls() {
   el('send').disabled = !ready || state.mode === 'pick' || (state.mode === 'busy' && !state.localTask);
   el('send').textContent = state?.mode === 'busy' ? 'Queue request' : 'Send';
   el('stop').disabled = !online || !state?.localTask || state.mode !== 'busy' || stopping === state.taskId || Boolean(pending);
-  draft.disabled = !ready || state.mode === 'pick';
+  draft.disabled = state?.mode === 'pick';
   for (const button of el('choices').children) button.disabled = !ready;
   el('retry').hidden = !pending || sending;
 }
@@ -40,17 +42,20 @@ function render(next) {
   reconcilePending(next.sessionId);
   const old = state;
   state = next;
-  el('session-lifetime').textContent=state.detached?'This session runs independently. Use End session in Tools to stop it.':'Shared with your terminal. Keep the terminal session open.';
-  if(!old&&!state.hasPreview&&!panel.open)panel.showModal();
+  el('session-lifetime').textContent=state.detached?'This session runs independently. Use Commands → End session to stop it.':'Shared with your terminal. Keep the terminal session open.';
+  updateWorkspace(next);
   const fingerprint=JSON.stringify([next.addresses,next.phone,next.reports]);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;devices(next);}
   if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
   el('identity').textContent = state.identity;
+  el('game-name').textContent = state.identity || 'gamedev.pl';
+  el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
+  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,workspace:state.workspace}}));
   const transcript = el('transcript');
   const bottom = transcript.scrollTop + transcript.clientHeight >= transcript.scrollHeight - 30;
   const text = state.lines.join('\n');
   if (transcript.textContent !== text) { transcript.textContent = text; if (bottom) transcript.scrollTop = transcript.scrollHeight; }
-  el('task').textContent = [state.mode === 'busy' ? state.activity : '', ...state.live].filter(Boolean).join('\n');
+  el('task').textContent = (state.mode === 'busy' ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('queue').textContent = state.queued.length ? 'Queued (' + state.queued.length + ')\n' + state.queued.map((v, i) => (i + 1) + '. ' + v).join('\n') : '';
   el('question').textContent = state.question;
   for (const id of ['prompt-label', 'prompt', 'actions']) el(id).hidden = state.mode === 'pick';
@@ -68,6 +73,7 @@ function render(next) {
     swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
   }
   controls();
+  updateOnboarding(next);
 }
 async function deliver() {
   if (!pending || sending) return;
@@ -87,22 +93,22 @@ async function deliver() {
     el('feedback').textContent = 'No receipt received. Retry keeps the same request ID and cannot enqueue twice.';
   } finally { sending = false; controls(); }
 }
-function send(command) {
+function send(command, clearActionDraft=false) {
   if (!online || !state || pending || sending) return;
-  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&command.kind!=='action'};
+  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
 el('composer').onsubmit = event => {
   event.preventDefault(); if (!draft.value.trim() || !state || el('send').disabled) return;
+  if (!state.question && !state.choices.length && draft.value.trimStart().startsWith('/')) { submitSlash(); return; }
   send(state.mode === 'busy' ? {kind:'queue', taskId:state.taskId, text:draft.value} : {kind:'input', promptId:state.promptId, text:draft.value});
 };
 el('stop').onclick = () => send({kind:'stop', taskId:state.taskId});
 el('retry').onclick = deliver;
-el('edit').onclick = () => { document.exitPointerLock?.(); panel.showModal(); draft.focus(); };
-el('close').onclick = () => panel.close();
-panel.addEventListener('close', () => frame.focus());
+el('edit').onclick = () => openChat();
+el('close').onclick = () => closeChat();
 el('fullscreen').onclick = () => { const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); request.catch(() => { el('notice').textContent = 'Fullscreen is unavailable in this browser.'; }); };
-function viewport() { document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
+function viewport() { document.body.dataset.compact=String((window.visualViewport?.height||window.innerHeight)<=520); document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
 window.visualViewport?.addEventListener('resize', viewport); viewport();
 async function apply(force=false,automatic=false) {
   if (loading) return;
@@ -135,10 +141,12 @@ async function previewTick() {
 }
 async function tick() {
   try { const next = await api('/state'); online = true; render(next); }
-  catch { online = false; el('connection').textContent = 'Disconnected'; el('task').textContent = state?.detached?'Reconnect with gamedevpl play --edit in the launch directory. Accepted tasks are never replayed automatically.':'Disconnected. Reopen /play from your terminal session.'; controls(); }
+  catch (error) { online = false; showConnectionError(error); controls(); }
   setTimeout(tick, 1000);
 }
 ${WORKBENCH_PLAYER_SCRIPT}
 ${WORKBENCH_TOOLS_SCRIPT}
+${WORKBENCH_NAVIGATION_SCRIPT}
+${WORKBENCH_ONBOARDING_SCRIPT}
 tick(); previewTick();
 `;

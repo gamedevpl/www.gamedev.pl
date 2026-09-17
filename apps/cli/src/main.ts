@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { selectWorkbenchEntry } from './workbench-entry.js';
 import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.js';
 export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
@@ -113,7 +114,18 @@ async function runDelegateVerb(input: {
 }
 
 // Verbs that already speak to the platform; the rest stay silent.
-const TELEMETRY_VERBS = new Set(['recover', 'kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
+const TELEMETRY_VERBS = new Set([
+  'recover',
+  'kit',
+  'connect',
+  'delegate',
+  'play',
+  'login',
+  'update',
+  'status',
+  'repl',
+  'create',
+]);
 
 // One rung per install, so `installed` counts installs not runs.
 export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
@@ -143,13 +155,22 @@ export async function runCli(
   if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
-    if ((verb === 'create' && flags.play) || (verb === 'play' && flags.edit)) {
+    const workbench = selectWorkbenchEntry({
+      verb,
+      args,
+      flags,
+      interactive: tty && Boolean(io.stdout.isTTY),
+      bare: !argv[2] || argv[2].startsWith('-'),
+      cwd: process.cwd(),
+    });
+    if (workbench) {
       const { launchWorkbench } = await import('./workbench-launch.js');
       await launchWorkbench({
-        cwd: process.cwd(),
+        cwd: workbench.cwd,
+        launch: flags.edit === true && !args.length ? undefined : workbench.entry,
         entry: argv[1]!,
         env,
-        idea: verb === 'create' ? args.join(' ').trim() || undefined : undefined,
+        idea: workbench.idea,
         noOpen: flags['no-open'] === true,
         write: (line) => io.stdout.write(`${line}\n`),
       });

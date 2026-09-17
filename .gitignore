@@ -25,3 +25,6 @@ playwright-report
 
 # Staged for the Hosting upload; built from apps/web, never committed.
 infra/firebase/public/assets/
+
+# Generated, self-contained CLI browser assets.
+apps/cli/src/generated/
