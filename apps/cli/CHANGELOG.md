@@ -7,23 +7,22 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.19.0 — 2026-09-17
+
 ### Breaking
 
 - Interactive `gamedevpl`, `play [slug]` and `create [idea]` open a browser workspace. Use `--terminal` or explicit `repl` for terminal chat and `play --preview` for raw preview; JSON, redirected and stop flows retain their existing behavior (#1396).
 
-### Fixed
-
-- Make the Play browser type-check reject undeclared side-effect imports (#1396).
-
-- Keep tool logs collapsed, name agent replies, and keep update notices and the composer accessible on short phone screens (#1396).
-
-- Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace (#1396).
-
 ### Added
 
 - Start from an Open/Create browser screen, enter intake without dispatching an agent, and open the game automatically after checkout; new-game launches remain separate from existing-game sessions (#1396).
-
 - Play offers command search, slash completion and shared prompt history (#1396).
+
+### Fixed
+
+- Make the Play browser type-check reject undeclared side-effect imports (#1396).
+- Keep tool logs collapsed, name agent replies, and keep update notices and the composer accessible on short phone screens (#1396).
+- Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace (#1396).
 
 ## 0.18.0 — 2026-09-17
 
