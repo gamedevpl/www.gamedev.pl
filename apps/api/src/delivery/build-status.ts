@@ -94,6 +94,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     value: BuildEvent[];
   }
   const eventsCache = new Map<number, CachedEvents>();
+  // Two pollers racing a miss must share one read, not each pay for their own.
+  const eventsInFlight = new Map<number, Promise<BuildEvent[]>>();
 
   async function loadBuildEvents(jobId: number): Promise<BuildEvent[]> {
     if (!store) return [];
@@ -102,26 +104,32 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    // Append-only, so one count answers whether it moved.
-    let counted: number | undefined;
-    if (cached && cached.probeUntil > currentTime) {
-      counted = await store.countBuildEvents(jobId);
-      if (counted === cached.total) {
-        cached.expiresAt = currentTime + eventsCacheTtlMs;
-        return cached.value;
+    const running = eventsInFlight.get(jobId);
+    if (running) return running;
+    const loading = (async () => {
+      // Append-only, so one count answers whether it moved.
+      let counted: number | undefined;
+      if (cached && cached.probeUntil > currentTime) {
+        counted = await store.countBuildEvents(jobId);
+        if (counted === cached.total) {
+          cached.expiresAt = currentTime + eventsCacheTtlMs;
+          return cached.value;
+        }
       }
-    }
-    const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
-    // A page under the cap is the whole collection.
-    const total = value.length < maxEventsShown ? value.length : (counted ?? (await store.countBuildEvents(jobId)));
-    eventsCache.set(jobId, {
-      value,
-      total,
-      expiresAt: currentTime + eventsCacheTtlMs,
-      // Re-armed by a full read only, so a quiet watch refreshes.
-      probeUntil: currentTime + eventsProbeWindowMs,
-    });
-    return value;
+      const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
+      // A page under the cap is the whole collection.
+      const total = value.length < maxEventsShown ? value.length : (counted ?? (await store.countBuildEvents(jobId)));
+      eventsCache.set(jobId, {
+        value,
+        total,
+        expiresAt: currentTime + eventsCacheTtlMs,
+        // Re-armed by a full read only, so a quiet watch refreshes.
+        probeUntil: currentTime + eventsProbeWindowMs,
+      });
+      return value;
+    })().finally(() => eventsInFlight.delete(jobId));
+    eventsInFlight.set(jobId, loading);
+    return loading;
   }
 
   // The channel prunes on write; only a little history is ever wanted.
@@ -130,6 +138,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
   // Bumped by invalidateMedia; a read started before it must not write after.
   const mediaGeneration = new Map<number, number>();
+  // Two pollers racing a miss must share one read, not each pay for their own.
+  const previewsInFlight = new Map<number, Promise<BuildPreviewSummary[]>>();
+  const shotsInFlight = new Map<number, Promise<BuildShotSummary[]>>();
 
   async function loadBuildPreviews(jobId: number): Promise<BuildPreviewSummary[]> {
     if (!store) return [];
@@ -138,12 +149,20 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    const running = previewsInFlight.get(jobId);
+    if (running) return running;
     const generation = mediaGeneration.get(jobId) ?? 0;
-    const value = await store.listBuildPreviews(jobId, { limit: maxPreviewsShown });
-    if ((mediaGeneration.get(jobId) ?? 0) === generation) {
-      previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
-    }
-    return value;
+    const loading = store
+      .listBuildPreviews(jobId, { limit: maxPreviewsShown })
+      .then((value) => {
+        if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+          previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+        }
+        return value;
+      })
+      .finally(() => previewsInFlight.delete(jobId));
+    previewsInFlight.set(jobId, loading);
+    return loading;
   }
 
   const maxShotsShown = 12;
@@ -155,12 +174,20 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
+    const running = shotsInFlight.get(jobId);
+    if (running) return running;
     const generation = mediaGeneration.get(jobId) ?? 0;
-    const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
-    if ((mediaGeneration.get(jobId) ?? 0) === generation) {
-      shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
-    }
-    return value;
+    const loading = store
+      .listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS })
+      .then((value) => {
+        if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+          shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+        }
+        return value;
+      })
+      .finally(() => shotsInFlight.delete(jobId));
+    shotsInFlight.set(jobId, loading);
+    return loading;
   }
 
   // Pictures of this build: the screenshots the agent pushed over the channel.
