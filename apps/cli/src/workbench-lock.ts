@@ -15,9 +15,11 @@ export async function withCheckoutWriter<T>(root: string, run: () => Promise<T>)
   const instance = randomUUID();
   try {
     mkdirSync(lock, { mode: 0o700 });
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     throw Error(
       'Another CLI operation owns this checkout. If it crashed, confirm its child agent has exited before removing the writer lock.',
+      { cause: error },
     );
   }
   try {

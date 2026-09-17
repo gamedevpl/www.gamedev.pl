@@ -1,3 +1,4 @@
+import { isJsonContentType } from './workbench-http.js';
 import { EVIDENCE_MARKER } from './workbench-evidence.js';
 import { lanAddresses, startPhonePreview, type PhoneReport } from './workbench-phone.js';
 import { embedGameHtml } from '@gamedevpl/contract';
@@ -170,7 +171,7 @@ export async function startSessionBrowser(session: SessionController, options: {
         return;
       }
       if (req.method === 'POST' && req.url === '/phone') {
-        if (req.headers.origin !== origin || req.headers['content-type'] !== 'application/json') {
+        if (req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
           reply(403, { error: 'JSON and same-origin required' });
           return;
         }
@@ -215,7 +216,7 @@ export async function startSessionBrowser(session: SessionController, options: {
         return;
       }
       if (req.method === 'POST' && req.url === '/artifacts') {
-        if (req.headers.origin !== origin || req.headers['content-type'] !== 'application/json') {
+        if (req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
           reply(403, { error: 'JSON and same-origin required' });
           return;
         }
@@ -223,7 +224,7 @@ export async function startSessionBrowser(session: SessionController, options: {
         return;
       }
       if (req.method === 'POST' && req.url === '/commands') {
-        if (req.headers.origin !== origin || req.headers['content-type'] !== 'application/json') {
+        if (req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
           reply(403, { error: 'JSON and same-origin required' });
           return;
         }

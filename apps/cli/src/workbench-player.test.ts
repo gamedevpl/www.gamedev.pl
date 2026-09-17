@@ -123,3 +123,103 @@ it.each([
   expect(html).not.toContain('allow-same-origin');
   expect(WORKBENCH_PLAYER_SCRIPT).not.toContain('allow-same-origin');
 });
+
+it.each(['capabilities', 'snapshot', 'ready', 'restore'])(
+  'a superseded update at %s cannot resume frames or overwrite the newer update',
+  async (phase) => {
+    const { runtime, previous, scores, events, build } = player();
+    const bridge = runtime.gameRequest;
+    let release!: () => void;
+    let held = false;
+    runtime.gameRequest = async (frame, type, data) => {
+      const matches =
+        phase === 'ready'
+          ? frame !== previous && type === 'capabilities'
+          : phase === 'capabilities'
+            ? frame === previous && type === 'capabilities'
+            : type === phase;
+      if (!held && matches) {
+        held = true;
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
+      return bridge(frame, type, data);
+    };
+    const stale = runtime.swapBuild(build);
+    await vi.advanceTimersByTimeAsync(0);
+    const staleCandidate = document.querySelector('iframe:not(#game)');
+    const latest = runtime.swapBuild({ ...build, revision: 'latest' });
+    await vi.advanceTimersByTimeAsync(0);
+    document.getElementById('notice')!.textContent = 'New update in progress';
+    document.getElementById('restart')!.hidden = true;
+    const eventCount = events.length;
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await stale).toBe(false);
+    expect(events).toHaveLength(eventCount);
+    expect(staleCandidate?.isConnected ?? false).toBe(false);
+    expect(document.getElementById('notice')!.textContent).toBe('New update in progress');
+    expect(document.getElementById('restart')!.hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(await latest).toBe(true);
+    expect(runtime.revision).toBe('latest');
+    expect(scores.get(runtime.frame)).toBe(8);
+    expect(document.querySelectorAll('iframe')).toHaveLength(1);
+  },
+);
+it('an old readiness failure cannot overwrite an already committed update', async () => {
+  const { runtime, previous, build } = player();
+  const bridge = runtime.gameRequest;
+  let release!: () => void;
+  let held = false;
+  runtime.gameRequest = async (frame, type, data) => {
+    if (!held && frame !== previous && type === 'capabilities') {
+      held = true;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      throw Error('Old bridge failed');
+    }
+    return bridge(frame, type, data);
+  };
+  const stale = runtime.swapBuild(build);
+  await vi.advanceTimersByTimeAsync(0);
+  const latest = runtime.swapBuild({ ...build, revision: 'latest' });
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await latest).toBe(true);
+  const notice = document.getElementById('notice')!.textContent;
+  release();
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await stale).toBe(false);
+  expect(document.getElementById('notice')!.textContent).toBe(notice);
+  expect(document.getElementById('restart')!.hidden).toBe(true);
+  expect(runtime.revision).toBe('latest');
+});
+
+it('source invalidation while waiting for readiness leaves the new source UI untouched', async () => {
+  const { runtime, previous, events, build } = player();
+  const bridge = runtime.gameRequest;
+  let release!: () => void;
+  runtime.gameRequest = async (frame, type, data) => {
+    if (frame !== previous && type === 'capabilities')
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    return bridge(frame, type, data);
+  };
+  const stale = runtime.swapBuild(build);
+  await vi.advanceTimersByTimeAsync(0);
+  runInNewContext("swapEpoch++;revision='';frame.removeAttribute('srcdoc');", runtime);
+  document.getElementById('notice')!.textContent = 'Loading another game';
+  document.getElementById('restart')!.hidden = true;
+  const eventCount = events.length;
+  release();
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await stale).toBe(false);
+  expect(events).toHaveLength(eventCount);
+  expect(document.querySelectorAll('iframe')).toHaveLength(1);
+  expect(runtime.revision).toBe('');
+  expect(document.getElementById('notice')!.textContent).toBe('Loading another game');
+  expect(document.getElementById('restart')!.hidden).toBe(true);
+});

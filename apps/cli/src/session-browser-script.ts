@@ -79,7 +79,7 @@ async function deliver() {
 }
 function send(command) {
   if (!online || !state || pending) return;
-  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&command.kind!=='action'};
+  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&command.kind!=='action'};
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
 el('composer').onsubmit = event => {

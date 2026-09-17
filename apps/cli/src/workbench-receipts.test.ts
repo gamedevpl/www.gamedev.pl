@@ -2,12 +2,18 @@ import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 import { SESSION_BROWSER_SCRIPT } from './session-browser-script.js';
 
-it('keeps evidence staged after acceptance and resends it with a clarification answer', async () => {
+it.each(['ordinary', 'question', 'choice'])('retains staged evidence across a %s answer', async (kind) => {
   const fields = new Map<string, { textContent: string }>();
   const attachments = [{ id: 'image' }, { id: 'trace' }];
   const api = vi.fn(async () => ({ status: 'accepted' }));
   const draft = { value: 'Fix this image' };
-  const state = { sessionId: 'session', promptId: 1, mode: 'prompt' };
+  const state = {
+    sessionId: 'session',
+    promptId: 1,
+    mode: kind === 'choice' ? 'pick' : 'prompt',
+    question: kind === 'question' ? 'Which color?' : '',
+    choices: kind === 'choice' ? ['Red'] : [],
+  };
   const context = {
     api,
     draft,
@@ -32,7 +38,13 @@ it('keeps evidence staged after acceptance and resends it with a clarification a
   client.send({ kind: 'input', promptId: 1, text: draft.value });
   await vi.waitFor(() => expect(context.pending).toBeUndefined());
   expect(context.attachments).toEqual(attachments);
-  expect(draft.value).toBe('');
+  expect(draft.value).toBe(kind === 'choice' ? 'Fix this image' : '');
+  const sent = (api.mock.calls[0] as unknown as [string, { command: object }])[1].command;
+  if (kind === 'ordinary') expect(sent).toHaveProperty('attachments', ['image', 'trace']);
+  else expect(sent).not.toHaveProperty('attachments');
+  state.mode = 'prompt';
+  state.question = '';
+  state.choices = [];
   state.promptId = 2;
   draft.value = 'Make the car red';
   client.send({ kind: 'input', promptId: 2, text: draft.value });

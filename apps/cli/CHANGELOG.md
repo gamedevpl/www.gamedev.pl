@@ -14,6 +14,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Keep Play usable after preparation timeouts, preserve staged evidence while answering questions, and ignore superseded reloads (#1388).
 - Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task (#1392).
 
 ## 0.17.0 — 2026-09-16

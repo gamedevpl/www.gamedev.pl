@@ -133,8 +133,17 @@ export function journalApi(api: ApiClient, journal: PlayJournal, save: () => voi
   return {
     ...api,
     async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-      // Presence is best effort and cannot consume or clear a delivery receipt.
-      if (method === 'GET' || (method === 'POST' && /^\/api\/me\/studio\/local-activity\/[^/?#]+$/.test(path)))
+      // Presence and preparation cannot consume build or delivery receipts.
+      const preparesTurn =
+        /^\/api\/submissions\/[^/?#]+\/turn$/.test(path) &&
+        body !== null &&
+        typeof body === 'object' &&
+        'prepareOnly' in body &&
+        body.prepareOnly === true;
+      if (
+        method === 'GET' ||
+        (method === 'POST' && (/^\/api\/me\/studio\/local-activity\/[^/?#]+$/.test(path) || preparesTurn))
+      )
         return api.request(method, path, body, signal);
       if (journal.pending)
         throw Error(

@@ -6,7 +6,7 @@ import { acquireStartupLock } from './workbench-startup-lock.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 vi.mock('node:fs', async (original) => {
   const fs = await original<typeof import('node:fs')>();
-  return { ...fs, writeFileSync: vi.fn(fs.writeFileSync) };
+  return { ...fs, mkdirSync: vi.fn(fs.mkdirSync), writeFileSync: vi.fn(fs.writeFileSync) };
 });
 const roots: string[] = [];
 function root() {
@@ -46,7 +46,30 @@ it.each([true, false])(
     expect(() => acquireStartupLock(path, 5678)).toThrow(
       'confirm the launcher, controller and child agent have all exited',
     );
-    expect(() => acquireStartupLock(path, 5678)).toThrow('recorded child PID: 5678');
+    expect(() => acquireStartupLock(path, 5678)).toThrow('previous controller PID: 5678');
     expect(existsSync(path)).toBe(true);
   },
 );
+
+it.each(['EACCES', 'ENOSPC', 'EEXIST'])('preserves writer mkdir error %s', async (code) => {
+  const path = root();
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  const error = Object.assign(Error(code), { code });
+  const run = vi.fn();
+  vi.mocked(mkdirSync).mockImplementation((target, options) => {
+    if (/[/\\][a-f0-9]{64}$/.test(String(target))) throw error;
+    return fs.mkdirSync(target, options);
+  });
+  try {
+    const attempt = withCheckoutWriter(path, run);
+    if (code === 'EEXIST') {
+      await expect(attempt).rejects.toMatchObject({
+        message: expect.stringContaining('owns this checkout'),
+        cause: error,
+      });
+    } else await expect(attempt).rejects.toBe(error);
+    expect(run).not.toHaveBeenCalled();
+  } finally {
+    vi.mocked(mkdirSync).mockImplementation(fs.mkdirSync);
+  }
+});

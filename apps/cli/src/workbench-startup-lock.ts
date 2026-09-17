@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export function acquireStartupLock(path: string, childPid?: number): () => void {
+export function acquireStartupLock(path: string, controllerPid?: number): () => void {
   try {
     mkdirSync(path, { mode: 0o700 });
   } catch (error) {
@@ -14,7 +14,7 @@ export function acquireStartupLock(path: string, childPid?: number): () => void 
       // Older or interrupted acquisitions may not have an owner record.
     }
     throw Error(
-      `Play startup lock exists: ${path}. Launcher PID: ${owner}; recorded child PID: ${childPid ?? 'none'}. ` +
+      `Play startup lock exists: ${path}. Launcher PID: ${owner}; previous controller PID: ${controllerPid ?? 'none'}. ` +
         'If startup is still running, wait and retry. For crash recovery, inspect the session journal and log ' +
         'and confirm the launcher, controller and child agent have all exited before removing this lock directory. ' +
         'Then rerun the same launch command. Never remove a live or unverified lock.',

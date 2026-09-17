@@ -1,3 +1,4 @@
+import { isJsonContentType } from './workbench-http.js';
 import QRCode from 'qrcode';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -78,7 +79,7 @@ export async function startPhonePreview(input: {
         req.method === 'POST' &&
         req.url === '/report' &&
         req.headers.origin === origin &&
-        req.headers['content-type'] === 'application/json'
+        isJsonContentType(req.headers['content-type'])
       ) {
         const chunks: Buffer[] = [];
         let size = 0;

@@ -187,3 +187,42 @@ it.each(['timeout', 'server'])(
     await expect(api.request('POST', '/api/submissions', {})).rejects.toThrow('unknown outcome');
   },
 );
+
+it.each(['timeout', 'server'])(
+  'turn preparation %s failures do not fence real turns or clear unknown mutations',
+  async (failure) => {
+    const error = failure === 'timeout' ? Error('Timed out') : new CliError('Unavailable', EXIT_REFUSED);
+    if (error instanceof CliError) error.httpStatus = 503;
+    const request = vi.fn().mockRejectedValueOnce(error).mockResolvedValue({ kind: 'build' });
+    const state: PlayJournal = { version: 1, instance: 'prepare', cwd: '/tmp' };
+    const save = vi.fn();
+    const raw = { origin: 'https://example.test', request, requestBytes: vi.fn() };
+    const api = journalApi(raw, state, save);
+    const path = '/api/submissions/round/turn';
+    await expect(api.request('POST', path, { text: 'Add ramps', prepareOnly: true })).rejects.toThrow();
+    expect(state.pending).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    const reconnected = journalApi(raw, JSON.parse(JSON.stringify(state)), save);
+    await expect(reconnected.request('POST', path, { text: 'Add ramps' })).resolves.toEqual({ kind: 'build' });
+    const pending = { path: '/api/submissions', hash: 'unknown', startedAt: new Date().toISOString() };
+    state.pending = pending;
+    await api.request('POST', path, { text: 'Add ramps', prepareOnly: true });
+    expect(state.pending).toEqual(pending);
+    await expect(api.request('POST', path, { text: 'Add ramps' })).rejects.toThrow('unknown outcome');
+  },
+);
+it.each([
+  ['/api/submissions/round/turn', { prepareOnly: false }],
+  ['/api/submissions/round/turn', { prepareOnly: 'true' }],
+  ['/api/submissions', { prepareOnly: true }],
+  ['/api/cli/chat', { prepareOnly: true }],
+])('still fences uncertain mutations to %s with %j', async (path, body) => {
+  const state: PlayJournal = { version: 1, instance: 'mutation', cwd: '/tmp' };
+  const api = journalApi(
+    { origin: '', request: vi.fn().mockRejectedValue(Error('Timeout')), requestBytes: vi.fn() },
+    state,
+    vi.fn(),
+  );
+  await expect(api.request('POST', path, body)).rejects.toThrow('Timeout');
+  expect(state.pending).toMatchObject({ path });
+});

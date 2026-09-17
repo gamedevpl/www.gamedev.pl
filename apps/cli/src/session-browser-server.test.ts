@@ -176,3 +176,48 @@ it('answers a phone pairing race with 409 and closes the superseded listener', a
   expect(close).toHaveBeenCalledOnce();
   expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).not.toHaveProperty('phone');
 });
+
+it.each(['/commands', '/artifacts', '/phone'])(
+  '%s accepts JSON parameters but preserves media and origin fences',
+  async (path) => {
+    const { session, url, headers } = await fixture();
+    const prompt = session.prompt();
+    const state = await fetch(`${url.origin}/state`, { headers }).then((r) => r.json());
+    const data =
+      path === '/commands'
+        ? {
+            version: 1,
+            sessionId: state.sessionId,
+            command: { id: 'charset', kind: 'input', promptId: state.promptId, text: 'Hello' },
+          }
+        : path === '/phone'
+          ? { stop: true }
+          : {
+              name: 'trace.json',
+              mime: 'application/json',
+              purpose: 'diagnostic',
+              data: Buffer.from('{}').toString('base64'),
+              revision: 'one',
+              device: 'desktop',
+              capturedAt: new Date().toISOString(),
+            };
+    const post = (contentType: string, origin = url.origin) =>
+      fetch(`${url.origin}${path}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': contentType, Origin: origin },
+        body: JSON.stringify(data),
+      });
+    for (const media of [
+      'application/jsonp',
+      'application/json-malicious',
+      'text/plain',
+      'text/plain; application/json',
+    ])
+      expect((await post(media)).status).toBe(403);
+    for (const origin of ['null', 'https://evil.example'])
+      expect((await post('application/json; charset=utf-8', origin)).status).toBe(403);
+    expect((await post('application/json; charset=utf-8')).status).toBe(200);
+    session.close();
+    await prompt;
+  },
+);

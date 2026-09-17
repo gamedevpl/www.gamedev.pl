@@ -69,10 +69,27 @@ it('phone capability can read and report but cannot execute editor operations', 
   expect(await fetch(`${local}/game`, { headers }).then((r) => r.json())).toEqual({ html: 'game', revision: 'one' });
   expect((await fetch(`${local}/commands`, { method: 'POST', headers, body: '{}' })).status).toBe(404);
   const report = { id: '12345678-1234-4123-8123-123456789abc', text: 'Car stuck', revision: 'old-build' };
-  for (let i = 0; i < 2; i++)
-    expect((await fetch(`${local}/report`, { method: 'POST', headers, body: JSON.stringify(report) })).status).toBe(
-      200,
-    );
+  for (const media of ['application/jsonp', 'text/plain', 'application/json-malicious'])
+    expect(
+      (
+        await fetch(`${local}/report`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': media },
+          body: JSON.stringify(report),
+        })
+      ).status,
+    ).toBe(404);
+  expect(reports).toHaveLength(0);
+  for (const media of ['application/json', 'application/json; charset=utf-8'])
+    expect(
+      (
+        await fetch(`${local}/report`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': media },
+          body: JSON.stringify(report),
+        })
+      ).status,
+    ).toBe(200);
   expect(reports).toHaveLength(1);
   expect(reports[0]).toMatchObject({ revision: 'old-build', text: 'Car stuck' });
   expect(

@@ -26,29 +26,31 @@ async function ready(target) {
 let swapEpoch=0,lastSwapError='';
 async function swapBuild(build,force=false,automatic=false) {
   const epoch=++swapEpoch, previous=frame;let next;
+  const current=()=>epoch===swapEpoch&&frame===previous;
+  const check=()=>{if(!current())throw Error('Update superseded');};
   try {
     let saved=null;
     if(revision&&!force) {
-      const caps=await gameRequest(previous,'capabilities');
+      const caps=await gameRequest(previous,'capabilities');check();
       if(!caps.state)throw Error('This game cannot preserve state. Use Restart with update.');
       if(automatic&&(!caps.validate||!caps.safe))throw Error('Update ready. Apply manually at a safe moment.');
       posture(previous,'pause');
-      saved=await gameRequest(previous,'snapshot');
+      saved=await gameRequest(previous,'snapshot');check();
       if(JSON.stringify(saved??null).length>1000000)throw Error('State exceeds 1 MB');
       if(saved==null)throw Error('No restorable state. Use Restart with update.');
     }
     next=document.createElement('iframe');next.title='Candidate game';next.setAttribute('sandbox','allow-scripts allow-pointer-lock');
     next.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;visibility:hidden';
     document.body.prepend(next);next.srcdoc=build.html;
-    const caps=await ready(next);posture(next,'pause');
-    if(epoch!==swapEpoch)throw Error('Update superseded');
+    const caps=await ready(next);check();posture(next,'pause');
     if(saved!==null) {
       if(!caps.state||automatic&&!caps.validate)throw Error('Candidate cannot safely restore this state');
-      if(await gameRequest(next,'restore',saved)!==true)throw Error('Candidate rejected the saved state');
+      const restored=await gameRequest(next,'restore',saved);check();
+      if(restored!==true)throw Error('Candidate rejected the saved state');
     }
     posture(next,'resume');
     await new Promise(r=>setTimeout(r,150));
-    if(epoch!==swapEpoch)throw Error('Update superseded');
+    check();
     previous.remove();next.style.cssText='';next.id='game';frame=next;
     revision=build.revision;el('shown-build').textContent='Build '+revision.slice(0,10);
     el('empty').hidden=true;el('apply').hidden=true;el('restart').hidden=true;
@@ -56,7 +58,9 @@ async function swapBuild(build,force=false,automatic=false) {
     el('record').textContent='Enable recording';recording=false;
     return true;
   } catch(error) {
-    next?.remove();posture(previous,'resume');
+    next?.remove();
+    if(!current())return false;
+    posture(previous,'resume');
     lastSwapError=error.message+' Current build kept.';el('notice').textContent=lastSwapError;
     if(revision)el('restart').hidden=false;
     return false;
