@@ -5,7 +5,7 @@ export const SESSION_BROWSER_PAGE = String.raw`<!doctype html>
 <title>gamedevpl · Play & edit</title><style>
 :root{color-scheme:dark;font:14px system-ui,sans-serif;color:#e8edf5;background:#080c12;--height:100dvh}
 *{box-sizing:border-box}[hidden]{display:none!important}html,body{margin:0;width:100%;height:100%;overflow:hidden}
-button,textarea{font:inherit}button{border:1px solid #394759;background:#202b3b;color:inherit;padding:10px 14px;border-radius:10px;cursor:pointer}
+button,textarea,select,input{font:inherit}select{max-width:100%;background:#202b3b;color:inherit;padding:8px}#workbench-tools{min-height:40px;flex:0 1 auto;padding:12px;max-height:40%;overflow:auto}#workbench-tools label{display:block;margin:8px 0}#workbench-tools .actions{flex-wrap:wrap}button{border:1px solid #394759;background:#202b3b;color:inherit;padding:10px 14px;border-radius:10px;cursor:pointer}
 button:hover{background:#304057}button:disabled{opacity:.45;cursor:default}button:focus-visible,textarea:focus-visible{outline:2px solid #56ecc1;outline-offset:3px}
 .primary{background:#65edc7;color:#09241d;border-color:transparent;font-weight:700}.primary:hover{background:#9bf8dc}
 #game{position:fixed;inset:0;width:100%;height:100%;border:0;background:#080c12}
@@ -21,20 +21,29 @@ dialog::backdrop{background:#0003}dialog[open]{display:flex;flex-direction:colum
 #transcript{white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;flex:1;min-height:40px;margin:0;padding:16px;font:13px/1.65 ui-monospace,monospace}
 #task{padding:10px 16px;color:#98e7cf;font-size:12px;white-space:pre-wrap;max-height:15%;overflow:auto}
 #queue{padding:0 16px 8px;font-size:12px;color:#abb8c9;max-height:15%;overflow:auto;white-space:pre-wrap}
-#composer{min-height:0;max-height:65%;overflow:auto;border-top:1px solid #2b3747;padding:14px;display:grid;gap:10px}
-#question{margin:0;overflow-wrap:anywhere;max-height:16vh;overflow:auto}#choices{display:grid;gap:6px;max-height:22vh;overflow:auto}#choices:empty{display:none}
+#composer{flex:0 0 auto;min-height:0;max-height:65%;overflow:auto;border-top:1px solid #2b3747;padding:14px;display:grid;gap:10px}
+#question:empty,#feedback:empty,#task:empty,#queue:empty{display:none}#question{margin:0;overflow-wrap:anywhere;max-height:16vh;overflow:auto}#choices{display:grid;gap:6px;max-height:22vh;overflow:auto}#choices:empty{display:none}
 textarea{resize:vertical;min-height:72px;max-height:20vh;width:100%;color:inherit;background:#0a111b;border:1px solid #3a4c60;border-radius:10px;padding:12px}
 .actions{display:flex;gap:8px}.actions #send{flex:1}#feedback{margin:0;font-size:12px;color:#ffd6a0;overflow-wrap:anywhere}
 .hint{font-size:11px;color:#8d9caf;margin:0;line-height:1.5}#retry[hidden]{display:none}
+@media(max-height:520px){#composer>.hint{display:none}#composer{padding:10px;gap:6px}#transcript{min-height:20px}}
 @media(max-width:520px){#connection{font-size:12px;max-width:calc(100vw - 145px)}#tools{gap:6px}#tools button{padding:9px 10px}.panel-head{padding:12px}#transcript{padding:12px}}
 </style></head><body>
 <iframe id="game" title="Game preview" sandbox="allow-scripts allow-pointer-lock"></iframe>
-<div id="empty"><h1>Your game, your workspace.</h1><p>Start /play in this terminal session to load the game.</p></div>
-<nav id="tools" aria-label="Play controls"><span id="connection" role="status">Connecting…</span><button id="apply" hidden>Apply update · restarts game</button><button id="fullscreen">Fullscreen</button><button id="edit" class="primary">Edit game</button></nav>
-<pre id="notice" role="status"></pre>
+<div id="empty"><h1>Your game, your workspace.</h1><p>Describe your game in the editor, or open a local game from Tools.</p></div>
+<nav id="tools" aria-label="Play controls"><span id="connection" role="status">Connecting…</span><button id="apply" hidden>Apply update · preserve state</button><span id="shown-build"></span><select id="policy" aria-label="Update policy"><option value="ask">Ask before update</option><option value="auto">Auto · preserve state</option><option value="freeze">Freeze build</option></select><button id="restart" hidden>Restart with update</button><button id="clean">Clean play</button><button id="fullscreen">Fullscreen</button><button id="edit" class="primary">Edit game</button></nav>
+<button id="reveal" hidden aria-label="Show Play controls" style="position:fixed;top:12px;right:12px">Edit</button><pre id="notice" role="status"></pre>
 <dialog id="panel" aria-labelledby="panel-title"><div class="panel-head"><strong id="panel-title">Edit game</strong><button id="close" aria-label="Close editing panel">Close</button></div>
 <p id="identity"></p><pre id="transcript" tabindex="0" aria-label="Conversation output"></pre><div id="task"></div><div id="queue"></div>
+<details id="workbench-tools"><summary>Tools, attachments &amp; devices</summary>
+<label>Operation <select id="operation"></select></label><input id="operation-argument" placeholder="Game slug or handle (when required)" aria-label="Operation argument"><button id="run-operation" type="button">Run</button>
+<label>Upload purpose <select id="purpose"><option value="reference">Reference</option><option value="asset">Game asset</option></select></label>
+<label>Attach file <input id="upload" type="file" multiple accept="image/png,image/jpeg,image/webp,video/webm,video/mp4,application/json,text/plain"></label>
+<div class="actions"><button id="screenshot">Screenshot</button><button id="trace">Trace</button></div>
+<div class="actions"><button id="record">Enable recording</button><button id="clip">Attach recent clip</button></div>
+<p class="hint">Attachments remain staged until you remove them, including during clarification. Media is stored locally. Local agents can inspect these files using their supported tools. Video and DOM overlays may not be supported by every agent.</p>
+<div id="attachments"></div><div id="devices"></div></details>
 <form id="composer"><p id="question"></p><div id="choices"></div><label id="prompt-label" for="prompt">Your request</label><textarea id="prompt" maxlength="8000" placeholder="Describe what to change…"></textarea>
 <div id="actions" class="actions"><button id="send" class="primary" type="submit" disabled>Send</button><button id="stop" type="button" disabled>Stop task</button></div>
-<p id="feedback" role="status"></p><button id="retry" type="button" hidden>Retry same request</button><p class="hint">Shared with your terminal. Keep the terminal session open. Closing this tab does not stop the task.</p></form></dialog>
+<p id="feedback" role="status"></p><button id="retry" type="button" hidden>Retry same request</button><p id="session-lifetime" class="hint">Shared with your terminal. Keep the terminal session open. Closing this tab does not stop the task.</p></form></dialog>
 <script>${SESSION_BROWSER_SCRIPT}</script></body></html>`;

@@ -428,7 +428,8 @@ Existing previews from older CLI versions may need `/play --stop` followed by `/
 In an interactive CLI session, `/play` opens the game with an **Edit game** overlay.
 You can send prompts, queue follow-ups, answer choices, read recent output and request
 Stop from the browser. Keep the terminal open; native agent permission handoffs still
-use it. Updates are applied manually and restart the game. Standalone `gamedevpl play`
+use it. Compatible game updates can preserve state; unsupported updates require an
+explicit restart. Standalone `gamedevpl play`
 keeps its preview-only behavior. The panel is local to this computer.
 
 ### Local progress and diagnostics
@@ -447,3 +448,14 @@ blocked reports also enter the conversation. They do not mark checks or delivery
 as completed. Other adapters, including Muse, use activity inferred from their
 events and their normal progress messages; automatic MCP wiring for them is not
 implemented. Task diagnostics and progress text stay local, outside telemetry.
+
+### Browser-first creation and editing
+
+Run `gamedevpl create --play "Your game idea"` to open browser intake, or
+`gamedevpl play --edit` inside a checkout. The session runs independently of the
+terminal. Use Tools for CLI/platform operations, local attachments, screenshots,
+recording, diagnostic traces and phone pairing on trusted Wi-Fi. Compatible game
+updates can preserve state; unsupported updates require an explicit restart.
+
+See [Play workbench](../../docs/play-workbench.md) for access boundaries, adapter
+limitations, recovery and verification details. `--no-open` prints the session link.

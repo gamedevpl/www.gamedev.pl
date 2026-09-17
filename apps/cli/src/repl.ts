@@ -1,3 +1,6 @@
+import { splitEvidence, withEvidence } from './workbench-evidence.js';
+import { workbenchPlatformAction } from './workbench-platform-actions.js';
+import { workbenchLocalAction } from './workbench-checkpoints.js';
 import { runReplPlay } from './repl-play.js';
 import { recoverRepl } from './recover.js';
 import type { InteractiveRun } from './agy-interactive.js';
@@ -54,6 +57,8 @@ export async function handleReplLine(input: {
   currentPath?: string;
   cwd?: string;
 }): Promise<ReplLineResult> {
+  if (await workbenchPlatformAction(input)) return { next: 'continue' };
+  if (await workbenchLocalAction(input.line.trim(), input.workshop, input.write)) return { next: 'continue' };
   if (input.cwd && !input.token && input.line.trim() && !input.line.trim().startsWith('/')) {
     input.write(
       'This checkout is not connected yet. Use /recover to restore it or /connect to retry. Your files are safe.',
@@ -65,7 +70,8 @@ export async function handleReplLine(input: {
     input.write('no pending task to retry');
     return { next: 'continue', conversationId: input.conversationId };
   }
-  let trimmed = retry?.request ?? input.line.trim();
+  const original = splitEvidence(retry?.request ?? input.line.trim());
+  let trimmed = original.text;
   if (!trimmed) return { next: 'continue', conversationId: input.conversationId };
   if (trimmed === '/logs') {
     input.write(input.workshop?.lastLog ? readFileSync(input.workshop.lastLog, 'utf8') : 'No local task log yet.');
@@ -267,6 +273,7 @@ export async function handleReplLine(input: {
         if (!input.pick) return { next: 'continue', conversationId: result.conversationId };
         const env = input.env ?? process.env;
         const choice = await chooseExecution({
+          localOnly: Boolean(original.evidence),
           env,
           pick: input.pick,
           write: input.write,
@@ -292,7 +299,7 @@ export async function handleReplLine(input: {
             api: input.api,
             choice,
             ...created,
-            request: result.concept,
+            request: withEvidence(result.concept, original.evidence),
             env,
             pick: input.pick,
             write: input.write,
@@ -334,7 +341,7 @@ export async function handleReplLine(input: {
           api: input.api,
           token: input.token,
           slug,
-          request: trimmed,
+          request: withEvidence(trimmed, original.evidence),
           env: input.env ?? process.env,
           pick: input.pick,
           workshop: input.workshop,
@@ -355,6 +362,7 @@ export async function handleReplLine(input: {
         const choice =
           retry?.choice ??
           (await chooseExecution({
+            localOnly: Boolean(original.evidence),
             env,
             pick: input.pick,
             write: input.write,
@@ -375,7 +383,8 @@ export async function handleReplLine(input: {
             else delete input.workshop.selectedAgent;
           }
           if (outcome.pending) {
-            if (input.pendingExecution) input.pendingExecution.current = { choice, request: trimmed };
+            if (input.pendingExecution)
+              input.pendingExecution.current = { choice, request: withEvidence(trimmed, original.evidence) };
             input.write(`${handoffLine(outcome, slug)} — /retry resumes this task with the selected agent`);
             return { next: 'continue', conversationId: input.conversationId };
           }
@@ -394,7 +403,7 @@ export async function handleReplLine(input: {
           choice,
           slug,
           token: input.token,
-          request: trimmed,
+          request: withEvidence(trimmed, original.evidence),
           env,
           pick: input.pick,
           write: input.write,
@@ -423,7 +432,13 @@ export async function handleReplLine(input: {
       return { next: 'continue', conversationId: input.conversationId };
     }
     input.onActivity?.('Running the local builder');
-    await workshopTurn({ api: input.api, ws, request: trimmed, ack: result.ack, write: input.write });
+    await workshopTurn({
+      api: input.api,
+      ws,
+      request: withEvidence(trimmed, original.evidence),
+      ack: result.ack,
+      write: input.write,
+    });
     return { next: 'continue', conversationId: input.conversationId };
   } catch (error) {
     input.write(formatError(error));

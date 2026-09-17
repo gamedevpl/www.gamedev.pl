@@ -46,8 +46,8 @@ Standalone `gamedevpl play` and remote games keep their existing preview behavio
 The panel shares the running terminal session: send a request, queue a follow-up while
 an adapter works, answer its structured choices, read recent output, or request Stop.
 Opening or closing the panel leaves the sandboxed game frame mounted. A new build is
-applied explicitly with **Apply update · restarts game**. This client does not yet restore
-runtime state or remove layout inside the game's own HTML.
+applied with state-preserving replacement when supported; an explicit restart remains the fallback.
+Studio and the CLI share the game embedding bridge. See [Play workbench](./play-workbench.md).
 
 The listener binds only to `127.0.0.1` on an ephemeral port. Its random bearer token
 arrives in the URL fragment, is removed from the address bar, and stays in tab-scoped
@@ -64,13 +64,13 @@ by CLI preview startup are registered for the proxy; transcript text alone canno
 a new preview. The existing source reader checks assembled content against its revision,
 and source generations prevent late responses from attaching a previous preview.
 
-**Current limits:** keep the terminal session open. This listener belongs to that process,
-not a detached or supervised controller. Closing a browser tab does not cancel work;
-ending the terminal session disconnects the panel. There is no cross-process checkout
-lock, durable event replay, remote access, upload flow or browser replacement for native
-vendor permission handoffs. Those handoffs still require the terminal. Preview-only
-processes retain their existing idle timeout. Polling clients do not establish task
-ownership or platform delivery authority.
+**Lifecycle:** terminal `/play` belongs to the terminal process. `create --play` and
+`play --edit` instead launch an independent browser controller with a private recovery
+journal. Closing a tab does not cancel work. A separate, explicitly enabled LAN listener
+serves phone playtests without granting editor authority. Local attachments and fixed
+operation commands are described in [Play workbench](./play-workbench.md). Native vendor
+permission handoffs may still require a terminal. No controller restores a vendor
+conversation or automatically retries a mutation whose outcome is unknown.
 
 The browser submits through the existing CLI execution loop, retaining its first-turn,
 adapter and creation measurements. Opening Play still records `play_requested`, which

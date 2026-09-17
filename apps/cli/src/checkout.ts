@@ -1,3 +1,4 @@
+import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -175,7 +176,7 @@ export async function inspectGame(input: { api: ApiClient; slug: string; dest: s
   return { sync, tree };
 }
 
-export async function pullGame(input: {
+async function pullGameUnlocked(input: {
   api: ApiClient;
   slug: string;
   dest: string;
@@ -217,4 +218,8 @@ export async function pullGame(input: {
 
 export async function diffGame(input: { api: ApiClient; slug: string; dest: string }): Promise<SyncResult> {
   return (await inspectGame(input)).sync;
+}
+
+export function pullGame(input: Parameters<typeof pullGameUnlocked>[0]): ReturnType<typeof pullGameUnlocked> {
+  return withCheckoutWriter(input.dest, () => pullGameUnlocked(input));
 }

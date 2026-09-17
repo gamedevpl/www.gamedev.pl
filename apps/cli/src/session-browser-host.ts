@@ -1,8 +1,10 @@
+import { platformPreview } from './workbench-platform.js';
+import type { ApiClient } from './api.js';
 import { openUrl } from './open-url.js';
 import type { SessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
 
-export function sessionBrowserHost(session: SessionController) {
+export function sessionBrowserHost(session: SessionController, headless = false) {
   let preview = '';
   let opening: ReturnType<typeof startSessionBrowser> | undefined;
   let closed = false;
@@ -12,7 +14,21 @@ export function sessionBrowserHost(session: SessionController) {
       void opening?.then((server) => server.clearPreview()).catch(() => undefined);
     }
   });
+  const start = () =>
+    (opening ??= startSessionBrowser(session, { detached: headless }).catch((error: unknown) => {
+      opening = undefined;
+      throw error;
+    }));
   return {
+    async start() {
+      return (await start()).url;
+    },
+    registerPlatform(api: ApiClient, token: string) {
+      if (!headless || preview) return;
+      void opening
+        ?.then((server) => server.setSource(`platform:${token}`, platformPreview(api, token)))
+        .catch(() => undefined);
+    },
     registerPreview(url: string) {
       preview = url;
       void opening
@@ -24,7 +40,7 @@ export function sessionBrowserHost(session: SessionController) {
     async open(url: string): Promise<boolean> {
       if (closed) return false;
       if (!preview || preview !== url) return openUrl(url);
-      opening ??= startSessionBrowser(session).catch((error: unknown) => {
+      opening ??= startSessionBrowser(session, { detached: headless }).catch((error: unknown) => {
         opening = undefined;
         throw error;
       });
@@ -32,7 +48,7 @@ export function sessionBrowserHost(session: SessionController) {
         const server = await opening;
         if (closed) return false;
         if (preview) server.setPreview(preview);
-        const opened = await openUrl(server.url);
+        const opened = headless || (await openUrl(server.url));
         if (!opened) session.writeLine(`Open the editing panel: ${server.url}`);
         return opened;
       } catch {
