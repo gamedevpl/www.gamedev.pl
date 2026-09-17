@@ -5,14 +5,25 @@ import { getStatus, isTerminalStatus, latestProposal, previewUrl, studioUrl, typ
 import type { ApiClient } from './api.js';
 import type { CliTelemetry } from './telemetry.js';
 
-export function statusWatchDelayMs(status: Pick<RoundStatus, 'status' | 'phase' | 'stall'>): number {
+// A watch left running against a wedged or abandoned round would otherwise poll
+// every 3s forever. Past this many polls with no visible change, back off.
+const ACTIVE_BACKOFF_AFTER_POLLS = 20;
+const ACTIVE_BACKOFF_CAP_MS = 30_000;
+
+export function statusWatchDelayMs(
+  status: Pick<RoundStatus, 'status' | 'phase' | 'stall'>,
+  unchangedPolls = 0,
+): number {
   const active =
     status.status === 'building' ||
     status.phase === 'dispatched' ||
     status.stall === 'no_agent_yet' ||
     status.stall === 'ended' ||
     status.stall === 'quiet';
-  return active ? 3000 : 10_000;
+  if (!active) return 10_000;
+  if (unchangedPolls < ACTIVE_BACKOFF_AFTER_POLLS) return 3000;
+  const doublings = Math.floor((unchangedPolls - ACTIVE_BACKOFF_AFTER_POLLS) / ACTIVE_BACKOFF_AFTER_POLLS) + 1;
+  return Math.min(3000 * 2 ** doublings, ACTIVE_BACKOFF_CAP_MS);
 }
 
 // Agent-authored text reaching a terminal; strip it like any payload.

@@ -36,6 +36,7 @@ export function createRoundWatch(input: {
   const run = (async () => {
     let lastKey = '';
     let lastStatus: RoundStatus | undefined;
+    let unchangedPolls = 0;
     while (!stopped) {
       const token = input.getToken();
       if (token) {
@@ -48,6 +49,7 @@ export function createRoundWatch(input: {
           input.setLive(formatRoundLive(status, input.api.origin));
           const key = statusFingerprint(status);
           if (shouldAnnounceStatus(status, lastKey, key)) input.announce(formatStatusEvent(status));
+          unchangedPolls = key === lastKey ? unchangedPolls + 1 : 0;
           lastKey = key;
           if (isTerminalStatus(status.status)) {
             if (!stopped && token === input.getToken()) {
@@ -58,6 +60,7 @@ export function createRoundWatch(input: {
             }
             lastKey = '';
             lastStatus = undefined;
+            unchangedPolls = 0;
             continue;
           }
         } catch (error) {
@@ -68,7 +71,7 @@ export function createRoundWatch(input: {
         }
       }
       if (stopped) break;
-      const delay = lastStatus ? statusWatchDelayMs(lastStatus) : 3000;
+      const delay = lastStatus ? statusWatchDelayMs(lastStatus, unchangedPolls) : 3000;
       await Promise.race([
         sleep(delay),
         new Promise<void>((resolve) => {
