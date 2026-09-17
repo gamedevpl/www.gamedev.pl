@@ -117,9 +117,7 @@ describe('build event reads under a three-second poll', () => {
     expect(list.mock.calls.filter((c) => c[1]?.limit === 20)).toHaveLength(2);
   });
 
-  // Two tabs (or an orphaned watch plus a fresh one) racing the same cold key
-  // must not each pay for their own page — that doubling is what made one
-  // forgotten CLI session cost as much as two.
+  // Two racing pollers must share the page, not double it.
   it('shares one read across two pollers racing the same cache miss', async () => {
     const { store, list, poll } = await harness();
     let releaseRead!: () => void;

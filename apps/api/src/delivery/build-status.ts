@@ -94,7 +94,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     value: BuildEvent[];
   }
   const eventsCache = new Map<number, CachedEvents>();
-  // Two pollers racing a miss must share one read, not each pay for their own.
+  // Two pollers racing a miss share one read, not two.
   const eventsInFlight = new Map<number, Promise<BuildEvent[]>>();
 
   async function loadBuildEvents(jobId: number): Promise<BuildEvent[]> {
@@ -138,7 +138,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
   // Bumped by invalidateMedia; a read started before it must not write after.
   const mediaGeneration = new Map<number, number>();
-  // Two pollers racing a miss must share one read, not each pay for their own.
+  // Two pollers racing a miss share one read, not two.
   const previewsInFlight = new Map<number, Promise<BuildPreviewSummary[]>>();
   const shotsInFlight = new Map<number, Promise<BuildShotSummary[]>>();
 
