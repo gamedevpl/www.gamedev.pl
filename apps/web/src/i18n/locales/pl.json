@@ -1471,7 +1471,7 @@
     "orEmail": "Albo napisz bezpośrednio na"
   },
   "create": {
-    "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
+    "headline": "Opisz grę. Agent AI ją zbuduje.",
     "subhead": "Prawdziwy kod od agenta AI, sprawdzony przez człowieka i gotowy do gry w przeglądarce.",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
     "step1Title": "Krótki wywiad",

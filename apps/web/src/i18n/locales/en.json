@@ -1457,7 +1457,7 @@
     "orEmail": "Or write directly to"
   },
   "create": {
-    "headline": "Describe a game. An AI agent builds it for real.",
+    "headline": "Describe a game. An AI agent builds it.",
     "subhead": "Real code written by an AI agent, reviewed by a human, playable in the browser.",
     "stepsHeading": "What happens after you press Build",
     "step1Title": "Quick questions",
