@@ -189,9 +189,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
 
-  async getUser(uid: string): Promise<User | null> {
-    return this.identityStore.getUser(uid);
-  }
+  getUser = (uid: string) => this.identityStore.getUser(uid);
 
   async getUserByHandle(handle: string): Promise<User | null> {
     return this.identityStore.getUserByHandle(handle);
