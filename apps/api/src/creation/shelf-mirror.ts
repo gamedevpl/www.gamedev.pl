@@ -37,12 +37,8 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   async function rebuildNow(ownerUid: string): Promise<ShelfDocument | null> {
     const owned = await store.listSubmissionsByOwner(ownerUid);
 
-    // The same reconcile the shelf route reads through, or the
-
-    // mirror answers with games this creator no longer owns.
-
-    // A rebuild runs per job write, so it reads no game twice.
-    const records = await reconcileTransferredOwnership(store, ownerUid, owned, { bySlug: 'inherited' });
+    // Mirror reconciles ownership identically to the shelf route.
+    const records = await reconcileTransferredOwnership(store, ownerUid, owned);
     const shelf = buildShelfDocument(records, new Date(now()).toISOString());
     await store.putShelf(ownerUid, shelf);
     return shelf;

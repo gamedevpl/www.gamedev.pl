@@ -73,4 +73,58 @@ describe('the shelf mirror after a handover', () => {
     const collapsed = collapseJobsToOwnerGames(mirroredRecords, 'shelf');
     expect(collapsed.map((entry) => entry.tip.jobId)).toEqual([jobId]);
   });
+
+  it('retains earlier owner rounds when recipient adds their own round', async () => {
+    const store = new InMemoryStore();
+    const jobId1 = await transferredGame(store);
+
+    const jobId2 = await store.allocateJobId();
+    await store.createSubmission(jobId2, 'g:grace', 'Sky Dodge (update)');
+    await store.setSubmissionSlug(jobId2, 'sky-dodge');
+
+    expect(await store.rebuildShelf('g:grace')).toBe(true);
+    const shelf = await store.getShelf('g:grace');
+    const jobIds = shelf?.rounds.map((round) => round.jobId) ?? [];
+    expect(jobIds).toContain(jobId1);
+    expect(jobIds).toContain(jobId2);
+
+    const direct = await loadShelfRecords(store, 'g:grace', undefined, token);
+    const directJobIds = direct.map((record) => record.jobId);
+    expect(directJobIds).toContain(jobId1);
+    expect(directJobIds).toContain(jobId2);
+  });
+
+  it('retains intervening rounds when ownership boomerangs back', async () => {
+    const store = new InMemoryStore();
+    const jobId1 = await transferredGame(store);
+
+    const jobId2 = await store.allocateJobId();
+    await store.createSubmission(jobId2, 'g:grace', 'Sky Dodge (grace round)');
+    await store.setSubmissionSlug(jobId2, 'sky-dodge');
+
+    const at2 = new Date(Date.now() + 2000).toISOString();
+    const code = (await store.ensureRecipientCode('g:ada', at2))!;
+    const rev = (await store.getGameAccess('sky-dodge'))!.accessRevision;
+    await store.createGameTransferInvitation('sky-dodge', 'g:grace', 'g:ada', rev, at2, code);
+    const invite2 = (await store.getActiveGameTransfer('sky-dodge', at2))!;
+    await store.acceptGameTransferInvitation('sky-dodge', 'g:ada', at2, invite2.invitationId);
+
+    expect(await store.rebuildShelf('g:ada')).toBe(true);
+    const shelfAda = await store.getShelf('g:ada');
+    const adaJobIds = shelfAda?.rounds.map((round) => round.jobId) ?? [];
+    expect(adaJobIds).toContain(jobId1);
+    expect(adaJobIds).toContain(jobId2);
+
+    expect(await store.rebuildShelf('g:grace')).toBe(true);
+    const shelfGrace = await store.getShelf('g:grace');
+    expect(shelfGrace?.rounds ?? []).toEqual([]);
+  });
+
+  it('counts canonical reconciled rounds for transfer recipient and sender', async () => {
+    const store = new InMemoryStore();
+    await transferredGame(store);
+
+    expect(await store.countSubmissionsByOwner('g:grace')).toBe(1);
+    expect(await store.countSubmissionsByOwner('g:ada')).toBe(0);
+  });
 });

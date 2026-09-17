@@ -108,6 +108,27 @@ describe('recordShelfShadow', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('matches a recipient shelf containing only transferred canonical rounds', async () => {
+    const inherited = [record(1, { slug: 'sky', ownerUid: 'g:sender' })];
+    const shelf = buildShelfDocument(inherited, at);
+    const warnings: object[] = [];
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => shelf,
+          countSubmissionsByOwner: async () => 1,
+          rebuildShelf: async () => true,
+        },
+        log: { warn: (context) => warnings.push(context) },
+      },
+      'g:recipient',
+      inherited,
+    );
+
+    expect(result?.verdict).toBe('match');
+    expect(warnings).toEqual([]);
+  });
+
   it('never throws into the reader it is shadowing', async () => {
     const warnings: object[] = [];
     const result = await recordShelfShadow(

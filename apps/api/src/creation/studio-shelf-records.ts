@@ -32,19 +32,11 @@ async function lookupRequested(
   return store.getSubmission(jobId);
 }
 
-export interface ReconcileOptions {
-  // 'inherited' reads only slugs this owner authored nothing on.
-
-  // The write path pays that; a read pays for every canonical slug.
-  bySlug?: 'every-canonical' | 'inherited';
-}
-
 // listSubmissionsByOwner alone drifts after a transfer -- reconcile it.
 export async function reconcileTransferredOwnership(
   store: ShelfStore,
   ownerUid: string,
   records: SubmissionRecord[],
-  opts?: ReconcileOptions,
 ): Promise<SubmissionRecord[]> {
   const memberAccess = await store.listGameAccessByMember(ownerUid);
   const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
@@ -59,21 +51,9 @@ export async function reconcileTransferredOwnership(
   );
   const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
-  // Every job on the slug, not just this owner's historical rows.
-  const authored = new Set(records.flatMap((record) => (record.slug ? [record.slug] : [])));
-  const hasEligible = (slug: string) =>
-    records.some((r) => r.slug === slug && !r.abandonedAt && r.state !== 'canceled');
-  const inherited = opts?.bySlug === 'inherited';
-  const read = [...canonicalSlugs].filter((slug) => !inherited || !authored.has(slug) || !hasEligible(slug));
-  const canonicalJobs = await Promise.all(read.map((slug) => store.listSubmissionsBySlug(slug)));
+  const canonicalJobs = await Promise.all([...canonicalSlugs].map((slug) => store.listSubmissionsBySlug(slug)));
 
-  // As read: this owner's rows on a game they still own.
-  const readSlugs = new Set(read);
-  const own = inherited
-    ? records.filter((r) => r.slug !== undefined && canonicalSlugs.has(r.slug) && !readSlugs.has(r.slug))
-    : [];
-
-  return [...canonicalJobs.flat(), ...own, ...kept];
+  return [...canonicalJobs.flat(), ...kept];
 }
 
 // Owner-query lag: document GET still finds a just-written draft.

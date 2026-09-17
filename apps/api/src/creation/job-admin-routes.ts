@@ -11,7 +11,7 @@ import {
 } from './job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublishableMode } from '../platform/publication-state.js';
-import { gameOwnerUid, resolveGameAccess } from '../platform/game-access-resolve.js';
+import { resolveGameAccess, sameOwner } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
 import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
@@ -186,7 +186,8 @@ export async function registerJobAdminRoutes(
       }
 
       // Creator-owned games need a publishable profile: the canonical owner's.
-      const publishOwner = (await resolveGameAccess(store, record.slug)).owner;
+      const initialAccess = await resolveGameAccess(store, record.slug);
+      const publishOwner = initialAccess.owner;
       if (publishOwner.kind === 'creator') {
         const owner = await store.getUser(publishOwner.uid);
         if (!hasPublishableProfile(owner)) {
@@ -209,11 +210,16 @@ export async function registerJobAdminRoutes(
 
       const clearance = await resolveEditorialPublish({
         editorialClearance: options.editorialClearance,
-        ownerUid: await gameOwnerUid(store, record),
+        ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
         slug: record.slug,
         body: request.body,
       });
       if ('status' in clearance) return reply.code(clearance.status).send(clearance.body);
+
+      const latest = await resolveGameAccess(store, record.slug);
+      const stale =
+        latest.accessRevision !== initialAccess.accessRevision || !sameOwner(latest.owner, initialAccess.owner);
+      if (stale) return reply.code(409).send({ error: 'owner_changed' });
 
       const at = new Date(now()).toISOString();
       // Through `publishing` rather than straight to `published`: the intermediate state is

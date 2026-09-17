@@ -1,5 +1,6 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
+import { countCanonicalSubmissions } from './canonical-shelf-count.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import type { ShelfDocument } from './records/shelf.js';
@@ -110,14 +111,10 @@ import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore extends SubmissionFacade implements Store {
-  private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore(
-    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
-  );
+  private identityStore = new InMemoryIdentityStore((uid) => this.gameAccessStore.erasedAt.get(uid) ?? null);
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
-  protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore((uid) =>
-    this.identityStore.users.has(uid),
-  );
+  protected gameAccessStore = new InMemoryGameAccessStore((uid) => this.identityStore.users.has(uid));
   protected gameTransferStore = new InMemoryGameTransferStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
@@ -147,9 +144,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private shelves = new Map<string, ShelfDocument>();
-  protected shelfStore = new InMemoryShelfStore(
-    this.shelves,
-    (ownerUid) => [...this.submissions.values()].filter((record) => record.ownerUid === ownerUid).length,
+  protected shelfStore = new InMemoryShelfStore(this.shelves, (uid) =>
+    countCanonicalSubmissions(uid, this.submissions.values(), this.gameAccessStore.access),
   );
   private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
     this.quotaStore.getCreationLimits(),

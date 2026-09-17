@@ -229,6 +229,7 @@ export async function registerGameTransferRoutes(
       }
       invalidateTransferInboxCache(store, uid);
       invalidatePublishedGameCaches?.(slug);
+      await Promise.all([store.rebuildShelf(result.senderUid), store.rebuildShelf(result.recipientUid)]);
       return reply.send({ transfer: await toSummary(store, result, uid) });
     },
   );
