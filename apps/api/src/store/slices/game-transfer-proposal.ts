@@ -20,6 +20,14 @@ function erasedOwner(user: { createdAt?: string } | null, erasedAt: string | nul
   return user?.createdAt === undefined || fencedOut(erasedAt, user.createdAt);
 }
 
+function isCurrentOwner(
+  access: { ownerUid: string; accessRevision: number } | null,
+  ownerUid: string,
+  accessRevision: number,
+): boolean {
+  return Boolean(access && access.ownerUid === ownerUid && access.accessRevision === accessRevision);
+}
+
 function openBlocks(
   open: GameTransferProposal | null,
   ownerUid: string,
@@ -64,6 +72,7 @@ export class InMemoryGameTransferProposalStore implements GameTransferProposalSt
   constructor(
     private erasedAt: (uid: string) => string | null = () => null,
     private owner: (uid: string) => { createdAt?: string } | null = () => null,
+    private gameAccess: (slug: string) => { ownerUid: string; accessRevision: number } | null = () => null,
   ) {}
 
   proposals = new Map<string, GameTransferProposal>();
@@ -90,6 +99,9 @@ export class InMemoryGameTransferProposalStore implements GameTransferProposalSt
     }
     if (erasedOwner(this.owner(input.ownerUid), this.erasedAt(input.ownerUid))) {
       return { ok: false, reason: 'ineligible' };
+    }
+    if (!isCurrentOwner(this.gameAccess(input.slug), input.ownerUid, input.accessRevision)) {
+      return { ok: false, reason: 'stale_owner' };
     }
     const openId = this.openBySlug.get(input.slug);
     const open = openId ? retained(this.proposals.get(openId), input.at) : null;
@@ -197,6 +209,11 @@ export class FirestoreGameTransferProposalStore implements GameTransferProposalS
       const erasedAt = fenceSnap.exists ? ((fenceSnap.data() as { at?: string }).at ?? null) : null;
       const user = userSnap.exists ? (userSnap.data() as { createdAt?: string }) : null;
       if (erasedOwner(user, erasedAt)) return { ok: false as const, reason: 'ineligible' as const };
+      const accessSnap = await tx.get(this.db.collection('gameAccess').doc(input.slug));
+      const access = accessSnap.exists ? (accessSnap.data() as { ownerUid: string; accessRevision: number }) : null;
+      if (!isCurrentOwner(access, input.ownerUid, input.accessRevision)) {
+        return { ok: false as const, reason: 'stale_owner' as const };
+      }
       const slugSnap = await tx.get(this.slugDoc(input.slug));
       const openId = slugSnap.exists ? (slugSnap.data() as { proposalId: string }).proposalId : null;
       const openSnap = openId ? await tx.get(this.proposalDoc(openId)) : null;

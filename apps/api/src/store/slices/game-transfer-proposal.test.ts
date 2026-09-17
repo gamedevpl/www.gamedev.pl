@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../../platform/store.js';
 import { fakeFirestore } from '../fake-firestore.js';
 import { TRANSFER_PROPOSAL_TTL_MS, TRANSFER_PROPOSAL_TOMBSTONE_MS } from '../records/game-transfer-proposal.js';
+import { newGameAccess } from '../records/game-access.js';
 import { FirestoreGameTransferProposalStore, InMemoryGameTransferProposalStore } from './game-transfer-proposal.js';
 
 const AT = '2026-01-01T00:00:00.000Z';
@@ -230,7 +231,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(old.status).toBe('invalidated');
     });
 
-    it('invalidates a previous owner leftover open proposal', async () => {
+    it('invalidates a leftover open proposal when the current owner proposes', async () => {
       const store = makeStore();
       await seedOwner(store);
       const first = await store.proposeGameTransfer({
@@ -242,7 +243,36 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
         at: AT,
       });
       if (!first.ok) throw new Error('unreachable');
+      const code = (await store.ensureRecipientCode(B, AT))!;
+      await store.createGameTransferInvitation(SLUG, A, B, 1, AT, code);
+      const invite = (await store.getActiveGameTransfer(SLUG, AT))!;
+      await store.acceptGameTransferInvitation(SLUG, B, AT, invite.invitationId);
       const next = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: B,
+        accessRevision: 2,
+        expectedAccessVersion: 'v2',
+        idempotencyKey: 'k2',
+        at: AT,
+      });
+      expect(next).toMatchObject({ ok: true });
+      if (!next.ok) throw new Error('unreachable');
+      expect(await store.confirmTransferProposal(first.proposal.proposalId, A, AT)).toBeNull();
+    });
+
+    it('refuses a caller who is no longer the current owner', async () => {
+      const store = makeStore();
+      await seedOwner(store);
+      const first = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 1,
+        expectedAccessVersion: 'v1',
+        idempotencyKey: 'k1',
+        at: AT,
+      });
+      if (!first.ok) throw new Error('unreachable');
+      const refused = await store.proposeGameTransfer({
         slug: SLUG,
         ownerUid: B,
         accessRevision: 1,
@@ -250,12 +280,48 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
         idempotencyKey: 'k2',
         at: AT,
       });
-      expect(next).toMatchObject({ ok: true });
-      if (!next.ok) throw new Error('unreachable');
-      expect(next.proposal.proposalId).not.toBe(first.proposal.proposalId);
-      expect(await store.confirmTransferProposal(first.proposal.proposalId, A, AT)).toBeNull();
-      const leftover = await store.getTransferProposalReceipt(A, 'k1', AT);
-      expect(leftover.status).toBe('invalidated');
+      expect(refused).toEqual({ ok: false, reason: 'stale_owner' });
+      expect((await store.getTransferProposalReceipt(A, 'k1', AT)).status).toBe('ready');
+    });
+
+    it('does not let a previous owner destroy the current owner proposal', async () => {
+      const store = makeStore();
+      await seedOwner(store);
+      await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 1,
+        expectedAccessVersion: 'v1',
+        idempotencyKey: 'k1',
+        at: AT,
+      });
+      const code = (await store.ensureRecipientCode(B, AT))!;
+      await store.createGameTransferInvitation(SLUG, A, B, 1, AT, code);
+      const invite = (await store.getActiveGameTransfer(SLUG, AT))!;
+      await store.acceptGameTransferInvitation(SLUG, B, AT, invite.invitationId);
+      const current = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: B,
+        accessRevision: 2,
+        expectedAccessVersion: 'v2',
+        idempotencyKey: 'k2',
+        at: AT,
+      });
+      expect(current).toMatchObject({ ok: true });
+      if (!current.ok) throw new Error('unreachable');
+      const stale = await store.proposeGameTransfer({
+        slug: SLUG,
+        ownerUid: A,
+        accessRevision: 1,
+        expectedAccessVersion: 'v1',
+        idempotencyKey: 'k-stale',
+        at: AT,
+      });
+      expect(stale).toEqual({ ok: false, reason: 'stale_owner' });
+      expect((await store.getTransferProposalReceipt(B, 'k2', AT)).status).toBe('ready');
+      expect(await store.confirmTransferProposal(current.proposal.proposalId, B, AT)).toMatchObject({
+        proposalId: current.proposal.proposalId,
+      });
     });
   });
 }
@@ -275,8 +341,14 @@ describe('InMemoryStore getUser override', () => {
 });
 
 describe('transfer proposal slug pointer', () => {
+  const accessFor = (ownerUid: string, accessRevision: number) => () => ({ ownerUid, accessRevision });
+
   it('does not drop another owner pointer when erasing in memory', async () => {
-    const inner = new InMemoryGameTransferProposalStore();
+    const inner = new InMemoryGameTransferProposalStore(
+      () => null,
+      () => null,
+      accessFor(A, 1),
+    );
     const first = await inner.proposeGameTransfer({
       slug: SLUG,
       ownerUid: A,
@@ -294,6 +366,10 @@ describe('transfer proposal slug pointer', () => {
 
   it('does not drop another owner pointer when erasing in Firestore', async () => {
     const { db } = fakeFirestore();
+    await db
+      .collection('gameAccess')
+      .doc(SLUG)
+      .set(newGameAccess(SLUG, A, AT));
     const inner = new FirestoreGameTransferProposalStore(db);
     const first = await inner.proposeGameTransfer({
       slug: SLUG,
@@ -309,5 +385,44 @@ describe('transfer proposal slug pointer', () => {
     const slugSnap = await db.collection('gameTransferProposalBySlug').doc(SLUG).get();
     expect(slugSnap.data()).toEqual({ proposalId: 'bea-open' });
     expect((await inner.getTransferProposal(first.proposal.proposalId, AT))?.invalidatedAt).toBe(AT);
+  });
+
+  it('lets the current owner replace a leftover previous-owner proposal', async () => {
+    let access = { ownerUid: A, accessRevision: 1 };
+    const inner = new InMemoryGameTransferProposalStore(
+      () => null,
+      () => null,
+      () => access,
+    );
+    const first = await inner.proposeGameTransfer({
+      slug: SLUG,
+      ownerUid: A,
+      accessRevision: 1,
+      expectedAccessVersion: 'v1',
+      idempotencyKey: 'k1',
+      at: AT,
+    });
+    if (!first.ok) throw new Error('unreachable');
+    access = { ownerUid: B, accessRevision: 2 };
+    const next = await inner.proposeGameTransfer({
+      slug: SLUG,
+      ownerUid: B,
+      accessRevision: 2,
+      expectedAccessVersion: 'v2',
+      idempotencyKey: 'k2',
+      at: AT,
+    });
+    expect(next).toMatchObject({ ok: true });
+    expect((await inner.getTransferProposalReceipt(A, 'k1', AT)).status).toBe('invalidated');
+    const stale = await inner.proposeGameTransfer({
+      slug: SLUG,
+      ownerUid: A,
+      accessRevision: 1,
+      expectedAccessVersion: 'v1',
+      idempotencyKey: 'k-stale',
+      at: AT,
+    });
+    expect(stale).toEqual({ ok: false, reason: 'stale_owner' });
+    expect((await inner.getTransferProposalReceipt(B, 'k2', AT)).status).toBe('ready');
   });
 });
