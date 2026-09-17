@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.18.0 — 2026-09-17
+
 ### Added
 
 - Local agents with MCP can report meaningful task progress even without a running preview (#1392).
