@@ -15,38 +15,50 @@ export function compactTaskLine(text: string): string {
   }
   return text;
 }
-export function taskOutput(write: (text: string) => void) {
+export function taskOutput(write: (text: string) => void, activity?: (text: string) => void) {
   const path = join(mkdtempSync(join(tmpdir(), 'gamedev-task-')), 'transcript.txt');
   writeFileSync(path, '', { mode: 0o600 });
   let preparing = false;
-  let lastTool = '';
-  let repeats = 0;
-  const flush = (): void => {
-    if (repeats) write(`${lastTool.split(' · ')[0]} · +${repeats} more tool operations — /logs`);
-    repeats = 0;
-    lastTool = '';
+  let progress = '';
+  let currentActivity = 'Agent working';
+  let lastPulse = 0;
+  const record = (text: string): string => {
+    const safe = text
+      .split('\n')
+      .map((line) => sanitizeEventPayload(line, Infinity))
+      .join('\n');
+    appendFileSync(path, safe + '\n');
+    return safe;
   };
   return {
     path,
-    flush,
+    flush() {},
+    raw(text: string) {
+      record(text.slice(0, 32768));
+      if (Date.now() - lastPulse >= 1000) {
+        lastPulse = Date.now();
+        activity?.(progress || currentActivity);
+      }
+    },
+    progress(text: string, blocked: boolean) {
+      progress = record(text);
+      activity?.(progress);
+      if (blocked) write('Agent blocked: ' + progress);
+    },
     preparing(value: boolean) {
       preparing = value;
     },
     write(text: string) {
-      const safe = text
-        .split('\n')
-        .map((line) => sanitizeEventPayload(line, Infinity))
-        .join('\n');
-      appendFileSync(path, safe + '\n');
+      const safe = record(text);
       if (preparing && !/error|failed|refused|cannot/i.test(safe)) return;
       const shown = compactTaskLine(safe);
       const tool = /^[\w-]+ · (?:Running a shell command|Tool:)/.test(shown);
-      if (tool && shown === lastTool) {
-        repeats += 1;
+      const waiting = /^[\w-]+ ▸ (?:Waiting for model response|Task started)$/.test(shown);
+      if (tool || waiting) {
+        currentActivity = shown.replace(' ▸ ', ' · ');
+        activity?.(progress || currentActivity);
         return;
       }
-      flush();
-      if (tool) lastTool = shown;
       if (shown) write(shown);
     },
   };

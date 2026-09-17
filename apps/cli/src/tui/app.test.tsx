@@ -13,13 +13,13 @@ afterEach(() => {
   for (const close of cleanup.splice(0)) close();
 });
 const wait = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
-function screen(columns: number, rows: number, openPreview?: (url: string) => void) {
+function screen(columns: number, rows: number, openPreview?: (url: string) => void, readLogs?: () => string[]) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
   const output = Object.assign(new PassThrough(), { columns, rows, isTTY: true });
   const frames: string[] = [];
   output.on('data', (chunk) => frames.push(stripVTControlCharacters(String(chunk))));
-  const app = render(createElement(ReplApp, { session, color: false, openPreview }), {
+  const app = render(createElement(ReplApp, { session, color: false, openPreview, readLogs }), {
     stdin: input as unknown as NodeJS.ReadStream,
     stdout: output as unknown as NodeJS.WriteStream,
     debug: true,
@@ -32,7 +32,12 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
     input.end();
     output.end();
   });
-  return { session, input, frame: () => frames.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '' };
+  return {
+    session,
+    input,
+    frame: () =>
+      frames.filter((frame) => frame.includes('gamedevpl') || frame.includes('Task diagnostics')).at(-1) ?? '',
+  };
 }
 
 describe('TUI feedback', () => {
@@ -346,4 +351,20 @@ it.each([40, 110])('distinguishes live send and explicit queue at width %s', asy
   await wait();
   expect(view.session.get().queued).toEqual(['later task']);
   expect(send).toHaveBeenCalledOnce();
+});
+
+it('opens live logs during a task without sending or queuing /logs', async () => {
+  const view = screen(110, 24, undefined, () => ['diagnostic detail']);
+  view.session.setLocalTask('muse');
+  view.session.setDraft('/logs');
+  await wait();
+  view.input.write('\r');
+  await wait(100);
+  expect(view.frame()).toContain('Task diagnostics');
+  expect(view.frame()).toContain('diagnostic detail');
+  expect(view.session.get().queued).toEqual([]);
+  expect(view.session.get().draft).toBe('');
+  view.input.write('\u001b');
+  await wait(100);
+  expect(view.frame()).not.toContain('Task diagnostics');
 });

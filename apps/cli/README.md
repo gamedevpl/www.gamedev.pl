@@ -430,3 +430,19 @@ You can send prompts, queue follow-ups, answer choices, read recent output and r
 Stop from the browser. Keep the terminal open; native agent permission handoffs still
 use it. Updates are applied manually and restart the game. Standalone `gamedevpl play`
 keeps its preview-only behavior. The panel is local to this computer.
+
+### Local progress and diagnostics
+
+Technical tool activity updates one status line instead of filling the conversation.
+Replies, questions, errors, and blockers remain visible. Press Ctrl+L to view the
+live diagnostic tail while the agent works, or type /logs and Enter during a task.
+Arrow keys scroll and pause the tail; return to the bottom to follow updates.
+Esc closes diagnostics without interrupting the task. The private temporary log
+includes protocol events (bounded per event); /logs after the task prints the log.
+
+Codex, Claude, and Copilot receive the authenticated local report_progress MCP
+tool independently of preview availability. Reports update a single task status;
+blocked reports also enter the conversation. They do not mark checks or delivery
+as completed. Other adapters, including Muse, use activity inferred from their
+events and their normal progress messages; automatic MCP wiring for them is not
+implemented. Task diagnostics and progress text stay local, outside telemetry.

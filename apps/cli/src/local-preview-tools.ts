@@ -12,15 +12,16 @@ export async function localPreviewTools(input: {
   previewUrl?: string;
   abort: AbortSignal;
   write: (line: string) => void;
+  progress?: (text: string, blocked: boolean) => void;
 }) {
-  if (!input.previewUrl || !localPreviewSupported(input.spec.name)) return undefined;
+  if (!localPreviewSupported(input.spec.name)) return undefined;
   let server: Awaited<ReturnType<typeof startLocalPreviewMcp>> | undefined;
   let cleanup: (() => void) | undefined;
   try {
     server = await startLocalPreviewMcp({ ...input, previewUrl: input.previewUrl });
     const wired = localPreviewAdapter(input.spec, server);
     cleanup = wired.cleanup;
-    input.write('Local browser tools connected: preview_status, capture, capture_status.');
+    input.write('Local task tools connected: report_progress (Ctrl+L for diagnostics).');
     return {
       spec: wired.spec,
       async close() {
@@ -31,7 +32,7 @@ export async function localPreviewTools(input: {
   } catch (error) {
     await server?.close();
     cleanup?.();
-    input.write(`Local browser tools unavailable: ${formatError(error)}`);
+    input.write(`Local task tools unavailable: ${formatError(error)}`);
     return undefined;
   }
 }

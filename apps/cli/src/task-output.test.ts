@@ -13,11 +13,7 @@ it('keeps full details privately while showing readable tools and setup errors',
     output.preparing(false);
     output.write('codex ▸ ⚙ /bin/zsh -lc "cat game.ts"');
     output.write('codex ▸ I improved the controls.');
-    expect(shown).toEqual([
-      'error: dependency install failed',
-      'codex · Running a shell command',
-      'codex ▸ I improved the controls.',
-    ]);
+    expect(shown).toEqual(['error: dependency install failed', 'codex ▸ I improved the controls.']);
     const log = readFileSync(output.path, 'utf8');
     expect(log).toContain('added 32 packages');
     expect(log).toContain('/bin/zsh -lc "cat game.ts"');
@@ -31,7 +27,7 @@ it('keeps full details privately while showing readable tools and setup errors',
   }
 });
 
-it('groups repeated tools without losing diagnostics or the full transcript', () => {
+it('hides all tool operations without losing diagnostics', () => {
   const shown: string[] = [];
   const output = taskOutput((line) => shown.push(line));
   try {
@@ -43,17 +39,35 @@ it('groups repeated tools without losing diagnostics or the full transcript', ()
     output.write('codex ▸ ⚙ /bin/zsh -lc "ls"');
     output.flush();
     output.flush();
-    expect(shown).toEqual([
-      'codex · Running a shell command',
-      'codex · +2 more tool operations — /logs',
-      'error: command failed',
-      'codex · Running a shell command',
-      'codex · +1 more tool operations — /logs',
-    ]);
+    expect(shown).toEqual(['error: command failed']);
     const log = readFileSync(output.path, 'utf8');
     expect(log.match(/\/bin\/zsh/g)).toHaveLength(5);
     expect(log).toContain('cat model.ts');
     expect(log).toContain('error: command failed');
+  } finally {
+    rmSync(dirname(output.path), { recursive: true, force: true });
+  }
+});
+
+it('keeps Muse chatter out of conversation and preserves milestone status across tools', () => {
+  const shown: string[] = [],
+    activity: string[] = [];
+  const output = taskOutput(
+    (line) => shown.push(line),
+    (line) => activity.push(line),
+  );
+  try {
+    output.progress('editing: Adding ramps', false);
+    for (let i = 0; i < 20; i++) {
+      output.raw('{"event":"heartbeat"}');
+      output.write('muse ▸ Waiting for model response');
+      output.write('muse ▸ ⚙ tool:read_file');
+    }
+    expect(shown).toEqual([]);
+    expect(activity.at(-1)).toBe('editing: Adding ramps');
+    output.progress('blocked: Need access', true);
+    expect(shown).toEqual(['Agent blocked: blocked: Need access']);
+    expect(readFileSync(output.path, 'utf8')).toContain('tool:read_file');
   } finally {
     rmSync(dirname(output.path), { recursive: true, force: true });
   }
