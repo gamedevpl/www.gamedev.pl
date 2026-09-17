@@ -1552,7 +1552,7 @@ button:disabled {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
-  max-width: 46ch;
+  max-width: 68ch;
 }
 
 .bottom-cta-action {

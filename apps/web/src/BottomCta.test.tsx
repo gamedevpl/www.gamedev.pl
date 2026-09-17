@@ -38,7 +38,7 @@ describe('BottomCta', () => {
       root!.render(createElement(BottomCta));
     });
 
-    expect(container.textContent).toContain('Have your own idea?');
+    expect(container.textContent).toContain('Have your own game idea?');
     act(() => {
       container.querySelector<HTMLButtonElement>('.bottom-cta-action')!.click();
     });
