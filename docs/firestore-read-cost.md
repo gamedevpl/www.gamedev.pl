@@ -69,6 +69,15 @@ change would put every permission check in the product behind a 30-second answer
 that is a different decision. A second resolve inside the window does not call
 `listSubmissionsBySlug`; a miss, an expiry, or an invalidating write does.
 
+The live `getGameAccess` still runs on every resolve, including the 193 quarantined
+slugs this cache exists for. A miss is billed: Firestore charges a read for a get on
+a missing document, and it shows up as `NOT_FOUND` in `document/read_count` — about
+10k in a three-day sample. Caching the absence would remove it, and every path that
+creates a canonical record already drops this window. It is left live on purpose: a
+canonical record written on another instance takes effect immediately, which is the
+whole point of that record. The collection scan is gone; one billed miss per call
+remains.
+
 This is an authorization answer, not a display value. `canActOnSlug` gates private
 prior-round chat, so the window is **30 seconds** — the same bound as the session-user
 cache — sized against a former owner reading for the length of it, not against the

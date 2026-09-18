@@ -17,6 +17,10 @@ interface StoreCache {
   entries: Map<string, Entry>;
   inFlight: Map<string, Promise<unknown>>;
   // Bumped by each drop, so a read cannot seal in staleness.
+
+  // Store-wide on purpose: one slug drop voids every in-flight seal.
+
+  // Erasure bumps once per slug and drops unrelated concurrent reads.
   generation: number;
 }
 
@@ -74,6 +78,9 @@ export function invalidateDerivedAccessMany(store: object, slugs: readonly strin
 
 // Tests share a process; a carried window is a false pass.
 export function clearDerivedAccessCache(store: object): void {
-  caches.get(store)?.entries.clear();
-  caches.get(store)?.inFlight.clear();
+  const cache = caches.get(store);
+  if (!cache) return;
+  cache.entries.clear();
+  cache.inFlight.clear();
+  cache.generation += 1;
 }

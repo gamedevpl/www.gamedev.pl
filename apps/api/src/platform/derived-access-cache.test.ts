@@ -112,4 +112,18 @@ describe('derived access window', () => {
     await readDerivedAccessCached(store, 'legacy-shared', load, clock);
     expect(load).toHaveBeenCalledTimes(2);
   });
+
+  it('does not reseal a read that was in flight when the cache was cleared', async () => {
+    const store = {};
+    const clock = () => 1_000;
+    const load = vi.fn(async () => {
+      clearDerivedAccessCache(store);
+      return 'stale';
+    });
+
+    await readDerivedAccessCached(store, 'legacy-shared', load, clock);
+    const listed = vi.fn(async () => 'fresh');
+    expect(await readDerivedAccessCached(store, 'legacy-shared', listed, clock)).toBe('fresh');
+    expect(listed).toHaveBeenCalledTimes(1);
+  });
 });
