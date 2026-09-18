@@ -175,6 +175,48 @@ None of the three delays the creator: their own actions invalidate the cache and
 `pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
 never the first read — a mount still answers the page once.
 
+**A forgotten localStorage list is occupancy with a longer memory.** The status
+poll's cost was supposed to be one token per open Studio tab. On 2026-09-18 a
+single Chrome session issued 1,102 of 1,120 status polls in forty minutes,
+spread across **32 job tokens**, in lockstep — 29 different tokens inside the
+same one-second bucket, again a minute later — until the browser closed at
+17:25Z. `/submissions` was 221,334 of that day's ~280k reads. The top three
+Insights rows were the same session: `WHERE slug = ?` (permission checks on
+old games with no `GameAccess` record), `WHERE ownerUid = ?` (`/api/submissions/mine`
+returning a 123-round shelf), `WHERE openRound = ?` (the header badge).
+
+`loadCreatorGames` is the fan-out. It takes every token this browser ever saved
+(`getSavedSpecs()`, anonymous-era localStorage), subtracts what `/mine`
+returned, and `Promise.all`s `getSubmissionStatus` for the rest. Nothing wrote
+the answer back: `removeSpec` had no callers, so the list only grew, and jobs
+19 / 22 / 24 / 29 / 32 / 35 / 37 / 92 / 130 were asked about forever, once a
+minute, from one forgotten home tab. That is the same lesson as a forgotten
+Studio tab, with a different shape: **it scales with how long a browser has
+been used**, not with how many creators are watching something now.
+
+The client half stops asking. An unlisted token whose status is terminal or
+missing — `abandoned`, HTTP 404, or a token the API rejects (400) — is pruned
+via `removeSpec`. A settled status that is not in-flight (`published`,
+`needs_changes`) is stored as `lastStatus` on the spec so the next load still
+renders it and does not re-ask. **In-flight is the only remaining re-ask:** a
+live round the server's shelf has not listed yet (anonymous-era, signed-out,
+or a round `/mine` has not collapsed) can still move, and the Studio chip
+should see that. Lengthening the 30s home poll would not have helped; the
+cost is the size of the fan-out.
+
+That remaining re-ask is also the residual. `shouldAskUnlisted` is
+`isSubmissionInFlight`, true for `null` and for queued / building /
+in_review / publishing. A live unlisted round is supposed to be asked again;
+nothing here ages it out. Ancient jobs the notify sweep has already
+auto-abandoned prune on the first answer. Rounds that stay non-terminal —
+quiet `building`, parked `in_review` — keep fanning out from that browser
+until they settle or the spec is cleared. Do not cap the list by age: an
+age cut would hide a live anonymous round the shelf has not listed yet,
+which is the case this list exists for. Measure after deploy. If the
+remaining fan-out is still the day's hottest query, that is a new
+decision, not this one. The derived `listSubmissionsBySlug` fallback
+those polls still take is a separate cache, not this change.
+
 **A gate on the store reaches only what subscribes to it.** The welcome dialog and the
 connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both
 polled at three seconds behind a hidden tab and neither honoured `pollAfterMs` — measured at

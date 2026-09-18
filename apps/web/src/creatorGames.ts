@@ -1,4 +1,5 @@
 import { getSavedSpecs } from './mySpecs.js';
+import { rememberUnlistedOutcome, shouldAskUnlisted } from './unlistedSpecs.js';
 import { getSubmissionStatus, listMySubmissions, type SubmissionState } from './submissionApi.js';
 import type { PixelIconName } from './PixelIcon.js';
 
@@ -40,7 +41,8 @@ export async function loadCreatorGames(locale: string): Promise<CreatorGameItem[
     token: spec.token,
     title: spec.title,
     createdAt: spec.createdAt,
-    status: null,
+    status: spec.lastStatus ?? null,
+    slug: spec.slug,
   }));
 
   let merged = local;
@@ -56,7 +58,7 @@ export async function loadCreatorGames(locale: string): Promise<CreatorGameItem[
         title: existing?.title ?? submission.title,
         createdAt: existing?.createdAt ?? Date.parse(submission.createdAt),
         status: submission.lastKnownStatus,
-        slug: submission.slug ?? undefined,
+        slug: submission.slug ?? existing?.slug,
       });
     }
     merged = [...byToken.values()];
@@ -68,14 +70,17 @@ export async function loadCreatorGames(locale: string): Promise<CreatorGameItem[
   const visible = merged.filter((item) => item.status !== 'abandoned');
 
   const unlisted = visible.filter((item) => !listedByServer.has(item.token));
-  if (unlisted.length === 0) return visible;
+  const toAsk = unlisted.filter((item) => shouldAskUnlisted(item.status));
+  if (toAsk.length === 0) return visible;
 
   const resolved = await Promise.all(
-    unlisted.map(async (item) => {
+    toAsk.map(async (item) => {
       try {
         const status = await getSubmissionStatus(item.token, locale);
+        rememberUnlistedOutcome(item.token, status.status, status.slug);
         return { ...item, status: status.status, slug: status.slug };
-      } catch {
+      } catch (error) {
+        rememberUnlistedOutcome(item.token, null, undefined, (error as { status?: number }).status);
         return item;
       }
     }),
