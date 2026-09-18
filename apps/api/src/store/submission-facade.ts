@@ -98,6 +98,8 @@ export abstract class SubmissionFacade {
       const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
       if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
       await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, job.createdAt, new Date().toISOString());
+      // Access is what reconcile reads; rebuild after it lands.
+      await this.shelfMirror.rebuild(job.ownerUid);
     } catch {
       // Derived state: the backfill repairs it, a throw would not.
     }
@@ -109,6 +111,7 @@ export abstract class SubmissionFacade {
       const job = await this.submissionStore.getSubmission(jobId);
       if (!job?.ownerUid) return;
       await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, job.createdAt, new Date().toISOString());
+      await this.shelfMirror.rebuild(job.ownerUid);
     } catch {
       // A throw here would strand a slug the claim already took.
     }
@@ -216,6 +219,8 @@ export abstract class SubmissionFacade {
       this.dropDerivedAccess(slug);
       await this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
       await this.gameTransferProposalStore.invalidateOpenTransferProposalsForSlug(slug, at);
+      // Reconcile, not ownerUid, is what the shelf serves.
+      await this.refreshShelves(result.senderUid, result.recipientUid);
     }
     return result;
   }
@@ -290,6 +295,9 @@ export abstract class SubmissionFacade {
   ): Promise<EditorInviteAcceptResult> {
     const result = await this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
     this.dropDerivedAccess(slug);
+    if (result && typeof result === 'object') {
+      await this.refreshShelves(result.senderUid, result.recipientUid);
+    }
     return result;
   }
 
@@ -331,12 +339,21 @@ export abstract class SubmissionFacade {
   async removeEditor(slug: string, ownerUid: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
     const result = await this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
     this.dropDerivedAccess(slug);
+    if (result && typeof result === 'object') await this.refreshShelves(result.ownerUid, editorUid);
     return result;
   }
 
   async leaveGame(slug: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
     const result = await this.gameMembershipStore.leaveGame(slug, editorUid, at);
     this.dropDerivedAccess(slug);
+    if (result && typeof result === 'object') await this.refreshShelves(result.ownerUid, editorUid);
     return result;
+  }
+
+  // Ownership changes rebuild every affected shelf.
+  private async refreshShelves(...ownerUids: string[]): Promise<void> {
+    for (const ownerUid of new Set(ownerUids.filter(Boolean))) {
+      await this.shelfMirror.rebuild(ownerUid);
+    }
   }
 }
