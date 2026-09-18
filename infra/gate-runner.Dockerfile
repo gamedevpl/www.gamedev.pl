@@ -53,9 +53,51 @@ RUN chrome_bin="$(command -v chromium || command -v chromium-browser || command 
  && printf '#!/bin/sh\nexec "%s" --no-sandbox "$@"\n' "$chrome_bin" > /usr/local/bin/gate-chrome \
  && chmod +x /usr/local/bin/gate-chrome
 
+# An explicit cache path, not the default under $HOME: Cloud Build sets HOME per step,
+# so a cache baked into /root/.npm would simply not be found at run time.
 ENV GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome \
     CHROME_PATH=/usr/local/bin/gate-chrome \
-    PUPPETEER_SKIP_DOWNLOAD=1
+    PUPPETEER_SKIP_DOWNLOAD=1 \
+    npm_config_cache=/opt/npm-cache
+
+# Warm the npm cache with the harness's dependency set (phase 2).
+#
+# The harness is cloned per run at the version's own engine ref, so its node_modules
+# cannot be baked. Its *packages* can: this fetches them once here and throws the tree
+# away, leaving populated tarballs in the cache. At run time `npm ci` then resolves from
+# disk instead of the network for everything that has not changed since this image was
+# built, and npm verifies each one against the harness lockfile's integrity hashes — so a
+# ref whose dependencies differ silently falls back to fetching the difference. A stale
+# cache is a slower run, never a wrong one.
+#
+# Two deliberate choices, both load-bearing:
+#
+#   --ignore-scripts: the games repo is agent-authored. Fetching its declared third-party
+#   packages is the same set the gate would fetch anyway, but running its install scripts
+#   inside our image build would let candidate-adjacent content execute in the one place
+#   this design treats as trusted. Never remove this flag.
+#
+#   A BuildKit secret, not an ARG or ENV: the token mounts for this layer only and is
+#   never written into the image. The clone (with its `.git`, which holds the tokenised
+#   remote) is removed inside the same RUN, so no layer carries it either.
+#
+# The cache is in the image and nowhere else, on purpose. The obvious alternative — a
+# cache object in the games store bucket — would be writable by the gate service account,
+# whose credentials are reachable from candidate code via the metadata server. That makes
+# a node_modules cache a write-once-execute-everywhere hole: one hostile game poisons
+# every later gate run. See infra/gate-hardening.md (BY-11).
+ARG GAMES_REPO=gamedevpl/www.gamedev.pl-games
+RUN --mount=type=secret,id=games_token \
+    set -eu; \
+    if [ -s /run/secrets/games_token ]; then \
+      token="$(cat /run/secrets/games_token)"; \
+      git clone --depth 1 "https://x-access-token:${token}@github.com/${GAMES_REPO}.git" /tmp/harness-warm; \
+      ( cd /tmp/harness-warm && npm ci --no-audit --no-fund --ignore-scripts ); \
+      rm -rf /tmp/harness-warm; \
+      echo "npm cache warmed from ${GAMES_REPO}"; \
+    else \
+      echo "no games token supplied — npm cache left cold, gate runs fetch as before"; \
+    fi
 
 # The platform the gate runs *from*. Not the harness: that is the games repo at the
 # version's own pinned engine ref, which only the manifest knows, so the runner still

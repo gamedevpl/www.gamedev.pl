@@ -159,6 +159,10 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build the image
+        # No warm-cache secret here on purpose: this job must prove the image builds
+        # without one, which is the shape a fork PR and a token outage both get.
+        env:
+          DOCKER_BUILDKIT: '1'
         run: docker build -f infra/gate-runner.Dockerfile -t gate-runner:ci .
       - name: Check the baked environment
         run: |

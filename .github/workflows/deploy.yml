@@ -110,11 +110,21 @@ jobs:
         # Built from the same commit as the app image and on every deploy, deliberately:
         # the platform is *in* this image, so a stale one would gate candidates against
         # code the site is no longer running.
+        env:
+          # Warms the npm cache with the harness's dependency set. Optional: without it
+          # the image still builds and gate runs fetch those packages as they do today.
+          GAMES_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+          DOCKER_BUILDKIT: '1'
         run: |
           SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
           GATE_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner:${SHORT_SHA}"
           echo "GATE_IMAGE=${GATE_IMAGE}" >> $GITHUB_ENV
-          docker build -f infra/gate-runner.Dockerfile -t "${GATE_IMAGE}" .
+          # --secret, never --build-arg: a build arg lands in the image history.
+          printf '%s' "${GAMES_TOKEN}" > /tmp/games_token
+          docker build -f infra/gate-runner.Dockerfile \
+            --secret id=games_token,src=/tmp/games_token \
+            -t "${GATE_IMAGE}" .
+          rm -f /tmp/games_token
           docker push "${GATE_IMAGE}"
 
       - name: Deploy candidate revision to Cloud Run
