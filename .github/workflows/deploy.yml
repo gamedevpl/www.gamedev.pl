@@ -118,13 +118,46 @@ jobs:
         run: |
           SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
           GATE_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner:${SHORT_SHA}"
-          # --secret, never --build-arg: a build arg lands in the image history.
+          # This step's job is an optimization, not a requirement — the app image already
+          # built and pushed in the step above, and that is what actually needs to reach
+          # production. Defaulting GATE_IMAGE empty here, before anything that can fail,
+          # means any unexpected exit below still leaves the deploy able to proceed on the
+          # from-scratch gate path rather than never reaching "Deploy candidate revision".
+          echo "GATE_IMAGE=" >> $GITHUB_ENV
+
+          # `if CMD; then` is exempt from this shell's errexit, unlike a bare CMD — so a
+          # build or push failure here degrades to the paragraph above instead of failing
+          # the whole job and blocking the app deploy over an optimization that failed.
           printf '%s' "${GAMES_TOKEN}" > /tmp/games_token
-          docker build -f infra/gate-runner.Dockerfile \
+          if docker build -f infra/gate-runner.Dockerfile \
             --secret id=games_token,src=/tmp/games_token \
-            -t "${GATE_IMAGE}" .
-          rm -f /tmp/games_token
-          docker push "${GATE_IMAGE}"
+            --metadata-file /tmp/gate-meta.json \
+            -t "${GATE_IMAGE}" . \
+            && docker push "${GATE_IMAGE}"; then
+            rm -f /tmp/games_token
+          else
+            rm -f /tmp/games_token
+            echo "::warning::gate-runner image build/push failed; continuing without it — the gate builds its own environment per run instead."
+            exit 0
+          fi
+
+          # A tag is mutable: this same commit can be redeployed by hand
+          # (workflow_dispatch), and node:22 / apt packages float, so a second build of
+          # the identical commit is not guaranteed byte-identical to the first. A gate
+          # started later against an older Cloud Run revision would then pull whatever
+          # :SHORT_SHA currently resolves to, not what that revision was built beside —
+          # quietly undermining the reason this image exists (checking a candidate
+          # against the platform actually serving the site). Handed to the gate by digest
+          # instead, which is exactly what was pushed. Falls back to the tag, still
+          # strictly better than the from-scratch path, if the digest cannot be read —
+          # the metadata-file format is BuildKit's, not a registry guarantee.
+          GATE_IMAGE_REF="${GATE_IMAGE}"
+          DIGEST=$(jq -r '."containerimage.digest" // empty' /tmp/gate-meta.json 2>/dev/null || true)
+          if [ -n "${DIGEST}" ]; then
+            GATE_IMAGE_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner@${DIGEST}"
+          else
+            echo "::warning::could not read the pushed image digest from BuildKit's metadata file; GATE_RUNNER_IMAGE will use the mutable :${SHORT_SHA} tag instead."
+          fi
 
           # Naming the image to the service is only safe once gate-runner may PULL it.
           # That grant lives in infra/setup-gcp.sh, which an owner runs by hand — so a
@@ -144,10 +177,9 @@ jobs:
           GATE_SA="gate-runner@${PROJECT_ID}.iam.gserviceaccount.com"
           READY=$(gcloud secrets versions access latest --secret=gate-runner-image-ready --project="${PROJECT_ID}" 2>/dev/null || true)
           if [ "${READY#granted}" != "${READY}" ]; then
-            echo "GATE_IMAGE=${GATE_IMAGE}" >> $GITHUB_ENV
-            echo "gate-runner may pull ${GATE_IMAGE} — gate will use the prebuilt image"
+            echo "GATE_IMAGE=${GATE_IMAGE_REF}" >> $GITHUB_ENV
+            echo "gate-runner may pull ${GATE_IMAGE_REF} — gate will use the prebuilt image"
           else
-            echo "GATE_IMAGE=" >> $GITHUB_ENV
             echo "::warning::gate-runner-image-ready secret is not 'granted'; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh to grant ${GATE_SA} artifactregistry.reader on ${REPO} and record the secret."
           fi
 

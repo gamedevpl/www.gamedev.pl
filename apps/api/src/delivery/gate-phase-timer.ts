@@ -2,7 +2,7 @@
 
 export interface GatePhaseTimer {
   time<T>(name: string, work: () => Promise<T>): Promise<T>;
-  // Phase seconds plus a `check=` remainder.
+  // Phase seconds, plus `rest=` for everything else in runGate.
   summary(totalMs: number): string;
 }
 
@@ -14,8 +14,8 @@ export function createGatePhaseTimer(now: () => number = Date.now): GatePhaseTim
       try {
         return await work();
       } finally {
-        // Accumulated, not overwritten: a phase may run once per harness.
-        phaseMs.set(name, (phaseMs.get(name) ?? 0) + (now() - startedAt));
+        // Accumulated across calls; clamped per phase, not just in the total.
+        phaseMs.set(name, (phaseMs.get(name) ?? 0) + Math.max(0, now() - startedAt));
       }
     },
     summary(totalMs) {
@@ -27,7 +27,7 @@ export function createGatePhaseTimer(now: () => number = Date.now): GatePhaseTim
         parts.push(`${name}=${seconds(ms)}`);
       }
       // Never negative: clock skew must not read as nonsense.
-      parts.push(`check=${seconds(Math.max(0, totalMs - measured))}`);
+      parts.push(`rest=${seconds(Math.max(0, totalMs - measured))}`);
       return parts.join(' ');
     },
   };

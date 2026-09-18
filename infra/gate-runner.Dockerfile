@@ -87,14 +87,20 @@ ENV GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome \
 # a node_modules cache a write-once-execute-everywhere hole: one hostile game poisons
 # every later gate run. See infra/gate-hardening.md (BY-11).
 ARG GAMES_REPO=gamedevpl/www.gamedev.pl-games
+# Best-effort, not `set -e`: a games-repo hiccup (rate limit, a 404 on one dependency)
+# must cost a cold cache, not the whole image. Chromium, ffmpeg and the platform below
+# are the parts this image cannot ship without.
 RUN --mount=type=secret,id=games_token \
-    set -eu; \
+    set -u; \
     if [ -s /run/secrets/games_token ]; then \
       token="$(cat /run/secrets/games_token)"; \
-      git clone --depth 1 "https://x-access-token:${token}@github.com/${GAMES_REPO}.git" /tmp/harness-warm; \
-      ( cd /tmp/harness-warm && npm ci --no-audit --no-fund --ignore-scripts ); \
+      if git clone --depth 1 "https://x-access-token:${token}@github.com/${GAMES_REPO}.git" /tmp/harness-warm \
+        && ( cd /tmp/harness-warm && npm ci --no-audit --no-fund --ignore-scripts ); then \
+        echo "npm cache warmed from ${GAMES_REPO}"; \
+      else \
+        echo "npm cache warm-up failed — cache left cold or partial, gate runs fetch the rest as before"; \
+      fi; \
       rm -rf /tmp/harness-warm; \
-      echo "npm cache warmed from ${GAMES_REPO}"; \
     else \
       echo "no games token supplied — npm cache left cold, gate runs fetch as before"; \
     fi

@@ -30,15 +30,28 @@ is ours; candidate files are **data** materialized into our pinned harness only.
 
 ### Egress the run actually needs
 
-Allow-list target if/when a private worker pool or VPC-SC perimeter is applied:
+Allow-list target if/when a private worker pool or VPC-SC perimeter is applied. Split by
+path, because the two need different destinations — an allow-list built from the
+combined list would permit apt and a platform clone that production never uses.
 
-1. **GitHub** (`github.com`) — shallow clone of the platform repo (public) and the games-repo harness (PAT).
-2. **npm** (`registry.npmjs.org` and the registry’s CDN hosts) — `npm ci` for platform + harness.
-3. **Debian apt** mirrors used by `node:22` — `ffmpeg`, `chromium`, `git`, `ca-certificates`.
-4. **GCS JSON API** (`storage.googleapis.com`) — read candidate sources; write derived artifacts.
-5. **This service** (`CANONICAL_HOST`) — `POST /api/internal/gate-verdict`, where the verdict goes.
-6. **Secret Manager** — fetched by Cloud Build into `secretEnv` before steps (not by game code).
-7. **Container image pulls** — `gcr.io/cloud-builders/git`, `node:22` (Cloud Build infrastructure).
+**Production** (the prebuilt `gate-runner` image, `infra/gate-runner.Dockerfile` — the
+common case once `setup-gcp.sh` has granted the pull below):
+
+1. **GitHub** (`github.com`) — shallow clone of the games-repo harness only; the platform
+   is baked into the image, so this run does not clone it.
+2. **npm** (`registry.npmjs.org` and the registry’s CDN hosts) — `npm ci` for the harness
+   only; the image’s warm cache resolves what it can from disk, the rest still goes out.
+3. **GCS JSON API** (`storage.googleapis.com`) — read candidate sources; write derived artifacts.
+4. **This service** (`CANONICAL_HOST`) — `POST /api/internal/gate-verdict`, where the verdict goes.
+5. **Secret Manager** — fetched by Cloud Build into `secretEnv` before steps (not by game code).
+6. **Artifact Registry** — pulling the `gate-runner` image itself, the one destination the image adds.
+
+**Fallback only** — no image configured, the pull grant above is missing, or a hand
+`gcloud builds submit` against this YAML directly:
+
+7. Items 1–2 above, but for the **platform** too, not just the harness.
+8. **Debian apt** mirrors used by `node:22` — `ffmpeg`, `chromium`, `git`, `ca-certificates`.
+9. **Container image pulls** — `gcr.io/cloud-builders/git`, `node:22` (Cloud Build infrastructure).
 
 No other Google APIs, no Firestore, no Cloud Run admin, no Artifact Registry push, no
 ability to start further builds should be granted to `gate-runner`.

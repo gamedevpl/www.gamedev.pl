@@ -75,10 +75,10 @@ function run(
   command: string,
   args: string[],
   cwd: string,
-  options?: { onChunk?: (text: string) => void },
+  options?: { onChunk?: (text: string) => void; env?: NodeJS.ProcessEnv },
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: process.env });
+    const child = spawn(command, args, { cwd, env: options?.env ?? process.env });
     let output = '';
     const capture = (chunk: Buffer) => {
       const text = chunk.toString();
@@ -177,7 +177,13 @@ async function main(): Promise<void> {
         const scrub = await run('git', ['remote', 'set-url', 'origin', `https://github.com/${repo}.git`], dir);
         if (scrub.code !== 0) throw new Error('could not scrub harness git credentials');
         await writeProgress('installing');
-        const install = await phases.time('harnessInstall', () => run('npm', ['ci', '--no-audit', '--no-fund'], dir));
+        // Scrubbed for this spawn: npm's own install scripts inherit it too (BY-11).
+        const harnessEnv = { ...process.env };
+        delete harnessEnv.GAMES_REPO_TOKEN;
+        delete harnessEnv.GITHUB_TOKEN;
+        const install = await phases.time('harnessInstall', () =>
+          run('npm', ['ci', '--no-audit', '--no-fund'], dir, { env: harnessEnv }),
+        );
         if (install.code !== 0) throw new Error('harness install failed');
         // Same reason for the process env: spawn inherits it, and check:game must not.
         delete process.env.GAMES_REPO_TOKEN;
