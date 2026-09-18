@@ -118,7 +118,9 @@ describe('agent source inheritance across rounds', () => {
       },
     });
     expect(patched.json()).toMatchObject({ accepted: true, baseFrom: 'delivery' });
-    expect(historyReads).toHaveBeenCalledTimes(2);
+    // Sibling history once; shelf skip covers the rest.
+    expect(historyReads).toHaveBeenCalledTimes(1);
+    expect(historyReads).toHaveBeenCalledWith(SLUG);
 
     const submitted = await app.inject({
       method: 'POST',
