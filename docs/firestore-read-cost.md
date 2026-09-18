@@ -298,11 +298,23 @@ The 09-20 checkpoint should read the weekly mismatch count split by verdict, not
 only `version` / `truncated` / `count` / `collapse` mean the document and source actually
 disagreed.
 
-`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
-Firestore intersects the two single-field indexes and no composite index is configured —
-the same trick `listOpenRoundsByOwner` already used. The wide `listSubmissionsByOwner` stays
+`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses used
+to zigzag-merge the two single-field indexes — Query Insights measured
+`listOpenRoundsByOwner` at 8.5 index entries scanned per result. Both queries now have a
+COLLECTION composite in `infra/setup-gcp.sh` (`ownerUid+slug`, `openRound+ownerUid`).
+Re-run that script against the live project; without the composite the query still
+answers, it just keeps paying the merge. The wide `listSubmissionsByOwner` stays
 for the surfaces that genuinely want the whole shelf: the Studio rail, the public creator page,
 account erasure.
+
+**The shelf poll then paid that owner query again, once per game.**
+`reconcileTransferredOwnership` called `listSubmissionsBySlug` for every `gameAccess` row
+the member was on, so a five-game sole owner paid five extra equality queries on every
+`/api/submissions/mine` poll — Query Insights' hottest QUERY. The slug query is required
+after a transfer (the recipient's owner query does not yet contain the sender's rounds) and
+while editors or a revocation epoch mean another uid may have written siblings. A pristine
+sole owner whose owner query already contains the slug skips it. `ownerQueryCoversAccess`
+is that predicate.
 
 Ordering is part of the contract, not an implementation detail. The query returns rounds
 newest first with the job id breaking a tie, which the callers rely on to pick the round an
@@ -343,6 +355,18 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
    nothing. `notify-sweep-routes.ts` now remembers the ids it has seen already present and skips
    them (`alertsSkipped` in the response and the log), and `createNotification` inserts with
    `create()` — the atomic insert — instead of reading inside a transaction to decide.
+
+3. **An empty inbox should not be queried.** `listPendingCreatorMessages` with
+   `deliveredAt IS NULL` was the sweep's per-job tax on motionless rounds: Insights counted
+   thousands of executions, zero documents, and still billed the one-read minimum. Submissions
+   now carry `pendingCreatorMessage`, written `false` at create, `true` atomically with an
+   undelivered append, and `false` once `markCreatorMessagesDelivered` empties the inbox.
+   The sweep skips the query when the flag is `false`. A missing flag (records that predate
+   it) still queries, and `stampEmpty: true` writes `false` only when the inbox is empty and
+   the flag is not already `true` — so a concurrent append that batched `true` with the
+   message is not clobbered. A leftover `true` with an empty inbox still costs one query
+   a run until a mark or a later empty stamp; that is cheaper than missing a waiting
+   message.
 
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.

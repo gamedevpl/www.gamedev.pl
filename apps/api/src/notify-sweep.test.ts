@@ -153,20 +153,49 @@ describe('POST /api/internal/notify-sweep', () => {
     clock = opened + 5 * DAY;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
 
-    // The first derivation records a status, which is itself a move.
+    // New jobs stamp pendingCreatorMessage false and skip the empty query.
+    expect(pending).not.toHaveBeenCalled();
+
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
-    expect(pending).toHaveBeenCalledTimes(2);
+    expect(pending).not.toHaveBeenCalled();
 
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 1 });
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 1 });
-    expect(pending).toHaveBeenCalledTimes(2);
+    expect(pending).not.toHaveBeenCalled();
 
     clock += HOUR_MS;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
-    expect(pending).toHaveBeenCalledTimes(3);
+    expect(pending).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('still queries the inbox when a creator message is waiting', async () => {
+    const opened = Date.now();
+    const store = new InMemoryStore();
+    await store.createSubmission(92, 'g:owner', 'Waiting');
+    await store.setSubmissionSlug(92, 'waiting');
+    await store.recordJobTransition(92, {
+      to: 'building',
+      at: new Date(opened).toISOString(),
+      by: 'agent',
+      reason: 'dispatched',
+    });
+    await store.appendCreatorMessage(92, 'faster please');
+    const app = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    const pending = vi.spyOn(store, 'listPendingCreatorMessages');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pending).toHaveBeenCalled();
     await app.close();
   });
 

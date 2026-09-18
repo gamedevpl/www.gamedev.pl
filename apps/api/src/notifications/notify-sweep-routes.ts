@@ -179,8 +179,11 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             continue;
           }
 
-          // A dispatched request nobody ever collects errors nowhere; ageing makes it visible.
-          const pending = await store.listPendingCreatorMessages(record.jobId);
+          // Uncollected inbox rows age into an operator stall alert.
+          const pending =
+            record.pendingCreatorMessage === false
+              ? []
+              : await store.listPendingCreatorMessages(record.jobId, { stampEmpty: true });
           const oldest = pending[0];
           if (oldest) {
             pendingFeedback.set(record.jobId, oldest.createdAt);

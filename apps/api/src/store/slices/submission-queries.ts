@@ -235,7 +235,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   }
 
   async listSubmissionsByOwnerAndSlug(ownerUid: string, slug: string): Promise<SubmissionRecord[]> {
-    // Two equality clauses, so the two single-field indexes intersect.
+    // COLLECTION composite in setup-gcp.sh; avoids a zigzag merge.
     const snap = await this.db
       .collection('submissions')
       .where('ownerUid', '==', ownerUid)
@@ -247,7 +247,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   }
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
-    // Two equality clauses -- Firestore intersects the two single-field indexes.
+    // COLLECTION composite in setup-gcp.sh; avoids a zigzag merge.
     const snap = await (await this.openRounds()).where('ownerUid', '==', ownerUid).get();
     return snap.docs
       .map((d) => fromStoredSubmission(d.data()))

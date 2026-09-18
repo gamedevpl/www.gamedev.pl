@@ -97,6 +97,8 @@ export interface SubmissionRecord {
   lastStatus?: SubmissionStatus;
   // Denormalized isRoundOpen -- the sweep and badge query this instead of scanning.
   openRound?: boolean;
+  // Denormalized unread inbox; sweep skips the empty query when false.
+  pendingCreatorMessage?: boolean;
   /**
    * The language the creator submitted in. Told to the agent over the build channel
    * so it can write its progress updates in that language directly — which beats

@@ -1,4 +1,5 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { GameAccessRecord } from '../store/records/game-access.js';
 import { resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
 import { canActOnSubmissionOrSlug, isGameMember } from '../platform/game-access-permissions.js';
 
@@ -32,6 +33,21 @@ async function lookupRequested(
   return store.getSubmission(jobId);
 }
 
+// Skip the slug query when the owner list is complete.
+export function ownerQueryCoversAccess(
+  access: GameAccessRecord,
+  ownerUid: string,
+  owned: readonly Pick<SubmissionRecord, 'slug'>[],
+): boolean {
+  return (
+    access.ownerUid === ownerUid &&
+    access.editorUids.length === 0 &&
+    access.capabilitiesRevokedAtRevision === undefined &&
+    access.memberRevocations === undefined &&
+    owned.some((record) => record.slug === access.slug)
+  );
+}
+
 // listSubmissionsByOwner alone drifts after a transfer -- reconcile it.
 export async function reconcileTransferredOwnership(
   store: ShelfStore,
@@ -51,7 +67,13 @@ export async function reconcileTransferredOwnership(
   );
   const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
-  const canonicalJobs = await Promise.all([...canonicalSlugs].map((slug) => store.listSubmissionsBySlug(slug)));
+  const canonicalJobs = await Promise.all(
+    memberAccess.map((access) =>
+      ownerQueryCoversAccess(access, ownerUid, records)
+        ? Promise.resolve(records.filter((record) => record.slug === access.slug))
+        : store.listSubmissionsBySlug(access.slug),
+    ),
+  );
 
   return [...canonicalJobs.flat(), ...kept];
 }
