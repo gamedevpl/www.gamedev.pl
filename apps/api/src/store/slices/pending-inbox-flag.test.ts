@@ -27,6 +27,7 @@ describe('pending inbox flag', () => {
 
   it('stampEmpty writes false only when the inbox is empty', async () => {
     const store = new InMemoryStore();
+    await store.createSubmission(4, 'g:owner', 'Nudge');
     await store.appendCreatorMessage(4, 'nudge');
     await store.listPendingCreatorMessages(4, { stampEmpty: true });
     expect((await store.getSubmission(4))?.pendingCreatorMessage).toBe(true);
