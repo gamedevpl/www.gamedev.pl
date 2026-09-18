@@ -1,3 +1,4 @@
+import type { SubmissionState } from '@gamedevpl/contract';
 import { readStorageJSON, writeStorageJSON } from './core/persistence.js';
 
 export type SavedSpec = {
@@ -10,6 +11,7 @@ export type SavedSpec = {
    * before slugs were assigned up front have none, and those still resolve by token.
    */
   slug?: string;
+  lastStatus?: SubmissionState;
 };
 
 const STORAGE_KEY = 'gamedev_saved_specs';
