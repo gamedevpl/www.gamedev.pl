@@ -4,7 +4,7 @@ import type { BuilderKind } from '../creation/builder.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
 import { runShelfRebuildPass } from '../platform/shelf-rebuild-pass.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
-import { createSweepCadence } from '../platform/sweep-cadence.js';
+import { createSweepCadence, RECHECK_HOURLY_MS } from '../platform/sweep-cadence.js';
 import { isSweepActive } from '../platform/sweep-scope.js';
 import { lastRoundActivityAt, quietRoundDays, shouldAutoAbandonQuietRound } from '../platform/quiet-round.js';
 import { closeJob, type CloseJobDeps } from '../creation/close-job.js';
@@ -70,6 +70,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
   } = deps;
 
   const cadence = createSweepCadence();
+  let skipFalseInboxAt = 0;
   // An alert id is stable, so a remembered hit is final.
   const alertsAlreadyEmitted = new Set<string>();
   const MAX_REMEMBERED_ALERTS = 2_000;
@@ -180,8 +181,9 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           }
 
           // Uncollected inbox rows age into an operator stall alert.
+          if (skipFalseInboxAt === 0) skipFalseInboxAt = now() + RECHECK_HOURLY_MS;
           const pending =
-            record.pendingCreatorMessage === false && cadence.known(record.jobId)
+            record.pendingCreatorMessage === false && cadence.known(record.jobId) && now() >= skipFalseInboxAt
               ? []
               : await store.listPendingCreatorMessages(record.jobId, { stampEmpty: true });
           const oldest = pending[0];

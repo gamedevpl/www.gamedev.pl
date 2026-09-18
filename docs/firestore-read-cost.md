@@ -368,14 +368,16 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
    thousands of executions, zero documents, and still billed the one-read minimum. Submissions
    now carry `pendingCreatorMessage`, written `true` atomically with an
    undelivered append, and `false` once `markCreatorMessagesDelivered` empties the inbox.
-   The sweep skips a repeat query when the flag is `false`, but a process that has
-   never derived the job still probes — same rule as cadence — so a rollback
-   revision that appended without the flag is visible after this revision returns.
-   Create leaves the field unset (legacy records already did); `stampEmpty: true`
-   writes `false` only when the inbox is empty. A leftover `true` with an empty
-   inbox is healed by clearing, then restoring `true` if a concurrent append
-   landed. `writePendingInboxFlag(false)` still refuses to clobber `true`, so a
-   probe that did not go through that heal path cannot hide a waiting message.
+   The sweep skips a repeat query when the flag is `false`, but only after this
+   process has been deriving for an hour (`RECHECK_HOURLY_MS`). A first look
+   always probes, and dues inside that window still probe, because deploy.yml
+   promotes the candidate to 100% while an old revision can still finish a
+   feedback request. Create leaves the field unset (legacy records already did);
+   `stampEmpty: true` writes `false` only when the inbox is empty. A leftover
+   `true` with an empty inbox is healed by clearing, then restoring `true` if a
+   concurrent append landed. `writePendingInboxFlag(false)` still refuses to
+   clobber `true`, so a probe that did not go through that heal path cannot hide
+   a waiting message.
 
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.
