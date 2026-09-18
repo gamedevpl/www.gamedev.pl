@@ -142,3 +142,32 @@ jobs:
       - name: Container logs on failure
         if: failure()
         run: docker logs gamedev-ci || true
+
+  # The gate runner image, built and exercised before merge, for the same reason as the
+  # job above: it is built on master by `deploy.yml`, so without this its first failure
+  # would land after merge — and a gate that cannot start is a queue of candidates nobody
+  # drains, which reads to a creator as "verification hasn't started".
+  #
+  # Three assertions, each standing in for a failure this environment has actually had:
+  # the chrome shim (capture dies on ENOENT, or Chrome refuses to run as root), ffmpeg
+  # (no video, no verdict), and a built workspace package resolving at runtime — the
+  # `build:packages` omission that once took every gate down at module load.
+  gate_image:
+    name: Gate runner image
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build the image
+        run: docker build -f infra/gate-runner.Dockerfile -t gate-runner:ci .
+      - name: Check the baked environment
+        run: |
+          set -euo pipefail
+          docker run --rm gate-runner:ci bash -c '
+            set -euo pipefail
+            test "$GAME_CAPTURE_CHROME" = /usr/local/bin/gate-chrome
+            gate-chrome --version
+            ffmpeg -version > /dev/null
+            cd /opt/platform
+            node -e "import(\"@gamedevpl/contract\").then(() => console.log(\"packages resolve\"))"
+          '

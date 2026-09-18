@@ -529,6 +529,27 @@ else
   echo "    WARN: secret github-token missing — create it before gate runs can clone the harness."
 fi
 
+# The gate runs out of a prebuilt image (infra/gate-runner.Dockerfile) that deploy.yml
+# pushes here from the commit it deploys. A build step cannot pull an image its service
+# account may not read, and that failure mode is a gate that never starts rather than one
+# that fails a candidate — so this grant is load-bearing, not hygiene. Scoped to the one
+# repository, not project-wide reader.
+GATE_IMAGE_REPO="${GATE_IMAGE_REPO:-gamedev}"
+GATE_IMAGE_REGION="${GATE_IMAGE_REGION:-$APP_REGION}"
+if gcloud artifacts repositories describe "$GATE_IMAGE_REPO" \
+  --location="$GATE_IMAGE_REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  grant_gate_with_retry gcloud artifacts repositories add-iam-policy-binding "$GATE_IMAGE_REPO" \
+    --location="$GATE_IMAGE_REGION" \
+    --project="$PROJECT_ID" \
+    --member="serviceAccount:${GATE_SA_EMAIL}" \
+    --role="roles/artifactregistry.reader"
+  echo "    gate-runner may pull the runner image from ${GATE_IMAGE_REGION}/${GATE_IMAGE_REPO}."
+else
+  echo "    WARN: Artifact Registry repo ${GATE_IMAGE_REPO} (${GATE_IMAGE_REGION}) missing — until it"
+  echo "          exists and a deploy has pushed gate-runner, the gate builds its own environment"
+  echo "          per run. That works; it just pays Cloud Build for setup on every candidate."
+fi
+
 # The runtime starts the gate itself when a game is delivered (gate-trigger.ts). Without
 # this a candidate is stored and never verified, so it can never publish and the upload
 # path ends in a queue nobody drains.

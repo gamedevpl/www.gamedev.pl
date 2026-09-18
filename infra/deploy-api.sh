@@ -315,6 +315,13 @@ if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   # Engine did, and an unset project means the gate silently never starts — deliveries
   # would pile up stored and unverified with nothing in the logs saying why.
   ENV_VARS="${ENV_VARS}|GATE_BUILD_PROJECT=${PROJECT_ID}"
+  # The prebuilt gate runner image (infra/gate-runner.Dockerfile). Threaded here too
+  # because --set-env-vars replaces the whole map, so a hand deploy that omitted it would
+  # silently drop the one the Actions deploy set. Unset is a supported value, not a
+  # breakage: the gate then builds its environment per run, which is what it did before
+  # the image existed — slower, and correct. Pass the tag deploy.yml pushed to keep the
+  # fast path: GATE_RUNNER_IMAGE=europe-west1-docker.pkg.dev/<project>/gamedev/gate-runner:<sha>
+  ENV_VARS="${ENV_VARS}|GATE_RUNNER_IMAGE=${GATE_RUNNER_IMAGE:-}"
 fi
 # The remix code-lane trace. Threaded here as well as in the Actions workflow,
 # because --set-env-vars replaces the whole map: a deploy from this script would
