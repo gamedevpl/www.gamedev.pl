@@ -226,11 +226,12 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     if ((await this.limits())?.dreamsPaused === true) return { posted: null, refusedBy: 'paused' };
     if (opts.blocked(record!)) return { posted: null, refusedBy: 'blocked' };
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
-    // Stamped with the card; the list outlives the claim it stamps.
-    const attempts = [...new Set([...(record!.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
+    // Re-read; a concurrent inbox stamp must survive.
+    const current = this.submissions.get(jobId) ?? record!;
+    const attempts = [...new Set([...(current.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
     this.submissions.set(jobId, {
-      ...record!,
-      dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt },
+      ...current,
+      dreamRun: { ...current.dreamRun!, postedAt: posted.createdAt },
       proposalPostedAttempts: attempts,
     });
     return { posted };

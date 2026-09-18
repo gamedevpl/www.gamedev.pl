@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FirestoreStore, InMemoryStore } from '../../platform/store.js';
+import { FirestoreStore, InMemoryStore, type Store } from '../../platform/store.js';
 import { fakeFirestore } from '../fake-firestore.js';
 import {
   hasPendingInbox,
@@ -7,6 +7,11 @@ import {
   writePendingInboxFlag,
   clearPendingInboxFlag,
 } from './pending-inbox-flag.js';
+
+const STORES: Array<[string, () => Store]> = [
+  ['InMemoryStore', () => new InMemoryStore()],
+  ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
+];
 
 describe('pending inbox flag', () => {
   it('queues only undelivered non-studio rows', () => {
@@ -97,5 +102,30 @@ describe('pending inbox flag', () => {
 
     await store.markCreatorMessagesDelivered(3, ['ghost']);
     expect((await db.collection('submissions').doc('3').get()).exists).toBe(false);
+  });
+
+  // blocked() runs after the snapshot and before the proposal write.
+  it.each(STORES)('%s keeps a concurrent inbox stamp across a proposal post', async (_name, makeStore) => {
+    const store = makeStore();
+    const proposal = { sourceRef: 'shot-a', version: 'v1', options: [] };
+    const claim = { version: 'v1', claimedAt: '2026-09-18T12:00:00.000Z' };
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(11, 'v1');
+    await store.claimDreamRun(11, claim.version, claim.claimedAt, 1);
+    let inbox: Promise<unknown> | undefined;
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', {
+        proposal,
+        ownerUid: 'g:owner',
+        roundGeneration: 1,
+        blocked: () => {
+          inbox = store.appendCreatorMessage(11, 'please jump');
+          return false;
+        },
+      }),
+    ).toEqual({ posted: expect.objectContaining({ proposal }) });
+    await inbox;
+    expect((await store.getSubmission(11))?.pendingCreatorMessage).toBe(true);
+    expect((await store.listPendingCreatorMessages(11)).map((message) => message.text)).toEqual(['please jump']);
   });
 });

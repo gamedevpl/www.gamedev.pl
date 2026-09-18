@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InMemoryStore } from '../platform/store.js';
+import { FirestoreStore, InMemoryStore } from '../platform/store.js';
+import { fakeFirestore } from '../store/fake-firestore.js';
 import { mintToken } from '../platform/submission-token.js';
 import { loadShelfRecords, ownerQueryCoversAccess, reconcileTransferredOwnership } from './studio-shelf-records.js';
 import type { GameAccessRecord } from '../store/records/game-access.js';
@@ -251,6 +252,38 @@ describe('reconcileTransferredOwnership', () => {
     const records = await reconcileTransferredOwnership(store, 'g:one', owned);
 
     expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11]);
+  });
+
+  it('counts every round on FirestoreStore(fake) and lists when the owner query is short', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new FirestoreStore(fakeFirestore().db);
+    await store.upsertUser({ uid: 'g:one' });
+    await store.upsertUser({ uid: 'g:two' });
+    await store.createSubmission(10, 'g:one', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.createSubmission(11, 'g:two', 'Sky Dodge again');
+    await store.setSubmissionSlug(11, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:one', at, at);
+    expect(await store.countSubmissionsBySlug('sky-dodge')).toBe(2);
+
+    const listSpy = vi.spyOn(store, 'listSubmissionsBySlug');
+    const owned = await store.listSubmissionsByOwner('g:one');
+    const records = await reconcileTransferredOwnership(store, 'g:one', owned);
+    expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11]);
+    expect(listSpy).toHaveBeenCalledWith('sky-dodge');
+  });
+
+  it('skips the slug list on FirestoreStore(fake) when the count matches', async () => {
+    const store = new FirestoreStore(fakeFirestore().db);
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    const listSpy = vi.spyOn(store, 'listSubmissionsBySlug');
+    const countSpy = vi.spyOn(store, 'countSubmissionsBySlug');
+    const owned = await store.listSubmissionsByOwner('g:creator');
+    const records = await reconcileTransferredOwnership(store, 'g:creator', owned);
+    expect(records.map((row) => row.jobId)).toEqual([10]);
+    expect(countSpy).toHaveBeenCalledWith('sky-dodge');
+    expect(listSpy).not.toHaveBeenCalled();
   });
 });
 
