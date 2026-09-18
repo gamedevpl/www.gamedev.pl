@@ -135,6 +135,8 @@ const FILE_BUCKET = {
   'slug-ownership': 'platform',
   'game-access-resolve': 'platform',
   'game-access-permissions': 'platform',
+  'derived-access-cache': 'platform',
+  'game-access-resolve-cache': 'platform',
   'game-quota': 'platform',
   'game-access-backfill': 'platform',
   'game-access-cutover': 'platform',
