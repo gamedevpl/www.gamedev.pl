@@ -23,16 +23,17 @@ Two corollaries, both of which have been got wrong here:
 
 ## Where the windows are
 
-| Surface                     | Poll  | Window                   | Dropped by                                                                                  |
-| --------------------------- | ----- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| `/api/catalog` enrichment   | —     | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                               |
-| store catalog + media       | —     | 10 min                   | publishing a game (`catalog-routes.ts`)                                                     |
-| notify sweep health scan    | 2 min | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                              |
-| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                          |
-| `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
-| `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
-| Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
-| Studio health scan          | mount | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)   |
+| Surface                     | Poll                        | Window                   | Dropped by                                                                                                         |
+| --------------------------- | --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `/api/catalog` enrichment   | —                           | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                                                      |
+| store catalog + media       | —                           | 10 min                   | publishing a game (`catalog-routes.ts`)                                                                            |
+| notify sweep health scan    | 2 min                       | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                                                     |
+| notify sweep per-job derive | 2 min                       | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                                                 |
+| `/api/review/status` badge  | 2 min                       | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`)                        |
+| `/api/notifications` bell   | 1 min                       | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                                             |
+| Studio connect guide        | 10 s                        | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                                       |
+| Studio health scan          | mount                       | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)                          |
+| Derived GameAccess fallback | Studio status & slug routes | 30 s                     | ensureGameAccess, recordSettledOwner, transfer, editor add/remove, slug claim, erasure (`derived-access-cache.ts`) |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -47,6 +48,48 @@ served the write, an own action is reflected immediately — but do not design a
 that needs that, and do not write it down as a guarantee. Making own-write freshness true
 across instances needs shared invalidation (a durable version key both instances read),
 which is not what a badge is worth.
+
+### Derived GameAccess, 30 seconds
+
+Query Insights for 17–18 September put `COLLECTION /submissions WHERE slug = ?` at the
+top of the day: **41,288 executions, 96,482 reads**, 2.337 documents scanned on
+average. Cheap per call, enormous in volume — the signature of an uncached lookup on
+a path the Studio status poll (and slug routes, transfers, editor invites, moderation)
+hits through `canActOnSlug`.
+
+`resolveGameAccess` already does the cheap thing first: a `gameAccess/{slug}` document
+get. The collection query is only the fallback for games with **no canonical record**.
+That set is not shrinking on its own. The GameAccess backfill left 193 slugs out
+because several uids hold rounds on them, and anything that predates the model still
+has no row. Promoting a quarantined slug would silently pick a winner; the fallback
+stays.
+
+The window covers **only that derived branch**. Caching the canonical get in the same
+change would put every permission check in the product behind a 30-second answer, and
+that is a different decision. A second resolve inside the window does not call
+`listSubmissionsBySlug`; a miss, an expiry, or an invalidating write does.
+
+The live `getGameAccess` still runs on every resolve, including the 193 quarantined
+slugs this cache exists for. A miss is billed: Firestore charges a read for a get on
+a missing document, and it shows up as `NOT_FOUND` in `document/read_count` — about
+10k in a three-day sample. Caching the absence would remove it, and every path that
+creates a canonical record already drops this window. It is left live on purpose: a
+canonical record written on another instance takes effect immediately, which is the
+whole point of that record. The collection scan is gone; one billed miss per call
+remains.
+
+This is an authorization answer, not a display value. `canActOnSlug` gates private
+prior-round chat, so the window is **30 seconds** — the same bound as the session-user
+cache — sized against a former owner reading for the length of it, not against the
+saving. Writes that change authority drop the slug on the instance that served them:
+`ensureGameAccess`, `recordSettledOwner`, `backfillGameAccess`, transfer accept
+(`transferredAccess`), editor accept (`withEditorAdded`), editor remove / leave
+(`withEditorRemoved`), membership erasure (`withMemberErased`), slug claim, and
+account erasure. The residual that remains is the documented bound: **one window for
+any action, including your own**, because `--max-instances 4` means invalidation on
+one instance does not reach the others. On the instance that served the write, the
+next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
+row) is not hooked and can sit until the window ends, on every instance.
 
 ## The floor underneath the windows
 
@@ -131,6 +174,48 @@ widening therefore stops at **10s**, and `dispatched` keeps 2s to match its own 
 None of the three delays the creator: their own actions invalidate the cache and call
 `pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
 never the first read — a mount still answers the page once.
+
+**A forgotten localStorage list is occupancy with a longer memory.** The status
+poll's cost was supposed to be one token per open Studio tab. On 2026-09-18 a
+single Chrome session issued 1,102 of 1,120 status polls in forty minutes,
+spread across **32 job tokens**, in lockstep — 29 different tokens inside the
+same one-second bucket, again a minute later — until the browser closed at
+17:25Z. `/submissions` was 221,334 of that day's ~280k reads. The top three
+Insights rows were the same session: `WHERE slug = ?` (permission checks on
+old games with no `GameAccess` record), `WHERE ownerUid = ?` (`/api/submissions/mine`
+returning a 123-round shelf), `WHERE openRound = ?` (the header badge).
+
+`loadCreatorGames` is the fan-out. It takes every token this browser ever saved
+(`getSavedSpecs()`, anonymous-era localStorage), subtracts what `/mine`
+returned, and `Promise.all`s `getSubmissionStatus` for the rest. Nothing wrote
+the answer back: `removeSpec` had no callers, so the list only grew, and jobs
+19 / 22 / 24 / 29 / 32 / 35 / 37 / 92 / 130 were asked about forever, once a
+minute, from one forgotten home tab. That is the same lesson as a forgotten
+Studio tab, with a different shape: **it scales with how long a browser has
+been used**, not with how many creators are watching something now.
+
+The client half stops asking. An unlisted token whose status is terminal or
+missing — `abandoned`, HTTP 404, or a token the API rejects (400) — is pruned
+via `removeSpec`. A settled status that is not in-flight (`published`,
+`needs_changes`) is stored as `lastStatus` on the spec so the next load still
+renders it and does not re-ask. **In-flight is the only remaining re-ask:** a
+live round the server's shelf has not listed yet (anonymous-era, signed-out,
+or a round `/mine` has not collapsed) can still move, and the Studio chip
+should see that. Lengthening the 30s home poll would not have helped; the
+cost is the size of the fan-out.
+
+That remaining re-ask is also the residual. `shouldAskUnlisted` is
+`isSubmissionInFlight`, true for `null` and for queued / building /
+in_review / publishing. A live unlisted round is supposed to be asked again;
+nothing here ages it out. Ancient jobs the notify sweep has already
+auto-abandoned prune on the first answer. Rounds that stay non-terminal —
+quiet `building`, parked `in_review` — keep fanning out from that browser
+until they settle or the spec is cleared. Do not cap the list by age: an
+age cut would hide a live anonymous round the shelf has not listed yet,
+which is the case this list exists for. Measure after deploy. If the
+remaining fan-out is still the day's hottest query, that is a new
+decision, not this one. The derived `listSubmissionsBySlug` fallback
+those polls still take is a separate cache, not this change.
 
 **A gate on the store reaches only what subscribes to it.** The welcome dialog and the
 connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both
