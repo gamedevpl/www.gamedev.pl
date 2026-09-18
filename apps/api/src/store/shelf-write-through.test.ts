@@ -47,6 +47,20 @@ async function acceptEditor(store: Store, slug: string, ownerUid: string, editor
   await store.acceptEditorInvitation(slug, editorUid, at, invite.inviteId);
 }
 
+// The 193 derived-only games: a slug with no gameAccess row.
+async function dropAccess(store: Store, slug: string): Promise<void> {
+  const memory = store as unknown as { gameAccessStore?: { access?: Map<string, unknown> } };
+  if (memory.gameAccessStore?.access instanceof Map) {
+    memory.gameAccessStore.access.delete(slug);
+    return;
+  }
+  const firestore = store as unknown as {
+    db?: { collection: (name: string) => { doc: (id: string) => { delete: () => Promise<unknown> } } };
+  };
+  if (!firestore.db) throw new Error(`no gameAccess store for ${slug}`);
+  await firestore.db.collection('gameAccess').doc(slug).delete();
+}
+
 for (const [implName, makeStore] of IMPLEMENTATIONS) {
   describe(`shelf write-through: ${implName}`, () => {
     it('has a shelf that agrees the moment the first round is created', async () => {
@@ -213,6 +227,27 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await agrees(store, 'g:grace')).toBe('match');
       // No remaining access: count must still match the document.
       expect(await agrees(store, 'g:ada')).toBe('match');
+    });
+
+    it('agrees for an owner whose slugs never kept a gameAccess row', async () => {
+      const store = makeStore();
+      const stamp = freezeClock();
+      await store.createSubmission(1, 'g:owner', 'One');
+      await store.setSubmissionSlug(1, 'one');
+      stamp(1);
+      await store.createSubmission(2, 'g:owner', 'Two');
+      await store.setSubmissionSlug(2, 'two');
+      stamp(2);
+      await store.createSubmission(3, 'g:owner', 'Three');
+      await store.setSubmissionSlug(3, 'three');
+
+      await dropAccess(store, 'one');
+      await dropAccess(store, 'two');
+      await dropAccess(store, 'three');
+      expect(await store.listGameAccessByMember('g:owner')).toEqual([]);
+
+      await store.rebuildShelf('g:owner');
+      expect(await agrees(store, 'g:owner')).toBe('match');
     });
 
     it('refreshes the tip when an editor leave cancels the newer round', async () => {
