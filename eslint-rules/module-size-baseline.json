@@ -25,7 +25,7 @@
     "apps/api/src/account-deletion-infra.test.ts": 41,
     "apps/api/src/agent-build-media.test.ts": 609,
     "apps/api/src/agent-build-reads.test.ts": 640,
-    "apps/api/src/agent-channel-inheritance.test.ts": 138,
+    "apps/api/src/agent-channel-inheritance.test.ts": 140,
     "apps/api/src/agent-surface/agent-backend-env.test.ts": 417,
     "apps/api/src/agent-surface/agent-backend-env.ts": 382,
     "apps/api/src/agent-surface/agent-backend.ts": 122,
