@@ -803,7 +803,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 
-  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listPendingCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; stampEmpty?: boolean },
+  ): Promise<CreatorMessage[]> {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 
@@ -859,6 +862,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listSubmissionsBySlug(slug);
+  }
+
+  async countSubmissionsBySlug(slug: string): Promise<number> {
+    return this.submissionQueryStore.countSubmissionsBySlug(slug);
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {

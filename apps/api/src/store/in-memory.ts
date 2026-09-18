@@ -634,6 +634,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.submissionQueryStore.listSubmissionsBySlug(slug);
   }
 
+  async countSubmissionsBySlug(slug: string): Promise<number> {
+    return this.submissionQueryStore.countSubmissionsBySlug(slug);
+  }
+
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
     return this.submissionQueryStore.getPublishedSubmissionBySlug(slug);
   }
@@ -787,7 +791,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 
-  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listPendingCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; stampEmpty?: boolean },
+  ): Promise<CreatorMessage[]> {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 

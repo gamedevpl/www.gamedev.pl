@@ -230,6 +230,43 @@ for ENTRY in $CG_COMPOSITE_INDEXES; do
   fi
 done
 
+# Two equality filters on a collection zigzag-merge single-field indexes unless a
+# COLLECTION composite exists. Insights flagged listOpenRoundsByOwner at 8.5 index
+# entries per result; listSubmissionsByOwnerAndSlug is the same shape.
+# group:field:ORDER+field:ORDER
+COLLECTION_COMPOSITE_INDEXES="submissions:openRound:ASCENDING+ownerUid:ASCENDING submissions:ownerUid:ASCENDING+slug:ASCENDING"
+for ENTRY in $COLLECTION_COMPOSITE_INDEXES; do
+  CG_GROUP="${ENTRY%%:*}"
+  CG_SPEC="${ENTRY#*:}"
+  INDEXES_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/${CG_GROUP}/indexes"
+  FIELDS_JSON="["
+  FIRST_FIELD=1
+  IFS='+' read -r -a CG_FIELD_ENTRIES <<< "$CG_SPEC"
+  for FIELD_ENTRY in "${CG_FIELD_ENTRIES[@]}"; do
+    CG_FIELD="${FIELD_ENTRY%%:*}"
+    CG_ORDER="${FIELD_ENTRY#*:}"
+    if [ "$FIRST_FIELD" -eq 0 ]; then
+      FIELDS_JSON="${FIELDS_JSON},"
+    fi
+    FIRST_FIELD=0
+    FIELDS_JSON="${FIELDS_JSON}{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"${CG_ORDER}\"}"
+  done
+  FIELDS_JSON="${FIELDS_JSON}]"
+  HTTP_CODE="$(curl -s -o /tmp/collection-composite-index.json -w '%{http_code}' -X POST "$INDEXES_URL" \
+    -H "Authorization: Bearer ${FIELD_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"queryScope\":\"COLLECTION\",\"fields\":${FIELDS_JSON}}")"
+  if [ "$HTTP_CODE" = "409" ] || grep -q 'ALREADY_EXISTS' /tmp/collection-composite-index.json 2>/dev/null; then
+    echo "    ${CG_GROUP} COLLECTION composite ${CG_SPEC}: already present."
+  elif [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo "    ${CG_GROUP} COLLECTION composite ${CG_SPEC}: creating (builds asynchronously)."
+  else
+    echo "    ERROR: ${CG_GROUP} COLLECTION composite ${CG_SPEC} failed HTTP ${HTTP_CODE}" >&2
+    cat /tmp/collection-composite-index.json >&2 || true
+    exit 1
+  fi
+done
+
 # Pre-assembled published games (apps/api/src/game-snapshot.ts). The bucket sits in
 # the Cloud Run region, not the Firestore one: it is read on the play path, and a
 # cross-region read would put the latency back that baking was meant to remove.

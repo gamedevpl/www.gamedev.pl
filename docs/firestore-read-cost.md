@@ -298,11 +298,30 @@ The 09-20 checkpoint should read the weekly mismatch count split by verdict, not
 only `version` / `truncated` / `count` / `collapse` mean the document and source actually
 disagreed.
 
-`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
-Firestore intersects the two single-field indexes and no composite index is configured —
-the same trick `listOpenRoundsByOwner` already used. The wide `listSubmissionsByOwner` stays
+`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses used
+to zigzag-merge the two single-field indexes — Query Insights measured
+`listOpenRoundsByOwner` at 8.5 index entries scanned per result. Both queries now have a
+COLLECTION composite in `infra/setup-gcp.sh` (`ownerUid+slug`, `openRound+ownerUid`).
+Re-run that script against the live project; without the composite the query still
+answers, it just keeps paying the merge. The wide `listSubmissionsByOwner` stays
 for the surfaces that genuinely want the whole shelf: the Studio rail, the public creator page,
 account erasure.
+
+**The shelf poll then paid that owner query again, once per game.**
+`reconcileTransferredOwnership` called `listSubmissionsBySlug` for every `gameAccess` row
+the member was on, so a five-game sole owner paid five extra equality queries on every
+`/api/submissions/mine` poll — Query Insights' hottest QUERY. The slug query is required
+after a transfer (the recipient's owner query does not yet contain the sender's rounds) and
+while editors, a revocation epoch, or a settlement that changed owner (accessRevision > 1)
+mean another uid may have written siblings.
+
+Those conditions are necessary but not sufficient: a legacy multi-uid slug is pristine at
+revision 1 with no editors and no revocations, and nothing on the record says a second uid
+wrote rounds on it. So `ownerQueryCoversAccess` is only a cheap pre-filter, and
+`countSubmissionsBySlug` is the proof — a `count()` is charged one read per 1000 index
+entries rather than one per round, so the sole-owner poll still stops paying per round, and
+a count that disagrees with the owner rows falls back to the full list. Absence of proof
+means query: a predicate that guessed wrong here drops a game's own history off its shelf.
 
 Ordering is part of the contract, not an implementation detail. The query returns rounds
 newest first with the job id breaking a tie, which the callers rely on to pick the round an
@@ -343,6 +362,22 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
    nothing. `notify-sweep-routes.ts` now remembers the ids it has seen already present and skips
    them (`alertsSkipped` in the response and the log), and `createNotification` inserts with
    `create()` — the atomic insert — instead of reading inside a transaction to decide.
+
+3. **An empty inbox should not be queried.** `listPendingCreatorMessages` with
+   `deliveredAt IS NULL` was the sweep's per-job tax on motionless rounds: Insights counted
+   thousands of executions, zero documents, and still billed the one-read minimum. Submissions
+   now carry `pendingCreatorMessage`, written `true` atomically with an
+   undelivered append, and `false` once `markCreatorMessagesDelivered` empties the inbox.
+   The sweep skips a repeat query when the flag is `false`, but only after this
+   process has been deriving for an hour (`RECHECK_HOURLY_MS`). A first look
+   always probes, and dues inside that window still probe, because deploy.yml
+   promotes the candidate to 100% while an old revision can still finish a
+   feedback request. Create leaves the field unset (legacy records already did);
+   `stampEmpty: true` writes `false` only when the inbox is empty. A leftover
+   `true` with an empty inbox is healed by clearing, then restoring `true` if a
+   concurrent append landed. `writePendingInboxFlag(false)` still refuses to
+   clobber `true`, so a probe that did not go through that heal path cannot hide
+   a waiting message.
 
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.

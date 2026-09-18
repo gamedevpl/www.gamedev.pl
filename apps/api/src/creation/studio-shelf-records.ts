@@ -1,8 +1,12 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { GameAccessRecord } from '../store/records/game-access.js';
 import { resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
 import { canActOnSubmissionOrSlug, isGameMember } from '../platform/game-access-permissions.js';
 
-export type ShelfStore = Pick<Store, 'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission'> &
+export type ShelfStore = Pick<
+  Store,
+  'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission' | 'countSubmissionsBySlug'
+> &
   GameAccessResolveStore &
   Pick<Store, 'listGameAccessByMember'>;
 
@@ -32,6 +36,36 @@ async function lookupRequested(
   return store.getSubmission(jobId);
 }
 
+// Cheap pre-filter; another uid may hold rounds this owner cannot see.
+export function ownerQueryCoversAccess(
+  access: GameAccessRecord,
+  ownerUid: string,
+  owned: readonly Pick<SubmissionRecord, 'slug'>[],
+): boolean {
+  return (
+    access.ownerUid === ownerUid &&
+    access.accessRevision === 1 &&
+    access.editorUids.length === 0 &&
+    access.capabilitiesRevokedAtRevision === undefined &&
+    access.memberRevocations === undefined &&
+    owned.some((record) => record.slug === access.slug)
+  );
+}
+
+// The predicate guesses; a count proves it, for one read.
+async function slugRounds(
+  store: ShelfStore,
+  access: GameAccessRecord,
+  ownerUid: string,
+  records: SubmissionRecord[],
+): Promise<SubmissionRecord[]> {
+  if (!ownerQueryCoversAccess(access, ownerUid, records)) return store.listSubmissionsBySlug(access.slug);
+  const mine = records.filter((record) => record.slug === access.slug);
+  const total = await store.countSubmissionsBySlug(access.slug);
+  if (total === mine.length) return mine;
+  return store.listSubmissionsBySlug(access.slug);
+}
+
 // listSubmissionsByOwner alone drifts after a transfer -- reconcile it.
 export async function reconcileTransferredOwnership(
   store: ShelfStore,
@@ -51,7 +85,7 @@ export async function reconcileTransferredOwnership(
   );
   const kept = nonCanonical.filter((_, i) => stillOwned[i]);
 
-  const canonicalJobs = await Promise.all([...canonicalSlugs].map((slug) => store.listSubmissionsBySlug(slug)));
+  const canonicalJobs = await Promise.all(memberAccess.map((access) => slugRounds(store, access, ownerUid, records)));
 
   return [...canonicalJobs.flat(), ...kept];
 }

@@ -20,6 +20,7 @@ export interface SweepCadence {
   isDue(input: { jobId: number; now: number; lastActivityAt: number }): boolean;
   reschedule(input: { jobId: number; now: number; lastActivityAt: number; hot?: boolean }): void;
   forget(jobId: number): void;
+  known(jobId: number): boolean;
   tracked(): number;
 }
 
@@ -47,6 +48,9 @@ export function createSweepCadence(): SweepCadence {
     },
     forget(jobId) {
       schedule.delete(jobId);
+    },
+    known(jobId) {
+      return schedule.has(jobId);
     },
     tracked() {
       return schedule.size;

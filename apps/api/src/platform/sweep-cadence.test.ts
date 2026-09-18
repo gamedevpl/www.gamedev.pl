@@ -34,9 +34,13 @@ describe('sweepRecheckDelayMs', () => {
 describe('createSweepCadence', () => {
   const now = 1_800_000_000_000;
 
-  it('is due for a job it has never seen', () => {
+  it('is unknown until reschedule and known after', () => {
     const cadence = createSweepCadence();
-    expect(cadence.isDue({ jobId: 1000012, now, lastActivityAt: now })).toBe(true);
+    expect(cadence.known(1000012)).toBe(false);
+    cadence.reschedule({ jobId: 1000012, now, lastActivityAt: now });
+    expect(cadence.known(1000012)).toBe(true);
+    cadence.forget(1000012);
+    expect(cadence.known(1000012)).toBe(false);
   });
 
   it('keeps a moving job due on every run', () => {
@@ -57,7 +61,9 @@ describe('createSweepCadence', () => {
     const cadence = createSweepCadence();
     cadence.reschedule({ jobId: 1000012, now, lastActivityAt: now - 2 * HOUR });
     expect(cadence.isDue({ jobId: 1000012, now: now + 8 * 60_000, lastActivityAt: now - 2 * HOUR })).toBe(false);
-    expect(cadence.isDue({ jobId: 1000012, now: now + RECHECK_TEN_MINUTES_MS, lastActivityAt: now - 2 * HOUR })).toBe(true);
+    expect(cadence.isDue({ jobId: 1000012, now: now + RECHECK_TEN_MINUTES_MS, lastActivityAt: now - 2 * HOUR })).toBe(
+      true,
+    );
   });
 
   it('keeps a job with uncollected feedback due however still it looks', () => {

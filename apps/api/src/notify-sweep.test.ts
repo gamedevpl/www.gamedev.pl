@@ -3,7 +3,8 @@ import { buildApp } from './platform/app.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { InternalAuthVerifier } from './platform/internal-auth.js';
-import { InMemoryStore } from './platform/store.js';
+import { FirestoreStore, InMemoryStore } from './platform/store.js';
+import { fakeFirestore } from './store/fake-firestore.js';
 
 const secret = 'submission-secret';
 const acceptAll: InternalAuthVerifier = { verify: async () => true };
@@ -153,20 +154,134 @@ describe('POST /api/internal/notify-sweep', () => {
     clock = opened + 5 * DAY;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
 
-    // The first derivation records a status, which is itself a move.
+    // First look probes; dues inside the deploy window still probe.
+    expect(pending).toHaveBeenCalledTimes(1);
+    pending.mockClear();
+
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
-    expect(pending).toHaveBeenCalledTimes(2);
+    expect(pending).toHaveBeenCalledTimes(1);
+    pending.mockClear();
 
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 1 });
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 1 });
-    expect(pending).toHaveBeenCalledTimes(2);
+    expect(pending).not.toHaveBeenCalled();
 
     clock += HOUR_MS;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
-    expect(pending).toHaveBeenCalledTimes(3);
+    expect(pending).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('probes a false inbox flag on the first look after restart', async () => {
+    const opened = Date.now();
+    const store = new InMemoryStore();
+    await store.createSubmission(94, 'g:owner', 'Restart');
+    await store.setSubmissionSlug(94, 'restart');
+    await store.recordJobTransition(94, {
+      to: 'building',
+      at: new Date(opened).toISOString(),
+      by: 'agent',
+      reason: 'dispatched',
+    });
+    await store.listPendingCreatorMessages(94, { stampEmpty: true });
+    expect((await store.getSubmission(94))?.pendingCreatorMessage).toBe(false);
+    const first = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    await first.close();
+    const pending = vi.spyOn(store, 'listPendingCreatorMessages');
+    const app = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pending).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('probes a false flag during the deploy window so a legacy append is visible', async () => {
+    const opened = Date.now();
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await store.createSubmission(95, 'g:owner', 'Overlap');
+    await store.setSubmissionSlug(95, 'overlap');
+    await store.recordJobTransition(95, {
+      to: 'building',
+      at: new Date(opened).toISOString(),
+      by: 'agent',
+      reason: 'dispatched',
+    });
+    await store.listPendingCreatorMessages(95, { stampEmpty: true });
+    expect((await store.getSubmission(95))?.pendingCreatorMessage).toBe(false);
+    const app = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/internal/notify-sweep',
+          headers: { authorization: 'Bearer scheduler-token' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    await db
+      .collection('submissions')
+      .doc('95')
+      .collection('messages')
+      .doc('m1')
+      .set({
+        id: 'm1',
+        text: 'from old revision',
+        createdAt: new Date(opened).toISOString(),
+        deliveredAt: null,
+      });
+    const pending = vi.spyOn(store, 'listPendingCreatorMessages');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pending).toHaveBeenCalled();
+    expect((await store.getSubmission(95))?.pendingCreatorMessage).toBe(true);
+    await app.close();
+  });
+
+  it('still queries the inbox when a creator message is waiting', async () => {
+    const opened = Date.now();
+    const store = new InMemoryStore();
+    await store.createSubmission(92, 'g:owner', 'Waiting');
+    await store.setSubmissionSlug(92, 'waiting');
+    await store.recordJobTransition(92, {
+      to: 'building',
+      at: new Date(opened).toISOString(),
+      by: 'agent',
+      reason: 'dispatched',
+    });
+    await store.appendCreatorMessage(92, 'faster please');
+    const app = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    const pending = vi.spyOn(store, 'listPendingCreatorMessages');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pending).toHaveBeenCalled();
     await app.close();
   });
 
