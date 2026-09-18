@@ -54,7 +54,14 @@ export function parseLanes(raw: unknown): PauseableLane[] {
 
 // `reason` says why nothing paused; the log answers instead of asking.
 export type BrakeSkipReason =
-  'no_incident' | 'closed' | 'no_lanes_label' | 'unrecognised_lanes' | 'budget_under_threshold' | 'already_handled';
+  | 'no_incident'
+  | 'closed'
+  | 'no_lanes_label'
+  | 'unrecognised_lanes'
+  | 'budget_under_threshold'
+  // A named budget whose forecast is over but whose spend is not: warned, never paused.
+  | 'forecast_only'
+  | 'already_handled';
 
 export interface BrakeNotification {
   lanes: PauseableLane[];
@@ -84,22 +91,33 @@ export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
   const ratio = (key: string) => (typeof budget[key] === 'number' ? (budget[key] as number) : 0);
   const spent = ratio('alertThresholdExceeded');
   const forecast = ratio('forecastThresholdExceeded');
-  const over = Math.max(spent, forecast) >= 1;
   const rawLanes = /\blanes=([A-Za-z_,]+)/.exec(policyName)?.[1];
   const named = rawLanes === undefined ? undefined : parseLanes(rawLanes);
-  // A typo in a named budget is loud, never a quiet tick.
-  if (named && named.length === 0 && over) return { lanes: [], policyName, rawLanes, reason: 'unrecognised_lanes' };
-  const lanes = named ? (over ? named : []) : budgetLanes(spent, forecast);
-  if (lanes.length === 0) return { lanes, policyName, reason: 'budget_under_threshold', quiet: true };
-  const basis = spent >= 1 ? `spent:${spent}` : `forecast:${forecast}`;
   // The interval keeps next month's first trip distinct from this one.
   const interval = typeof budget.costIntervalStart === 'string' ? `:${budget.costIntervalStart}` : '';
-  return {
-    lanes,
-    incidentId: `budget:${policyName}${interval}:${basis}`,
-    policyName,
-    ...(rawLanes ? { rawLanes } : {}),
-  };
+
+  if (named) {
+    // A named budget buys one service, and a forecast there is a trend rather than a
+    // fact: GCP extrapolates the recent slope, so a single expensive day re-aims the
+    // whole month. On 2026-09-18 that pulled `Cloud Build lanes=gate` with 53% of the
+    // month actually spent -- the straight-line rate finished under budget -- and
+    // because this brake never resumes, the gate would have stayed down for twelve
+    // days over a projection. So a named budget waits for money genuinely spent. The
+    // unnamed budget below still grades a forecast, where the lane it pulls is the
+    // single most expensive one and the blast radius is small.
+    if (spent < 1) {
+      if (forecast >= 1) return { lanes: [], policyName, rawLanes, reason: 'forecast_only' };
+      return { lanes: [], policyName, reason: 'budget_under_threshold', quiet: true };
+    }
+    // A typo in a named budget is loud, never a quiet tick.
+    if (named.length === 0) return { lanes: [], policyName, rawLanes, reason: 'unrecognised_lanes' };
+    return { lanes: named, incidentId: `budget:${policyName}${interval}:spent:${spent}`, policyName, rawLanes };
+  }
+
+  const lanes = budgetLanes(spent, forecast);
+  if (lanes.length === 0) return { lanes, policyName, reason: 'budget_under_threshold', quiet: true };
+  const basis = spent >= 1 ? `spent:${spent}` : `forecast:${forecast}`;
+  return { lanes, incidentId: `budget:${policyName}${interval}:${basis}`, policyName };
 }
 
 // An unrecognised lane pauses nothing, which is right.
@@ -159,9 +177,16 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       const { lanes, incidentId, policyName, state, rawLanes, reason, quiet } = lanesFromNotification(payload);
       if (lanes.length === 0) {
         // Acknowledged, not retried: a redelivery pauses nothing either.
+        // A forecast trip is the early warning the operator wants ahead of the real
+        // one, so it says so rather than reading as a malformed alert.
+        const message = quiet
+          ? 'spend brake heard a budget tick under threshold'
+          : reason === 'forecast_only'
+            ? 'spend brake heard a named budget forecast over 100%; not pausing until it is spent'
+            : 'spend brake fired with no recognised lane';
         request.log[quiet ? 'info' : 'warn'](
           { incidentId, policyName, state, rawLanes, reason, decoded: payload !== undefined },
-          quiet ? 'spend brake heard a budget tick under threshold' : 'spend brake fired with no recognised lane',
+          message,
         );
         return reply.send({ paused: [], reason });
       }

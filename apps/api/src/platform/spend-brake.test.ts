@@ -111,8 +111,43 @@ describe('spend brake payload reading', () => {
       'budget:Cloud Build lanes=gate:2026-10-01T00:00:00Z:spent:1',
     );
     expect(
-      lanesFromNotification({ budgetDisplayName: 'Vertex lanes=seeding_managed', forecastThresholdExceeded: 1 }).lanes,
+      lanesFromNotification({ budgetDisplayName: 'Vertex lanes=seeding_managed', alertThresholdExceeded: 1 }).lanes,
     ).toEqual(['seeding', 'managed']);
+  });
+
+  it('warns but never pauses when a named budget is only forecast over', () => {
+    // What happened on 2026-09-18: the month was 53% spent, one expensive day steepened
+    // the trend, and a projection took the gate down for the rest of the period.
+    expect(
+      lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gate', forecastThresholdExceeded: 1.41 }),
+    ).toEqual({
+      lanes: [],
+      policyName: 'Cloud Build lanes=gate',
+      rawLanes: 'gate',
+      reason: 'forecast_only',
+    });
+    // Spend catching up is the alert that pauses, and it is not `already_handled` by
+    // the forecast that preceded it: only a pause records an incident id.
+    expect(
+      lanesFromNotification({
+        budgetDisplayName: 'Cloud Build lanes=gate',
+        alertThresholdExceeded: 1,
+        forecastThresholdExceeded: 1.41,
+      }),
+    ).toEqual({
+      lanes: ['gate'],
+      incidentId: 'budget:Cloud Build lanes=gate:spent:1',
+      policyName: 'Cloud Build lanes=gate',
+      rawLanes: 'gate',
+    });
+    // A forecast under 100% on a named budget stays the quiet routine tick.
+    expect(
+      lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gate', forecastThresholdExceeded: 0.9 }),
+    ).toEqual({ lanes: [], policyName: 'Cloud Build lanes=gate', reason: 'budget_under_threshold', quiet: true });
+    // The unnamed budget still grades a forecast: `managed` alone, the dearest lane.
+    expect(lanesFromNotification({ budgetDisplayName: 'Monthly', forecastThresholdExceeded: 1 }).lanes).toEqual([
+      'managed',
+    ]);
   });
 
   it('stays quiet on a routine budget tick under every threshold', () => {

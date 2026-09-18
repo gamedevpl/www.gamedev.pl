@@ -192,8 +192,11 @@ account. Ticks under threshold are acknowledged silently, and the same threshold
 acted on once — a resume after it stands.
 
 Per-service budgets can name their own lanes in the display name instead, e.g.
-"Cloud Build lanes=gate" or "Vertex AI lanes=seeding_managed": over 100% pulls
-those lanes and nothing else. Every budget can share this one topic.
+"Cloud Build lanes=gate" or "Vertex AI lanes=seeding_managed": 100% *spent* pulls
+those lanes and nothing else. A named budget that is only forecast over is logged
+and left alone -- a forecast is a slope, and one expensive day re-aims it at a
+whole month, which is how the gate went down on a period that finished under
+budget. Every budget can share this one topic.
 
 Bandwidth is the one an open site spends without anybody asking for it, and it has
 no per-service budget yet. Create one, and point the two that already exist at the
