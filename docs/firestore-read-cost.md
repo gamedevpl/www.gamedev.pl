@@ -312,9 +312,9 @@ account erasure.
 the member was on, so a five-game sole owner paid five extra equality queries on every
 `/api/submissions/mine` poll — Query Insights' hottest QUERY. The slug query is required
 after a transfer (the recipient's owner query does not yet contain the sender's rounds) and
-while editors or a revocation epoch mean another uid may have written siblings. A pristine
-sole owner whose owner query already contains the slug skips it. `ownerQueryCoversAccess`
-is that predicate.
+while editors, a revocation epoch, or a settlement that changed owner (accessRevision > 1)
+mean another uid may have written siblings. A revision-1 sole owner whose owner query
+already contains the slug skips it. `ownerQueryCoversAccess` is that predicate.
 
 Ordering is part of the contract, not an implementation detail. The query returns rounds
 newest first with the job id breaking a tie, which the callers rely on to pick the round an
@@ -359,14 +359,16 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
 3. **An empty inbox should not be queried.** `listPendingCreatorMessages` with
    `deliveredAt IS NULL` was the sweep's per-job tax on motionless rounds: Insights counted
    thousands of executions, zero documents, and still billed the one-read minimum. Submissions
-   now carry `pendingCreatorMessage`, written `false` at create, `true` atomically with an
+   now carry `pendingCreatorMessage`, written `true` atomically with an
    undelivered append, and `false` once `markCreatorMessagesDelivered` empties the inbox.
-   The sweep skips the query when the flag is `false`. A missing flag (records that predate
-   it) still queries, and `stampEmpty: true` writes `false` only when the inbox is empty and
-   the flag is not already `true` — so a concurrent append that batched `true` with the
-   message is not clobbered. A leftover `true` with an empty inbox still costs one query
-   a run until a mark or a later empty stamp; that is cheaper than missing a waiting
-   message.
+   The sweep skips a repeat query when the flag is `false`, but a process that has
+   never derived the job still probes — same rule as cadence — so a rollback
+   revision that appended without the flag is visible after this revision returns.
+   Create leaves the field unset (legacy records already did); `stampEmpty: true`
+   writes `false` only when the inbox is empty. A leftover `true` with an empty
+   inbox is healed by clearing, then restoring `true` if a concurrent append
+   landed. `writePendingInboxFlag(false)` still refuses to clobber `true`, so a
+   probe that did not go through that heal path cannot hide a waiting message.
 
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.

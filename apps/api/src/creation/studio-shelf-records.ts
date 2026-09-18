@@ -41,6 +41,7 @@ export function ownerQueryCoversAccess(
 ): boolean {
   return (
     access.ownerUid === ownerUid &&
+    access.accessRevision === 1 &&
     access.editorUids.length === 0 &&
     access.capabilitiesRevokedAtRevision === undefined &&
     access.memberRevocations === undefined &&

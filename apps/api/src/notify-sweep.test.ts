@@ -153,8 +153,9 @@ describe('POST /api/internal/notify-sweep', () => {
     clock = opened + 5 * DAY;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
 
-    // New jobs stamp pendingCreatorMessage false and skip the empty query.
-    expect(pending).not.toHaveBeenCalled();
+    // First look probes; later dues skip the empty inbox query.
+    expect(pending).toHaveBeenCalledTimes(1);
+    pending.mockClear();
 
     clock += 2 * 60 * 1000;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
@@ -169,6 +170,39 @@ describe('POST /api/internal/notify-sweep', () => {
     clock += HOUR_MS;
     expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
     expect(pending).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('probes a false inbox flag on the first look after restart', async () => {
+    const opened = Date.now();
+    const store = new InMemoryStore();
+    await store.createSubmission(94, 'g:owner', 'Restart');
+    await store.setSubmissionSlug(94, 'restart');
+    await store.recordJobTransition(94, {
+      to: 'building',
+      at: new Date(opened).toISOString(),
+      by: 'agent',
+      reason: 'dispatched',
+    });
+    await store.listPendingCreatorMessages(94, { stampEmpty: true });
+    expect((await store.getSubmission(94))?.pendingCreatorMessage).toBe(false);
+    const first = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    await first.close();
+    const pending = vi.spyOn(store, 'listPendingCreatorMessages');
+    const app = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => opened,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pending).toHaveBeenCalled();
     await app.close();
   });
 

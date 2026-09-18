@@ -14,7 +14,7 @@ describe('pending inbox flag', () => {
   it('stamps true on append and false once the inbox is empty', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(9, 'g:owner', 'Sky');
-    expect((await store.getSubmission(9))?.pendingCreatorMessage).toBe(false);
+    expect((await store.getSubmission(9))?.pendingCreatorMessage).toBeUndefined();
 
     const first = await store.appendCreatorMessage(9, 'faster');
     expect((await store.getSubmission(9))?.pendingCreatorMessage).toBe(true);
@@ -38,14 +38,37 @@ describe('pending inbox flag', () => {
     expect((await storeEmpty.getSubmission(5))?.pendingCreatorMessage).toBe(false);
   });
 
+  it('stampEmpty heals a leftover true after an empty scan', async () => {
+    const { db } = fakeFirestore();
+    await db.collection('submissions').doc('6').set({ pendingCreatorMessage: true });
+    const fsStore = new FirestoreStore(db);
+    await fsStore.listPendingCreatorMessages(6, { stampEmpty: true });
+    expect((await db.collection('submissions').doc('6').get()).data()?.pendingCreatorMessage).toBe(false);
+  });
+
   it('round-trips the flag on the fake Firestore store', async () => {
     const store = new FirestoreStore(fakeFirestore().db);
     await store.createSubmission(8, 'g:owner', 'Sky');
-    expect((await store.getSubmission(8))?.pendingCreatorMessage).toBe(false);
+    expect((await store.getSubmission(8))?.pendingCreatorMessage).toBeUndefined();
     const first = await store.appendCreatorMessage(8, 'faster');
     expect((await store.getSubmission(8))?.pendingCreatorMessage).toBe(true);
     await store.markCreatorMessagesDelivered(8, [first.id]);
     expect((await store.getSubmission(8))?.pendingCreatorMessage).toBe(false);
+  });
+
+  it('stampEmpty restores true when a rollback row is waiting', async () => {
+    const { db } = fakeFirestore();
+    await db.collection('submissions').doc('6').set({ pendingCreatorMessage: false });
+    await db.collection('submissions').doc('6').collection('messages').doc('m1').set({
+      id: 'm1',
+      text: 'from old revision',
+      createdAt: '2026-09-18T00:00:00.000Z',
+      deliveredAt: null,
+    });
+    const fsStore = new FirestoreStore(db);
+    const pending = await fsStore.listPendingCreatorMessages(6, { stampEmpty: true });
+    expect(pending).toHaveLength(1);
+    expect((await db.collection('submissions').doc('6').get()).data()?.pendingCreatorMessage).toBe(true);
   });
 
   it('probe false does not clobber a concurrent true', async () => {

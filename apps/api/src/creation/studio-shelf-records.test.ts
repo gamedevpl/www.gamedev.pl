@@ -215,6 +215,24 @@ describe('reconcileTransferredOwnership', () => {
     expect(records.map((row) => row.slug)).toContain('sky-dodge');
     expect(spy).toHaveBeenCalledWith('sky-dodge');
   });
+
+  it('still slug-queries after settlement corrects the owner', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    await store.upsertUser({ uid: 'g:bea' });
+    await store.createSubmission(10, 'g:ada', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:ada', at, at);
+    await store.createSubmission(11, 'g:bea', 'Sky Dodge');
+    await store.setSubmissionSlug(11, 'sky-dodge');
+    await store.recordSettledOwner('sky-dodge', 'g:bea', 11, at, at);
+    const spy = vi.spyOn(store, 'listSubmissionsBySlug');
+    const owned = await store.listSubmissionsByOwner('g:bea');
+    const records = await reconcileTransferredOwnership(store, 'g:bea', owned);
+    expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11]);
+    expect(spy).toHaveBeenCalledWith('sky-dodge');
+  });
 });
 
 describe('ownerQueryCoversAccess', () => {
@@ -232,6 +250,7 @@ describe('ownerQueryCoversAccess', () => {
 
   it('is true only for a pristine sole owner whose rounds are already loaded', () => {
     expect(ownerQueryCoversAccess(access(), 'g:creator', [{ slug: 'sky-dodge' }])).toBe(true);
+    expect(ownerQueryCoversAccess(access({ accessRevision: 2 }), 'g:creator', [{ slug: 'sky-dodge' }])).toBe(false);
     expect(ownerQueryCoversAccess(access(), 'g:creator', [{ slug: 'other' }])).toBe(false);
     expect(ownerQueryCoversAccess(access({ editorUids: ['g:bea'] }), 'g:creator', [{ slug: 'sky-dodge' }])).toBe(false);
     expect(

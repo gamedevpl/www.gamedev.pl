@@ -90,7 +90,6 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       title,
       roundGeneration: 1,
       roundStartedAt: createdAt,
-      pendingCreatorMessage: false,
     };
     // Dual-write the pre-rename key too: a rollback to the previous revision
     // (runbooks/rollback-deploy.md) runs code that only reads `issueNumber`.

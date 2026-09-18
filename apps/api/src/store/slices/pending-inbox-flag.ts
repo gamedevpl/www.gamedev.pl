@@ -21,17 +21,48 @@ export function setLocalPendingInboxFlag(
   submissions.set(jobId, { ...current, pendingCreatorMessage: pending });
 }
 
+function flagOf(data: { pendingCreatorMessage?: boolean } | undefined): boolean | undefined {
+  return data?.pendingCreatorMessage;
+}
+
+export function stampLocalInbox(submissions: Map<number, SubmissionRecord>, jobId: number, pendingCount: number): void {
+  setLocalPendingInboxFlag(submissions, jobId, pendingCount > 0);
+}
+
+export async function stampListedInbox(
+  db: Firestore,
+  jobId: number,
+  pendingCount: number,
+  relist: () => Promise<readonly unknown[]>,
+): Promise<void> {
+  if (pendingCount === 0) await stampEmptyInbox(db, jobId, relist);
+  else await writePendingInboxFlag(db, jobId, true);
+}
+
 export async function writePendingInboxFlag(db: Firestore, jobId: number, pending: boolean): Promise<void> {
   const ref = db.collection('submissions').doc(String(jobId));
-  if (pending) {
-    await ref.set({ pendingCreatorMessage: true }, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const current = flagOf((await tx.get(ref)).data() as { pendingCreatorMessage?: boolean } | undefined);
+    if (current === pending) return;
+    if (!pending && current === true) return;
+    tx.set(ref, { pendingCreatorMessage: pending }, { merge: true });
+  });
+}
+
+// Heal leftover true: clear, then restore if a row landed.
+export async function stampEmptyInbox(
+  db: Firestore,
+  jobId: number,
+  relist: () => Promise<readonly unknown[]>,
+): Promise<void> {
+  const ref = db.collection('submissions').doc(String(jobId));
+  const current = flagOf((await ref.get()).data() as { pendingCreatorMessage?: boolean } | undefined);
+  if (current === true) {
+    await clearPendingInboxFlag(db, jobId);
+    if ((await relist()).length > 0) await writePendingInboxFlag(db, jobId, true);
     return;
   }
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if ((snap.data() as { pendingCreatorMessage?: boolean } | undefined)?.pendingCreatorMessage === true) return;
-    tx.set(ref, { pendingCreatorMessage: false }, { merge: true });
-  });
+  await writePendingInboxFlag(db, jobId, false);
 }
 
 export async function clearPendingInboxFlag(db: Firestore, jobId: number): Promise<void> {

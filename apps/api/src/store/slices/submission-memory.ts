@@ -23,7 +23,6 @@ export class InMemorySubmissionStore implements SubmissionStore {
       // Legacy records predating this field stay unset until their round closes.
       roundGeneration: 1,
       roundStartedAt: createdAt,
-      pendingCreatorMessage: false,
     };
     this.submissions.set(jobId, record);
     return { ...record };

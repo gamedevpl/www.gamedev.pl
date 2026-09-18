@@ -181,7 +181,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
 
           // Uncollected inbox rows age into an operator stall alert.
           const pending =
-            record.pendingCreatorMessage === false
+            record.pendingCreatorMessage === false && cadence.known(record.jobId)
               ? []
               : await store.listPendingCreatorMessages(record.jobId, { stampEmpty: true });
           const oldest = pending[0];

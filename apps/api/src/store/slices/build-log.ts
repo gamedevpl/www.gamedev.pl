@@ -13,6 +13,8 @@ import {
   hasPendingInbox,
   queuesCreatorInbox,
   setLocalPendingInboxFlag,
+  stampListedInbox,
+  stampLocalInbox,
   writePendingInboxFlag,
 } from './pending-inbox-flag.js';
 
@@ -242,9 +244,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
       .map((message) => ({ ...message }));
-    if (opts?.stampEmpty && pending.length === 0 && this.submissions.get(jobId)?.pendingCreatorMessage !== true) {
-      setLocalPendingInboxFlag(this.submissions, jobId, false);
-    }
+    if (opts?.stampEmpty) stampLocalInbox(this.submissions, jobId, pending.length);
     return pending;
   }
 
@@ -435,7 +435,9 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       .filter((message) => !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10);
-    if (opts?.stampEmpty && pending.length === 0) await writePendingInboxFlag(this.db, jobId, false);
+    if (opts?.stampEmpty) {
+      await stampListedInbox(this.db, jobId, pending.length, () => this.listPendingCreatorMessages(jobId));
+    }
     return pending;
   }
 
