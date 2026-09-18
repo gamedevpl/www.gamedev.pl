@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
 import { judgeShelfShadow, recordShelfShadow } from '../creation/shelf-shadow.js';
@@ -10,9 +10,14 @@ const IMPLEMENTATIONS: Array<[string, () => Store]> = [
   ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
 ];
 
-// Collapse sorts ties by input order; a shared millisecond is not drift.
-function afterATick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 5));
+afterEach(() => vi.useRealTimers());
+
+const CLOCK = Date.parse('2026-09-13T10:00:00.000Z');
+
+// Injected timestamps, not a sleep: same-ms collapse is not drift.
+function freezeClock(): (seconds: number) => void {
+  vi.useFakeTimers({ now: CLOCK });
+  return (seconds: number) => vi.setSystemTime(new Date(CLOCK + seconds * 1000));
 }
 
 // Same records and count the production shadow judges against.
@@ -53,8 +58,9 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
 
     it('stays in agreement through every shelf-relevant writer', async () => {
       const store = makeStore();
+      const stamp = freezeClock();
       await store.createSubmission(1, 'g:owner', 'First');
-      await afterATick();
+      stamp(1);
       await store.createSubmission(2, 'g:owner', 'Second');
 
       // Every writer the plan names; the shelf must survive.
@@ -183,27 +189,29 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.upsertUser({ uid: 'g:ada' });
       await store.upsertUser({ uid: 'g:grace' });
 
+      const stamp = freezeClock();
       // Sender: three slugless plus one slugged; the live 4-vs-3 case.
       await store.createSubmission(1, 'g:ada', 'One');
-      await afterATick();
+      stamp(1);
       await store.createSubmission(2, 'g:ada', 'Two');
-      await afterATick();
+      stamp(2);
       await store.createSubmission(3, 'g:ada', 'Three');
-      await afterATick();
+      stamp(3);
       await store.createSubmission(4, 'g:ada', 'Sky');
       await store.setSubmissionSlug(4, 'sky');
 
       // Recipient already has three; a missed write-through is 4 vs 3.
-      await afterATick();
+      stamp(4);
       await store.createSubmission(5, 'g:grace', 'Grace one');
-      await afterATick();
+      stamp(5);
       await store.createSubmission(6, 'g:grace', 'Grace two');
-      await afterATick();
+      stamp(6);
       await store.createSubmission(7, 'g:grace', 'Grace three');
 
       await acceptTransfer(store, 'sky', 'g:ada', 'g:grace');
 
       expect(await agrees(store, 'g:grace')).toBe('match');
+      // No remaining access: count must still match the document.
       expect(await agrees(store, 'g:ada')).toBe('match');
     });
 

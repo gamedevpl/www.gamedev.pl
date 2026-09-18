@@ -326,6 +326,18 @@ mismatches** split by verdict (`count` and `collapse` both 0, not merely quieter
 flip in the same change that hooks the writers — the next week's log is the proof, and a
 reader flip needs its own revert.
 
+Dropping the `count()` early-exit looked like it would make the polled path more expensive.
+Measured against the read-cost gate (#1409) on this change, `GET /api/submissions/mine`
+goes **44 → 39**: the old pre-check queried `listGameAccessByMember` and then
+`reconcileTransferredOwnership` queried it again. Whoever merges this and #1409 second
+should run `npm run firestore-read-cost -- "GET /api/submissions/mine" --write --force`
+so those five reads stay locked.
+
+That fixture's creator has `gameAccess` rows, so it cannot see an owner with none — the
+derived-only accounts the access backfill left. After both land, add that shape to the
+fixture so the gate watches it. Until then they pay the owner query plus a
+`resolveGameAccess` per slugged round.
+
 `listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses used
 to zigzag-merge the two single-field indexes — Query Insights measured
 `listOpenRoundsByOwner` at 8.5 index entries scanned per result. Both queries now have a
