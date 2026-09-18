@@ -91,6 +91,53 @@ one instance does not reach the others. On the instance that served the write, t
 next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
 row) is not hooked and can sit until the window ends, on every instance.
 
+## The gate
+
+A window in the table above is a promise the next edit can break without anyone noticing
+until Query Insights a day later. The gate that keeps the rule true after the person who
+wrote it has moved on is a per-route billed-read baseline, the same shape as module-size
+and comment-prose: shrink freely; raising one route is a deliberate, reviewable act.
+
+It does **not** reuse `store/read-meter.ts`. That meter patches the real
+`@google-cloud/firestore` prototypes; tests never construct those classes. They run on
+`InMemoryStore`, or on `FirestoreStore(fakeFirestore().db)` whose fake is a hand-rolled
+object. Wired as-is, every route would measure zero and the gate would be vacuous. The
+counter lives on the fake, which is the only place in the test path that materialises
+gets, queries, `count()` and `getAll`.
+
+It counts what Firestore **bills**, not what the code calls:
+
+- a document get is 1, whether or not the document exists;
+- a query is one read per document returned, **minimum 1 even when it returns nothing**;
+- an aggregation (`count()`) is 1, not the number of rows it counted;
+- `getAll` is one per reference requested.
+
+The fixture is fixed-size and explicit: eight creator rounds, twelve decoy rounds, five
+events and three messages on the polled job, six creator notifications, ten decoy
+notifications, seven reviewer assessments, fifteen decoy assessments, four decoy
+re-reviews. Decoys are why removing a `where` fails the gate instead of still passing.
+
+Covered first, because a regression is both likely and expensive: `GET /api/submissions/:token`,
+`GET /api/submissions/mine`, `GET /api/review/status`, `GET /api/notifications`. The numbers
+are today's cost, not a target — do not round them up.
+
+```bash
+npm run firestore-read-cost                                            # report
+npm run firestore-read-cost -- "GET /api/submissions/mine"             # one route
+npm run firestore-read-cost -- "GET /api/submissions/mine" --write --force   # raise ONE
+npm run firestore-read-cost -- --write --reseal                        # reseal every route
+```
+
+Enforce: `eslint-rules/firestore-read-cost-check.mjs` via `npm run firestore-read-cost`
+(also part of `npm run lint`). Ceilings live in
+[`eslint-rules/firestore-read-cost-baseline.json`](../eslint-rules/firestore-read-cost-baseline.json).
+The HTTP fixture is `apps/api/src/store/firestore-read-cost.fixture.ts`
+(excluded from the API compile — it is a test harness, not a production module).
+
+**Never run `--write` unscoped.** It does not only raise the route you are fixing; it also
+lowers every other ceiling to whatever that route happens to measure today. Same refusal
+and `--reseal` escape as module-size.
+
 ## The floor underneath the windows
 
 Every one of those windows removes a _collection scan_. None of them removes the read that
