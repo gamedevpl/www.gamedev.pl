@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -89,5 +90,11 @@ describe('firestore-read-cost-check', () => {
     const result = spawnSync(process.execPath, [CHECKER, '--write'], { encoding: 'utf8' });
     expect(result.status).toBe(1);
     expect(`${result.stderr}${result.stdout}`).toMatch(/Refusing an unscoped --write/);
+  });
+
+  it('over-baseline hint raises one route, not an unscoped --write', () => {
+    const source = fs.readFileSync(CHECKER, 'utf8');
+    expect(source).toMatch(/npm run firestore-read-cost -- \$\{JSON\.stringify\(failure\.route\)\} --write --force/);
+    expect(source).not.toMatch(/firestore-read-cost -- --write`/);
   });
 });

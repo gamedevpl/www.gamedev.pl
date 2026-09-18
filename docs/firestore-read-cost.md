@@ -88,7 +88,8 @@ npm run firestore-read-cost -- --write --reseal                        # reseal 
 Enforce: `eslint-rules/firestore-read-cost-check.mjs` via `npm run firestore-read-cost`
 (also part of `npm run lint`). Ceilings live in
 [`eslint-rules/firestore-read-cost-baseline.json`](../eslint-rules/firestore-read-cost-baseline.json).
-The HTTP fixture is `apps/api/src/store/firestore-read-cost.ts`.
+The HTTP fixture is `apps/api/src/store/firestore-read-cost.fixture.ts`
+(excluded from the API compile — it is a test harness, not a production module).
 
 **Never run `--write` unscoped.** It does not only raise the route you are fixing; it also
 lowers every other ceiling to whatever that route happens to measure today. Same refusal

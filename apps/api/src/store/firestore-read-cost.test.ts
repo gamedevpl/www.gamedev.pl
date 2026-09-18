@@ -10,7 +10,7 @@ import {
   measurePolledRoute,
   measurePolledRouteReads,
   seedReadCostFixture,
-} from './firestore-read-cost.js';
+} from './firestore-read-cost.fixture.js';
 
 const BASELINE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

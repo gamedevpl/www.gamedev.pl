@@ -22,9 +22,26 @@ import {
   nextRouteBaseline,
 } from './firestore-read-cost-lib.mjs';
 
+function ensurePackagesBuilt() {
+  // CI lint runs before type-check, so workspace dist is empty.
+  const needed = ['packages/contract/dist/index.js', 'packages/zone-core/dist/index.js'];
+  if (needed.every((rel) => fs.existsSync(path.join(REPO_ROOT, rel)))) return;
+  const result = spawnSync('npm', ['run', 'build:packages'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    if (result.stderr) process.stderr.write(result.stderr);
+    if (result.stdout) process.stderr.write(result.stdout);
+    throw new Error('firestore-read-cost needs packages built (npm run build:packages)');
+  }
+}
+
 function measureRoutes() {
+  ensurePackagesBuilt();
   const apiRoot = path.join(REPO_ROOT, 'apps/api');
-  const script = path.join(apiRoot, 'src/store/firestore-read-cost.ts');
+  const script = path.join(apiRoot, 'src/store/firestore-read-cost.fixture.ts');
   const tsxCli = path.join(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs');
   if (!fs.existsSync(tsxCli)) throw new Error('tsx is not installed; run npm install');
   const result = spawnSync(process.execPath, [tsxCli, script], {
@@ -132,7 +149,8 @@ function main() {
       } else {
         console.error(
           `${failure.route}: ${failure.reads} billed reads (baseline ${failure.allowed}). ` +
-            `Routes may shrink, never grow — fix the query, then \`npm run firestore-read-cost -- --write\`.`,
+            `Routes may shrink, never grow — fix the query, or raise this one with ` +
+            `\`npm run firestore-read-cost -- ${JSON.stringify(failure.route)} --write --force\`.`,
         );
       }
     }

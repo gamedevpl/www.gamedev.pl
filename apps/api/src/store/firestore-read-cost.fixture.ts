@@ -337,7 +337,7 @@ export async function measurePolledRouteReads(): Promise<Record<PolledRoute, num
 }
 
 const invoked = process.argv[1] ?? '';
-if (invoked.endsWith('firestore-read-cost.ts') || invoked.endsWith('firestore-read-cost.js')) {
+if (invoked.endsWith('firestore-read-cost.fixture.ts') || invoked.endsWith('firestore-read-cost.fixture.js')) {
   measurePolledRouteReads()
     .then((measured) => {
       process.stdout.write(`${JSON.stringify(measured, null, 2)}\n`);
