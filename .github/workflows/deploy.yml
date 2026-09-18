@@ -118,7 +118,6 @@ jobs:
         run: |
           SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
           GATE_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner:${SHORT_SHA}"
-          echo "GATE_IMAGE=${GATE_IMAGE}" >> $GITHUB_ENV
           # --secret, never --build-arg: a build arg lands in the image history.
           printf '%s' "${GAMES_TOKEN}" > /tmp/games_token
           docker build -f infra/gate-runner.Dockerfile \
@@ -126,6 +125,42 @@ jobs:
             -t "${GATE_IMAGE}" .
           rm -f /tmp/games_token
           docker push "${GATE_IMAGE}"
+
+          # Naming the image to the service is only safe once gate-runner may PULL it.
+          # That grant lives in infra/setup-gcp.sh, which an owner runs by hand — so a
+          # deploy could otherwise hand the service an image its build SA cannot read,
+          # and every gate would then die before run-gate with candidates left
+          # unverified. Which is the one failure this whole path exists to avoid.
+          #
+          # So the variable is set only when the grant is visible, on the repository or
+          # inherited from the project. Anything else (missing grant, or no permission
+          # to read the policy) leaves it empty, which is a supported value: the gate
+          # builds its own environment per run exactly as it did before this image
+          # existed. Slower, correct, and loud in the log rather than silent.
+          GATE_SA="gate-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+          READER=""
+          for SCOPE in repo project; do
+            if [ "$SCOPE" = repo ]; then
+              READER=$(gcloud artifacts repositories get-iam-policy "${REPO}" \
+                --location="${REGION}" --project="${PROJECT_ID}" \
+                --flatten="bindings[].members" \
+                --filter="bindings.role=roles/artifactregistry.reader AND bindings.members:${GATE_SA}" \
+                --format="value(bindings.members)" 2>/dev/null || true)
+            else
+              READER=$(gcloud projects get-iam-policy "${PROJECT_ID}" \
+                --flatten="bindings[].members" \
+                --filter="bindings.role=roles/artifactregistry.reader AND bindings.members:${GATE_SA}" \
+                --format="value(bindings.members)" 2>/dev/null || true)
+            fi
+            [ -n "$READER" ] && break
+          done
+          if [ -n "$READER" ]; then
+            echo "GATE_IMAGE=${GATE_IMAGE}" >> $GITHUB_ENV
+            echo "gate-runner may pull ${GATE_IMAGE} — gate will use the prebuilt image"
+          else
+            echo "GATE_IMAGE=" >> $GITHUB_ENV
+            echo "::warning::${GATE_SA} has no artifactregistry.reader on ${REPO}; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh, or: gcloud artifacts repositories add-iam-policy-binding ${REPO} --location=${REGION} --project=${PROJECT_ID} --member=serviceAccount:${GATE_SA} --role=roles/artifactregistry.reader"
+          fi
 
       - name: Deploy candidate revision to Cloud Run
         # Repo variables arrive as step env rather than being interpolated into the script.
