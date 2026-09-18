@@ -14,6 +14,7 @@ import type { GameEditorInvitation } from './records/game-editor-invite.js';
 import type { GameMembershipStore, MembershipChangeResult } from './slices/game-membership.js';
 import type { SubmissionQueryStore } from './slices/submission-queries.js';
 import type { ShelfMirror } from '../creation/shelf-mirror.js';
+import { invalidateAllDerivedGameAccess, invalidateDerivedGameAccess } from '../platform/game-access-derived-cache.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
@@ -81,7 +82,7 @@ export abstract class SubmissionFacade {
       const claimants = await this.submissionQueryStore.listSubmissionsBySlug(slug);
       const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
       if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
-      await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, job.createdAt, new Date().toISOString());
+      await this.ensureGameAccess(slug, job.ownerUid, job.createdAt, new Date().toISOString());
     } catch {
       // Derived state: the backfill repairs it, a throw would not.
     }
@@ -92,7 +93,7 @@ export abstract class SubmissionFacade {
     try {
       const job = await this.submissionStore.getSubmission(jobId);
       if (!job?.ownerUid) return;
-      await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, job.createdAt, new Date().toISOString());
+      await this.recordSettledOwner(slug, job.ownerUid, jobId, job.createdAt, new Date().toISOString());
     } catch {
       // A throw here would strand a slug the claim already took.
     }
@@ -115,7 +116,9 @@ export abstract class SubmissionFacade {
   }
 
   async ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.ensureGameAccess(slug, ownerUid, workAt, at);
+    const record = await this.gameAccessStore.ensureGameAccess(slug, ownerUid, workAt, at);
+    invalidateDerivedGameAccess(this, slug);
+    return record;
   }
 
   async recordSettledOwner(
@@ -125,7 +128,9 @@ export abstract class SubmissionFacade {
     workAt: string,
     at: string,
   ): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, workAt, at);
+    const record = await this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, workAt, at);
+    invalidateDerivedGameAccess(this, slug);
+    return record;
   }
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
@@ -133,7 +138,9 @@ export abstract class SubmissionFacade {
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
-    return this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    const touched = await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    invalidateAllDerivedGameAccess(this);
+    return touched;
   }
 
   async backfillGameAccess(
@@ -144,7 +151,9 @@ export abstract class SubmissionFacade {
     checkAccount: boolean,
     at: string,
   ): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.backfillGameAccess(slug, ownerUid, jobId, workAt, checkAccount, at);
+    const record = await this.gameAccessStore.backfillGameAccess(slug, ownerUid, jobId, workAt, checkAccount, at);
+    invalidateDerivedGameAccess(this, slug);
+    return record;
   }
 
   async getAccountErasure(uid: string): Promise<string | null> {
@@ -189,6 +198,7 @@ export abstract class SubmissionFacade {
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
     const result = await this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at, invitationId);
     if (result && result !== 'busy' && result !== 'ineligible' && result !== 'stale_owner') {
+      invalidateDerivedGameAccess(this, slug);
       await this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
       await this.gameTransferProposalStore.invalidateOpenTransferProposalsForSlug(slug, at);
     }
@@ -263,7 +273,9 @@ export abstract class SubmissionFacade {
     at: string,
     inviteId: string,
   ): Promise<EditorInviteAcceptResult> {
-    return this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+    const result = await this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+    if (result && typeof result === 'object') invalidateDerivedGameAccess(this, slug);
+    return result;
   }
 
   async cancelEditorInvitation(
@@ -302,10 +314,14 @@ export abstract class SubmissionFacade {
   }
 
   async removeEditor(slug: string, ownerUid: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
-    return this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+    const result = await this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+    if (result && typeof result === 'object') invalidateDerivedGameAccess(this, slug);
+    return result;
   }
 
   async leaveGame(slug: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
-    return this.gameMembershipStore.leaveGame(slug, editorUid, at);
+    const result = await this.gameMembershipStore.leaveGame(slug, editorUid, at);
+    if (result && typeof result === 'object') invalidateDerivedGameAccess(this, slug);
+    return result;
   }
 }

@@ -310,7 +310,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     for (const [tokenId, record] of [...this.accessTokensStore.accessTokens]) {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
-    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    await this.eraseMemberFromAllGameAccess(uid, at);
     await this.gameEditorInviteStore.cancelPendingEditorInvitesForUid(uid, at);
     for (const [slug, record] of [...this.gameAdmissionStore.gameAgentKeys]) {
       if (record.ownerUid === uid) this.gameAdmissionStore.gameAgentKeys.delete(slug);

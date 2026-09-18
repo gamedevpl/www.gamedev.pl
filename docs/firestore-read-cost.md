@@ -23,16 +23,17 @@ Two corollaries, both of which have been got wrong here:
 
 ## Where the windows are
 
-| Surface                     | Poll  | Window                   | Dropped by                                                                                  |
-| --------------------------- | ----- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| `/api/catalog` enrichment   | —     | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                               |
-| store catalog + media       | —     | 10 min                   | publishing a game (`catalog-routes.ts`)                                                     |
-| notify sweep health scan    | 2 min | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                              |
-| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                          |
-| `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
-| `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
-| Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
-| Studio health scan          | mount | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)   |
+| Surface                      | Poll        | Window                   | Dropped by                                                                                     |
+| ---------------------------- | ----------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `/api/catalog` enrichment    | —           | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                                  |
+| store catalog + media        | —           | 10 min                   | publishing a game (`catalog-routes.ts`)                                                        |
+| notify sweep health scan     | 2 min       | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                                 |
+| notify sweep per-job derive  | 2 min       | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                             |
+| `/api/review/status` badge   | 2 min       | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`)    |
+| `/api/notifications` bell    | 1 min       | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                         |
+| Studio connect guide         | 10 s        | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                   |
+| Studio health scan           | mount       | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)      |
+| Derived game-access fallback | status poll | 30 s                     | `ensureGameAccess`, settlement, transfer, membership, erasure (`game-access-derived-cache.ts`) |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -131,6 +132,55 @@ widening therefore stops at **10s**, and `dispatched` keeps 2s to match its own 
 None of the three delays the creator: their own actions invalidate the cache and call
 `pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
 never the first read — a mount still answers the page once.
+
+**A forgotten localStorage list is occupancy with a longer memory.** The status
+poll's cost was supposed to be one token per open Studio tab. On 2026-09-18 a
+single Chrome session issued 1,102 of 1,120 status polls in forty minutes,
+spread across **32 job tokens**, in lockstep — 29 different tokens inside the
+same one-second bucket, again a minute later — until the browser closed at
+17:25Z. `/submissions` was 221,334 of that day's ~280k reads. The top three
+Insights rows were the same session: `WHERE slug = ?` (permission checks on
+old games with no `GameAccess` record), `WHERE ownerUid = ?` (`/api/submissions/mine`
+returning a 123-round shelf), `WHERE openRound = ?` (the header badge).
+
+`loadCreatorGames` is the fan-out. It takes every token this browser ever saved
+(`getSavedSpecs()`, anonymous-era localStorage), subtracts what `/mine`
+returned, and `Promise.all`s `getSubmissionStatus` for the rest. Nothing wrote
+the answer back: `removeSpec` had no callers, so the list only grew, and jobs
+19 / 22 / 24 / 29 / 32 / 35 / 37 / 92 / 130 were asked about forever, once a
+minute, from one forgotten home tab. That is the same lesson as a forgotten
+Studio tab, with a different shape: **it scales with how long a browser has
+been used**, not with how many creators are watching something now.
+
+The client half stops asking. An unlisted token whose status is terminal or
+missing — `abandoned`, HTTP 404, or a token the API rejects (400) — is pruned
+via `removeSpec`. A settled status that is not in-flight (`published`,
+`needs_changes`) is stored as `lastStatus` on the spec so the next load still
+renders it and does not re-ask. **In-flight is the only remaining re-ask:** a
+live round the server's shelf has not listed yet (anonymous-era, signed-out,
+or a round `/mine` has not collapsed) can still move, and the Studio chip
+should see that. Lengthening the 30s home poll would not have helped; the
+cost is the size of the fan-out.
+
+The server half is a backstop, not a substitute. `resolveGameAccess` already
+does a cheap `getGameAccess` doc-get; the expensive part is the derived
+fallback, `listSubmissionsBySlug`, taken by every status poll's permission
+check when the game has no canonical record. That population is not shrinking:
+the GameAccess backfill quarantined 193 slugs **by design** (ambiguous
+multi-uid ownership), plus everything predating the model. Promoting those
+records would silently pick a winner; do not.
+
+`game-access-derived-cache.ts` windows only that derived branch, 30 seconds,
+in-flight dedup, keyed by store, dropped on every authority-changing write
+(`ensureGameAccess`, `recordSettledOwner`, transfer accept, editor
+add/remove, account erasure). Canonical answers stay a single doc get; folding
+them in would change the staleness contract for every permission check in the
+product. The cached value is an authorization answer — `canActOnSlug` gates
+reads of private prior-round chat — so the window is sized against a former
+owner reading for its length, not against the saving. Residual staleness is
+the documented bound for every process-local cache here: **one window for any
+action, including your own**. Invalidation on one of `--max-instances 4` does
+not reach the others.
 
 **A gate on the store reaches only what subscribes to it.** The welcome dialog and the
 connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both
