@@ -426,6 +426,8 @@ const FILE_BUCKET = {
   'recent-builds': 'delivery',
   'gate-runner': 'delivery',
   'gate-progress': 'delivery',
+  'gate-build-spec': 'delivery',
+  'gate-phase-timer': 'delivery',
   'gate-trigger': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',

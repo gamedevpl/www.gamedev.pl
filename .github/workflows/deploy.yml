@@ -100,6 +100,89 @@ jobs:
             -t "${IMAGE}" .
           docker push "${IMAGE}"
 
+      - name: Build and push the gate runner image
+        # The same trade as the step above, in the second place that was paying Cloud
+        # Build for setup work: every gate run used to clone the platform, apt-get ffmpeg
+        # and chromium, `npm ci` the monorepo and build its packages, inside the paid
+        # build, before looking at the candidate at all. Baked here instead, on the
+        # runner's free allowance. See infra/gate-runner.Dockerfile.
+        #
+        # Built from the same commit as the app image and on every deploy, deliberately:
+        # the platform is *in* this image, so a stale one would gate candidates against
+        # code the site is no longer running.
+        env:
+          # Warms the npm cache with the harness's dependency set. Optional: without it
+          # the image still builds and gate runs fetch those packages as they do today.
+          GAMES_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+          DOCKER_BUILDKIT: '1'
+        run: |
+          SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
+          GATE_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner:${SHORT_SHA}"
+          # This step's job is an optimization, not a requirement — the app image already
+          # built and pushed in the step above, and that is what actually needs to reach
+          # production. Defaulting GATE_IMAGE empty here, before anything that can fail,
+          # means any unexpected exit below still leaves the deploy able to proceed on the
+          # from-scratch gate path rather than never reaching "Deploy candidate revision".
+          echo "GATE_IMAGE=" >> $GITHUB_ENV
+
+          # `if CMD; then` is exempt from this shell's errexit, unlike a bare CMD — so a
+          # build or push failure here degrades to the paragraph above instead of failing
+          # the whole job and blocking the app deploy over an optimization that failed.
+          printf '%s' "${GAMES_TOKEN}" > /tmp/games_token
+          if docker build -f infra/gate-runner.Dockerfile \
+            --secret id=games_token,src=/tmp/games_token \
+            --metadata-file /tmp/gate-meta.json \
+            -t "${GATE_IMAGE}" . \
+            && docker push "${GATE_IMAGE}"; then
+            rm -f /tmp/games_token
+          else
+            rm -f /tmp/games_token
+            echo "::warning::gate-runner image build/push failed; continuing without it — the gate builds its own environment per run instead."
+            exit 0
+          fi
+
+          # A tag is mutable: this same commit can be redeployed by hand
+          # (workflow_dispatch), and node:22 / apt packages float, so a second build of
+          # the identical commit is not guaranteed byte-identical to the first. A gate
+          # started later against an older Cloud Run revision would then pull whatever
+          # :SHORT_SHA currently resolves to, not what that revision was built beside —
+          # quietly undermining the reason this image exists (checking a candidate
+          # against the platform actually serving the site). Handed to the gate by digest
+          # instead, which is exactly what was pushed. Falls back to the tag, still
+          # strictly better than the from-scratch path, if the digest cannot be read —
+          # the metadata-file format is BuildKit's, not a registry guarantee.
+          GATE_IMAGE_REF="${GATE_IMAGE}"
+          DIGEST=$(jq -r '."containerimage.digest" // empty' /tmp/gate-meta.json 2>/dev/null || true)
+          if [ -n "${DIGEST}" ]; then
+            GATE_IMAGE_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner@${DIGEST}"
+          else
+            echo "::warning::could not read the pushed image digest from BuildKit's metadata file; GATE_RUNNER_IMAGE will use the mutable :${SHORT_SHA} tag instead."
+          fi
+
+          # Naming the image to the service is only safe once gate-runner may PULL it.
+          # That grant lives in infra/setup-gcp.sh, which an owner runs by hand — so a
+          # deploy could otherwise hand the service an image its build SA cannot read,
+          # and every gate would then die before run-gate with candidates left
+          # unverified. Which is the one failure this whole path exists to avoid.
+          #
+          # Checked by a Secret Manager secret, not get-iam-policy (this deployer is not
+          # granted the IAM-read permission that needs) and not a storage marker either —
+          # review caught that gate-runner holds objectAdmin on almost the whole store
+          # bucket (BY-11 hardening), and that identity runs hostile candidate code, so a
+          # marker object there is forgeable by the exact thing the fallback exists to
+          # protect against. setup-gcp.sh writes this secret; gate-runner is granted
+          # nothing on it, so it cannot forge a "granted" reading. The deployer already
+          # holds project-wide secretmanager.secretAccessor (infra/setup-wif.sh) to read
+          # it with no new grant.
+          GATE_SA="gate-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+          READY=$(gcloud secrets versions access latest --secret=gate-runner-image-ready --project="${PROJECT_ID}" 2>/dev/null || true)
+          if [ "${READY#granted}" != "${READY}" ]; then
+            echo "GATE_IMAGE=${GATE_IMAGE_REF}" >> $GITHUB_ENV
+            echo "gate-runner may pull ${GATE_IMAGE_REF} — gate will use the prebuilt image"
+          else
+            echo "::warning::gate-runner-image-ready secret is not 'granted'; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh to grant ${GATE_SA} artifactregistry.reader on ${REPO} and record the secret."
+          fi
+
       - name: Deploy candidate revision to Cloud Run
         # Repo variables arrive as step env rather than being interpolated into the script.
         # GitHub compiles a run: body containing ${{ }} as one expression, and this one blew
@@ -324,7 +407,7 @@ jobs:
           # after the runtime moved off it, and every seed dispatch would have 401'd).
           SEED_DISPATCH_SA="$APP_RUNTIME_SA"
           ACCOUNT_DELETION_SWEEP_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app/api/internal/account-deletion-sweep"
-          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|DREAMS_ENABLED=${DREAMS_ENABLED_VAL}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED_VAL}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
+          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GATE_RUNNER_IMAGE=${GATE_IMAGE}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|DREAMS_ENABLED=${DREAMS_ENABLED_VAL}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED_VAL}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
           for MANAGED_VAR in MANAGED_AGENT_VENDOR MANAGED_AGENT_MODEL MANAGED_AGENT_GEMINI_MODEL MANAGED_AGENT_OPENAI_MODEL MANAGED_AGENT_ID MANAGED_AGENT_ENVIRONMENT_ID MANAGED_AGENT_MAX_SECONDS MANAGED_AGENT_MAX_LIST_COST_CENTS MANAGED_AGENT_COPILOT_MAX_CREDITS MANAGED_AGENT_MAX_TOTAL_TOKENS MANAGED_AGENT_VAULT_IDS MANAGED_AGENT_MCP_URL MANAGED_AGENT_DELIVERY_MODE MANAGED_AGENT_COPILOT_MCP_REPO MANAGED_AGENT_COPILOT_MCP_BASE_REF MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
             MANAGED_VAL="${!MANAGED_VAR}"
             if [ -n "$MANAGED_VAL" ]; then
