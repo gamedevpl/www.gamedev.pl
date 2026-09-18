@@ -263,7 +263,7 @@
     "apps/api/src/creation/seed-stream.ts": 35,
     "apps/api/src/creation/session-crash.test.ts": 76,
     "apps/api/src/creation/session-crash.ts": 41,
-    "apps/api/src/creation/studio-shelf-records.test.ts": 318,
+    "apps/api/src/creation/studio-shelf-records.test.ts": 324,
     "apps/api/src/creation/studio-shelf-records.ts": 121,
     "apps/api/src/creation/symbol-map.test.ts": 77,
     "apps/api/src/creation/symbol-map.ts": 257,

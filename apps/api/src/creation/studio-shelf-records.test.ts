@@ -263,13 +263,19 @@ describe('reconcileTransferredOwnership', () => {
     await store.setSubmissionSlug(10, 'sky-dodge');
     await store.createSubmission(11, 'g:two', 'Sky Dodge again');
     await store.setSubmissionSlug(11, 'sky-dodge');
+    // Another slug, so a collection total cannot pass for this one.
+    await store.createSubmission(12, 'g:one', 'Other game');
+    await store.setSubmissionSlug(12, 'other-game');
     await store.ensureGameAccess('sky-dodge', 'g:one', at, at);
     expect(await store.countSubmissionsBySlug('sky-dodge')).toBe(2);
+    expect(await store.countSubmissionsBySlug('other-game')).toBe(1);
+    expect(await store.countSubmissionsBySlug('never-claimed')).toBe(0);
 
     const listSpy = vi.spyOn(store, 'listSubmissionsBySlug');
     const owned = await store.listSubmissionsByOwner('g:one');
     const records = await reconcileTransferredOwnership(store, 'g:one', owned);
-    expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11]);
+    // 12 has no access record; the non-canonical path keeps it.
+    expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11, 12]);
     expect(listSpy).toHaveBeenCalledWith('sky-dodge');
   });
 
