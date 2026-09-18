@@ -59,7 +59,7 @@ export type BrakeSkipReason =
   | 'no_lanes_label'
   | 'unrecognised_lanes'
   | 'budget_under_threshold'
-  // A named budget whose forecast is over but whose spend is not: warned, never paused.
+  // Forecast over, spend not: warned, never paused.
   | 'forecast_only'
   | 'already_handled';
 
@@ -97,20 +97,15 @@ export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
   const interval = typeof budget.costIntervalStart === 'string' ? `:${budget.costIntervalStart}` : '';
 
   if (named) {
-    // A named budget buys one service, and a forecast there is a trend rather than a
-    // fact: GCP extrapolates the recent slope, so a single expensive day re-aims the
-    // whole month. On 2026-09-18 that pulled `Cloud Build lanes=gate` with 53% of the
-    // month actually spent -- the straight-line rate finished under budget -- and
-    // because this brake never resumes, the gate would have stayed down for twelve
-    // days over a projection. So a named budget waits for money genuinely spent. The
-    // unnamed budget below still grades a forecast, where the lane it pulls is the
-    // single most expensive one and the blast radius is small.
+    // A typo pauses nothing ever, so say so before any forecast wording.
+    if (named.length === 0 && Math.max(spent, forecast) >= 1) {
+      return { lanes: [], policyName, rawLanes, reason: 'unrecognised_lanes' };
+    }
+    // Named lanes wait for real spend, never a forecast.
     if (spent < 1) {
       if (forecast >= 1) return { lanes: [], policyName, rawLanes, reason: 'forecast_only' };
       return { lanes: [], policyName, reason: 'budget_under_threshold', quiet: true };
     }
-    // A typo in a named budget is loud, never a quiet tick.
-    if (named.length === 0) return { lanes: [], policyName, rawLanes, reason: 'unrecognised_lanes' };
     return { lanes: named, incidentId: `budget:${policyName}${interval}:spent:${spent}`, policyName, rawLanes };
   }
 
@@ -177,8 +172,6 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       const { lanes, incidentId, policyName, state, rawLanes, reason, quiet } = lanesFromNotification(payload);
       if (lanes.length === 0) {
         // Acknowledged, not retried: a redelivery pauses nothing either.
-        // A forecast trip is the early warning the operator wants ahead of the real
-        // one, so it says so rather than reading as a malformed alert.
         const message = quiet
           ? 'spend brake heard a budget tick under threshold'
           : reason === 'forecast_only'

@@ -116,8 +116,7 @@ describe('spend brake payload reading', () => {
   });
 
   it('warns but never pauses when a named budget is only forecast over', () => {
-    // What happened on 2026-09-18: the month was 53% spent, one expensive day steepened
-    // the trend, and a projection took the gate down for the rest of the period.
+    // The 2026-09-18 trip: 53% spent, trend steepened.
     expect(
       lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gate', forecastThresholdExceeded: 1.41 }),
     ).toEqual({
@@ -126,8 +125,7 @@ describe('spend brake payload reading', () => {
       rawLanes: 'gate',
       reason: 'forecast_only',
     });
-    // Spend catching up is the alert that pauses, and it is not `already_handled` by
-    // the forecast that preceded it: only a pause records an incident id.
+    // Spend catching up is the alert that pauses.
     expect(
       lanesFromNotification({
         budgetDisplayName: 'Cloud Build lanes=gate',
@@ -140,11 +138,20 @@ describe('spend brake payload reading', () => {
       policyName: 'Cloud Build lanes=gate',
       rawLanes: 'gate',
     });
-    // A forecast under 100% on a named budget stays the quiet routine tick.
+    // A typo pauses nothing ever, so it must not read as forecast_only.
+    expect(
+      lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gaet', forecastThresholdExceeded: 1.4 }),
+    ).toEqual({
+      lanes: [],
+      policyName: 'Cloud Build lanes=gaet',
+      rawLanes: 'gaet',
+      reason: 'unrecognised_lanes',
+    });
+    // Under 100% stays the quiet routine tick.
     expect(
       lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gate', forecastThresholdExceeded: 0.9 }),
     ).toEqual({ lanes: [], policyName: 'Cloud Build lanes=gate', reason: 'budget_under_threshold', quiet: true });
-    // The unnamed budget still grades a forecast: `managed` alone, the dearest lane.
+    // Unnamed budgets still grade a forecast: `managed` alone.
     expect(lanesFromNotification({ budgetDisplayName: 'Monthly', forecastThresholdExceeded: 1 }).lanes).toEqual([
       'managed',
     ]);
