@@ -12,6 +12,7 @@ import {
   clearPendingInboxFlag,
   hasPendingInbox,
   queuesCreatorInbox,
+  queueInboxMessage,
   setLocalPendingInboxFlag,
   stampListedInbox,
   stampLocalInbox,
@@ -365,10 +366,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       await messageRef.set(record);
       return record;
     }
-    const batch = this.db.batch();
-    batch.set(messageRef, record);
-    batch.set(this.submissionRef(jobId), { pendingCreatorMessage: true }, { merge: true });
-    await batch.commit();
+    await queueInboxMessage(this.db, jobId, messageRef, record);
     return record;
   }
 

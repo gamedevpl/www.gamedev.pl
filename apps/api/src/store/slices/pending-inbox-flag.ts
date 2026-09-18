@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { DocumentReference, Firestore } from '@google-cloud/firestore';
 import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
 import { isStudioOrigin } from '../records/build-log.js';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -42,7 +42,9 @@ export async function stampListedInbox(
 export async function writePendingInboxFlag(db: Firestore, jobId: number, pending: boolean): Promise<void> {
   const ref = db.collection('submissions').doc(String(jobId));
   await db.runTransaction(async (tx) => {
-    const current = flagOf((await tx.get(ref)).data() as { pendingCreatorMessage?: boolean } | undefined);
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const current = flagOf(snap.data() as { pendingCreatorMessage?: boolean } | undefined);
     if (current === pending) return;
     if (!pending && current === true) return;
     tx.set(ref, { pendingCreatorMessage: pending }, { merge: true });
@@ -66,5 +68,25 @@ export async function stampEmptyInbox(
 }
 
 export async function clearPendingInboxFlag(db: Firestore, jobId: number): Promise<void> {
-  await db.collection('submissions').doc(String(jobId)).set({ pendingCreatorMessage: false }, { merge: true });
+  const ref = db.collection('submissions').doc(String(jobId));
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    tx.set(ref, { pendingCreatorMessage: false }, { merge: true });
+  });
+}
+
+// Write the message; skip the flag when the parent is missing.
+export async function queueInboxMessage(
+  db: Firestore,
+  jobId: number,
+  messageRef: DocumentReference,
+  record: CreatorMessage,
+): Promise<void> {
+  const parent = db.collection('submissions').doc(String(jobId));
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(parent);
+    tx.set(messageRef, record);
+    if (snap.exists) tx.set(parent, { pendingCreatorMessage: true }, { merge: true });
+  });
 }

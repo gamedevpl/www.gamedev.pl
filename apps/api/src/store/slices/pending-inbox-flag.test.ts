@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore } from '../../platform/store.js';
 import { fakeFirestore } from '../fake-firestore.js';
-import { hasPendingInbox, queuesCreatorInbox, writePendingInboxFlag } from './pending-inbox-flag.js';
+import {
+  hasPendingInbox,
+  queuesCreatorInbox,
+  writePendingInboxFlag,
+  clearPendingInboxFlag,
+} from './pending-inbox-flag.js';
 
 describe('pending inbox flag', () => {
   it('queues only undelivered non-studio rows', () => {
@@ -76,5 +81,21 @@ describe('pending inbox flag', () => {
     await db.collection('submissions').doc('7').set({ pendingCreatorMessage: true });
     await writePendingInboxFlag(db, 7, false);
     expect((await db.collection('submissions').doc('7').get()).data()?.pendingCreatorMessage).toBe(true);
+  });
+
+  it('does not create a submission parent when the job is missing', async () => {
+    const { db } = fakeFirestore();
+    await writePendingInboxFlag(db, 1, true);
+    await writePendingInboxFlag(db, 1, false);
+    await clearPendingInboxFlag(db, 1);
+    expect((await db.collection('submissions').doc('1').get()).exists).toBe(false);
+
+    const store = new FirestoreStore(db);
+    await store.appendCreatorMessage(2, 'orphan');
+    expect((await db.collection('submissions').doc('2').get()).exists).toBe(false);
+    expect(await store.listPendingCreatorMessages(2)).toHaveLength(1);
+
+    await store.markCreatorMessagesDelivered(3, ['ghost']);
+    expect((await db.collection('submissions').doc('3').get()).exists).toBe(false);
   });
 });
