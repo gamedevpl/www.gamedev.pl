@@ -112,19 +112,35 @@ It counts what Firestore **bills**, not what the code calls:
 - an aggregation (`count()`) is 1, not the number of rows it counted;
 - `getAll` is one per reference requested.
 
-The fixture is fixed-size and explicit: eight creator rounds, twelve decoy rounds, five
-events and three messages on the polled job, six creator notifications, ten decoy
-notifications, seven reviewer assessments, fifteen decoy assessments, four decoy
-re-reviews. Decoys are why removing a `where` fails the gate instead of still passing.
+The fixture is fixed-size and explicit: eight creator rounds, twelve decoy rounds, three
+derived-only owner rounds, five events and three messages on the polled job, six creator
+notifications, ten decoy notifications, seven reviewer assessments, fifteen decoy
+assessments, four decoy re-reviews. Decoys are why removing a `where` fails the gate
+instead of still passing.
 
 Covered first, because a regression is both likely and expensive: `GET /api/submissions/:token`,
-`GET /api/submissions/mine`, `GET /api/review/status`, `GET /api/notifications`. The numbers
-are today's cost, not a target — do not round them up.
+`GET /api/submissions/mine`, `GET /api/submissions/mine (derived-only owner)`,
+`GET /api/review/status`, `GET /api/notifications`. The numbers are today's cost, not a
+target — do not round them up.
+
+`/api/submissions/mine` is measured twice, because the two owner shapes have different
+cost curves. The existing creator has `gameAccess` rows, so `countSubmissionsByOwner`
+stays on the canonical reconcile (`listGameAccessByMember`, then a `count()` per
+canonical slug the owner query already covers). The derived-only owner has three slugged
+rounds and **no** `gameAccess` rows — the 193 slugs the GameAccess backfill left derived
+on purpose. With no canonical slugs, every record lands in `nonCanonical`, so that poll
+pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for every slugged round
+(the 30s derived-access window starts empty on each measurement: a new instance and every
+window expiry). Restoring the old `listGameAccessByMember` then `count()` pre-check in
+`countSubmissionsByOwner` moves only this second number; the access-row owner cannot see
+the difference.
 
 ```bash
 npm run firestore-read-cost                                            # report
-npm run firestore-read-cost -- "GET /api/submissions/mine"             # one route
+npm run firestore-read-cost -- "GET /api/submissions/mine"             # access-row owner
+npm run firestore-read-cost -- "derived-only"                         # derived-only owner
 npm run firestore-read-cost -- "GET /api/submissions/mine" --write --force   # raise ONE
+npm run firestore-read-cost -- "derived-only" --write --force          # raise the other
 npm run firestore-read-cost -- --write --reseal                        # reseal every route
 ```
 
@@ -466,9 +482,10 @@ should run `npm run firestore-read-cost -- "GET /api/submissions/mine" --write -
 so those five reads stay locked.
 
 That fixture's creator has `gameAccess` rows, so it cannot see an owner with none — the
-derived-only accounts the access backfill left. After both land, add that shape to the
-fixture so the gate watches it. Until then they pay the owner query plus a
-`resolveGameAccess` per slugged round.
+derived-only accounts the access backfill left. `GET /api/submissions/mine (derived-only
+owner)` is that shape: three slugged rounds, no `gameAccess` rows, measured cold so the
+gate watches the per-round `resolveGameAccess` curve. Do not treat a raise of that
+ceiling as the same decision as a raise of the access-row `mine` poll.
 
 `listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses used
 to zigzag-merge the two single-field indexes — Query Insights measured
