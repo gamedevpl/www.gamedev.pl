@@ -14,6 +14,8 @@ import type { GameEditorInvitation } from './records/game-editor-invite.js';
 import type { GameMembershipStore, MembershipChangeResult } from './slices/game-membership.js';
 import type { SubmissionQueryStore } from './slices/submission-queries.js';
 import type { ShelfMirror } from '../creation/shelf-mirror.js';
+import { invalidateDerivedAccess, invalidateDerivedAccessMany } from '../platform/derived-access-cache.js';
+
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
   protected abstract gameAccessStore: GameAccessStore;
@@ -25,6 +27,15 @@ export abstract class SubmissionFacade {
 
   // Mirrors the owner's rounds; see creation/shelf-mirror.ts.
   protected abstract shelfMirror: ShelfMirror;
+
+  protected dropDerivedAccess(slug: string): void {
+    invalidateDerivedAccess(this, slug);
+  }
+
+  protected dropDerivedAccessMany(slugs: readonly string[]): void {
+    invalidateDerivedAccessMany(this, slugs);
+  }
+
   async claimManualRoundSlug(
     jobId: number,
     slug: string,
@@ -33,7 +44,10 @@ export abstract class SubmissionFacade {
   ): Promise<boolean> {
     const won = await this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId, admissionNonce);
     // An atomic claim writes the slug itself.
-    if (won) await this.shelfMirror.afterJobWrite(jobId);
+    if (won) {
+      await this.shelfMirror.afterJobWrite(jobId);
+      this.dropDerivedAccess(slug);
+    }
     return won;
   }
   async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
@@ -63,6 +77,7 @@ export abstract class SubmissionFacade {
     if (!won) return false;
 
     await this.shelfMirror.afterJobWrite(jobId);
+    this.dropDerivedAccess(slug);
     // The claim is durable; a failed record cannot fail it.
     await this.tryRecordOwner(jobId, slug);
     return true;
@@ -75,6 +90,7 @@ export abstract class SubmissionFacade {
     await this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
     // Before the access block: its early returns must not skip the mirror.
     await this.shelfMirror.afterJobWrite(jobId);
+    this.dropDerivedAccess(slug);
     try {
       const job = await this.submissionStore.getSubmission(jobId);
       if (!job?.ownerUid) return;
@@ -115,7 +131,9 @@ export abstract class SubmissionFacade {
   }
 
   async ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.ensureGameAccess(slug, ownerUid, workAt, at);
+    const record = await this.gameAccessStore.ensureGameAccess(slug, ownerUid, workAt, at);
+    this.dropDerivedAccess(slug);
+    return record;
   }
 
   async recordSettledOwner(
@@ -125,7 +143,9 @@ export abstract class SubmissionFacade {
     workAt: string,
     at: string,
   ): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, workAt, at);
+    const record = await this.gameAccessStore.recordSettledOwner(slug, ownerUid, jobId, workAt, at);
+    this.dropDerivedAccess(slug);
+    return record;
   }
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
@@ -133,7 +153,9 @@ export abstract class SubmissionFacade {
   }
 
   async eraseMemberFromAllGameAccess(uid: string, at: string): Promise<string[]> {
-    return this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    const touched = await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    this.dropDerivedAccessMany(touched);
+    return touched;
   }
 
   async backfillGameAccess(
@@ -144,7 +166,9 @@ export abstract class SubmissionFacade {
     checkAccount: boolean,
     at: string,
   ): Promise<GameAccessRecord | null> {
-    return this.gameAccessStore.backfillGameAccess(slug, ownerUid, jobId, workAt, checkAccount, at);
+    const record = await this.gameAccessStore.backfillGameAccess(slug, ownerUid, jobId, workAt, checkAccount, at);
+    this.dropDerivedAccess(slug);
+    return record;
   }
 
   async getAccountErasure(uid: string): Promise<string | null> {
@@ -189,6 +213,7 @@ export abstract class SubmissionFacade {
   ): Promise<GameTransferInvitation | 'busy' | 'ineligible' | 'stale_owner' | null> {
     const result = await this.gameTransferStore.acceptGameTransferInvitation(slug, recipientUid, at, invitationId);
     if (result && result !== 'busy' && result !== 'ineligible' && result !== 'stale_owner') {
+      this.dropDerivedAccess(slug);
       await this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
       await this.gameTransferProposalStore.invalidateOpenTransferProposalsForSlug(slug, at);
     }
@@ -263,7 +288,9 @@ export abstract class SubmissionFacade {
     at: string,
     inviteId: string,
   ): Promise<EditorInviteAcceptResult> {
-    return this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+    const result = await this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+    this.dropDerivedAccess(slug);
+    return result;
   }
 
   async cancelEditorInvitation(
@@ -302,10 +329,14 @@ export abstract class SubmissionFacade {
   }
 
   async removeEditor(slug: string, ownerUid: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
-    return this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+    const result = await this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+    this.dropDerivedAccess(slug);
+    return result;
   }
 
   async leaveGame(slug: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
-    return this.gameMembershipStore.leaveGame(slug, editorUid, at);
+    const result = await this.gameMembershipStore.leaveGame(slug, editorUid, at);
+    this.dropDerivedAccess(slug);
+    return result;
   }
 }

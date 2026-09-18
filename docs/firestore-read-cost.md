@@ -23,16 +23,17 @@ Two corollaries, both of which have been got wrong here:
 
 ## Where the windows are
 
-| Surface                     | Poll  | Window                   | Dropped by                                                                                  |
-| --------------------------- | ----- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| `/api/catalog` enrichment   | —     | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                               |
-| store catalog + media       | —     | 10 min                   | publishing a game (`catalog-routes.ts`)                                                     |
-| notify sweep health scan    | 2 min | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                              |
-| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                          |
-| `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
-| `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
-| Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
-| Studio health scan          | mount | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)   |
+| Surface                     | Poll                        | Window                   | Dropped by                                                                                                         |
+| --------------------------- | --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `/api/catalog` enrichment   | —                           | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                                                      |
+| store catalog + media       | —                           | 10 min                   | publishing a game (`catalog-routes.ts`)                                                                            |
+| notify sweep health scan    | 2 min                       | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                                                     |
+| notify sweep per-job derive | 2 min                       | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                                                 |
+| `/api/review/status` badge  | 2 min                       | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`)                        |
+| `/api/notifications` bell   | 1 min                       | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                                             |
+| Studio connect guide        | 10 s                        | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                                       |
+| Studio health scan          | mount                       | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)                          |
+| Derived GameAccess fallback | Studio status & slug routes | 30 s                     | ensureGameAccess, recordSettledOwner, transfer, editor add/remove, slug claim, erasure (`derived-access-cache.ts`) |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -47,6 +48,48 @@ served the write, an own action is reflected immediately — but do not design a
 that needs that, and do not write it down as a guarantee. Making own-write freshness true
 across instances needs shared invalidation (a durable version key both instances read),
 which is not what a badge is worth.
+
+### Derived GameAccess, 30 seconds
+
+Query Insights for 17–18 September put `COLLECTION /submissions WHERE slug = ?` at the
+top of the day: **41,288 executions, 96,482 reads**, 2.337 documents scanned on
+average. Cheap per call, enormous in volume — the signature of an uncached lookup on
+a path the Studio status poll (and slug routes, transfers, editor invites, moderation)
+hits through `canActOnSlug`.
+
+`resolveGameAccess` already does the cheap thing first: a `gameAccess/{slug}` document
+get. The collection query is only the fallback for games with **no canonical record**.
+That set is not shrinking on its own. The GameAccess backfill left 193 slugs out
+because several uids hold rounds on them, and anything that predates the model still
+has no row. Promoting a quarantined slug would silently pick a winner; the fallback
+stays.
+
+The window covers **only that derived branch**. Caching the canonical get in the same
+change would put every permission check in the product behind a 30-second answer, and
+that is a different decision. A second resolve inside the window does not call
+`listSubmissionsBySlug`; a miss, an expiry, or an invalidating write does.
+
+The live `getGameAccess` still runs on every resolve, including the 193 quarantined
+slugs this cache exists for. A miss is billed: Firestore charges a read for a get on
+a missing document, and it shows up as `NOT_FOUND` in `document/read_count` — about
+10k in a three-day sample. Caching the absence would remove it, and every path that
+creates a canonical record already drops this window. It is left live on purpose: a
+canonical record written on another instance takes effect immediately, which is the
+whole point of that record. The collection scan is gone; one billed miss per call
+remains.
+
+This is an authorization answer, not a display value. `canActOnSlug` gates private
+prior-round chat, so the window is **30 seconds** — the same bound as the session-user
+cache — sized against a former owner reading for the length of it, not against the
+saving. Writes that change authority drop the slug on the instance that served them:
+`ensureGameAccess`, `recordSettledOwner`, `backfillGameAccess`, transfer accept
+(`transferredAccess`), editor accept (`withEditorAdded`), editor remove / leave
+(`withEditorRemoved`), membership erasure (`withMemberErased`), slug claim, and
+account erasure. The residual that remains is the documented bound: **one window for
+any action, including your own**, because `--max-instances 4` means invalidation on
+one instance does not reach the others. On the instance that served the write, the
+next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
+row) is not hooked and can sit until the window ends, on every instance.
 
 ## The floor underneath the windows
 
