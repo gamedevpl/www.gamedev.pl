@@ -82,6 +82,8 @@ export abstract class SubmissionFacade {
       const owners = new Set(claimants.filter((record) => !record.abandonedAt).map((record) => record.ownerUid));
       if (owners.size !== 1 || !owners.has(job.ownerUid)) return;
       await this.gameAccessStore.ensureGameAccess(slug, job.ownerUid, job.createdAt, new Date().toISOString());
+      // Access is what reconcile reads; rebuild after it lands.
+      await this.shelfMirror.rebuild(job.ownerUid);
     } catch {
       // Derived state: the backfill repairs it, a throw would not.
     }
@@ -93,6 +95,7 @@ export abstract class SubmissionFacade {
       const job = await this.submissionStore.getSubmission(jobId);
       if (!job?.ownerUid) return;
       await this.gameAccessStore.recordSettledOwner(slug, job.ownerUid, jobId, job.createdAt, new Date().toISOString());
+      await this.shelfMirror.rebuild(job.ownerUid);
     } catch {
       // A throw here would strand a slug the claim already took.
     }

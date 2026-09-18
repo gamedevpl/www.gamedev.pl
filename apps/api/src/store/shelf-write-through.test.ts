@@ -10,6 +10,11 @@ const IMPLEMENTATIONS: Array<[string, () => Store]> = [
   ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
 ];
 
+// Collapse sorts ties by input order; a shared millisecond is not drift.
+function afterATick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 5));
+}
+
 // Same records and count the production shadow judges against.
 async function agrees(store: Store, ownerUid: string): Promise<string> {
   const owned = await store.listSubmissionsByOwner(ownerUid);
@@ -49,6 +54,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
     it('stays in agreement through every shelf-relevant writer', async () => {
       const store = makeStore();
       await store.createSubmission(1, 'g:owner', 'First');
+      await afterATick();
       await store.createSubmission(2, 'g:owner', 'Second');
 
       // Every writer the plan names; the shelf must survive.
@@ -179,14 +185,20 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
 
       // Sender: three slugless plus one slugged; the live 4-vs-3 case.
       await store.createSubmission(1, 'g:ada', 'One');
+      await afterATick();
       await store.createSubmission(2, 'g:ada', 'Two');
+      await afterATick();
       await store.createSubmission(3, 'g:ada', 'Three');
+      await afterATick();
       await store.createSubmission(4, 'g:ada', 'Sky');
       await store.setSubmissionSlug(4, 'sky');
 
       // Recipient already has three; a missed write-through is 4 vs 3.
+      await afterATick();
       await store.createSubmission(5, 'g:grace', 'Grace one');
+      await afterATick();
       await store.createSubmission(6, 'g:grace', 'Grace two');
+      await afterATick();
       await store.createSubmission(7, 'g:grace', 'Grace three');
 
       await acceptTransfer(store, 'sky', 'g:ada', 'g:grace');
