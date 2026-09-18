@@ -132,34 +132,21 @@ jobs:
           # and every gate would then die before run-gate with candidates left
           # unverified. Which is the one failure this whole path exists to avoid.
           #
-          # So the variable is set only when the grant is visible, on the repository or
-          # inherited from the project. Anything else (missing grant, or no permission
-          # to read the policy) leaves it empty, which is a supported value: the gate
-          # builds its own environment per run exactly as it did before this image
-          # existed. Slower, correct, and loud in the log rather than silent.
+          # Checked by a marker object, not get-iam-policy: reading an Artifact Registry
+          # (or project) IAM policy needs a permission this deployer is not granted, and
+          # is not granted here either — a read-only IAM-introspection scope is still a
+          # second IAM surface to review for a check this narrow. The deployer already
+          # holds project-wide storage.admin (infra/setup-wif.sh), so setup-gcp.sh
+          # records the grant as an object only it writes, and this step reads that
+          # object with a permission that already exists.
           GATE_SA="gate-runner@${PROJECT_ID}.iam.gserviceaccount.com"
-          READER=""
-          for SCOPE in repo project; do
-            if [ "$SCOPE" = repo ]; then
-              READER=$(gcloud artifacts repositories get-iam-policy "${REPO}" \
-                --location="${REGION}" --project="${PROJECT_ID}" \
-                --flatten="bindings[].members" \
-                --filter="bindings.role=roles/artifactregistry.reader AND bindings.members:${GATE_SA}" \
-                --format="value(bindings.members)" 2>/dev/null || true)
-            else
-              READER=$(gcloud projects get-iam-policy "${PROJECT_ID}" \
-                --flatten="bindings[].members" \
-                --filter="bindings.role=roles/artifactregistry.reader AND bindings.members:${GATE_SA}" \
-                --format="value(bindings.members)" 2>/dev/null || true)
-            fi
-            [ -n "$READER" ] && break
-          done
-          if [ -n "$READER" ]; then
+          MARKER="gs://${GAMES_STORE_BUCKET}/.ops/gate-runner-image-reader"
+          if gcloud storage objects describe "${MARKER}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
             echo "GATE_IMAGE=${GATE_IMAGE}" >> $GITHUB_ENV
             echo "gate-runner may pull ${GATE_IMAGE} — gate will use the prebuilt image"
           else
             echo "GATE_IMAGE=" >> $GITHUB_ENV
-            echo "::warning::${GATE_SA} has no artifactregistry.reader on ${REPO}; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh, or: gcloud artifacts repositories add-iam-policy-binding ${REPO} --location=${REGION} --project=${PROJECT_ID} --member=serviceAccount:${GATE_SA} --role=roles/artifactregistry.reader"
+            echo "::warning::${MARKER} not found; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh to grant ${GATE_SA} artifactregistry.reader on ${REPO} and record the marker."
           fi
 
       - name: Deploy candidate revision to Cloud Run

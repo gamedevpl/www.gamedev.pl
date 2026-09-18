@@ -536,6 +536,14 @@ fi
 # repository, not project-wide reader.
 GATE_IMAGE_REPO="${GATE_IMAGE_REPO:-gamedev}"
 GATE_IMAGE_REGION="${GATE_IMAGE_REGION:-$APP_REGION}"
+# deploy.yml has to know this grant exists before it can safely set GATE_RUNNER_IMAGE —
+# naming the image to the service before gate-runner can pull it is the outage this whole
+# section exists to prevent (see that file). It cannot ask Artifact Registry directly:
+# `get-iam-policy` needs a permission the deployer SA is not granted (and granting it,
+# even read-only, is a second IAM surface to review for a check this narrow). It already
+# holds project-wide storage.admin (setup-wif.sh), so a marker object in the store bucket
+# — which only this owner-run script writes — is a check it can already perform.
+GATE_IMAGE_READY_MARKER="gs://${STORE_BUCKET}/.ops/gate-runner-image-reader"
 if gcloud artifacts repositories describe "$GATE_IMAGE_REPO" \
   --location="$GATE_IMAGE_REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
   grant_gate_with_retry gcloud artifacts repositories add-iam-policy-binding "$GATE_IMAGE_REPO" \
@@ -544,10 +552,14 @@ if gcloud artifacts repositories describe "$GATE_IMAGE_REPO" \
     --member="serviceAccount:${GATE_SA_EMAIL}" \
     --role="roles/artifactregistry.reader"
   echo "    gate-runner may pull the runner image from ${GATE_IMAGE_REGION}/${GATE_IMAGE_REPO}."
+  printf 'granted %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | gcloud storage cp - "$GATE_IMAGE_READY_MARKER" \
+    --project="$PROJECT_ID" >/dev/null
 else
   echo "    WARN: Artifact Registry repo ${GATE_IMAGE_REPO} (${GATE_IMAGE_REGION}) missing — until it"
   echo "          exists and a deploy has pushed gate-runner, the gate builds its own environment"
   echo "          per run. That works; it just pays Cloud Build for setup on every candidate."
+  # Stale marker from a prior repo/region would tell the deploy the grant still holds.
+  gcloud storage rm "$GATE_IMAGE_READY_MARKER" --project="$PROJECT_ID" >/dev/null 2>&1 || true
 fi
 
 # The runtime starts the gate itself when a game is delivered (gate-trigger.ts). Without
