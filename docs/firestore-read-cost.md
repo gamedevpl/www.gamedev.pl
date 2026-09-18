@@ -313,8 +313,15 @@ the member was on, so a five-game sole owner paid five extra equality queries on
 `/api/submissions/mine` poll — Query Insights' hottest QUERY. The slug query is required
 after a transfer (the recipient's owner query does not yet contain the sender's rounds) and
 while editors, a revocation epoch, or a settlement that changed owner (accessRevision > 1)
-mean another uid may have written siblings. A revision-1 sole owner whose owner query
-already contains the slug skips it. `ownerQueryCoversAccess` is that predicate.
+mean another uid may have written siblings.
+
+Those conditions are necessary but not sufficient: a legacy multi-uid slug is pristine at
+revision 1 with no editors and no revocations, and nothing on the record says a second uid
+wrote rounds on it. So `ownerQueryCoversAccess` is only a cheap pre-filter, and
+`countSubmissionsBySlug` is the proof — a `count()` is charged one read per 1000 index
+entries rather than one per round, so the sole-owner poll still stops paying per round, and
+a count that disagrees with the owner rows falls back to the full list. Absence of proof
+means query: a predicate that guessed wrong here drops a game's own history off its shelf.
 
 Ordering is part of the contract, not an implementation detail. The query returns rounds
 newest first with the job id breaking a tie, which the callers rely on to pick the round an

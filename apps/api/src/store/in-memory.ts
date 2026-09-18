@@ -634,6 +634,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.submissionQueryStore.listSubmissionsBySlug(slug);
   }
 
+  async countSubmissionsBySlug(slug: string): Promise<number> {
+    return this.submissionQueryStore.countSubmissionsBySlug(slug);
+  }
+
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
     return this.submissionQueryStore.getPublishedSubmissionBySlug(slug);
   }

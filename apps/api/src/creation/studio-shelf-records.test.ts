@@ -233,6 +233,25 @@ describe('reconcileTransferredOwnership', () => {
     expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11]);
     expect(spy).toHaveBeenCalledWith('sky-dodge');
   });
+
+  // Pristine at revision 1, so no access field marks the second writer.
+  it('keeps a sibling round another uid owns on a legacy multi-uid slug', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:one' });
+    await store.upsertUser({ uid: 'g:two' });
+    await store.createSubmission(10, 'g:one', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.createSubmission(11, 'g:two', 'Sky Dodge again');
+    await store.setSubmissionSlug(11, 'sky-dodge');
+    await store.ensureGameAccess('sky-dodge', 'g:one', at, at);
+    expect((await store.getGameAccess('sky-dodge'))?.accessRevision).toBe(1);
+
+    const owned = await store.listSubmissionsByOwner('g:one');
+    const records = await reconcileTransferredOwnership(store, 'g:one', owned);
+
+    expect(records.map((row) => row.jobId).sort((a, b) => a - b)).toEqual([10, 11]);
+  });
 });
 
 describe('ownerQueryCoversAccess', () => {
