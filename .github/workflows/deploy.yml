@@ -132,21 +132,23 @@ jobs:
           # and every gate would then die before run-gate with candidates left
           # unverified. Which is the one failure this whole path exists to avoid.
           #
-          # Checked by a marker object, not get-iam-policy: reading an Artifact Registry
-          # (or project) IAM policy needs a permission this deployer is not granted, and
-          # is not granted here either — a read-only IAM-introspection scope is still a
-          # second IAM surface to review for a check this narrow. The deployer already
-          # holds project-wide storage.admin (infra/setup-wif.sh), so setup-gcp.sh
-          # records the grant as an object only it writes, and this step reads that
-          # object with a permission that already exists.
+          # Checked by a Secret Manager secret, not get-iam-policy (this deployer is not
+          # granted the IAM-read permission that needs) and not a storage marker either —
+          # review caught that gate-runner holds objectAdmin on almost the whole store
+          # bucket (BY-11 hardening), and that identity runs hostile candidate code, so a
+          # marker object there is forgeable by the exact thing the fallback exists to
+          # protect against. setup-gcp.sh writes this secret; gate-runner is granted
+          # nothing on it, so it cannot forge a "granted" reading. The deployer already
+          # holds project-wide secretmanager.secretAccessor (infra/setup-wif.sh) to read
+          # it with no new grant.
           GATE_SA="gate-runner@${PROJECT_ID}.iam.gserviceaccount.com"
-          MARKER="gs://${GAMES_STORE_BUCKET}/.ops/gate-runner-image-reader"
-          if gcloud storage objects describe "${MARKER}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+          READY=$(gcloud secrets versions access latest --secret=gate-runner-image-ready --project="${PROJECT_ID}" 2>/dev/null || true)
+          if [ "${READY#granted}" != "${READY}" ]; then
             echo "GATE_IMAGE=${GATE_IMAGE}" >> $GITHUB_ENV
             echo "gate-runner may pull ${GATE_IMAGE} — gate will use the prebuilt image"
           else
             echo "GATE_IMAGE=" >> $GITHUB_ENV
-            echo "::warning::${MARKER} not found; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh to grant ${GATE_SA} artifactregistry.reader on ${REPO} and record the marker."
+            echo "::warning::gate-runner-image-ready secret is not 'granted'; the gate will keep building its environment per run (slower, still correct). Run infra/setup-gcp.sh to grant ${GATE_SA} artifactregistry.reader on ${REPO} and record the secret."
           fi
 
       - name: Deploy candidate revision to Cloud Run
