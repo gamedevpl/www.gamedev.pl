@@ -4,6 +4,6 @@
     "GET /api/notifications": 8,
     "GET /api/review/status": 12,
     "GET /api/submissions/:token": 22,
-    "GET /api/submissions/mine": 44
+    "GET /api/submissions/mine": 39
   }
 }
