@@ -5,7 +5,6 @@
 import type { GameAccessRecord } from '../store/records/game-access.js';
 import type { GameAccessStore } from '../store/slices/game-access.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
-import { readDerivedGameAccessCached } from './game-access-derived-cache.js';
 import { BOT_UID_PREFIX, DELETED_ACCOUNT_UID } from './store.js';
 
 // platform covers repo-lane, erased and bot-owned games: nobody to ask.
@@ -63,24 +62,15 @@ function fromRecord(record: GameAccessRecord): ResolvedGameAccess {
   };
 }
 
-export async function resolveGameAccess(
-  store: GameOwnerLookup,
-  slug: string,
-  now: () => number = Date.now,
-): Promise<ResolvedGameAccess> {
+export async function resolveGameAccess(store: GameOwnerLookup, slug: string): Promise<ResolvedGameAccess> {
   const record = await store.getGameAccess(slug);
   if (record) return fromRecord(record);
-  return readDerivedGameAccessCached(
-    store,
-    slug,
-    async () => ({
-      owner: deriveOwnerFromSubmissions(await store.listSubmissionsBySlug(slug)),
-      editorUids: [],
-      accessRevision: 0,
-      source: 'derived' as const,
-    }),
-    now,
-  );
+  return {
+    owner: deriveOwnerFromSubmissions(await store.listSubmissionsBySlug(slug)),
+    editorUids: [],
+    accessRevision: 0,
+    source: 'derived',
+  };
 }
 
 // Who owns `slug` now; `fallback` covers games with no creator.

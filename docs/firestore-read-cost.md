@@ -23,17 +23,16 @@ Two corollaries, both of which have been got wrong here:
 
 ## Where the windows are
 
-| Surface                      | Poll        | Window                   | Dropped by                                                                                     |
-| ---------------------------- | ----------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `/api/catalog` enrichment    | —           | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                                  |
-| store catalog + media        | —           | 10 min                   | publishing a game (`catalog-routes.ts`)                                                        |
-| notify sweep health scan     | 2 min       | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                                 |
-| notify sweep per-job derive  | 2 min       | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                             |
-| `/api/review/status` badge   | 2 min       | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`)    |
-| `/api/notifications` bell    | 1 min       | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                         |
-| Studio connect guide         | 10 s        | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                   |
-| Studio health scan           | mount       | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)      |
-| Derived game-access fallback | status poll | 30 s                     | `ensureGameAccess`, settlement, transfer, membership, erasure (`game-access-derived-cache.ts`) |
+| Surface                     | Poll  | Window                   | Dropped by                                                                                  |
+| --------------------------- | ----- | ------------------------ | ------------------------------------------------------------------------------------------- |
+| `/api/catalog` enrichment   | —     | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                               |
+| store catalog + media       | —     | 10 min                   | publishing a game (`catalog-routes.ts`)                                                     |
+| notify sweep health scan    | 2 min | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                              |
+| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                          |
+| `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
+| `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
+| Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
+| Studio health scan          | mount | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)   |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -162,25 +161,18 @@ or a round `/mine` has not collapsed) can still move, and the Studio chip
 should see that. Lengthening the 30s home poll would not have helped; the
 cost is the size of the fan-out.
 
-The server half is a backstop, not a substitute. `resolveGameAccess` already
-does a cheap `getGameAccess` doc-get; the expensive part is the derived
-fallback, `listSubmissionsBySlug`, taken by every status poll's permission
-check when the game has no canonical record. That population is not shrinking:
-the GameAccess backfill quarantined 193 slugs **by design** (ambiguous
-multi-uid ownership), plus everything predating the model. Promoting those
-records would silently pick a winner; do not.
-
-`game-access-derived-cache.ts` windows only that derived branch, 30 seconds,
-in-flight dedup, keyed by store, dropped on every authority-changing write
-(`ensureGameAccess`, `recordSettledOwner`, transfer accept, editor
-add/remove, account erasure). Canonical answers stay a single doc get; folding
-them in would change the staleness contract for every permission check in the
-product. The cached value is an authorization answer — `canActOnSlug` gates
-reads of private prior-round chat — so the window is sized against a former
-owner reading for its length, not against the saving. Residual staleness is
-the documented bound for every process-local cache here: **one window for any
-action, including your own**. Invalidation on one of `--max-instances 4` does
-not reach the others.
+That remaining re-ask is also the residual. `shouldAskUnlisted` is
+`isSubmissionInFlight`, true for `null` and for queued / building /
+in_review / publishing. A live unlisted round is supposed to be asked again;
+nothing here ages it out. Ancient jobs the notify sweep has already
+auto-abandoned prune on the first answer. Rounds that stay non-terminal —
+quiet `building`, parked `in_review` — keep fanning out from that browser
+until they settle or the spec is cleared. Do not cap the list by age: an
+age cut would hide a live anonymous round the shelf has not listed yet,
+which is the case this list exists for. Measure after deploy. If the
+remaining fan-out is still the day's hottest query, that is a new
+decision, not this one. The derived `listSubmissionsBySlug` fallback
+those polls still take is a separate cache, not this change.
 
 **A gate on the store reaches only what subscribes to it.** The welcome dialog and the
 connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both

@@ -280,7 +280,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     ]);
 
     // After the fence, so a record created mid-erasure is either refused or seen here.
-    await this.eraseMemberFromAllGameAccess(uid, at);
+    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
     await this.gameEditorInviteStore.cancelPendingEditorInvitesForUid(uid, at);
     await this.gameTransferProposalStore.eraseTransferProposalsForUid(uid, at);
 

@@ -134,8 +134,6 @@ const FILE_BUCKET = {
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
   'game-access-resolve': 'platform',
-  'game-access-derived-cache': 'platform',
-  'game-access-derived-cache.test': 'platform',
   'game-access-permissions': 'platform',
   'game-quota': 'platform',
   'game-access-backfill': 'platform',
