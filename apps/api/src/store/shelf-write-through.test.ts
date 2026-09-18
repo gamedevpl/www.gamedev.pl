@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
 import { judgeShelfShadow, recordShelfShadow } from '../creation/shelf-shadow.js';
+import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
 
 // Both stores: the write-through spans facade and class.
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -9,14 +10,31 @@ const IMPLEMENTATIONS: Array<[string, () => Store]> = [
   ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
 ];
 
-// The write-through claim, asked as the shadow asks it.
+// Same records and count the production shadow judges against.
 async function agrees(store: Store, ownerUid: string): Promise<string> {
-  const [shelf, records, count] = await Promise.all([
-    store.getShelf(ownerUid),
-    store.listSubmissionsByOwner(ownerUid),
-    store.countSubmissionsByOwner(ownerUid),
-  ]);
+  const owned = await store.listSubmissionsByOwner(ownerUid);
+  const records = await reconcileTransferredOwnership(store, ownerUid, owned);
+  const [shelf, count] = await Promise.all([store.getShelf(ownerUid), store.countSubmissionsByOwner(ownerUid)]);
   return judgeShelfShadow(shelf, records, count).verdict;
+}
+
+async function acceptTransfer(store: Store, slug: string, senderUid: string, recipientUid: string): Promise<void> {
+  const at = new Date().toISOString();
+  await store.ensureGameAccess(slug, senderUid, at, at);
+  const later = new Date(Date.now() + 1000).toISOString();
+  const code = (await store.ensureRecipientCode(recipientUid, later))!;
+  const revision = (await store.getGameAccess(slug))!.accessRevision;
+  await store.createGameTransferInvitation(slug, senderUid, recipientUid, revision, later, code);
+  const invite = (await store.getActiveGameTransfer(slug, later))!;
+  await store.acceptGameTransferInvitation(slug, recipientUid, later, invite.invitationId);
+}
+
+async function acceptEditor(store: Store, slug: string, ownerUid: string, editorUid: string): Promise<void> {
+  const at = new Date().toISOString();
+  const code = (await store.ensureRecipientCode(editorUid, at))!;
+  await store.createEditorInvitation(slug, ownerUid, editorUid, at, code);
+  const invite = (await store.getEditorInvite(slug, editorUid, at))!;
+  await store.acceptEditorInvitation(slug, editorUid, at, invite.inviteId);
 }
 
 for (const [implName, makeStore] of IMPLEMENTATIONS) {
@@ -152,6 +170,50 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.deleteShelf('g:owner');
 
       expect(await store.getShelf('g:owner')).toBeNull();
+    });
+
+    it('mirrors a transferred round that list-by-owner would miss', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada' });
+      await store.upsertUser({ uid: 'g:grace' });
+
+      // Sender: three slugless plus one slugged; the live 4-vs-3 case.
+      await store.createSubmission(1, 'g:ada', 'One');
+      await store.createSubmission(2, 'g:ada', 'Two');
+      await store.createSubmission(3, 'g:ada', 'Three');
+      await store.createSubmission(4, 'g:ada', 'Sky');
+      await store.setSubmissionSlug(4, 'sky');
+
+      // Recipient already has three; a missed write-through is 4 vs 3.
+      await store.createSubmission(5, 'g:grace', 'Grace one');
+      await store.createSubmission(6, 'g:grace', 'Grace two');
+      await store.createSubmission(7, 'g:grace', 'Grace three');
+
+      await acceptTransfer(store, 'sky', 'g:ada', 'g:grace');
+
+      expect(await agrees(store, 'g:grace')).toBe('match');
+      expect(await agrees(store, 'g:ada')).toBe('match');
+    });
+
+    it('refreshes the tip when an editor leave cancels the newer round', async () => {
+      const store = makeStore();
+      await store.upsertUser({ uid: 'g:ada' });
+      await store.upsertUser({ uid: 'g:bea' });
+
+      await store.createSubmission(1, 'g:ada', 'Sky');
+      await store.setSubmissionSlug(1, 'sky');
+      const at = new Date().toISOString();
+      await store.ensureGameAccess('sky', 'g:ada', at, at);
+      await acceptEditor(store, 'sky', 'g:ada', 'g:bea');
+
+      await store.createSubmission(2, 'g:bea', 'Sky edit');
+      await store.setSubmissionSlug(2, 'sky');
+      await store.recordJobTransition(2, { to: 'building', at: new Date().toISOString(), by: 'creator' });
+
+      await store.leaveGame('sky', 'g:bea', new Date().toISOString());
+
+      expect(await agrees(store, 'g:ada')).toBe('match');
+      expect(await agrees(store, 'g:bea')).toBe('match');
     });
 
     // The idle-account case: no write to hook, no row to find.

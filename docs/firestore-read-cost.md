@@ -214,7 +214,10 @@ write directly — and submissions carry no `updatedAt`:
    is correct by construction and there is no drift arithmetic to get wrong. Because the
    document is in Firestore, **every instance sees it** — unlike the per-instance windows
    above. "Every writer" includes the two _atomic_ slug claims, which write the slug
-   themselves rather than through the plain setter, and `setDraftShared`.
+   themselves rather than through the plain setter, `setDraftShared`, and the
+   membership writers that change who a round belongs to without touching the
+   submission row (`acceptGameTransferInvitation`, `acceptEditorInvitation`,
+   `removeEditor`, `leaveGame`).
 
    Coalescing concurrent rebuilds is not enough: a write landing after a running rebuild has
    read source but before it writes would be waited on and then lost, so the mirror requeues
@@ -297,6 +300,31 @@ is not itself a red flag — it is the marker for an account about to self-heal 
 The 09-20 checkpoint should read the weekly mismatch count split by verdict, not as one number:
 only `version` / `truncated` / `count` / `collapse` mean the document and source actually
 disagreed.
+
+**What the week to 2026-09-18 actually showed**, before the writers below were hooked:
+656 `collapse`, 102 `count`, 0 `absent`, 3 distinct owners. Not a race and not warm-up —
+it repeated every few minutes, and `absent` (the benign "not built yet") never appeared.
+`MAX_SHELF_ROUNDS` is 2,000 and the owners had 4 and 155 rounds, so truncation was not it.
+
+The two verdicts were two different unhooked writers, both real:
+
+- **`count` (sourceCount 4, shelfCount 3).** A round in source never reached the document.
+  Two cooperating holes: `acceptGameTransferInvitation` / `acceptEditorInvitation` changed
+  membership without rebuilding the shelf, so a transferred or shared round existed in
+  `reconcileTransferredOwnership` and not in `shelves/{ownerUid}`; and Firestore
+  `countSubmissionsByOwner` took a raw `ownerUid` `count()` whenever the owner had no
+  remaining `gameAccess` rows, so a sender who kept slugless rounds and transferred the
+  slugged one compared 4 against a correctly rebuilt 3 forever. The hourly pass cannot
+  heal a count definition that disagrees with the rebuilt document.
+- **`collapse` (same count, different content).** `leaveGame` wrote `state: canceled` on
+  the editor's live tip without `afterJobWrite` / a shelf rebuild, so the document still
+  served that round as the tip while source collapse dropped it. The diverging field is
+  one the fingerprint already covers (`createdAt` / `jobId` of the tip, via `state`).
+
+Readers stay on source. Graduate them only after a later week of shadow logs is **zero
+mismatches** split by verdict (`count` and `collapse` both 0, not merely quieter). Do not
+flip in the same change that hooks the writers — the next week's log is the proof, and a
+reader flip needs its own revert.
 
 `listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses used
 to zigzag-merge the two single-field indexes — Query Insights measured

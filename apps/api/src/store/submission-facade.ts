@@ -191,6 +191,8 @@ export abstract class SubmissionFacade {
     if (result && result !== 'busy' && result !== 'ineligible' && result !== 'stale_owner') {
       await this.gameEditorInviteStore.cancelPendingEditorInvitesForSlug(slug, at);
       await this.gameTransferProposalStore.invalidateOpenTransferProposalsForSlug(slug, at);
+      // Reconcile, not ownerUid, is what the shelf serves.
+      await this.refreshShelves(result.senderUid, result.recipientUid);
     }
     return result;
   }
@@ -263,7 +265,11 @@ export abstract class SubmissionFacade {
     at: string,
     inviteId: string,
   ): Promise<EditorInviteAcceptResult> {
-    return this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+    const result = await this.gameEditorInviteStore.acceptEditorInvitation(slug, recipientUid, at, inviteId);
+    if (result && typeof result === 'object') {
+      await this.refreshShelves(result.senderUid, result.recipientUid);
+    }
+    return result;
   }
 
   async cancelEditorInvitation(
@@ -302,10 +308,21 @@ export abstract class SubmissionFacade {
   }
 
   async removeEditor(slug: string, ownerUid: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
-    return this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+    const result = await this.gameMembershipStore.removeEditor(slug, ownerUid, editorUid, at);
+    if (result && typeof result === 'object') await this.refreshShelves(result.ownerUid, editorUid);
+    return result;
   }
 
   async leaveGame(slug: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
-    return this.gameMembershipStore.leaveGame(slug, editorUid, at);
+    const result = await this.gameMembershipStore.leaveGame(slug, editorUid, at);
+    if (result && typeof result === 'object') await this.refreshShelves(result.ownerUid, editorUid);
+    return result;
+  }
+
+  // Ownership changes rebuild every affected shelf.
+  private async refreshShelves(...ownerUids: string[]): Promise<void> {
+    for (const ownerUid of new Set(ownerUids.filter(Boolean))) {
+      await this.shelfMirror.rebuild(ownerUid);
+    }
   }
 }

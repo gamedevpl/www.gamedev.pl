@@ -438,8 +438,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async countSubmissionsByOwner(ownerUid: string): Promise<number> {
-    const access = await this.listGameAccessByMember(ownerUid);
-    if (!access.length) return this.shelfStore.countSubmissionsByOwner(ownerUid);
+    // Must match the rebuilt shelf, not the ownerUid query.
     return (await reconcileTransferredOwnership(this, ownerUid, await this.listSubmissionsByOwner(ownerUid))).length;
   }
 
