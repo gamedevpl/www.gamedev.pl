@@ -634,12 +634,20 @@ jobs:
           # Later steps (the authenticated smoke) need the same URL.
           echo "CANDIDATE_URL=${CANDIDATE_URL}" >> "$GITHUB_ENV"
 
+          fetch_status() {
+            local code
+            # errexit guard: non-zero curl exit (e.g. DNS failure, connection timeout)
+            # must not terminate the shell under set -e so caller retry loops can handle it.
+            code=$(curl -s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" "$@" || true)
+            echo "${code:-000}"
+          }
+
           # Health is always public. The candidate tag's route can take several
           # seconds to propagate across all edge proxies (Google Frontend Anycast).
           # Poll until /api/health returns 200 before proceeding.
           WARMED=false
           for i in $(seq 1 15); do
-            STATUS_HEALTH=$(curl -s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
+            STATUS_HEALTH=$(fetch_status "${CANDIDATE_URL}/api/health")
             if [ "$STATUS_HEALTH" = "200" ]; then
               WARMED=true
               break
@@ -656,7 +664,7 @@ jobs:
           # Allow the same brief edge convergence window if / hits a different edge proxy.
           SHELL_READY=false
           for i in $(seq 1 10); do
-            STATUS_SHELL=$(curl -s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/")
+            STATUS_SHELL=$(fetch_status "${CANDIDATE_URL}/")
             if [ "$STATUS_SHELL" = "200" ]; then
               SHELL_READY=true
               break
@@ -680,11 +688,11 @@ jobs:
             local code=""
 
             for attempt in $(seq 1 5); do
-              local args=(-s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" -X "$method")
+              local args=(-X "$method")
               if [ -n "$auth_header" ]; then
                 args+=(-H "Authorization: $auth_header")
               fi
-              code=$(curl "${args[@]}" "${CANDIDATE_URL}${path}")
+              code=$(fetch_status "${args[@]}" "${CANDIDATE_URL}${path}")
               if [ "$code" = "$expected" ]; then
                 return 0
               fi
