@@ -3,6 +3,7 @@ import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js'
 import { fakeFirestore } from './fake-firestore.js';
 import { judgeShelfShadow, recordShelfShadow } from '../creation/shelf-shadow.js';
 import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
+import { SHELF_VERSION } from './records/shelf.js';
 
 // Both stores: the write-through spans facade and class.
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -158,7 +159,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.createSubmission(1, 'g:owner', 'First');
       // Stands in for a rollback revision writing behind the document.
       await store.putShelf('g:owner', {
-        version: 1,
+        version: SHELF_VERSION,
         builtAt: '2026-01-01T00:00:00.000Z',
         sourceCount: 99,
         rounds: [],

@@ -1,7 +1,9 @@
 import type { SubmissionRecord } from './submission.js';
 
 // A shelf document older than its version is rebuilt, never merged.
-export const SHELF_VERSION = 1;
+
+// 2 adds ownedCount; version 1 is repaired on sight.
+export const SHELF_VERSION = 2;
 
 // A creator this far past plausible reads from source instead.
 export const MAX_SHELF_ROUNDS = 2_000;

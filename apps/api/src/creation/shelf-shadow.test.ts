@@ -206,6 +206,27 @@ describe('recordShelfShadow', () => {
     expect(rebuildCalled).toBe(false);
   });
 
+  // A pre-ownedCount shelf would otherwise read from source forever.
+  it('repairs a shelf left behind by an older version', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => ({ ...buildShelfDocument(source, at), version: SHELF_VERSION - 1 }),
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    );
+    expect(result?.verdict).toBe('version');
+    expect(rebuildCalled).toBe(true);
+  });
+
   // Readers serve this document, so drift is wrong answers until rewritten.
   it('repairs a shelf that exists but disagrees', async () => {
     let rebuildCalled = false;
