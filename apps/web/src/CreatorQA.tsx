@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { BuilderChoice, type BuilderUnavailableReason } from './BuilderChoice.js';
 import { isBuilderKind, type BuilderKind } from './builderKind.js';
+import { CreatorQADiscardModal } from './CreatorQADiscardModal.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
@@ -93,9 +94,28 @@ export function CreatorQA({
   const [customText, setCustomText] = useState<Record<string, string>>(initialAnswers?.custom ?? {});
   const [builder, setBuilder] = useState<BuilderKind>(isBuilderKind(initialBuilder) ? initialBuilder : 'platform');
   const [step, setStep] = useState(0);
+  const [showConfirmExit, setShowConfirmExit] = useState(false);
   const titleReady = isSubmittableTitle(title);
   // Never switched over automatically — the creator must pick self.
   const builderBlocked = builder === 'platform' && Boolean(platformUnavailable);
+
+  const hasProgress = useMemo(() => {
+    if (step > 0) return true;
+    if (title.trim() !== initialTitle.trim()) return true;
+    if (Object.values(selectedAnswers).some((opts) => opts && opts.length > 0)) return true;
+    if (Object.values(customText).some((txt) => txt && txt.trim().length > 0)) return true;
+    if (builder !== (isBuilderKind(initialBuilder) ? initialBuilder : 'platform')) return true;
+    return false;
+  }, [step, title, initialTitle, selectedAnswers, customText, builder, initialBuilder]);
+
+  const handleExitClick = () => {
+    if (submitting) return;
+    if (hasProgress) {
+      setShowConfirmExit(true);
+    } else {
+      onCancel?.();
+    }
+  };
 
   const stages = useMemo<Stage[]>(
     () => [
@@ -184,7 +204,8 @@ export function CreatorQA({
    */
   const handleTabKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return;
-    const root = wizardRef.current;
+    const dialog = showConfirmExit ? wizardRef.current?.querySelector<HTMLElement>('.qa-confirm-dialog') : null;
+    const root = dialog ?? wizardRef.current;
     if (!root) return;
     const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
 
@@ -211,6 +232,16 @@ export function CreatorQA({
       event.preventDefault();
       first.focus();
     }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (showConfirmExit && event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowConfirmExit(false);
+      return;
+    }
+    handleTabKey(event);
   };
 
   // Every stage starts at its own top, and the new heading takes focus so a screen
@@ -325,7 +356,7 @@ export function CreatorQA({
       aria-modal="true"
       aria-label={t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}
       ref={wizardRef}
-      onKeyDown={handleTabKey}
+      onKeyDown={handleKeyDown}
       // Somewhere for focus to rest when every control is disabled mid-submission.
       tabIndex={-1}
     >
@@ -337,15 +368,13 @@ export function CreatorQA({
           // This dismisses the wizard and drops the pending spec — it does *not* submit.
           <button
             type="button"
-            className="btn-secondary qa-wizard-exit"
-            onClick={onCancel}
+            className="qa-wizard-exit"
+            onClick={handleExitClick}
             disabled={submitting}
-            // The label is hidden on narrow screens and the icon is decorative, which
-            // left the only way back to editing as an unnamed button on a phone.
-            aria-label={t('qa.backToEditing')}
+            aria-label={t('qa.close')}
+            title={t('qa.close')}
           >
-            <PixelIcon name="close" size={12} />
-            <span>{t('qa.backToEditing')}</span>
+            <PixelIcon name="close" size={14} />
           </button>
         )}
       </header>
@@ -592,6 +621,16 @@ export function CreatorQA({
           </button>
         )}
       </footer>
+
+      {showConfirmExit && (
+        <CreatorQADiscardModal
+          onKeep={() => setShowConfirmExit(false)}
+          onDiscard={() => {
+            setShowConfirmExit(false);
+            onCancel?.();
+          }}
+        />
+      )}
     </div>,
     document.body,
   );

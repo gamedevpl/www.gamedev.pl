@@ -276,8 +276,6 @@ describe('CreatorQA', () => {
   });
 
   it('labels the exit for what it does — dismiss, not submit', async () => {
-    // It used to read "Skip Clarifications", which promises the thing the primary
-    // button does. Whatever the wording becomes, it must not imply a submission.
     let submitted = false;
     let cancelled = false;
     const root = await render({
@@ -291,11 +289,44 @@ describe('CreatorQA', () => {
     });
 
     const exit = find<HTMLButtonElement>('.qa-wizard-exit');
-    expect(exit?.textContent).toContain('Back to editing');
+    expect(exit?.getAttribute('aria-label')).toBe('Close');
 
+    // Without progress, clicking exit immediately cancels
     await click(exit);
     expect(cancelled).toBe(true);
     expect(submitted).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('prompts to confirm before discarding unsaved progress on exit', async () => {
+    let cancelled = false;
+    const root = await render({
+      ...baseProps,
+      initialAnswers: { selected: { mechanics: ['Card drafting'] }, custom: {} },
+      onCancel: () => {
+        cancelled = true;
+      },
+    });
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit');
+    await click(exit);
+
+    // Confirmation dialog appears because user has progress
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    expect(find('.qa-confirm-title')?.textContent).toBe('Discard game creation?');
+    expect(cancelled).toBe(false);
+
+    // Clicking "Keep creating" dismisses the confirmation
+    await click(find('.qa-confirm-keep'));
+    expect(find('.qa-confirm-dialog')).toBeNull();
+    expect(cancelled).toBe(false);
+
+    // Clicking exit again and confirming discards and cancels
+    await click(exit);
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    await click(find('.qa-confirm-discard'));
+    expect(cancelled).toBe(true);
 
     await act(async () => root.unmount());
   });
@@ -491,13 +522,10 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
-  it('names the exit even when its label is hidden on a narrow screen', async () => {
-    // Below 560px the CSS hides the span, and the icon is decorative — without an
-    // explicit label that leaves a phone user with an unnamed button as the only
-    // way back to editing.
+  it('names the icon exit button with an accessible label', async () => {
     const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn(), onCancel: vi.fn() });
 
-    expect(find('.qa-wizard-exit')?.getAttribute('aria-label')).toBe('Back to editing');
+    expect(find('.qa-wizard-exit')?.getAttribute('aria-label')).toBe('Close');
 
     await act(async () => root.unmount());
   });
