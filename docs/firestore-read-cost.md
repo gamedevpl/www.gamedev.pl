@@ -91,6 +91,46 @@ one instance does not reach the others. On the instance that served the write, t
 next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
 row) is not hooked and can sit until the window ends, on every instance.
 
+### The shelf is served from its document
+
+`/api/submissions/mine` is polled, and its source read grows with one creator's history:
+`listSubmissionsByOwner` returns a document per round, and `reconcileTransferredOwnership`
+then does a `getGameAccess` per record. On 2026-09-19 one creator's polls cost **680 billed
+reads each** — 126 of 139 requests on that route in three hours, about 99% of its reads.
+Everyone else cost under 100. Two populations, nothing between them.
+
+That is what `shelves/{ownerUid}` was built to remove, and readers now use it. A shelf read
+is **one document get**.
+
+Trusting a document needs a reason. Three of them here:
+
+1. **Self-consistency, free.** `documentAnswersAlone` rejects a wrong `version`, a
+   `truncated` document, and one whose `rounds` and `sourceCount` disagree. It cannot see
+   staleness — that needs source, which is the whole cost being avoided.
+2. **Sampling, one read in twenty.** `createShelfVerifySampler` makes every twentieth read
+   answer from source instead, and hands those records to the shadow, which judges the
+   document against them and logs any mismatch. The sampled read also _serves_ source, so a
+   stale document is repaired on the same request that catches it.
+3. **The first read of a process always verifies**, the same rule the sweep cadence follows:
+   a process never trusts a document it has not checked once itself.
+
+`SHELF_DOCUMENT_READS=false` turns it off, threaded through both deploy paths and
+`infra/env-manifest.json` so it cannot evaporate under the next deploy.
+
+What this costs when it is wrong: up to twenty reads of a stale shelf before a sampled read
+catches it. Write-through keeps the document current on every shelf-relevant writer, and
+the hourly rebuild pass is the backstop; the shadow ran clean before this was turned on.
+
+Measured on the gate fixture, whose owner has eight rounds:
+
+| Route                                                 | Reads |
+| ----------------------------------------------------- | ----: |
+| `GET /api/submissions/mine` (first read in a process) |    22 |
+| `GET /api/submissions/mine (document, steady state)`  | **1** |
+
+The first read costs one more than before — the document get it now makes before deciding.
+Every read after it costs one instead of one per round.
+
 ## The gate
 
 A window in the table above is a promise the next edit can break without anyone noticing

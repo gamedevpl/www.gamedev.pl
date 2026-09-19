@@ -188,6 +188,7 @@ const FILE_BUCKET = {
   // env-flag reader -- neither has business logic tied to any one bucket.
   'github-rate-limit': 'platform',
   'editor-kit-env': 'platform',
+  'shelf-reads-env': 'platform',
   // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
   // node:crypto over a caller-supplied secret, with no agent-surface state at all.
   'agent-token': 'platform',
@@ -318,6 +319,7 @@ const FILE_BUCKET = {
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
   'shelf-shadow': 'creation',
+  'shelf-source': 'creation',
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
   'game-transfer-routes': 'creation',
