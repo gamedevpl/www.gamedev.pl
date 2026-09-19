@@ -124,6 +124,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore(
     (uid) => this.identityStore.users.has(uid),
     (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
+    (slug) => [...this.submissions.values()].filter((record) => record.slug === slug).map((record) => record.ownerUid),
   );
   protected gameTransferStore = new InMemoryGameTransferStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,

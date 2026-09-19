@@ -4,9 +4,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../../platform/store.js';
 import { fakeFirestore } from '../fake-firestore.js';
 
-const implementations: Array<[string, () => Store]> = [
-  ['memory', () => new InMemoryStore()],
-  ['firestore', () => new FirestoreStore(fakeFirestore().db)],
+// The public API creates the canonical row eagerly; legacy slugs lack one.
+type Made = { store: Store; wipeAccess: (slug: string) => Promise<void> };
+const implementations: Array<[string, () => Made]> = [
+  [
+    'memory',
+    () => {
+      const store = new InMemoryStore();
+      const access = (store as unknown as { gameAccessStore: { access: Map<string, unknown> } }).gameAccessStore.access;
+      return { store, wipeAccess: async (slug) => void access.delete(slug) };
+    },
+  ],
+  [
+    'firestore',
+    () => {
+      const fake = fakeFirestore();
+      return {
+        store: new FirestoreStore(fake.db),
+        wipeAccess: async (slug) => void (await fake.db.collection('gameAccess').doc(slug).delete()),
+      };
+    },
+  ],
 ];
 
 async function sharedGame(store: Store, at: string): Promise<void> {
@@ -24,7 +42,7 @@ for (const [name, make] of implementations)
   describe(`${name}: revocation invalidates the shelf`, () => {
     // Rebuild and fallback are both best effort; one wobble takes both.
     it('invalidates even when the rebuild and its fallback both fail', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await sharedGame(store, at);
 
@@ -48,9 +66,83 @@ for (const [name, make] of implementations)
       vi.restoreAllMocks();
     });
 
+    // Two authors, no canonical row: both see it, derived.
+    async function legacyTwoAuthorSlug({ store, wipeAccess }: Made): Promise<void> {
+      await store.upsertUser({ uid: 'g:first' });
+      await store.upsertUser({ uid: 'g:second' });
+      for (const [uid, title] of [
+        ['g:first', 'Round one'],
+        ['g:second', 'Round two'],
+      ] as const) {
+        const jobId = await store.allocateJobId();
+        await store.createSubmission(jobId, uid, title);
+        await store.setSubmissionSlug(jobId, 'legacy-sky');
+        // setSubmissionSlug creates the canonical row eagerly; this is history.
+        await wipeAccess('legacy-sky');
+      }
+      expect(await store.getGameAccess('legacy-sky')).toBeNull();
+      await store.rebuildShelf('g:second');
+      expect((await store.getShelf('g:second'))?.stale).toBeUndefined();
+      expect((await store.getShelf('g:second'))?.rounds.length).toBeGreaterThan(0);
+    }
+
+    // Going canonical strips the other author; their own count does not move.
+    it('invalidates other legacy authors when ensureGameAccess creates the first row', async () => {
+      const made = make();
+      const { store } = made;
+      const at = new Date().toISOString();
+      await legacyTwoAuthorSlug(made);
+      const ownedBySecond = await store.countSubmissionsByOwner('g:second');
+
+      await store.ensureGameAccess('legacy-sky', 'g:first', at, at);
+
+      expect(await store.countSubmissionsByOwner('g:second')).toBe(ownedBySecond);
+      expect((await store.getShelf('g:second'))?.stale).toBe(true);
+    });
+
+    it('invalidates other legacy authors when settlement creates the first row', async () => {
+      const made = make();
+      const { store } = made;
+      const at = new Date().toISOString();
+      await legacyTwoAuthorSlug(made);
+
+      expect(await store.recordSettledOwner('legacy-sky', 'g:first', 1, at, at)).toMatchObject({ ownerUid: 'g:first' });
+
+      expect((await store.getShelf('g:second'))?.stale).toBe(true);
+    });
+
+    it('invalidates other legacy authors when the backfill creates the first row', async () => {
+      const made = make();
+      const { store } = made;
+      const at = new Date().toISOString();
+      await legacyTwoAuthorSlug(made);
+
+      expect(await store.backfillGameAccess('legacy-sky', 'g:first', 1, at, false, at)).toMatchObject({
+        ownerUid: 'g:first',
+      });
+
+      expect((await store.getShelf('g:second'))?.stale).toBe(true);
+    });
+
+    // A fresh single-author game has nobody else to invalidate.
+    it('leaves a lone author alone when their own new game goes canonical', async () => {
+      const { store } = make();
+      const at = new Date().toISOString();
+      await store.upsertUser({ uid: 'g:solo' });
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, 'g:solo', 'Only mine');
+      await store.setSubmissionSlug(jobId, 'solo-sky');
+      await store.rebuildShelf('g:solo');
+      const before = await store.getShelf('g:solo');
+
+      await store.ensureGameAccess('solo-sky', 'g:solo', at, at);
+
+      expect((await store.getShelf('g:solo'))?.seq).toBe(before?.seq);
+    });
+
     // Leaving cancels their round; the tip changes for all.
     it('invalidates the remaining members when a leave cancels a round', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await sharedGame(store, at);
       await store.rebuildShelf('g:owner');
@@ -69,7 +161,7 @@ for (const [name, make] of implementations)
 
     // Another's round moves no count of the editor's own.
     it('invalidates a co-editor when a round lands on a shared game', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await sharedGame(store, at);
 
@@ -91,7 +183,7 @@ for (const [name, make] of implementations)
 
     // The loser keeps serving the name otherwise.
     it('invalidates the loser when settlement moves the canonical owner', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await store.upsertUser({ uid: 'g:first' });
       await store.upsertUser({ uid: 'g:second' });
@@ -115,7 +207,7 @@ for (const [name, make] of implementations)
 
     // Gaining a game moves no ownerUid either, so the count still agrees.
     it('invalidates the recipient shelf when an editor invite is accepted', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await store.upsertUser({ uid: 'g:owner' });
       await store.upsertUser({ uid: 'g:editor' });
@@ -144,7 +236,7 @@ for (const [name, make] of implementations)
 
     // A transfer moves no ownerUid either, so neither shelf would notice.
     it('invalidates both sides of a transfer, even with the rebuild dead', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await store.upsertUser({ uid: 'g:ada' });
       await store.upsertUser({ uid: 'g:grace' });
@@ -174,7 +266,7 @@ for (const [name, make] of implementations)
     });
 
     it('does the same when the editor leaves of their own accord', async () => {
-      const store = make();
+      const { store } = make();
       const at = new Date().toISOString();
       await sharedGame(store, at);
       await store.rebuildShelf('g:editor');
