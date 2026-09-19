@@ -638,42 +638,49 @@ jobs:
             local code
             # errexit guard: non-zero curl exit (e.g. DNS failure, connection timeout)
             # must not terminate the shell under set -e so caller retry loops can handle it.
-            code=$(curl -s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" "$@" || true)
+            code=$(curl -s --connect-timeout 3 --max-time 5 -o /dev/null -w "%{http_code}" "$@" || true)
             echo "${code:-000}"
           }
 
           # Health is always public. The candidate tag's route can take several
           # seconds to propagate across all edge proxies (Google Frontend Anycast).
-          # Poll until /api/health returns 200 before proceeding.
+          # Poll until /api/health returns 200 before proceeding, strictly bounded by wall clock.
           WARMED=false
-          for i in $(seq 1 15); do
+          HEALTH_DEADLINE=$((SECONDS + 30))
+          attempt=1
+          while [ $SECONDS -lt $HEALTH_DEADLINE ]; do
             STATUS_HEALTH=$(fetch_status "${CANDIDATE_URL}/api/health")
             if [ "$STATUS_HEALTH" = "200" ]; then
               WARMED=true
               break
             fi
-            echo "Waiting for candidate revision route to propagate... (/api/health returned ${STATUS_HEALTH}, attempt ${i}/15)"
+            echo "Waiting for candidate revision route to propagate... (/api/health returned ${STATUS_HEALTH}, attempt ${attempt})"
+            attempt=$((attempt + 1))
             sleep 2
           done
           if [ "$WARMED" != "true" ]; then
-            echo "Smoke test failed: health returned ${STATUS_HEALTH}"
+            echo "Smoke test failed: health returned ${STATUS_HEALTH} (timed out after 30s)"
             exit 1
           fi
 
           # SPA shell must be publicly reachable so the sign-in button loads (chicken-and-egg).
-          # Allow the same brief edge convergence window if / hits a different edge proxy.
+          # Allow the same brief edge convergence window if / hits a different edge proxy,
+          # strictly bounded by wall clock.
           SHELL_READY=false
-          for i in $(seq 1 10); do
+          SHELL_DEADLINE=$((SECONDS + 10))
+          attempt=1
+          while [ $SECONDS -lt $SHELL_DEADLINE ]; do
             STATUS_SHELL=$(fetch_status "${CANDIDATE_URL}/")
             if [ "$STATUS_SHELL" = "200" ]; then
               SHELL_READY=true
               break
             fi
-            echo "Waiting for candidate shell route to propagate... (GET / returned ${STATUS_SHELL}, attempt ${i}/10)"
+            echo "Waiting for candidate shell route to propagate... (GET / returned ${STATUS_SHELL}, attempt ${attempt})"
+            attempt=$((attempt + 1))
             sleep 1
           done
           if [ "$SHELL_READY" != "true" ]; then
-            echo "Smoke test failed: GET / returned ${STATUS_SHELL} (shell must be publicly reachable)"
+            echo "Smoke test failed: GET / returned ${STATUS_SHELL} (shell must be publicly reachable; timed out after 10s)"
             exit 1
           fi
 
