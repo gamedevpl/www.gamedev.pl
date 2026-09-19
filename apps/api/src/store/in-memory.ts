@@ -156,6 +156,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
     (slug, record) => this.gameAccessStore.access.set(slug, record),
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);

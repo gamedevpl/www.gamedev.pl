@@ -48,6 +48,35 @@ for (const [name, make] of implementations)
       vi.restoreAllMocks();
     });
 
+    // Gaining a game moves no ownerUid either, so the count still agrees.
+    it('invalidates the recipient shelf when an editor invite is accepted', async () => {
+      const store = make();
+      const at = new Date().toISOString();
+      await store.upsertUser({ uid: 'g:owner' });
+      await store.upsertUser({ uid: 'g:editor' });
+      await store.ensureGameAccess('sky-dodge', 'g:owner', at, at);
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, 'g:owner', 'Sky Dodge');
+      await store.setSubmissionSlug(jobId, 'sky-dodge');
+
+      // The editor has a shelf of their own before being invited.
+      const ownJob = await store.allocateJobId();
+      await store.createSubmission(ownJob, 'g:editor', 'Mine');
+      await store.rebuildShelf('g:editor');
+      const before = await store.getShelf('g:editor');
+      expect(before?.stale).toBeUndefined();
+
+      const invite = await store.createEditorInvitation('sky-dodge', 'g:owner', 'g:editor', at);
+      vi.spyOn(store, 'listSubmissionsByOwner').mockRejectedValue(new Error('firestore is having a day'));
+      vi.spyOn(store, 'tombstoneShelf').mockRejectedValue(new Error('firestore is still having a day'));
+
+      await store.acceptEditorInvitation('sky-dodge', 'g:editor', at, (invite as { inviteId: string }).inviteId);
+
+      // Otherwise the shared game is missing until repair.
+      expect((await store.getShelf('g:editor'))?.stale).toBe(true);
+      vi.restoreAllMocks();
+    });
+
     // A transfer moves no ownerUid either, so neither shelf would notice.
     it('invalidates both sides of a transfer, even with the rebuild dead', async () => {
       const store = make();

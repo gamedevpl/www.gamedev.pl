@@ -50,9 +50,11 @@ export async function eraseAccount(options: {
 }
 
 // Rounds moved owner, so both shelves are wrong.
+
+// Tombstoned, not deleted: a delete resets seq and a stale rebuild wins.
 async function moveShelf(store: Store, uid: string): Promise<void> {
   try {
-    await store.deleteShelf(uid);
+    await store.tombstoneShelf(uid, new Date().toISOString());
     await store.rebuildShelf(DELETED_ACCOUNT_UID);
   } catch {
     // An erasure must never fail on a cache.

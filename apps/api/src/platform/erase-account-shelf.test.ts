@@ -13,15 +13,25 @@ async function verdict(store: InMemoryStore, ownerUid: string): Promise<string> 
 }
 
 describe('eraseAccount and the shelf', () => {
-  it('drops the erased owner shelf and rebuilds the one the rounds moved to', async () => {
+  it('tombstones the erased owner shelf and rebuilds the one the rounds moved to', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:leaving', 'Theirs');
     await store.setSubmissionSlug(1, 'sky');
-    expect(await store.getShelf('g:leaving')).not.toBeNull();
+    const before = await store.getShelf('g:leaving');
+    expect(before).not.toBeNull();
 
     await eraseAccount({ store, uid: 'g:leaving' });
 
-    expect(await store.getShelf('g:leaving')).toBeNull();
+    // A delete resets seq, and an in-flight rebuild wins with it.
+    const after = await store.getShelf('g:leaving');
+    expect(after?.stale).toBe(true);
+    expect(after?.rounds).toEqual([]);
+    expect(after?.seq ?? 0).toBeGreaterThan(before?.seq ?? 0);
+
+    // Nothing personal survives the tombstone.
+    expect(JSON.stringify(after)).not.toContain('Theirs');
+    expect(JSON.stringify(after)).not.toContain('sky');
+
     // The round moved to the deleted-account uid.
     expect(await verdict(store, DELETED_ACCOUNT_UID)).toBe('match');
   });
