@@ -9,7 +9,6 @@ import type { SubmissionRecord } from '../store/records/submission.js';
 
 export interface ShelfShadowStore {
   getShelf(ownerUid: string): Promise<ShelfDocument | null>;
-  countSubmissionsByOwner(ownerUid: string): Promise<number>;
   // Coalesced per owner by the mirror; see the 'absent' backfill below.
   rebuildShelf(ownerUid: string): Promise<boolean>;
 }
@@ -69,11 +68,9 @@ export async function recordShelfShadow(
   sourceRecords: readonly SubmissionRecord[],
 ): Promise<ShelfShadowResult | null> {
   try {
-    const [shelf, sourceCount] = await Promise.all([
-      deps.store.getShelf(ownerUid),
-      deps.store.countSubmissionsByOwner(ownerUid),
-    ]);
-    const result = judgeShelfShadow(shelf, sourceRecords, sourceCount);
+    // The caller already reconciled these; counting them again costs a second pass.
+    const shelf = await deps.store.getShelf(ownerUid);
+    const result = judgeShelfShadow(shelf, sourceRecords, sourceRecords.length);
     noteReadTally('shelfShadow', result.verdict);
     if (result.verdict !== 'match') {
       noteReadTally('shelfMismatch', true);
