@@ -3,9 +3,9 @@ import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js'
 import { fakeFirestore } from './fake-firestore.js';
 import { documentAnswersAlone } from '../creation/shelf-source.js';
 
-// Every case runs a store method that invalidates nothing itself.
+// Each case runs a store method; claimSeal invalidates nothing itself.
 
-// claimSeal and ensureGameAccess were both found uncovered here.
+// The rival-claimant case #1416 later covered in the slice; kept as a backstop.
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
   ['InMemoryStore', () => new InMemoryStore()],
   ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
