@@ -25,6 +25,9 @@ export interface ShelfMirror {
   pending(): number;
 }
 
+// Exhausting these means giving up and serving nothing.
+const REBUILD_ATTEMPTS = 3;
+
 export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   const { store, now } = options;
   const inFlight = new Map<string, Promise<ShelfDocument | null>>();
@@ -36,19 +39,22 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   };
 
   async function rebuildNow(ownerUid: string): Promise<ShelfDocument | null> {
-    // Read before source, so a write in between is seen.
-    const seq = (await store.getShelf(ownerUid))?.seq ?? 0;
-    const owned = await store.listSubmissionsByOwner(ownerUid);
+    // First writer wins, not freshest reader, so reread on a loss.
+    for (let attempt = 0; attempt < REBUILD_ATTEMPTS; attempt += 1) {
+      // Read before source, so a write in between is seen.
+      const seq = (await store.getShelf(ownerUid))?.seq ?? 0;
+      const owned = await store.listSubmissionsByOwner(ownerUid);
 
-    // Mirror reconciles ownership identically to the shelf route.
-    const records = await reconcileTransferredOwnership(store, ownerUid, owned);
-    const shelf = buildShelfDocument(records, new Date(now()).toISOString(), owned.length);
-    if (!(await store.putShelfIfUnchanged(ownerUid, shelf, seq))) {
-      // The winner read source later, so its document is fresher.
-      report(new Error('shelf rebuild lost a concurrent write'), { ownerUid });
-      return null;
+      // Mirror reconciles ownership identically to the shelf route.
+      const records = await reconcileTransferredOwnership(store, ownerUid, owned);
+      const shelf = buildShelfDocument(records, new Date(now()).toISOString(), owned.length);
+      if (await store.putShelfIfUnchanged(ownerUid, shelf, seq)) return shelf;
     }
-    return shelf;
+
+    // Stored by a pass this cannot order itself against: serve nothing.
+    report(new Error('shelf rebuild lost the sequence race'), { ownerUid });
+    await discard(ownerUid);
+    return null;
   }
 
   // A delete resets seq, so an earlier pass would win.

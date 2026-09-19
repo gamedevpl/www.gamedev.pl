@@ -147,6 +147,49 @@ describe('createShelfMirror', () => {
     await expect(instanceA.rebuild('g:owner')).resolves.not.toBeNull();
   });
 
+  // The correct rebuild can lose; retrying is what makes it converge.
+  it('retries when it loses the race, so the revoked round does not survive', async () => {
+    const { state, store } = harness();
+    // Revocation already happened: source lacks the round.
+    state.rows = [];
+    const revoking = createShelfMirror({ store, now: () => 0, onError: () => {} });
+
+    // A pass reading before the revocation commits first, once.
+    const realPut = store.putShelfIfUnchanged;
+    let interfered = false;
+    store.putShelfIfUnchanged = async (ownerUid: string, shelf: ShelfDocument, expectedSeq: number) => {
+      if (!interfered) {
+        interfered = true;
+        await realPut(ownerUid, buildShelfDocument([record(1, { slug: 'sky' })], '', 1), expectedSeq);
+      }
+      return realPut(ownerUid, shelf, expectedSeq);
+    };
+
+    await expect(revoking.rebuild('g:owner')).resolves.not.toBeNull();
+
+    // The retry reread source and overwrote the revoked round.
+    expect(interfered).toBe(true);
+    expect(state.stored.get('g:owner')?.rounds).toEqual([]);
+    expect(state.stored.get('g:owner')?.stale).toBeUndefined();
+  });
+
+  // Endless contention must not leave the winner servable.
+  it('tombstones rather than serving a document it could not order itself against', async () => {
+    const { state, store } = harness();
+    state.rows = [];
+    const losing = createShelfMirror({ store, now: () => 0, onError: () => {} });
+
+    // Someone else writes between every read and write here.
+    const realPut = store.putShelfIfUnchanged;
+    store.putShelfIfUnchanged = async (ownerUid: string, shelf: ShelfDocument, expectedSeq: number) => {
+      await realPut(ownerUid, buildShelfDocument([record(1, { slug: 'sky' })], '', 1), expectedSeq);
+      return realPut(ownerUid, shelf, expectedSeq);
+    };
+
+    await expect(losing.rebuild('g:owner')).resolves.toBeNull();
+    expect(state.stored.get('g:owner')?.stale).toBe(true);
+  });
+
   // A delete resets seq to 0, which the earlier pass also holds.
   it('leaves a sequenced tombstone on discard, not a gap another pass can win', async () => {
     const { state, store } = harness();
