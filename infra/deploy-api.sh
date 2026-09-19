@@ -269,9 +269,15 @@ if gcloud secrets describe openai-api-key --project "$PROJECT_ID" >/dev/null 2>&
 fi
 if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
-  # Muse Image draws the CreatorQA option tiles off the same credential.
-  SECRET_MAPPINGS+=("OPTION_IMAGE_API_KEY=meta-api-key:latest")
-  echo "==> meta-api-key found; a seed provider once SEED_META_MODEL is set, option tiles once OPTION_IMAGE_MODEL is."
+  echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
+fi
+# Its own secret, deliberately not meta-api-key: CreatorQA option tiles send real
+# creator text to the vendor, which legal-compliance-plan.md gates separately from
+# round-0 seeding. Sharing the seed credential would arm this the moment that one is
+# provisioned for its own, already-approved purpose.
+if gcloud secrets describe option-image-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("OPTION_IMAGE_API_KEY=option-image-api-key:latest")
+  echo "==> option-image-api-key found; draws CreatorQA option tiles once OPTION_IMAGE_MODEL is also set."
 fi
 # describe only proves the secret container exists, not that it has a version
 # — a container created without a version passes describe but makes
