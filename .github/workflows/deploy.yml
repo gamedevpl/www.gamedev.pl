@@ -639,16 +639,16 @@ jobs:
           # Poll until /api/health returns 200 before proceeding.
           WARMED=false
           for i in $(seq 1 15); do
-            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health" || echo 000)
-            if [ "$STATUS_CODE" = "200" ]; then
+            STATUS_HEALTH=$(curl -s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
+            if [ "$STATUS_HEALTH" = "200" ]; then
               WARMED=true
               break
             fi
-            echo "Waiting for candidate revision route to propagate... (/api/health returned ${STATUS_CODE}, attempt ${i}/15)"
+            echo "Waiting for candidate revision route to propagate... (/api/health returned ${STATUS_HEALTH}, attempt ${i}/15)"
             sleep 2
           done
           if [ "$WARMED" != "true" ]; then
-            echo "Smoke test failed: health returned ${STATUS_CODE}"
+            echo "Smoke test failed: health returned ${STATUS_HEALTH}"
             exit 1
           fi
 
@@ -656,68 +656,67 @@ jobs:
           # Allow the same brief edge convergence window if / hits a different edge proxy.
           SHELL_READY=false
           for i in $(seq 1 10); do
-            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/" || echo 000)
-            if [ "$STATUS_CODE" = "200" ]; then
+            STATUS_SHELL=$(curl -s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/")
+            if [ "$STATUS_SHELL" = "200" ]; then
               SHELL_READY=true
               break
             fi
-            echo "Waiting for candidate shell route to propagate... (GET / returned ${STATUS_CODE}, attempt ${i}/10)"
+            echo "Waiting for candidate shell route to propagate... (GET / returned ${STATUS_SHELL}, attempt ${i}/10)"
             sleep 1
           done
           if [ "$SHELL_READY" != "true" ]; then
-            echo "Smoke test failed: GET / returned ${STATUS_CODE} (shell must be publicly reachable)"
+            echo "Smoke test failed: GET / returned ${STATUS_SHELL} (shell must be publicly reachable)"
             exit 1
           fi
+
+          # Walled assertions: bounded retry across the edge convergence window to prevent
+          # a trailing request landing on a slow Anycast edge from failing the deploy.
+          assert_status() {
+            local method="$1"
+            local path="$2"
+            local expected="$3"
+            local auth_header="$4"
+            local desc="$5"
+            local code=""
+
+            for attempt in $(seq 1 5); do
+              local args=(-s --connect-timeout 5 --max-time 10 -o /dev/null -w "%{http_code}" -X "$method")
+              if [ -n "$auth_header" ]; then
+                args+=(-H "Authorization: $auth_header")
+              fi
+              code=$(curl "${args[@]}" "${CANDIDATE_URL}${path}")
+              if [ "$code" = "$expected" ]; then
+                return 0
+              fi
+              echo "Retry ${attempt}/5 for ${desc}: got ${code}, expected ${expected}"
+              sleep 1
+            done
+
+            echo "Smoke test failed: ${desc} (got ${code}, expected ${expected})"
+            exit 1
+          }
 
           # In private-beta mode catalog requires a session → 401
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: expected 401 for /api/catalog in private-beta mode (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status GET "/api/catalog" 401 "" "expected 401 for /api/catalog in private-beta mode"
 
           # Published games are behind the same wall — anonymous play must not leak through.
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/games/smoke-test-slug")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: expected 401 for unauthenticated /api/games (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status GET "/api/games/smoke-test-slug" 401 "" "expected 401 for unauthenticated /api/games"
 
           # Drafts stay walled (unmerged work is not published content).
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/drafts/smoke-test-slug")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: expected 401 for unauthenticated /api/drafts (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status GET "/api/drafts/smoke-test-slug" 401 "" "expected 401 for unauthenticated /api/drafts"
 
           # Auth endpoint configured and active: no session → 401
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/auth/me")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: expected 401 for /api/auth/me (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status GET "/api/auth/me" 401 "" "expected 401 for /api/auth/me"
 
           # Spend routes require session: no session → 401
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: expected 401 for unauthenticated /api/submissions (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status POST "/api/submissions" 401 "" "expected 401 for unauthenticated /api/submissions"
 
           # Waitlist route exists and works WITHOUT a session; an empty body still
           # proves the route + validation are live without needing a real Google token.
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/waitlist")
-          if [ "$STATUS_CODE" -ne 400 ]; then
-            echo "Smoke test failed: expected 400 for empty-body /api/waitlist (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status POST "/api/waitlist" 400 "" "expected 400 for empty-body /api/waitlist"
 
           # Refine route requires session: no session → 401
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions/refine")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: expected 401 for unauthenticated /api/submissions/refine (got ${STATUS_CODE})"
-            exit 1
-          fi
+          assert_status POST "/api/submissions/refine" 401 "" "expected 401 for unauthenticated /api/submissions/refine"
 
           # A forged bearer token must read as unauthenticated — never a 500, never a
           # session (docs/agent-access-tokens.md). Needs no secret, so it runs on every
@@ -725,12 +724,7 @@ jobs:
           # any real token exists. The forged value is assembled at runtime because a
           # well-formed gdpl_pat_ literal in this file would (correctly) trip gitleaks.
           FORGED_TOKEN="gdpl_pat_$(printf '0%.0s' $(seq 16))_$(printf 'A%.0s' $(seq 43))"
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${FORGED_TOKEN}" "${CANDIDATE_URL}/api/auth/me")
-          if [ "$STATUS_CODE" -ne 401 ]; then
-            echo "Smoke test failed: forged bearer token on /api/auth/me returned ${STATUS_CODE}, expected 401"
-            exit 1
-          fi
+          assert_status GET "/api/auth/me" 401 "Bearer ${FORGED_TOKEN}" "forged bearer token on /api/auth/me"
 
           echo "Smoke test passed on candidate URL!"
 
