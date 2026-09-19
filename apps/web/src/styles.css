@@ -643,6 +643,13 @@
   }
 }
 
+.prompt-busy-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
 .prompt-busy-status {
   display: inline-flex;
   align-items: center;
@@ -657,6 +664,39 @@
 .prompt-busy-status .build-btn-spinner {
   border-color: rgba(0, 228, 172, 0.25);
   border-top-color: var(--turquoise);
+}
+
+.prompt-busy-text {
+  transition: opacity 0.2s ease;
+}
+
+.prompt-busy-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: rgba(0, 228, 172, 0.15);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.prompt-busy-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--turquoise), transparent);
+  border-radius: 9999px;
+  animation: prompt-progress-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes prompt-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
 }
 
 .creation-card.is-busy {
@@ -1143,6 +1183,26 @@
   color: #0b221d;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.build-match-btn.is-busy,
+.match-build-link.is-busy {
+  opacity: 1;
+  cursor: progress;
+}
+
+.build-match-btn .build-btn-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.match-build-link.is-busy .build-btn-spinner {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-color: rgba(0, 228, 172, 0.25);
+  border-top-color: var(--turquoise);
 }
 
 .creation-card {
