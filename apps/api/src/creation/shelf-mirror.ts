@@ -44,6 +44,15 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
     return shelf;
   }
 
+  // Source costs reads; a stale document costs access.
+  async function discard(ownerUid: string): Promise<void> {
+    try {
+      await store.deleteShelf(ownerUid);
+    } catch (error) {
+      report(error, { ownerUid });
+    }
+  }
+
   function rebuild(ownerUid: string): Promise<ShelfDocument | null> {
     // A burst of writes costs one rebuild, not one each.
     const running = inFlight.get(ownerUid);
@@ -61,6 +70,8 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
           built = await rebuildNow(ownerUid);
         } catch (error) {
           report(error, { ownerUid });
+          // A rebuild follows revocations too: a kept document serves a lost game.
+          await discard(ownerUid);
         }
         if (!requeued.has(ownerUid)) return built;
       }

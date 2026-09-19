@@ -9,13 +9,14 @@ const record = (jobId: number, extra: Partial<SubmissionRecord> = {}): Submissio
 interface Harness {
   rows: SubmissionRecord[];
   writes: ShelfDocument[];
+  deleted: string[];
   reads: number;
   release?: () => void;
 }
 
 // Holds the read open so a write lands mid-rebuild.
 function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
-  const state: Harness = { rows: [], writes: [], reads: 0 };
+  const state: Harness = { rows: [], writes: [], deleted: [], reads: 0 };
   let unblock: (() => void) | undefined;
   const gate = options.blockReads
     ? new Promise<void>((resolve) => {
@@ -38,8 +39,8 @@ function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
       if (options.failWrite) throw new Error('write refused');
       state.writes.push(shelf);
     },
-    async deleteShelf() {
-      // not exercised here
+    async deleteShelf(ownerUid: string) {
+      state.deleted.push(ownerUid);
     },
     // No canonical access here: the reconcile keeps every row.
     async listGameAccessByMember() {
@@ -107,6 +108,18 @@ describe('createShelfMirror', () => {
 
     await expect(mirror.rebuild('g:owner')).resolves.toBeNull();
     expect(errors).toHaveLength(1);
+  });
+
+  // A kept document would serve a game the member just lost.
+  it('drops the document when the rebuild fails, rather than leaving it servable', async () => {
+    const { state, store } = harness({ failWrite: true });
+    state.rows = [record(1)];
+    const mirror = createShelfMirror({ store, now: () => 0, onError: () => {} });
+
+    await mirror.rebuild('g:owner');
+
+    expect(state.writes).toEqual([]);
+    expect(state.deleted).toEqual(['g:owner']);
   });
 
   it('resolves the owner from the job, because writers only know a job', async () => {
