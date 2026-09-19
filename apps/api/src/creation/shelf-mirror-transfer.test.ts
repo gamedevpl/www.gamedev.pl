@@ -120,11 +120,18 @@ describe('the shelf mirror after a handover', () => {
     expect(shelfGrace?.rounds ?? []).toEqual([]);
   });
 
-  it('counts canonical reconciled rounds for transfer recipient and sender', async () => {
+  // A transfer moves gameAccess, not ownerUid, so this count stays put.
+  it('counts the raw owner query, the same number the document records', async () => {
     const store = new InMemoryStore();
     await transferredGame(store);
 
-    expect(await store.countSubmissionsByOwner('g:grace')).toBe(1);
-    expect(await store.countSubmissionsByOwner('g:ada')).toBe(0);
+    expect(await store.countSubmissionsByOwner('g:ada')).toBe(1);
+    expect(await store.countSubmissionsByOwner('g:grace')).toBe(0);
+
+    // Her document agrees with itself: one round, none her own.
+    expect(await store.rebuildShelf('g:grace')).toBe(true);
+    const shelf = (await store.getShelf('g:grace'))!;
+    expect(shelf.rounds).toHaveLength(1);
+    expect(shelf.ownedCount).toBe(0);
   });
 });

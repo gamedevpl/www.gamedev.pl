@@ -91,6 +91,53 @@ one instance does not reach the others. On the instance that served the write, t
 next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
 row) is not hooked and can sit until the window ends, on every instance.
 
+### The shelf is served from its document
+
+`/api/submissions/mine` is polled, and its source read grows with one creator's history:
+`listSubmissionsByOwner` returns a document per round, and `reconcileTransferredOwnership`
+then does a `getGameAccess` per record. On 2026-09-19 one creator's polls cost **680 billed
+reads each** — 126 of 139 requests on that route in three hours, about 99% of its reads.
+Everyone else cost under 100. Two populations, nothing between them.
+
+That is what `shelves/{ownerUid}` was built to remove, and readers now use it. A shelf read
+is a document get plus one aggregation that checks it.
+
+Trusting a document needs a reason. Four of them here, cheapest first:
+
+1. **Self-consistency, free.** `documentAnswersAlone` rejects a wrong `version`, a
+   `truncated` document, one whose `rounds` and `sourceCount` disagree, and one built before
+   `ownedCount` was recorded.
+2. **One aggregation, every read.** The document stores `ownedCount` — the size of the
+   `ownerUid` query it was built from — so a single `count()` says whether a round has been
+   added or removed since. That is the drift that matters most, and it is caught on **every**
+   read rather than on a sample. It needs both numbers, because `sourceCount` counts
+   reconciled records and the two legitimately differ for an owner with transfers.
+3. **Full source, one read in a hundred.** Content that changes without changing the count —
+   a renamed title, a new status — needs the collapse comparison. Those reads hand their
+   records to the shadow, which judges the document and logs a mismatch, and they serve
+   source, so the document is repaired on the request that catches it.
+4. **The first read of a process always verifies**, the same rule the sweep cadence follows:
+   a process never trusts a document it has not checked once itself.
+
+`SHELF_DOCUMENT_READS=false` turns it off, threaded through both deploy paths and
+`infra/env-manifest.json` so it cannot evaporate under the next deploy.
+
+What this costs when it is wrong: a round appearing or disappearing is caught immediately; a
+same-count content change can be up to a hundred reads stale. Write-through keeps the
+document current on every shelf-relevant writer, the hourly rebuild pass is the backstop, and
+the shadow ran clean before this was turned on.
+
+Measured on the gate fixture, whose owner has eight rounds:
+
+| Route                                                 | Reads |
+| ----------------------------------------------------- | ----: |
+| `GET /api/submissions/mine` (first read in a process) |    22 |
+| `GET /api/submissions/mine (document, steady state)`  | **2** |
+
+Two reads: the document, and the count that checks it. Against the 553-read average that
+route was serving its heaviest owner, the amortised cost including the one-in-a-hundred full
+read is about **7**.
+
 ## The gate
 
 A window in the table above is a promise the next edit can break without anyone noticing

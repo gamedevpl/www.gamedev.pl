@@ -8,6 +8,7 @@ import {
   type GameAccessRecord,
 } from '../records/game-access.js';
 import { DELETED_ACCOUNT_UID } from '../records/identity.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 import { TRANSFER_MARKER_RESCAN_INTERVAL_MS, backfillTransferMarkers } from '../transfer-marker-backfill.js';
 
 // Read plus conditional creates, each fenced against account erasure.
@@ -65,7 +66,23 @@ const clone = (record: GameAccessRecord): GameAccessRecord => ({
 });
 
 export class InMemoryGameAccessStore implements GameAccessStore {
-  constructor(private hasAccount: (uid: string) => boolean = () => true) {}
+  constructor(
+    private hasAccount: (uid: string) => boolean = () => true,
+    // Same write as the access change; neither lands alone.
+    private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
+    // Every ownerUid with a round on the slug.
+    private authorsOf: (slug: string) => string[] = () => [],
+  ) {}
+
+  // The first canonical row strips every other legacy author.
+
+  // Derived showed the owner only their rounds; canonical shows all.
+  private invalidateOtherAuthors(slug: string, ownerUid: string, at: string): void {
+    const authors = new Set(this.authorsOf(slug));
+    authors.delete(ownerUid);
+    if (authors.size === 0) return;
+    for (const uid of [...authors, ownerUid]) this.invalidateShelf(uid, at);
+  }
 
   // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
   access = new Map<string, GameAccessRecord>();
@@ -75,6 +92,7 @@ export class InMemoryGameAccessStore implements GameAccessStore {
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
     this.erasedAt.set(uid, at);
+    this.invalidateShelf(uid, at);
   }
 
   async getAccountErasure(uid: string): Promise<string | null> {
@@ -107,6 +125,7 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     if (fencedOut(this.erasedAt.get(ownerUid) ?? null, workAt)) return null;
     const record = newGameAccess(slug, ownerUid, at);
     this.access.set(slug, record);
+    this.invalidateOtherAuthors(slug, ownerUid, at);
     return clone(record);
   }
 
@@ -123,6 +142,12 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     if (fencedOut(this.erasedAt.get(ownerUid) ?? null, workAt)) return existing ? clone(existing) : null;
     const record = settledOver(existing ?? null, slug, ownerUid, at, jobId);
     this.access.set(slug, record);
+    // Settlement moved the name; the loser keeps serving it otherwise.
+    if (existing && existing.ownerUid !== ownerUid) {
+      this.invalidateShelf(existing.ownerUid, at);
+      this.invalidateShelf(ownerUid, at);
+    }
+    if (!existing) this.invalidateOtherAuthors(slug, ownerUid, at);
     return clone(record);
   }
 
@@ -142,6 +167,7 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     // Settled by its own job: a migrated record is not tentative.
     const record = newGameAccess(slug, ownerUid, at, jobId);
     this.access.set(slug, record);
+    this.invalidateOtherAuthors(slug, ownerUid, at);
     return clone(record);
   }
 
@@ -166,8 +192,15 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
   }
 
+  // With the fence: a post-commit tombstone can fail on its own.
   async beginAccountErasure(uid: string, at: string): Promise<void> {
-    await this.erasureFence(uid).set({ uid, at });
+    const shelfRef = this.db.collection('shelves').doc(uid);
+    await this.db.runTransaction(async (tx) => {
+      const shelfSnap = await tx.get(shelfRef);
+      const shelf = shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null;
+      tx.set(this.erasureFence(uid), { uid, at });
+      tx.set(shelfRef, tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
+    });
   }
 
   async getAccountErasure(uid: string): Promise<string | null> {
@@ -225,6 +258,35 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return snap.exists ? (snap.data() as GameAccessRecord) : null;
   }
 
+  // Reads only; the caller writes tombstones after its own writes.
+  private async otherAuthorShelves(
+    tx: FirebaseFirestore.Transaction,
+    slug: string,
+    ownerUid: string,
+  ): Promise<Array<{ ref: FirebaseFirestore.DocumentReference; seq: number }>> {
+    const rounds = await tx.get(this.db.collection('submissions').where('slug', '==', slug));
+    const authors = new Set(rounds.docs.map((doc) => (doc.data() as { ownerUid?: string }).ownerUid));
+    authors.delete(ownerUid);
+    authors.delete(undefined);
+    // Derived showed the owner only their rounds; canonical shows all.
+    if (authors.size === 0) return [];
+    return Promise.all(
+      [...authors, ownerUid].map(async (uid) => {
+        const ref = this.db.collection('shelves').doc(uid!);
+        const snap = await tx.get(ref);
+        return { ref, seq: snap.exists ? ((snap.data() as ShelfDocument).seq ?? 0) : 0 };
+      }),
+    );
+  }
+
+  private tombstoneAll(
+    tx: FirebaseFirestore.Transaction,
+    shelves: Array<{ ref: FirebaseFirestore.DocumentReference; seq: number }>,
+    at: string,
+  ): void {
+    for (const { ref, seq } of shelves) tx.set(ref, tombstoneShelf(at, seq + 1));
+  }
+
   async ensureGameAccess(slug: string, ownerUid: string, workAt: string, at: string): Promise<GameAccessRecord | null> {
     const ref = this.doc(slug);
 
@@ -235,8 +297,10 @@ export class FirestoreGameAccessStore implements GameAccessStore {
 
       // Reading the fence here is what orders this write against erasure.
       if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return null;
+      const others = await this.otherAuthorShelves(tx, slug, ownerUid);
       const record = newGameAccess(slug, ownerUid, at);
       tx.create(ref, record);
+      this.tombstoneAll(tx, others, at);
       return record;
     });
   }
@@ -255,9 +319,26 @@ export class FirestoreGameAccessStore implements GameAccessStore {
       if (existing && (!isPristine(existing) || !settlementWins(existing, jobId))) return existing;
       if (existing?.ownerUid === ownerUid && existing.settledJobId === jobId) return existing;
       if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return existing;
+
+      // Settlement moved the name; read before writing below.
+      const moved = Boolean(existing && existing.ownerUid !== ownerUid);
+      const shelves = moved
+        ? await Promise.all(
+            [existing!.ownerUid, ownerUid].map(async (uid) => {
+              const shelfRef = this.db.collection('shelves').doc(uid);
+              const shelfSnap = await tx.get(shelfRef);
+              return { shelfRef, shelf: shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null };
+            }),
+          )
+        : [];
+
+      const others = existing ? [] : await this.otherAuthorShelves(tx, slug, ownerUid);
+
       const record = settledOver(existing, slug, ownerUid, at, jobId);
       if (existing) tx.set(ref, record);
       else tx.create(ref, record);
+      for (const { shelfRef, shelf } of shelves) tx.set(shelfRef, tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
+      this.tombstoneAll(tx, others, at);
       return record;
     });
   }
@@ -278,10 +359,12 @@ export class FirestoreGameAccessStore implements GameAccessStore {
       if (snap.exists) return snap.data() as GameAccessRecord;
       if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return null;
       if (checkAccount && !(await tx.get(this.db.collection('users').doc(ownerUid))).exists) return null;
+      const others = await this.otherAuthorShelves(tx, slug, ownerUid);
 
       // Settled by its own job: a migrated record is not tentative.
       const record = newGameAccess(slug, ownerUid, at, jobId);
       tx.create(ref, record);
+      this.tombstoneAll(tx, others, at);
       return record;
     });
   }
