@@ -134,8 +134,10 @@ Trusting a document needs a reason. Four of them here, cheapest first:
    before *some* instance samples an owner is about four hundred of their reads. The bounds
    below say "a hundred of that owner's reads per instance" for that reason.
 
-`SHELF_DOCUMENT_READS=false` turns it off, threaded through both deploy paths and
-`infra/env-manifest.json` so it cannot evaporate under the next deploy.
+`SHELF_DOCUMENT_READS=false` turns it off. It is threaded through both deploy paths and
+`infra/env-manifest.json` so a value set in the repo survives every deploy -- but it takes
+effect only on a deploy or a hand `gcloud run services update`; the incident procedure in
+"mirrored, and served" below has both steps.
 
 What this costs when it is wrong: a round of the owner's own appearing or disappearing is
 caught on the next read; a same-count change — content, a collaborator's round, membership,
@@ -514,8 +516,14 @@ whole round count per write. That is cheaper than the poll it replaces only if w
 genuinely rarer than reads for that account, and during an active build they may not be.
 Readers were flipped before that measurement was taken, so it has to be made live: sum
 `route=/api/submissions/mine` against the write path in the meter over a real week. If write
-amplification exceeds the read it saves, the right answer is `SHELF_DOCUMENT_READS=false`,
-which is one repo variable and no deploy, and then to delete the document.
+amplification exceeds the read it saves, the right answer is `SHELF_DOCUMENT_READS=false`
+and then to delete the document. Flipping it is **not** free of a deploy: the value is baked
+into the Cloud Run revision at deploy time, so setting the repo variable alone changes
+nothing until the next rollout. In an incident, set it by hand for immediate effect
+(`gcloud run services update gamedev-app --region=europe-west1
+--update-env-vars=SHELF_DOCUMENT_READS=false`) **and** set the repo variable so the next
+deploy does not silently switch it back on -- a hand-set lever alone evaporates on the next
+deploy, which is the incident shape the env-manifest gate exists to prevent.
 
 **A fourth gap, found live, not in review: an idle account cannot be reached by either
 mechanism.** Write-through needs a write to fire; the hourly pass needs an existing document
