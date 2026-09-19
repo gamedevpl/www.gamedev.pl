@@ -9,7 +9,8 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GamesStore } from './games-store.js';
 
 type DraftPreviewValue = { slug: string; title: string; html: string };
-export type DraftGrant = { jobId: number; version?: string };
+// Carries the record it authorized, so serving it needs no second read.
+export type DraftGrant = { jobId: number; record?: SubmissionRecord | null; version?: string };
 // `revision` is the delivered candidate's games-store version id.
 type CachedDraftPreview = { value: DraftPreviewValue; revision: string; expiresAt: number };
 
@@ -28,12 +29,7 @@ export interface DraftPreviewRoutesHandle {
   // Null refuses. A grant names the exact version it authorized.
   canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null>;
   // Returns the reply, so a caller's `return` reads as answered.
-  replyWithDraft(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    jobId: number,
-    versionOverride?: string,
-  ): Promise<FastifyReply>;
+  replyWithDraft(request: FastifyRequest, reply: FastifyReply, grant: DraftGrant): Promise<FastifyReply>;
 }
 
 // Serves a build's playable HTML to its owner or sharer.
@@ -73,14 +69,14 @@ export async function registerDraftPreviewRoutes(
     }
     if (!record || record.abandonedAt) return null;
     // The owner sees their own red build; a stranger never does.
-    if (uid && (await canActOnSubmissionOrSlug(store, record, uid, 'read'))) return { jobId: record.jobId };
+    if (uid && (await canActOnSubmissionOrSlug(store, record, uid, 'read'))) return { jobId: record.jobId, record };
     // A pulled game is not re-opened by flipping the switch.
     if (record.moderationBlockedAt) return null;
     if (!record.draftSharedAt) return null;
     const version = sharedDraftVersion(record);
     if (!version || !(await shareGate.isGreen(slug, version))) return null;
     // Pinned: a delivery landing now must not ride this answer.
-    return { jobId: record.jobId, version };
+    return { jobId: record.jobId, record, version };
   }
 
   // Serves the gate's own bundle, never raw delivered sources.
@@ -132,9 +128,9 @@ export async function registerDraftPreviewRoutes(
   async function replyWithDraft(
     request: FastifyRequest,
     reply: FastifyReply,
-    jobId: number,
-    versionOverride?: string,
+    grant: DraftGrant,
   ): Promise<FastifyReply> {
+    const { jobId, version: versionOverride } = grant;
     const serveLastKnown = (reason: string, err?: unknown): boolean => {
       if (versionOverride) return false;
       const lastKnown = draftPreviewCache.get(jobId);
@@ -144,8 +140,8 @@ export async function registerDraftPreviewRoutes(
       return true;
     };
 
-    // Guarded on gamesStore: without one, the record can't change the answer.
-    const record = gamesStore ? await store?.getSubmission(jobId) : null;
+    // The caller already read this record to authorize the request.
+    const record = grant.record ?? null;
     if (record) {
       try {
         if (await replyWithStoredDraft(request, reply, record, versionOverride)) return reply;
@@ -204,7 +200,7 @@ export async function registerDraftPreviewRoutes(
         return reply.status(404).send({ error: 'no preview available for this submission yet' });
       }
 
-      await replyWithDraft(request, reply, jobId, requestedVersion);
+      await replyWithDraft(request, reply, { jobId, record: owned, version: requestedVersion });
       return reply; // resolve only after that send finished
     },
   );
@@ -238,7 +234,7 @@ export async function registerDraftPreviewRoutes(
       return reply.status(404).send({ error: 'draft not found' });
     }
 
-    await replyWithDraft(request, reply, grant.jobId, grant.version);
+    await replyWithDraft(request, reply, grant);
     return reply;
   });
 
