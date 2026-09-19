@@ -167,7 +167,7 @@ export async function registerDraftPreviewRoutes(
     return reply.status(409).send({ error: 'no preview available for this submission yet' });
   }
 
-  // Only reachable by the token holder for that specific submission.
+  // Holding a token says the caller was a member once, not still.
   app.get(
     '/api/submissions/:token/preview',
     { config: { rateLimit: { max: maxPreviewsPerWindow, timeWindow: previewRateLimitWindowMs } } },
@@ -197,6 +197,11 @@ export async function registerDraftPreviewRoutes(
           return reply.status(400).send({ error: 'invalid submission token' });
         }
         throw error;
+      }
+
+      const owned = store ? await store.getSubmission(jobId) : null;
+      if (store && !(owned && (await canActOnSubmissionOrSlug(store, owned, request.user!.uid, 'read')))) {
+        return reply.status(404).send({ error: 'no preview available for this submission yet' });
       }
 
       await replyWithDraft(request, reply, jobId, requestedVersion);
