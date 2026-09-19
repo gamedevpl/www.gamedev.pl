@@ -598,10 +598,13 @@ The two verdicts were two different unhooked writers, both real:
   served that round as the tip while source collapse dropped it. The diverging field is
   one the fingerprint already covers (`createdAt` / `jobId` of the tip, via `state`).
 
-Readers stay on source. Graduate them only after a later week of shadow logs is **zero
-mismatches** split by verdict (`count` and `collapse` both 0, not merely quieter). Do not
-flip in the same change that hooks the writers — the next week's log is the proof, and a
-reader flip needs its own revert.
+That was the plan of record when this section was written: keep readers on source and
+graduate them only after a week of shadow logs showed zero mismatches split by verdict, in a
+change separate from the one that hooked the writers, so the flip had its own revert. It did
+not happen that way. Readers were pointed at the document on 2026-09-19 in the same PR, by
+the owner's decision, and the invalidation gaps that week would have surfaced were found in
+review instead — see "mirrored, and served" above for the model that shipped. The revert is
+now the kill switch, and its procedure is written there.
 
 Dropping the `count()` early-exit looked like it would make the polled path more expensive.
 Measured against the read-cost gate (#1409) on this change, `GET /api/submissions/mine`
