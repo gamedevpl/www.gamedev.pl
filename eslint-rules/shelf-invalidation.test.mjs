@@ -112,6 +112,26 @@ class S {
 }`,
       errors: [{ messageId: 'unguarded' }],
     },
+    // `tx` is the universal name here; an earlier callback must not launder a later write.
+    {
+      filename: slice,
+      code: `
+class S {
+  constructor(private db: any) {}
+  private ref(jobId: number) {
+    return this.db.collection('submissions').doc(String(jobId));
+  }
+  async seal(jobId: number) {
+    return this.db.runTransaction(async (tx: any) => {
+      tx.set(this.ref(jobId), { state: 'building' }, { merge: true });
+    });
+  }
+  async rename(jobId: number, tx: any) {
+    tx.set(this.ref(jobId), { title: 'x' }, { merge: true });
+  }
+}`,
+      errors: [{ messageId: 'unguarded' }],
+    },
     // A row of a query is still a document in that collection.
     {
       filename: slice,

@@ -126,15 +126,16 @@ export const shelfInvalidation = {
     const filename = context.filename ?? context.getFilename();
     // The method a write sits in, which is what the map above names.
     const methodStack = [];
-    // Parameters bound by a runTransaction callback: the guarded seam itself.
-    const transactionParams = new Set();
     // Class members, addressed as `this.name`; one map, file-wide.
     const memberCollections = new Map();
     const memberDocuments = new Map();
-    // Locals, which a sibling method may reuse for another collection entirely.
-    const scopes = [{ collections: new Map(), documents: new Map() }];
+    // Per function: a sibling may reuse a name for another collection.
+    const newScope = () => ({ collections: new Map(), documents: new Map(), txParams: new Set() });
+    const scopes = [newScope()];
     const localCollection = (name) => scopes.findLast((scope) => scope.collections.has(name))?.collections.get(name);
     const localDocument = (name) => scopes.findLast((scope) => scope.documents.has(name))?.documents.get(name);
+    // Only while that callback is open; `tx` is reused file-wide.
+    const inTransaction = (name) => scopes.some((scope) => scope.txParams.has(name));
 
     function collectionOf(expression) {
       const node = unwrap(expression);
@@ -201,13 +202,14 @@ export const shelfInvalidation = {
 
     return {
       'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression'(node) {
-        scopes.push({ collections: new Map(), documents: new Map() });
+        const scope = newScope();
+        scopes.push(scope);
         const parent = node.parent;
         if (parent?.type !== 'CallExpression') return;
         if (parent.callee?.type !== 'MemberExpression') return;
         if (parent.callee.property?.name !== 'runTransaction') return;
         const first = node.params?.[0];
-        if (first?.type === 'Identifier') transactionParams.add(first.name);
+        if (first?.type === 'Identifier') scope.txParams.add(first.name);
       },
       'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression:exit'() {
         if (scopes.length > 1) scopes.pop();
@@ -236,7 +238,7 @@ export const shelfInvalidation = {
 
         const receiver = node.callee.object;
         // Inside runTransaction the guard is already doing this work.
-        if (receiver?.type === 'Identifier' && transactionParams.has(receiver.name)) return;
+        if (receiver?.type === 'Identifier' && inTransaction(receiver.name)) return;
 
         // `tx.set(ref, data)` shape first, then `ref.set(data)`.
         const viaArgument = documentOf(node.arguments?.[0]);

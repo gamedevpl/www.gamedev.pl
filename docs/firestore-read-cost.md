@@ -508,19 +508,28 @@ So invalidation is structural now, at the two seams that exist:
   type-check, which is the actual guarantee; the `gamedev/shelf-invalidation` lint rule covers
   only what a type cannot, a write made outside any transaction.
 
-Two properties make this affordable. Resolving owners costs **no extra read**, because they
-come from documents the transaction had already read for its own sake. And the tombstone is a
-**blind write**: `seq: FieldValue.increment(1)` needs no read of the current sequence, so it
-can be issued after the transaction's writes have begun. Tombstoning rather than rebuilding is
-deliberate — a rebuild costs a full source read per write, a tombstone costs one small write
-and collapses repeated writes between two reads. Never a delete: a delete resets `seq` to 0,
-which an in-flight rebuild may also hold, so its stale write then wins the compare-and-set.
-That bug was introduced three separate times during #1416 review.
+Two properties make this affordable. The tombstone is a **blind write**:
+`seq: FieldValue.increment(1)` needs no read of the current sequence, so it can be issued after
+the transaction's writes have begun. And tombstoning rather than rebuilding is deliberate — a
+rebuild costs a full source read per write, a tombstone costs one small write and collapses
+repeated writes between two reads. Never a delete: a delete resets `seq` to 0, which an
+in-flight rebuild may also hold, so its stale write then wins the compare-and-set. That bug was
+introduced three separate times during #1416 review.
 
-What the guard does not do: expand a shared game's co-editors on an ordinary round write. That
-stays `shelfMirror.afterJobWrite`'s job, because doing it at the seam would mean a `gameAccess`
-read on every round write. A `gameAccess` write does expand — including a post-commit query for
-rival claimants of the slug, which is rare enough to pay for.
+**What the owner resolution costs, stated per case rather than as a slogan.** It is free when
+the transaction read what the guard needs, which is the common shape here — these transactions
+read the document they are about to write. It is not free otherwise, and the guard defers those
+to after the commit rather than pretending:
+
+| Case                                                                                                                             | Cost                             |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| The written document was read in the transaction                                                                                 | none                             |
+| A write to a document the transaction never read (`bindSubmissionSlug`, whose slug query cannot contain a still-slugless target) | one document read after commit   |
+| A shared game whose `gameAccess` row the transaction did not read                                                                | one document read after commit   |
+| A `gameAccess` write, which can drop the slug from a rival claimant's shelf                                                      | one `slug ==` query after commit |
+
+Deferred work is best-effort and runs outside the transaction, so it is logged and counted
+(`shelfGuardDeferredFailed`) rather than swallowed; the hourly pass is still the backstop.
 
 Staleness, stated: immediate on every instance for a hooked writer; for a writer nobody
 hooked or a rollback revision, **within a hundred of that owner's reads per instance or one hour**,
