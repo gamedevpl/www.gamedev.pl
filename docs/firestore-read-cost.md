@@ -107,17 +107,26 @@ Trusting a document needs a reason. Four of them here, cheapest first:
 1. **Self-consistency, free.** `documentAnswersAlone` rejects a wrong `version`, a
    `truncated` document, one whose `rounds` and `sourceCount` disagree, and one built before
    `ownedCount` was recorded.
-2. **One aggregation, every read.** The document stores `ownedCount` — the size of the
-   `ownerUid` query it was built from — so a single `count()` says whether a round has been
-   added or removed since. That is the drift that matters most, and it is caught on **every**
-   read rather than on a sample. It needs both numbers, because `sourceCount` counts
-   reconciled records and the two legitimately differ for an owner with transfers.
-3. **Full source, one read in a hundred.** Content that changes without changing the count —
-   a renamed title, a new status — needs the collapse comparison. Those reads hand their
-   records to the shadow, which judges the document and logs a mismatch, and they serve
-   source, so the document is repaired on the request that catches it.
-4. **The first read of a process always verifies**, the same rule the sweep cadence follows:
-   a process never trusts a document it has not checked once itself.
+2. **One aggregation, every read — for the owner's own rounds only.** The document stores
+   `ownedCount`, the size of the raw `ownerUid` query it was built from, so a single
+   `count()` says whether a round **of the owner's own** appeared or vanished since. It needs
+   both numbers, because `sourceCount` counts reconciled records and the two legitimately
+   differ for an owner with transfers. What this count **cannot** see: a round written by a
+   collaborator on a shared game, an editor added or removed, a transfer, a settlement, an
+   erasure. None of those move the reader's own count. Every one of those writes therefore
+   tombstones the affected shelves **in the same transaction** as the change, so the next
+   read falls back to source. That is the guarantee; the count is not.
+3. **Full source, one read in a hundred, per owner.** Content that changes without changing
+   the count — a renamed title, a new status — needs the collapse comparison. Those reads
+   hand their records to the shadow, which judges the document and rebuilds it on any
+   verdict but `match` (and `truncated`, which a rebuild cannot change), and they serve
+   source. This is also the **backstop for the in-transaction invalidation above**: if that
+   write were ever missing — a new write path nobody hooked, a rollback revision — the stale
+   document is caught within a hundred of that owner's reads or by the hourly pass. That is
+   the same-count stale window, and it is bounded, not zero.
+4. **Every owner's first read in a process verifies**, and then every hundredth of theirs.
+   The sampler counts per owner, not per process, so one heavy poller cannot consume the
+   samples a quiet owner would have had.
 
 `SHELF_DOCUMENT_READS=false` turns it off, threaded through both deploy paths and
 `infra/env-manifest.json` so it cannot evaporate under the next deploy.
@@ -405,7 +414,7 @@ That shape does not scale with traffic and it does not scale with the catalog. I
 it grows without anybody visiting. A per-request ranking never flags it, because on six of the
 seven accounts it is cheap.
 
-### The shelf itself: mirrored, and on probation
+### The shelf itself: mirrored, and served
 
 The narrow query above fixes the callers that wanted one game. The shelf readers genuinely
 need every round: `collapseJobsToOwnerGames` picks each game's newest live round as its tip,
@@ -440,10 +449,16 @@ write directly — and submissions carry no `updatedAt`:
    one more pass instead of joining a snapshot that is already behind. Same invariant as the
    sweep cadence — _void the deferral when the record moves_.
 
-2. **A count on read.** The document stores `sourceCount`; the reader spends one `count()`
-   aggregate and rebuilds on disagreement. This catches a create or a reassignment without
-   knowing who wrote. It cannot catch an in-place field update, which is why there is a third
-   layer.
+2. **A count on read, and invalidation on write.** The document stores `ownedCount`; the
+   reader spends one `count()` aggregate against the raw `ownerUid` query and falls back to
+   source on disagreement. That catches the owner's own rounds appearing or vanishing and
+   **nothing else** — not a collaborator's round, not a membership, transfer, settlement or
+   erasure, none of which move the reader's count. Those are handled where they happen: the
+   membership, invite, transfer, settlement and erasure transactions each tombstone the
+   shelves they change, and a round written on a shared game tombstones the co-editors. A
+   tombstone is a document with `stale: true` and a bumped `seq`; it is never a delete,
+   because a delete resets the sequence a stale in-flight rebuild may still hold. It cannot
+   catch an in-place field update, which is why there is a third layer.
 3. **A bounded pass, never once-ever.** `runShelfRebuildPass` rebuilds shelves older than an
    hour, ten per run, riding `notify-sweep`. It reports failures by _inspecting the rebuild's
    answer_, because the mirror swallows its own errors — a `try`/`catch` around it can never
@@ -455,16 +470,22 @@ write directly — and submissions carry no `updatedAt`:
    knowing the document exists, so a once-ever marker would retire the only thing that
    notices it. Same lesson as `open-round-backfill.ts`.
 
-Staleness, stated: immediate on every instance for a hooked writer, **at most one hour** for a
-writer nobody hooked or a rollback revision.
+Staleness, stated: immediate on every instance for a hooked writer; for a writer nobody
+hooked or a rollback revision, **within a hundred of that owner's reads or one hour**,
+whichever comes first — the same-count stale window.
 
-**Readers still read source.** This is a shadow: each shelf read also loads the document,
-judges it against what the reader is about to serve, and annotates its own `firestore reads`
-line with `shelfShadow` and, on disagreement, `shelfMismatch`. The comparison is on the
-**collapsed** output, so a difference the collapse would have hidden is not reported as drift,
-and `absent` / `version` / `truncated` / `count` / `collapse` are distinguished rather than
-lumped into one failure. The bar for pointing readers at the document is **zero mismatches
-over a full week**, not "it seemed fine".
+**Readers serve the document.** They were pointed at it on 2026-09-19 without the week of
+mismatch-free shadow this section originally required; the owner chose not to phase the
+rollout, and the review that replaced the week found and fixed the invalidation gaps the
+shadow would have surfaced. The shadow remains as the repair path: every sampled or
+fallen-back read still loads the document, judges it against what source returned, annotates
+its `firestore reads` line with `shelfShadow` (and `shelfMismatch` on disagreement), and
+rebuilds on any verdict but `match` or `truncated`. The comparison is on the **collapsed**
+output, so a difference the collapse would have hidden is not reported as drift, and
+`absent` / `stale` / `version` / `truncated` / `count` / `collapse` are distinguished. A
+concurrent rebuild losing the compare-and-set retries from the new sequence rather than
+trusting the winner, and gives up into a tombstone rather than leaving a document it could
+not order itself against.
 
 **A probation check is only as strong as its fingerprint**, and the first version of this one
 was not strong enough: it compared jobId, slug, title and status, and so would have certified
