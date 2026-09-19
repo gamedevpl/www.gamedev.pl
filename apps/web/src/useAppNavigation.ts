@@ -23,7 +23,7 @@ export type UseAppNavigationOptions = {
 export type UseAppNavigationResult = {
   route: AppRoute;
   navigate: Navigate;
-  exitOverlay: () => void;
+  exitOverlay: (fallbackPath?: string) => void;
   handleCreateNav: () => void;
   handlePartyCreateNav: () => void;
   handlePartyNav: () => void;
@@ -75,16 +75,20 @@ export function useAppNavigation({
     setRoute(readLocationRoute());
   }, []);
 
-  // Closing a URL-owning overlay returns to its opener, else home.
-  const exitOverlay = useCallback(() => {
-    const returnPath = playReturnPathRef.current;
-    playReturnPathRef.current = null;
-    if (returnPath && !returnPath.startsWith('/play/')) {
-      navigate(returnPath);
-      return;
-    }
-    navigate('/');
-  }, [navigate]);
+  // Closing a URL-owning overlay returns to its opener, else fallback (default '/').
+  const exitOverlay = useCallback(
+    (fallbackPath?: unknown) => {
+      const returnPath = playReturnPathRef.current;
+      playReturnPathRef.current = null;
+      if (returnPath && !returnPath.startsWith('/play/')) {
+        navigate(returnPath);
+        return;
+      }
+      const target = typeof fallbackPath === 'string' ? fallbackPath : '/';
+      navigate(target, { replace: true });
+    },
+    [navigate],
+  );
 
   // Deliberate click focuses even on phones, unlike page-load autofocus.
   function handleCreateNav() {
