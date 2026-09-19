@@ -68,7 +68,7 @@ describe('agent play mode layout', () => {
     expect(tracked).toMatch(/height:\s*var\(--agent-visual-height,\s*100dvh\)/);
     expect(tracked).toMatch(/transform:\s*translateY\(var\(--agent-visual-offset,\s*0px\)\)/);
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)[\s\S]*?\.has-agent-panel\.is-viewport-tracked\s*\{[\s\S]*?--agent-inset-bottom:\s*55%/,
+      /@media\s*\(max-width:\s*760px\)[\s\S]*?\.has-agent-panel\.is-viewport-tracked\s*\{[\s\S]*?--agent-inset-bottom:\s*var\(--agent-visual-inset-bottom,\s*55dvh\)/,
     );
   });
 });

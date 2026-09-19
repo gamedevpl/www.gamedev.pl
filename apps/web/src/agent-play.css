@@ -19,11 +19,12 @@
     --agent-inset-bottom: 55dvh;
   }
 
-  /* dvh tracks browser chrome, not the keyboard. Once the stage is sized to the
-     visual viewport, 55% is the same split against the part of the screen that
-     is actually visible — including when the command box raises the keys. */
+  /* dvh tracks browser chrome, not the keyboard. A 55% *margin* would resolve
+     against width (~215px on a 390px phone) while the rail's height:55% uses
+     height (~464px) — the canvas stays under the panel. JS writes the split as
+     pixels from visualViewport.height onto --agent-visual-inset-bottom. */
   .has-agent-panel.is-viewport-tracked {
-    --agent-inset-bottom: 55%;
+    --agent-inset-bottom: var(--agent-visual-inset-bottom, 55dvh);
   }
 }
 

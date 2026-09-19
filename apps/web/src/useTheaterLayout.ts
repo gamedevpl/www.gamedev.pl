@@ -46,6 +46,8 @@ export function useAgentViewportTrack(enabled: boolean, rootRef: RefObject<HTMLE
     const sync = () => {
       root.style.setProperty('--agent-visual-height', `${viewport.height}px`);
       root.style.setProperty('--agent-visual-offset', `${viewport.offsetTop}px`);
+      // 55% of height as px: margin-bottom % is width.
+      root.style.setProperty('--agent-visual-inset-bottom', `${Math.round(viewport.height * 0.55)}px`);
     };
 
     sync();
@@ -57,6 +59,7 @@ export function useAgentViewportTrack(enabled: boolean, rootRef: RefObject<HTMLE
       viewport.removeEventListener('scroll', sync);
       root.style.removeProperty('--agent-visual-height');
       root.style.removeProperty('--agent-visual-offset');
+      root.style.removeProperty('--agent-visual-inset-bottom');
     };
   }, [enabled, rootRef]);
   return tracked;

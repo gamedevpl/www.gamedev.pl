@@ -106,5 +106,6 @@ describe('agent visual viewport tracking', () => {
     expect(el.dataset.tracked).toBe('1');
     expect(el.style.getPropertyValue('--agent-visual-height')).toBe('400px');
     expect(el.style.getPropertyValue('--agent-visual-offset')).toBe('12px');
+    expect(el.style.getPropertyValue('--agent-visual-inset-bottom')).toBe('220px');
   });
 });

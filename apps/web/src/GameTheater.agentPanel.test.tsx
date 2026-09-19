@@ -145,6 +145,7 @@ describe('GameTheater agent mode panel', () => {
       expect(stage.classList.contains('is-viewport-tracked')).toBe(true);
       expect(stage.style.getPropertyValue('--agent-visual-height')).toBe('400px');
       expect(stage.style.getPropertyValue('--agent-visual-offset')).toBe('12px');
+      expect(stage.style.getPropertyValue('--agent-visual-inset-bottom')).toBe('220px');
 
       await act(async () => {
         viewport.height = 360;
@@ -153,6 +154,7 @@ describe('GameTheater agent mode panel', () => {
       });
       expect(stage.style.getPropertyValue('--agent-visual-height')).toBe('360px');
       expect(stage.style.getPropertyValue('--agent-visual-offset')).toBe('40px');
+      expect(stage.style.getPropertyValue('--agent-visual-inset-bottom')).toBe('198px');
     } finally {
       Reflect.deleteProperty(window, 'visualViewport');
     }
