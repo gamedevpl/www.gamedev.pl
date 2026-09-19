@@ -143,6 +143,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
         this.submissions.set(record.jobId, { ...record, roundGeneration: gen });
       }
     },
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
   );
   protected gameTransferProposalStore = new InMemoryGameTransferProposalStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
@@ -174,14 +175,16 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug, action, actorUid, subjectUid, at) => {
       this.gameEditorInviteStore.audits.push(newMembershipAudit(slug, action, actorUid, subjectUid, at));
     },
-    // Called lazily, so `shelves` below is initialised by then.
-    (ownerUid, at) => {
-      this.shelves.set(ownerUid, tombstoneShelf(at, (this.shelves.get(ownerUid)?.seq ?? 0) + 1));
-    },
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
   );
   private gameQuotaStore = new InMemoryGameQuotaStore();
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private shelves = new Map<string, ShelfDocument>();
+
+  // Called lazily by the slices above, so `shelves` is initialised by then.
+  private invalidateShelfDocument(ownerUid: string, at: string): void {
+    this.shelves.set(ownerUid, tombstoneShelf(at, (this.shelves.get(ownerUid)?.seq ?? 0) + 1));
+  }
   // The raw ownerUid query, which is what the document records as ownedCount.
   protected shelfStore = new InMemoryShelfStore(
     this.shelves,

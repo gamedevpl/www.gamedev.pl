@@ -48,6 +48,37 @@ for (const [name, make] of implementations)
       vi.restoreAllMocks();
     });
 
+    // A transfer moves no ownerUid either, so neither shelf would notice.
+    it('invalidates both sides of a transfer, even with the rebuild dead', async () => {
+      const store = make();
+      const at = new Date().toISOString();
+      await store.upsertUser({ uid: 'g:ada' });
+      await store.upsertUser({ uid: 'g:grace' });
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, 'g:ada', 'Sky Dodge');
+      await store.setSubmissionSlug(jobId, 'sky-dodge');
+      await store.ensureGameAccess('sky-dodge', 'g:ada', at, at);
+      await store.rebuildShelf('g:ada');
+      const sent = await store.getShelf('g:ada');
+      expect(sent?.stale).toBeUndefined();
+
+      const later = new Date(Date.now() + 1000).toISOString();
+      const code = (await store.ensureRecipientCode('g:grace', later))!;
+      const revision = (await store.getGameAccess('sky-dodge'))!.accessRevision;
+      await store.createGameTransferInvitation('sky-dodge', 'g:ada', 'g:grace', revision, later, code);
+      const invite = (await store.getActiveGameTransfer('sky-dodge', later))!;
+
+      vi.spyOn(store, 'listSubmissionsByOwner').mockRejectedValue(new Error('firestore is having a day'));
+      vi.spyOn(store, 'tombstoneShelf').mockRejectedValue(new Error('firestore is still having a day'));
+
+      await store.acceptGameTransferInvitation('sky-dodge', 'g:grace', later, invite.invitationId);
+
+      // The sender must stop serving the game; the recipient must start.
+      expect((await store.getShelf('g:ada'))?.stale).toBe(true);
+      expect((await store.getShelf('g:grace'))?.stale).toBe(true);
+      vi.restoreAllMocks();
+    });
+
     it('does the same when the editor leaves of their own accord', async () => {
       const store = make();
       const at = new Date().toISOString();
