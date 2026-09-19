@@ -58,6 +58,24 @@
       "proposalsOn": "Propozycje konceptów włączone",
       "proposalsOff": "Propozycje konceptów wyłączone"
     },
+    "share": {
+      "offered": {
+        "title": "Zaproszono cię do edycji gry",
+        "body": "{{actorName}} zaprasza cię do edycji „{{title}}”."
+      },
+      "accepted": {
+        "title": "Edytor dołączył do twojej gry",
+        "body": "{{actorName}} przyjął zaproszenie do „{{title}}”."
+      },
+      "removed": {
+        "title": "Usunięto cię z gry",
+        "body": "{{actorName}} usunął cię z „{{title}}”."
+      },
+      "left": {
+        "title": "Edytor opuścił twoją grę",
+        "body": "{{actorName}} opuścił „{{title}}”."
+      }
+    },
     "operator": {
       "review_ready": {
         "title": "Build czeka na publikację",
@@ -111,6 +129,12 @@
         "title": "Twoja zmiana jest na żywo",
         "body": "Twoja zmiana jest już częścią {{title}}."
       }
+    },
+    "transfer": {
+      "offered": {
+        "title": "Ktoś przekazuje ci grę",
+        "body": "{{title}} będzie twoja, jeśli przyjmiesz. Zaproszenie wygasa po siedmiu dniach."
+      }
     }
   },
   "header": {
@@ -150,6 +174,7 @@
     "smartSearching": "Szukanie w katalogu…",
     "smartBuildBtn": "Stwórz taką grę",
     "orBuildOwnGame": "lub stwórz swoją grę",
+    "preparingAttachments": "Przygotowywanie załączników…",
     "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać",
     "micStart": "Mów",
     "micListening": "Słucham...",
@@ -327,8 +352,8 @@
     "withContributions": "ze zmianami od"
   },
   "bottomCta": {
-    "headline": "Masz własny pomysł?",
-    "sub": "Opisz go powyżej, a agent AI zbuduje go naprawdę — gotowego do gry dla wszystkich.",
+    "headline": "Masz własny pomysł na grę?",
+    "sub": "Opisz go powyżej, a agent AI zbuduje grywalną wersję w przeglądarce.",
     "action": "Opisz swój pomysł"
   },
   "recommendations": {
@@ -379,6 +404,7 @@
         "live": "Na żywo"
       },
       "noMatches": "Żadna gra nie pasuje do tego wyszukiwania.",
+      "editorRole": "Edytor · {{name}}",
       "countTruncated": "Wyświetlam {{shown}} z {{total}} gier",
       "truncated": "Masz więcej gier, niż możemy tu pokazać. Widać pięćdziesiąt najnowszych.",
       "openShelf": "Twoje gry",
@@ -593,7 +619,9 @@
       "assistNeedsContent": "To zmiana samych map — edytuj je poniżej.",
       "assistRejected": "Ta prośba została odrzucona.",
       "assistQuota": "Wykorzystano dzisiejsze prośby o strojenie. Suwaki nadal działają.",
-      "assistUnavailable": "Asystent nie odpowiedział — spróbuj ponownie lub użyj suwaków."
+      "assistUnavailable": "Asystent nie odpowiedział — spróbuj ponownie lub użyj suwaków.",
+      "useStandardEditor": "Użyj standardowego edytora",
+      "useGameEditor": "Użyj edytora tej gry"
     },
     "overview": {
       "status": "Status",
@@ -635,7 +663,9 @@
       "expand": "Rozwiń",
       "fullScreen": "Pełny ekran",
       "exitFullScreen": "Zamknij pełny ekran",
-      "peekEmpty": "Brak nowości"
+      "peekEmpty": "Brak nowości",
+      "transfer": "Przekazanie",
+      "members": "Członkowie"
     },
     "buildHistory": {
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
@@ -847,6 +877,72 @@
       "notChecked": "jeszcze niesprawdzona",
       "checkedTitle": "Ta wersja przeszła bramkę podglądu.",
       "notCheckedTitle": "Ta wersja nie została jeszcze sprawdzona."
+    },
+    "transfer": {
+      "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
+      "loading": "Sprawdzam…",
+      "codeLabel": "Kod odbiorcy",
+      "codePlaceholder": "Jego kod",
+      "codeHint": "Poproś drugiego twórcę o kod z jego ustawień konta.",
+      "send": "Wyślij zaproszenie",
+      "sending": "Wysyłam…",
+      "pending": "Czekam, aż {{name}} przyjmie.",
+      "expires": "Wygasa {{when}}.",
+      "cancel": "Anuluj zaproszenie",
+      "cancelling": "Anuluję…",
+      "errors": {
+        "load": "Nie udało się sprawdzić przekazania tej gry.",
+        "generic": "Nie udało się. Spróbuj ponownie.",
+        "invalidCode": "Ten kod do nikogo nie pasuje.",
+        "self": "To twój własny kod.",
+        "ineligible": "Ten twórca nie może teraz przyjmować gier.",
+        "busy": "Trwa runda budowania. Przekaż grę, gdy się skończy.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "notOwner": "Ta gra nie jest twoja, więc nie możesz jej przekazać.",
+        "alreadyOut": "Zaproszenie dla tej gry już jest wysłane."
+      },
+      "someone": "inny twórca"
+    },
+    "transferPropose": {
+      "intro": "Potwierdź ten transfer w Studio. Nic się nie zmienia, dopóki nie wybierzesz odbiorcy i on nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
+      "confirm": "Wyślij zaproszenie",
+      "game": "Przekaż {{title}}",
+      "missing": "Ta propozycja transferu zniknęła albo nie jest twoja.",
+      "expired": "Ta propozycja wygasła. Poproś agenta o nową.",
+      "sent": "To zaproszenie zostało już wysłane.",
+      "back": "Wróć do Studio"
+    },
+    "members": {
+      "intro": "Zaproś innego twórcę jako edytora. Zobaczy projekt dopiero po przyjęciu. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
+      "loading": "Sprawdzam…",
+      "codeLabel": "Kod odbiorcy",
+      "codePlaceholder": "Jego kod",
+      "codeHint": "Poproś drugiego twórcę o kod z jego półki w Studio.",
+      "send": "Wyślij zaproszenie",
+      "sending": "Wysyłam…",
+      "pending": "Czekam, aż {{name}} przyjmie.",
+      "expires": "Wygasa {{when}}.",
+      "cancel": "Anuluj zaproszenie",
+      "cancelling": "Anuluję…",
+      "owner": "Właściciel: {{name}}",
+      "editor": "Edytor: {{name}}",
+      "you": "(ty)",
+      "ownerUnknown": "właściciel",
+      "remove": "Usuń",
+      "leave": "Opuść tę grę",
+      "leaving": "Opuszczam…",
+      "errors": {
+        "load": "Nie udało się wczytać członków tej gry.",
+        "generic": "Nie udało się. Spróbuj ponownie.",
+        "invalidCode": "Ten kod do nikogo nie pasuje.",
+        "self": "To twój własny kod.",
+        "ineligible": "Ten twórca nie może teraz dołączać do gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "notOwner": "Tylko właściciel zarządza członkami.",
+        "alreadyMember": "Ten twórca już jest przy tej grze.",
+        "memberCap": "Ta gra osiągnęła limit członków.",
+        "alreadyOut": "Zaproszenie dla tej osoby już jest wysłane."
+      }
     }
   },
   "submit": {
@@ -875,6 +971,9 @@
     "nameHint": "Tak Twoja gra będzie się nazywać wszędzie. Możesz to zmienić teraz — później już nie.",
     "createNow": "Stwórz teraz",
     "analyzing": "Analizuję Twój pomysł…",
+    "analyzingStepMechanics": "Badam mechaniki gry i inspiracje…",
+    "analyzingStepQuestions": "Układam pytania projektowe…",
+    "analyzingStepFinalizing": "Prawie gotowe…",
     "otherPlaceholder": "Inaczej — opisz to po swojemu…",
     "pickSeveral": "Wybierz dowolne pasujące — mogą się łączyć.",
     "pickOneOrSkip": "Wybierz to, co sobie wyobrażasz, albo pomiń — wtedy my zdecydujemy.",
@@ -1376,31 +1475,33 @@
     "orEmail": "Albo napisz bezpośrednio na"
   },
   "create": {
-    "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
-    "subhead": "To nie szablon ani zabawka — prawdziwy HTML, CSS i JavaScript, napisane przez agenta kodującego, sprawdzone przez człowieka, a potem grywalne w przeglądarce dla każdego.",
-    "example1": "gra jak Cannon Fodder, ale z oddziałami kotów",
-    "example2": "labirynt z żyroskopem dla mojego młodszego brata",
-    "example3": "strategia 4X, którą skończę w 20 minut",
+    "headline": "Opisz grę. Agent AI ją zbuduje.",
+    "subhead": "Prawdziwy kod od agenta AI, sprawdzony przez człowieka i gotowy do gry w przeglądarce.",
     "stepsHeading": "Co dzieje się po kliknięciu Build",
-    "step1Title": "Kilka szybkich pytań",
-    "step1Detail": "Nadajemy nazwę i, jeśli trzeba, dopytujemy o klimat — albo pomiń, a AI zdecyduje. Zajmuje minutę.",
+    "step1Title": "Krótki wywiad",
+    "step1Detail": "Doprecyzuj klimat i mechanikę lub zdaj się na AI.",
     "step2Title": "Agent pisze kod",
-    "step2Detail": "Możesz obserwować pracę w Studio i mówić, co zmienić, w trakcie budowy.",
-    "step3Title": "Najpierw zagrasz w szkic",
-    "step3Detail": "Grywalny podgląd pojawia się, zanim gra jest ukończona. Wypróbuj ją, poproś o zmiany.",
-    "step4Title": "Człowiek sprawdza, potem gra jest na żywo",
-    "step4Detail": "Gdy przejdzie ocenę, trafia do katalogu i każdy może w nią zagrać.",
-    "notifyNote": "Możesz zamknąć kartę. Budowa trwa tyle, ile trzeba — powiadomimy Cię, gdy będzie szkic do zagrania, a wątek zostaje w Studio.",
+    "step2Detail": "Śledź postępy w Studio na żywo i sugeruj zmiany w locie.",
+    "step3Title": "Grywalny szkic",
+    "step3Detail": "Wypróbuj wczesną wersję gry i poproś o poprawki.",
+    "step4Title": "Weryfikacja i publikacja",
+    "step4Detail": "Po pomyślnej recenzji gra trafia prosto do katalogu.",
+    "notifyNote": "Możesz zamknąć kartę — powiadomimy Cię, gdy szkic będzie gotowy do gry.",
     "buildersHeading": "Kto to zbuduje?",
-    "buildersSub": "Wybierasz w ostatnim kroku — i możesz zmienić przy każdej rundzie.",
+    "buildersSub": "Wybór w ostatnim kroku — z możliwością zmiany w każdej rundzie.",
     "defaultBadge": "Domyślne",
     "freeBadge": "Bezpłatne",
-    "platformPoint1": "Nic do instalowania ani konfigurowania",
-    "platformPoint2": "Liczy się do Twojego dziennego limitu",
-    "selfPoint1": "Instalacja jednym kliknięciem albo wklej konfigurację",
-    "selfPoint2": "Twój agent, Twoje tokeny — bez naszego dziennego limitu",
+    "platformPoint1": "Zero instalacji i konfiguracji",
+    "platformPoint2": "Wliczone w dzienny limit konta",
+    "selfPoint1": "Szybka instalacja lub konfiguracja MCP",
+    "selfPoint2": "Własny agent i tokeny — bez dziennego limitu",
     "anyMcpClient": "dowolny klient MCP",
-    "showcaseHeading": "Zrobione dokładnie tak"
+    "showcaseHeading": "Na żywo w katalogu",
+    "pokeQa": "Szturchnij pomysłowego Dobromira — podaj iskrę w dół",
+    "pokeCode": "Szturchnij maskotkę BRRR — podaj iskrę w dół",
+    "pokePlay": "Szturchnij maskotkę przy szkicu — podaj iskrę w dół",
+    "pokeLive": "Szturchnij maskotkę na żywo — dokończ mini-build",
+    "comboBuilt": "Cztery maskotki skończyły mini-build."
   },
   "ai": {
     "generatedBadge": "Gra wygenerowana przez AI",
@@ -1680,7 +1781,7 @@
     "legend": "Kto buduje tę rundę?",
     "platform": {
       "title": "Agent Gamedev.pl",
-      "detail": "Przypisujemy agenta i postęp widać tutaj.",
+      "detail": "Nasz agent w chmurze — postępy widzisz w Studio.",
       "unavailable": {
         "badge": {
           "coming_soon": "Już wkrótce",
@@ -1704,7 +1805,7 @@
     },
     "self": {
       "title": "Mój własny agent",
-      "detail": "Podłączasz Claude Code, Codex, Cursor albo innego agenta."
+      "detail": "Podłączasz własnego agenta przez protokół MCP."
     },
     "badge": {
       "self": "Twój agent",
@@ -2143,5 +2244,48 @@
     "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
     "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
     "selfMode": "Ta runda: Twój agent (BYOCA)"
+  },
+  "studioShelf": {
+    "transfer": {
+      "title": "Przekazania",
+      "offer": "{{name}} przekazuje ci {{slug}}. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
+      "accept": "Przyjmij",
+      "reject": "Odrzuć",
+      "yourCode": "Twój kod odbiorcy",
+      "reveal": "Pokaż",
+      "hide": "Ukryj",
+      "rotate": "Nowy kod",
+      "rotating": "Zmieniam…",
+      "errors": {
+        "rotate": "Nie udało się wygenerować nowego kodu.",
+        "respond": "Nie udało się. Spróbuj ponownie.",
+        "busy": "Na tej grze trwa runda budowania. Spróbuj, gdy się skończy.",
+        "unreachable": "Nie udało się wczytać zaproszeń.",
+        "ineligible": "Twoje konto nie może teraz przyjmować gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "gone": "To zaproszenie jest już nieaktualne.",
+        "staleClient": "Odśwież stronę i spróbuj ponownie — ta karta jest nieaktualna.",
+        "code": "Nie udało się wczytać twojego kodu odbiorcy."
+      },
+      "retry": "Spróbuj ponownie",
+      "someone": "Inny twórca",
+      "codeHint": "Podaj ten kod osobie, która przekazuje ci grę."
+    },
+    "share": {
+      "title": "Zaproszenia do edycji",
+      "offer": "{{name}} zaprasza cię do edycji {{slug}}. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",
+      "accept": "Przyjmij",
+      "reject": "Odrzuć",
+      "errors": {
+        "respond": "Nie udało się. Spróbuj ponownie.",
+        "unreachable": "Nie udało się wczytać zaproszeń.",
+        "ineligible": "Twoje konto nie może teraz dołączać do gier.",
+        "staleOwner": "Ta gra zmieniła właściciela. Odśwież Studio.",
+        "gone": "To zaproszenie jest już nieaktualne.",
+        "alreadyMember": "Jesteś już przy tej grze.",
+        "memberCap": "Ta gra osiągnęła limit członków."
+      },
+      "retry": "Spróbuj ponownie"
+    }
   }
 }

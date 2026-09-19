@@ -210,7 +210,7 @@ export function CodeSurface({
   onPreviewReadyRef.current = onPreviewReady;
 
   const [pendingJump, setPendingJump] = useState<{ path: string; from: number; to: number } | null>(null);
-  const [kitViewerLine, setKitViewerLine] = useState<number | null>(null);
+  const [kitViewer, setKitViewer] = useState<{ path: string; line: number; content: string } | null>(null);
 
   useEffect(() => {
     if (openedRecordedRef.current) return;
@@ -387,10 +387,10 @@ export function CodeSurface({
     ready: languageServiceReady,
     serviceRef: languageServiceRef,
     kitDeclaration,
+    kitFiles,
     queueUpdate: queueLanguageUpdate,
   } = useCodeSurfaceLanguageService({ slug, editable, sourcesRef, draftsRef });
 
-  // Re-reads the creator's stored opt-in whenever the round changes.
   useEffect(() => {
     setAgentModeEnabledState(isAgentModeEnabled(slug));
   }, [slug]);
@@ -535,13 +535,11 @@ export function CodeSurface({
     }
   }
 
-  // GA-09: switches tabs for a game file, opens the kit.
   function handleGotoDefinition(vfsPath: string, from: number, to: number) {
     const path = fromVfsPath(vfsPath);
-    if (path === KIT_DECLARATION_PATH) {
-      const declaration = kitDeclaration;
-      if (!declaration) return;
-      setKitViewerLine(declaration.slice(0, from).split('\n').length);
+    const kitContent = path === KIT_DECLARATION_PATH ? kitDeclaration : kitFiles[path];
+    if (kitContent) {
+      setKitViewer({ path, content: kitContent, line: kitContent.slice(0, from).split('\n').length });
       return;
     }
     if (!sources?.files.some((entry) => entry.path === path)) return;
@@ -962,10 +960,11 @@ export function CodeSurface({
     });
   }
   if (kitDeclaration) {
+    const declaration = kitDeclaration;
     actionsCommands.push({
       id: 'kit',
       label: t('studioPanel.code.actions.commandKit'),
-      run: () => setKitViewerLine(1),
+      run: () => setKitViewer({ path: KIT_DECLARATION_PATH, line: 1, content: declaration }),
     });
   }
   actionsCommands.push({ id: 'back', label: t('studioPanel.code.actions.commandBack'), run: onBack });
@@ -1341,11 +1340,12 @@ export function CodeSurface({
         />
       ) : null}
 
-      {kitViewerLine !== null && kitDeclaration ? (
+      {kitViewer ? (
         <CodeSurfaceKitViewer
-          declaration={kitDeclaration}
-          activeLine={kitViewerLine}
-          onClose={() => setKitViewerLine(null)}
+          path={kitViewer.path}
+          declaration={kitViewer.content}
+          activeLine={kitViewer.line}
+          onClose={() => setKitViewer(null)}
         />
       ) : null}
 

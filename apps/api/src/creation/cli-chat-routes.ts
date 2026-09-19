@@ -8,7 +8,7 @@ import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { isModerationBlock, rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { mintToken, verifyToken } from '../platform/submission-token.js';
 import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
@@ -17,6 +17,7 @@ import { CREATION_REFUSAL_CODES, type ChatGate } from './creation-limits.js';
 import type { CreateGameResult } from './create-game.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
+import { reconcileTransferredOwnership } from './studio-shelf-records.js';
 import { failClosedReply, IntakeChatAgent, type IntakeAgent } from './intake-agent.js';
 
 const ChatBodySchema = z.object({
@@ -103,7 +104,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
             return reply.status(403).send({ error: 'invalid active game' });
           }
           const record = await store.getSubmission(jobId);
-          if (!record || !(await ownsSubmissionOrSlug(store, record, uid))) {
+          if (!record || !(await canActOnSubmissionOrSlug(store, record, uid, 'build'))) {
             return reply.status(403).send({ error: 'invalid active game' });
           }
           if (supplied.checkoutSlug && supplied.checkoutSlug !== record.slug) {
@@ -161,7 +162,8 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       let games;
       let gamesTotal;
       try {
-        const records = await store.listSubmissionsByOwner(uid);
+        const owned = await store.listSubmissionsByOwner(uid);
+        const records = await reconcileTransferredOwnership(store, uid, owned);
         await recordShelfShadow({ store, log: request.log }, uid, records);
         const shelf = collapseJobsToOwnerGames(records, 'shelf');
         gamesTotal = shelf.length;
@@ -272,7 +274,7 @@ async function loadConversation(
   uid: string,
   conversationId: string | undefined,
 ): Promise<CliChatRecord | null> {
-  const record = await store.getCliChat(uid);
+  const record = await store.getCliChat(uid, conversationId);
   if (!record) return null;
   if (conversationId && record.conversationId !== conversationId) return null;
   return record;

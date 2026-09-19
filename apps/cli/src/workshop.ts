@@ -1,6 +1,11 @@
+import { PROGRESS_INSTRUCTIONS } from './local-progress.js';
+
+import { withCheckoutWriter } from './workbench-lock.js';
+import { localPreviewTools, startWorkshopPreview, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
-import { runMuseWithApprovals } from './muse-approval.js';
+import { defaultAdapterRun } from './workshop-runner.js';
+import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
@@ -10,14 +15,12 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
-import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { changedPaths, localGameFiles, formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
-import { childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
+import { childEnv, createDelegateStream } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { deliverySession } from './submit-session.js';
@@ -27,9 +30,7 @@ import { repairLoop } from './repair-loop.js';
 import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
-
 export type PickChoice = (choices: string[], question: string) => Promise<string>;
-
 export type AdapterRun = (input: {
   spec: AdapterSpec;
   prompt: string;
@@ -37,7 +38,9 @@ export type AdapterRun = (input: {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  onDiagnostic?: (line: string) => void;
   authCheck?: Promise<void>;
+  onSteering?: (send: Steer | undefined) => void;
 }) => Promise<{ code: number | null; permissionSession?: string }>;
 
 type VerifyRun = NonNullable<Parameters<typeof runLadder>[0]['run']>;
@@ -54,6 +57,8 @@ export type Workshop = {
   activityApi?: ApiClient;
   interactiveRun?: InteractiveRun;
   onLocalTask?: (agent: string) => void;
+  onSteering?: (send: Steer | undefined) => void;
+  onLocalPreview?: (url: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -78,23 +83,6 @@ export function detectLocalAdapters(
     const spec = detectAdapter(row.name, which, file);
     return spec ? [spec] : [];
   });
-}
-
-async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): ReturnType<AdapterRun> {
-  return runMuseWithApprovals(input, spawnLocalAdapter);
-}
-
-async function spawnLocalAdapter(input: Parameters<AdapterRun>[0]): ReturnType<AdapterRun> {
-  const child = await spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
-  for (const stream of [child.stdout, child.stderr]) {
-    if (stream) createInterface({ input: stream }).on('line', (line: string) => input.onLine?.(line));
-  }
-  return {
-    code: await new Promise<number | null>((resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', resolve);
-    }),
-  };
 }
 
 export function describeAdapters(adapters: AdapterSpec[], all = loadAdapters().adapters): string {
@@ -247,8 +235,8 @@ export async function runLocalBuild(input: {
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws } = input;
-  const spec = configureAdapter(input.spec, ws.env);
-  const output = taskOutput(input.write);
+  let spec = configureAdapter(input.spec, ws.env);
+  const output = taskOutput(input.write, ws.onActivity);
   ws.lastLog = output.path;
   input = { ...input, write: output.write };
   input.write(`\n── ${ws.slug} · local task ──`);
@@ -262,6 +250,7 @@ export async function runLocalBuild(input: {
   let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
   let authCheck: Promise<void> | undefined;
+  let localTools: Awaited<ReturnType<typeof localPreviewTools>>;
   try {
     if (!(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
     if (!ws.runAdapter && spec.name === 'claude') {
@@ -289,20 +278,27 @@ export async function runLocalBuild(input: {
     let previewUrl: string | undefined;
     if (!ws.runAdapter && !ws.unattended) {
       try {
-        const preview = await startLocalPlay({
+        previewUrl = await startWorkshopPreview({
           root: ws.root,
           slug: ws.slug,
           env: ws.env,
           write: input.write,
-          prepared: true,
           abort: controller.signal,
+          agent: spec.name,
+          onLocalPreview: ws.onLocalPreview,
         });
-        previewUrl = preview?.url;
-        if (preview) input.write(`live preview while ${spec.name} edits: ${preview.url}`);
       } catch (error) {
         input.write(formatError(error));
       }
     }
+    localTools = await localPreviewTools({
+      spec,
+      previewUrl,
+      abort: controller.signal,
+      write: input.write,
+      progress: output.progress,
+    });
+    if (localTools) spec = localTools.spec;
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
     input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
@@ -312,7 +308,7 @@ export async function runLocalBuild(input: {
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
     success = await repairLoop({
-      brief: `${input.brief}\n${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Open this exact URL with your available browser tool. Do not start or stop another preview server.` : 'No live preview was supplied. If visual work requires a browser or preview unavailable here, report the blocker; the creator can start /play in their terminal.'}`,
+      brief: `${input.brief}\n${PROGRESS_INSTRUCTIONS}\n${localTools && previewUrl ? LOCAL_PREVIEW_INSTRUCTIONS : ''}${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
@@ -332,18 +328,18 @@ export async function runLocalBuild(input: {
           spec,
           prompt,
           authCheck,
+          onSteering: ws.unattended ? undefined : ws.onSteering,
           cwd,
           env: childEnv(ws.env, ''),
           abort: controller.signal,
+          onDiagnostic: output.raw,
           onLine: (line) => {
+            output.raw(line);
             failure.observe(line);
             if (line.startsWith('Muse needs your approval')) ws.onActivity?.('Muse needs your approval');
             conversation = agyConversation(line) ?? conversation;
             if (permissionBlocked(line)) blocked = true;
             for (const shown of stream(line)) {
-              if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · running a tool — /logs after completion`);
-              if (shown.includes('Waiting for model response'))
-                ws.onActivity?.(`${spec.name} · waiting for model response`);
               input.write(shown);
             }
           },
@@ -382,7 +378,7 @@ export async function runLocalBuild(input: {
             'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
           );
           input.write(
-            'If the agent reported missing browser access, enable its browser tool or provide screenshots, then retry. /diff shows existing local edits; /submit delivers them explicitly.',
+            'Missing browser access prevents visual verification, not code changes. Retry an implementation task with that limitation noted. /diff shows existing local edits; /push delivers them explicitly.',
           );
           return false;
         }
@@ -391,6 +387,8 @@ export async function runLocalBuild(input: {
     });
     return success;
   } finally {
+    ws.onSteering?.(undefined);
+    await localTools?.close();
     output.flush();
     await presence?.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
     if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
@@ -475,7 +473,7 @@ export async function readyToEdit(input: {
 }
 
 // One creator request, end to end: agent, ladder, offer.
-export async function workshopTurn(input: {
+async function workshopTurnUnlocked(input: {
   api: ApiClient;
   ws: Workshop;
   request: string;
@@ -493,4 +491,10 @@ export async function workshopTurn(input: {
   });
   if (ok) await offerSubmit(input);
   return ok;
+}
+
+export function workshopTurn(
+  input: Parameters<typeof workshopTurnUnlocked>[0],
+): ReturnType<typeof workshopTurnUnlocked> {
+  return withCheckoutWriter(input.ws.root, () => workshopTurnUnlocked(input));
 }

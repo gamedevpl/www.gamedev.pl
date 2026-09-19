@@ -17,11 +17,13 @@ import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
 import { normalizeAtIntake } from '../platform/localize-intake.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 import type { ContentChecker, RejectCategory } from '../platform/moderation.js';
 import { createDeliveryModerationGate } from './delivery-moderation.js';
+import { gameOwnerUid } from '../platform/game-access-resolve.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -46,6 +48,8 @@ export interface SourceDeliveryInput {
   summary?: string;
   // Caller identity is distinct from file authorship.
   actor?: 'agent' | 'creator';
+  // Present on MCP inject; omitted on a leftover round key.
+  actorUid?: string;
 }
 
 export interface SourceDeliveryAccepted {
@@ -292,6 +296,17 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         const authorityError = managedAuthorityError(record, input, input.authority);
         if (authorityError) throw authorityError;
       }
+      if (record.slug && record.ownerUid) {
+        const action = input.mode === 'publish' ? 'publish' : 'edit';
+        const actor = input.actorUid ?? record.ownerUid;
+        const allowed = await canActOnSlug(options.store, record.slug, actor, action);
+        if (!allowed) {
+          if (input.authority) {
+            throw new SourceDeliveryAuthorityError('round_closed', 'managed delivery actor is no longer a member');
+          }
+          return { accepted: false, rejected: 'stopped' };
+        }
+      }
 
       if (stopReason(record)) return { accepted: false, rejected: 'stopped' };
       if (isRateLimited(input.jobId)) return { accepted: false, rejected: 'rate_limited' };
@@ -299,7 +314,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       // Read-only: a delivery refused later costs the ceiling nothing.
       if (options.gateRunGate) {
         const dateStr = new Date(now()).toISOString().slice(0, 10);
-        const headroom = await options.gateRunGate.peek(record.ownerUid, dateStr);
+        // The ceiling belongs to whoever owns the game now.
+        const headroom = await options.gateRunGate.peek(await gameOwnerUid(options.store, record), dateStr);
         if (!headroom.allowed) return { accepted: false, rejected: 'gate_capacity' };
       }
 
@@ -342,10 +358,12 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         );
       }
 
+      // Abuse concentrates on a person, so it must name the current one.
+      const moderatedUid = await gameOwnerUid(options.store, record);
       // After every cap, so a flood cannot buy itself an inference call.
       const proseRefusal = await proseGate.refuse({
         files: input.files,
-        uid: record.ownerUid,
+        uid: moderatedUid,
         log: options.log?.warn ? { warn: options.log.warn } : null,
       });
       if (proseRefusal) return { accepted: false, ...proseRefusal };

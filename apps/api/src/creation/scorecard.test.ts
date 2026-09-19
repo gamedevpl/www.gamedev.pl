@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore, type TelemetryEvent } from '../platform/store.js';
 import { buildScorecard, runScorecardSweep } from './scorecard.js';
@@ -178,6 +178,75 @@ describe('runScorecardSweep', () => {
     // only increments a counter is how a uniform production-only failure (every game
     // rejected identically) would look like a number nobody can act on.
     expect(seen).toEqual([{ slug: 'brick-storm', message: 'write failed' }]);
+  });
+});
+
+describe('runScorecardSweep — daily rollups', () => {
+  const day = (offset: number) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
+
+  async function seedDays(store: InMemoryStore, days: number) {
+    for (let offset = 0; offset < days; offset++) {
+      const dateStr = day(offset);
+      await store.appendTelemetryEvents(dateStr, [
+        event({ type: 'game_opened', sessionId: `s${offset}`, at: `${dateStr}T10:00:00.000Z`, msSinceOpen: 0 }),
+        event({
+          type: 'play_time',
+          sessionId: `s${offset}`,
+          at: `${dateStr}T10:00:20.000Z`,
+          msSinceOpen: 20_000,
+          seconds: 20 + offset,
+        }),
+      ]);
+    }
+  }
+
+  it('scans each day once, then reads the rollups back', async () => {
+    const store = new InMemoryStore();
+    await seedDays(store, 5);
+
+    const first = await runScorecardSweep({ store, windowDays: 5 });
+    expect(first.rescanned).toBe(5);
+    expect(first.reused).toBe(0);
+
+    const scan = vi.spyOn(store, 'listTelemetryEvents');
+    const second = await runScorecardSweep({ store, windowDays: 5 });
+
+    // Only the days still open are read event by event.
+    expect(second.reused).toBe(3);
+    expect(second.rescanned).toBe(2);
+    expect(scan).toHaveBeenCalledTimes(2);
+    scan.mockRestore();
+  });
+
+  it('writes the same scorecard whether the days were scanned or reused', async () => {
+    const store = new InMemoryStore();
+    await seedDays(store, 5);
+
+    await runScorecardSweep({ store, windowDays: 5 });
+    const scanned = await store.getScorecard('brick-storm');
+    await runScorecardSweep({ store, windowDays: 5 });
+    const reused = await store.getScorecard('brick-storm');
+
+    expect(reused?.sessions).toEqual(scanned?.sessions);
+    expect(reused?.health).toEqual(scanned?.health);
+    expect(reused?.depth).toEqual(scanned?.depth);
+  });
+
+  it('matches a straight scan over the same events', async () => {
+    const store = new InMemoryStore();
+    await seedDays(store, 5);
+    const events: TelemetryEvent[] = [];
+    for (let offset = 0; offset < 5; offset++) {
+      events.push(...(await store.listTelemetryEvents(day(offset))));
+    }
+    const direct = summarizeGameHealth(events)[0];
+
+    await runScorecardSweep({ store, windowDays: 5 });
+    const card = await store.getScorecard('brick-storm');
+
+    expect(card?.sessions.count).toBe(direct?.sessions);
+    expect(card?.sessions.medianPlaySeconds).toBe(direct?.medianPlaySeconds);
+    expect(card?.sessions.totalPlaySeconds).toBe(direct?.totalPlaySeconds);
   });
 });
 

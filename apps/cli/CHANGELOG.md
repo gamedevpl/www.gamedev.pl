@@ -7,6 +7,71 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.19.0 — 2026-09-17
+
+### Breaking
+
+- Interactive `gamedevpl`, `play [slug]` and `create [idea]` open a browser workspace. Use `--terminal` or explicit `repl` for terminal chat and `play --preview` for raw preview; JSON, redirected and stop flows retain their existing behavior (#1396).
+
+### Added
+
+- Start from an Open/Create browser screen, enter intake without dispatching an agent, and open the game automatically after checkout; new-game launches remain separate from existing-game sessions (#1396).
+- Play offers command search, slash completion and shared prompt history (#1396).
+
+### Fixed
+
+- Make the Play browser type-check reject undeclared side-effect imports (#1396).
+- Keep tool logs collapsed, name agent replies, and keep update notices and the composer accessible on short phone screens (#1396).
+- Play keeps the game interactive alongside a React conversation panel, separates attachments and commands, explains prompt routing, and distinguishes session access failures from an empty workspace (#1396).
+
+## 0.18.0 — 2026-09-17
+
+### Added
+
+- Local agents with MCP can report meaningful task progress even without a running preview (#1392).
+- Create and edit in a detached Play workbench with state-preserving updates, local evidence attachments, phone playtesting, and guarded CLI/platform controls (#1388).
+
+### Fixed
+
+- Recover Play after session changes without replaying uncertain operations, and remove expired phone links (#1388).
+- Keep Play usable after preparation timeouts, preserve staged evidence while answering questions, and ignore superseded reloads (#1388).
+- Keep technical activity out of every agent conversation; view live diagnostics with Ctrl+L or /logs during a task (#1392).
+
+## 0.17.0 — 2026-09-16
+
+### Added
+
+- Interactive `/play` opens an editing panel beside the game: send prompts, queue follow-ups, answer choices and stop tasks while keeping the terminal session open (#1383).
+- Delegate local tasks to OpenCode and show Windsurf manual MCP setup alongside Cursor discovery (#1386).
+- Send messages into a running Codex or Muse task with Enter, or queue a separate follow-up with Ctrl+Q; failed sends retain your text (#1381).
+
+### Fixed
+
+- Hide Copilot protocol chatter while preserving replies, tool activity, and errors (#1386).
+
+### Internal
+
+- Share the interactive session state and guarded command receipts between client adapters, preserving terminal queue and history behavior (#1378).
+
+## 0.16.0 — 2026-09-16
+
+### Added
+
+- Local Codex, Claude, and Copilot tasks receive MCP screenshot tools for the current preview without needing a browser inside the agent sandbox (#1375).
+- Type follow-up requests while a local agent works; Enter queues them for after the current task without interrupting it (#1369).
+- Interactive sessions restore recent conversation output and prompt history after restarting, separately for each account, server, and game (#1369).
+
+### Fixed
+
+- Interactive `/update` distinguishes the installed version from the running session and explains that a restart is required (#1369).
+- Delegated agents explicitly consider browser automation through shell commands and scripts without requiring a specific automation library (#1369).
+
+## 0.15.3 — 2026-09-15
+
+### Fixed
+
+- Delegated agents continue implementation without a connected browser and can use isolated temporary Playwright tooling for visual checks (#1364).
+
 ## 0.15.2 — 2026-09-13
 
 ### Fixed

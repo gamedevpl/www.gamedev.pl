@@ -25,9 +25,21 @@ export type { GameAccessStore };
 import type { GameAccessRecord, GameAccessRole } from '../store/records/game-access.js';
 import type { GameTransferStore } from '../store/slices/game-transfer.js';
 export type { GameTransferStore };
+import type { GameTransferProposalStore } from '../store/slices/game-transfer-proposal.js';
+export type { GameTransferProposalStore };
+import type { GameTransferProposal } from '../store/records/game-transfer-proposal.js';
+export type { GameTransferProposal };
 import type { GameTransferInvitation, GameTransferStatus } from '../store/records/game-transfer.js';
 export type { GameTransferInvitation, GameTransferStatus };
 export type { GameAccessRecord, GameAccessRole };
+import type { GameEditorInviteStore } from '../store/slices/game-editor-invite.js';
+export type { GameEditorInviteStore };
+import type { GameEditorInvitation, GameEditorInviteStatus } from '../store/records/game-editor-invite.js';
+export type { GameEditorInvitation, GameEditorInviteStatus };
+import type { GameMembershipStore } from '../store/slices/game-membership.js';
+export type { GameMembershipStore };
+import type { GameQuotaStore } from '../store/slices/game-quota.js';
+export type { GameQuotaStore };
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -104,6 +116,8 @@ export type { WorldEntriesStore };
 import type {
   NotificationType,
   ProposalNotificationType,
+  ShareNotificationType,
+  TransferNotificationType,
   SubmissionNotificationType,
   OperatorNotificationType,
   StoredNotification,
@@ -111,6 +125,8 @@ import type {
 export type {
   NotificationType,
   ProposalNotificationType,
+  ShareNotificationType,
+  TransferNotificationType,
   SubmissionNotificationType,
   OperatorNotificationType,
   StoredNotification,
@@ -267,6 +283,10 @@ export interface Store
     CatalogEnrichmentStore,
     GameAccessStore,
     GameTransferStore,
+    GameTransferProposalStore,
+    GameEditorInviteStore,
+    GameMembershipStore,
+    GameQuotaStore,
     OAuthStore,
     CliChatStore {}
 

@@ -132,6 +132,13 @@ function alreadyExists(docKey: string): Error & { code: number } {
 export function fakeFirestore() {
   const docs = new Map<string, Record<string, unknown>>();
   const key = (collection: string, id: string) => `${collection}/${id}`;
+  let billedReads = 0;
+  const billDocs = (n: number) => {
+    billedReads += n;
+  };
+  const billQuery = (returned: number) => {
+    billedReads += Math.max(1, returned);
+  };
 
   /** Document ids directly under `path` — not those in deeper subcollections. */
   const idsUnder = (path: string) =>
@@ -173,7 +180,8 @@ export function fakeFirestore() {
           rejectNestedArrays(data);
           if (!docs.has(docKey)) throw new Error('no document to update');
         },
-        apply: () => docs.set(docKey, { ...docs.get(docKey)!, ...data }),
+        // Same sentinel handling as a merge `set` -- update() honours FieldValue.delete() too.
+        apply: () => docs.set(docKey, mergeInto(docs.get(docKey)!, data)),
       }),
       delete: () => ({ validate: () => {}, apply: () => docs.delete(docKey) }),
     };
@@ -198,12 +206,15 @@ export function fakeFirestore() {
           },
         };
       },
-      get: async () => ({
-        get exists() {
-          return docs.has(key(collection, id));
-        },
-        data: () => docs.get(key(collection, id)),
-      }),
+      get: async () => {
+        billDocs(1);
+        return {
+          get exists() {
+            return docs.has(key(collection, id));
+          },
+          data: () => docs.get(key(collection, id)),
+        };
+      },
       set: async (data: Record<string, unknown>, options?: { merge?: boolean }) => now(stage.set(data, options)),
       create: async (data: Record<string, unknown>) => now(stage.create(data)),
       update: async (data: Record<string, unknown>) => now(stage.update(data)),
@@ -314,12 +325,14 @@ export function fakeFirestore() {
       count: () => ({
         get: async () => {
           // Materialised at `get()`, as the real client does.
+          billDocs(1);
           const total = rows().length;
           return { data: () => ({ count: total }) };
         },
       }),
       get: async () => {
         const found = rows();
+        billQuery(found.length);
         return {
           empty: found.length === 0,
           docs: found.map((row) => ({ id: row.id, data: () => project(row.data), ref: makeRef(row.path, row.id) })),
@@ -398,5 +411,14 @@ export function fakeFirestore() {
     },
   };
 
-  return { db: db as unknown as Firestore, docs, key };
+  return {
+    db: db as unknown as Firestore,
+    docs,
+    key,
+    // What Firestore bills, not what the code called.
+    billedReads: () => billedReads,
+    resetBilledReads: () => {
+      billedReads = 0;
+    },
+  };
 }

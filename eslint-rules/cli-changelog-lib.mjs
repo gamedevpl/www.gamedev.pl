@@ -23,11 +23,13 @@ const ENTRY_RE = /^- (.+)$/;
 // Paths whose change means "the shipped CLI changed", so the changelog must move too.
 export function cliSourceTouched(files) {
   return files.some((file) => {
+    if (['apps/web/src/PixelIcon.tsx', 'apps/web/src/core/styles/tokens.css'].includes(file)) return true;
     if (!file.startsWith('apps/cli/')) return false;
     if (file.endsWith('.test.ts') || file.endsWith('.test.tsx')) return false;
     return (
       file.startsWith('apps/cli/src/') ||
       file.startsWith('apps/cli/scripts/') ||
+      file.startsWith('apps/cli/browser/') ||
       file === 'apps/cli/adapters.json'
     );
   });
@@ -181,7 +183,10 @@ export function releaseNotes(text, version) {
   if (!section) return null;
   const body = renderCategories(section, { includeInternal: false });
   if (body.length === 0) {
-    const raw = parsed.lines.slice(section.start + 1, section.end).join('\n').trim();
+    const raw = parsed.lines
+      .slice(section.start + 1, section.end)
+      .join('\n')
+      .trim();
     return raw.length > 0 ? raw : null;
   }
   return body.join('\n').trim();
@@ -228,7 +233,6 @@ export function bumpVersionStrings(version) {
   if (installersNext === installers) throw new Error(`no CLI_VERSION constant found in ${CLI_INSTALLERS_PATH}`);
   writeRepoFile(CLI_INSTALLERS_PATH, installersNext);
 }
-
 
 function versionConstantIn(relative) {
   const match = /export const CLI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readRepoFile(relative));

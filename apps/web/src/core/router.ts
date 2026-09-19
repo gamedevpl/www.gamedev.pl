@@ -1,29 +1,10 @@
 import type { LegalDocId } from '../legal/types.js';
 import { decodeSegment } from '../pathSegment.js';
 
-/**
- * Creator Studio work surface. Persisted in the URL so a refresh or shared link
- * reopens the same surface on the same game.
- *
- * Three, where there were five. Making a game is a conversation with an agent, and the
- * studio was five tabs across the top of it — with the same act (say what to change)
- * living in three of them, so which box a creator was allowed depended on a lifecycle
- * state they had to know to find it. Now: the thread, the things beside the thread, and
- * the one surface that genuinely takes over the screen.
- *
- * `'code'` is the fourth (creator-code-editing-execution-plan.md CE-06) — manual editing
- * of a game's own sources, docked as a panel the same way `edit` is. It follows `edit`'s
- * own rule for who gets it: not "IDE", not "editor" (taken), not "sources" (the
- * read-only public view already has that name).
- */
+/** Studio work surface in the URL: thread, details, edit, code. */
 export type StudioTab = 'thread' | 'details' | 'edit' | 'code';
 
-/**
- * Every name a surface has answered to, including the five-tab vocabulary that came
- * before. Old names resolve to the surface that absorbed them and the studio rewrites
- * the URL, so a bookmark or a notification link from months ago lands somewhere real
- * and quietly becomes current.
- */
+/** Old studio tab names still resolve and rewrite. */
 const STUDIO_TAB_ALIASES: Record<string, StudioTab> = {
   thread: 'thread',
   build: 'thread',
@@ -133,6 +114,7 @@ export type AppRoute =
   | { view: 'studio'; game?: string; tab?: StudioTab; posture?: 'play' }
   | { view: 'studioWelcome'; game: string }
   | { view: 'studioConnect'; game: string }
+  | { view: 'studioTransferPropose'; game: string; proposalId: string }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -354,6 +336,13 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // tab is a 404 rather than a silent fallback to the game-only view: it keeps the
   // client in step with the API's shell allowlist, which serves those paths a real 404.
   const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
+  const proposeMatch = normalizedPath.match(/^\/studio\/([^/]+)\/transfer\/propose\/([^/]+)$/);
+  if (proposeMatch?.[1] && proposeMatch[2]) {
+    const game = decodeSegment(proposeMatch[1]);
+    const proposalId = decodeSegment(proposeMatch[2]);
+    if (game && proposalId) return { view: 'studioTransferPropose', game, proposalId };
+    return { view: 'notFound' };
+  }
   if (studioMatch?.[1]) {
     const game = decodeSegment(studioMatch[1]);
     const tabSegment = studioMatch[2] ? decodeSegment(studioMatch[2]) : undefined;
@@ -486,6 +475,8 @@ export function canonicalPath(pathname: string): string | null {
         return studioWelcomePath(route.game);
       case 'studioConnect':
         return studioConnectPath(route.game);
+      case 'studioTransferPropose':
+        return studioTransferProposePath(route.game, route.proposalId);
       case 'creator':
         return creatorPath(route.handle);
       case 'game':
@@ -530,6 +521,10 @@ export function studioConnectPath(game: string): string {
   return `/studio/${encodeURIComponent(game)}/connect`;
 }
 
+export function studioTransferProposePath(game: string, proposalId: string): string {
+  return `/studio/${encodeURIComponent(game)}/transfer/propose/${encodeURIComponent(proposalId)}`;
+}
+
 /**
  * Parent path for the NavHeader "Up" chevron — Android-style Up, not browser Back.
  *
@@ -565,6 +560,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
       return { path: '/', labelKey: 'upHome' };
     case 'studioWelcome':
     case 'studioConnect':
+    case 'studioTransferPropose':
       return { path: studioPath(), labelKey: 'upStudio' };
     case 'game':
       // The page is nested under the creator profile the way a repo nests under its

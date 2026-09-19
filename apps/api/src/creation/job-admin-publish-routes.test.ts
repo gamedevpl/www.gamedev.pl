@@ -175,6 +175,67 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     await app.close();
   });
 
+  it('gates the profile requirement on the transfer recipient, not the sender', async () => {
+    // Sender has a handle, recipient does not: the byline would point nowhere.
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    await store.upsertUser({ uid: 'g:recipient' });
+    const at = '2026-08-01T00:00:00.000Z';
+    const access = await store.ensureGameAccess('comet-courier', 'g:boss', at, at);
+    await store.createGameTransferInvitation('comet-courier', 'g:boss', 'g:recipient', access!.accessRevision, at);
+    expect(
+      await store.acceptGameTransferInvitation(
+        'comet-courier',
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer('comet-courier', at))!.invitationId,
+      ),
+    ).toMatchObject({
+      status: 'accepted',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('profile_required');
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
+  });
+
+  it('lets a transfer recipient with a handle publish a job whose sender had none', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }), { claimProfile: false });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.claimHandle('g:recipient', 'newowner', '2026-08-01T00:00:00.000Z');
+    const at = '2026-08-01T00:00:00.000Z';
+    const access = await store.ensureGameAccess('comet-courier', 'g:boss', at, at);
+    await store.createGameTransferInvitation('comet-courier', 'g:boss', 'g:recipient', access!.accessRevision, at);
+    expect(
+      await store.acceptGameTransferInvitation(
+        'comet-courier',
+        'g:recipient',
+        at,
+        (await store.getActiveGameTransfer('comet-courier', at))!.invitationId,
+      ),
+    ).toMatchObject({
+      status: 'accepted',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await store.getPublication('comet-courier')).toMatchObject({ state: 'published' });
+
+    await app.close();
+  });
+
   it('refuses to publish a version our own gate failed', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: false }));
 

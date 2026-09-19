@@ -28,18 +28,17 @@ export const KIT_DECLARATION_PATH = 'shared/game-kit.d.ts';
 export async function createCodeSurfaceLanguageService(
   files: Record<string, string>,
   kitDeclaration: string | null,
+  kitFiles: Record<string, string> = {},
 ): Promise<CodeSurfaceLanguageService | null> {
   let innerWorker: Worker | null = null;
   try {
-    // Dynamic import: static `import 'comlink'` here would leak into the main bundle.
     const Comlink = await import('comlink');
     innerWorker = new Worker(new URL('./tsWorker.ts', import.meta.url), { type: 'module' });
     const worker = Comlink.wrap<WorkerShape & { deleteFile(path: string): void }>(innerWorker);
     await worker.initialize();
-    if (kitDeclaration) {
-      await worker.updateFile({ path: toVfsPath(KIT_DECLARATION_PATH), code: kitDeclaration });
-    }
-    await Promise.all(Object.entries(files).map(([path, code]) => worker.updateFile({ path: toVfsPath(path), code })));
+    const vfs = { ...kitFiles, ...files };
+    if (kitDeclaration) vfs[KIT_DECLARATION_PATH] = kitDeclaration;
+    await Promise.all(Object.entries(vfs).map(([path, code]) => worker.updateFile({ path: toVfsPath(path), code })));
     return bindLanguageWorker(worker, toVfsPath, () => innerWorker?.terminate());
   } catch {
     innerWorker?.terminate();

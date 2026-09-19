@@ -138,8 +138,6 @@ CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
 PRIVATE_BETA="${PRIVATE_BETA:-true}"
 PUBLIC_PLAY_SLUGS="${PUBLIC_PLAY_SLUGS:-}"
 EDITORKIT_V2="${EDITORKIT_V2:-true}"
-# GO-01 step 6: off until the operator flips it post-backfill.
-GAME_ACCESS_AUTHORITATIVE="${GAME_ACCESS_AUTHORITATIVE:-false}"
 # Concept proposals (NP-1v). Off unless an operator turns them on.
 DREAMS_ENABLED="${DREAMS_ENABLED:-false}"
 # The agent writer is its own switch; see .claude/skills/byoca-mcp.
@@ -312,7 +310,7 @@ fi
 
 # ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
 # commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
-ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}|EDITORKIT_V2=${EDITORKIT_V2}|GAME_ACCESS_AUTHORITATIVE=${GAME_ACCESS_AUTHORITATIVE}|DREAMS_ENABLED=${DREAMS_ENABLED}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}"
+ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}|EDITORKIT_V2=${EDITORKIT_V2}|DREAMS_ENABLED=${DREAMS_ENABLED}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}"
 if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
 fi
@@ -323,6 +321,13 @@ if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   # Engine did, and an unset project means the gate silently never starts — deliveries
   # would pile up stored and unverified with nothing in the logs saying why.
   ENV_VARS="${ENV_VARS}|GATE_BUILD_PROJECT=${PROJECT_ID}"
+  # The prebuilt gate runner image (infra/gate-runner.Dockerfile). Threaded here too
+  # because --set-env-vars replaces the whole map, so a hand deploy that omitted it would
+  # silently drop the one the Actions deploy set. Unset is a supported value, not a
+  # breakage: the gate then builds its environment per run, which is what it did before
+  # the image existed — slower, and correct. Pass the tag deploy.yml pushed to keep the
+  # fast path: GATE_RUNNER_IMAGE=europe-west1-docker.pkg.dev/<project>/gamedev/gate-runner:<sha>
+  ENV_VARS="${ENV_VARS}|GATE_RUNNER_IMAGE=${GATE_RUNNER_IMAGE:-}"
 fi
 # The remix code-lane trace. Threaded here as well as in the Actions workflow,
 # because --set-env-vars replaces the whole map: a deploy from this script would

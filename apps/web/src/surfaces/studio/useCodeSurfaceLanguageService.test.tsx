@@ -37,18 +37,25 @@ describe('useCodeSurfaceLanguageService', () => {
   });
 
   function Probe() {
-    const { kitDeclaration } = useCodeSurfaceLanguageService({
+    const { kitDeclaration, kitFiles } = useCodeSurfaceLanguageService({
       slug: 'demo',
       editable: true,
       sourcesRef: { current: { files: [{ path: 'game.ts', content: '' }] } as never },
       draftsRef: { current: {} },
     });
-    return createElement('span', { 'data-testid': 'kit' }, kitDeclaration ?? 'none');
+    return createElement(
+      'span',
+      { 'data-testid': 'kit' },
+      `${kitDeclaration ?? 'none'}|${kitFiles['shared/editor-def.ts'] ?? 'none'}`,
+    );
   }
 
   // A null worker leaves `ready` false, so nothing else re-renders.
   it('surfaces the kit declaration even when the worker fails to boot', async () => {
-    fetchKit.mockResolvedValue({ declaration: 'declare const kit: unknown;' });
+    fetchKit.mockResolvedValue({
+      declaration: 'declare const kit: unknown;',
+      files: { 'shared/editor-def.ts': 'export function defineEditor() {}\n' },
+    });
     createService.mockResolvedValue(null);
 
     await act(async () => {
@@ -56,6 +63,8 @@ describe('useCodeSurfaceLanguageService', () => {
     });
     await act(async () => {});
 
-    expect(container.querySelector('[data-testid="kit"]')?.textContent).toBe('declare const kit: unknown;');
+    expect(container.querySelector('[data-testid="kit"]')?.textContent).toBe(
+      'declare const kit: unknown;|export function defineEditor() {}\n',
+    );
   });
 });

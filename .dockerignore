@@ -1,6 +1,11 @@
 **/node_modules
 **/dist
 .git
+# google-github-actions/auth (deploy.yml) writes this into the workspace before both
+# image builds. A single-stage Dockerfile's COPY . . would bake the deployer's WIF
+# credential straight into a pulled image; gate-runner's is pulled by the gate, which
+# runs hostile candidate code that could read and replay it as github-actions-deployer.
+gha-creds-*.json
 **/.env
 **/.env.local
 **/*.log

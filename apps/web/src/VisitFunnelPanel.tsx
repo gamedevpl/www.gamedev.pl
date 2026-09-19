@@ -1,4 +1,5 @@
 import { CliFunnelBlock } from './CliFunnelBlock.js';
+import { TransferFunnelBlock } from './TransferFunnelBlock.js';
 import { ProposalFunnelBlock } from './ProposalFunnelBlock.js';
 import { type VisitFunnel, type VisitsResponse } from './healthApi.js';
 
@@ -31,6 +32,16 @@ const STEP_LABELS: Record<string, string> = {
 const WAITLIST_LABELS: Record<string, string> = {
   cta_clicked: 'clicked Join waitlist',
   joined: 'joined waitlist',
+};
+
+const SHARE_LABELS: Record<string, string> = {
+  offered: 'sent an editor invite',
+  accepted: 'accepted an editor invite',
+  declined: 'declined an editor invite',
+  cancelled: 'cancelled an editor invite',
+  expired: 'let an editor invite expire',
+  removed: 'removed an editor',
+  left: 'left a shared game',
 };
 
 const FRAMED_PLAY_LABELS: Record<string, string> = {
@@ -67,6 +78,8 @@ const EDITOR_LABELS: Record<string, string> = {
   draft_saved: 'saved a draft',
   previewed: 'played the draft',
   published: 'published changes',
+  standard_surface_chosen: 'left the game editor',
+  controller_surface_restored: 'went back to it',
 };
 
 const REMIX_LABELS: Record<string, string> = {
@@ -295,6 +308,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Sharing</h3>
+          {(funnel.sharing ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody shared a game in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of offered
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.sharing ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{SHARE_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.sharing?.[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -604,6 +647,7 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
 
         <CliFunnelBlock funnel={funnel} />
         <ProposalFunnelBlock funnel={funnel} />
+        <TransferFunnelBlock funnel={funnel} />
 
         {funnel.completion?.requests ? (
           <div className="funnel-block">

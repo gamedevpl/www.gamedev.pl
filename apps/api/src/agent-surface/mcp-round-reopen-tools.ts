@@ -14,7 +14,9 @@ import {
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
-import { creatorOwnsSlug } from '../platform/slug-ownership.js';
+import { canActOnGame, canActOnSlug, canonicalCreatorOwnerUid } from '../platform/game-access-permissions.js';
+import { reserveActorAndGameQuota } from '../platform/game-quota.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
@@ -60,6 +62,7 @@ export interface RoundReopenToolsDeps {
         locale: string;
         log: { error: (context: object, message: string) => void };
         openedBy?: 'creator' | 'agent';
+        ownerUid?: string;
       }) => Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }>)
     | undefined;
   contentChecker: ContentChecker | undefined;
@@ -208,8 +211,14 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         }
 
         const at = new Date(now()).toISOString();
-        // Ensures the gameAgentKeys/{slug} admission-lock doc exists for creator keys.
-        const lockRecord = await store.ensureGameAgentKey(resolved.slug, resolved.creatorUid, at);
+        const access = await resolveGameAccess(store, resolved.slug);
+        if (!canActOnGame(access, resolved.creatorUid, 'build')) {
+          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+        }
+        const ownerUid = canonicalCreatorOwnerUid(access);
+        if (!ownerUid) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+        // Game key stays owner-bound; editors use their own creator key.
+        const lockRecord = await store.ensureGameAgentKey(resolved.slug, ownerUid, at);
         if (!lockRecord) {
           // Existing doc owned by someone else — do not touch their admission lock.
           return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
@@ -278,12 +287,14 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           const started = await startImprovementRound({
             jobId: resolved.publishedRecord.jobId,
             beforeDispatch: async () => {
-              const quota = await store.checkAndIncrementQuota(
-                resolved.creatorUid,
+              const quota = await reserveActorAndGameQuota(store, {
+                actorUid: resolved.creatorUid,
+                slug: resolved.slug,
                 dateStr,
-                dailyImprovementQuota,
-                'improvements',
-              );
+                actorLimit: dailyImprovementQuota,
+                gameLimit: dailyImprovementQuota,
+                action: 'improvements',
+              });
               if (quota.allowed) return true;
               quotaError = quota.tier === 'blocked' ? 'account is blocked' : IMPROVEMENT_QUOTA_EXHAUSTED_REASON;
               return false;
@@ -383,7 +394,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           }
           const verified = await verifyDurableCreatorAgentKey(store, bearer, agentTokenSecret, now());
           if (!verified.ok) return toolErr(verified.reason);
-          if (!(await creatorOwnsSlug(store, slugArg, verified.claims.creatorUid))) {
+          if (!(await canActOnSlug(store, slugArg, verified.claims.creatorUid, 'build'))) {
             return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           }
           if (await store.getPublishedSubmissionBySlug(slugArg)) {
@@ -400,7 +411,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           if (!slugArg) {
             return toolErr('slug is required when using OAuth — pass the game slug to continue');
           }
-          if (!(await creatorOwnsSlug(store, slugArg, asAccess.ownerUid))) {
+          if (!(await canActOnSlug(store, slugArg, asAccess.ownerUid, 'build'))) {
             return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
           }
           if (await store.getPublishedSubmissionBySlug(slugArg)) {
@@ -471,6 +482,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           locale: resolved.draft.locale ?? 'en',
           log: ctx.request.log,
           openedBy: 'agent',
+          ownerUid: resolved.creatorUid,
         });
         if (!continued.ok) {
           if (continued.reason === 'already_published') return toolErr(GAME_ALREADY_PUBLISHED_REASON);

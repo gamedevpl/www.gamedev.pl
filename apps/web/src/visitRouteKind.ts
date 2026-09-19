@@ -12,6 +12,7 @@ export function routeKind(view: string): VisitRouteKind {
       return view;
     case 'studioWelcome':
     case 'studioConnect':
+    case 'studioTransferPropose':
       return 'studio';
     case 'draft':
       return 'play';

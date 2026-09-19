@@ -19,13 +19,21 @@
 set -euo pipefail
 
 # GNU date rejects "-1d"; BSD date rejects "1 day ago". Take a plain shorthand and
-# hand each the form it understands.
+# hand each the form it understands. BSD's -v letters are case-sensitive and H is hours --
+# lowercase h is not a unit at all, so deriving the letter from the word ("hour" -> "h")
+# fails on macOS and nowhere else, which is why 7d worked and 12h never did.
 WINDOW="${1:-1d}"
 AMOUNT="${WINDOW%[dh]}"
 UNIT="day"
 case "$WINDOW" in
-  *h) UNIT="hour" ;;
-  *d | *[0-9]) UNIT="day" ;;
+  *h)
+    UNIT="hour"
+    BSD_UNIT="H"
+    ;;
+  *d | *[0-9])
+    UNIT="day"
+    BSD_UNIT="d"
+    ;;
   *)
     echo "Window must look like 1d, 7d or 12h" >&2
     exit 1
@@ -38,7 +46,7 @@ fi
 
 started_at() {
   date -u -d "$AMOUNT $UNIT ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null ||
-    date -u -v"-${AMOUNT}${UNIT:0:1}" +%Y-%m-%dT%H:%M:%SZ
+    date -u -v"-${AMOUNT}${BSD_UNIT}" +%Y-%m-%dT%H:%M:%SZ
 }
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
 

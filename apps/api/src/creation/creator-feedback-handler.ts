@@ -23,6 +23,9 @@ import type { ChatOrchestration } from './chat-orchestration.js';
 import { loadRecentChatTurns } from './chat-turns-history.js';
 import { FeedbackRequestSchema, TurnRequestSchema } from './feedback-request.js';
 import { detectStall, type JobTransition } from './job-state.js';
+import { canActOnGame, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import { withImprovementAdmission } from './improvement-admission.js';
 import type { ResumeOutcome } from './resume-build.js';
 
 export type CreatorMessageMode = 'feedback' | 'turn';
@@ -40,6 +43,8 @@ export interface FeedbackRoutesOptions {
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   invalidateStatusCache: (jobId: number) => void;
+  // Narrower than invalidateStatusCache -- only fires for an actual shot write.
+  invalidateMedia: (jobId: number) => void;
   runChatAgent: ChatOrchestration['runChatAgent'];
   resumeBuild: (input: {
     jobId: number;
@@ -50,6 +55,7 @@ export interface FeedbackRoutesOptions {
     feedbackQueueFailed?: boolean;
     builder?: BuilderKind;
     preserveRoundBudget?: boolean;
+    ownerUid?: string;
     transition?: { by: JobTransition['by']; reason: string };
   }) => Promise<ResumeOutcome>;
 }
@@ -103,6 +109,7 @@ export async function handleCreatorFeedback(
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia,
     runChatAgent,
     resumeBuild,
   } = options;
@@ -163,6 +170,12 @@ export async function handleCreatorFeedback(
   }
 
   const record = store ? await store.getSubmission(jobId) : null;
+  // Before any write: that job may have changed hands.
+  if (store && record && !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'build'))) {
+    return reply
+      .status(409)
+      .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
+  }
   if (record?.publishedAt) {
     return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });
   }
@@ -178,6 +191,7 @@ export async function handleCreatorFeedback(
   if (store && parsed.data.context?.screenshotPng) {
     try {
       shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
+      invalidateMedia(jobId);
     } catch (shotError) {
       request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
     }
@@ -187,6 +201,7 @@ export async function handleCreatorFeedback(
       const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
       referenceImageShotIds = stored.ids;
       referenceImages = stored.images;
+      invalidateMedia(jobId);
     } catch (shotError) {
       request.log.error({ err: shotError }, 'failed to store creator reference images');
     }
@@ -306,20 +321,50 @@ export async function handleCreatorFeedback(
         ? 'quiet_builder_handoff'
         : 'creator_feedback';
 
-  const outcome = await resumeBuild({
-    jobId,
-    feedback: inboxText,
-    locale: creatorLocale,
-    log: request.log,
-    ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
-    ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
-    ...(builderChanging ? { preserveRoundBudget: true } : {}),
-    ...(!queued ? { feedbackQueueFailed: true } : {}),
-    transition: {
-      by: 'creator',
-      reason: handoffReason,
-    },
-  });
+  const reopen = () =>
+    resumeBuild({
+      jobId,
+      feedback: inboxText,
+      locale: creatorLocale,
+      log: request.log,
+      ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
+      ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
+      ...(builderChanging ? { preserveRoundBudget: true } : {}),
+      ...(!queued ? { feedbackQueueFailed: true } : {}),
+      // Charged to the caller, not the historical row's owner.
+      ownerUid: request.user!.uid,
+      transition: {
+        by: 'creator',
+        reason: handoffReason,
+      },
+    });
+  // Fenced against a concurrent transfer only when reopening a closed round.
+  let outcome: ResumeOutcome;
+  let staleOwner = false;
+  if (store && record?.slug && !isActiveBuildRound(record)) {
+    const slug = record.slug;
+    try {
+      outcome = await withImprovementAdmission(store, slug, now, async () => {
+        // Under the lease: a transfer may have committed first.
+        const access = await resolveGameAccess(store, slug);
+        if (access.source === 'canonical' && !canActOnGame(access, request.user!.uid, 'build')) {
+          staleOwner = true;
+          return { started: false, reason: 'dispatch_failed' } as ResumeOutcome;
+        }
+        return reopen();
+      });
+    } catch {
+      // The fence refused: a round is opening, not a failed dispatch.
+      outcome = { started: false, reason: 'busy' };
+    }
+  } else {
+    outcome = await reopen();
+  }
+  if (staleOwner) {
+    return reply
+      .status(409)
+      .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
+  }
 
   if (outcome.started) await appendStudioAck();
   invalidateStatusCache(jobId);
@@ -362,6 +407,11 @@ export async function handleCreatorTurnsGet(
     throw error;
   }
   if (!store) return reply.send({ turns: [] });
+  // The token proves which job, never who is asking.
+  const record = await store.getSubmission(jobId);
+  if (!record || !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'read'))) {
+    return reply.status(404).send({ error: 'not found' });
+  }
   const turns = await loadRecentChatTurns(store, jobId);
   return reply.send({ turns });
 }

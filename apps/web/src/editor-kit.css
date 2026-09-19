@@ -26,6 +26,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
 .editor-panel-note {
@@ -60,6 +61,17 @@
   gap: 8px;
 }
 
+.editor-banner-slot {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
 .editor-banner {
   display: flex;
   align-items: center;
@@ -72,6 +84,7 @@
   padding: 8px 12px;
   font-size: 0.85rem;
   color: var(--text);
+  pointer-events: auto;
 }
 
 .editor-banner.is-ok {
@@ -395,4 +408,19 @@
   .editor-layered-remix-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* The way back to the standard board when a game drives the surface. */
+.editor-surface-switch {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.editor-surface-switch:hover {
+  border-color: var(--turquoise);
 }

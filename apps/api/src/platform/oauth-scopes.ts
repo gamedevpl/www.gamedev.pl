@@ -6,14 +6,15 @@ export { looksLikeAsAccessToken };
 
 export const MCP_SCOPE = 'mcp';
 export const CREATOR_SCOPE = 'creator';
-export const OAUTH_SCOPES = [MCP_SCOPE, CREATOR_SCOPE] as const;
+export const OWNERSHIP_SCOPE = 'ownership';
+export const OAUTH_SCOPES = [MCP_SCOPE, CREATOR_SCOPE, OWNERSHIP_SCOPE] as const;
 export type OAuthScope = (typeof OAUTH_SCOPES)[number];
 
 export const MAX_OAUTH_GRANTS_PER_UID = 10;
 export const OAUTH_GRANT_CAP_DESCRIPTION = 'too many connected clients - revoke one in Studio';
 
 export function advertisedOAuthScopes(env: NodeJS.ProcessEnv = process.env): OAuthScope[] {
-  return cliSurfaceEnabled(env) ? [MCP_SCOPE, CREATOR_SCOPE] : [MCP_SCOPE];
+  return cliSurfaceEnabled(env) ? [MCP_SCOPE, CREATOR_SCOPE, OWNERSHIP_SCOPE] : [MCP_SCOPE, OWNERSHIP_SCOPE];
 }
 
 export function parseOAuthScopes(raw: string | undefined, env: NodeJS.ProcessEnv = process.env): OAuthScope[] | null {
@@ -21,7 +22,7 @@ export function parseOAuthScopes(raw: string | undefined, env: NodeJS.ProcessEnv
   if (tokens.length === 0) return null;
   const unique: OAuthScope[] = [];
   for (const token of tokens) {
-    if (token !== MCP_SCOPE && token !== CREATOR_SCOPE) return null;
+    if (token !== MCP_SCOPE && token !== CREATOR_SCOPE && token !== OWNERSHIP_SCOPE) return null;
     if (!unique.includes(token)) unique.push(token);
   }
   if (unique.includes(CREATOR_SCOPE) && !cliSurfaceEnabled(env)) return null;

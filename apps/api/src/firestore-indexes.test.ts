@@ -65,41 +65,6 @@ function key(constraint: Pick<Constraint, 'group' | 'field' | 'order'>): string 
   return `${constraint.group}.${constraint.field}:${constraint.order}`;
 }
 
-/**
- * Finds `collectionGroup('x')` and the constraints on the same statement.
- *
- * "Same statement" is everything up to the next `;`, which is what makes chained calls
- * across several lines work. Both `where` and `orderBy` count: each needs the field
- * indexed at COLLECTION_GROUP scope.
- *
- * **Direction is part of the requirement, not decoration.** The field override written by
- * step 7 creates exactly one COLLECTION_GROUP entry, in one direction, so an index
- * provisioned ASCENDING does not satisfy an `orderBy(field, 'desc')` — that is the same
- * hard 9 FAILED_PRECONDITION as having no index at all. An equality `where` is served by
- * ASCENDING, and `orderBy` defaults to ascending when the direction is left off.
- */
-function findCollectionGroupQueries(source: string): Constraint[] {
-  const constraints: Constraint[] = [];
-  const groupPattern = /\.collectionGroup\(\s*'([^']+)'\s*\)/g;
-
-  for (const match of source.matchAll(groupPattern)) {
-    const start = match.index + match[0].length;
-    const end = source.indexOf(';', start);
-    const statement = source.slice(start, end === -1 ? source.length : end);
-
-    // Second capture is the operator for `where` ('==') and the direction for `orderBy`
-    // ('desc'), which is why the direction is read per-kind rather than positionally.
-    const constraintPattern = /\.(where|orderBy)\(\s*'([^']+)'\s*(?:,\s*'([^']*)')?/g;
-    for (const [, kind, field, second] of statement.matchAll(constraintPattern)) {
-      const order: IndexOrder = kind === 'orderBy' && second === 'desc' ? 'DESCENDING' : 'ASCENDING';
-      constraints.push({ group: match[1], field, order });
-    }
-  }
-
-  return constraints;
-}
-
-/** Parses the `CG_INDEXES="group:field:ORDER ..."` list that step 7 iterates over. */
 function provisionedIndexes(script: string): Set<string> {
   const declaration = /CG_INDEXES="([^"]*)"/.exec(script);
   if (!declaration) throw new Error('CG_INDEXES not found in infra/setup-gcp.sh — did step 7 get renamed?');
@@ -118,29 +83,87 @@ function provisionedIndexes(script: string): Set<string> {
   return provisioned;
 }
 
+interface CgStatement {
+  group: string;
+  constraints: Constraint[];
+}
+
+function uniqueConstraints(constraints: Constraint[]): Constraint[] {
+  const seen = new Set<string>();
+  const unique: Constraint[] = [];
+  for (const constraint of constraints) {
+    const identity = key(constraint);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    unique.push(constraint);
+  }
+  return unique;
+}
+
+function findCollectionGroupStatements(source: string): CgStatement[] {
+  const statements: CgStatement[] = [];
+  const groupPattern = /\.collectionGroup\(\s*'([^']+)'\s*\)/g;
+
+  for (const match of source.matchAll(groupPattern)) {
+    const start = match.index + match[0].length;
+    const end = source.indexOf(';', start);
+    const statement = source.slice(start, end === -1 ? source.length : end);
+    const constraints: Constraint[] = [];
+    const constraintPattern = /\.(where|orderBy)\(\s*'([^']+)'\s*(?:,\s*'([^']*)')?/g;
+    for (const [, kind, field, second] of statement.matchAll(constraintPattern)) {
+      const order: IndexOrder = kind === 'orderBy' && second === 'desc' ? 'DESCENDING' : 'ASCENDING';
+      constraints.push({ group: match[1], field, order });
+    }
+    if (constraints.length > 0) statements.push({ group: match[1], constraints: uniqueConstraints(constraints) });
+  }
+
+  return statements;
+}
+
+function compositeKey(statement: CgStatement): string {
+  return `${statement.group}:${statement.constraints.map((constraint) => `${constraint.field}:${constraint.order}`).join('+')}`;
+}
+
+function provisionedComposites(script: string): Set<string> {
+  const declaration = /CG_COMPOSITE_INDEXES="([^"]*)"/.exec(script);
+  if (!declaration) {
+    throw new Error('CG_COMPOSITE_INDEXES not found in infra/setup-gcp.sh — a multi-field collection-group query needs it.');
+  }
+  return new Set(declaration[1].split(/\s+/).filter(Boolean));
+}
+
 describe('COLLECTION_GROUP indexes', () => {
-  const constraints = apiSources().flatMap((source) => findCollectionGroupQueries(source));
+  const statements = apiSources().flatMap((source) => findCollectionGroupStatements(source));
+  const singleField = statements.filter((statement) => statement.constraints.length === 1);
+  const composite = statements.filter((statement) => statement.constraints.length > 1);
 
   it('finds the collection-group queries it is meant to be guarding', () => {
     // If a refactor moves these queries or changes how they are written, this fails
     // rather than quietly guarding an empty list. Deduplicated: this asserts *which*
     // groups are queried, so a second query against a group already covered is not a
     // change worth failing over.
-    const found = [...new Set(constraints.map((constraint) => constraint.group))].sort();
+    const found = [...new Set(statements.map((statement) => statement.group))].sort();
 
     expect(
       found,
       'The set of collection groups queried by apps/api/src changed. If you added a query, add ' +
-        'the group here and its field to CG_INDEXES in infra/setup-gcp.sh. If this went empty or ' +
+        'the group here and its field to CG_INDEXES (single-field) or CG_COMPOSITE_INDEXES ' +
+        '(two or more fields on one statement) in infra/setup-gcp.sh. If this went empty or ' +
         'lost an entry, the regex above stopped matching the code it guards — fix the regex, ' +
         'because a guard that matches nothing still passes and reads as coverage.',
-    ).toEqual(['playerFeedback', 'scorecard', 'worldEntries']);
+    ).toEqual(['notifications', 'playerFeedback', 'scorecard', 'worldEntries']);
   });
 
-  it('provisions an index, in the right direction, for every constrained field', () => {
+  it('provisions a single-field index for every one-constraint collection-group query', () => {
     const provisioned = provisionedIndexes(setupScript);
-
-    const missing = [...new Set(constraints.filter((constraint) => !provisioned.has(key(constraint))).map(key))];
+    const missing = [
+      ...new Set(
+        singleField
+          .flatMap((statement) => statement.constraints)
+          .filter((constraint) => !provisioned.has(key(constraint)))
+          .map(key),
+      ),
+    ];
 
     expect(
       missing,
@@ -152,6 +175,25 @@ describe('COLLECTION_GROUP indexes', () => {
             'project. If an entry for that field already exists, the direction is wrong rather than ' +
             'the index missing: step 7 writes one COLLECTION_GROUP entry per field, and the opposite ' +
             'direction does not satisfy the query.'
+        : undefined,
+    ).toEqual([]);
+  });
+
+  it('provisions a composite index for every multi-field collection-group query', () => {
+    expect(
+      composite.map(compositeKey).sort(),
+      'A collection-group statement with two or more fields needs a composite index. ' +
+        'Single-field CG_INDEXES entries cannot satisfy it. Add the fingerprint to ' +
+        'CG_COMPOSITE_INDEXES in infra/setup-gcp.sh.',
+    ).toEqual(['notifications:emailedAt:ASCENDING+createdAt:ASCENDING']);
+
+    const provisioned = provisionedComposites(setupScript);
+    const missing = composite.map(compositeKey).filter((fingerprint) => !provisioned.has(fingerprint));
+    expect(
+      missing,
+      missing.length
+        ? `No COLLECTION_GROUP composite for ${missing.join(', ')}. Add it to CG_COMPOSITE_INDEXES ` +
+            'as group:field:ORDER+field:ORDER, then re-run infra/setup-gcp.sh against the live project.'
         : undefined,
     ).toEqual([]);
   });

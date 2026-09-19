@@ -1,5 +1,5 @@
-import { gameAccessAuthoritative } from './game-access-cutover.js';
-import { ownsGame, resolveGameAccess } from './game-access-resolve.js';
+import { ownsGame, resolveGameAccess, type GameOwnerLookup } from './game-access-resolve.js';
+import { canActOnSlug } from './game-access-permissions.js';
 import { mintGameSlug } from './slug.js';
 import type { Store, SubmissionRecord } from './store.js';
 
@@ -64,52 +64,30 @@ export async function settleSlugClaim(
   return (await holds(retry)) ? retry : null;
 }
 
-// Owns = newest non-abandoned submission for the slug is theirs.
-
-// Abandoned rounds are skipped so a cancel cannot unown a published game.
-
-// Flag off: the historical derived rule, unchanged.
-
-// Flag on: the canonical GameAccess record, so transfers work.
-export async function creatorOwnsSlug(
-  store: Store,
-  slug: string,
-  creatorUid: string,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<boolean> {
-  if (gameAccessAuthoritative(env)) {
-    return ownsGame(await resolveGameAccess(store, slug), creatorUid);
-  }
-  const records = await store.listSubmissionsBySlug(slug);
-  const newestLive = records.find((record) => !record.abandonedAt);
-  return newestLive !== undefined && newestLive.ownerUid === creatorUid;
+// Owns = the canonical GameAccess record names this uid as owner.
+export async function creatorOwnsSlug(store: GameOwnerLookup, slug: string, creatorUid: string): Promise<boolean> {
+  return ownsGame(await resolveGameAccess(store, slug), creatorUid);
 }
 
 // record.ownerUid is right until a slug can transfer ownership.
 
 // Past that, a stale record.ownerUid must not outrank the canonical one.
 export async function ownsSubmissionOrSlug(
-  store: Store,
+  store: GameOwnerLookup,
   record: { ownerUid: string | null; slug?: SubmissionRecord['slug'] },
   uid: string,
-  env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
   if (!record.slug) return record.ownerUid === uid;
-  if (!gameAccessAuthoritative(env)) return record.ownerUid === uid;
-  return creatorOwnsSlug(store, record.slug, uid, env);
+  return creatorOwnsSlug(store, record.slug, uid);
 }
 
-// The rounds a uid may see for a slug: their own rounds.
-
-// Post-transfer, only the new canonical owner sees any of them.
+// Every round for the slug -- post-transfer, including an old owner's.
 export async function listAuthorizedRoundsForSlug(
   store: Store,
   uid: string,
   slug: string,
-  env: NodeJS.ProcessEnv = process.env,
 ): Promise<SubmissionRecord[]> {
-  if (!gameAccessAuthoritative(env)) return store.listSubmissionsByOwnerAndSlug(uid, slug);
-  if (!(await creatorOwnsSlug(store, slug, uid, env))) return [];
+  if (!(await canActOnSlug(store, slug, uid, 'read'))) return [];
   // Every round — an intervening owner's round may be the tip.
   return store.listSubmissionsBySlug(slug);
 }

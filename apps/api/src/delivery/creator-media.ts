@@ -2,11 +2,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { sendMedia } from '../platform/media-response.js';
-import type { BuildMediaStore } from '../platform/store.js';
+import type { BuildMediaStore, Store } from '../platform/store.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 
 export interface CreatorMediaRoutesOptions {
-  store?: BuildMediaStore;
+  store?: BuildMediaStore & Pick<Store, 'getSubmission' | 'getGameAccess' | 'listSubmissionsBySlug'>;
   now: () => number;
   submissionTokenSecret?: string;
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
@@ -52,6 +53,12 @@ export async function registerCreatorMediaRoutes(
           return reply.status(400).send({ error: 'invalid submission token' });
         }
         throw error;
+      }
+
+      // The token names a job, never who is asking.
+      const owned = await store.getSubmission(jobId);
+      if (!owned || !(await canActOnSubmissionOrSlug(store, owned, request.user!.uid, 'read'))) {
+        return reply.status(404).send({ error: 'media not found' });
       }
 
       try {
@@ -112,6 +119,11 @@ export async function registerCreatorMediaRoutes(
           return reply.status(400).send({ error: 'invalid submission token' });
         }
         throw error;
+      }
+
+      const ownedPreview = await store.getSubmission(jobId);
+      if (!ownedPreview || !(await canActOnSubmissionOrSlug(store, ownedPreview, request.user!.uid, 'read'))) {
+        return reply.status(404).send({ error: 'preview not found' });
       }
 
       try {

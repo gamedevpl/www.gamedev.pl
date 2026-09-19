@@ -117,10 +117,11 @@ it.each(['memory', 'firestore'])(
 it.each([
   { recoveryKey: 'old', ownerUid: 'owner', moderationBlockedAt: undefined, allowed: true },
   { recoveryKey: undefined, ownerUid: 'owner', moderationBlockedAt: undefined, allowed: false },
-  { recoveryKey: 'old', ownerUid: 'foreign', moderationBlockedAt: undefined, allowed: false },
+  // A recipient is a different uid; the route checked ownership.
+  { recoveryKey: 'old', ownerUid: 'foreign', moderationBlockedAt: undefined, allowed: true },
   { recoveryKey: 'old', ownerUid: 'owner', moderationBlockedAt: 'blocked', allowed: false },
 ])(
-  'Firestore reclaims abandoned recovery only with matching ownership and no moderation: $allowed',
+  'Firestore reclaims abandoned recovery on lineage and moderation, not on the old uid: $allowed',
   async ({ allowed, ...source }) => {
     const store = firestoreStore([
       [

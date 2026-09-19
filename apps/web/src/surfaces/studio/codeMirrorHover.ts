@@ -1,6 +1,6 @@
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, activateHover, closeHoverTooltips, hoverTooltip, ViewPlugin } from '@codemirror/view';
-import { defaultGotoHandler, renderDisplayParts, tsFacet, type HoverInfo } from '@valtown/codemirror-ts';
+import { renderDisplayParts, tsFacet, type HoverInfo } from '@valtown/codemirror-ts';
 import type { GotoDefinitionHandler } from './codeMirrorTypes.js';
 
 // GA-07: compact by default, expanded while the modifier is held.
@@ -41,8 +41,18 @@ export const modifierHoverState = StateField.define<ModifierHoverState>({
     ),
 });
 
+function isTsLibPath(fileName: string): boolean {
+  const base = fileName.split(/[/\\]/).pop() ?? '';
+  return /^lib\..+\.d\.ts$/.test(base);
+}
+
+// Cmd-click follows def; typeDef of Record is lib.
+export function pickGotoDefinition(info: HoverInfo) {
+  return [...(info.def ?? []), ...(info.typeDef ?? [])].find((entry) => !isTsLibPath(entry.fileName));
+}
+
 function definitionRange(info: HoverInfo): { from: number; to: number } | null {
-  const definition = [...(info.typeDef ?? []), ...(info.def ?? [])].at(0);
+  const definition = pickGotoDefinition(info);
   if (!definition || !info.quickInfo) return null;
   return { from: info.start, to: info.start + info.quickInfo.textSpan.length };
 }
@@ -157,9 +167,18 @@ export function modifierAwareHover(): ReturnType<typeof hoverTooltip> {
 // GA-09: same-file jumps select in place; else bubbles up.
 export function makeGotoHandler(onGotoDefinitionRef: { current: GotoDefinitionHandler | undefined }) {
   return (currentPath: string, hoverData: HoverInfo, view: EditorView) => {
-    if (defaultGotoHandler(currentPath, hoverData, view)) return true;
-    const definition = [...(hoverData.typeDef ?? []), ...(hoverData.def ?? [])].at(0);
+    const definition = pickGotoDefinition(hoverData);
     if (!definition) return undefined;
+    if (currentPath === definition.fileName) {
+      view.dispatch({
+        selection: {
+          anchor: definition.textSpan.start,
+          head: definition.textSpan.start + definition.textSpan.length,
+        },
+        scrollIntoView: true,
+      });
+      return true;
+    }
     onGotoDefinitionRef.current?.(
       definition.fileName,
       definition.textSpan.start,

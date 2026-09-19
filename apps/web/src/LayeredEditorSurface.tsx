@@ -72,11 +72,11 @@ function updateProperties(
 }
 
 function propertyFields(
-  properties: Record<string, EditorPropertySpec>,
+  properties: Record<string, EditorPropertySpec> | undefined,
   values: Record<string, unknown>,
   onChange: (name: string, value: unknown) => void,
 ) {
-  return Object.entries(properties).map(([propertyName, propertySpec]) => {
+  return Object.entries(properties ?? {}).map(([propertyName, propertySpec]) => {
     const value = values[propertyName];
     if (propertySpec.type === 'text') {
       return (

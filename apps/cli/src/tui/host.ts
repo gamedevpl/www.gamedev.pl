@@ -1,3 +1,4 @@
+import { taskLogTail } from '../task-log.js';
 import { startUpdateNotice } from '../update-notice.js';
 import { runInteractive, type InteractiveRun } from '../agy-interactive.js';
 import { offerKitUpdate } from '../kit-update.js';
@@ -18,7 +19,8 @@ import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
 import { agentHint, discoverAgents } from '../agents.js';
 import { createCliTelemetry } from '../telemetry.js';
 import { reportInstall } from '../main.js';
-import { openUrl } from '../open-url.js';
+import { sessionBrowserHost } from '../session-browser-host.js';
+import { historyStore } from './history.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -30,6 +32,12 @@ export async function runInkRepl(input: {
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
   currentPath?: string;
+  browserOnly?: boolean;
+  entryMode?: 'home' | 'create' | 'game';
+  suggestedSlug?: string;
+  onReady?: (url: string) => void;
+  login?: (write: (line: string) => void) => Promise<void>;
+  onCheckpoint?: (state: { token: string | null; slug: string; checkout?: { root: string; slug: string } }) => void;
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
@@ -39,6 +47,24 @@ export async function runInkRepl(input: {
   reportInstall(telemetry, input.env, isTty);
   let watched = '';
   let spoke = false;
+  let conversationId: string | undefined;
+  let uid = '';
+  let who = '';
+  let history: ReturnType<typeof historyStore> | undefined;
+  let historyScope = '';
+  let lastLines: string[] | undefined;
+  let historyWarning = false;
+  const saveHistory = (): void => {
+    if (!history) return;
+    try {
+      history.save({ ...session.savedHistory(), conversationId });
+    } catch {
+      if (!historyWarning) {
+        historyWarning = true;
+        session.writeLine('Could not save local conversation history. This session can continue.');
+      }
+    }
+  };
   const session = createTuiSession(replBanner(isTty, input.env), () => {
     if (abort.current) {
       abort.current.abort();
@@ -48,19 +74,84 @@ export async function runInkRepl(input: {
     host.instance?.unmount();
     process.exit(EXIT_GREEN);
   });
+  const bindHistory = (game: string): void => {
+    const scope = game ? `game:${game}` : `directory:${input.checkout?.root ?? process.cwd()}`;
+    if (!uid || input.env.GAMEDEV_HISTORY === 'off' || scope === historyScope) return;
+    saveHistory();
+    historyScope = scope;
+    history = historyStore(input.env, input.api.origin, uid, scope);
+    const saved = history.load();
+    conversationId = saved.conversationId;
+    session.restoreHistory(saved);
+  };
+  bindHistory(input.checkout?.slug ?? input.slug ?? '');
+  session.subscribe((state) => {
+    if (state.lines === lastLines) return;
+    lastLines = state.lines;
+    saveHistory();
+  });
   const foregroundApi = activityApi(input.api, (activity) => {
     const previous = session.get().activity;
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
+  let token = input.token;
+  let slug = input.checkout?.slug ?? input.slug ?? '';
+  let initialLine = input.initialLine;
+  const browser = sessionBrowserHost(session, input.browserOnly, () => ({
+    mode: slug ? 'game' : (input.entryMode ?? 'home'),
+    slug,
+    suggestedSlug: input.suggestedSlug,
+  }));
+  if (input.browserOnly) {
+    input.onReady?.(await browser.start());
+    session.writeLine('Play session ready. Closing the terminal does not stop this session.');
+  }
+  const refreshAccount = async (): Promise<void> => {
+    const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
+      'GET',
+      '/api/auth/me',
+      undefined,
+      AbortSignal.timeout(3000),
+    );
+    if (uid !== user.uid) {
+      saveHistory();
+      history = undefined;
+      historyScope = '';
+      conversationId = undefined;
+    }
+    uid = user.uid;
+    who = user.handle ?? uid;
+  };
+  try {
+    await refreshAccount();
+  } catch {
+    who = 'account unavailable';
+  }
+
+  if (input.browserOnly && !uid && input.login && !input.checkout) {
+    const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
+    if (answer === 'Sign in') {
+      try {
+        await input.login(session.writeLine);
+        await refreshAccount();
+      } catch (error) {
+        session.writeLine(formatError(error));
+      }
+    }
+  }
+  if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
   const openPreview = (url: string): void => {
     telemetry.record('play_requested');
-    void openUrl(url).then((opened) => {
+    void browser.open(url).then((opened) => {
       if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
     });
   };
+  let workshop: Workshop | undefined;
+  const readLogs = () => taskLogTail(workshop?.lastLog);
   const mount = (historyOffset = 0) => {
-    host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview }), {
+    if (input.browserOnly) return;
+    host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview, readLogs }), {
       stdin: input.io.stdin,
       stdout: input.io.stdout,
       exitOnCtrlC: false,
@@ -70,6 +161,10 @@ export async function runInkRepl(input: {
   mount();
   const stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
   const interactiveRun: InteractiveRun = async (request) => {
+    if (input.browserOnly)
+      throw new Error(
+        'This agent requires an interactive terminal permission handoff. Choose another installed agent or use gamedevpl connect in a terminal.',
+      );
     const offset = session.get().lines.length;
     host.instance?.unmount();
     try {
@@ -78,13 +173,12 @@ export async function runInkRepl(input: {
       mount(offset);
     }
   };
-  let token = input.token;
-  let conversationId: string | undefined;
-  let who = '';
-  let slug = input.checkout?.slug ?? input.slug ?? '';
-  let initialLine = input.initialLine;
-  const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
-  let workshop: Workshop | undefined;
+  if (input.browserOnly && !uid && input.checkout) initialLine = '/play';
+  const paintIdentity = (): void => {
+    bindHistory(slug);
+    session.setIdentity(formatSessionIdentity(who, slug));
+  };
+  paintIdentity();
   const pendingExecution: PendingExecution = {};
   if (!input.checkout) {
     const hint = agentHint(discoverAgents(input.env));
@@ -104,6 +198,8 @@ export async function runInkRepl(input: {
       telemetry,
       onActivity: session.setActivity,
       onLocalTask: session.setLocalTask,
+      onSteering: session.setSteering,
+      onLocalPreview: browser.registerPreview,
       interactiveRun,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
@@ -138,6 +234,7 @@ export async function runInkRepl(input: {
     onStatus: (status) => {
       if (isPublishTransition(watched, status.status)) telemetry.record('published');
       watched = status.status;
+      if (token && !workshop) browser.registerPlatform(input.api, token);
     },
     onSlug: (next) => {
       if (next !== slug) session.clearPreview();
@@ -145,26 +242,27 @@ export async function runInkRepl(input: {
       paintIdentity();
     },
   });
-  // Don't block the prompt on profile.
-  void input.api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile').then(
-    (profile) => {
-      who = profile.handle ?? profile.uid ?? '';
-      paintIdentity();
-    },
-    (error: unknown) => {
-      who = 'not signed in';
-      paintIdentity();
-      session.writeLine(formatError(error));
-    },
-  );
   try {
     for (;;) {
       const line = initialLine ?? (await session.prompt());
+      if (initialLine && !line.startsWith('/')) session.writeLine('› ' + line);
       initialLine = undefined;
       if (!spoke && (!input.checkout || token) && line.trim() && !line.trim().startsWith('/')) {
         spoke = true;
         telemetry.record('first_turn');
       }
+      if (line === '/login' && input.login) {
+        try {
+          await input.login(session.writeLine);
+          await refreshAccount();
+          paintIdentity();
+          if (input.browserOnly && input.checkout && !workshop) initialLine = '/checkout ' + input.checkout.slug;
+        } catch (error) {
+          session.writeLine(formatError(error));
+        }
+        continue;
+      }
+      const turnScope = historyScope;
       let result;
       try {
         result = await handleReplLine({
@@ -181,13 +279,23 @@ export async function runInkRepl(input: {
           telemetry,
           pendingExecution,
           interactiveRun,
+          openPreview: browser.open,
+          onLocalPreview: browser.registerPreview,
           onWorkshop: (opened) => {
+            bindHistory(opened.slug);
             if (workshop?.slug !== opened.slug || workshop?.root !== opened.root) session.clearPreview();
             workshop = opened;
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
+            opened.onSteering = session.setSteering;
+            opened.onLocalPreview = browser.registerPreview;
             opened.interactiveRun = interactiveRun;
             opened.activityApi = input.api;
+            input.onCheckpoint?.({
+              token: opened.token,
+              slug: opened.slug,
+              checkout: { root: opened.root, slug: opened.slug },
+            });
             if (token !== opened.token) {
               token = opened.token;
               delete pendingExecution.current;
@@ -217,6 +325,8 @@ export async function runInkRepl(input: {
         workshop = result.workshop;
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
+        workshop.onSteering = session.setSteering;
+        workshop.onLocalPreview = browser.registerPreview;
         workshop.interactiveRun = interactiveRun;
         workshop.activityApi = input.api;
       }
@@ -225,13 +335,20 @@ export async function runInkRepl(input: {
         slug = result.slug;
         paintIdentity();
       }
-      if (result.conversationId !== undefined) conversationId = result.conversationId;
+      if (input.browserOnly && result.workshop && /^\/(checkout|connect)(?:\s|$)/.test(line)) initialLine = '/play';
+      if (result.conversationId !== undefined && (result.conversationId !== '' || historyScope === turnScope)) {
+        conversationId = result.conversationId;
+      }
+      input.onCheckpoint?.({ token, slug, checkout: workshop && { root: workshop.root, slug: workshop.slug } });
+      saveHistory();
       if (result.next === 'quit') break;
     }
   } finally {
+    saveHistory();
     stopUpdateNotice();
     watch.stop();
     session.close();
+    await browser.close();
     host.instance?.unmount();
     await telemetry.flush();
   }

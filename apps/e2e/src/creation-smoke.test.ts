@@ -22,16 +22,11 @@ describe.skipIf(!hasToken)('creation happy path', () => {
   it('refines an ordinary game idea instead of rejecting it', async () => {
     // base36 — a decimal timestamp trips the L1 PII phone-number regex.
     const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    const res = await api.post('/api/submissions/refine', {
-      data: {
-        concept: `A short arcade game where you dodge falling rocks and survive as long as possible. E2E smoke ${nonce}.`,
-        locale: 'en',
-      },
-    });
-
+    const concept = `A short arcade game where you dodge falling rocks and survive as long as possible. E2E smoke ${nonce}.`;
+    const res = await api.post('/api/submissions/refine', { timeout: 80_000, data: { concept, locale: 'en' } });
     const body = await res.json().catch(() => undefined);
     expect(res.status(), `expected 200, got ${res.status()}: ${JSON.stringify(body)}`).toBe(200);
     expect(body?.error, `refine rejected a benign prompt: ${JSON.stringify(body)}`).toBeUndefined();
     expect(Array.isArray(body?.questions)).toBe(true);
-  });
+  }, 95_000);
 });

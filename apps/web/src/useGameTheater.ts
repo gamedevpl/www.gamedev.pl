@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { gamePageHandle, type CatalogEntry } from './catalog.js';
 import type { User } from './AuthContext.js';
-import { gamePath, type AppRoute } from './core/router.js';
+import { gamePath, playPath, type AppRoute } from './core/router.js';
 import { createPartySession, type PartySession } from './surfaces/party/mpApi.js';
 import type { PlayVia } from './visitTelemetry.js';
 import type { CatalogStatus } from './useCatalogData.js';
@@ -25,6 +25,7 @@ export type UseGameTheaterOptions = {
   catalogStatus: CatalogStatus;
   user: User | null;
   navigate: Navigate;
+  exitOverlay?: (fallbackPath?: string) => void;
   setIsAuthModalOpen: Dispatch<SetStateAction<boolean>>;
   setRecommendationsRefreshKey: Dispatch<SetStateAction<number>>;
 };
@@ -46,6 +47,7 @@ export function useGameTheater({
   catalogStatus,
   user,
   navigate,
+  exitOverlay,
   setIsAuthModalOpen,
   setRecommendationsRefreshKey,
 }: UseGameTheaterOptions): UseGameTheaterResult {
@@ -63,13 +65,30 @@ export function useGameTheater({
   // `/play/<slug>` auto-opens theater once the catalog confirms the game.
   useEffect(() => {
     if (stageContent?.type === 'catalog') {
+      if (route.view !== 'play' && route.view !== 'game' && route.view !== 'creator') {
+        setStageContent(null);
+        return;
+      }
+      if (route.view === 'play' && stageContent.game.slug !== route.slug) {
+        const nextEntry = catalogEntries.find((game) => game.slug === route.slug);
+        if (catalogStatus === 'ready' && !nextEntry) {
+          setStageContent(null);
+        } else if (nextEntry) {
+          setStageContent({ type: 'catalog', game: nextEntry });
+        }
+        return;
+      }
+      if (route.view === 'game' && stageContent.game.slug !== route.slug) {
+        setStageContent(null);
+        return;
+      }
       const entry = catalogEntries.find((game) => game.slug === stageContent.game.slug);
       if (entry && stageContent.game !== entry) {
         setStageContent((prev) =>
           prev?.type === 'catalog' && prev.game.slug === entry.slug ? { ...prev, game: entry } : prev,
         );
       }
-      if (route.view === 'play' && catalogStatus === 'ready' && !entry) {
+      if (catalogStatus === 'ready' && !entry) {
         setStageContent(null);
       }
       return;
@@ -95,9 +114,11 @@ export function useGameTheater({
   }, [stageContent]);
 
   function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
-    // In-place Play; `/play/<slug>` auto-opens itself instead.
     const fullEntry = catalogEntries.find((e) => e.slug === game.slug) ?? game;
     setStageContent({ type: 'catalog', game: fullEntry, ...(via === undefined ? {} : { via }) });
+    if (route.view !== 'game' && route.view !== 'creator') {
+      navigate(playPath(game.slug));
+    }
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
   }
@@ -105,13 +126,20 @@ export function useGameTheater({
   // The remix sheet opens on the first frame, no theater detour.
   function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
     setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
+    if (route.view !== 'game' && route.view !== 'creator') {
+      navigate(playPath(game.slug));
+    }
   }
 
   function handleExitCatalogTheater() {
-    // Deep-linked `/play` → canonical page (replace). Else dismiss overlay only.
     if (route.view === 'play' && stageContent?.type === 'catalog') {
       const game = stageContent.game;
-      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
+      const canonical = gamePath(gamePageHandle(game), game.slug);
+      if (exitOverlay) {
+        exitOverlay(canonical);
+      } else {
+        navigate(canonical, { replace: true });
+      }
       setStageContent(null);
       return;
     }
@@ -121,7 +149,12 @@ export function useGameTheater({
   function handleExitPartyTheater() {
     if (route.view === 'play' && stageContent?.type === 'party') {
       const game = stageContent.game;
-      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
+      const canonical = gamePath(gamePageHandle(game), game.slug);
+      if (exitOverlay) {
+        exitOverlay(canonical);
+      } else {
+        navigate(canonical, { replace: true });
+      }
       setStageContent(null);
       return;
     }

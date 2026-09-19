@@ -1,3 +1,5 @@
+import { copilotEventText } from './copilot-events.js';
+import { opencodeEventText } from './opencode-events.js';
 import { codexEventText } from './codex-events.js';
 import { createMuseStream, museEventText } from './muse-events.js';
 import { antigravityText } from './agent-events.js';
@@ -73,6 +75,10 @@ export function parseEventLine(line: string, adapter?: string): string | null {
   if (!parsed || typeof parsed !== 'object') return trimmed;
   if (adapter === 'muse') {
     const text = museEventText(parsed);
+    if (text !== undefined) return text;
+  }
+  if (adapter === 'copilot' || adapter === 'opencode') {
+    const text = adapter === 'copilot' ? copilotEventText(parsed) : opencodeEventText(parsed);
     if (text !== undefined) return text;
   }
   const codex = codexEventText(parsed);

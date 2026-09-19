@@ -24,8 +24,9 @@ async function harness(seed = 20) {
   });
   const list = vi.spyOn(store, 'listBuildEvents');
   const counted = vi.spyOn(store, 'countBuildEvents');
+  // The creator's own poll: the feed answers to an owner.
   const poll = async () =>
-    assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en');
+    assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
   return { store, assembler, list, counted, poll, tick: (ms: number) => (clock += ms), at: () => clock };
 }
 
@@ -114,5 +115,153 @@ describe('build event reads under a three-second poll', () => {
     assembler.invalidateEvents(JOB);
     await poll();
     expect(list.mock.calls.filter((c) => c[1]?.limit === 20)).toHaveLength(2);
+  });
+
+  // Two racing pollers must share the page, not double it.
+  it('shares one read across two pollers racing the same cache miss', async () => {
+    const { store, list, poll } = await harness();
+    let releaseRead!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    list.mockImplementationOnce(async (...args) => {
+      await gate;
+      return InMemoryStore.prototype.listBuildEvents.apply(store, args);
+    });
+
+    const [first, second] = [poll(), poll()];
+    releaseRead();
+    await Promise.all([first, second]);
+
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('build media reads under status polling', () => {
+  it('serves previews and shots from 30s cache rather than re-reading every poll', async () => {
+    const { store, assembler, tick } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+    await store.appendBuildShot(JOB, { label: 'Shot 1' });
+
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews');
+    const listShots = vi.spyOn(store, 'listBuildShots');
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // After 6s, events probe expires (5s) but media cache (30s) stays cached
+    tick(6_000);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // After 31s, media cache expires and is re-read
+    tick(25_000);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(2);
+    expect(listShots).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves media cached when only invalidateEvents fires', async () => {
+    const { store, assembler, tick } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+    await store.appendBuildShot(JOB, { label: 'Shot 1' });
+
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews');
+    const listShots = vi.spyOn(store, 'listBuildShots');
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // Must not pay for two reads on every ordinary event.
+    tick(5_000);
+    assembler.invalidateEvents(JOB);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates previews and shots on invalidateMedia', async () => {
+    const { store, assembler, tick } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+    await store.appendBuildShot(JOB, { label: 'Shot 1' });
+
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews');
+    const listShots = vi.spyOn(store, 'listBuildShots');
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+    expect(listShots).toHaveBeenCalledTimes(1);
+
+    // Inside the 30s window, invalidateMedia clears the media cache specifically.
+    tick(5_000);
+    assembler.invalidateMedia(JOB);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(2);
+    expect(listShots).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares one preview read across two pollers racing the same cache miss', async () => {
+    const { store, assembler } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+
+    let releaseRead!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews').mockImplementationOnce(async (...args) => {
+      await gate;
+      return InMemoryStore.prototype.listBuildPreviews.apply(store, args);
+    });
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    const [first, second] = [poll(), poll()];
+    releaseRead();
+    await Promise.all([first, second]);
+
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+  });
+
+  // A read started before invalidateMedia must not repopulate the cache after it.
+  it('does not let a read in flight during invalidateMedia repopulate the cache', async () => {
+    const { store, assembler } = await harness();
+    await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
+
+    let releaseFirstRead!: () => void;
+    const firstReadGate = new Promise<void>((resolve) => {
+      releaseFirstRead = resolve;
+    });
+    const listPreviews = vi.spyOn(store, 'listBuildPreviews').mockImplementationOnce(async (...args) => {
+      await firstReadGate;
+      return InMemoryStore.prototype.listBuildPreviews.apply(store, args);
+    });
+
+    const poll = async () =>
+      assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en', 'g:owner');
+
+    // Parked inside its read; the repair below fires before it returns.
+    const firstPoll = poll();
+    assembler.invalidateMedia(JOB);
+    releaseFirstRead();
+    await firstPoll;
+    listPreviews.mockRestore();
+
+    const listAfter = vi.spyOn(store, 'listBuildPreviews');
+    await poll();
+    // The stale write from the in-flight read must not have landed.
+    expect(listAfter).toHaveBeenCalledTimes(1);
   });
 });

@@ -212,6 +212,28 @@ describe('Mascot', () => {
     });
   });
 
+  it('draws a chin-hand for thinking', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'thinking', size: 48 }));
+    });
+    expect(container.querySelector('.mascot__think-arm')).not.toBeNull();
+    expect(container.querySelector('.mascot__wave-arm')).toBeNull();
+
+    await act(async () => {
+      root.render(createElement(Mascot, { emotion: 'busy', size: 48 }));
+    });
+    expect(container.querySelector('.mascot__think-arm')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('does not take a hanging pose prop — pull-ups are motion on InteractiveMascot', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');

@@ -97,6 +97,8 @@ export interface SubmissionRecord {
   lastStatus?: SubmissionStatus;
   // Denormalized isRoundOpen -- the sweep and badge query this instead of scanning.
   openRound?: boolean;
+  // Denormalized unread inbox; sweep skips the empty query when false.
+  pendingCreatorMessage?: boolean;
   /**
    * The language the creator submitted in. Told to the agent over the build channel
    * so it can write its progress updates in that language directly — which beats
@@ -211,6 +213,13 @@ export interface SubmissionRecord {
    * the field. New jobs start at `1`.
    */
   roundGeneration?: number;
+
+  // The game's accessRevision when this round opened.
+
+  // A transfer advances that revision, retiring every earlier round at once.
+
+  // Absent on rounds opened before the epoch existed.
+  accessEpoch?: number;
   /**
    * Which builder owns the *current* round: the platform's coding agent, or the
    * creator's own. Absent on legacy jobs (= platform).

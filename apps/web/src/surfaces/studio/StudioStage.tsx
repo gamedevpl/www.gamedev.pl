@@ -390,7 +390,7 @@ export function StudioStage({
   }, []);
   useGamePlayer(frameRef, active, requestWatch, undefined, onGameActivity, undefined, onPointerHeldChange);
   const editorBridgeActive = Boolean(shownHtml) && Boolean(editable) && (posture === 'play' || covered);
-  const editorBridge = useEditorDraftBridge(frameRef, editorBridgeActive, slug, Boolean(editable));
+  const editorBridge = useEditorDraftBridge(frameRef, editorBridgeActive, slug, Boolean(editable), shownHtml);
   useEffect(() => {
     if (!editorPushRef) return undefined;
     editorPushRef.current = editorBridge.push;

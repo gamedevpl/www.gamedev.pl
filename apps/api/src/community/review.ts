@@ -22,6 +22,7 @@ import {
 } from './assessment-resolution.js';
 import type { emitReviewSweep as EmitReviewSweep, EmitDeps } from '../notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
+import { assessmentCreatorHandle } from './assessment-attribution.js';
 import { createReviewQueueCache } from './review-queue-cache.js';
 import type { ReviewCatalogEntry, ReviewQueueItem } from './review-queue-cache.js';
 import {
@@ -140,7 +141,14 @@ function reviewerAudience(reviewerUids: Set<string>, adminUids: Set<string>): Se
   return new Set([...reviewerUids, ...adminUids]);
 }
 
-export async function registerReviewRoutes(app: FastifyInstance, options: ReviewRoutesOptions): Promise<void> {
+export interface ReviewRoutesHandle {
+  invalidateGameOwner(slug: string): void;
+}
+
+export async function registerReviewRoutes(
+  app: FastifyInstance,
+  options: ReviewRoutesOptions,
+): Promise<ReviewRoutesHandle> {
   const { store } = options;
   const reviewerUids = options.reviewerUids ?? new Set<string>();
   const adminUids = options.adminUids ?? new Set<string>();
@@ -155,6 +163,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     targetedQueueItems,
     invalidateOpenSweep,
     invalidateReviewer,
+    invalidateGameOwner,
   } = createReviewQueueCache({ store, listCatalog, now });
 
   function refuseUnlessReviewer(
@@ -332,7 +341,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const verdict: AssessmentVerdict = body.data.verdict;
     const source: AssessmentSource = body.data.source;
     const title = body.data.title?.trim() || body.data.slug;
-    const creatorHandle = body.data.creatorHandle === undefined ? null : body.data.creatorHandle;
     const reviewerUid = request.user!.uid;
 
     // New rows need a released slug or an open re-review request.
@@ -356,7 +364,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       slug: body.data.slug,
       title,
       source,
-      creatorHandle,
+      creatorHandle: await assessmentCreatorHandle(store, body.data.slug, listCatalog),
       reviewerUid,
       verdict,
       note: sanitized,
@@ -708,4 +716,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const requests = await store.listReReviewRequests({ limit: MAX_ADMIN_ROWS });
     return { requests };
   });
+
+  return { invalidateGameOwner };
 }

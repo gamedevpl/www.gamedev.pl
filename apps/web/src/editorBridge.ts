@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
+import { fetchGameEditor, type EditorContentDoc, type GameEditorState } from './studioApi.js';
 import { recordEditorStep } from './visitTelemetry.js';
 import {
   BRIDGE_NAMESPACE,
   PROTOCOL_VERSION,
+  editorContentMessage,
   parseEditorControllerEnvelope,
   type EditorCanvasBox,
   type EditorControllerChange,
@@ -25,8 +26,12 @@ export type {
   EditorUiNode,
   EditorUiRequest,
 } from './editorControllerProtocol.js';
+export { editorContentMessage } from './editorControllerProtocol.js';
 
 export type EditorContentPush = (content: EditorContentDoc, selection?: EditorSelection | null) => void;
+
+// validate() runs on apply, so an answer is due in seconds.
+const CHECK_ANSWER_MS = 3000;
 
 export type EditorControllerState = {
   status: 'connecting' | 'ready' | 'failed';
@@ -36,6 +41,8 @@ export type EditorControllerState = {
   pendingChange: EditorControllerChange | null;
   uiRequest: EditorUiRequest | null;
   checks: { ok: boolean; problems: string[] } | null;
+  // False while pushed content still awaits the game's verdict.
+  checksFresh: boolean;
   canvasBox: EditorCanvasBox | null;
   sendEvent: (event: Record<string, unknown>) => void;
   sendSelection: (selection: EditorControllerSelection | null) => void;
@@ -44,49 +51,18 @@ export type EditorControllerState = {
   useFallback: (reason: string) => void;
 };
 
-export function editorContentMessage(
-  content: EditorContentDoc,
-  selection?: EditorSelection | null,
-): Extract<EditorControllerOutbound, { t: 'editor:content' }> {
-  return {
-    ns: BRIDGE_NAMESPACE,
-    v: PROTOCOL_VERSION,
-    t: 'editor:content' as const,
-    content,
-    ...(selection ? { selection } : {}),
-  };
-}
-
-/**
- * The shell half of EditorKit's draft hot-apply (the game half is the games
- * repo's `shared/modules/editor.ts`).
- *
- * When the creator playtests their own editable game, the game's editor module
- * announces itself with `editor:hello`; this hook answers with the creator's
- * saved draft (`editor:content`), and the game re-enters play on the new
- * content — the edit-to-playing loop, seconds, no build.
- *
- * Deliberately pull-based and owner-only: nothing is pushed until the game
- * *inside this creator's own playtest frame* asks, the draft comes from the
- * owner-scoped editor API (anyone else gets 404), and a game without the editor
- * module never says hello, so every other playtest carries zero editor traffic.
- * Everything arriving from the frame is hostile input: only the `editor:hello`
- * type is read, and nothing from the game is echoed back beyond the draft.
- *
- * `push` is the one exception to pull-based (§E tier 1, Code-surface param
- * edits): posts straight to the frame regardless of the `active` gate, since
- * the stage stays mounted under every posture. Also updates what the next
- * `editor:hello` gets answered with, so a later restart cannot regress it.
- */
 export function useEditorDraftBridge(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
   active: boolean,
   slug: string | undefined,
   editable: boolean,
+  // Changes on a new build; a frame load resets too.
+  documentKey?: string | null,
 ): { push: EditorContentPush; controller: EditorControllerState | null } {
   /** What the next `editor:hello` gets answered with. */
   const lastContentRef = useRef<EditorContentDoc | null>(null);
   const lastSelectionRef = useRef<EditorSelection | null>(null);
+  const lastRevisionRef = useRef<number | undefined>(undefined);
   const controllerHelloRef = useRef(false);
   const controllerTimerRef = useRef<number | null>(null);
   const [controllerStatus, setControllerStatus] = useState<EditorControllerState['status'] | null>(null);
@@ -96,53 +72,33 @@ export function useEditorDraftBridge(
   const [pendingChange, setPendingChange] = useState<EditorControllerChange | null>(null);
   const [uiRequest, setUiRequest] = useState<EditorUiRequest | null>(null);
   const [controllerChecks, setControllerChecks] = useState<{ ok: boolean; problems: string[] } | null>(null);
+  const [checksFresh, setChecksFresh] = useState(true);
   const [canvasBox, setCanvasBox] = useState<EditorControllerState['canvasBox']>(null);
   const controllerStatusRef = useRef(controllerStatus);
   controllerStatusRef.current = controllerStatus;
   const controllerViewRef = useRef(controllerView);
   controllerViewRef.current = controllerView;
+  // A controller that stood down does not take the surface back.
+  const controllerStoodDownRef = useRef(false);
+  const checkTimerRef = useRef<number | null>(null);
+  const checksSeenRef = useRef(false);
 
-  useEffect(() => {
-    lastContentRef.current = null;
-    lastSelectionRef.current = null;
-    controllerHelloRef.current = false;
-    setControllerStatus(null);
-    setControllerView(null);
-    setControllerReason(null);
-    setControllerSelection(null);
-    setPendingChange(null);
-    setUiRequest(null);
-    setControllerChecks(null);
-    setCanvasBox(null);
-  }, [slug]);
+  const standDownRef = useRef<(reason: string) => void>(() => {});
 
-  useEffect(() => {
-    if (!active || !slug || !editable) return;
+  const armCheckWatchdog = useCallback(() => {
+    if (controllerStoodDownRef.current || checkTimerRef.current !== null) return;
+    if (!checksSeenRef.current) return;
+    checkTimerRef.current = window.setTimeout(() => {
+      checkTimerRef.current = null;
+      standDownRef.current('The game editor stopped answering its own checks.');
+    }, CHECK_ANSWER_MS);
+  }, []);
 
-    let disposed = false;
-    let controllerExpected = false;
-    /** One fetch per playtest session; a hello after the first reuses it. */
-    let draftPromise: Promise<EditorContentDoc | null> | null = null;
-
-    function loadDraft(): Promise<EditorContentDoc | null> {
-      draftPromise ??= fetchGameEditor(slug as string)
-        .then((state) => {
-          controllerExpected = state.definition.controller === true;
-          if (controllerExpected && !controllerHelloRef.current) expectController();
-          return state.draft?.content ?? null;
-        })
-        .catch(() => null);
-      return draftPromise;
-    }
-
-    function post(content: EditorContentDoc, selection: EditorSelection | null) {
-      frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, selection), '*');
-    }
-
-    function failController(reason: string) {
-      if (disposed) return;
-      if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
-      controllerTimerRef.current = null;
+  const standDown = useCallback(
+    (reason: string) => {
+      if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+      checkTimerRef.current = null;
+      controllerStoodDownRef.current = true;
       setControllerStatus('failed');
       setControllerReason(reason);
       frameRef.current?.contentWindow?.postMessage(
@@ -150,6 +106,79 @@ export function useEditorDraftBridge(
         '*',
       );
       recordEditorStep('controller_failed');
+    },
+    [frameRef],
+  );
+  standDownRef.current = standDown;
+
+  const [documentGeneration, setDocumentGeneration] = useState(0);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || typeof frame.addEventListener !== 'function') return undefined;
+    const onLoad = () => setDocumentGeneration((generation) => generation + 1);
+    frame.addEventListener('load', onLoad);
+    return () => frame.removeEventListener('load', onLoad);
+    // documentKey: the frame does not exist until the first build arrives.
+  }, [frameRef, documentKey]);
+
+  // The draft outlives a rebuild; only another game replaces it.
+  useEffect(() => {
+    lastContentRef.current = null;
+    lastSelectionRef.current = null;
+    lastRevisionRef.current = undefined;
+  }, [slug]);
+
+  useEffect(() => {
+    controllerHelloRef.current = false;
+    controllerStoodDownRef.current = false;
+    checksSeenRef.current = false;
+    if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+    checkTimerRef.current = null;
+    if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
+    controllerTimerRef.current = null;
+    setControllerStatus(null);
+    setControllerView(null);
+    setControllerReason(null);
+    setControllerSelection(null);
+    setPendingChange(null);
+    setUiRequest(null);
+    setControllerChecks(null);
+    setChecksFresh(true);
+    setCanvasBox(null);
+  }, [slug, documentKey, documentGeneration]);
+
+  useEffect(() => {
+    if (!active || !slug || !editable) return;
+
+    let disposed = false;
+    let controllerExpected = false;
+    /** One fetch per playtest session; a hello after the first reuses it. */
+    let statePromise: Promise<GameEditorState | null> | null = null;
+
+    function loadState(): Promise<GameEditorState | null> {
+      statePromise ??= fetchGameEditor(slug as string)
+        .then((state) => {
+          controllerExpected = state.definition.controller === true;
+          if (controllerExpected && !controllerHelloRef.current) expectController();
+          return state;
+        })
+        .catch(() => null);
+      return statePromise;
+    }
+
+    function post(content: EditorContentDoc, selection: EditorSelection | null) {
+      lastRevisionRef.current ??= 1;
+      frameRef.current?.contentWindow?.postMessage(
+        editorContentMessage(content, selection, lastRevisionRef.current),
+        '*',
+      );
+    }
+
+    function failController(reason: string) {
+      if (disposed) return;
+      if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
+      controllerTimerRef.current = null;
+      standDown(reason);
     }
 
     function expectController() {
@@ -170,15 +199,20 @@ export function useEditorDraftBridge(
       const data = parseEditorControllerEnvelope(event.data);
       if (!data) {
         const raw = event.data as Record<string, unknown> | null;
-        if (raw?.ns === BRIDGE_NAMESPACE && raw.v === PROTOCOL_VERSION && raw.t === 'editor:ui') {
-          failController('The game editor sent an invalid view.');
-        }
+        const invalidView = raw?.ns === BRIDGE_NAMESPACE && raw.v === PROTOCOL_VERSION && raw.t === 'editor:ui';
+        if (invalidView && !controllerStoodDownRef.current) failController('The game editor sent an invalid view.');
         return;
       }
+      // A stood-down controller gets no commands; the draft push stays.
+      if (controllerStoodDownRef.current && data.t !== 'editor:hello') return;
       if (data.t === 'editor:hello' && data.controller) {
         controllerHelloRef.current = true;
         expectController();
       } else if (data.t === 'editor:ui') {
+        if ((Array.isArray(data.doc) ? data.doc : [data.doc]).length === 0) {
+          failController('The game editor sent a view with nothing in it.');
+          return;
+        }
         if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
         controllerTimerRef.current = null;
         setControllerView(data.doc);
@@ -194,25 +228,30 @@ export function useEditorDraftBridge(
       } else if (data.t === 'editor:ui-request') {
         setUiRequest({ id: data.id, spec: data.spec });
       } else if (data.t === 'editor:check') {
+        const expected = lastRevisionRef.current;
+        if (typeof data.revision === 'number' && expected !== undefined && data.revision !== expected) return;
+        if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+        checkTimerRef.current = null;
+        checksSeenRef.current = true;
         setControllerChecks({ ok: data.ok, problems: data.problems });
+        setChecksFresh(true);
       } else if (data.t === 'editor:ack' && !data.ok && controllerStatusRef.current !== null) {
         failController(data.error ?? 'The game refused this content change.');
       } else if (data.t === 'editor:controller-error') {
         failController(data.error ?? 'The game editor stopped responding.');
-      } else if (data.t === 'editor:hello') {
-        // A non-controller editor still receives the declaration-driven content push.
-      } else {
-        return;
-      }
+      } else if (data.t !== 'editor:hello') return;
 
       if (data.t !== 'editor:hello') return;
 
+      // The definition is needed either way; the draft is skippable.
+      const pending = loadState();
       // A push already sent fresher content than the fetch would — that wins.
       if (lastContentRef.current !== null) {
         post(lastContentRef.current, lastSelectionRef.current);
         return;
       }
-      void loadDraft().then((content) => {
+      void pending.then((state) => {
+        const content = state?.draft?.content ?? null;
         if (disposed || content === null) return;
         lastContentRef.current = content;
         post(content, lastSelectionRef.current);
@@ -223,17 +262,26 @@ export function useEditorDraftBridge(
     return () => {
       disposed = true;
       if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
+      // No listener left to hear the answer, so no timeout.
+      if (checkTimerRef.current !== null) window.clearTimeout(checkTimerRef.current);
+      checkTimerRef.current = null;
       window.removeEventListener('message', onMessage);
     };
-  }, [frameRef, active, slug, editable]);
+  }, [armCheckWatchdog, frameRef, active, slug, editable, standDown]);
 
   const push = useCallback<EditorContentPush>(
     (content, selection) => {
       lastContentRef.current = content;
       if (selection !== undefined) lastSelectionRef.current = selection;
-      frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, lastSelectionRef.current), '*');
+      lastRevisionRef.current = (lastRevisionRef.current ?? 0) + 1;
+      setChecksFresh(false);
+      armCheckWatchdog();
+      frameRef.current?.contentWindow?.postMessage(
+        editorContentMessage(content, lastSelectionRef.current, lastRevisionRef.current),
+        '*',
+      );
     },
-    [frameRef],
+    [armCheckWatchdog, frameRef],
   );
 
   const send = useCallback(
@@ -252,6 +300,7 @@ export function useEditorDraftBridge(
       pendingChange,
       uiRequest,
       checks: controllerChecks,
+      checksFresh,
       canvasBox,
       sendEvent: (event) => send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:event', event }),
       sendSelection: (selection) => {
@@ -272,6 +321,7 @@ export function useEditorDraftBridge(
           ...(error ? { error } : {}),
         }),
       useFallback: (reason) => {
+        controllerStoodDownRef.current = true;
         setControllerStatus('failed');
         setControllerReason(reason);
         send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:mode', mode: 'fallback' });
@@ -279,6 +329,7 @@ export function useEditorDraftBridge(
     };
   }, [
     canvasBox,
+    checksFresh,
     controllerChecks,
     controllerReason,
     controllerSelection,

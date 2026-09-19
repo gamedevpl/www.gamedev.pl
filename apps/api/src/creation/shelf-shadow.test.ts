@@ -78,7 +78,7 @@ describe('recordShelfShadow', () => {
     const warnings: object[] = [];
     const result = await recordShelfShadow(
       {
-        store: { getShelf: async () => null, countSubmissionsByOwner: async () => 1, rebuildShelf: async () => true },
+        store: { getShelf: async () => null, rebuildShelf: async () => true },
         log: { warn: (context) => warnings.push(context) },
       },
       'g:owner',
@@ -95,13 +95,32 @@ describe('recordShelfShadow', () => {
       {
         store: {
           getShelf: async () => buildShelfDocument(source, at),
-          countSubmissionsByOwner: async () => 1,
           rebuildShelf: async () => true,
         },
         log: { warn: (context) => warnings.push(context) },
       },
       'g:owner',
       source,
+    );
+
+    expect(result?.verdict).toBe('match');
+    expect(warnings).toEqual([]);
+  });
+
+  it('matches a recipient shelf containing only transferred canonical rounds', async () => {
+    const inherited = [record(1, { slug: 'sky', ownerUid: 'g:sender' })];
+    const shelf = buildShelfDocument(inherited, at);
+    const warnings: object[] = [];
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => shelf,
+          rebuildShelf: async () => true,
+        },
+        log: { warn: (context) => warnings.push(context) },
+      },
+      'g:recipient',
+      inherited,
     );
 
     expect(result?.verdict).toBe('match');
@@ -116,7 +135,6 @@ describe('recordShelfShadow', () => {
           getShelf: async () => {
             throw new Error('firestore is having a day');
           },
-          countSubmissionsByOwner: async () => 1,
           rebuildShelf: async () => true,
         },
         log: { warn: (context) => warnings.push(context) },
@@ -142,7 +160,6 @@ describe('recordShelfShadow', () => {
       {
         store: {
           getShelf: async () => null,
-          countSubmissionsByOwner: async () => 1,
           rebuildShelf: async (ownerUid: string) => {
             rebuildOwner = ownerUid;
             return rebuildDone;
@@ -175,7 +192,6 @@ describe('recordShelfShadow', () => {
       {
         store: {
           getShelf: async () => buildShelfDocument(source, at),
-          countSubmissionsByOwner: async () => 1,
           rebuildShelf: async () => {
             rebuildCalled = true;
             return true;
@@ -191,9 +207,8 @@ describe('recordShelfShadow', () => {
     await recordShelfShadow(
       {
         store: {
-          // count disagrees with the shelf, so the verdict is 'count', not 'absent'.
-          getShelf: async () => buildShelfDocument(source, at),
-          countSubmissionsByOwner: async () => 99,
+          // Document counts a round source lacks: 'count', not 'absent'.
+          getShelf: async () => buildShelfDocument([...source, record(2)], at),
           rebuildShelf: async () => {
             rebuildCalled = true;
             return true;
@@ -213,7 +228,6 @@ describe('recordShelfShadow', () => {
       {
         store: {
           getShelf: async () => null,
-          countSubmissionsByOwner: async () => 1,
           rebuildShelf: async () => {
             throw new Error('write refused');
           },
@@ -234,7 +248,6 @@ describe('recordShelfShadow', () => {
       {
         store: {
           getShelf: async () => null,
-          countSubmissionsByOwner: async () => 1,
           rebuildShelf: async () => false,
         },
         log: { warn: (_context, message) => messages.push(message ?? '') },

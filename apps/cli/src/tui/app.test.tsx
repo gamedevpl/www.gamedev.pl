@@ -13,13 +13,13 @@ afterEach(() => {
   for (const close of cleanup.splice(0)) close();
 });
 const wait = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
-function screen(columns: number, rows: number, openPreview?: (url: string) => void) {
+function screen(columns: number, rows: number, openPreview?: (url: string) => void, readLogs?: () => string[]) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
   const output = Object.assign(new PassThrough(), { columns, rows, isTTY: true });
   const frames: string[] = [];
   output.on('data', (chunk) => frames.push(stripVTControlCharacters(String(chunk))));
-  const app = render(createElement(ReplApp, { session, color: false, openPreview }), {
+  const app = render(createElement(ReplApp, { session, color: false, openPreview, readLogs }), {
     stdin: input as unknown as NodeJS.ReadStream,
     stdout: output as unknown as NodeJS.WriteStream,
     debug: true,
@@ -32,10 +32,33 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
     input.end();
     output.end();
   });
-  return { session, input, frame: () => frames.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '' };
+  return {
+    session,
+    input,
+    frame: () =>
+      frames.filter((frame) => frame.includes('gamedevpl') || frame.includes('Task diagnostics')).at(-1) ?? '',
+  };
 }
 
 describe('TUI feedback', () => {
+  it.each([40, 110])('accepts a queued follow-up during a local task at width %s', async (width) => {
+    const openPreview = vi.fn();
+    const view = screen(width, 16, openPreview);
+    view.session.setLocalTask('codex');
+    view.session.writeLine('local live preview: http://127.0.0.1:1234/test/');
+    await wait();
+    view.input.write('more ramps');
+    await wait();
+    expect(view.session.get().draft).toBe('more ramps');
+    expect(openPreview).not.toHaveBeenCalled();
+    view.input.write('\r');
+    await wait();
+    expect(view.session.get().queued).toEqual(['more ramps']);
+    expect(view.frame()).toContain('1 queued');
+    view.input.write('\u000f');
+    await wait();
+    expect(openPreview).toHaveBeenCalledOnce();
+  });
   it('shows the selected model and effort in a narrow picker', async () => {
     const view = screen(40, 12);
     void view.session.prompt(
@@ -298,4 +321,67 @@ it('shows local ownership instead of a stale remote no-agent status', async () =
   view.session.setLocalTask('');
   await wait();
   expect(view.frame()).toContain('Studio: queued');
+});
+
+it.each([40, 110])('distinguishes live send and explicit queue at width %s', async (width) => {
+  const view = screen(width, 16);
+  let acknowledge!: () => void;
+  const send = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  view.session.setLocalTask('muse');
+  view.session.setSteering(send);
+  await wait();
+  view.input.write('change the ramps');
+  await wait();
+  view.input.write('\r');
+  await wait();
+  expect(send).toHaveBeenCalledWith('change the ramps');
+  expect(view.frame()).toContain('Message the active agent');
+  expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(16);
+  expect(view.session.get().queued).toEqual([]);
+  acknowledge();
+  await wait();
+  view.input.write('later task');
+  await wait();
+  view.input.write('\u0011');
+  await wait();
+  expect(view.session.get().queued).toEqual(['later task']);
+  expect(send).toHaveBeenCalledOnce();
+});
+
+it.each([40, 110])('opens live logs at width %s without sending or queuing /logs', async (width) => {
+  const view = screen(width, 24, undefined, () => ['diagnostic detail']);
+  view.session.setLocalTask('muse');
+  const send = vi.fn(async () => {});
+  view.session.setSteering(send);
+  view.session.setDraft('/logs');
+  await wait();
+  view.input.write('\r');
+  await wait(100);
+  expect(view.frame()).toContain('Task diagnostics');
+  expect(view.frame()).toContain('diagnostic detail');
+  expect(view.session.get().queued).toEqual([]);
+  expect(send).not.toHaveBeenCalled();
+  expect(view.session.get().draft).toBe('');
+  view.input.write('\u001b');
+  await wait(100);
+  expect(view.frame()).not.toContain('Task diagnostics');
+});
+
+it('keeps diagnostics out of conversation history after a task', async () => {
+  const view = screen(110, 24, undefined, () => ['private diagnostic detail']);
+  void view.session.prompt();
+  view.session.setDraft('/logs');
+  await wait();
+  view.input.write('\r');
+  await wait(100);
+  expect(view.frame()).toContain('Task diagnostics');
+  expect(view.session.savedHistory().lines.join('\n')).not.toContain('private diagnostic detail');
+  view.input.write('\u001b');
+  await wait(100);
+  expect(view.session.get().mode).toBe('prompt');
 });

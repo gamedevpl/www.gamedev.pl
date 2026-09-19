@@ -46,9 +46,7 @@ describe('isKnownSpaShellPath', () => {
     '/status/tok-abc',
     '/studio',
     '/studio/tok-abc',
-    // The surfaces the studio has now. `/thread` is where every deep link into a game
-    // lands — it was answered with a 404 for as long as it existed, because this list
-    // still described the five tabs it replaced.
+    // Surfaces the studio has now, including `/thread` deep links.
     '/studio/tok-abc/thread',
     '/studio/tok-abc/details',
     '/studio/global-thermonuclear-strategy/thread',
@@ -65,6 +63,7 @@ describe('isKnownSpaShellPath', () => {
     '/studio/sky-dodge/code',
     '/studio/tok-abc/welcome',
     '/studio/tok-abc/connect',
+    '/studio/tok-abc/transfer/propose/11111111-2222-4333-8444-555555555555',
     '/admin',
     '/admin/queue',
     '/admin/costs',

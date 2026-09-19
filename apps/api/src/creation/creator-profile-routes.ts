@@ -17,8 +17,9 @@ import {
 } from '../platform/creator-profile.js';
 import type { CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
-import type { Store } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 
 /**
  * Creator profiles — claim a handle, edit the public page, publish gate data.
@@ -246,6 +247,40 @@ export async function registerCreatorProfileRoutes(
   });
 }
 
+// A transfer leaves the sender's old submissions' ownerUid untouched.
+async function reconcilePublishedOwnership(
+  store: Store,
+  ownerUid: string,
+  records: SubmissionRecord[],
+): Promise<SubmissionRecord[]> {
+  const memberAccess = await store.listGameAccessByMember(ownerUid);
+  const canonicalSlugs = new Set(memberAccess.filter((a) => a.ownerUid === ownerUid).map((a) => a.slug));
+
+  const nonCanonical = records.filter((r) => !r.slug || !canonicalSlugs.has(r.slug));
+  const stillOwned = await Promise.all(
+    nonCanonical.map(async (record) => {
+      if (!record.slug) return true;
+      const access = await resolveGameAccess(store, record.slug);
+      return access.source !== 'canonical' || ownsGame(access, ownerUid);
+    }),
+  );
+  const kept = nonCanonical.filter((_, i) => stillOwned[i]);
+
+  // Refetches the published tip fresh, never a stale pre-boomerang round.
+  const canonicalRecords = await Promise.all(
+    [...canonicalSlugs].map((slug) => publishedSubmissionForSlug(store, slug)),
+  );
+
+  return [...canonicalRecords.filter((r): r is SubmissionRecord => r !== null), ...kept];
+}
+
+// The newest round may be unpublished while an older sibling is live.
+async function publishedSubmissionForSlug(store: Store, slug: string): Promise<SubmissionRecord | null> {
+  const published = (await store.listSubmissionsBySlug(slug)).filter((r) => r.publishedAt && !r.abandonedAt);
+  published.sort((a, b) => b.publishedAt!.localeCompare(a.publishedAt!));
+  return published[0] ?? null;
+}
+
 async function listCreatorPublishedGames(
   store: Store,
   gamesStore: GamesStore | null,
@@ -254,7 +289,8 @@ async function listCreatorPublishedGames(
   ownerUid: string,
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {
-  const records = await store.listSubmissionsByOwner(ownerUid, { limit: 100 });
+  const owned = await store.listSubmissionsByOwner(ownerUid, { limit: 100 });
+  const records = await reconcilePublishedOwnership(store, ownerUid, owned);
   // An improvement is a new job on an existing slug. When it publishes, both the
   // original and the revise tip carry `publishedAt`, so listing every published
   // record would put the same game on the profile twice. One card per slug —

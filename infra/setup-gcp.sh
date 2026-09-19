@@ -192,6 +192,81 @@ for ENTRY in $CG_INDEXES; do
   echo "    ${CG_GROUP}.${CG_FIELD} COLLECTION_GROUP index: creating (builds asynchronously)."
 done
 
+# Multi-field COLLECTION_GROUP queries need a composite index. Single-field overrides
+# above cannot satisfy `emailedAt == null` AND `createdAt >= …` ORDER BY createdAt —
+# that is the pending-email retry scan. `gcloud firestore indexes composite create`
+# is the right tool here (it rejects only *single-field* composites).
+# group:field:ORDER+field:ORDER
+CG_COMPOSITE_INDEXES="notifications:emailedAt:ASCENDING+createdAt:ASCENDING"
+for ENTRY in $CG_COMPOSITE_INDEXES; do
+  CG_GROUP="${ENTRY%%:*}"
+  CG_SPEC="${ENTRY#*:}"
+  INDEXES_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/${CG_GROUP}/indexes"
+  FIELDS_JSON="["
+  FIRST_FIELD=1
+  IFS='+' read -r -a CG_FIELD_ENTRIES <<< "$CG_SPEC"
+  for FIELD_ENTRY in "${CG_FIELD_ENTRIES[@]}"; do
+    CG_FIELD="${FIELD_ENTRY%%:*}"
+    CG_ORDER="${FIELD_ENTRY#*:}"
+    if [ "$FIRST_FIELD" -eq 0 ]; then
+      FIELDS_JSON="${FIELDS_JSON},"
+    fi
+    FIRST_FIELD=0
+    FIELDS_JSON="${FIELDS_JSON}{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"${CG_ORDER}\"}"
+  done
+  FIELDS_JSON="${FIELDS_JSON}]"
+  HTTP_CODE="$(curl -s -o /tmp/cg-composite-index.json -w '%{http_code}' -X POST "$INDEXES_URL" \
+    -H "Authorization: Bearer ${FIELD_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"queryScope\":\"COLLECTION_GROUP\",\"fields\":${FIELDS_JSON}}")"
+  if [ "$HTTP_CODE" = "409" ] || grep -q 'ALREADY_EXISTS' /tmp/cg-composite-index.json 2>/dev/null; then
+    echo "    ${CG_GROUP} composite ${CG_SPEC}: already present."
+  elif [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo "    ${CG_GROUP} composite ${CG_SPEC}: creating (builds asynchronously)."
+  else
+    echo "    ERROR: ${CG_GROUP} composite ${CG_SPEC} failed HTTP ${HTTP_CODE}" >&2
+    cat /tmp/cg-composite-index.json >&2 || true
+    exit 1
+  fi
+done
+
+# Two equality filters on a collection zigzag-merge single-field indexes unless a
+# COLLECTION composite exists. Insights flagged listOpenRoundsByOwner at 8.5 index
+# entries per result; listSubmissionsByOwnerAndSlug is the same shape.
+# group:field:ORDER+field:ORDER
+COLLECTION_COMPOSITE_INDEXES="submissions:openRound:ASCENDING+ownerUid:ASCENDING submissions:ownerUid:ASCENDING+slug:ASCENDING"
+for ENTRY in $COLLECTION_COMPOSITE_INDEXES; do
+  CG_GROUP="${ENTRY%%:*}"
+  CG_SPEC="${ENTRY#*:}"
+  INDEXES_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/collectionGroups/${CG_GROUP}/indexes"
+  FIELDS_JSON="["
+  FIRST_FIELD=1
+  IFS='+' read -r -a CG_FIELD_ENTRIES <<< "$CG_SPEC"
+  for FIELD_ENTRY in "${CG_FIELD_ENTRIES[@]}"; do
+    CG_FIELD="${FIELD_ENTRY%%:*}"
+    CG_ORDER="${FIELD_ENTRY#*:}"
+    if [ "$FIRST_FIELD" -eq 0 ]; then
+      FIELDS_JSON="${FIELDS_JSON},"
+    fi
+    FIRST_FIELD=0
+    FIELDS_JSON="${FIELDS_JSON}{\"fieldPath\":\"${CG_FIELD}\",\"order\":\"${CG_ORDER}\"}"
+  done
+  FIELDS_JSON="${FIELDS_JSON}]"
+  HTTP_CODE="$(curl -s -o /tmp/collection-composite-index.json -w '%{http_code}' -X POST "$INDEXES_URL" \
+    -H "Authorization: Bearer ${FIELD_ACCESS_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"queryScope\":\"COLLECTION\",\"fields\":${FIELDS_JSON}}")"
+  if [ "$HTTP_CODE" = "409" ] || grep -q 'ALREADY_EXISTS' /tmp/collection-composite-index.json 2>/dev/null; then
+    echo "    ${CG_GROUP} COLLECTION composite ${CG_SPEC}: already present."
+  elif [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo "    ${CG_GROUP} COLLECTION composite ${CG_SPEC}: creating (builds asynchronously)."
+  else
+    echo "    ERROR: ${CG_GROUP} COLLECTION composite ${CG_SPEC} failed HTTP ${HTTP_CODE}" >&2
+    cat /tmp/collection-composite-index.json >&2 || true
+    exit 1
+  fi
+done
+
 # Pre-assembled published games (apps/api/src/game-snapshot.ts). The bucket sits in
 # the Cloud Run region, not the Firestore one: it is read on the play path, and a
 # cross-region read would put the latency back that baking was meant to remove.
@@ -489,6 +564,54 @@ if gcloud secrets describe github-token --project="$PROJECT_ID" >/dev/null 2>&1;
   echo "    gate-runner may read secret github-token."
 else
   echo "    WARN: secret github-token missing — create it before gate runs can clone the harness."
+fi
+
+# The gate runs out of a prebuilt image (infra/gate-runner.Dockerfile) that deploy.yml
+# pushes here from the commit it deploys. A build step cannot pull an image its service
+# account may not read, and that failure mode is a gate that never starts rather than one
+# that fails a candidate — so this grant is load-bearing, not hygiene. Scoped to the one
+# repository, not project-wide reader.
+GATE_IMAGE_REPO="${GATE_IMAGE_REPO:-gamedev}"
+GATE_IMAGE_REGION="${GATE_IMAGE_REGION:-$APP_REGION}"
+# deploy.yml has to know this grant exists before it can safely set GATE_RUNNER_IMAGE —
+# naming the image to the service before gate-runner can pull it is the outage this whole
+# section exists to prevent (see that file). It cannot ask Artifact Registry directly:
+# `get-iam-policy` needs a permission the deployer SA is not granted (and granting it,
+# even read-only, is a second IAM surface to review for a check this narrow).
+#
+# The readiness proof is a Secret Manager secret, not a storage object — review caught
+# that the store bucket was the wrong place: gate-runner holds objectAdmin there on
+# everything except `*/manifest.json` (the BY-11 hardening above), and that identity
+# executes hostile candidate code, so a marker object there is forgeable by the very
+# thing the read-only fallback exists to protect against. A forged marker would tell a
+# deploy the grant holds when it does not, and every gate build after would fail pulling
+# an image it cannot read. Secret Manager access is narrow by convention in this script
+# (see github-token above) and gate-runner is granted nothing on this secret at all, so
+# it cannot read or write it — the deployer already holds project-wide
+# secretmanager.secretAccessor (setup-wif.sh) to read it with no new grant.
+GATE_IMAGE_READY_SECRET="gate-runner-image-ready"
+if gcloud secrets describe "$GATE_IMAGE_READY_SECRET" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  : # already exists; versions are added below either way
+else
+  echo -n 'not-granted' | gcloud secrets create "$GATE_IMAGE_READY_SECRET" \
+    --data-file=- --replication-policy=automatic --project="$PROJECT_ID" >/dev/null
+fi
+if gcloud artifacts repositories describe "$GATE_IMAGE_REPO" \
+  --location="$GATE_IMAGE_REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  grant_gate_with_retry gcloud artifacts repositories add-iam-policy-binding "$GATE_IMAGE_REPO" \
+    --location="$GATE_IMAGE_REGION" \
+    --project="$PROJECT_ID" \
+    --member="serviceAccount:${GATE_SA_EMAIL}" \
+    --role="roles/artifactregistry.reader"
+  echo "    gate-runner may pull the runner image from ${GATE_IMAGE_REGION}/${GATE_IMAGE_REPO}."
+  echo -n "granted $(date -u +%Y-%m-%dT%H:%M:%SZ)" | gcloud secrets versions add "$GATE_IMAGE_READY_SECRET" \
+    --data-file=- --project="$PROJECT_ID" >/dev/null
+else
+  echo "    WARN: Artifact Registry repo ${GATE_IMAGE_REPO} (${GATE_IMAGE_REGION}) missing — until it"
+  echo "          exists and a deploy has pushed gate-runner, the gate builds its own environment"
+  echo "          per run. That works; it just pays Cloud Build for setup on every candidate."
+  echo -n 'not-granted' | gcloud secrets versions add "$GATE_IMAGE_READY_SECRET" \
+    --data-file=- --project="$PROJECT_ID" >/dev/null
 fi
 
 # The runtime starts the gate itself when a game is delivered (gate-trigger.ts). Without

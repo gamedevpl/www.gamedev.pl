@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
+import { currentOwnerUid } from '../platform/game-access-resolve.js';
 import { runShelfRebuildPass } from '../platform/shelf-rebuild-pass.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
-import { createSweepCadence } from '../platform/sweep-cadence.js';
+import { createSweepCadence, RECHECK_HOURLY_MS } from '../platform/sweep-cadence.js';
 import { isSweepActive } from '../platform/sweep-scope.js';
 import { lastRoundActivityAt, quietRoundDays, shouldAutoAbandonQuietRound } from '../platform/quiet-round.js';
 import { closeJob, type CloseJobDeps } from '../creation/close-job.js';
@@ -16,6 +17,7 @@ import type { PublicationRecord } from '../delivery/games-store.js';
 import type { SubmissionStatus, SubmissionStatusResponse } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
+import { retryPendingNotificationEmails } from './notification-email-retry.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { uncollectedFeedbackCause, type UncollectedFeedbackCause } from './uncollected-feedback.js';
 
@@ -68,7 +70,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
   } = deps;
 
   const cadence = createSweepCadence();
-
+  let skipFalseInboxAt = 0;
   // An alert id is stable, so a remembered hit is final.
   const alertsAlreadyEmitted = new Set<string>();
   const MAX_REMEMBERED_ALERTS = 2_000;
@@ -76,7 +78,6 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     if (alertsAlreadyEmitted.size >= MAX_REMEMBERED_ALERTS) alertsAlreadyEmitted.clear();
     alertsAlreadyEmitted.add(id);
   }
-
   // Scanning games every two minutes was most of the day's reads.
   const publicationsTtlMs = 10 * 60_000;
   let publicationsCache: { expiresAt: number; value: PublicationRecord[] } | null = null;
@@ -87,12 +88,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     publicationsCache = { expiresAt: now() + publicationsTtlMs, value };
     return value;
   }
-
-  // Closed-tab backstop: Cloud Scheduler POSTs an OIDC token here.
-
-  // Reuses the status poll derivation and its idempotent emit.
-
-  // OIDC authenticates the caller; the hourly ceiling only guards runaways.
+  // Closed-tab backstop: Scheduler OIDC POST; hourly limit guards runaways.
   app.post(
     '/api/internal/notify-sweep',
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
@@ -154,8 +150,8 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       }
 
       const active = openRounds.filter((record) => isSweepActive(record) && !closedIds.has(record.jobId));
-      let emitted = 0;
-      let deferred = 0;
+      let emitted = 0,
+        deferred = 0;
       const stalledIssues: number[] = [];
       const stalledCauses: Record<string, UncollectedFeedbackCause> = {};
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
@@ -184,8 +180,12 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             continue;
           }
 
-          // A dispatched request nobody ever collects errors nowhere; ageing makes it visible.
-          const pending = await store.listPendingCreatorMessages(record.jobId);
+          // Uncollected inbox rows age into an operator stall alert.
+          if (skipFalseInboxAt === 0) skipFalseInboxAt = now() + RECHECK_HOURLY_MS;
+          const pending =
+            record.pendingCreatorMessage === false && cadence.known(record.jobId) && now() >= skipFalseInboxAt
+              ? []
+              : await store.listPendingCreatorMessages(record.jobId, { stampEmpty: true });
           const oldest = pending[0];
           if (oldest) {
             pendingFeedback.set(record.jobId, oldest.createdAt);
@@ -281,9 +281,11 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
 
             // Notified-at is written after both emits, so failures retry next sweep.
             const submission = manifest ? await store.getSubmission(manifest.jobId) : null;
-            if (submission) {
+            // The game's owner now, not whoever's job last published it.
+            const healthUid = await currentOwnerUid(store, publication.slug, submission?.ownerUid);
+            if (submission && healthUid) {
               await emitSubmissionNotification(buildNotifyDeps(), {
-                uid: submission.ownerUid,
+                uid: healthUid,
                 type: 'submission.game_health',
                 jobId: submission.jobId,
                 gameTitle: submission.title,
@@ -298,7 +300,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
                   kind: 'game_unhealthy',
                   jobId: manifest?.jobId ?? 0,
                   title: submission?.title ?? publication.slug,
-                  ownerUid: submission?.ownerUid ?? '',
+                  ownerUid: healthUid ?? '',
                   slug: publication.slug,
                   since: health.ranAt,
                 },
@@ -315,9 +317,13 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           }
         }
       }
-
-      // Bounded floor under the shelf write-through; failures are counted, never thrown.
       const shelfRebuild = await runShelfRebuildPass({ store, now });
+      const emailRetry = await retryPendingNotificationEmails(buildNotifyDeps(), { nowMs: now() })
+        .then((result) => ({ ...result, error: result.failed > 0 && result.sent === 0 }))
+        .catch((retryError) => {
+          request.log.error({ err: retryError }, 'notification email retry sweep failed');
+          return { scanned: 0, retried: 0, sent: 0, skipped: 0, failed: 0, unconfigured: false, error: true };
+        });
 
       // Error level so a job nobody watches cannot fail quietly for weeks.
       const sweepLog =
@@ -336,6 +342,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           stalledCauses,
           healthResolved,
           unhealthy,
+          emailRetry,
           shelvesRebuilt: shelfRebuild.rebuilt,
           shelvesFailed: shelfRebuild.failed,
           ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),
@@ -344,7 +351,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           ? 'creator feedback undelivered past the stall threshold — no agent has collected it'
           : 'notify sweep complete',
       );
-      return reply.send({
+      return reply.status(emailRetry.error ? 500 : 200).send({
         scanned: active.length,
         deferred,
         closed,
@@ -356,6 +363,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         stalledCauses,
         healthResolved,
         unhealthy,
+        emailRetry,
         shelvesRebuilt: shelfRebuild.rebuilt,
         shelvesFailed: shelfRebuild.failed,
         ...(shelfRebuild.unlisted ? { shelvesUnlisted: true } : {}),

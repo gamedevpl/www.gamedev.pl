@@ -16,10 +16,9 @@
 // is the owner", including the answer `platform`, which is the majority of the catalog
 // and the case the proposal queue exists to serve.
 
-import { gameAccessAuthoritative } from '../platform/game-access-cutover.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { creatorOwnsSlug } from '../platform/slug-ownership.js';
-import { BOT_UID_PREFIX, DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * Who reviews changes to a game.
@@ -40,28 +39,8 @@ export type OwnerOfRecord =
  * everywhere else. Two authorities disagreeing about who owns a game is precisely the bug
  * that would let a proposal be accepted by someone who cannot publish it.
  */
-export async function resolveOwnerOfRecord(
-  store: Store,
-  slug: string,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<OwnerOfRecord> {
-  if (gameAccessAuthoritative(env)) {
-    return (await resolveGameAccess(store, slug)).owner;
-  }
-  const records = await store.listSubmissionsBySlug(slug);
-  const newestLive = records.find((record) => !record.abandonedAt);
-  if (!newestLive) {
-    // No job at all, or every job abandoned: a repo-lane catalog game, or a store game
-    // whose rounds were all walked away from. Either way nobody is waiting to be asked.
-    return { kind: 'platform', reason: 'no_owner' };
-  }
-  if (newestLive.ownerUid === DELETED_ACCOUNT_UID) {
-    return { kind: 'platform', reason: 'owner_deleted' };
-  }
-  if (newestLive.ownerUid.startsWith(BOT_UID_PREFIX)) {
-    return { kind: 'platform', reason: 'bot_owned' };
-  }
-  return { kind: 'creator', uid: newestLive.ownerUid };
+export async function resolveOwnerOfRecord(store: Store, slug: string): Promise<OwnerOfRecord> {
+  return (await resolveGameAccess(store, slug)).owner;
 }
 
 /** The uid a proposal's `targetOwnerUid` is denormalised to. `null` means platform. */
@@ -82,11 +61,6 @@ export function reviewerKindOf(owner: OwnerOfRecord): 'platform' | 'creator' {
  * one boolean — which is how a non-admin creator ends up able to decide a platform
  * proposal because the check was reused somewhere it did not belong.
  */
-export async function canReviewSlug(
-  store: Store,
-  slug: string,
-  uid: string,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<boolean> {
-  return creatorOwnsSlug(store, slug, uid, env);
+export async function canReviewSlug(store: Store, slug: string, uid: string): Promise<boolean> {
+  return creatorOwnsSlug(store, slug, uid);
 }

@@ -119,8 +119,8 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    expect(navigations).toEqual([]);
-    expect(window.location.pathname).toBe('/');
+    expect(navigations).toEqual(['/play/sky-dodge']);
+    expect(window.location.pathname).toBe('/play/sky-dodge');
     window.removeEventListener(NAVIGATE_EVENT, onNavigate);
 
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
@@ -132,9 +132,15 @@ describe('catalog playback', () => {
     expect(srcdoc).toContain('<canvas>sky</canvas>');
     expect(srcdoc).toContain('gdpl-player');
 
+    const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
+    expect(exit).not.toBeNull();
     await act(async () => {
-      root.unmount();
+      exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
     });
+    expect(window.location.pathname).toBe('/');
+
+    await act(async () => root.unmount());
   });
 
   it('re-fetches catalog when navigating back to home route', async () => {
@@ -199,9 +205,7 @@ describe('catalog playback', () => {
 
     expect(catalogCalls).toBe(initialCalls + 1);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('auto-opens the theater for a direct /play path once the catalog is ready', async () => {
@@ -266,9 +270,7 @@ describe('catalog playback', () => {
     expect(fetched.some((url) => url.includes('/api/catalog'))).toBe(true);
     expect(fetched.some((url) => url.endsWith('/api/games/football-3d-lite'))).toBe(true);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('keeps the full-page mascot on direct play links until the theater opens', async () => {
@@ -351,9 +353,7 @@ describe('catalog playback', () => {
     expect(container.querySelector('.game-theater-bar')).not.toBeNull();
     expect(container.querySelector('iframe[title="Airtime"]')).not.toBeNull();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('opens the theater from a canonical game page and auto-starts its carried Remix request', async () => {
@@ -484,8 +484,6 @@ describe('catalog playback', () => {
     await flushEffects();
     expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {}, locale: 'en' }]);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 });

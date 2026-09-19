@@ -43,4 +43,23 @@ describe('CatalogEntry', () => {
     const touch: CatalogEntry['touch'] = null;
     expect(touch).toBeNull();
   });
+
+  it('accepts optional bake-time effort in 0..1', () => {
+    const entry: CatalogEntry = {
+      slug: 'rich-game',
+      title: 'Rich Game',
+      genre: 'arcade',
+      controls: 'keys',
+      status: 'published',
+      media: null,
+      multiplayer: null,
+      saves: null,
+      world: null,
+      sensing: null,
+      orientation: 'any',
+      submittedBy: null,
+      effort: 0.81,
+    };
+    expect(entry.effort).toBe(0.81);
+  });
 });

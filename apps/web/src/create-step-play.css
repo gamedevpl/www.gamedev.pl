@@ -1,0 +1,234 @@
+/* Poke-the-pipeline: spark pass, combo win. */
+
+button.create-step-scene {
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(45, 212, 191, 0.15);
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+button.create-step-scene:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+button.create-step-scene:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 212, 191, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 228, 172, 0.18);
+}
+
+button.create-step-scene:hover .mascot {
+  filter: drop-shadow(0 2px 6px rgba(0, 228, 172, 0.3)) brightness(1.06);
+}
+
+button.create-step-scene:active {
+  transform: translateY(0) scale(0.96);
+}
+
+button.create-step-scene .mascot {
+  transition:
+    transform 0.2s ease,
+    filter 0.2s ease;
+}
+
+.create-step-spark {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  z-index: 2;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--turquoise);
+  box-shadow: 0 0 8px var(--turquoise-glow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.create-step-scene.is-throwing .create-step-spark {
+  animation: create-spark-throw 0.28s ease-in;
+}
+
+.create-step-scene.is-catching .create-step-spark {
+  animation: create-spark-catch 0.28s ease-out;
+}
+
+.create-step-scene.is-catching .mascot {
+  animation: create-mascot-catch 0.4s ease;
+}
+
+.create-step-scene.is-miss .mascot {
+  animation: create-mascot-miss 0.45s ease;
+}
+
+.create-step-scene.is-catching,
+.create-step-scene.is-throwing {
+  border-color: var(--turquoise);
+  box-shadow: 0 0 16px rgba(0, 228, 172, 0.35);
+}
+
+.create-step-scene.is-miss {
+  border-color: rgba(248, 113, 113, 0.55);
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.2);
+}
+
+.create-steps-list.is-won .create-step-scene {
+  border-color: var(--turquoise);
+  box-shadow:
+    0 0 0 2px var(--turquoise),
+    0 0 16px var(--turquoise-glow);
+}
+
+.create-step-body {
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.create-step-index {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.create-step .create-step-n,
+.create-step .create-step-title,
+.create-step .create-step-card,
+.create-step .create-step-index::after {
+  transition:
+    background 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.create-step-index:hover .create-step-n,
+.create-step:has(.create-step-scene:hover) .create-step-n,
+.create-step:has(.create-step-scene:focus-visible) .create-step-n {
+  border-color: var(--turquoise);
+  box-shadow: 0 0 10px rgba(0, 228, 172, 0.25);
+}
+
+.create-step.is-catching .create-step-n,
+.create-steps-list.is-won .create-step-n {
+  background: rgba(0, 228, 172, 0.16);
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  box-shadow: 0 0 8px rgba(0, 228, 172, 0.25);
+}
+
+.create-step.is-throwing .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.35);
+}
+
+.create-step.is-catching .create-step-index::after,
+.create-step.is-throwing .create-step-index::after,
+.create-steps-list.is-won .create-step .create-step-index::after {
+  background: var(--turquoise);
+  box-shadow: 0 0 8px var(--turquoise-glow);
+}
+
+.create-step.is-miss .create-step-n {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: #f87171;
+  color: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.2);
+}
+
+.create-step.is-miss .create-step-index::after {
+  background: linear-gradient(#f87171, rgba(248, 113, 113, 0.12));
+}
+
+.create-steps-list:not(.is-won)[data-combo-next='1'] .create-step:nth-child(2) .create-step-n,
+.create-steps-list:not(.is-won)[data-combo-next='2'] .create-step:nth-child(3) .create-step-n,
+.create-steps-list:not(.is-won)[data-combo-next='3'] .create-step:nth-child(4) .create-step-n {
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.22);
+}
+
+.create-step-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes create-spark-throw {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 18px);
+  }
+}
+
+@keyframes create-spark-catch {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -14px);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes create-mascot-catch {
+  0% {
+    transform: translateY(-5px) scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes create-mascot-miss {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.create-step-scene,
+  button.create-step-scene:hover,
+  button.create-step-scene:active,
+  button.create-step-scene .mascot,
+  .create-step-spark,
+  .create-step-scene.is-catching .mascot,
+  .create-step-scene.is-miss .mascot,
+  button.create-step-scene:active .mascot,
+  .create-step .create-step-n,
+  .create-step .create-step-title,
+  .create-step .create-step-card,
+  .create-step .create-step-index::after {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

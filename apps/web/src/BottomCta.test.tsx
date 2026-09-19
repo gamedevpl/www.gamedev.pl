@@ -14,36 +14,36 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
-  if (!Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')) {
-    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: () => {}, writable: true });
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
   }
 });
 
 afterEach(() => {
   act(() => root?.unmount());
-  root = null;
   container.remove();
 });
 
 describe('BottomCta', () => {
   it('scrolls the composer into view when the action is pressed', () => {
-    const composer = document.createElement('div');
-    composer.id = 'hero-prompt';
+    const [focusSpy, scrollIntoView] = [vi.fn(), vi.fn()];
+    const composer = Object.assign(document.createElement('div'), { id: 'hero-prompt', scrollIntoView });
+    composer.appendChild(
+      Object.assign(document.createElement('textarea'), { className: 'big-prompt-input', focus: focusSpy }),
+    );
     document.body.appendChild(composer);
-    const scrollIntoView = vi.fn();
-    composer.scrollIntoView = scrollIntoView;
 
     root = createRoot(container);
     act(() => {
       root!.render(createElement(BottomCta));
     });
 
-    expect(container.textContent).toContain('Have your own idea?');
+    expect(container.textContent).toContain('Have your own game idea?');
     act(() => {
       container.querySelector<HTMLButtonElement>('.bottom-cta-action')!.click();
     });
     expect(scrollIntoView).toHaveBeenCalled();
-
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     composer.remove();
   });
 

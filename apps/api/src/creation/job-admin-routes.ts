@@ -11,7 +11,8 @@ import {
 } from './job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublishableMode } from '../platform/publication-state.js';
-import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from '../platform/store.js';
+import { resolveGameAccess, sameOwner } from '../platform/game-access-resolve.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
 import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
 
@@ -184,10 +185,11 @@ export async function registerJobAdminRoutes(
         return reply.code(409).send({ error: 'nothing_delivered' });
       }
 
-      // Platform/bot-authored jobs may publish without a human profile. Creator-owned
-      // jobs cannot — catalog attribution has nowhere to point otherwise.
-      if (!record.ownerUid.startsWith(BOT_UID_PREFIX)) {
-        const owner = await store.getUser(record.ownerUid);
+      // Creator-owned games need a publishable profile: the canonical owner's.
+      const initialAccess = await resolveGameAccess(store, record.slug);
+      const publishOwner = initialAccess.owner;
+      if (publishOwner.kind === 'creator') {
+        const owner = await store.getUser(publishOwner.uid);
         if (!hasPublishableProfile(owner)) {
           return reply.code(409).send({ error: 'profile_required' });
         }
@@ -208,11 +210,16 @@ export async function registerJobAdminRoutes(
 
       const clearance = await resolveEditorialPublish({
         editorialClearance: options.editorialClearance,
-        ownerUid: record.ownerUid,
+        ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
         slug: record.slug,
         body: request.body,
       });
       if ('status' in clearance) return reply.code(clearance.status).send(clearance.body);
+
+      const latest = await resolveGameAccess(store, record.slug);
+      const stale =
+        latest.accessRevision !== initialAccess.accessRevision || !sameOwner(latest.owner, initialAccess.owner);
+      if (stale) return reply.code(409).send({ error: 'owner_changed' });
 
       const at = new Date(now()).toISOString();
       // Through `publishing` rather than straight to `published`: the intermediate state is
@@ -259,7 +266,8 @@ export async function registerJobAdminRoutes(
             slug: record.slug,
             version: record.deliveredVersion,
             gameTitle: record.title,
-            ownerUid: record.ownerUid,
+            // Skipped as "already knows": that is the owner now, not the old row's.
+            ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
           });
         } catch (error) {
           request.log.error({ err: error, slug: record.slug }, 'follower notification fan-out failed after publish');

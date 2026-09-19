@@ -9,6 +9,7 @@ export type CliExitCode =
 
 export class CliError extends Error {
   apiCode?: string;
+  httpStatus?: number;
   constructor(
     message: string,
     readonly exitCode: CliExitCode,

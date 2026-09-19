@@ -89,9 +89,12 @@ function kitTarball(files: Record<string, string>): Buffer {
 }
 
 /** A games store and an object store sharing one fake bucket, with a kit published. */
-function storesWithKit(kitDts: string): { games: GamesStore; objectStore: GcsObjectStore } {
+function storesWithKit(
+  kitDts: string,
+  extra: Record<string, string> = {},
+): { games: GamesStore; objectStore: GcsObjectStore } {
   const { impl, objects } = stubGcs();
-  const tarball = kitTarball({ 'shared/game-kit.d.ts': kitDts });
+  const tarball = kitTarball({ 'shared/game-kit.d.ts': kitDts, ...extra });
   objects.set(
     'kits/current.json',
     Buffer.from(JSON.stringify({ current: ENGINE_REF, previous: null, updatedAt: '2026-08-10T00:00:00.000Z' })),
@@ -354,6 +357,56 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const listed = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(listed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
       }));
+
+    it('refuses to open a manual round once canonical ownership moved mid-request', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const at = '2026-01-01T00:00:00.000Z';
+        await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
+
+        const originalBegin = store.beginCheckoutRecovery.bind(store);
+        vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
+          // Ownership moves between the route's own ownership check and this lease.
+          await store.recordSettledOwner('sky-dodge', 'g:other', 999, at, at);
+          return originalBegin(...args);
+        });
+
+        const res = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(res.statusCode).toBe(409);
+        // No stray round was opened for the now-stale caller.
+        expect(await store.listSubmissionsBySlug('sky-dodge')).toHaveLength(1);
+      }));
+
+    it('lets the recipient open the first manual round after a transfer', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const at = '2026-01-01T00:00:00.000Z';
+        await store.upsertUser({ uid: 'g:recipient' });
+        await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
+        await store.createGameTransferInvitation('sky-dodge', 'g:creator', 'g:recipient', 1, at);
+        await store.acceptGameTransferInvitation(
+          'sky-dodge',
+          'g:recipient',
+          at,
+          (await store.getActiveGameTransfer('sky-dodge', at))!.invitationId,
+        );
+
+        const res = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:recipient'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().roundOpened).toEqual(expect.any(Number));
+        const opened = await store.getSubmission(res.json().roundOpened);
+        expect(opened?.ownerUid).toBe('g:recipient');
+      }));
   });
 
   describe('POST /api/me/studio/games/:slug/sources/stage/delete', () => {
@@ -601,6 +654,32 @@ describe('the Code surface routes (creator-code.ts)', () => {
         { objectStore, games: withKitGames },
       );
     });
+
+    it('accepts EDITOR.ts that imports defineEditor from the kit', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
+        'shared/editor-def.ts': 'export function defineEditor(value: number) { return value; }\n',
+      });
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/typecheck',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: {
+              overlay: [
+                {
+                  path: 'EDITOR.ts',
+                  content: `import { defineEditor } from '../../shared/editor-def.ts';\nexport default defineEditor(1);\n`,
+                },
+              ],
+            },
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toEqual({ ok: true });
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
   });
 
   describe('POST /api/me/studio/games/:slug/sources/preview', () => {
@@ -775,8 +854,32 @@ describe('the Code surface routes (creator-code.ts)', () => {
           expect(res.json()).toEqual({
             engineRef: ENGINE_REF,
             declaration: 'declare const GameKit: { boot(): void };',
+            files: {},
           });
           expect(res.headers.etag).toBe(`"${ENGINE_REF}"`);
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
+
+    it('includes editor-def so Studio can resolve EDITOR.ts imports', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
+        'shared/editor-def.ts': 'export function defineEditor() {}\n',
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+      });
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'GET',
+            url: '/api/me/studio/games/sky-dodge/sources/kit-declaration',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toEqual({
+            engineRef: ENGINE_REF,
+            declaration: 'declare const GameKit: { boot(): void };',
+            files: { 'shared/editor-def.ts': 'export function defineEditor() {}\n' },
+          });
         },
         { objectStore, games: withKitGames },
       );
@@ -1342,10 +1445,15 @@ describe('the Code surface routes (creator-code.ts)', () => {
         ],
       });
 
-      const delivered: Array<{ files: SourceFile[]; mode: string; summary?: string }> = [];
+      const delivered: Array<{ files: SourceFile[]; mode: string; summary?: string; actorUid?: string }> = [];
       const stubSourceDelivery: SourceDeliveryService = {
         deliver: async (input) => {
-          delivered.push({ files: input.files, mode: input.mode, summary: input.summary });
+          delivered.push({
+            files: input.files,
+            mode: input.mode,
+            summary: input.summary,
+            actorUid: input.actorUid,
+          });
           return { accepted: true, slug: input.slug, version: 'v-reverted', mode: input.mode, gateStarted: true };
         },
       };
@@ -1369,7 +1477,62 @@ describe('the Code surface routes (creator-code.ts)', () => {
           expect(delivered[0]?.files.map((f) => f.path)).toContain('game.ts');
           expect(delivered[0]).toMatchObject({
             summary: `Reverted to build ${version}`,
+            actorUid: 'g:creator',
           });
+        },
+        { sourceDelivery: stubSourceDelivery },
+      );
+    });
+
+    it('refuses an editor revert that asks to publish', async () => {
+      const at = '2026-09-16T10:00:00.000Z';
+      await store.upsertUser({ uid: 'g:bea' });
+      await store.ensureGameAccess('sky-dodge', 'g:creator', at, at);
+      const code = (await store.ensureRecipientCode('g:bea', at))!;
+      await store.createEditorInvitation('sky-dodge', 'g:creator', 'g:bea', at, code);
+      await store.acceptEditorInvitation(
+        'sky-dodge',
+        'g:bea',
+        at,
+        (await store.getEditorInvite('sky-dodge', 'g:bea', at))!.inviteId,
+      );
+
+      const { version } = await games.putCandidateSources({
+        slug: 'sky-dodge',
+        jobId: 10,
+        mode: 'preview',
+        files: [
+          { path: 'SPEC.md', content: '# Sky Dodge' },
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({
+              engine: { modules: [] },
+              howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+            }),
+          },
+          { path: 'game.ts', content: 'export function run() {}' },
+        ],
+      });
+
+      let delivered = 0;
+      const stubSourceDelivery: SourceDeliveryService = {
+        deliver: async (input) => {
+          delivered += 1;
+          return { accepted: true, slug: input.slug, version: 'v-reverted', mode: input.mode, gateStarted: true };
+        },
+      };
+
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/revert',
+            headers: { ...authHeaders('g:bea'), 'content-type': 'application/json' },
+            payload: { targetVersion: version, mode: 'publish', attestation: true },
+          });
+          expect(res.statusCode).toBe(403);
+          expect(res.json()).toMatchObject({ error: 'not_owner' });
+          expect(delivered).toBe(0);
         },
         { sourceDelivery: stubSourceDelivery },
       );

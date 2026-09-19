@@ -26,6 +26,8 @@ round is, and which mistakes cost a whole build.
 
 ## Getting into a round
 
+- **Listing your games:** `list_account_games` returns every game on your account with its
+  slug, title, published status, and whether an active build round is open (`hasActiveRound`).
 - **New game:** `create_game` first. `start` needs a slug and a new game has none.
 - **Existing game with a round already open:** `start` directly.
 - **Existing game with no open round:** `start` is refused — nothing exists for it to bind
@@ -46,9 +48,26 @@ round is, and which mistakes cost a whole build.
 Everything else is in the workflow `start` hands you. These are the ones agents get wrong
 often enough to name up front:
 
-1. **Screenshot as soon as the game draws.** `screenshot_upload_url` then
-   `curl --upload-file <png> "$url"` early, not at the end. There is no base64
-   screenshot tool — PNG bytes must never enter the model.
+1. **Screenshot as soon as the game draws — or skip, if you have no browser.**
+   Without a shell or browser (ChatGPT): skip mid-build screenshots. Deliver
+   `mode=preview` then `end`. On a later/resumed run call `get_gate_verdict`
+   once (`start` does not surface `preview_passed`); if a preview verdict is
+   already available, then `get_gate_media` — that is the happy path; the gate
+   captures with WebGL flags. With a shell: launch headless Chromium with
+   `--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
+--enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`; Chrome ≥150
+   may need `--use-angle=swiftshader`). Capture `canvas.toDataURL('image/png')`
+   inside the same render callback (after compositing the default buffer is gone;
+   `preserveDrawingBuffer:true` only in a disposable capture harness, never in
+   shipped game source) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a data
+   URL to disk in-process (`fs.writeFileSync('shot.png',
+Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
+   data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and
+   `curl --upload-file shot.png "$url"`. A black/blank
+   frame means those WebGL flags were missing or the drawing buffer was already
+   discarded. If SwiftShader is unavailable, `GAME_CAPTURE_GFX=canvas2d` or
+   `?gfx=canvas2d` (force2d). There is no base64 screenshot tool — PNG bytes must
+   never enter the model.
 2. **Stage, don't re-upload.** `stage_source_file` for new or fully rewritten paths;
    `patch_source_file` for edits. Then `submit_sources({ fromStaged: true, … })`, which
    overlays onto the latest delivery — so only changed paths need staging. Never re-emit a

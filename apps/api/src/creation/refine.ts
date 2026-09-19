@@ -76,14 +76,10 @@ export interface VertexSpecRefinerOptions {
   groundingClient?: GenAIClient;
 }
 
-// Moderation's 5s is right for a one-token verdict; refinement has to author up to
-// four questions with labelled options *and* per-option detail text, in the
-// creator's language. Prod logs (2026-07-24 21:56Z and 23:05Z) show both real
-// attempts after the model fix aborting on the old 5s budget, so the panel has
-// never rendered a question. Env-tunable so the ceiling can move without a deploy.
-export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
+// Refinement authors questions with options in creator's language; env-tunable.
+export const DEFAULT_REFINE_TIMEOUT_MS = 35_000;
 
-export const DEFAULT_GROUNDING_TIMEOUT_MS = 6_000;
+export const DEFAULT_GROUNDING_TIMEOUT_MS = 8_000;
 
 /**
  * How long an answered spec stays free to re-ask, and how many are held. Short

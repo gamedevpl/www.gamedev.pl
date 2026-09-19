@@ -12,6 +12,25 @@ export class ProjectTooLargeError extends Error {}
 export class EmptyProjectError extends Error {}
 export class CredentialLeakError extends Error {}
 
+// One shape for every lane: a field added here cannot be forgotten.
+export interface AssemblableSources {
+  indexHtml: string;
+  gameJs: string;
+  styleCss: string;
+  hiddenFields?: readonly string[];
+}
+
+export function projectFromSources(sources: AssemblableSources, title: string): GameProject {
+  return {
+    title,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+    hiddenFields: sources.hiddenFields,
+  };
+}
+
 export interface AssembleOptions {
   /**
    * Inject a strict Content-Security-Policy meta so the game cannot reach the
@@ -67,6 +86,8 @@ export function assembleGameHtml(project: GameProject, options: AssembleOptions 
     throw new CredentialLeakError('generated project contains credential-like strings');
   }
 
+  const hiddenFieldsJs = agentHiddenFieldsJs(project.hiddenFields);
+
   const cspMeta = options.restrictNetwork
     ? `\n    <meta http-equiv="Content-Security-Policy" content="${RESTRICTIVE_CSP}" />`
     : '';
@@ -82,9 +103,24 @@ ${AI_PROVENANCE_META}
   </head>
   <body>
 ${project.html}
-    <script>${project.js}</script>
+    <script>${hiddenFieldsJs}${project.js}</script>
   </body>
 </html>`;
+}
+
+// Escape `<` rather than drop the name: dropping leaves it unredacted.
+function scriptSafeJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+function agentHiddenFieldsJs(hiddenFields: readonly string[] | undefined): string {
+  if (!hiddenFields || hiddenFields.length === 0) return '';
+  const names = hiddenFields.filter((field) => typeof field === 'string' && field.length > 0);
+  if (names.length === 0) return '';
+  return `window.__GAME_AGENT_HIDDEN__=Object.freeze(${scriptSafeJson(names)});`;
 }
 
 function escapeHtml(value: string): string {

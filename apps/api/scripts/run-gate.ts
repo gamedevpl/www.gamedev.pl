@@ -37,6 +37,7 @@
 
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createGatePhaseTimer } from '../src/delivery/gate-phase-timer.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { GameProject } from '@gamedevpl/contract';
@@ -45,7 +46,7 @@ import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
 import { withRemoteVerdicts } from '../src/delivery/gate-verdict-client.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
-import { assembleGameHtml } from '../src/platform/assemble.js';
+import { assembleGameHtml, projectFromSources } from '../src/platform/assemble.js';
 
 // Not the repo's dist/ build — assembleGameHtml applies our serve-time policy.
 async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
@@ -53,13 +54,7 @@ async function assembleFromHarness(harness: string, slug: string): Promise<strin
   const sources = await client.getGameSources('main', slug);
   if (!sources) return null;
 
-  const project: GameProject = {
-    title: sources.title ?? slug,
-    description: '',
-    html: sources.indexHtml,
-    js: sources.gameJs,
-    css: sources.styleCss,
-  };
+  const project: GameProject = projectFromSources(sources, sources.title ?? slug);
   // Self-contained by repo policy, same as the bake and play route.
   return assembleGameHtml(project, { restrictNetwork: true });
 }
@@ -80,10 +75,10 @@ function run(
   command: string,
   args: string[],
   cwd: string,
-  options?: { onChunk?: (text: string) => void },
+  options?: { onChunk?: (text: string) => void; env?: NodeJS.ProcessEnv },
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: process.env });
+    const child = spawn(command, args, { cwd, env: options?.env ?? process.env });
     let output = '';
     const capture = (chunk: Buffer) => {
       const text = chunk.toString();
@@ -153,6 +148,8 @@ async function main(): Promise<void> {
     }
   };
 
+  const phases = createGatePhaseTimer();
+
   const outcome = await runGate(
     slug,
     version,
@@ -170,7 +167,9 @@ async function main(): Promise<void> {
         const url = `https://x-access-token:${token}@github.com/${repo}.git`;
         // Shallow and single-branch: the gate needs the tree at one ref, and the history
         // it would otherwise pull is ~200 MB of capture media it will never read.
-        const clone = await run('git', ['clone', '--depth', '1', '--branch', engineRef, url, dir], process.cwd());
+        const clone = await phases.time('harnessClone', () =>
+          run('git', ['clone', '--depth', '1', '--branch', engineRef, url, dir], process.cwd()),
+        );
         if (clone.code !== 0) throw new Error(`could not fetch harness at ${engineRef}`);
         // Drop the PAT from the remote before any agent-authored tree runs: check:game
         // executes under this harness, and `.git/config` would otherwise hand the token
@@ -178,7 +177,13 @@ async function main(): Promise<void> {
         const scrub = await run('git', ['remote', 'set-url', 'origin', `https://github.com/${repo}.git`], dir);
         if (scrub.code !== 0) throw new Error('could not scrub harness git credentials');
         await writeProgress('installing');
-        const install = await run('npm', ['ci', '--no-audit', '--no-fund'], dir);
+        // Scrubbed for this spawn: npm's own install scripts inherit it too (BY-11).
+        const harnessEnv = { ...process.env };
+        delete harnessEnv.GAMES_REPO_TOKEN;
+        delete harnessEnv.GITHUB_TOKEN;
+        const install = await phases.time('harnessInstall', () =>
+          run('npm', ['ci', '--no-audit', '--no-fund'], dir, { env: harnessEnv }),
+        );
         if (install.code !== 0) throw new Error('harness install failed');
         // Same reason for the process env: spawn inherits it, and check:game must not.
         delete process.env.GAMES_REPO_TOKEN;
@@ -232,6 +237,8 @@ async function main(): Promise<void> {
     `\n${health ? 'health check' : preview ? 'preview check' : proposal ? 'proposal gate' : 'gate'} ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} ` +
       `in ${Math.round(outcome.durationMs / 1000)}s`,
   );
+  // Read off the Cloud Build log before optimising further.
+  console.log(`phases: ${phases.summary(outcome.durationMs)}`);
   if (outcome.artifacts.length) console.log(`stored: ${outcome.artifacts.join(', ')}`);
   if (!outcome.green) console.error(outcome.report);
 

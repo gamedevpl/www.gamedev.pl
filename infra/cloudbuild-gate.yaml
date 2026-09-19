@@ -30,6 +30,18 @@
 # image to build and keep patched. If gate volume ever makes per-run install time matter,
 # the answer is a prebuilt image — not a different runner.
 #
+# Per-run install time did come to matter, and that image now exists:
+# `infra/gate-runner.Dockerfile`, pushed by `deploy.yml` and named to the service as
+# GATE_RUNNER_IMAGE. Production deliveries take it, and the four setup phases below —
+# clone, apt, `npm ci`, `build:packages` — are already in it.
+#
+# This file deliberately stays the from-scratch version. It is the hand-runnable path,
+# where the point is usually to check a candidate against a working copy rather than
+# against what is deployed, and it is the shape `gate-trigger.ts` falls back to when no
+# image is configured. So the two are no longer step-for-step identical, and that is the
+# one intended divergence: everything else — machine type, timeout, disk, service
+# account, secret bindings, what is data and what is CONFIG — must still match.
+#
 # Invoked with the slug and version of the candidate to check:
 #
 #   gcloud builds submit --no-source --config infra/cloudbuild-gate.yaml \

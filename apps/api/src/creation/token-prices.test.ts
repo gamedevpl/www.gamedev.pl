@@ -51,6 +51,24 @@ describe('priceTokens', () => {
     expect(priced?.usd).toBeGreaterThanOrEqual(0);
   });
 
+  it('prices cached input at its own rate, and calls that exact', () => {
+    // The gemini shape reports cache reads separately.
+    const priced = priceTokens({
+      vendor: 'gemini',
+      model: 'gemini-3.8-flash',
+      input: 1_000_000,
+      output: 0,
+      total: 1_000_000,
+      thought: 0,
+      cached: 800_000,
+      toolUse: 0,
+    });
+
+    // 200k fresh at $1.50 plus 800k cached at $0.15.
+    expect(priced?.usd).toBeCloseTo(0.3 + 0.12, 10);
+    expect(priced?.pricedExactly).toBe(true);
+  });
+
   it('matches a model id whatever case it arrives in', () => {
     expect(rateForModel('Claude-Sonnet-5')).toEqual(rateForModel('claude-sonnet-5'));
     expect(rateForModel(undefined)).toBeUndefined();

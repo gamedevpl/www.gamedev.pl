@@ -4,7 +4,9 @@ import { pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { mintToken } from '../platform/submission-token.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
+import { reconcileTransferredOwnership } from './studio-shelf-records.js';
 
 export interface CreatorSelfRoutesOptions {
   store?: Store;
@@ -63,7 +65,8 @@ export async function registerCreatorSelfRoutes(
       return reply.send({ submissions: [] });
     }
 
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const owned = await store.listSubmissionsByOwner(request.user!.uid);
+    const records = await reconcileTransferredOwnership(store, request.user!.uid, owned);
     // Shadow only: source still answers, the document is judged against it.
     await recordShelfShadow({ store, log: request.log }, request.user!.uid, records);
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
@@ -95,7 +98,13 @@ export async function registerCreatorSelfRoutes(
       return reply.send({ active: 0 });
     }
 
-    const open = await store.listOpenRoundsByOwner(request.user!.uid);
+    const uid = request.user!.uid;
+    // A round on a game given away is not work in flight.
+    const owned = await store.listOpenRoundsByOwner(uid);
+    const stillOwned = await Promise.all(
+      owned.map(async (round) => !round.slug || (await canActOnSlug(store, round.slug, uid, 'read'))),
+    );
+    const open = owned.filter((_, index) => stillOwned[index]);
     const { games } = pageOwnerGames(open, 'shelf');
     const active = games.filter(({ tip }) => isSubmissionInFlight(tip.lastStatus ?? tip.lastNotifiedStatus)).length;
     return reply.send({ active });

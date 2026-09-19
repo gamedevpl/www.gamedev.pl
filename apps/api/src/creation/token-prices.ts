@@ -3,7 +3,7 @@ import type { AgentSessionTokens } from './job-state.js';
 // Token twin of USD_PER_CREDIT: published list rates, so conversion estimates nothing.
 
 // Bumped on any rate change, and reported beside the money it produced.
-export const TOKEN_PRICE_TABLE_VERSION = '2026-09-14';
+export const TOKEN_PRICE_TABLE_VERSION = '2026-09-15';
 
 export interface TokenRate {
   inputPerMTok: number;
@@ -17,9 +17,16 @@ const RATES: Readonly<Record<string, TokenRate>> = {
   'claude-sonnet-5': { inputPerMTok: 3, outputPerMTok: 15 },
   'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5 },
 
-  // No Vertex rate yet: the repo's only figure is blended PLN.
+  // Vertex standard tier, not the halved Gemini API introductory tier.
 
-  // See infra/setup-monitoring.sh, the A25 calibration comment.
+  // Matches our own bill: see A25 in infra/setup-monitoring.sh.
+  'gemini-3.8-flash': { inputPerMTok: 1.5, outputPerMTok: 7.5, cachedInputPerMTok: 0.15 },
+  'gemini-3.7-flash': { inputPerMTok: 1.5, outputPerMTok: 7.5, cachedInputPerMTok: 0.15 },
+
+  // Published rate, uncorroborated by our bill: flash dominates A25's blend.
+  'gemini-3.5-flash-lite': { inputPerMTok: 0.3, outputPerMTok: 2.5 },
+
+  // gemini-3.1-flash-image bills per image, not per token.
 };
 
 export interface TokenPrice {

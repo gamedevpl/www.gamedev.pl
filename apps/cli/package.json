@@ -1,6 +1,6 @@
 {
   "name": "@gamedevpl/cli",
-  "version": "0.15.2",
+  "version": "0.19.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -9,25 +9,35 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-adapters.mjs",
-    "type-check": "tsc -p tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p browser/tsconfig.json",
     "test": "vitest run",
     "dev": "tsx src/main.ts",
-    "bundle": "node scripts/build-binary.mjs"
+    "bundle": "node scripts/build-binary.mjs",
+    "prebuild": "node scripts/build-play-ui.mjs",
+    "pretype-check": "node scripts/build-play-ui.mjs",
+    "pretest": "node scripts/build-play-ui.mjs",
+    "predev": "node scripts/build-play-ui.mjs"
   },
   "engines": {
     "node": ">=20.19"
   },
   "dependencies": {
+    "@gamedevpl/contract": "*",
     "ink": "^5.2.1",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
-    "@gamedevpl/contract": "*"
+    "zod": "^3.23.8",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.15",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.31",
     "esbuild": "0.25.12",
+    "jsdom": "^29.1.1",
     "tsx": "^4.16.5",
     "typescript": "^5.5.4",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@types/react-dom": "^18.3.0"
   }
 }

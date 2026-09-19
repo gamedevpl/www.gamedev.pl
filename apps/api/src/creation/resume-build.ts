@@ -4,6 +4,7 @@ import type { ManagedAvailabilityGate, ManagedUnavailableReason } from '../agent
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { BuilderKind } from './builder.js';
 import { canTransition, type JobTransition } from './job-state.js';
+import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
 
 // Why a round did not start, when one did not.
 
@@ -12,7 +13,13 @@ import { canTransition, type JobTransition } from './job-state.js';
 // The agent account is out of requests; every job is stuck.
 
 // Told apart so the creator hears "not now" rather than a guess.
-export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed' | 'platform_unavailable';
+export type ResumeFailureReason =
+  | 'not_configured'
+  | 'no_capacity'
+  | 'dispatch_failed'
+  | 'platform_unavailable'
+  // A round is already opening for this game, or one is live.
+  | 'busy';
 
 export type ResumeOutcome =
   { started: true } | { started: false; reason: ResumeFailureReason; unavailableReason?: ManagedUnavailableReason };
@@ -103,7 +110,10 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
     const selected = await backendFor(builder);
     if (!selected) return { started: false, reason: 'not_configured' };
-    const spendingUid = input.ownerUid ?? record?.ownerUid;
+    // Quota follows the game, not the row's author.
+    const access = record?.slug === undefined ? null : await resolveGameAccess(store, record.slug);
+    const canonicalOwner = access?.owner.kind === 'creator' ? access.owner.uid : undefined;
+    const spendingUid = input.ownerUid ?? canonicalOwner ?? record?.ownerUid;
     // Skip for undelivered continuations — not a fresh dispatch.
     if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && spendingUid) {
       const dateStr = new Date(now()).toISOString().slice(0, 10);
@@ -120,9 +130,14 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       // An undelivered nudge is the same round: its token must keep working.
 
       // A legacy job still needs the field written for the reminted key.
-      const roundGeneration = input.undelivered
-        ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
-        : ((await store.bumpRoundGeneration(input.jobId)) ?? (record?.roundGeneration ?? 0) + 1);
+
+      // A handover revoked the token the nudge would keep.
+      const revoked =
+        record !== null && record !== undefined && access !== null && !roundAuthorityCurrent(record, access);
+      const roundGeneration =
+        input.undelivered && !revoked
+          ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
+          : ((await store.bumpRoundGeneration(input.jobId)) ?? (record?.roundGeneration ?? 0) + 1);
       const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];

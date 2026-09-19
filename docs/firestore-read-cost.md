@@ -23,15 +23,17 @@ Two corollaries, both of which have been got wrong here:
 
 ## Where the windows are
 
-| Surface                     | Poll  | Window                   | Dropped by                                                                                  |
-| --------------------------- | ----- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| `/api/catalog` enrichment   | —     | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                               |
-| store catalog + media       | —     | 10 min                   | publishing a game (`catalog-routes.ts`)                                                     |
-| notify sweep health scan    | 2 min | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                              |
-| notify sweep per-job derive | 2 min | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                          |
-| `/api/review/status` badge  | 2 min | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`) |
-| `/api/notifications` bell   | 1 min | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                      |
-| Studio connect guide        | 10 s  | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                |
+| Surface                     | Poll                        | Window                   | Dropped by                                                                                                         |
+| --------------------------- | --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `/api/catalog` enrichment   | —                           | 10 min                   | writing an enrichment (`catalog-enricher.ts`)                                                                      |
+| store catalog + media       | —                           | 10 min                   | publishing a game (`catalog-routes.ts`)                                                                            |
+| notify sweep health scan    | 2 min                       | 10 min                   | recording a verdict (`notify-sweep-routes.ts`)                                                                     |
+| notify sweep per-job derive | 2 min                       | 0/10/60 min by stillness | a move, a status change, uncollected feedback (`sweep-cadence.ts`)                                                 |
+| `/api/review/status` badge  | 2 min                       | 10 min                   | the reviewer's own verdict; an operator's sweep change or requeue (`review-queue-cache.ts`)                        |
+| `/api/notifications` bell   | 1 min                       | 5 min                    | creating, reading or clearing a notification (`notification-cache.ts`)                                             |
+| Studio connect guide        | 10 s                        | —                        | reads one document by id; cadence widens instead (`LocalActivityStatus.tsx`)                                       |
+| Studio health scan          | mount                       | 10 min                   | publishing or transferring a game (the slug set is in the key) (`studio-health-cache.ts`)                          |
+| Derived GameAccess fallback | Studio status & slug routes | 30 s                     | ensureGameAccess, recordSettledOwner, transfer, editor add/remove, slug claim, erasure (`derived-access-cache.ts`) |
 
 Per-user surfaces — the reviewer badge and the bell — key their windows by uid, and the
 bell keys by store as well, so one person's queue can never answer another's poll. That
@@ -46,6 +48,119 @@ served the write, an own action is reflected immediately — but do not design a
 that needs that, and do not write it down as a guarantee. Making own-write freshness true
 across instances needs shared invalidation (a durable version key both instances read),
 which is not what a badge is worth.
+
+### Derived GameAccess, 30 seconds
+
+Query Insights for 17–18 September put `COLLECTION /submissions WHERE slug = ?` at the
+top of the day: **41,288 executions, 96,482 reads**, 2.337 documents scanned on
+average. Cheap per call, enormous in volume — the signature of an uncached lookup on
+a path the Studio status poll (and slug routes, transfers, editor invites, moderation)
+hits through `canActOnSlug`.
+
+`resolveGameAccess` already does the cheap thing first: a `gameAccess/{slug}` document
+get. The collection query is only the fallback for games with **no canonical record**.
+That set is not shrinking on its own. The GameAccess backfill left 193 slugs out
+because several uids hold rounds on them, and anything that predates the model still
+has no row. Promoting a quarantined slug would silently pick a winner; the fallback
+stays.
+
+The window covers **only that derived branch**. Caching the canonical get in the same
+change would put every permission check in the product behind a 30-second answer, and
+that is a different decision. A second resolve inside the window does not call
+`listSubmissionsBySlug`; a miss, an expiry, or an invalidating write does.
+
+The live `getGameAccess` still runs on every resolve, including the 193 quarantined
+slugs this cache exists for. A miss is billed: Firestore charges a read for a get on
+a missing document, and it shows up as `NOT_FOUND` in `document/read_count` — about
+10k in a three-day sample. Caching the absence would remove it, and every path that
+creates a canonical record already drops this window. It is left live on purpose: a
+canonical record written on another instance takes effect immediately, which is the
+whole point of that record. The collection scan is gone; one billed miss per call
+remains.
+
+This is an authorization answer, not a display value. `canActOnSlug` gates private
+prior-round chat, so the window is **30 seconds** — the same bound as the session-user
+cache — sized against a former owner reading for the length of it, not against the
+saving. Writes that change authority drop the slug on the instance that served them:
+`ensureGameAccess`, `recordSettledOwner`, `backfillGameAccess`, transfer accept
+(`transferredAccess`), editor accept (`withEditorAdded`), editor remove / leave
+(`withEditorRemoved`), membership erasure (`withMemberErased`), slug claim, and
+account erasure. The residual that remains is the documented bound: **one window for
+any action, including your own**, because `--max-instances 4` means invalidation on
+one instance does not reach the others. On the instance that served the write, the
+next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
+row) is not hooked and can sit until the window ends, on every instance.
+
+## The gate
+
+A window in the table above is a promise the next edit can break without anyone noticing
+until Query Insights a day later. The gate that keeps the rule true after the person who
+wrote it has moved on is a per-route billed-read baseline, the same shape as module-size
+and comment-prose: shrink freely; raising one route is a deliberate, reviewable act.
+
+It does **not** reuse `store/read-meter.ts`. That meter patches the real
+`@google-cloud/firestore` prototypes; tests never construct those classes. They run on
+`InMemoryStore`, or on `FirestoreStore(fakeFirestore().db)` whose fake is a hand-rolled
+object. Wired as-is, every route would measure zero and the gate would be vacuous. The
+counter lives on the fake, which is the only place in the test path that materialises
+gets, queries, `count()` and `getAll`.
+
+It counts what Firestore **bills**, not what the code calls:
+
+- a document get is 1, whether or not the document exists;
+- a query is one read per document returned, **minimum 1 even when it returns nothing**;
+- an aggregation (`count()`) is 1, not the number of rows it counted;
+- `getAll` is one per reference requested.
+
+The fixture is fixed-size and explicit: eight creator rounds, twelve decoy rounds, three
+derived-only owner rounds, five events and three messages on the polled job, six creator
+notifications, ten decoy notifications, seven reviewer assessments, fifteen decoy
+assessments, four decoy re-reviews. Decoys are why removing a `where` fails the gate
+instead of still passing.
+
+Covered first, because a regression is both likely and expensive: `GET /api/submissions/:token`,
+`GET /api/submissions/mine`, `GET /api/submissions/mine (derived-only owner)`,
+`GET /api/review/status`, `GET /api/notifications`. The numbers are today's cost, not a
+target — do not round them up.
+
+The lint gate is at-or-under for every route: shrinks pass, raises fail. The derived-only
+owner is also pinned **exact** in `firestore-read-cost.test.ts`, because that route exists
+to see movement in either direction — a silent shrink is the cost curve going missing
+again. The other four stay at-or-under on purpose. That looser rule already cost a
+reseal: #1408 took access-row `mine` from 44 to 39, the ceiling stayed at 44, and those
+five reads sat spendable until #1410 locked them by hand. Making the other four exact is
+a separate decision; do not collapse the two rules without taking it.
+
+`/api/submissions/mine` is measured twice, because the two owner shapes have different
+cost curves. The existing creator has `gameAccess` rows, so `countSubmissionsByOwner`
+stays on the canonical reconcile (`listGameAccessByMember`, then a `count()` per
+canonical slug the owner query already covers). The derived-only owner has three slugged
+rounds and **no** `gameAccess` rows — the 193 slugs the GameAccess backfill left derived
+on purpose. With no canonical slugs, every record lands in `nonCanonical`, so that poll
+pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for every slugged round
+(the 30s derived-access window starts empty on each measurement: a new instance and every
+window expiry). Restoring the old `listGameAccessByMember` then `count()` pre-check in
+`countSubmissionsByOwner` moves only this second number; the access-row owner cannot see
+the difference.
+
+```bash
+npm run firestore-read-cost                                            # report
+npm run firestore-read-cost -- "GET /api/submissions/mine"             # access-row owner
+npm run firestore-read-cost -- "derived-only"                         # derived-only owner
+npm run firestore-read-cost -- "GET /api/submissions/mine" --write --force   # raise ONE
+npm run firestore-read-cost -- "derived-only" --write --force          # raise the other
+npm run firestore-read-cost -- --write --reseal                        # reseal every route
+```
+
+Enforce: `eslint-rules/firestore-read-cost-check.mjs` via `npm run firestore-read-cost`
+(also part of `npm run lint`). Ceilings live in
+[`eslint-rules/firestore-read-cost-baseline.json`](../eslint-rules/firestore-read-cost-baseline.json).
+The HTTP fixture is `apps/api/src/store/firestore-read-cost.fixture.ts`
+(excluded from the API compile — it is a test harness, not a production module).
+
+**Never run `--write` unscoped.** It does not only raise the route you are fixing; it also
+lowers every other ceiling to whatever that route happens to measure today. Same refusal
+and `--reseal` escape as module-size.
 
 ## The floor underneath the windows
 
@@ -131,6 +246,48 @@ None of the three delays the creator: their own actions invalidate the cache and
 `pokeStudioStatus`, which ticks immediately and skips every gate. The gates gate repeats,
 never the first read — a mount still answers the page once.
 
+**A forgotten localStorage list is occupancy with a longer memory.** The status
+poll's cost was supposed to be one token per open Studio tab. On 2026-09-18 a
+single Chrome session issued 1,102 of 1,120 status polls in forty minutes,
+spread across **32 job tokens**, in lockstep — 29 different tokens inside the
+same one-second bucket, again a minute later — until the browser closed at
+17:25Z. `/submissions` was 221,334 of that day's ~280k reads. The top three
+Insights rows were the same session: `WHERE slug = ?` (permission checks on
+old games with no `GameAccess` record), `WHERE ownerUid = ?` (`/api/submissions/mine`
+returning a 123-round shelf), `WHERE openRound = ?` (the header badge).
+
+`loadCreatorGames` is the fan-out. It takes every token this browser ever saved
+(`getSavedSpecs()`, anonymous-era localStorage), subtracts what `/mine`
+returned, and `Promise.all`s `getSubmissionStatus` for the rest. Nothing wrote
+the answer back: `removeSpec` had no callers, so the list only grew, and jobs
+19 / 22 / 24 / 29 / 32 / 35 / 37 / 92 / 130 were asked about forever, once a
+minute, from one forgotten home tab. That is the same lesson as a forgotten
+Studio tab, with a different shape: **it scales with how long a browser has
+been used**, not with how many creators are watching something now.
+
+The client half stops asking. An unlisted token whose status is terminal or
+missing — `abandoned`, HTTP 404, or a token the API rejects (400) — is pruned
+via `removeSpec`. A settled status that is not in-flight (`published`,
+`needs_changes`) is stored as `lastStatus` on the spec so the next load still
+renders it and does not re-ask. **In-flight is the only remaining re-ask:** a
+live round the server's shelf has not listed yet (anonymous-era, signed-out,
+or a round `/mine` has not collapsed) can still move, and the Studio chip
+should see that. Lengthening the 30s home poll would not have helped; the
+cost is the size of the fan-out.
+
+That remaining re-ask is also the residual. `shouldAskUnlisted` is
+`isSubmissionInFlight`, true for `null` and for queued / building /
+in_review / publishing. A live unlisted round is supposed to be asked again;
+nothing here ages it out. Ancient jobs the notify sweep has already
+auto-abandoned prune on the first answer. Rounds that stay non-terminal —
+quiet `building`, parked `in_review` — keep fanning out from that browser
+until they settle or the spec is cleared. Do not cap the list by age: an
+age cut would hide a live anonymous round the shelf has not listed yet,
+which is the case this list exists for. Measure after deploy. If the
+remaining fan-out is still the day's hottest query, that is a new
+decision, not this one. The derived `listSubmissionsBySlug` fallback
+those polls still take is a separate cache, not this change.
+
 **A gate on the store reaches only what subscribes to it.** The welcome dialog and the
 connect wizard each ran their own `getSubmissionStatus` loop on a bare `setTimeout`, so both
 polled at three seconds behind a hidden tab and neither honoured `pollAfterMs` — measured at
@@ -213,7 +370,10 @@ write directly — and submissions carry no `updatedAt`:
    is correct by construction and there is no drift arithmetic to get wrong. Because the
    document is in Firestore, **every instance sees it** — unlike the per-instance windows
    above. "Every writer" includes the two _atomic_ slug claims, which write the slug
-   themselves rather than through the plain setter, and `setDraftShared`.
+   themselves rather than through the plain setter, `setDraftShared`, and the
+   membership writers that change who a round belongs to without touching the
+   submission row (`acceptGameTransferInvitation`, `acceptEditorInvitation`,
+   `removeEditor`, `leaveGame`).
 
    Coalescing concurrent rebuilds is not enough: a write landing after a running rebuild has
    read source but before it writes would be waited on and then lost, so the mirror requeues
@@ -297,11 +457,68 @@ The 09-20 checkpoint should read the weekly mismatch count split by verdict, not
 only `version` / `truncated` / `count` / `collapse` mean the document and source actually
 disagreed.
 
-`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses, so
-Firestore intersects the two single-field indexes and no composite index is configured —
-the same trick `listOpenRoundsByOwner` already used. The wide `listSubmissionsByOwner` stays
+**What the week to 2026-09-18 actually showed**, before the writers below were hooked:
+656 `collapse`, 102 `count`, 0 `absent`, 3 distinct owners. Not a race and not warm-up —
+it repeated every few minutes, and `absent` (the benign "not built yet") never appeared.
+`MAX_SHELF_ROUNDS` is 2,000 and the owners had 4 and 155 rounds, so truncation was not it.
+
+The two verdicts were two different unhooked writers, both real:
+
+- **`count` (sourceCount 4, shelfCount 3).** A round in source never reached the document.
+  Two cooperating holes: `acceptGameTransferInvitation` / `acceptEditorInvitation` changed
+  membership without rebuilding the shelf, so a transferred or shared round existed in
+  `reconcileTransferredOwnership` and not in `shelves/{ownerUid}`; and Firestore
+  `countSubmissionsByOwner` took a raw `ownerUid` `count()` whenever the owner had no
+  remaining `gameAccess` rows, so a sender who kept slugless rounds and transferred the
+  slugged one compared 4 against a correctly rebuilt 3 forever. The hourly pass cannot
+  heal a count definition that disagrees with the rebuilt document.
+- **`collapse` (same count, different content).** `leaveGame` wrote `state: canceled` on
+  the editor's live tip without `afterJobWrite` / a shelf rebuild, so the document still
+  served that round as the tip while source collapse dropped it. The diverging field is
+  one the fingerprint already covers (`createdAt` / `jobId` of the tip, via `state`).
+
+Readers stay on source. Graduate them only after a later week of shadow logs is **zero
+mismatches** split by verdict (`count` and `collapse` both 0, not merely quieter). Do not
+flip in the same change that hooks the writers — the next week's log is the proof, and a
+reader flip needs its own revert.
+
+Dropping the `count()` early-exit looked like it would make the polled path more expensive.
+Measured against the read-cost gate (#1409) on this change, `GET /api/submissions/mine`
+goes **44 → 39**: the old pre-check queried `listGameAccessByMember` and then
+`reconcileTransferredOwnership` queried it again. Whoever merges this and #1409 second
+should run `npm run firestore-read-cost -- "GET /api/submissions/mine" --write --force`
+so those five reads stay locked.
+
+That fixture's creator has `gameAccess` rows, so it cannot see an owner with none — the
+derived-only accounts the access backfill left. `GET /api/submissions/mine (derived-only
+owner)` is that shape: three slugged rounds, no `gameAccess` rows, measured cold so the
+gate watches the per-round `resolveGameAccess` curve. Do not treat a raise of that
+ceiling as the same decision as a raise of the access-row `mine` poll.
+
+`listSubmissionsByOwnerAndSlug` replaces all four call sites. Two equality clauses used
+to zigzag-merge the two single-field indexes — Query Insights measured
+`listOpenRoundsByOwner` at 8.5 index entries scanned per result. Both queries now have a
+COLLECTION composite in `infra/setup-gcp.sh` (`ownerUid+slug`, `openRound+ownerUid`).
+Re-run that script against the live project; without the composite the query still
+answers, it just keeps paying the merge. The wide `listSubmissionsByOwner` stays
 for the surfaces that genuinely want the whole shelf: the Studio rail, the public creator page,
 account erasure.
+
+**The shelf poll then paid that owner query again, once per game.**
+`reconcileTransferredOwnership` called `listSubmissionsBySlug` for every `gameAccess` row
+the member was on, so a five-game sole owner paid five extra equality queries on every
+`/api/submissions/mine` poll — Query Insights' hottest QUERY. The slug query is required
+after a transfer (the recipient's owner query does not yet contain the sender's rounds) and
+while editors, a revocation epoch, or a settlement that changed owner (accessRevision > 1)
+mean another uid may have written siblings.
+
+Those conditions are necessary but not sufficient: a legacy multi-uid slug is pristine at
+revision 1 with no editors and no revocations, and nothing on the record says a second uid
+wrote rounds on it. So `ownerQueryCoversAccess` is only a cheap pre-filter, and
+`countSubmissionsBySlug` is the proof — a `count()` is charged one read per 1000 index
+entries rather than one per round, so the sole-owner poll still stops paying per round, and
+a count that disagrees with the owner rows falls back to the full list. Absence of proof
+means query: a predicate that guessed wrong here drops a game's own history off its shelf.
 
 Ordering is part of the contract, not an implementation detail. The query returns rounds
 newest first with the job id breaking a tie, which the callers rely on to pick the round an
@@ -343,6 +560,22 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
    them (`alertsSkipped` in the response and the log), and `createNotification` inserts with
    `create()` — the atomic insert — instead of reading inside a transaction to decide.
 
+3. **An empty inbox should not be queried.** `listPendingCreatorMessages` with
+   `deliveredAt IS NULL` was the sweep's per-job tax on motionless rounds: Insights counted
+   thousands of executions, zero documents, and still billed the one-read minimum. Submissions
+   now carry `pendingCreatorMessage`, written `true` atomically with an
+   undelivered append, and `false` once `markCreatorMessagesDelivered` empties the inbox.
+   The sweep skips a repeat query when the flag is `false`, but only after this
+   process has been deriving for an hour (`RECHECK_HOURLY_MS`). A first look
+   always probes, and dues inside that window still probe, because deploy.yml
+   promotes the candidate to 100% while an old revision can still finish a
+   feedback request. Create leaves the field unset (legacy records already did);
+   `stampEmpty: true` writes `false` only when the inbox is empty. A leftover
+   `true` with an empty inbox is healed by clearing, then restoring `true` if a
+   concurrent append landed. `writePendingInboxFlag(false)` still refuses to
+   clobber `true`, so a probe that did not go through that heal path cannot hide
+   a waiting message.
+
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.
 
@@ -365,6 +598,8 @@ already emitted.
 ```bash
 infra/read-cost-report.sh        # trailing day, split by type
 infra/read-cost-report.sh 7d     # a full working week
+
+infra/recalibrate-firestore-alerts.sh      # A29/A30/A31, in each condition's own shape
 ```
 
 ### Per request, from the service's own logs
@@ -506,3 +741,85 @@ is megabytes, so `7d` exited with `Argument list too long` before node started �
 hid it. Pages now go through a temp file. The lesson generalises: a tool whose only real use is
 one large window should be exercised at that window, because the small one is not a smaller
 version of the same code path.
+
+## The nightly sweep read the same days twenty-eight times
+
+The scorecard sweep is not a poll, so none of the windows above touch it, and it was the
+single largest read on the project outside the status poll: **24,186 document reads in the
+03:20 minute**, measured 2026-09-15. That is 40.3 reads/s over A30's 600-second bucket,
+which is exactly the 40.63 maximum the alert had been calibrated against — the "spike" the
+threshold was sized for was this job.
+
+The cause is not traffic. `SCORECARD_WINDOW_DAYS` is 28, and the sweep scanned all 28 raw
+`telemetry/{date}/playEvents` partitions every night under a 50,000-document budget. A day's
+partition was therefore read about 28 times over its life, and 27 of those reads returned
+data that could no longer change.
+
+The fix is a rollup, not a cache: `telemetryDaily/{date}` holds one document per day with
+every game played that day, written the first time the sweep sees the day. A day older than
+`SEAL_LAG_DAYS` is **sealed** and read back as one document forever after; today and
+yesterday stay open and are rescanned, so telemetry that flushed late is still picked up. In
+the steady state the 28-day window costs 26 document reads and two partition scans.
+
+Two properties make that safe to do to a number an agent acts on:
+
+- **The counters are exact.** Sessions, bounces, ticks, outcomes and totals are sums, and
+  sums of per-day sums are the same number.
+- **The medians are exact until a day gets big.** Each day keeps up to
+  `MAX_SAMPLES_PER_METRIC` values per metric, evenly spaced through that day's sorted
+  values, plus the count they stand for. Merging takes the weighted median, which reduces to
+  the plain median when no day was downsampled. `telemetry-daily.test.ts` asserts the merged
+  rows equal a straight scan over the same events.
+- **The sample budget is spent on games, not on depth.** A day document has a fixed total
+  (`MAX_SAMPLE_VALUES_PER_DAY`) shared across every game that played, so a catalog-wide day
+  shortens each game's sample set instead of dropping the quiet games off the end. Past the
+  hard `MAX_GAMES_PER_DAY` ceiling the day sets `gamesTruncated`, which the sweep folds into
+  `window.truncated` — a dropped game is never reported as a complete window.
+- **The top lists are reranked, not inherited.** The rollup stores `MAX_TALLY_ROWS` errors
+  and labels per day, well past the five and eight a scorecard reports, so an error that
+  ranks sixth every single day still wins the 28-day window. Merging the reported top-N of
+  each day would have lost it.
+
+The midnight seam needs care, and the naive version of this is worse than it looks. Events
+are bucketed by event time on the write path, so a session running across UTC midnight
+leaves a tail in the next partition: no `game_opened`, and whatever it did after 00:00.
+Summed as if it were its own session, that tail is a fresh visit that played for nothing
+and bounced. A player who finished a game at 00:00:10 would turn one completed session
+into two, one of them a bounce — halving the finish rate and the median play time on a
+number an agent acts on.
+
+So the rollup joins it rather than tolerating it. A session with no open whose first
+event lands within `CONTINUATION_GRACE_MS` of the partition start is a **continuation**:
+it is dropped from its own day entirely, and absorbed whole by the day that opened it.
+That costs nothing extra to read, because the walk runs newest first and the sweep is
+already scanning the next partition when it builds the previous one — a day is only
+sealed on a run where its successor was scanned, which is what makes the join always
+available.
+
+The result is that a session is summarized in exactly one place, with all its play time,
+its score, its labels, its zone rungs and its ending, so every session-derived number
+matches a whole-window scan rather than approximating it. Tests assert `toEqual` against
+that scan for the seam cases, not a tolerance.
+
+The grace window is what keeps it honest in the other direction: wide enough for a late
+flush, narrow enough that a session whose open was simply dropped at two in the afternoon
+is still counted as the session it is.
+
+One consequence is deliberate and worth stating. A session is counted on the day it
+opened, so the tail at the very start of the **oldest** day in a window belongs to the day
+before it — which is outside the window. A straight scan of the same partitions would have
+counted that fragment as a session of its own; the rollup does not. That is the same
+distortion the seam fix exists to remove, and fixing it only at the window edge would mean
+storing boundary session state in every day's document to serve one partial session out of
+twenty-eight days. The rule "a session belongs to the day it opened" is worth more than
+parity with a scan that was itself approximating.
+
+The failure path is not deliberate and is handled. If a day's rollup write fails while its
+successor's succeeded, the next sweep would rebuild that day with no tail in hand and seal
+a finished session as a bounce — permanently, since sealing is once. So when a day needs
+rebuilding and its successor came from a rollup rather than a scan, the successor is read
+back for the tail. One extra scan beats a wrong number that never expires.
+
+Same day, same logs: `/api/me/studio/health` was running 1,500–2,000 reads a minute for the
+same structural reason, one telemetry query per (day, slug) with no window at all. It is in
+the table above now.

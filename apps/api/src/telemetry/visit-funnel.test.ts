@@ -181,6 +181,31 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('reports the sharing funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'share_step', at: '2026-09-15T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'offered'),
+      step('a', 'accepted'),
+      started('b'),
+      step('b', 'offered'),
+      started('c'),
+      step('c', 'left'),
+    ]);
+
+    expect(funnel.sharing).toEqual([
+      { step: 'offered', visits: 2 },
+      { step: 'accepted', visits: 1 },
+      { step: 'declined', visits: 0 },
+      { step: 'cancelled', visits: 0 },
+      { step: 'expired', visits: 0 },
+      { step: 'removed', visits: 0 },
+      { step: 'left', visits: 1 },
+    ]);
+  });
+
   it('splits party rungs by whether the bar or a seat drove them', () => {
     // A seat rung is evidence phones drive the room.
     const funnel = summarizeVisitFunnel([
@@ -222,6 +247,24 @@ describe('summarizeVisitFunnel', () => {
       { step: 'returned_to_lobby', visits: 0, barVisits: 0, seatVisits: 0 },
       { step: 'quit', visits: 0, barVisits: 0, seatVisits: 0 },
     ]);
+  });
+
+  it('surfaces the handover rollup, so the rungs are not written for nobody', () => {
+    const at = '2026-09-15T10:00:00.000Z';
+    const funnel = summarizeVisitFunnel([
+      { visitId: 'v1', type: 'transfer_step', at, msSinceStart: 0, step: 'invite_sent' },
+      { visitId: 'v2', type: 'transfer_step', at, msSinceStart: 0, step: 'offer_shown' },
+      { visitId: 'v2', type: 'transfer_step', at, msSinceStart: 1, step: 'offer_accepted' },
+    ]);
+
+    expect(funnel.transfers).toEqual({
+      sent: 1,
+      cancelled: 0,
+      offered: 1,
+      answered: 1,
+      accepted: 1,
+      declined: 0,
+    });
   });
 
   it('keeps waitlist and create steps from colliding', () => {
@@ -282,6 +325,8 @@ describe('summarizeVisitFunnel', () => {
       { step: 'tool_used', visits: 0 },
       { step: 'undo_used', visits: 0 },
       { step: 'selection_from_game', visits: 0 },
+      { step: 'standard_surface_chosen', visits: 0 },
+      { step: 'controller_surface_restored', visits: 0 },
     ]);
   });
 

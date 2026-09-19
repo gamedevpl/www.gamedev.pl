@@ -6,6 +6,7 @@ import {
   emitDigestNotification,
   emitOperatorAlert,
   emitSubmissionNotification,
+  emitTransferOfferedNotification,
   emitWaitlistJoined,
   notifyOnTransition,
   statusToEvent,
@@ -304,6 +305,19 @@ describe('notifyOnTransition', () => {
     expect((await notifyOnTransition({ store }, await record(), { status: 'publishing' }, 'tok')).emitted).toBe(false);
     expect(await store.listNotifications('g:owner')).toEqual([]);
   });
+
+  it('routes to the canonical owner after a transfer, not the job’s stale ownerUid', async () => {
+    await store.setSubmissionSlug(7, 'sky-dodge');
+    const at = new Date().toISOString();
+    await store.upsertUser({ uid: 'g:newowner' });
+    await store.ensureGameAccess('sky-dodge', 'g:owner', at, at);
+    await store.recordSettledOwner('sky-dodge', 'g:newowner', 999, at, at);
+
+    const res = await notifyOnTransition({ store }, await record(), { status: 'building' }, 'tok');
+    expect(res.emitted).toBe(true);
+    expect(await store.listNotifications('g:owner')).toEqual([]);
+    expect((await store.listNotifications('g:newowner'))[0].id).toBe('sub-7-building');
+  });
 });
 
 describe('emitSubmissionNotification email fan-out', () => {
@@ -376,6 +390,9 @@ describe('emitSubmissionNotification email fan-out', () => {
     await emitSubmissionNotification({ store }, event);
 
     expect(fetchSpy).toHaveBeenCalledWith('https://api.resend.com/emails', expect.anything());
+    expect((fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'notification-email:g:owner:sub-9-published',
+    );
     expect((await store.listNotifications('g:owner'))[0].emailedAt).not.toBeNull();
     vi.unstubAllEnvs();
     fetchSpy.mockRestore();
@@ -448,6 +465,41 @@ describe('digest opt-out', () => {
     );
 
     expect(sent).toHaveLength(1);
+  });
+
+  it('does not email a digest to someone who opted out', async () => {
+    const store = new InMemoryStore();
+    const mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+    await store.setDigestOptOut('g:owner', '2026-07-20T00:00:00.000Z');
+
+    await emitDigestNotification(
+      { store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' },
+      digestEvent,
+    );
+
+    expect(mailer.sent).toHaveLength(0);
+  });
+
+  it('still emails a build notification after a digest opt-out', async () => {
+    const store = new InMemoryStore();
+    const mailer = new ConsoleMailer(() => {});
+    await store.upsertUser({ uid: 'g:owner', email: 'owner@example.com' });
+    await store.setDigestOptOut('g:owner', '2026-07-20T00:00:00.000Z');
+
+    await emitSubmissionNotification(
+      { store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' },
+      {
+        uid: 'g:owner',
+        type: 'submission.published',
+        jobId: 42,
+        gameTitle: 'Sky Dodge',
+        statusToken: 'tok',
+        slug: 'sky-dodge',
+      },
+    );
+
+    expect(mailer.sent).toHaveLength(1);
   });
 });
 
@@ -618,5 +670,61 @@ describe('emitWaitlistJoined', () => {
     expect(await store.listNotifications('g:second')).toHaveLength(1);
     expect(mailer.sent).toHaveLength(0);
     expect(errors).toContain('operator alert email send failed');
+  });
+});
+
+describe('emitTransferOfferedNotification', () => {
+  let store: InMemoryStore;
+  let mailer: ConsoleMailer;
+  const deps = (): EmitDeps => ({ store, mailer, appBaseUrl: 'https://www.gamedev.pl', unsubscribeSecret: 'secret' });
+  const event = { uid: 'g:grace', slug: 'sky-dodge', gameTitle: 'Sky Dodge', invitedAt: '2026-09-15T10:00:00.000Z' };
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    mailer = new ConsoleMailer();
+    await store.upsertUser({ uid: 'g:grace', email: 'grace@example.com' });
+  });
+
+  it('tells the recipient, and points them where they can act', async () => {
+    await emitTransferOfferedNotification(deps(), event);
+
+    const [notification] = await store.listNotifications('g:grace');
+    expect(notification.type).toBe('transfer.offered');
+    expect(notification.params).toEqual({ title: 'Sky Dodge', slug: 'sky-dodge' });
+    expect(notification.link).toBe('/studio');
+  });
+
+  it('emails it, because an invitation expires unseen', async () => {
+    const sent: EmailMessage[] = [];
+    const recorder: Mailer = { send: async (message) => void sent.push(message) };
+    await emitTransferOfferedNotification({ ...deps(), mailer: recorder }, event);
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe('grace@example.com');
+    expect(`${sent[0].subject} ${sent[0].html}`).toContain('Sky Dodge');
+    // Do not claim they submitted a game; they may not have.
+    expect(sent[0].text).not.toContain('you submitted a game');
+    expect(sent[0].text).toContain('handing you a game');
+    expect((await store.listNotifications('g:grace'))[0].emailedAt).not.toBeNull();
+  });
+
+  it('is one notification per invitation, however often it retries', async () => {
+    await emitTransferOfferedNotification(deps(), event);
+    const again = await emitTransferOfferedNotification(deps(), event);
+
+    expect(again.created).toBe(false);
+    expect(await store.listNotifications('g:grace')).toHaveLength(1);
+  });
+
+  it('tells them again when the same game is offered a second time', async () => {
+    // Keying by slug alone swallowed the second ask.
+    await emitTransferOfferedNotification(deps(), event);
+    const second = await emitTransferOfferedNotification(deps(), {
+      ...event,
+      invitedAt: '2026-09-30T10:00:00.000Z',
+    });
+
+    expect(second.created).toBe(true);
+    expect(await store.listNotifications('g:grace')).toHaveLength(2);
   });
 });

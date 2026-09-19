@@ -1,3 +1,4 @@
+/* Shared with the CLI Play bundle: edits affect CLI releases. Play embeds only 600/700 WOFF2 fonts. */
 /* Fonts, color/spacing tokens, and the base reset every surface starts from. */
 
 @font-face {

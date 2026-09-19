@@ -28,6 +28,56 @@ describe('mcp sessionKey', () => {
     });
   });
 
+  it('binds the writer uid into the sessionKey', () => {
+    const sessionId = newMcpSessionId();
+    const key = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: 42,
+      roundGeneration: 2,
+      now,
+      ttlHours: 24,
+      actorUid: 'g:bea',
+    });
+    expect(verifyMcpSessionKey(key, secret)).toEqual({
+      sessionId,
+      jobId: 42,
+      roundGeneration: 2,
+      exp: Math.floor(now / 1000) + 24 * 60 * 60,
+      actorUid: 'g:bea',
+    });
+  });
+
+  it('round-trips an Apple uid that contains dots', () => {
+    const appleUid = 'a:001234.abcdef.0000';
+    const sessionId = newMcpSessionId();
+    const key = mintMcpSessionKey(secret, {
+      sessionId,
+      jobId: 42,
+      roundGeneration: 2,
+      now,
+      ttlHours: 24,
+      actorUid: appleUid,
+    });
+    expect(verifyMcpSessionKey(key, secret).actorUid).toBe(appleUid);
+    expect(Buffer.from(key, 'base64url').toString('utf8').split('.')).toHaveLength(6);
+  });
+
+  it('rejects a tampered actorUid on a sessionKey', () => {
+    const key = mintMcpSessionKey(secret, {
+      sessionId: 'abc',
+      jobId: 1,
+      roundGeneration: 1,
+      now,
+      ttlHours: 1,
+      actorUid: 'g:bea',
+    });
+    const decoded = Buffer.from(key, 'base64url').toString('utf8');
+    const parts = decoded.split('.');
+    parts[4] = Buffer.from('g:ada', 'utf8').toString('base64url');
+    const forged = Buffer.from(parts.join('.'), 'utf8').toString('base64url');
+    expect(() => verifyMcpSessionKey(forged, secret)).toThrow(InvalidAgentTokenError);
+  });
+
   it('rejects a tampered sessionKey', () => {
     const key = mintMcpSessionKey(secret, {
       sessionId: 'abc',

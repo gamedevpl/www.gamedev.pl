@@ -64,6 +64,7 @@ function harness(input: HarnessInput = {}) {
         return { ...preview, id: `p${previews.length}`, createdAt: '2026-01-01T00:00:00.000Z' };
       },
       pruneBuildPreviews: async () => 0,
+      listSubmissionsBySlug: async () => (record ? [record] : []),
     } as unknown as StagedPreviewOptions['store'],
     gamesStore: {
       getStagedSourceFiles: async () => input.staged ?? PLAYABLE_TREE,

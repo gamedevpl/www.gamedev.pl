@@ -7,8 +7,9 @@ import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platfo
 import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
+import { reserveActorAndGameQuota } from '../platform/game-quota.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import { ownsSubmissionOrSlug } from '../platform/slug-ownership.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from '../platform/submission-token.js';
@@ -33,6 +34,8 @@ export interface ImproveRoutesOptions {
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   invalidateStatusCache: (jobId: number) => void;
+  // Narrower than invalidateStatusCache -- only fires for an actual shot write.
+  invalidateMedia: (jobId: number) => void;
   runChatAgent: ChatOrchestration['runChatAgent'];
   startImprovementRound: (input: {
     jobId: number;
@@ -62,6 +65,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
     checkUserAccess,
     builderOf,
     invalidateStatusCache,
+    invalidateMedia,
     runChatAgent,
     startImprovementRound,
   } = options;
@@ -120,7 +124,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       const record = await store.getSubmission(jobId);
-      if (!record || !(await ownsSubmissionOrSlug(store, record, request.user!.uid))) {
+      if (!record || !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'build'))) {
         return reply.status(403).send({ error: 'only the creator can request improvements' });
       }
       if (record.abandonedAt) {
@@ -169,6 +173,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       if (parsed.data.context?.screenshotPng) {
         try {
           shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
+          invalidateMedia(jobId);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
         }
@@ -178,6 +183,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
           const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
           referenceImageShotIds = stored.ids;
           referenceImages = stored.images;
+          invalidateMedia(jobId);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator reference images');
         }
@@ -233,16 +239,24 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       const started = await startImprovementRound({
         jobId,
         beforeDispatch: async () => {
-          const quota = await store.checkAndIncrementQuota(
-            request.user!.uid,
-            dateStr,
-            dailyImprovementQuota,
-            'improvements',
-          );
+          const quota = record.slug
+            ? await reserveActorAndGameQuota(store, {
+                actorUid: request.user!.uid,
+                slug: record.slug,
+                dateStr,
+                actorLimit: dailyImprovementQuota,
+                gameLimit: dailyImprovementQuota,
+                action: 'improvements',
+              })
+            : await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyImprovementQuota, 'improvements');
           if (quota.allowed) return true;
+          const exhausted =
+            'reason' in quota && quota.reason === 'game'
+              ? 'daily game improvement quota exceeded'
+              : 'daily improvement quota exceeded';
           reply
             .status(quota.tier === 'blocked' ? 403 : 429)
-            .send({ error: quota.tier === 'blocked' ? 'account is blocked' : 'daily improvement quota exceeded' });
+            .send({ error: quota.tier === 'blocked' ? 'account is blocked' : exhausted });
           return false;
         },
         text: inboxText,
@@ -278,6 +292,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       if (parsed.data.context?.referenceImages?.length) {
         try {
           await storeCreatorReferenceImages(store, started.jobId, parsed.data.context.referenceImages);
+          invalidateMedia(started.jobId);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator reference images on the new job');
         }

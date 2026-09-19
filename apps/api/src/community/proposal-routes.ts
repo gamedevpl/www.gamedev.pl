@@ -26,7 +26,7 @@ import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { diffProposal } from './proposal-diff.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { resolveOwnerOfRecord } from './owner-of-record.js';
-import { DECLINE_REASONS, toPublicProposalState, type DeclineReason } from './proposal-state.js';
+import { DECLINE_REASONS, isReviewerVisible, toPublicProposalState, type DeclineReason } from './proposal-state.js';
 import {
   acceptProposal,
   canProposeTo,
@@ -177,6 +177,14 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     return reply.send({ proposals: records.map(toPublicProposal) });
   });
 
+  // targetOwnerUid is denormalised and stale after a transfer; always re-resolve.
+  async function canSeeAsReviewer(record: ProposalRecord, uid: string, isOperator: boolean): Promise<boolean> {
+    if (!isReviewerVisible(record.state)) return false;
+    if (record.targetOwnerUid === null) return isOperator;
+    const owner = await resolveOwnerOfRecord(store, record.targetSlug);
+    return owner.kind === 'creator' && owner.uid === uid;
+  }
+
   app.get<{ Params: { id: string } }>('/api/proposals/:id', async (request, reply) => {
     if (!requireUser(request, reply)) return reply;
     const params = IdParamsSchema.safeParse(request.params);
@@ -190,7 +198,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     // what is pending against a game they do not own.
     const uid = request.user!.uid;
     const operator = isAdminSession(request, adminUids);
-    if (record.proposerUid !== uid && !visibleToReviewer(record, uid, operator)) {
+    if (record.proposerUid !== uid && !(await canSeeAsReviewer(record, uid, operator))) {
       return reply.status(404).send({ error: 'not_found' });
     }
     return reply.send({ proposal: toPublicProposal(record) });
@@ -214,7 +222,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     const record = await store.getProposal(params.data.id);
     if (!record?.version) return reply.status(404).send({ error: 'not_found' });
     const uid = request.user!.uid;
-    if (record.proposerUid !== uid && !visibleToReviewer(record, uid, isAdminSession(request, adminUids))) {
+    if (record.proposerUid !== uid && !(await canSeeAsReviewer(record, uid, isAdminSession(request, adminUids)))) {
       return reply.status(404).send({ error: 'not_found' });
     }
 
@@ -242,11 +250,28 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     return reply.send({ proposal: toPublicProposal(result.proposal) });
   });
 
-  /** The creator's review queue: proposals against games they own. */
+  // The creator's review queue: proposals against games they currently own.
   app.get('/api/me/reviews', async (request, reply) => {
     if (!requireUser(request, reply)) return reply;
-    const records = await store.listProposals({ targetOwnerUid: request.user!.uid });
-    const visible = records.filter((record) => visibleToReviewer(record, request.user!.uid, false));
+    const uid = request.user!.uid;
+    const stored = await store.listProposals({ targetOwnerUid: uid });
+    const stillOwned = await Promise.all(
+      stored.map(async (record) => {
+        const owner = await resolveOwnerOfRecord(store, record.targetSlug);
+        return owner.kind === 'creator' && owner.uid === uid;
+      }),
+    );
+    const kept = stored.filter((_, i) => stillOwned[i]);
+
+    // Every canonically owned slug: a slug can carry more than one proposal.
+    const memberAccess = await store.listGameAccessByMember(uid);
+    const canonicalSlugs = memberAccess.filter((access) => access.ownerUid === uid).map((access) => access.slug);
+    const bySlug = (await Promise.all(canonicalSlugs.map((slug) => store.listProposals({ targetSlug: slug })))).flat();
+
+    const byId = new Map(kept.map((record) => [record.id, record]));
+    for (const record of bySlug) byId.set(record.id, record);
+
+    const visible = [...byId.values()].filter((record) => isReviewerVisible(record.state));
     return reply.send({ proposals: visible.map(toPublicProposal) });
   });
 
@@ -273,7 +298,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
       if (!isAdminSession(request, adminUids)) return { ok: false };
       return { ok: true, reviewer: 'platform', byUid: request.user?.uid ?? null };
     }
-    if (!request.user || record.targetOwnerUid !== request.user.uid) return { ok: false };
+    if (!request.user) return { ok: false };
     // Re-resolved rather than trusted from the denormalised field: a slug that changed
     // hands between opening and deciding must route to whoever holds it now.
     const owner = await resolveOwnerOfRecord(store, record.targetSlug);

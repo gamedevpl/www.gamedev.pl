@@ -14,6 +14,7 @@ export default [
   {
     ignores: [
       '**/dist/**',
+      'apps/cli/src/generated/**',
       '**/build/**',
       '**/coverage/**',
       // Agent worktrees are checkouts of *other branches* nested inside this one.

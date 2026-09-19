@@ -13,6 +13,8 @@ import {
   operatorPushContent,
   proposalNotificationMessage,
   proposalPushContent,
+  transferNotificationMessage,
+  transferPushContent,
   submissionNotificationMessage,
   followedGamePushContent,
   submissionPushContent,
@@ -22,11 +24,13 @@ import {
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { invalidateNotificationCache } from './notification-cache.js';
 import type { JobAlert } from './operator-alerts.js';
+import { gameOwnerUid } from '../platform/game-access-resolve.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
   NotificationType,
   OperatorNotificationType,
   ProposalNotificationType,
+  TransferNotificationType,
   StoredNotification,
   SubmissionNotificationType,
   SubmissionRecord,
@@ -66,6 +70,10 @@ function isOperatorNotification(type: NotificationType): type is OperatorNotific
 }
 
 /** Same narrowing for the proposal family, which has its own copy — see email-templates. */
+function isTransferNotification(type: NotificationType): type is TransferNotificationType {
+  return type.startsWith('transfer.');
+}
+
 function isProposalNotification(type: NotificationType): type is ProposalNotificationType {
   return type.startsWith('proposal.');
 }
@@ -119,24 +127,23 @@ async function createNotification(
  * user has no address or has unsubscribed, or the notification was already emailed.
  * A send failure leaves emailedAt null so the next sweep retries. Never throws.
  */
-async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
-  if (notification.emailedAt) return;
+export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<boolean> {
+  if (notification.emailedAt) return false;
   // Operator alerts have their own send (see `emitOperatorAlert`): they carry no
   // unsubscribe and must not be silenced by one. Guarded here rather than left to the
   // call sites so a future caller cannot accidentally route one through creator mail.
-  if (isOperatorNotification(notification.type)) return;
-
+  if (isOperatorNotification(notification.type) || notification.type.startsWith('share.')) return false;
   // Explicit deps win (tests inject them). Otherwise fall back to env config so
   // the default call sites send email in prod with no extra wiring: a real mailer
   // only when RESEND_API_KEY is set (no false "sent" via the console fake), and
   // the unsubscribe secret from SESSION_SECRET.
   const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
   const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
-  if (!mailer || !unsubscribeSecret) return;
-
+  if (!mailer || !unsubscribeSecret) return false;
   try {
     const user = await deps.store.getUser(uid);
-    if (!user?.email || user.emailUnsubscribedAt) return;
+    if (!user?.email || user.emailUnsubscribedAt) return false;
+    if (notification.type === 'creator.digest' && user.digestOptOutAt) return false;
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
@@ -163,15 +170,24 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
           null
         : notification.type === 'creator.digest'
           ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
-          : isProposalNotification(notification.type)
-            ? proposalNotificationMessage(user.email, locale, notification.type, emailParams)
-            : submissionNotificationMessage(user.email, locale, notification.type, emailParams);
+          : isTransferNotification(notification.type)
+            ? transferNotificationMessage(user.email, locale, notification.type, emailParams)
+            : isProposalNotification(notification.type)
+              ? proposalNotificationMessage(user.email, locale, notification.type, emailParams)
+              : submissionNotificationMessage(
+                  user.email,
+                  locale,
+                  notification.type as SubmissionNotificationType,
+                  emailParams,
+                );
 
-    if (!message) return;
-    await mailer.send(message);
+    if (!message) return false;
+    await mailer.send(message, { idempotencyKey: `notification-email:${uid}:${notification.id}` });
     await deps.store.markNotificationEmailed(uid, notification.id);
+    return true;
   } catch (err) {
     deps.logError?.(err, 'notification email send failed');
+    return false;
   }
 }
 
@@ -188,7 +204,7 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
 
   try {
     const [user, subscriptions] = await Promise.all([deps.store.getUser(uid), deps.store.listPushSubscriptions(uid)]);
-    if (subscriptions.length === 0) return;
+    if (subscriptions.length === 0 || notification.type.startsWith('share.')) return;
     // The digest opt-out is per-notification, not per-channel: someone who asked to stop
     // the weekly summary meant the summary, not just the email carrying it. Without this
     // an unsubscribed creator keeps getting pushed every Monday, which is the version of
@@ -205,9 +221,15 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
           : isOperatorNotification(notification.type)
             ? // English regardless of the reader's locale — see the operator copy's comment.
               operatorPushContent(notification.type, notification.params.title ?? '')
-            : isProposalNotification(notification.type)
-              ? proposalPushContent(locale, notification.type, notification.params.title ?? '')
-              : submissionPushContent(locale, notification.type, notification.params.title ?? '');
+            : isTransferNotification(notification.type)
+              ? transferPushContent(locale, notification.params.title ?? '')
+              : isProposalNotification(notification.type)
+                ? proposalPushContent(locale, notification.type, notification.params.title ?? '')
+                : submissionPushContent(
+                    locale,
+                    notification.type as SubmissionNotificationType,
+                    notification.params.title ?? '',
+                  );
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
@@ -498,6 +520,34 @@ export async function emitFollowedGameNotification(
   return { created };
 }
 
+export interface TransferOfferedEvent {
+  uid: string;
+  slug: string;
+  gameTitle: string;
+  // This invitation, not this game: re-inviting is a new ask.
+  invitedAt: string;
+}
+
+export async function emitTransferOfferedNotification(
+  deps: EmitDeps,
+  event: TransferOfferedEvent,
+): Promise<{ created: boolean }> {
+  const { created, notification } = await createNotification(deps, event.uid, {
+    id: `transfer-${event.slug}-${event.invitedAt}`,
+    type: 'transfer.offered',
+    createdAt: new Date(deps.now?.() ?? Date.now()).toISOString(),
+    titleKey: 'notifications.transfer.offered.title',
+    bodyKey: 'notifications.transfer.offered.body',
+    params: { title: event.gameTitle, slug: event.slug },
+    link: '/studio',
+  });
+
+  await maybeSendEmail(deps, event.uid, notification);
+  if (created) await maybePush(deps, event.uid, notification);
+
+  return { created };
+}
+
 export interface DigestNotificationEvent {
   uid: string;
   /** Week-keyed id, so a sweep that runs twice in one week emits once. */
@@ -636,7 +686,7 @@ export async function emitProposalNotification(
  */
 export async function notifyOnTransition(
   deps: EmitDeps,
-  submission: Pick<SubmissionRecord, 'jobId' | 'ownerUid' | 'title' | 'lastNotifiedStatus'>,
+  submission: Pick<SubmissionRecord, 'jobId' | 'ownerUid' | 'title' | 'lastNotifiedStatus' | 'slug'>,
   status: SubmissionStatusResponse,
   statusToken: string,
 ): Promise<{ emitted: boolean }> {
@@ -646,8 +696,11 @@ export async function notifyOnTransition(
   const prevEvent = submission.lastNotifiedStatus ? statusToEvent(submission.lastNotifiedStatus) : null;
   if (prevEvent === event) return { emitted: false };
 
+  // Canonical ownership, not the stale ownerUid a transfer leaves behind.
+  const recipientUid = submission.slug ? await gameOwnerUid(deps.store, submission) : submission.ownerUid;
+
   await emitSubmissionNotification(deps, {
-    uid: submission.ownerUid,
+    uid: recipientUid,
     type: event,
     jobId: submission.jobId,
     gameTitle: submission.title,

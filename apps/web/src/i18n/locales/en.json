@@ -58,6 +58,24 @@
       "proposalsOn": "Concept proposals on",
       "proposalsOff": "Concept proposals off"
     },
+    "share": {
+      "offered": {
+        "title": "You were invited to edit a game",
+        "body": "{{actorName}} invited you to edit “{{title}}”."
+      },
+      "accepted": {
+        "title": "An editor joined your game",
+        "body": "{{actorName}} accepted the invite for “{{title}}”."
+      },
+      "removed": {
+        "title": "You were removed from a game",
+        "body": "{{actorName}} removed you from “{{title}}”."
+      },
+      "left": {
+        "title": "An editor left your game",
+        "body": "{{actorName}} left “{{title}}”."
+      }
+    },
     "operator": {
       "review_ready": {
         "title": "A build is waiting to be published",
@@ -111,6 +129,12 @@
         "title": "Your contribution is live",
         "body": "Your change is now part of {{title}}."
       }
+    },
+    "transfer": {
+      "offered": {
+        "title": "A game is being handed to you",
+        "body": "{{title}} is yours if you accept. The invitation expires in seven days."
+      }
     }
   },
   "header": {
@@ -150,6 +174,7 @@
     "smartSearching": "Searching catalog…",
     "smartBuildBtn": "Build this game",
     "orBuildOwnGame": "or build your own game",
+    "preparingAttachments": "Preparing attachments…",
     "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit",
     "micStart": "Speak",
     "micListening": "Listening...",
@@ -327,8 +352,8 @@
     "withContributions": "with contributions from"
   },
   "bottomCta": {
-    "headline": "Have your own idea?",
-    "sub": "Describe it above and an AI agent builds it for real — live for everyone to play.",
+    "headline": "Have your own game idea?",
+    "sub": "Describe it above and an AI agent will build it live for everyone to play.",
     "action": "Describe your idea"
   },
   "recommendations": {
@@ -377,6 +402,7 @@
         "live": "Live"
       },
       "noMatches": "No games match that search.",
+      "editorRole": "Editor · {{name}}",
       "countTruncated": "Showing {{shown}} of {{total}} games",
       "truncated": "You have more games than we can show here. The newest fifty are listed.",
       "openShelf": "Your games",
@@ -587,7 +613,9 @@
       "assistNeedsContent": "That's a change to the maps themselves — edit them below.",
       "assistRejected": "That request was refused.",
       "assistQuota": "You've used today's tuning requests. The sliders still work.",
-      "assistUnavailable": "The assistant didn't answer — try again, or use the sliders."
+      "assistUnavailable": "The assistant didn't answer — try again, or use the sliders.",
+      "useStandardEditor": "Use the standard editor",
+      "useGameEditor": "Use this game's editor"
     },
     "overview": {
       "status": "Status",
@@ -629,7 +657,9 @@
       "expand": "Expand",
       "fullScreen": "Full screen",
       "exitFullScreen": "Exit full screen",
-      "peekEmpty": "No updates yet"
+      "peekEmpty": "No updates yet",
+      "transfer": "Transfer",
+      "members": "Members"
     },
     "buildHistory": {
       "live": "Checking your latest changes now",
@@ -837,6 +867,72 @@
       "notChecked": "not yet checked",
       "checkedTitle": "This build passed the preview gate.",
       "notCheckedTitle": "This build hasn't been checked yet."
+    },
+    "transfer": {
+      "intro": "Hand this game to another creator. Nothing moves until they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
+      "loading": "Checking…",
+      "codeLabel": "Recipient code",
+      "codePlaceholder": "Their code",
+      "codeHint": "Ask the other creator for the code in their account settings.",
+      "send": "Send invitation",
+      "sending": "Sending…",
+      "pending": "Waiting for {{name}} to accept.",
+      "expires": "Expires {{when}}.",
+      "cancel": "Cancel invitation",
+      "cancelling": "Cancelling…",
+      "errors": {
+        "load": "Could not check this game's transfer.",
+        "generic": "That did not work. Try again.",
+        "invalidCode": "That code does not match anyone.",
+        "self": "That is your own code.",
+        "ineligible": "That creator cannot receive games right now.",
+        "busy": "A build round is running. Transfer once it finishes.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "notOwner": "This game is not yours to transfer.",
+        "alreadyOut": "An invitation for this game is already out."
+      },
+      "someone": "another creator"
+    },
+    "transferPropose": {
+      "intro": "Confirm this transfer in Studio. Nothing moves until you choose a recipient and they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
+      "confirm": "Send invitation",
+      "game": "Transfer {{title}}",
+      "missing": "This transfer proposal is gone or is not yours.",
+      "expired": "This proposal expired. Ask the agent to start a new one.",
+      "sent": "This invitation was already sent.",
+      "back": "Back to Studio"
+    },
+    "members": {
+      "intro": "Invite another creator as an editor. They see the project only after they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
+      "loading": "Checking…",
+      "codeLabel": "Recipient code",
+      "codePlaceholder": "Their code",
+      "codeHint": "Ask the other creator for the code shown on their Studio shelf.",
+      "send": "Send invitation",
+      "sending": "Sending…",
+      "pending": "Waiting for {{name}} to accept.",
+      "expires": "Expires {{when}}.",
+      "cancel": "Cancel invitation",
+      "cancelling": "Cancelling…",
+      "owner": "Owner: {{name}}",
+      "editor": "Editor: {{name}}",
+      "you": "(you)",
+      "ownerUnknown": "the owner",
+      "remove": "Remove",
+      "leave": "Leave this game",
+      "leaving": "Leaving…",
+      "errors": {
+        "load": "Could not load this game's members.",
+        "generic": "That did not work. Try again.",
+        "invalidCode": "That code does not match anyone.",
+        "self": "That is your own code.",
+        "ineligible": "That creator cannot join games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "notOwner": "Only the owner can manage members.",
+        "alreadyMember": "That creator is already on this game.",
+        "memberCap": "This game has reached its member limit.",
+        "alreadyOut": "An invitation for this person is already out."
+      }
     }
   },
   "submit": {
@@ -865,6 +961,9 @@
     "nameHint": "This is what your game will be called everywhere. You can change it now — not later.",
     "createNow": "Create Now",
     "analyzing": "Analyzing your idea…",
+    "analyzingStepMechanics": "Exploring gameplay mechanics & references…",
+    "analyzingStepQuestions": "Formulating design questions…",
+    "analyzingStepFinalizing": "Almost ready…",
     "otherPlaceholder": "Other — describe it your way…",
     "pickSeveral": "Pick any that apply — these stack.",
     "pickOneOrSkip": "Pick the one that matches what you imagined, or skip and we decide.",
@@ -1362,31 +1461,33 @@
     "orEmail": "Or write directly to"
   },
   "create": {
-    "headline": "Describe a game. An AI agent builds it for real.",
-    "subhead": "Not a template and not a toy — actual HTML, CSS and JavaScript, written by a coding agent, reviewed by a human, then playable by anyone in a browser.",
-    "example1": "a game like Cannon Fodder, but with squads of cats",
-    "example2": "tilt maze for my little brother",
-    "example3": "4X strategy I can finish in 20 minutes",
+    "headline": "Describe a game. An AI agent builds it.",
+    "subhead": "Real code written by an AI agent, reviewed by a human, playable in the browser.",
     "stepsHeading": "What happens after you press Build",
-    "step1Title": "A few quick questions",
-    "step1Detail": "Name it, then pick the vibe — or skip and the AI decides. Takes a minute.",
-    "step2Title": "An agent writes the code",
-    "step2Detail": "You can watch it work in Studio, and say what to change while it builds.",
-    "step3Title": "You play a draft first",
-    "step3Detail": "A playable preview appears before the game is finished. Try it, ask for changes.",
-    "step4Title": "A human reviews, then it's live",
-    "step4Detail": "Once it passes review it joins the catalog and everyone can play it.",
-    "notifyNote": "Close the tab if you like. Builds take as long as they take — we'll notify you when there's a draft to play, and Studio keeps the thread.",
+    "step1Title": "Quick questions",
+    "step1Detail": "Fine-tune the theme and mechanics, or skip and let AI decide.",
+    "step2Title": "Agent writes code",
+    "step2Detail": "Watch live progress in Studio and request changes on the fly.",
+    "step3Title": "Playable draft",
+    "step3Detail": "Test an early build right in your browser and ask for tweaks.",
+    "step4Title": "Review and publish",
+    "step4Detail": "Once it passes review, your game goes live in the catalog.",
+    "notifyNote": "You can close the tab — we'll notify you when a playable draft is ready.",
     "buildersHeading": "Who builds it?",
     "buildersSub": "You choose at the last step — and can change it per round.",
     "defaultBadge": "Default",
     "freeBadge": "Free to use",
-    "platformPoint1": "Nothing to install, nothing to configure",
-    "platformPoint2": "Counts against your daily allowance",
-    "selfPoint1": "One-click install, or paste the config",
-    "selfPoint2": "Your agent, your tokens — no daily limit from us",
+    "platformPoint1": "Zero install, zero configuration",
+    "platformPoint2": "Included in your daily allowance",
+    "selfPoint1": "Quick install or custom MCP config",
+    "selfPoint2": "Your agent and tokens — no daily allowance limit",
     "anyMcpClient": "any MCP client",
-    "showcaseHeading": "Made exactly this way"
+    "showcaseHeading": "Live in the catalog",
+    "pokeQa": "Poke the thinking mascot — pass the idea down",
+    "pokeCode": "Poke the BRRR mascot — pass the spark down",
+    "pokePlay": "Poke the play mascot — pass the spark down",
+    "pokeLive": "Poke the live mascot — finish the tiny build",
+    "comboBuilt": "The four mascots finished a tiny build."
   },
   "ai": {
     "generatedBadge": "AI-generated game",
@@ -1666,7 +1767,7 @@
     "legend": "Who builds this round?",
     "platform": {
       "title": "Gamedev.pl coding agent",
-      "detail": "We assign a coding agent and you watch progress here.",
+      "detail": "Our cloud coding agent — follow live progress in Studio.",
       "unavailable": {
         "badge": {
           "coming_soon": "Coming soon",
@@ -1690,7 +1791,7 @@
     },
     "self": {
       "title": "My own coding agent",
-      "detail": "You connect Claude Code, Codex, Cursor, or another agent."
+      "detail": "Connect your own agent via the MCP protocol."
     },
     "badge": {
       "self": "Your agent",
@@ -2129,5 +2230,48 @@
     "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet.",
     "panelWaiting": "Waiting for your agent to connect. You can close this panel and follow progress in the conversation.",
     "selfMode": "This round: your own agent (BYOCA)"
+  },
+  "studioShelf": {
+    "transfer": {
+      "title": "Transfers",
+      "offer": "{{name}} is handing you {{slug}}. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
+      "accept": "Accept",
+      "reject": "Decline",
+      "yourCode": "Your recipient code",
+      "reveal": "Show",
+      "hide": "Hide",
+      "rotate": "New code",
+      "rotating": "Rotating…",
+      "errors": {
+        "rotate": "Could not make a new code.",
+        "respond": "That did not work. Try again.",
+        "busy": "A build round is running on that game. Try again once it finishes.",
+        "unreachable": "Could not load your invitations.",
+        "ineligible": "Your account cannot receive games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "gone": "This invitation is no longer available.",
+        "staleClient": "Refresh the page and try again — this tab is out of date.",
+        "code": "Could not load your recipient code."
+      },
+      "retry": "Try again",
+      "someone": "Another creator",
+      "codeHint": "Give this code to whoever is handing you a game."
+    },
+    "share": {
+      "title": "Editor invitations",
+      "offer": "{{name}} invited you to edit {{slug}}. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",
+      "accept": "Accept",
+      "reject": "Decline",
+      "errors": {
+        "respond": "That did not work. Try again.",
+        "unreachable": "Could not load your invitations.",
+        "ineligible": "Your account cannot join games right now.",
+        "staleOwner": "This game changed hands. Reload Studio.",
+        "gone": "This invitation is no longer available.",
+        "alreadyMember": "You are already on this game.",
+        "memberCap": "This game has reached its member limit."
+      },
+      "retry": "Try again"
+    }
   }
 }

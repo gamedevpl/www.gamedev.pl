@@ -120,6 +120,9 @@ const FILE_BUCKET = {
   'moderation-metrics': 'platform',
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',
+  'telemetry-daily': 'platform',
+  'telemetry-daily.test': 'platform',
+  'telemetry-daily-window.test': 'platform',
   'delivery-metrics': 'platform',
   // Pure vocabulary and formatting for a creator's public identity -- read by every
   // surface that renders a byline, not creation-domain business logic.
@@ -131,10 +134,15 @@ const FILE_BUCKET = {
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
   'game-access-resolve': 'platform',
+  'game-access-permissions': 'platform',
+  'derived-access-cache': 'platform',
+  'game-access-resolve-cache': 'platform',
+  'game-quota': 'platform',
   'game-access-backfill': 'platform',
   'game-access-cutover': 'platform',
   'atomic-slug-claim': 'platform',
   'slug-policy': 'platform',
+  'recipient-code': 'platform',
   // Bare env-driven constant factored out of creation/builder.ts because delivery,
   // agent-surface, and submissions.ts all need the cap without the rest of builder.ts's
   // handoff-authorization logic.
@@ -183,6 +191,8 @@ const FILE_BUCKET = {
   // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
   // node:crypto over a caller-supplied secret, with no agent-surface state at all.
   'agent-token': 'platform',
+  'capability-revision': 'platform',
+  'actor-uid': 'platform',
   // Slug minting and claim settlement. Pure aside from caller-supplied probes, and
   // read by creation, catalog and the backfill CLI alike.
   slug: 'platform',
@@ -250,6 +260,7 @@ const FILE_BUCKET = {
   'quota-gate': 'creation',
   builder: 'creation',
   'typecheck-preflight': 'creation',
+  'language-kit-sources': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
   'checkout-recovery': 'creation',
@@ -258,6 +269,7 @@ const FILE_BUCKET = {
   'tab-complete': 'creation',
   'editor-assist': 'creation',
   'editor-contract': 'creation',
+  'editor-draft-shape': 'creation',
   'editor-drafts': 'creation',
   remix: 'creation',
   'remix-save': 'creation',
@@ -308,6 +320,13 @@ const FILE_BUCKET = {
   'shelf-shadow': 'creation',
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
+  'game-transfer-routes': 'creation',
+  'game-transfer-proposal-routes': 'creation',
+  'transfer-inbox-cache': 'creation',
+  'game-editor-invite-routes': 'creation',
+  'editor-invite-inbox-cache': 'creation',
+  'studio-health-cache': 'creation',
+  'studio-health-cache.test': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
@@ -319,6 +338,9 @@ const FILE_BUCKET = {
   'agent-channel-kit': 'agent-surface',
   'agent-channel-gate-media': 'agent-surface',
   'mcp-server': 'agent-surface',
+  'mcp-presence-capability': 'agent-surface',
+  'mcp-session-shape': 'agent-surface',
+  'agent-knowledge-warning': 'agent-surface',
   'mcp-tool-support': 'agent-surface',
   'mcp-example-tools': 'agent-surface',
   'mcp-concept-tools': 'agent-surface',
@@ -334,6 +356,8 @@ const FILE_BUCKET = {
   'mcp-source-patch-tools': 'agent-surface',
   'mcp-source-submit-tools': 'agent-surface',
   'mcp-game-create-tools': 'agent-surface',
+  'mcp-account-games-tools': 'agent-surface',
+  'mcp-ownership-tools': 'agent-surface',
   'mcp-round-reopen-tools': 'agent-surface',
   'mcp-session-basics-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
@@ -404,6 +428,8 @@ const FILE_BUCKET = {
   'recent-builds': 'delivery',
   'gate-runner': 'delivery',
   'gate-progress': 'delivery',
+  'gate-build-spec': 'delivery',
+  'gate-phase-timer': 'delivery',
   'gate-trigger': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',
@@ -440,6 +466,9 @@ const FILE_BUCKET = {
   'media-object-choice': 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
+  'catalog-effort': 'catalog',
+  'catalog-from-archive': 'catalog',
+  'catalog-commit-counts': 'catalog',
   'affinity-cache': 'catalog',
   recommend: 'catalog',
   recommendations: 'catalog',
@@ -448,6 +477,7 @@ const FILE_BUCKET = {
   'game-health': 'catalog',
   'games-repo-client': 'catalog',
   'games-repo-contract-check': 'catalog',
+  'editor-contract-lockstep': 'catalog',
   'local-games-repo': 'catalog',
   'index-html-generator': 'catalog',
   'slug-backfill': 'catalog',
@@ -456,6 +486,7 @@ const FILE_BUCKET = {
   votes: 'community',
   'player-feedback': 'community',
   'feedback-themes': 'community',
+  'assessment-attribution': 'community',
   'assessment-cli': 'community',
   'assessment-pagination': 'community',
   'assessment-resolution': 'community',
@@ -506,6 +537,7 @@ const FILE_BUCKET = {
   'visit-cli-funnel': 'telemetry',
   'visit-cli-pilot': 'telemetry',
   'visit-proposals': 'telemetry',
+  'visit-transfers': 'telemetry',
   'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
 
@@ -517,6 +549,8 @@ const FILE_BUCKET = {
   'game-follow-routes': 'notifications',
   'email-routes': 'notifications',
   'email-templates': 'notifications',
+  'email-templates-share': 'notifications',
+  'notify-share': 'notifications',
   'beta-welcome-email': 'notifications',
   mailer: 'notifications',
   'push-routes': 'notifications',
@@ -525,6 +559,7 @@ const FILE_BUCKET = {
   contact: 'notifications',
   'operator-alerts': 'notifications',
   'uncollected-feedback': 'notifications',
+  'notification-email-retry': 'notifications',
   'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,

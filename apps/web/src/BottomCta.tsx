@@ -7,8 +7,8 @@ export function BottomCta() {
 
   function scrollToComposer() {
     document.getElementById('hero-prompt')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelector<HTMLElement>('#hero-prompt .big-prompt-input')?.focus({ preventScroll: true });
   }
-
   return (
     <section className="bottom-cta">
       <div className="bottom-cta-copy">

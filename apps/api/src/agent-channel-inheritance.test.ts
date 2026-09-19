@@ -96,7 +96,7 @@ describe('agent source inheritance across rounds', () => {
     await store.setSubmissionPreviewVersion(ISSUE - 1, PRIOR_VERSION);
     const deliveries: SourceFile[][] = [];
     app = await createApp(store, fakeGamesStore(deliveries));
-    const historyReads = vi.spyOn(store, 'listSubmissionsByOwnerAndSlug');
+    const historyReads = vi.spyOn(store, 'listSubmissionsBySlug');
 
     const restored = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
     expect(restored.json()).toMatchObject({
@@ -118,7 +118,9 @@ describe('agent source inheritance across rounds', () => {
       },
     });
     expect(patched.json()).toMatchObject({ accepted: true, baseFrom: 'delivery' });
-    expect(historyReads).toHaveBeenCalledOnce();
+    // Sibling history once; shelf skip covers the rest.
+    expect(historyReads).toHaveBeenCalledTimes(1);
+    expect(historyReads).toHaveBeenCalledWith(SLUG);
 
     const submitted = await app.inject({
       method: 'POST',

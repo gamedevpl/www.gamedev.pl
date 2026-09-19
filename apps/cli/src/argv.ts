@@ -35,6 +35,10 @@ export function completeSlash(prefix: string): SlashVerb[] {
 }
 
 const BOOLEAN_FLAGS = new Set([
+  'play',
+  'edit',
+  'terminal',
+  'preview',
   'yes',
   'manual',
   'reset',

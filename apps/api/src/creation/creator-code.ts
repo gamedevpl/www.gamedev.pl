@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { registerCreatorTakeover } from './creator-takeover.js';
+import { canActOnGame, canActOnSlug } from '../platform/game-access-permissions.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   assembleGameHtml,
+  projectFromSources,
   CredentialLeakError,
   EmptyProjectError,
   ProjectTooLargeError,
@@ -33,7 +37,7 @@ import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '..
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
-import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
+import { studioKitFromTree } from './language-kit-sources.js';
 import { typeCheckGame } from './type-check.js';
 
 /**
@@ -211,34 +215,52 @@ export async function registerCreatorCodeRoutes(
     slug: string,
     ownerUid: string,
   ): Promise<SubmissionRecord> {
-    const jobId = await store.allocateJobId();
-    await store.createSubmission(jobId, ownerUid, source.title);
-    await store.setSubmissionLocale(jobId, source.locale ?? 'en');
-    await store.recordJobTransition(jobId, {
-      to: 'queued',
-      at: new Date().toISOString(),
-      by: 'creator',
-      reason: 'code_surface_opened',
-    });
-    // Carry the version forward — else its first write sees no base.
-    const baseVersion = await resolveRoundBaseVersion(store, source, slug);
-    if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
-    if (!(await store.claimManualRoundSlug(jobId, slug, source.jobId))) {
-      await store.recordJobTransition(jobId, {
-        to: 'abandoned',
-        at: new Date().toISOString(),
-        by: 'system',
-        reason: 'manual_round_claim_lost',
+    // Same admission fence acceptGameTransferInvitation checks against.
+    const nonce = randomUUID();
+    if (!(await store.beginCheckoutRecovery(slug, nonce, Date.now()))) {
+      throw Object.assign(new Error('A round is already opening for this game. Refresh before continuing.'), {
+        statusCode: 409,
       });
-      await store.setSubmissionAbandoned(jobId, new Date().toISOString());
-      throw Object.assign(new Error('The game round changed. Refresh before editing.'), { statusCode: 409 });
     }
-    return (await store.getSubmission(jobId)) ?? { ...source, ownerUid, jobId, roundGeneration: undefined };
+    try {
+      const access = await resolveGameAccess(store, slug);
+      if (access.source === 'canonical' && !canActOnGame(access, ownerUid, 'build')) {
+        throw Object.assign(new Error('Ownership of this game changed. Refresh before continuing.'), {
+          statusCode: 409,
+        });
+      }
+      const jobId = await store.allocateJobId();
+      await store.createSubmission(jobId, ownerUid, source.title);
+      await store.setSubmissionLocale(jobId, source.locale ?? 'en');
+      await store.recordJobTransition(jobId, {
+        to: 'queued',
+        at: new Date().toISOString(),
+        by: 'creator',
+        reason: 'code_surface_opened',
+      });
+      // Carry the version forward — else its first write sees no base.
+      const baseVersion = await resolveRoundBaseVersion(store, source, slug);
+      if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
+      if (!(await store.claimManualRoundSlug(jobId, slug, source.jobId, nonce))) {
+        await store.recordJobTransition(jobId, {
+          to: 'abandoned',
+          at: new Date().toISOString(),
+          by: 'system',
+          reason: 'manual_round_claim_lost',
+        });
+        await store.setSubmissionAbandoned(jobId, new Date().toISOString());
+        throw Object.assign(new Error('The game round changed. Refresh before editing.'), { statusCode: 409 });
+      }
+      return (await store.getSubmission(jobId)) ?? { ...source, ownerUid, jobId, roundGeneration: undefined };
+    } finally {
+      // The lease expires; cleanup must not replace the action's outcome.
+      await store.finishCheckoutRecovery(slug, nonce).catch(() => {});
+    }
   }
 
   /** Owner-resolved round + version, or the exact reply already sent on failure. */
   async function resolveForSlug(
-    request: { user?: { uid: string; tier?: string } | null; params: { slug: string } },
+    request: { user?: { uid: string; tier?: string } | null; params: { slug: string }; method?: string },
     reply: {
       status: (code: number) => { send: (body: unknown) => unknown };
     },
@@ -247,6 +269,11 @@ export async function registerCreatorCodeRoutes(
     const slug = request.params.slug;
     if (!SLUG_PARAM_PATTERN.test(slug)) {
       reply.status(400).send({ error: 'invalid slug' });
+      return null;
+    }
+    const action = request.method === 'GET' || request.method === 'HEAD' ? 'read' : 'edit';
+    if (!(await canActOnSlug(store, slug, request.user!.uid, action))) {
+      reply.status(404).send({ error: 'no such game' });
       return null;
     }
     const record = await resolveOwnedRecord(store, request.user!.uid, slug);
@@ -845,16 +872,18 @@ export async function registerCreatorCodeRoutes(
       }
 
       let kitDeclaration: string | null = null;
+      let kitShared: Record<string, string> = {};
       if (kitFileStore) {
         try {
-          const tree = await kitFileStore.loadTree();
-          kitDeclaration = sharedSourcesFromKitTree(tree)['shared/game-kit.d.ts'] ?? null;
+          const kit = studioKitFromTree(await kitFileStore.loadTree());
+          kitDeclaration = kit.declaration;
+          kitShared = kit.files;
         } catch (error) {
           request.log.warn({ err: error, slug }, 'code surface typecheck: kit load failed, checking without it');
         }
       }
 
-      const result = typeCheckGame(sources, kitDeclaration);
+      const result = typeCheckGame(sources, kitDeclaration, kitShared);
       return reply.send(result);
     },
   );
@@ -906,16 +935,7 @@ export async function registerCreatorCodeRoutes(
         if (!sources) {
           return reply.status(409).send({ error: 'incomplete', message: 'sources do not compile yet' });
         }
-        const html = assembleGameHtml(
-          {
-            title: sources.title ?? slug,
-            description: '',
-            html: sources.indexHtml,
-            js: sources.gameJs,
-            css: sources.styleCss,
-          },
-          { restrictNetwork: true },
-        );
+        const html = assembleGameHtml(projectFromSources(sources, sources.title ?? slug), { restrictNetwork: true });
         return reply.send({ html, engineRef, timings: sources.timings });
       } catch (error) {
         if (
@@ -944,12 +964,12 @@ export async function registerCreatorCodeRoutes(
       }
       try {
         const tree = await kitFileStore.loadTree();
-        const declaration = sharedSourcesFromKitTree(tree)['shared/game-kit.d.ts'] ?? null;
-        if (declaration === null) {
+        const kit = studioKitFromTree(tree);
+        if (kit.declaration === null) {
           return reply.status(404).send({ error: 'no kit published' });
         }
         reply.header('etag', `"${tree.engineRef}"`);
-        return reply.send({ engineRef: tree.engineRef, declaration });
+        return reply.send({ engineRef: tree.engineRef, declaration: kit.declaration, files: kit.files });
       } catch (error) {
         request.log.warn({ err: error, slug: resolved.slug }, 'code surface: kit declaration load failed');
         return reply.status(404).send({ error: 'no kit published' });
@@ -1087,6 +1107,9 @@ export async function registerCreatorCodeRoutes(
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
+      if (parsed.data.mode === 'publish' && !(await canActOnSlug(store, slug, request.user!.uid, 'publish'))) {
+        return reply.status(403).send({ error: 'not_owner' });
+      }
 
       const lastAt = lastDeliverAt.get(slug);
       const nowMs = Date.now();
@@ -1173,6 +1196,7 @@ export async function registerCreatorCodeRoutes(
           ...(parsed.data.summary ? { summary: parsed.data.summary } : {}),
           authorship,
           actor: 'creator',
+          actorUid: request.user!.uid,
         });
         if (outcome.accepted) {
           lastDeliverAt.set(slug, nowMs);
@@ -1233,6 +1257,9 @@ export async function registerCreatorCodeRoutes(
       }
 
       const { targetVersion, mode } = parsed.data;
+      if (mode === 'publish' && !(await canActOnSlug(store, slug, request.user!.uid, 'publish'))) {
+        return reply.status(403).send({ error: 'not_owner' });
+      }
       const targetManifest = await gamesStore.getManifest(slug, targetVersion);
       if (!targetManifest) {
         return reply.status(404).send({ error: `target version ${targetVersion} not found` });
@@ -1299,6 +1326,7 @@ export async function registerCreatorCodeRoutes(
           authorship: 'owner',
           summary: `Reverted to build ${targetVersion}`,
           actor: 'creator',
+          actorUid: request.user!.uid,
         });
         if (outcome.accepted) {
           lastDeliverAt.set(slug, nowMs);

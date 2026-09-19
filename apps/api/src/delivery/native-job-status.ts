@@ -9,6 +9,7 @@ import type { ManagedAvailabilityGate } from '../agent-surface/managed-availabil
 import type { GamesStore } from './games-store.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { SubmissionStatusResponse } from '../platform/submission-status.js';
+import { currentOwnerUidSoft } from '../platform/game-access-resolve.js';
 
 export interface NativeJobStatusOptions {
   store?: Store;
@@ -163,10 +164,10 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
       };
     }
     if (managedAvailabilityGate) {
-      status.platformBuilder = await managedAvailabilityGate.peek(
-        record.ownerUid,
-        new Date(now()).toISOString().slice(0, 10),
-      );
+      // The quota belongs to whoever owns the game now, not the author.
+      const quotaUid =
+        store && record.slug ? await currentOwnerUidSoft(store, record.slug, record.ownerUid) : record.ownerUid;
+      status.platformBuilder = await managedAvailabilityGate.peek(quotaUid, new Date(now()).toISOString().slice(0, 10));
     }
     if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) {
       status.builderHandoff = {

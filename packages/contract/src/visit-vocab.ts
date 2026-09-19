@@ -48,6 +48,10 @@ export type CreateStep = (typeof CREATE_STEPS)[number];
 export const WAITLIST_STEPS = ['cta_clicked', 'joined'] as const;
 export type WaitlistStep = (typeof WAITLIST_STEPS)[number];
 
+// Game sharing: invite and membership outcomes. No slug on the visit stream.
+export const SHARE_STEPS = ['offered', 'accepted', 'declined', 'cancelled', 'expired', 'removed', 'left'] as const;
+export type ShareStep = (typeof SHARE_STEPS)[number];
+
 // Framed /play/ interstitial: shown, then which exit they took.
 export const FRAMED_PLAY_STEPS = ['shown', 'open_new', 'open_here'] as const;
 export type FramedPlayStep = (typeof FRAMED_PLAY_STEPS)[number];
@@ -107,6 +111,8 @@ export const EDITOR_STEPS = [
   'tool_used',
   'undo_used',
   'selection_from_game',
+  'standard_surface_chosen',
+  'controller_surface_restored',
 ] as const;
 export type EditorStep = (typeof EDITOR_STEPS)[number];
 
@@ -186,6 +192,16 @@ export type PartyStep = (typeof PARTY_STEPS)[number];
 export const PARTY_VIAS = ['bar', 'seat'] as const;
 export type PartyVia = (typeof PARTY_VIAS)[number];
 
+// Two audiences, one lane: the step name says which side acted.
+export const TRANSFER_STEPS = [
+  'invite_sent',
+  'invite_cancelled',
+  'offer_shown',
+  'offer_accepted',
+  'offer_declined',
+] as const;
+export type TransferStep = (typeof TRANSFER_STEPS)[number];
+
 export const CLI_STEPS = [
   'installed',
   'authorized',
@@ -225,6 +241,7 @@ export const CLI_ADAPTERS = [
   'cursor',
   'copilot',
   'muse',
+  'opencode',
   'custom',
 ] as const;
 export type CliAdapter = (typeof CLI_ADAPTERS)[number];

@@ -40,7 +40,7 @@ const GAME_PAGE_PATTERN =
  */
 // Also: welcome/connect chapters; edit/editor EditorKit surface; code (the Code surface, CE-06).
 const STUDIO_PATTERN =
-  /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|code|welcome|connect))?)?$/;
+  /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|code|welcome|connect)|\/transfer\/propose\/[^/]+)?)?$/;
 // The operator console. Its sections are listed rather than matched loosely, so the
 // shell and the client's router agree about what is a real page and what is a typo —
 // the same contract the studio tabs above keep.

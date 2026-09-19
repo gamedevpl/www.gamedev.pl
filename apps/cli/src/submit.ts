@@ -1,3 +1,4 @@
+import { withCheckoutWriter } from './workbench-lock.js';
 import {
   isRecoveryReady,
   clearRecoveryReady,
@@ -103,7 +104,7 @@ function mapHttpError(error: unknown): never {
   throw error instanceof CliError ? error : new CliError(message, EXIT_REFUSED);
 }
 
-export async function submitGame(input: {
+async function submitGameUnlocked(input: {
   api: ApiClient;
   slug: string;
   dest: string;
@@ -303,4 +304,8 @@ export function formatSubmitLines(result: SubmitResult, slug: string): string[] 
     lines.push('sources accepted but the gate did not start — a preview is not assembling');
   }
   return lines;
+}
+
+export function submitGame(input: Parameters<typeof submitGameUnlocked>[0]): ReturnType<typeof submitGameUnlocked> {
+  return withCheckoutWriter(input.dest, () => submitGameUnlocked(input));
 }

@@ -13,6 +13,9 @@ export interface SubmissionQueryStore {
   // Every submission claiming this slug, newest first (published plus in-flight).
   listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
 
+  // Rounds claiming this slug, whoever owns them: one read.
+  countSubmissionsBySlug(slug: string): Promise<number>;
+
   // The published submission for a slug, ignoring in-flight work.
   getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
 
@@ -65,6 +68,10 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
       .filter((s) => s.slug === slug)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
       .map((s) => ({ ...s }));
+  }
+
+  async countSubmissionsBySlug(slug: string): Promise<number> {
+    return Array.from(this.submissions.values()).filter((s) => s.slug === slug).length;
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -186,6 +193,11 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
   }
 
+  async countSubmissionsBySlug(slug: string): Promise<number> {
+    const snap = await this.db.collection('submissions').where('slug', '==', slug).count().get();
+    return snap.data().count;
+  }
+
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
     // Same query, filtered in memory to avoid a composite index.
     const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
@@ -235,7 +247,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   }
 
   async listSubmissionsByOwnerAndSlug(ownerUid: string, slug: string): Promise<SubmissionRecord[]> {
-    // Two equality clauses, so the two single-field indexes intersect.
+    // COLLECTION composite in setup-gcp.sh; avoids a zigzag merge.
     const snap = await this.db
       .collection('submissions')
       .where('ownerUid', '==', ownerUid)
@@ -247,7 +259,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   }
 
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
-    // Two equality clauses -- Firestore intersects the two single-field indexes.
+    // COLLECTION composite in setup-gcp.sh; avoids a zigzag merge.
     const snap = await (await this.openRounds()).where('ownerUid', '==', ownerUid).get();
     return snap.docs
       .map((d) => fromStoredSubmission(d.data()))

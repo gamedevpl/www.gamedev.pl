@@ -290,6 +290,8 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     map.set(11, { ...live, createdAt: '2026-09-01T12:00:00.000Z' });
 
     const at = new Date().toISOString();
+    // Settles canonical ownership onto the new owner's job.
+    await store.recordSettledOwner(SLUG, OWNER, 11, '2026-09-01T12:00:00.000Z', at);
     await store.ensureCreatorAgentKey(OWNER, at);
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,

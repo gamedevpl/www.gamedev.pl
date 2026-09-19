@@ -51,6 +51,16 @@ describe('status watch', () => {
     expect(statusWatchDelayMs({ status: 'queued', stall: 'quiet' })).toBe(3000);
   });
 
+  it('backs off once nothing has visibly changed for a stretch, to bound a wedged or orphaned watch', () => {
+    expect(statusWatchDelayMs({ status: 'building' }, 19)).toBe(3000);
+    expect(statusWatchDelayMs({ status: 'building' }, 20)).toBe(6000);
+    expect(statusWatchDelayMs({ status: 'building' }, 39)).toBe(6000);
+    expect(statusWatchDelayMs({ status: 'building' }, 40)).toBe(12_000);
+    expect(statusWatchDelayMs({ status: 'building' }, 1000)).toBe(30_000);
+    // Idle statuses already use the slow cadence.
+    expect(statusWatchDelayMs({ status: 'needs_changes' }, 1000)).toBe(10_000);
+  });
+
   it('formats gate progress onto the live block', () => {
     expect(
       formatStatusLines(

@@ -66,6 +66,36 @@ describe('round watch', () => {
     expect(announced).toEqual(['published']);
   });
 
+  it('backs off the 3s poll once a build shows no visible progress for a while', async () => {
+    const delays: number[] = [];
+    const holder: { current?: ReturnType<typeof createRoundWatch> } = {};
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      // Same fingerprint every time — a wedged build, not a moving one.
+      fetch: async () => new Response(JSON.stringify({ status: 'building', slug: 'wedged' }), { status: 200 }),
+    });
+    holder.current = createRoundWatch({
+      getToken: () => 'tok',
+      api,
+      setLive: () => undefined,
+      announce: () => undefined,
+      sleep: async (ms) => {
+        delays.push(ms);
+        if (delays.length >= 100) holder.current?.stop();
+      },
+    });
+    await holder.current.run;
+
+    // Twenty unchanged polls retain the live cadence.
+    expect(delays.slice(0, 20)).toEqual(Array(20).fill(3000));
+    // Then the delay doubles every twenty polls.
+    expect(delays[20]).toBe(6000);
+    expect(delays[40]).toBe(12_000);
+    // Orphaned watches settle at the ceiling.
+    expect(delays.at(-1)).toBe(30_000);
+  });
+
   it('paints auth failures on the live strip and ignores 404', async () => {
     const live: string[][] = [];
     const holder: { current?: ReturnType<typeof createRoundWatch> } = {};

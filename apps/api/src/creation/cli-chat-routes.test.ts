@@ -203,6 +203,43 @@ describe('POST /api/cli/chat', () => {
     ]);
   });
 
+  it('resumes a previous conversation after another game without mixing owners', async () => {
+    const seen: Array<{ message: string; history: Array<{ role: string; text: string }> }> = [];
+    const {
+      app,
+      store,
+      authHeaders: headers,
+    } = await createApp({
+      intakeAgent: {
+        async decide(request) {
+          seen.push({ message: request.message, history: request.history });
+          return { kind: 'reply', text: `got ${request.message}` };
+        },
+      },
+    });
+    const first = (await chat(app, headers, { text: 'game A' })).json().conversationId;
+    const second = (
+      await chat(app, headers, {
+        text: 'game B',
+        conversationId: '00000000-0000-4000-8000-000000000000',
+      })
+    ).json().conversationId;
+    expect(second).not.toBe(first);
+    expect((await chat(app, headers, { text: 'continue A', conversationId: first })).json().conversationId).toBe(first);
+    expect(seen.at(-1)?.history).toEqual([
+      { role: 'user', text: 'game A' },
+      { role: 'assistant', text: 'got game A' },
+    ]);
+    expect((await chat(app, headers, { text: 'continue B', conversationId: second })).json().conversationId).toBe(
+      second,
+    );
+    expect(seen.at(-1)?.history).toEqual([
+      { role: 'user', text: 'game B' },
+      { role: 'assistant', text: 'got game B' },
+    ]);
+    expect(await store.getCliChat('another-owner', first)).toBeNull();
+  });
+
   it('replays stored history on the next turn', async () => {
     const seen: Array<{ message: string; history: Array<{ role: string; text: string }> }> = [];
     const { app, authHeaders: headers } = await createApp({
@@ -323,10 +360,12 @@ describe('POST /api/cli/chat', () => {
       store,
       intakeAgent: new StubIntakeAgent({ kind: 'reply', text: 'ok' }),
     });
-    await chat(app, headers, { text: 'hej' });
+    const first = (await chat(app, headers, { text: 'hej' })).json().conversationId;
+    await chat(app, headers, { text: 'another', conversationId: '00000000-0000-4000-8000-000000000000' });
     expect(await store.getCliChat('g:test-user')).not.toBeNull();
     await store.deleteAccountIdentity('g:test-user', '2026-09-05T00:00:00Z');
     expect(await store.getCliChat('g:test-user')).toBeNull();
+    expect(await store.getCliChat('g:test-user', first)).toBeNull();
   });
 });
 
@@ -369,6 +408,24 @@ describe('the shelf the CLI chat hands the agent', () => {
     const games = (seen[0]?.games ?? []).map((game) => game.slug).sort();
     expect(games).toEqual(['tv-tycoon', 'wojna-robakow']);
     expect(seen[0]?.games?.find((game) => game.slug === 'wojna-robakow')?.state).toBe('published');
+    await app.close();
+  });
+
+  it('reflects a transfer: drops the sender’s slug, includes the recipient’s', async () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:recipient' });
+    await store.createSubmission(1, 'g:test-user', 'Wojna robakow');
+    await store.setSubmissionSlug(1, 'wojna-robakow');
+    await store.ensureGameAccess('wojna-robakow', 'g:test-user', at, at);
+    await store.recordSettledOwner('wojna-robakow', 'g:recipient', 999, at, at);
+
+    const { agent, seen } = capturingAgent();
+    const { app, authHeaders: headers } = await createApp({ store, intakeAgent: agent });
+    const res = await chat(app, headers, { text: 'what are my games?' });
+    expect(res.statusCode).toBe(200);
+    expect(seen[0]?.games ?? []).toEqual([]);
     await app.close();
   });
 

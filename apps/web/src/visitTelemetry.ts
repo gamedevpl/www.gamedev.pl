@@ -16,11 +16,13 @@ import {
   type HowToPlayVia,
   type InviteStep,
   type PartyStep,
+  type TransferStep,
   type PartyVia,
   type PlayVia,
   type RemixControl,
   type RemixPaintedVia,
   type RemixStep,
+  type ShareStep,
   type StudioStep,
   type StudioStepDetail,
   type VisitRouteKind,
@@ -51,8 +53,10 @@ export type {
   RemixControl,
   RemixPaintedVia,
   RemixStep,
+  ShareStep,
   StudioStep,
   StudioStepDetail,
+  TransferStep,
   VisitRouteKind,
   WaitlistStep,
 };
@@ -114,6 +118,7 @@ export type VisitEvent =
   | { type: 'create_step'; step: CreateStep; builder?: BuilderDimension }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
+  | { type: 'share_step'; step: ShareStep }
   // Framed /play/ interstitial: shown, then which exit they took.
   | { type: 'framed_play_step'; step: FramedPlayStep }
   | { type: 'invite_step'; step: InviteStep }
@@ -124,6 +129,8 @@ export type VisitEvent =
    * game itself reported, which is a phone's menu button or the host keyboard.
    */
   | { type: 'party_step'; step: PartyStep; via?: PartyVia }
+  // A game changing hands. No slug, no counterparty, no code.
+  | { type: 'transfer_step'; step: TransferStep }
   | { type: 'beta_welcome_step'; step: BetaWelcomeStep }
   /**
    * Studio / self-build funnel facts on the same visit stream as `create_step`.
@@ -410,6 +417,14 @@ export function recordWaitlistStep(step: WaitlistStep): void {
   currentSession.record({ type: 'waitlist_step', step });
 }
 
+let recordedShareSteps = new Set<ShareStep>();
+
+export function recordShareStep(step: ShareStep): void {
+  if (!currentSession || recordedShareSteps.has(step)) return;
+  recordedShareSteps.add(step);
+  currentSession.record({ type: 'share_step', step });
+}
+
 let recordedFramedPlaySteps = new Set<FramedPlayStep>();
 
 export function recordFramedPlayStep(step: FramedPlayStep): void {
@@ -418,6 +433,20 @@ export function recordFramedPlayStep(step: FramedPlayStep): void {
   currentSession.record({ type: 'framed_play_step', step });
   // Clicks leave before the hide flush; send now.
   if (step !== 'shown') currentSession.flush();
+}
+
+let recordedTransferSteps = new Set<TransferStep>();
+
+/**
+ * Handing a game over. The step names carry which side acted, so no second
+ * dimension is needed; the slug and the counterparty deliberately never travel.
+ */
+export function recordTransferStep(step: TransferStep): void {
+  if (!currentSession || recordedTransferSteps.has(step)) return;
+  recordedTransferSteps.add(step);
+  currentSession.record({ type: 'transfer_step', step });
+  // Accepting changes route; send before the navigation.
+  if (step === 'offer_accepted') currentSession.flush();
 }
 
 let recordedPartySteps = new Set<string>();
@@ -606,8 +635,10 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedShareSteps = new Set();
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
+  recordedTransferSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
@@ -649,8 +680,10 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedShareSteps = new Set();
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
+  recordedTransferSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();

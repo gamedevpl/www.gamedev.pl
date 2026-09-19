@@ -7,6 +7,17 @@ import { isStudioOrigin } from '../records/build-log.js';
 import type { AgentEndedBy } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
 import { ownsDreamClaim, type DreamClaimRef } from './round-budget.js';
+import { newCreatorMessage } from './creator-message.js';
+import {
+  clearPendingInboxFlag,
+  hasPendingInbox,
+  queuesCreatorInbox,
+  queueInboxMessage,
+  setLocalPendingInboxFlag,
+  stampListedInbox,
+  stampLocalInbox,
+  writePendingInboxFlag,
+} from './pending-inbox-flag.js';
 
 // Newest first, id as a tie-break for same-millisecond events.
 export function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
@@ -73,7 +84,7 @@ export interface BuildLogStore {
   ): Promise<ProposalPostResult>;
 
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
-  listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  listPendingCreatorMessages(jobId: number, opts?: { limit?: number; stampEmpty?: boolean }): Promise<CreatorMessage[]>;
 
   // Every creator message, oldest first; cards drop before the limit.
   listCreatorMessages(jobId: number, opts?: { limit?: number; excludeProposals?: boolean }): Promise<CreatorMessage[]>;
@@ -186,19 +197,11 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       proposal?: CreatorProposal;
     },
   ): Promise<CreatorMessage> {
-    const now = new Date().toISOString();
-    const record: CreatorMessage = {
-      id: randomUUID(),
-      text,
-      createdAt: now,
-      deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
-      ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
-      ...(opts?.proposal ? { proposal: opts.proposal } : {}),
-    };
+    const record = newCreatorMessage(text, opts);
     const existing = this.creatorMessages.get(jobId) ?? [];
     existing.push(record);
     this.creatorMessages.set(jobId, existing);
+    if (queuesCreatorInbox(opts)) setLocalPendingInboxFlag(this.submissions, jobId, true);
     return { ...record };
   }
 
@@ -223,22 +226,28 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     if ((await this.limits())?.dreamsPaused === true) return { posted: null, refusedBy: 'paused' };
     if (opts.blocked(record!)) return { posted: null, refusedBy: 'blocked' };
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
-    // Stamped with the card; the list outlives the claim it stamps.
-    const attempts = [...new Set([...(record!.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
+    // Re-read; a concurrent inbox stamp must survive.
+    const current = this.submissions.get(jobId) ?? record!;
+    const attempts = [...new Set([...(current.proposalPostedAttempts ?? []), postedAttemptKey(claim)])];
     this.submissions.set(jobId, {
-      ...record!,
-      dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt },
+      ...current,
+      dreamRun: { ...current.dreamRun!, postedAt: posted.createdAt },
       proposalPostedAttempts: attempts,
     });
     return { posted };
   }
 
-  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    return (this.creatorMessages.get(jobId) ?? [])
+  async listPendingCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; stampEmpty?: boolean },
+  ): Promise<CreatorMessage[]> {
+    const pending = (this.creatorMessages.get(jobId) ?? [])
       .filter((message) => !message.deliveredAt && !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
       .map((message) => ({ ...message }));
+    if (opts?.stampEmpty) stampLocalInbox(this.submissions, jobId, pending.length);
+    return pending;
   }
 
   async listCreatorMessages(
@@ -258,12 +267,11 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     if (!existing || ids.length === 0) return;
     const at = new Date().toISOString();
     const targets = new Set(ids);
-    this.creatorMessages.set(
-      jobId,
-      existing.map((message) =>
-        targets.has(message.id) && !message.deliveredAt ? { ...message, deliveredAt: at } : message,
-      ),
+    const next = existing.map((message) =>
+      targets.has(message.id) && !message.deliveredAt ? { ...message, deliveredAt: at } : message,
     );
+    this.creatorMessages.set(jobId, next);
+    setLocalPendingInboxFlag(this.submissions, jobId, hasPendingInbox(next));
   }
 }
 
@@ -353,18 +361,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       proposal?: CreatorProposal;
     },
   ): Promise<CreatorMessage> {
-    // Spread in only for agent/studio — Firestore rejects an explicit undefined.
-    const now = new Date().toISOString();
-    const record: CreatorMessage = {
-      id: randomUUID(),
-      text,
-      createdAt: now,
-      deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
-      ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
-      ...(opts?.proposal ? { proposal: opts.proposal } : {}),
-    };
-    await this.messagesCollection(jobId).doc(record.id).set(record);
+    const record = newCreatorMessage(text, opts);
+    const messageRef = this.messagesCollection(jobId).doc(record.id);
+    if (!queuesCreatorInbox(opts)) {
+      await messageRef.set(record);
+      return record;
+    }
+    await queueInboxMessage(this.db, jobId, messageRef, record);
     return record;
   }
 
@@ -381,16 +384,14 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       blocked: (job: SubmissionRecord) => boolean;
     },
   ): Promise<ProposalPostResult> {
-    const now = new Date().toISOString();
-    const record: CreatorMessage = {
-      id: randomUUID(),
-      text,
-      createdAt: now,
-      deliveredAt: now,
+    const record = newCreatorMessage(text, {
       origin: 'studio',
-      ...(opts.textLocalized && opts.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      delivered: true,
+      textLocalized: opts.textLocalized,
+      locale: opts.locale,
       proposal: opts.proposal,
-    };
+    });
+    const now = record.createdAt;
     return await this.db.runTransaction(async (transaction) => {
       // Read and post together, or a newer delivery wins the gap.
       const snap = await transaction.get(this.submissionRef(jobId));
@@ -422,27 +423,56 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     });
   }
 
-  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listPendingCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; stampEmpty?: boolean },
+  ): Promise<CreatorMessage[]> {
     // Filtered/sorted here, not by index -- the set is tiny.
     const snap = await this.messagesCollection(jobId).where('deliveredAt', '==', null).get();
-    return snap.docs
+    const pending = snap.docs
       .map((doc) => doc.data() as CreatorMessage)
       .filter((message) => !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10);
+    if (opts?.stampEmpty) {
+      await stampListedInbox(this.db, jobId, pending.length, () => this.listPendingCreatorMessages(jobId));
+    }
+    return pending;
   }
 
   async listCreatorMessages(
     jobId: number,
     opts?: { limit?: number; excludeProposals?: boolean },
   ): Promise<CreatorMessage[]> {
-    // Slices the newest `limit` off an oldest-first sort, matching InMemory.
-    const snap = await this.messagesCollection(jobId).get();
-    return snap.docs
-      .map((doc) => doc.data() as CreatorMessage)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .filter((message) => !(opts?.excludeProposals && message.proposal))
-      .slice(-(opts?.limit ?? 20));
+    const limit = opts?.limit ?? 20;
+    // Newest messages first without a full scan.
+    if (!opts?.excludeProposals) {
+      const snap = await this.messagesCollection(jobId).orderBy('createdAt', 'desc').limit(limit).get();
+      return snap.docs
+        .map((doc) => doc.data() as CreatorMessage)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    }
+
+    // Pages until `limit` non-proposal messages are found.
+
+    // Capped at 5 pages -- bounded, never the unbounded scan it replaces.
+    const pageSize = Math.max(limit * 2, limit + 20);
+    const maxPages = 5;
+    const kept: CreatorMessage[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (let page = 0; page < maxPages && kept.length < limit; page += 1) {
+      let query = this.messagesCollection(jobId).orderBy('createdAt', 'desc').limit(pageSize);
+      if (cursor) query = query.startAfter(cursor);
+      const snap = await query.get();
+      if (snap.empty) break;
+      for (const doc of snap.docs) {
+        const message = doc.data() as CreatorMessage;
+        if (!message.proposal) kept.push(message);
+      }
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < pageSize) break;
+    }
+    return kept.slice(0, limit).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
 
   async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
@@ -457,5 +487,11 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       if (snap.exists) batch.set(refs[index], { deliveredAt: at }, { merge: true });
     });
     await batch.commit();
+    const remaining = await this.listPendingCreatorMessages(jobId);
+    if (remaining.length > 0) return;
+    await clearPendingInboxFlag(this.db, jobId);
+    if ((await this.listPendingCreatorMessages(jobId)).length > 0) {
+      await writePendingInboxFlag(this.db, jobId, true);
+    }
   }
 }

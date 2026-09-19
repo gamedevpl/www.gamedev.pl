@@ -9,15 +9,20 @@ import {
   defaultCollectionKey,
   defaultLayerKey,
   defaultLayerTileKey,
+  documentProblems,
   isPathItem,
   isTilemapItem,
   itemProblems,
   layerProblems,
   layeredProblems,
   setCell,
+  specFieldClass,
+  valueProblem,
 } from '../../editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from '../../LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
+import { EditorSurfaceSwitch } from './EditorSurfaceSwitch.js';
+import { useEditorSurfaceChoice } from './editorSurfaceChoice.js';
 import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
 import { useEditorDocument } from './useEditorDocument.js';
 import { recordAssistStep, recordEditorStep } from '../../visitTelemetry.js';
@@ -133,10 +138,16 @@ export function EditorPanel(props: {
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
   const [controllerDisabled, setControllerDisabled] = useState(false);
-  const controllerActive = Boolean(
-    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
-  );
+  const { standardPreferred, chooseSurface } = useEditorSurfaceChoice();
+  const controllerLive = Boolean(props.controller?.status === 'ready' && !controllerDisabled && props.controller.view);
+  const controllerActive = controllerLive && !standardPreferred;
   const lastControllerChangeRef = useRef<string | null>(null);
+  // A verdict about older content is no verdict about this one.
+  const verdict = props.controller?.checks ?? null;
+  const checksBlock = controllerLive && verdict !== null && (!verdict.ok || !props.controller?.checksFresh);
+  // Read at publish time, so a late verdict still counts.
+  const checksBlockRef = useRef(false);
+  checksBlockRef.current = checksBlock;
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
     content,
@@ -160,7 +171,6 @@ export function EditorPanel(props: {
   const spec = collectionKey ? editor!.definition.content[collectionKey] : null;
   const items = collectionKey ? ((content[collectionKey] ?? []) as EditorItemContent[]) : [];
   const item = items[itemIndex] ?? null;
-  const layerKeys = editor ? Object.keys(editor.definition.layers ?? {}) : [];
   const layerKey =
     editor && selectedLayerKey && editor.definition.layers?.[selectedLayerKey]
       ? selectedLayerKey
@@ -182,11 +192,11 @@ export function EditorPanel(props: {
         recordEditorStep('opened');
         setEditor(loaded);
         const merged = mergeDraft(loaded);
-        resetDocument(merged, loaded.draft?.revision ?? 0);
+        resetDocument(merged.content, loaded.draft?.revision ?? 0, merged.unsaved);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
         const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
         pushLive(
-          merged,
+          merged.content,
           defaultKey
             ? { collection: defaultKey, index: 0 }
             : defaultLayer
@@ -260,6 +270,11 @@ export function EditorPanel(props: {
     const change = props.controller?.pendingChange;
     if (!change || lastControllerChangeRef.current === change.id) return;
     lastControllerChangeRef.current = change.id;
+    if (standardPreferred) {
+      // A patch now would overwrite the creator's own edit.
+      props.controller?.acknowledgeChange(change.id, false, 'The creator is using the standard editor.');
+      return;
+    }
     const result = applyEditorPatch(contentRef.current, change.patch);
     if (result.error) {
       props.controller?.acknowledgeChange(change.id, false, result.error);
@@ -272,7 +287,7 @@ export function EditorPanel(props: {
     scheduleSave();
     props.controller?.acknowledgeChange(change.id, true);
     recordEditorStep('tool_used');
-  }, [contentRef, props.controller, pushLive, scheduleSave, setContent]);
+  }, [contentRef, props.controller, pushLive, scheduleSave, setContent, standardPreferred]);
 
   function updateItem(next: EditorItemContent) {
     if (!collectionKey) return;
@@ -383,11 +398,11 @@ export function EditorPanel(props: {
       if (!mountedRef.current) return;
       setEditor(loaded);
       const merged = mergeDraft(loaded);
-      resetDocument(merged, loaded.draft?.revision ?? 0);
+      resetDocument(merged.content, loaded.draft?.revision ?? 0, merged.unsaved);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
       const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
       pushLive(
-        merged,
+        merged.content,
         defaultKey
           ? { collection: defaultKey, index: 0 }
           : defaultLayer
@@ -483,6 +498,10 @@ export function EditorPanel(props: {
     if (saveState === 'dirty') {
       if (!(await saveNow())) return;
     }
+    if (checksBlockRef.current) {
+      setPublish({ kind: 'idle' });
+      return;
+    }
     setPublish({ kind: 'publishing' });
     try {
       const result = await publishEditorContent(slug);
@@ -564,26 +583,8 @@ export function EditorPanel(props: {
     : [];
   const allProblems = editor
     ? [
-        ...collectionKeys.flatMap((key) => {
-          const collection = editor.definition.content[key];
-          const collectionItems = itemsOf(content, key);
-          const perItem = collectionItems.flatMap((entry, index) => {
-            const found = itemProblems(collection.item, entry, name, pathMessages);
-            return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
-          });
-          const collectionWide = collectionProblems(collection, collectionItems);
-          return collectionWide.length > 0 ? [...perItem, name(collection.itemLabel)] : perItem;
-        }),
-        ...layerKeys.flatMap((key) => {
-          const declaredLayer = editor.definition.layers?.[key];
-          if (!declaredLayer) return [];
-          return layerProblems(declaredLayer, layersContent[key], name, pathMessages).length > 0
-            ? [name(declaredLayer.label)]
-            : [];
-        }),
-        ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
-        // Guarded: a dead controller's stale checks must not strand Publish.
-        ...(controllerActive && props.controller?.checks?.ok === false ? [t('studioPanel.editor.checksFromGame')] : []),
+        ...documentProblems(editor.definition, content),
+        ...(checksBlock ? [t('studioPanel.editor.checksFromGame')] : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
@@ -620,12 +621,17 @@ export function EditorPanel(props: {
             // the debounce timer, so a click inside that window would have sent the
             // creator to a playtest of the draft *before* their last edit.
             onClick={() => {
-              recordEditorStep('previewed');
-              if (saveState === 'dirty') {
-                void saveNow().then(() => props.onOpenPlaytest());
+              // Leaving unmounts the panel, so anything not on the server is gone.
+              if (saveState === 'clean' || saveState === 'saved') {
+                recordEditorStep('previewed');
+                props.onOpenPlaytest();
                 return;
               }
-              props.onOpenPlaytest();
+              void saveNow().then((saved) => {
+                if (!saved) return;
+                recordEditorStep('previewed');
+                props.onOpenPlaytest();
+              });
             }}
           >
             <PixelIcon name="play" size={12} /> {t('studioPanel.editor.tryDraft')}
@@ -643,47 +649,50 @@ export function EditorPanel(props: {
         </div>
       </div>
 
-      {saveState === 'conflict' ? (
-        <div className="editor-banner" role="alert">
-          {t('studioPanel.editor.conflict')}
-          <button type="button" onClick={() => void reloadNewest()}>
-            {t('studioPanel.editor.conflictReload')}
-          </button>
-          <button type="button" onClick={() => void saveNow(true)}>
-            {t('studioPanel.editor.conflictOverwrite')}
-          </button>
-        </div>
-      ) : null}
-      {saveState === 'error' && saveProblems.length > 0 ? (
-        <div className="editor-banner" role="alert">
-          {saveProblems.slice(0, 3).join(' · ')}
-        </div>
-      ) : null}
-      {publish.kind === 'published' ? (
-        <div className="editor-banner is-ok" role="status">
-          {t('studioPanel.editor.published')}
-        </div>
-      ) : null}
-      {publish.kind === 'cooldown' ? (
-        <div className="editor-banner" role="status">
-          {t('studioPanel.editor.cooldown')}
-        </div>
-      ) : null}
-      {publish.kind === 'waiting' ? (
-        <div className="editor-banner" role="status">
-          {t('studioPanel.editor.notSealed')}
-        </div>
-      ) : null}
-      {publish.kind === 'error' ? (
-        <div className="editor-banner" role="alert">
-          {publish.message}
-        </div>
-      ) : null}
-      {props.controller?.status === 'failed' || controllerDisabled ? (
-        <div className="editor-banner" role="alert">
-          {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
-        </div>
-      ) : null}
+      <div className="editor-banner-slot">
+        {saveState === 'conflict' ? (
+          <div className="editor-banner" role="alert">
+            {t('studioPanel.editor.conflict')}
+            <button type="button" onClick={() => void reloadNewest()}>
+              {t('studioPanel.editor.conflictReload')}
+            </button>
+            <button type="button" onClick={() => void saveNow(true)}>
+              {t('studioPanel.editor.conflictOverwrite')}
+            </button>
+          </div>
+        ) : null}
+        {saveState === 'error' && saveProblems.length > 0 ? (
+          <div className="editor-banner" role="alert">
+            {saveProblems.slice(0, 3).join(' · ')}
+          </div>
+        ) : null}
+        {publish.kind === 'published' ? (
+          <div className="editor-banner is-ok" role="status">
+            {t('studioPanel.editor.published')}
+          </div>
+        ) : null}
+        {publish.kind === 'cooldown' ? (
+          <div className="editor-banner" role="status">
+            {t('studioPanel.editor.cooldown')}
+          </div>
+        ) : null}
+        {publish.kind === 'waiting' ? (
+          <div className="editor-banner" role="status">
+            {t('studioPanel.editor.notSealed')}
+          </div>
+        ) : null}
+        {publish.kind === 'error' ? (
+          <div className="editor-banner" role="alert">
+            {publish.message}
+          </div>
+        ) : null}
+        {props.controller?.status === 'failed' || controllerDisabled ? (
+          <div className="editor-banner" role="alert">
+            {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
+          </div>
+        ) : null}
+      </div>
+      {controllerLive ? <EditorSurfaceSwitch standard={standardPreferred} onChoose={chooseSurface} /> : null}
 
       <div className="editor-body">
         {controllerActive && props.controller ? (
@@ -777,7 +786,6 @@ export function EditorPanel(props: {
             )}
           </div>
         ) : null}
-
         <aside className="editor-side">
           {paramSpecs ? (
             <div className="editor-side-group">
@@ -826,12 +834,14 @@ export function EditorPanel(props: {
                 </p>
               ) : null}
               {Object.entries(paramSpecs).map(([paramName, paramSpec]) => {
-                const value = paramValues[paramName] ?? paramSpec.default;
+                const stored = paramValues[paramName];
+                const value = stored ?? paramSpec.default;
+                const problem = valueProblem(paramSpec, stored);
                 if (paramSpec.type === 'int' || paramSpec.type === 'number') {
                   const step = paramSpec.type === 'int' ? 1 : (paramSpec.max - paramSpec.min) / 100;
                   const shown = typeof value === 'number' ? value : paramSpec.min;
                   return (
-                    <label key={paramName} className="editor-prop editor-tuning-row">
+                    <label key={paramName} className={specFieldClass(problem, 'editor-tuning-row')}>
                       <span>
                         {name(paramSpec.label)} <em>{Math.round(shown * 100) / 100}</em>
                       </span>
@@ -852,12 +862,15 @@ export function EditorPanel(props: {
                 }
                 if (paramSpec.type === 'enum') {
                   return (
-                    <label key={paramName} className="editor-prop">
+                    <label key={paramName} className={specFieldClass(problem)}>
                       <span>{name(paramSpec.label)}</span>
                       <select
                         value={typeof value === 'string' ? value : paramSpec.values[0]}
                         onChange={(event) => updateParam(paramName, event.target.value)}
                       >
+                        {typeof value === 'string' && !paramSpec.values.includes(value) ? (
+                          <option value={value}>{value}</option>
+                        ) : null}
                         {paramSpec.values.map((option) => (
                           <option key={option} value={option}>
                             {option}
@@ -869,7 +882,7 @@ export function EditorPanel(props: {
                 }
                 if (paramSpec.type === 'text') {
                   return (
-                    <label key={paramName} className="editor-prop">
+                    <label key={paramName} className={specFieldClass(problem)}>
                       <span>{name(paramSpec.label)}</span>
                       <input
                         type="text"
@@ -881,7 +894,7 @@ export function EditorPanel(props: {
                   );
                 }
                 return (
-                  <label key={paramName} className="editor-prop">
+                  <label key={paramName} className={specFieldClass(problem)}>
                     <span>{name(paramSpec.label)}</span>
                     <input
                       type="checkbox"
@@ -956,7 +969,7 @@ export function EditorPanel(props: {
                         pushLive(content, { collection: collectionKey, index });
                       }}
                     >
-                      {typeof entry.properties.name === 'string' && entry.properties.name
+                      {typeof entry?.properties?.name === 'string' && entry.properties.name
                         ? entry.properties.name
                         : `${name(spec.itemLabel)} ${index + 1}`}
                     </button>
@@ -1013,11 +1026,12 @@ export function EditorPanel(props: {
           {item && spec ? (
             <div className="editor-side-group">
               <h4>{t('studioPanel.editor.properties')}</h4>
-              {Object.entries(spec.item.properties).map(([propertyName, propertySpec]) => {
-                const value = item.properties[propertyName];
+              {Object.entries(spec.item.properties ?? {}).map(([propertyName, propertySpec]) => {
+                const value = item.properties?.[propertyName];
+                const problem = valueProblem(propertySpec, value);
                 if (propertySpec.type === 'text') {
                   return (
-                    <label key={propertyName} className="editor-prop">
+                    <label key={propertyName} className={specFieldClass(problem)}>
                       <span>{propertyName}</span>
                       <input
                         type="text"
@@ -1035,7 +1049,7 @@ export function EditorPanel(props: {
                 }
                 if (propertySpec.type === 'int' || propertySpec.type === 'number') {
                   return (
-                    <label key={propertyName} className="editor-prop">
+                    <label key={propertyName} className={specFieldClass(problem)}>
                       <span>
                         {propertyName}{' '}
                         <em>
@@ -1059,7 +1073,7 @@ export function EditorPanel(props: {
                 }
                 if (propertySpec.type === 'enum') {
                   return (
-                    <label key={propertyName} className="editor-prop">
+                    <label key={propertyName} className={specFieldClass(problem)}>
                       <span>{propertyName}</span>
                       <select
                         value={typeof value === 'string' ? value : propertySpec.values[0]}
@@ -1070,6 +1084,9 @@ export function EditorPanel(props: {
                           })
                         }
                       >
+                        {typeof value === 'string' && !propertySpec.values.includes(value) ? (
+                          <option value={value}>{value}</option>
+                        ) : null}
                         {propertySpec.values.map((option) => (
                           <option key={option} value={option}>
                             {option}
@@ -1080,7 +1097,7 @@ export function EditorPanel(props: {
                   );
                 }
                 return (
-                  <label key={propertyName} className="editor-prop">
+                  <label key={propertyName} className={specFieldClass(problem)}>
                     <span>{propertyName}</span>
                     <input
                       type="checkbox"

@@ -32,6 +32,7 @@
 import { createHash } from 'node:crypto';
 import {
   assembleGameHtml,
+  projectFromSources,
   CredentialLeakError,
   EmptyProjectError,
   ProjectTooLargeError,
@@ -156,7 +157,7 @@ function noteJob<K, V>(entries: Map<K, V>, key: K, value: V, maxJobs = MAX_STAGE
 export interface StagedPreviewOptions {
   store: Pick<
     Store,
-    'getSubmission' | 'getPublication' | 'listSubmissionsByOwnerAndSlug' | 'appendBuildPreview' | 'pruneBuildPreviews'
+    'getSubmission' | 'getPublication' | 'listSubmissionsBySlug' | 'appendBuildPreview' | 'pruneBuildPreviews'
   >;
   gamesStore: Pick<GamesStore, 'getStagedSourceFiles' | 'getManifest' | 'getSourceFile'> & {
     putDerivedArtifact?: GamesStore['putDerivedArtifact'];
@@ -273,16 +274,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     if (!sources) return 'incomplete';
 
     const assembleStartedAt = Date.now();
-    const html = assembleGameHtml(
-      {
-        title: sources.title ?? slug,
-        description: '',
-        html: sources.indexHtml,
-        js: sources.gameJs,
-        css: sources.styleCss,
-      },
-      { restrictNetwork: true },
-    );
+    const html = assembleGameHtml(projectFromSources(sources, sources.title ?? slug), { restrictNetwork: true });
     const assembleMs = Date.now() - assembleStartedAt;
     if (Buffer.byteLength(html, 'utf8') > maxBytes) return 'too_large';
 
@@ -445,16 +437,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       }
 
       const assembleStartedAt = Date.now();
-      const html = assembleGameHtml(
-        {
-          title: sources.title ?? slug,
-          description: '',
-          html: sources.indexHtml,
-          js: sources.gameJs,
-          css: sources.styleCss,
-        },
-        { restrictNetwork: true },
-      );
+      const html = assembleGameHtml(projectFromSources(sources, sources.title ?? slug), { restrictNetwork: true });
       const assembleMs = Date.now() - assembleStartedAt;
       if (Buffer.byteLength(html, 'utf8') > maxBytes) {
         options.log.warn({ jobId, version, bytes: Buffer.byteLength(html, 'utf8') }, 'candidate preview too large');

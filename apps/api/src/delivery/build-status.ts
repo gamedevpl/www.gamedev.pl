@@ -1,10 +1,11 @@
 import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
-import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
+import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-state.js';
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
+import { canActOnSlug, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -16,6 +17,7 @@ import type {
   PriorRoundHistory,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
+import { currentOwnerUidSoft } from '../platform/game-access-resolve.js';
 import type {
   BuildPreviewSummary,
   BuildShotSummary,
@@ -57,9 +59,17 @@ export interface BuildStatusOptions {
 }
 
 export interface BuildStatusAssembler {
-  attachBuildEvents(status: SubmissionStatusResponse, jobId: number, locale: string): Promise<SubmissionStatusResponse>;
+  attachBuildEvents(
+    status: SubmissionStatusResponse,
+    jobId: number,
+    locale: string,
+    // Who is asking: prior rounds are private.
+    viewerUid?: string,
+  ): Promise<SubmissionStatusResponse>;
   // Drops the cached channel events for a job that just received one.
   invalidateEvents(jobId: number): void;
+  // Drops previews/shots for a job whose media just changed.
+  invalidateMedia(jobId: number): void;
 }
 
 function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
@@ -72,6 +82,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
+  // Previews and shots change rarely during a build; 30s matches prior rounds.
+  const mediaCacheTtlMs = 30_000;
   // Past the window, a count is asked before the page.
   const eventsProbeWindowMs = 60_000;
   const maxEventsShown = 20;
@@ -82,6 +94,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     value: BuildEvent[];
   }
   const eventsCache = new Map<number, CachedEvents>();
+  // Two pollers racing a miss share one read, not two.
+  const eventsInFlight = new Map<number, Promise<BuildEvent[]>>();
 
   async function loadBuildEvents(jobId: number): Promise<BuildEvent[]> {
     if (!store) return [];
@@ -90,31 +104,43 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    // Append-only, so one count answers whether it moved.
-    let counted: number | undefined;
-    if (cached && cached.probeUntil > currentTime) {
-      counted = await store.countBuildEvents(jobId);
-      if (counted === cached.total) {
-        cached.expiresAt = currentTime + eventsCacheTtlMs;
-        return cached.value;
+    const running = eventsInFlight.get(jobId);
+    if (running) return running;
+    const loading = (async () => {
+      // Append-only, so one count answers whether it moved.
+      let counted: number | undefined;
+      if (cached && cached.probeUntil > currentTime) {
+        counted = await store.countBuildEvents(jobId);
+        if (counted === cached.total) {
+          cached.expiresAt = currentTime + eventsCacheTtlMs;
+          return cached.value;
+        }
       }
-    }
-    const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
-    // A page under the cap is the whole collection.
-    const total = value.length < maxEventsShown ? value.length : (counted ?? (await store.countBuildEvents(jobId)));
-    eventsCache.set(jobId, {
-      value,
-      total,
-      expiresAt: currentTime + eventsCacheTtlMs,
-      // Re-armed by a full read only, so a quiet watch refreshes.
-      probeUntil: currentTime + eventsProbeWindowMs,
-    });
-    return value;
+      const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
+      // A page under the cap is the whole collection.
+      const total = value.length < maxEventsShown ? value.length : (counted ?? (await store.countBuildEvents(jobId)));
+      eventsCache.set(jobId, {
+        value,
+        total,
+        expiresAt: currentTime + eventsCacheTtlMs,
+        // Re-armed by a full read only, so a quiet watch refreshes.
+        probeUntil: currentTime + eventsProbeWindowMs,
+      });
+      return value;
+    })().finally(() => eventsInFlight.delete(jobId));
+    eventsInFlight.set(jobId, loading);
+    return loading;
   }
 
   // The channel prunes on write; only a little history is ever wanted.
   const maxPreviewsShown = 4;
   const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
+  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
+  // Bumped by invalidateMedia; a read started before it must not write after.
+  const mediaGeneration = new Map<number, number>();
+  // Two pollers racing a miss share one read, not two.
+  const previewsInFlight = new Map<number, Promise<BuildPreviewSummary[]>>();
+  const shotsInFlight = new Map<number, Promise<BuildShotSummary[]>>();
 
   async function loadBuildPreviews(jobId: number): Promise<BuildPreviewSummary[]> {
     if (!store) return [];
@@ -123,13 +149,23 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildPreviews(jobId, { limit: maxPreviewsShown });
-    previewsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
-    return value;
+    const running = previewsInFlight.get(jobId);
+    if (running) return running;
+    const generation = mediaGeneration.get(jobId) ?? 0;
+    const loading = store
+      .listBuildPreviews(jobId, { limit: maxPreviewsShown })
+      .then((value) => {
+        if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+          previewsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+        }
+        return value;
+      })
+      .finally(() => previewsInFlight.delete(jobId));
+    previewsInFlight.set(jobId, loading);
+    return loading;
   }
 
   const maxShotsShown = 12;
-  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
 
   async function loadBuildShots(jobId: number): Promise<BuildShotSummary[]> {
     if (!store) return [];
@@ -138,9 +174,20 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
-    shotsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
-    return value;
+    const running = shotsInFlight.get(jobId);
+    if (running) return running;
+    const generation = mediaGeneration.get(jobId) ?? 0;
+    const loading = store
+      .listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS })
+      .then((value) => {
+        if ((mediaGeneration.get(jobId) ?? 0) === generation) {
+          shotsCache.set(jobId, { value, expiresAt: currentTime + mediaCacheTtlMs });
+        }
+        return value;
+      })
+      .finally(() => shotsInFlight.delete(jobId));
+    shotsInFlight.set(jobId, loading);
+    return loading;
   }
 
   // Pictures of this build: the screenshots the agent pushed over the channel.
@@ -218,21 +265,23 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   }
 
   // Older jobs on the same slug and creator — capped transcripts only.
-  async function loadPriorRounds(record: SubmissionRecord, locale: string): Promise<PriorRoundHistory[]> {
-    if (!store || !record.slug) return [];
+  async function loadPriorRounds(
+    record: SubmissionRecord,
+    locale: string,
+    viewerUid?: string,
+    viewerOwnsSlug = false,
+  ): Promise<PriorRoundHistory[]> {
+    if (!store || !record.slug || !viewerUid) return [];
+    // Earlier rounds carry private chat, and a status token names no one.
+    if (!viewerOwnsSlug && !(await canActOnSlug(store, record.slug, viewerUid, 'read'))) return [];
     const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
     if (cached && cached.expiresAt > currentTime) return cached.value;
 
-    // Only jobs started before this one — no later rounds as "earlier".
+    // Started before this one, whoever built them: the slug's own history.
     const siblings = (await store.listSubmissionsBySlug(record.slug))
-      .filter(
-        (sibling) =>
-          sibling.jobId !== record.jobId &&
-          sibling.ownerUid === record.ownerUid &&
-          sibling.createdAt < record.createdAt,
-      )
+      .filter((sibling) => startedBefore(sibling, record))
       .slice(0, maxPriorRounds)
       .reverse();
 
@@ -290,6 +339,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     status: SubmissionStatusResponse,
     jobId: number,
     locale: string,
+    viewerUid?: string,
   ): Promise<SubmissionStatusResponse> {
     const [loadedEvents, media, playable, record] = await Promise.all([
       loadBuildEvents(jobId),
@@ -298,16 +348,25 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
+    // State is a receipt the token carries; what was said is not.
+    const viewerOwns = Boolean(
+      store && record && viewerUid && (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read')),
+    );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
       ...status,
-      ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
-      ...(media.length > 0 ? { media } : {}),
-      ...(playable.length > 0 ? { playable } : {}),
+      ...(viewerOwns && events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
+      ...(viewerOwns && media.length > 0 ? { media } : {}),
+      ...(viewerOwns && playable.length > 0 ? { playable } : {}),
       // Resolved here, not in nativeJobStatus, so the cache stays language-neutral.
       ...(status.progress
-        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
+        ? {
+            progress: {
+              ...status.progress,
+              revisions: viewerOwns ? localizeRevisions(status.progress.revisions, locale) : [],
+            },
+          }
         : {}),
     };
     if (!record) return next;
@@ -320,10 +379,10 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (record.agentEndedAt) next.agentEndedAt = record.agentEndedAt;
     else delete next.agentEndedAt;
     if (managedAvailabilityGate) {
-      next.platformBuilder = await managedAvailabilityGate.peek(
-        record.ownerUid,
-        new Date(now()).toISOString().slice(0, 10),
-      );
+      // The quota belongs to whoever owns the game now, not the author.
+      const quotaUid =
+        store && record.slug ? await currentOwnerUidSoft(store, record.slug, record.ownerUid) : record.ownerUid;
+      next.platformBuilder = await managedAvailabilityGate.peek(quotaUid, new Date(now()).toISOString().slice(0, 10));
     }
 
     const stall = detectStall({
@@ -363,11 +422,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     }
 
     // Soft: sibling history must not 500 the live thread poll.
-    try {
-      const priorRounds = await loadPriorRounds(record, locale);
-      if (priorRounds.length > 0) next.priorRounds = priorRounds;
-      else delete next.priorRounds;
-    } catch {
+    if (viewerOwns) {
+      try {
+        const priorRounds = await loadPriorRounds(record, locale, viewerUid, true);
+        if (priorRounds.length > 0) next.priorRounds = priorRounds;
+        else delete next.priorRounds;
+      } catch {
+        delete next.priorRounds;
+      }
+    } else {
       delete next.priorRounds;
     }
 
@@ -391,5 +454,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     eventsCache.delete(jobId);
   }
 
-  return { attachBuildEvents, invalidateEvents };
+  function invalidateMedia(jobId: number): void {
+    mediaGeneration.set(jobId, (mediaGeneration.get(jobId) ?? 0) + 1);
+    previewsCache.delete(jobId);
+    shotsCache.delete(jobId);
+  }
+
+  return { attachBuildEvents, invalidateEvents, invalidateMedia };
 }

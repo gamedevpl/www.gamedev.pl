@@ -1,7 +1,9 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
+import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
+import { eraseTransferRows } from './erase-transfer-rows.js';
 import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
@@ -81,6 +83,10 @@ import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGameAccessStore } from './slices/game-access.js';
 import { FirestoreGameTransferStore } from './slices/game-transfer.js';
+import { FirestoreGameTransferProposalStore } from './slices/game-transfer-proposal.js';
+import { FirestoreGameEditorInviteStore } from './slices/game-editor-invite.js';
+import { FirestoreGameMembershipStore } from './slices/game-membership.js';
+import { FirestoreGameQuotaStore } from './slices/game-quota.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
@@ -100,6 +106,7 @@ import { FirestoreSocialStore } from './slices/social.js';
 import { FirestoreSubmissionQueryStore } from './slices/submission-queries.js';
 import { FirestoreSubmissionStore } from './slices/submission.js';
 import { FirestoreTelemetryStore } from './slices/telemetry.js';
+import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
@@ -127,6 +134,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private publicationStore: FirestorePublicationStore;
   protected gameAccessStore: FirestoreGameAccessStore;
   protected gameTransferStore: FirestoreGameTransferStore;
+  protected gameTransferProposalStore: FirestoreGameTransferProposalStore;
+  protected gameEditorInviteStore: FirestoreGameEditorInviteStore;
+  protected gameMembershipStore: FirestoreGameMembershipStore;
+  private gameQuotaStore: FirestoreGameQuotaStore;
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
@@ -162,6 +173,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.publicationStore = new FirestorePublicationStore(this.db);
     this.gameAccessStore = new FirestoreGameAccessStore(this.db);
     this.gameTransferStore = new FirestoreGameTransferStore(this.db);
+    this.gameTransferProposalStore = new FirestoreGameTransferProposalStore(this.db);
+    this.gameEditorInviteStore = new FirestoreGameEditorInviteStore(this.db);
+    this.gameMembershipStore = new FirestoreGameMembershipStore(this.db);
+    this.gameQuotaStore = new FirestoreGameQuotaStore(this.db);
     this.roundsStore = new FirestoreRoundsStore(this.db);
     this.roundBudgetStore = new FirestoreRoundBudgetStore(this.db);
     this.dispatchStore = new FirestoreDispatchStore(this.db);
@@ -174,9 +189,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
 
-  async getUser(uid: string): Promise<User | null> {
-    return this.identityStore.getUser(uid);
-  }
+  getUser = (uid: string) => this.identityStore.getUser(uid);
 
   async getUserByHandle(handle: string): Promise<User | null> {
     return this.identityStore.getUserByHandle(handle);
@@ -267,7 +280,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     ]);
 
     // After the fence, so a record created mid-erasure is either refused or seen here.
-    await this.gameAccessStore.eraseMemberFromAllGameAccess(uid, at);
+    await this.eraseMemberFromAllGameAccess(uid, at);
+    await this.gameEditorInviteStore.cancelPendingEditorInvitesForUid(uid, at);
+    await this.gameTransferProposalStore.eraseTransferProposalsForUid(uid, at);
 
     // Refresh rows may lack ownerUid; join them through owned grants.
     const grantIds = new Set(oauthGrants.docs.map((doc) => doc.id));
@@ -342,20 +357,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     // Slug-keyed docs can be overwritten before this runs; re-check, don't blind-delete.
     const transferSlugs = new Set([...transfersSent.docs, ...transfersReceived.docs].map((doc) => doc.id));
     // The recipient's cached inbox must drop this erased row too.
-    const affectedRecipients = new Set<string>();
-    for (const slug of transferSlugs) {
-      const ref = this.db.collection('gameTransfers').doc(slug);
-      await this.db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
-        if (!snap.exists) return;
-        const invite = snap.data() as { senderUid?: string; recipientUid?: string };
-        if (invite.senderUid === uid || invite.recipientUid === uid) {
-          tx.delete(ref);
-          if (invite.recipientUid) affectedRecipients.add(invite.recipientUid);
-        }
-      });
+    for (const recipientUid of await eraseTransferRows(this.db, uid, transferSlugs)) {
+      invalidateTransferInboxCache(this, recipientUid);
     }
-    for (const recipientUid of affectedRecipients) invalidateTransferInboxCache(this, recipientUid);
 
     // Stay under Firestore's 500-op batch cap.
     const BATCH_SIZE = 450;
@@ -367,6 +371,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     // The read above seeded the session window; an erased account must not survive it.
     this.identityStore.forgetUser(uid);
 
+    this.dropDerivedAccessMany([...publishedSlugs, ...unpublishedSlugs]);
     return { publishedSlugs, unpublishedSlugs };
   }
 
@@ -434,7 +439,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async countSubmissionsByOwner(ownerUid: string): Promise<number> {
-    return this.shelfStore.countSubmissionsByOwner(ownerUid);
+    // Must match the rebuilt shelf, not the ownerUid query.
+    return (await reconcileTransferredOwnership(this, ownerUid, await this.listSubmissionsByOwner(ownerUid))).length;
   }
 
   async listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]> {
@@ -797,7 +803,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 
-  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listPendingCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; stampEmpty?: boolean },
+  ): Promise<CreatorMessage[]> {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 
@@ -827,6 +836,14 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.telemetryStore.appendTelemetryEvents(dateStr, events);
   }
 
+  async getTelemetryDaily(dateStr: string): Promise<DailyTelemetryAggregate | undefined> {
+    return this.telemetryStore.getTelemetryDaily(dateStr);
+  }
+
+  async putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void> {
+    return this.telemetryStore.putTelemetryDaily(dateStr, aggregate);
+  }
+
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
     return this.telemetryStore.listTelemetryEvents(dateStr, opts);
   }
@@ -845,6 +862,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listSubmissionsBySlug(slug);
+  }
+
+  async countSubmissionsBySlug(slug: string): Promise<number> {
+    return this.submissionQueryStore.countSubmissionsBySlug(slug);
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -902,6 +923,23 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }> {
     return this.quotaStore.checkAndIncrementQuota(uid, dateStr, limit, action);
+  }
+
+  async getGameUsage(slug: string, dateStr: string): Promise<UsageCounters> {
+    return this.gameQuotaStore.getGameUsage(slug, dateStr);
+  }
+
+  async checkAndIncrementGameQuota(
+    slug: string,
+    dateStr: string,
+    limit: number,
+    action: keyof UsageCounters,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.gameQuotaStore.checkAndIncrementGameQuota(slug, dateStr, limit, action);
+  }
+
+  async decrementGameQuota(slug: string, dateStr: string, action: keyof UsageCounters): Promise<void> {
+    return this.gameQuotaStore.decrementGameQuota(slug, dateStr, action);
   }
 
   async getCreationLimits(): Promise<CreationLimits | null> {
@@ -1106,7 +1144,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   ): Promise<{ created: boolean; notification: StoredNotification }> {
     return this.notificationsStore.createNotification(uid, notification);
   }
-
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
     return this.notificationsStore.listNotifications(uid, opts);
   }
@@ -1122,7 +1159,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
     return this.notificationsStore.markNotificationEmailed(uid, id, at);
   }
-
+  async listPendingEmailNotifications(opts?: { limit?: number; createdAfter?: string }) {
+    return this.notificationsStore.listPendingEmailNotifications(opts);
+  }
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
     return this.notificationsStore.savePushSubscription(uid, subscription);
   }
@@ -1594,8 +1633,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.oauthStore.createOAuthAccessToken(record);
   }
 
-  async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    return this.oauthStore.getOAuthAccessToken(tokenId);
+  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
+    return this.oauthStore.getAsAccessToken(tokenId);
   }
 
   async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {
@@ -1632,6 +1671,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }): Promise<OAuthGrantRecord | null> {
     return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
-  getCliChat = (uid: string) => this.cliChatStore.getCliChat(uid);
+  getCliChat = (uid: string, conversationId?: string) => this.cliChatStore.getCliChat(uid, conversationId);
   putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }
