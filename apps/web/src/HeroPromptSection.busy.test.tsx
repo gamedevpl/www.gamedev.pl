@@ -101,6 +101,21 @@ describe('HeroPromptSection busy states and loading indicators', () => {
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Formulating design questions/i);
     expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Formulating design questions/i);
 
+    // Advance another 2.8s: step 4 (final step, interval is cleared)
+    await act(async () => {
+      vi.advanceTimersByTime(2800);
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Almost ready/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Almost ready/i);
+
+    // Advancing further stays on final step
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Almost ready/i);
+
     await act(async () => root.unmount());
   });
 });

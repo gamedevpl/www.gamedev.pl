@@ -699,6 +699,15 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .prompt-busy-progress-fill {
+    animation: none;
+    width: 100%;
+    transform: none;
+    opacity: 0.6;
+  }
+}
+
 .creation-card.is-busy {
   border-color: rgba(0, 228, 172, 0.35);
   background: rgba(0, 228, 172, 0.08);

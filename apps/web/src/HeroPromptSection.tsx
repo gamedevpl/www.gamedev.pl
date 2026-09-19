@@ -218,7 +218,14 @@ export function HeroPromptSection({
       return;
     }
     const interval = setInterval(() => {
-      setRefiningStepIndex((prev) => (prev + 1 < REFINING_STEPS.length ? prev + 1 : prev));
+      setRefiningStepIndex((prev) => {
+        const next = prev + 1;
+        if (next >= REFINING_STEPS.length - 1) {
+          clearInterval(interval);
+          return REFINING_STEPS.length - 1;
+        }
+        return next;
+      });
     }, 2800);
     return () => clearInterval(interval);
   }, [submissionStatus]);
