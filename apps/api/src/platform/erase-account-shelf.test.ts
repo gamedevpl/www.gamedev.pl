@@ -92,6 +92,43 @@ describe('eraseAccount and the shelf', () => {
     expect(after?.rounds).toEqual([]);
   });
 
+  // The fence is kept, so a truthy check blocks forever.
+  it('lets a uid that signed up again rebuild its shelf', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:leaving', 'Theirs');
+    await store.setSubmissionSlug(1, 'sky');
+    const erasedAt = new Date(Date.now() - 60_000).toISOString();
+    await eraseAccount({ store, uid: 'g:leaving', at: erasedAt });
+    expect((await store.getShelf('g:leaving'))?.stale).toBe(true);
+
+    // Same uid, new account: dated after the fence.
+    await store.upsertUser({ uid: 'g:leaving' });
+    expect((await store.getUser('g:leaving'))!.createdAt > erasedAt).toBe(true);
+    await store.createSubmission(2, 'g:leaving', 'Their new one');
+
+    expect(await store.rebuildShelf('g:leaving')).toBe(true);
+    const shelf = await store.getShelf('g:leaving');
+    expect(shelf?.stale).toBeUndefined();
+    expect(shelf?.rounds.map((round) => round.jobId)).toEqual([2]);
+  });
+
+  // Ten of these would fill the batch and starve live shelves.
+  it('moves a refused erasure tombstone out of the stale window', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:leaving', 'Theirs');
+    await store.beginAccountErasure('g:leaving', new Date().toISOString());
+    const before = (await store.getShelf('g:leaving'))!;
+
+    // The hourly pass picks it up and is refused.
+    expect(await store.listStaleShelfOwners(new Date(Date.now() + 1000).toISOString(), 10)).toContain('g:leaving');
+    expect(await store.rebuildShelf('g:leaving')).toBe(false);
+
+    // A refusal writing nothing stays first in line.
+    const after = (await store.getShelf('g:leaving'))!;
+    expect(after.stale).toBe(true);
+    expect(after.seq ?? 0).toBeGreaterThan(before.seq ?? 0);
+  });
+
   it('leaves both shelves alone on a dry run', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:leaving', 'Theirs');

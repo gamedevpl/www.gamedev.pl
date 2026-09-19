@@ -77,8 +77,10 @@ export async function recordShelfShadow(
       noteReadTally('shelfMismatch', true);
       deps.log.warn({ ownerUid, ...result }, 'shelf shadow mismatch');
     }
-    // Readers serve this document, so any drift is wrong answers until rewritten.
-    if (result.verdict !== 'match') await repairShelf(deps, ownerUid);
+    // Readers serve this document, so drift is wrong until rewritten.
+
+    // 'truncated' is permanent here; repairing would cost a rebuild per read.
+    if (result.verdict !== 'match' && result.verdict !== 'truncated') await repairShelf(deps, ownerUid);
     return result;
   } catch (error) {
     noteReadTally('shelfShadow', 'error');

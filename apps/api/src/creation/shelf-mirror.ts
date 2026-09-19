@@ -1,10 +1,12 @@
 import { buildShelfDocument, type ShelfDocument } from '../store/records/shelf.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-records.js';
+import { erasedIncarnation } from '../store/records/game-access.js';
 
 // Structural, not Pick<Store>: the store builds the mirror.
 export type ShelfMirrorStore = ShelfStore & {
   getAccountErasure(uid: string): Promise<string | null>;
+  getUser(uid: string): Promise<{ createdAt?: string } | null>;
   putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
   tombstoneShelf(ownerUid: string, builtAt: string): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
@@ -47,7 +49,11 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
       const seq = current?.seq ?? 0;
 
       // Erasure tombstones before rewriting rows; source still holds them.
-      if (current?.stale && (await store.getAccountErasure(ownerUid))) return null;
+      if (current?.stale && (await erasedForGood(ownerUid))) {
+        // Fresh builtAt, or the sweep keeps picking this.
+        await discard(ownerUid);
+        return null;
+      }
 
       const owned = await store.listSubmissionsByOwner(ownerUid);
 
@@ -61,6 +67,12 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
     report(new Error('shelf rebuild lost the sequence race'), { ownerUid });
     await discard(ownerUid);
     return null;
+  }
+
+  // A recreated uid is a new account; it may rebuild.
+  async function erasedForGood(ownerUid: string): Promise<boolean> {
+    const erasedAt = await store.getAccountErasure(ownerUid);
+    return erasedIncarnation(await store.getUser(ownerUid), erasedAt);
   }
 
   // A delete resets seq, so an earlier pass would win.

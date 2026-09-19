@@ -6,7 +6,7 @@ import {
   newTransferInvitation,
   type GameTransferInvitation,
 } from '../records/game-transfer.js';
-import { fencedOut } from '../records/game-access.js';
+import { erasedIncarnation } from '../records/game-access.js';
 import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 import { isActiveBuildRound, revokedRoundGeneration } from '../../creation/job-state.js';
 import type { JobState } from '@gamedevpl/contract';
@@ -70,13 +70,6 @@ function ownerMatches(access: GameAccessRecord, uid: string, revision: number): 
 }
 
 // The fence belongs to an incarnation, not to a uid.
-
-// A uid that signed up again is a different account.
-function erasedIncarnation(user: { createdAt?: string } | null, erasedAt: string | null): boolean {
-  if (erasedAt === null) return false;
-  // No record to date: treat the fence as covering it.
-  return user?.createdAt === undefined || fencedOut(erasedAt, user.createdAt);
-}
 
 // The fence document carries when the erasure began, or nothing.
 function fenceAt(snap: { exists: boolean; data: () => unknown }): string | null {

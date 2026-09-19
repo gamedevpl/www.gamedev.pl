@@ -206,6 +206,27 @@ describe('recordShelfShadow', () => {
     expect(rebuildCalled).toBe(false);
   });
 
+  // Rebuilding cannot un-truncate it, so repairing costs a rebuild per read.
+  it('reports a truncated shelf without rebuilding it', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => ({ ...buildShelfDocument(source, at), truncated: true as const }),
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    );
+    expect(result?.verdict).toBe('truncated');
+    expect(rebuildCalled).toBe(false);
+  });
+
   // A discard leaves this behind; it must not read as agreement.
   it('repairs a tombstone rather than treating an empty one as a match', async () => {
     let rebuildCalled = false;
