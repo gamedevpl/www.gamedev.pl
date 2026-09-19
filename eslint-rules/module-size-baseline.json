@@ -467,7 +467,7 @@
     "apps/api/src/static-serving.test.ts": 95,
     "apps/api/src/store-firestore.test.ts": 1340,
     "apps/api/src/store/firestore.ts": 1683,
-    "apps/api/src/store/in-memory.ts": 1668,
+    "apps/api/src/store/in-memory.ts": 1672,
     "apps/api/src/store/records/notifications.ts": 129,
     "apps/api/src/store/records/submission.ts": 314,
     "apps/api/src/store/slices/agent-keys.ts": 200,

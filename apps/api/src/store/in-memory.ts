@@ -2,7 +2,7 @@ import { SubmissionFacade } from './submission-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
-import type { ShelfDocument } from './records/shelf.js';
+import { tombstoneShelf, type ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -173,6 +173,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug, uid, cancelActive) => this.revokeMemberActor(slug, uid, cancelActive),
     (slug, action, actorUid, subjectUid, at) => {
       this.gameEditorInviteStore.audits.push(newMembershipAudit(slug, action, actorUid, subjectUid, at));
+    },
+    // Called lazily, so `shelves` below is initialised by then.
+    (ownerUid, at) => {
+      this.shelves.set(ownerUid, tombstoneShelf(at, (this.shelves.get(ownerUid)?.seq ?? 0) + 1));
     },
   );
   private gameQuotaStore = new InMemoryGameQuotaStore();

@@ -2,6 +2,7 @@ import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { withEditorRemoved, type GameAccessRecord } from '../records/game-access.js';
 import { editorInviteDocId, isPendingEditorInvite, type GameEditorInvitation } from '../records/game-editor-invite.js';
 import { newMembershipAudit } from '../records/game-membership-audit.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 import { isActiveBuildRound, revokedRoundGeneration } from '../../creation/job-state.js';
 import type { JobState } from '@gamedevpl/contract';
 import type { JobTransition } from '../../creation/job-state.js';
@@ -39,6 +40,8 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
       subjectUid: string,
       at: string,
     ) => void,
+    // Same write as the access change; neither lands alone.
+    private invalidateShelf: (ownerUid: string, at: string) => void,
   ) {}
 
   async removeEditor(slug: string, ownerUid: string, editorUid: string, at: string): Promise<MembershipChangeResult> {
@@ -50,6 +53,7 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
     this.cancelInvite(slug, editorUid, at);
     this.revokeActorRounds(slug, editorUid, false);
     this.writeAudit(slug, 'editor_removed', ownerUid, editorUid, at);
+    this.invalidateShelf(editorUid, at);
     return next;
   }
 
@@ -62,6 +66,7 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
     this.cancelInvite(slug, editorUid, at);
     this.revokeActorRounds(slug, editorUid, true);
     this.writeAudit(slug, 'editor_left', editorUid, editorUid, at);
+    this.invalidateShelf(editorUid, at);
     return next;
   }
 }
@@ -81,13 +86,15 @@ export class FirestoreGameMembershipStore implements GameMembershipStore {
     const gameRef = this.db.collection('games').doc(slug);
     const agentKeyRef = this.db.collection('gameAgentKeys').doc(slug);
     const activeQuery = this.db.collection('submissions').where('slug', '==', slug);
+    const shelfRef = this.db.collection('shelves').doc(editorUid);
     return this.db.runTransaction(async (tx) => {
-      const [accessSnap, inviteSnap, activeSnap, gameSnap, agentKeySnap] = await Promise.all([
+      const [accessSnap, inviteSnap, activeSnap, gameSnap, agentKeySnap, shelfSnap] = await Promise.all([
         tx.get(accessRef),
         tx.get(inviteRef),
         tx.get(activeQuery),
         tx.get(gameRef),
         tx.get(agentKeyRef),
+        tx.get(shelfRef),
       ]);
       const access = accessSnap.exists ? (accessSnap.data() as GameAccessRecord) : null;
       if (!access) return null;
@@ -101,6 +108,10 @@ export class FirestoreGameMembershipStore implements GameMembershipStore {
       }
       const actor = expectedOwnerUid ?? editorUid;
       tx.set(this.db.collection('gameMembershipAudit').doc(), newMembershipAudit(slug, action, actor, editorUid, at));
+
+      // Atomic with the access change; a later write can fail alone.
+      const shelf = shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null;
+      tx.set(shelfRef, tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
       let releasedLease = false;
       // Owner-remove keeps the live round; leave cancels it.
       const cancelActive = action === 'editor_left';
