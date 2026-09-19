@@ -5,17 +5,14 @@ import { revisionOriginOf } from './build-status.js';
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import type { BuilderKind } from '../creation/builder.js';
-import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { SubmissionStatusResponse } from '../platform/submission-status.js';
-import { currentOwnerUidSoft } from '../platform/game-access-resolve.js';
 
 export interface NativeJobStatusOptions {
   store?: Store;
   now: () => number;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
-  managedAvailabilityGate?: ManagedAvailabilityGate | null;
   gamesStore?: GamesStore;
   // N1: injected so this module has no value-level creation/ import.
   sessionCrashStall: (record: SubmissionRecord) => void;
@@ -34,7 +31,6 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
     store,
     now,
     builderOf,
-    managedAvailabilityGate,
     gamesStore,
     sessionCrashStall,
     codeSurfaceEnabled,
@@ -163,12 +159,7 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
         ...(killed ? { reason: 'killed' as const } : liveAgent ? { reason: 'agent_round' as const } : {}),
       };
     }
-    if (managedAvailabilityGate) {
-      // The quota belongs to whoever owns the game now, not the author.
-      const quotaUid =
-        store && record.slug ? await currentOwnerUidSoft(store, record.slug, record.ownerUid) : record.ownerUid;
-      status.platformBuilder = await managedAvailabilityGate.peek(quotaUid, new Date(now()).toISOString().slice(0, 10));
-    }
+    // Availability resolves per viewer, in `attachBuildEvents`.
     if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) {
       status.builderHandoff = {
         target: record.builderHandoff.to,
