@@ -331,6 +331,92 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
+  it('prompts to confirm if user advanced steps and navigated back to name stage', async () => {
+    let cancelled = false;
+    const root = await render({
+      ...baseProps,
+      onCancel: () => {
+        cancelled = true;
+      },
+    });
+
+    await next(); // question stage (step 1)
+    const backBtn = find<HTMLButtonElement>('.qa-back');
+    await click(backBtn); // back to name stage (step 0)
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit');
+    await click(exit);
+
+    // Confirmation dialog appears because user had advanced
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    expect(cancelled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('prompts to confirm when title is edited even if parent re-renders with new initialTitle', async () => {
+    let cancelled = false;
+    let currentTitle = 'Original Title';
+    const onTitleChange = vi.fn((newTitle: string) => {
+      currentTitle = newTitle;
+    });
+
+    const root = await render({
+      ...baseProps,
+      initialTitle: currentTitle,
+      onTitleChange,
+      onCancel: () => {
+        cancelled = true;
+      },
+    });
+
+    const input = find<HTMLInputElement>('.qa-name-input')!;
+    await type(input, 'Renamed Game');
+
+    // Simulate parent re-render passing updated initialTitle
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          ...baseProps,
+          initialTitle: 'Renamed Game',
+          onTitleChange,
+          onCancel: () => {
+            cancelled = true;
+          },
+        } as never),
+      );
+      await flushEffects();
+    });
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit');
+    await click(exit);
+
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    expect(cancelled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('restores focus to exit button after dismissing confirmation modal', async () => {
+    const root = await render({
+      ...baseProps,
+      initialAnswers: { selected: { mechanics: ['Card drafting'] }, custom: {} },
+      onCancel: vi.fn(),
+    });
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit')!;
+    exit.focus();
+    await click(exit);
+
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+
+    await click(find('.qa-confirm-keep'));
+    expect(find('.qa-confirm-dialog')).toBeNull();
+    expect(document.activeElement).toBe(exit);
+
+    await act(async () => root.unmount());
+  });
+
   it('submits initial concept unchanged when every question is skipped', async () => {
     let submittedConcept = '';
     const root = await render({

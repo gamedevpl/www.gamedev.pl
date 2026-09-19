@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { BuilderChoice, type BuilderUnavailableReason } from './BuilderChoice.js';
 import { isBuilderKind, type BuilderKind } from './builderKind.js';
 import { CreatorQADiscardModal } from './CreatorQADiscardModal.js';
+import { hasCreatorQaProgress } from './creatorQaProgress.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
@@ -99,22 +100,45 @@ export function CreatorQA({
   // Never switched over automatically — the creator must pick self.
   const builderBlocked = builder === 'platform' && Boolean(platformUnavailable);
 
-  const hasProgress = useMemo(() => {
-    if (step > 0) return true;
-    if (title.trim() !== initialTitle.trim()) return true;
-    if (Object.values(selectedAnswers).some((opts) => opts && opts.length > 0)) return true;
-    if (Object.values(customText).some((txt) => txt && txt.trim().length > 0)) return true;
-    if (builder !== (isBuilderKind(initialBuilder) ? initialBuilder : 'platform')) return true;
-    return false;
-  }, [step, title, initialTitle, selectedAnswers, customText, builder, initialBuilder]);
+  // Baselines captured at mount time: the parent passes edited values back through
+  // onTitleChange/onBuilderChange, which would otherwise reset the comparison.
+  const baselineTitleRef = useRef(initialTitle);
+  const baselineBuilderRef = useRef(initialBuilder);
+  const maxStepReachedRef = useRef(step);
+  if (step > maxStepReachedRef.current) {
+    maxStepReachedRef.current = step;
+  }
 
-  const handleExitClick = () => {
+  const hasProgress = useMemo(
+    () =>
+      hasCreatorQaProgress({
+        step,
+        maxStepReached: maxStepReachedRef.current,
+        title,
+        baselineTitle: baselineTitleRef.current,
+        builder,
+        baselineBuilder: baselineBuilderRef.current,
+        selectedAnswers,
+        customText,
+      }),
+    [step, title, builder, selectedAnswers, customText],
+  );
+
+  const exitTriggerRef = useRef<HTMLElement | null>(null);
+
+  const handleExitClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (submitting) return;
     if (hasProgress) {
+      exitTriggerRef.current = (document.activeElement as HTMLElement | null) ?? event.currentTarget;
       setShowConfirmExit(true);
     } else {
       onCancel?.();
     }
+  };
+
+  const handleKeep = () => {
+    setShowConfirmExit(false);
+    exitTriggerRef.current?.focus?.();
   };
 
   const stages = useMemo<Stage[]>(
@@ -238,7 +262,7 @@ export function CreatorQA({
     if (showConfirmExit && event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      setShowConfirmExit(false);
+      handleKeep();
       return;
     }
     handleTabKey(event);
@@ -624,7 +648,7 @@ export function CreatorQA({
 
       {showConfirmExit && (
         <CreatorQADiscardModal
-          onKeep={() => setShowConfirmExit(false)}
+          onKeep={handleKeep}
           onDiscard={() => {
             setShowConfirmExit(false);
             onCancel?.();
