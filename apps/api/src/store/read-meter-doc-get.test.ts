@@ -30,6 +30,15 @@ describe('read meter: a document get counts once', () => {
     });
   });
 
+  // Per async context; a module flag would leak across requests.
+  it('keeps an overlapping direct getAll counted while a get is in flight', async () => {
+    const db = new Firestore({ projectId: 'read-meter-test' });
+    await runWithReadTally(beginReadTally(), async () => {
+      await Promise.all([db.collection('shelves').doc('g:owner').get(), db.getAll(db.doc('shelves/a'), db.doc('shelves/b'))]);
+      expect(currentReadTally()?.reads).toBe(3);
+    });
+  });
+
   it('still records one read per reference for a direct getAll', async () => {
     const db = new Firestore({ projectId: 'read-meter-test' });
     await runWithReadTally(beginReadTally(), async () => {
