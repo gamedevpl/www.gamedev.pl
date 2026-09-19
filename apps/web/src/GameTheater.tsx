@@ -5,6 +5,7 @@ import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
 import { useAgentBridge } from './useAgentBridge.js';
 import { GameFrame } from './GameFrame.js';
+import { GameLoadScreen } from './GameLoadScreen.js';
 import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
@@ -23,6 +24,7 @@ import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
+import { useOrientationMismatch } from './useOrientationMismatch.js';
 import { creatorPath, gamePath } from './core/router.js';
 import './remix-result.css';
 
@@ -112,36 +114,6 @@ type GameTheaterProps = {
 export const PLAYER_CHROME_IDLE_MS = 3200;
 
 /**
- * True while a handheld is held the wrong way round for this game.
- *
- * Only handhelds are nudged: a desktop window can be any shape and its owner
- * resizes it rather than turning it over, so telling them to rotate is noise.
- */
-function useOrientationMismatch(desired: 'any' | 'portrait' | 'landscape' | 'adaptive'): boolean {
-  const [mismatched, setMismatched] = useState(false);
-
-  useEffect(() => {
-    // adaptive / any: the game follows the device — never nag to rotate.
-    if (
-      desired === 'any' ||
-      desired === 'adaptive' ||
-      typeof matchMedia !== 'function' ||
-      !matchMedia('(pointer: coarse)').matches
-    ) {
-      setMismatched(false);
-      return;
-    }
-    const query = matchMedia(`(orientation: ${desired})`);
-    const update = () => setMismatched(!query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, [desired]);
-
-  return mismatched;
-}
-
-/**
  * The full-viewport game player ("theater"): a fixed overlay with a header bar
  * (badge, title, lifted description, sound toggle, exit) over the sandboxed game.
  * It owns the player bridge (see gamePlayer.ts) so the game's own title/description/
@@ -177,7 +149,7 @@ export function GameTheater({
   // Agent mode; see docs/agent-play-mode.md.
   const agentModeKey = reportSlug ?? 'draft';
 
-  const agentBridge = useAgentBridge('slug' in source);
+  const agentBridge = useAgentBridge(true);
   // The server's answer is the gate, not the URL or menu.
   const agentAvailable = typeof agentBridge === 'string';
 
@@ -491,7 +463,11 @@ export function GameTheater({
   // — would have had the bar copy hidden by CSS and no menu to fall back to, and the
   // control would have vanished entirely.
   const showMoreMenu =
-    Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth) || (voiceMeter.available && isMidWidth);
+    Boolean(reportSlug) ||
+    agentAvailable ||
+    isNarrow ||
+    (hasControls && isMidWidth) ||
+    (voiceMeter.available && isMidWidth);
   const canRemix = remixable && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
@@ -843,8 +819,10 @@ export function GameTheater({
             theaterChromeHidden={chromeIdle}
             onRevealChrome={revealChrome}
           />
+        ) : agentBridge === undefined ? (
+          <GameLoadScreen onExit={onExit} />
         ) : (
-          <GameFrame title={title} html={source.html} frameRef={frameRef} embed />
+          <GameFrame title={title} html={source.html} frameRef={frameRef} embed agentBridge={agentBridge} />
         )}
         {sensing.backdrop.live ? (
           <div className="theater-camera-indicator" role="status" aria-live="polite">

@@ -3,7 +3,15 @@ import { Mascot } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatLoadBytes, type FetchProgress } from './fetchProgress.js';
 
-export function GameLoadScreen({ onExit, progress }: { onExit?: () => void; progress: FetchProgress }) {
+const DEFAULT_PROGRESS: FetchProgress = { loaded: 0, total: null };
+
+export function GameLoadScreen({
+  onExit,
+  progress = DEFAULT_PROGRESS,
+}: {
+  onExit?: () => void;
+  progress?: FetchProgress;
+}) {
   const { t } = useTranslation();
   const total = progress.total;
   const known = total != null && total > 0;

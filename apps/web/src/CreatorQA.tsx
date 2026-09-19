@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { BuilderChoice, type BuilderUnavailableReason } from './BuilderChoice.js';
 import { isBuilderKind, type BuilderKind } from './builderKind.js';
+import { CreatorQADiscardModal } from './CreatorQADiscardModal.js';
+import { hasCreatorQaProgress } from './creatorQaProgress.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
@@ -96,9 +98,51 @@ export function CreatorQA({
   const [customText, setCustomText] = useState<Record<string, string>>(initialAnswers?.custom ?? {});
   const [builder, setBuilder] = useState<BuilderKind>(isBuilderKind(initialBuilder) ? initialBuilder : 'platform');
   const [step, setStep] = useState(0);
+  const [showConfirmExit, setShowConfirmExit] = useState(false);
   const titleReady = isSubmittableTitle(title);
   // Never switched over automatically — the creator must pick self.
   const builderBlocked = builder === 'platform' && Boolean(platformUnavailable);
+
+  // Baselines captured at mount time: the parent passes edited values back through
+  // onTitleChange/onBuilderChange, which would otherwise reset the comparison.
+  const baselineTitleRef = useRef(initialTitle);
+  const baselineBuilderRef = useRef(initialBuilder);
+  const maxStepReachedRef = useRef(step);
+  if (step > maxStepReachedRef.current) {
+    maxStepReachedRef.current = step;
+  }
+
+  const hasProgress = useMemo(
+    () =>
+      hasCreatorQaProgress({
+        step,
+        maxStepReached: maxStepReachedRef.current,
+        title,
+        baselineTitle: baselineTitleRef.current,
+        builder,
+        baselineBuilder: baselineBuilderRef.current,
+        selectedAnswers,
+        customText,
+      }),
+    [step, title, builder, selectedAnswers, customText],
+  );
+
+  const exitTriggerRef = useRef<HTMLElement | null>(null);
+
+  const handleExitClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (submitting) return;
+    if (hasProgress) {
+      exitTriggerRef.current = (document.activeElement as HTMLElement | null) ?? event.currentTarget;
+      setShowConfirmExit(true);
+    } else {
+      onCancel?.();
+    }
+  };
+
+  const handleKeep = () => {
+    setShowConfirmExit(false);
+    exitTriggerRef.current?.focus?.();
+  };
 
   const stages = useMemo<Stage[]>(
     () => [
@@ -191,7 +235,8 @@ export function CreatorQA({
    */
   const handleTabKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return;
-    const root = wizardRef.current;
+    const dialog = showConfirmExit ? wizardRef.current?.querySelector<HTMLElement>('.qa-confirm-dialog') : null;
+    const root = dialog ?? wizardRef.current;
     if (!root) return;
     const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
 
@@ -218,6 +263,16 @@ export function CreatorQA({
       event.preventDefault();
       first.focus();
     }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (showConfirmExit && event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      handleKeep();
+      return;
+    }
+    handleTabKey(event);
   };
 
   // Every stage starts at its own top, and the new heading takes focus so a screen
@@ -332,7 +387,7 @@ export function CreatorQA({
       aria-modal="true"
       aria-label={t(questions.length > 0 ? 'qa.title' : 'qa.titleNameOnly')}
       ref={wizardRef}
-      onKeyDown={handleTabKey}
+      onKeyDown={handleKeyDown}
       // Somewhere for focus to rest when every control is disabled mid-submission.
       tabIndex={-1}
     >
@@ -344,15 +399,13 @@ export function CreatorQA({
           // This dismisses the wizard and drops the pending spec — it does *not* submit.
           <button
             type="button"
-            className="btn-secondary qa-wizard-exit"
-            onClick={onCancel}
+            className="qa-wizard-exit"
+            onClick={handleExitClick}
             disabled={submitting}
-            // The label is hidden on narrow screens and the icon is decorative, which
-            // left the only way back to editing as an unnamed button on a phone.
-            aria-label={t('qa.backToEditing')}
+            aria-label={t('qa.close')}
+            title={t('qa.close')}
           >
-            <PixelIcon name="close" size={12} />
-            <span>{t('qa.backToEditing')}</span>
+            <PixelIcon name="close" size={14} />
           </button>
         )}
       </header>
@@ -602,6 +655,17 @@ export function CreatorQA({
           </button>
         )}
       </footer>
+
+      {showConfirmExit && (
+        <CreatorQADiscardModal
+          openerElement={exitTriggerRef.current}
+          onKeep={handleKeep}
+          onDiscard={() => {
+            setShowConfirmExit(false);
+            onCancel?.();
+          }}
+        />
+      )}
     </div>,
     document.body,
   );
