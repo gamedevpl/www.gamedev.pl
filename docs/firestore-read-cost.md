@@ -132,16 +132,21 @@ five reads sat spendable until #1410 locked them by hand. Making the other four 
 a separate decision; do not collapse the two rules without taking it.
 
 `/api/submissions/mine` is measured twice, because the two owner shapes have different
-cost curves. The existing creator has `gameAccess` rows, so `countSubmissionsByOwner`
-stays on the canonical reconcile (`listGameAccessByMember`, then a `count()` per
-canonical slug the owner query already covers). The derived-only owner has three slugged
-rounds and **no** `gameAccess` rows — the 193 slugs the GameAccess backfill left derived
-on purpose. With no canonical slugs, every record lands in `nonCanonical`, so that poll
-pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for every slugged round
-(the 30s derived-access window starts empty on each measurement: a new instance and every
-window expiry). Restoring the old `listGameAccessByMember` then `count()` pre-check in
-`countSubmissionsByOwner` moves only this second number; the access-row owner cannot see
-the difference.
+cost curves. The existing creator has `gameAccess` rows, so the reconcile runs the
+canonical path (`listGameAccessByMember`, then a `count()` per canonical slug the owner
+query already covers). The derived-only owner has three slugged rounds and **no**
+`gameAccess` rows — the 193 slugs the GameAccess backfill left derived on purpose. With
+no canonical slugs, every record lands in `nonCanonical`, so that poll pays
+`listSubmissionsByOwner` plus a cold `resolveGameAccess` for every slugged round (the 30s
+derived-access window starts empty on each measurement: a new instance and every window
+expiry).
+
+Both ceilings came down when the shadow stopped deriving its own count. `recordShelfShadow`
+called `countSubmissionsByOwner` on every shelf load, which after #1408 ran the whole of
+`reconcileTransferredOwnership` — the pass `loadShelfRecords` had just run, and whose result
+it passes straight in. The count is `sourceRecords.length`; the comparison is unchanged,
+because `isShelfUsable` still weighs the count the document recorded against the live one.
+Access-row `mine` went 39 → **21** and the derived-only owner 18 → **11**.
 
 ```bash
 npm run firestore-read-cost                                            # report
