@@ -170,6 +170,10 @@ export async function handleCreatorFeedback(
   }
 
   const record = store ? await store.getSubmission(jobId) : null;
+  // A token outlives its round; missing is not a pass.
+  if (store && !record) {
+    return reply.status(404).send({ error: 'submission not found' });
+  }
   // Before any write: that job may have changed hands.
   if (store && record && !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'build'))) {
     return reply
