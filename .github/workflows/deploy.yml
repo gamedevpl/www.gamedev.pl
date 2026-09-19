@@ -634,16 +634,37 @@ jobs:
           # Later steps (the authenticated smoke) need the same URL.
           echo "CANDIDATE_URL=${CANDIDATE_URL}" >> "$GITHUB_ENV"
 
-          # Health is always public
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
-          if [ "$STATUS_CODE" -ne 200 ]; then
+          # Health is always public. The candidate tag's route can take several
+          # seconds to propagate across all edge proxies (Google Frontend Anycast).
+          # Poll until /api/health returns 200 before proceeding.
+          WARMED=false
+          for i in $(seq 1 15); do
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health" || echo 000)
+            if [ "$STATUS_CODE" = "200" ]; then
+              WARMED=true
+              break
+            fi
+            echo "Waiting for candidate revision route to propagate... (/api/health returned ${STATUS_CODE}, attempt ${i}/15)"
+            sleep 2
+          done
+          if [ "$WARMED" != "true" ]; then
             echo "Smoke test failed: health returned ${STATUS_CODE}"
             exit 1
           fi
 
-          # SPA shell must be publicly reachable so the sign-in button loads (chicken-and-egg)
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/")
-          if [ "$STATUS_CODE" -ne 200 ]; then
+          # SPA shell must be publicly reachable so the sign-in button loads (chicken-and-egg).
+          # Allow the same brief edge convergence window if / hits a different edge proxy.
+          SHELL_READY=false
+          for i in $(seq 1 10); do
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/" || echo 000)
+            if [ "$STATUS_CODE" = "200" ]; then
+              SHELL_READY=true
+              break
+            fi
+            echo "Waiting for candidate shell route to propagate... (GET / returned ${STATUS_CODE}, attempt ${i}/10)"
+            sleep 1
+          done
+          if [ "$SHELL_READY" != "true" ]; then
             echo "Smoke test failed: GET / returned ${STATUS_CODE} (shell must be publicly reachable)"
             exit 1
           fi
