@@ -11,7 +11,7 @@ import i18n from './i18n/index.js';
  * Closing a game reveals the page that opened it — or, for a `/play/<slug>` deep
  * link, replaces onto the canonical game page so the URL matches the surface.
  *
- * Catalog/profile Play opens an in-place theater; Close dismisses without history.
+ * Catalog/profile Play opens theater with /play/<slug>; Close returns to opener.
  * A shared `/play/<slug>` auto-opens, and Close goes to `/:handle/:slug`.
  */
 
@@ -89,8 +89,6 @@ async function renderApp() {
   await act(async () => {
     root.render(createElement(AuthProvider, null, createElement(App)));
     await flushEffects();
-  });
-  await act(async () => {
     await flushEffects();
   });
   return { container, root };
@@ -105,7 +103,7 @@ describe('closing a full-viewport game', () => {
     vi.restoreAllMocks();
   });
 
-  it('reveals the catalog that opened it without changing history', async () => {
+  it('reveals the catalog that opened it on Close', async () => {
     mockApi();
     window.history.pushState(null, '', '/');
     const { container, root } = await renderApp();
@@ -118,7 +116,7 @@ describe('closing a full-viewport game', () => {
       play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
-    expect(window.location.pathname).toBe('/');
+    expect(window.location.pathname).toBe('/play/sky-dodge');
 
     const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
     expect(exit).not.toBeNull();
@@ -131,9 +129,7 @@ describe('closing a full-viewport game', () => {
     expect(window.location.pathname).toBe('/');
     expect(container.querySelector('.exit-btn')).toBeNull();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('replaces a cold /play deep link onto the canonical game page on Close', async () => {
@@ -159,9 +155,7 @@ describe('closing a full-viewport game', () => {
     expect(container.querySelector('.exit-btn')).toBeNull();
     expect(container.querySelector('.game-page h1')?.textContent).toBe('Sky Dodge');
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('covers unpublished /play loading with the mascot, not the site header', async () => {
@@ -205,9 +199,7 @@ describe('closing a full-viewport game', () => {
     expect(container.querySelector('.app-loading-screen')).toBeNull();
     expect(container.querySelector('.game-theater-bar')).not.toBeNull();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('lets Close leave unpublished /play while the document is still loading', async () => {
@@ -243,9 +235,7 @@ describe('closing a full-viewport game', () => {
     expect(window.location.pathname).toBe('/');
     expect(container.querySelector('.app-loading-screen')).toBeNull();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('exits an unpublished /play deep link to home on Close', async () => {
@@ -267,9 +257,7 @@ describe('closing a full-viewport game', () => {
     expect(window.location.pathname).toBe('/');
     expect(container.querySelector('.exit-btn')).toBeNull();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => root.unmount());
   });
 
   it('returns to the in-app opener when closing /play opened from within the app', async () => {
@@ -298,16 +286,23 @@ describe('closing a full-viewport game', () => {
     }
     expect(window.location.pathname).toBe('/create');
 
-    const showcasePlay = container.querySelector<HTMLButtonElement>('.card-actions .primary-btn');
-    if (showcasePlay) {
-      await act(async () => {
-        showcasePlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await flushEffects();
-      });
-    }
-
+    const showcasePlay = container.querySelector<HTMLButtonElement>('.rail-card-play');
+    expect(showcasePlay).not.toBeNull();
     await act(async () => {
-      root.unmount();
+      showcasePlay?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
     });
+    expect(window.location.pathname).toBe('/play/sky-dodge');
+
+    const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
+    expect(exit).not.toBeNull();
+    await act(async () => {
+      exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(window.location.pathname).toBe('/create');
+    expect(container.querySelector('.exit-btn')).toBeNull();
+
+    await act(async () => root.unmount());
   });
 });

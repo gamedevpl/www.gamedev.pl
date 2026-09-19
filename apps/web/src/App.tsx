@@ -93,7 +93,6 @@ export function App() {
 
   const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
   const framedPlay = route.view === 'play' && window.parent !== window;
-
   const { catalogStatus, catalogError, catalogEntries, handleRetryCatalog, handlePullToRefresh } = useCatalogData({
     user,
     privateBeta,
@@ -118,10 +117,10 @@ export function App() {
     catalogStatus,
     user,
     navigate,
+    exitOverlay,
     setIsAuthModalOpen,
     setRecommendationsRefreshKey,
   });
-
   // Builds actually in flight, from the server — the header badge's source of truth.
   // Paused while a game is on screen because the player covers the header.
   const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent && !framedPlay);
