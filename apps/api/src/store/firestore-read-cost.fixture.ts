@@ -178,7 +178,7 @@ async function seedRound(
   await store.ensureGameAccess(round.slug, ownerUid, AT, AT);
 }
 
-// setSubmissionSlug writes a row; derived-only owners never kept one.
+// No public skip of that row; wrapping this delete drops the shape.
 async function dropGameAccess(store: Store, slug: string): Promise<void> {
   const firestore = store as unknown as {
     db?: { collection: (name: string) => { doc: (id: string) => { delete: () => Promise<unknown> } } };

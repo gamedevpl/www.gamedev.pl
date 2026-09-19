@@ -114,6 +114,7 @@ describe('polled route read baseline', () => {
     expect(row.reads).toBeGreaterThan(0);
   });
 
+  // Exact: this route exists to see movement either way.
   it('GET /api/submissions/mine (derived-only owner) records that cost exactly', async () => {
     const baseline = loadBaseline();
     const route = 'GET /api/submissions/mine (derived-only owner)';

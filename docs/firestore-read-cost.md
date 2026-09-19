@@ -123,6 +123,14 @@ Covered first, because a regression is both likely and expensive: `GET /api/subm
 `GET /api/review/status`, `GET /api/notifications`. The numbers are today's cost, not a
 target — do not round them up.
 
+The lint gate is at-or-under for every route: shrinks pass, raises fail. The derived-only
+owner is also pinned **exact** in `firestore-read-cost.test.ts`, because that route exists
+to see movement in either direction — a silent shrink is the cost curve going missing
+again. The other four stay at-or-under on purpose. That looser rule already cost a
+reseal: #1408 took access-row `mine` from 44 to 39, the ceiling stayed at 44, and those
+five reads sat spendable until #1410 locked them by hand. Making the other four exact is
+a separate decision; do not collapse the two rules without taking it.
+
 `/api/submissions/mine` is measured twice, because the two owner shapes have different
 cost curves. The existing creator has `gameAccess` rows, so `countSubmissionsByOwner`
 stays on the canonical reconcile (`listGameAccessByMember`, then a `count()` per
