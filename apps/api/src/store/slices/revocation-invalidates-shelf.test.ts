@@ -48,6 +48,25 @@ for (const [name, make] of implementations)
       vi.restoreAllMocks();
     });
 
+    // Leaving cancels their round; the tip changes for all.
+    it('invalidates the remaining members when a leave cancels a round', async () => {
+      const store = make();
+      const at = new Date().toISOString();
+      await sharedGame(store, at);
+      await store.rebuildShelf('g:owner');
+      expect((await store.getShelf('g:owner'))?.stale).toBeUndefined();
+      const ownedByOwner = await store.countSubmissionsByOwner('g:owner');
+      vi.spyOn(store, 'listSubmissionsByOwner').mockRejectedValue(new Error('firestore is having a day'));
+      vi.spyOn(store, 'tombstoneShelf').mockRejectedValue(new Error('firestore is still having a day'));
+
+      expect(await store.leaveGame('sky-dodge', 'g:editor', at)).toMatchObject({ ownerUid: 'g:owner' });
+
+      // The owner's count did not move; only this says so.
+      vi.restoreAllMocks();
+      expect(await store.countSubmissionsByOwner('g:owner')).toBe(ownedByOwner);
+      expect((await store.getShelf('g:owner'))?.stale).toBe(true);
+    });
+
     // Another's round moves no count of the editor's own.
     it('invalidates a co-editor when a round lands on a shared game', async () => {
       const store = make();

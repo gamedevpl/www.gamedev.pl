@@ -51,6 +51,29 @@ describe('eraseAccount and the shelf', () => {
     expect(after?.seq ?? 0).toBeGreaterThan(before?.seq ?? 0);
   });
 
+  // Erasure rewrites rounds without the mirror.
+  it('invalidates collaborators on a game the erased account wrote on', async () => {
+    const store = new InMemoryStore();
+    const at = new Date().toISOString();
+    await store.upsertUser({ uid: 'g:owner' });
+    await store.upsertUser({ uid: 'g:leaving' });
+    await store.ensureGameAccess('sky', 'g:owner', at, at);
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:leaving', 'Their round');
+    await store.setSubmissionSlug(jobId, 'sky');
+
+    await store.rebuildShelf('g:owner');
+    const before = await store.getShelf('g:owner');
+    expect(before?.stale).toBeUndefined();
+    const ownedByOwner = await store.countSubmissionsByOwner('g:owner');
+
+    await eraseAccount({ store, uid: 'g:leaving' });
+
+    // The owner's count never moved; only this says so.
+    expect(await store.countSubmissionsByOwner('g:owner')).toBe(ownedByOwner);
+    expect((await store.getShelf('g:owner'))?.stale).toBe(true);
+  });
+
   it('leaves both shelves alone on a dry run', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:leaving', 'Theirs');
