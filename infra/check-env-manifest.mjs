@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { unsetValueRefs } from './env-value-refs.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(here, '..');
@@ -42,22 +43,9 @@ function readVarNames(relPath) {
   return names;
 }
 
-// A `_VAL` is computed in the file itself, right before ENV_VARS is built, to fold a repo
-// variable together with its default. Threading one the file never assigns reaches Cloud
-// Run empty, and the name check above still passes, because the name is there -- only the
-// value is gone. That is how a kill switch ships dead. Other names may come from the
-// caller's environment, so only this convention can be checked.
+// Ordering and executability live in env-value-refs.mjs, where they are tested.
 function readUnsetValueRefs(relPath) {
-  const source = readFileSync(path.join(repoRoot, relPath), 'utf8');
-  const missing = new Set();
-  for (const line of source.split('\n')) {
-    if (!/\bENV_VARS=/.test(line)) continue;
-    for (const ref of line.matchAll(/=\$\{([A-Z][A-Z0-9_]*_VAL)\}/g)) {
-      // `eval "NAME=` counts, so the quote is part of what can precede it.
-      if (!new RegExp(`(^|[\\s"'])${ref[1]}=`, 'm').test(source)) missing.add(ref[1]);
-    }
-  }
-  return missing;
+  return unsetValueRefs(readFileSync(path.join(repoRoot, relPath), 'utf8'));
 }
 
 function readSecretBindings(relPath) {

@@ -77,6 +77,12 @@ describe('createShelfVerifySampler', () => {
     expect(verify('g:b')).toBe(true);
   });
 
+  // `next % 1` is always 0; the old rule never fired here.
+  it('verifies every read when the window is one', () => {
+    const verify = createShelfVerifySampler(1);
+    expect([verify(OWNER), verify(OWNER), verify(OWNER)]).toEqual([true, true, true]);
+  });
+
   it('verifies every read when the window is zero', () => {
     const verify = createShelfVerifySampler(0);
     expect([verify(OWNER), verify(OWNER)]).toEqual([true, true]);

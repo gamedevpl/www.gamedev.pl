@@ -47,7 +47,8 @@ export function createShelfVerifySampler(
     seen.delete(ownerUid);
     seen.set(ownerUid, next);
     if (seen.size > capacity) seen.delete(seen.keys().next().value!);
-    return next % every === 1;
+    // (next - 1) % every, so a window of one verifies every read.
+    return (next - 1) % every === 0;
   };
 }
 
