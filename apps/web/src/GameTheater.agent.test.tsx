@@ -32,6 +32,7 @@ vi.mock('./useScreenWakeLock', () => ({
 }));
 
 import { GameTheater } from './GameTheater.js';
+import { AUTH_HOLD_TIMEOUT_MS } from './useAgentBridge.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -136,8 +137,10 @@ describe('GameTheater agent play for draft games', () => {
     }
   });
 
-  it('holds mount while auth is loading, preventing iframe churn', async () => {
+  it('mounts immediately without hold when reviewer is not plausible', async () => {
     authState = { user: null, loading: true };
+    window.localStorage.clear();
+    window.history.replaceState(null, '', '/play/transport-tycoon-remake');
     root = createRoot(container);
     await act(async () => {
       root!.render(
@@ -150,33 +153,95 @@ describe('GameTheater agent play for draft games', () => {
       );
     });
 
-    // While auth is unresolved, load screen holds mount.
-    expect(container.querySelector('.app-loading-screen')).not.toBeNull();
-    expect(container.querySelector('iframe.game-frame')).toBeNull();
-
-    // Auth resolves as reviewer.
-    authState = {
-      user: { uid: 'reviewer-1', reviewer: true, tier: 'trusted' },
-      loading: false,
-    };
-    await act(async () => {
-      root!.render(
-        <GameTheater
-          title="Transport Tycoon Remake"
-          badge={{ icon: 'wrench', label: 'Draft' }}
-          source={{ html: '<!DOCTYPE html><html><body><canvas></canvas></body></html>' }}
-          onExit={() => undefined}
-        />,
-      );
-    });
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-
-    // Frame mounts cleanly with the bridge once ready.
+    // Unhinted visitors mount the raw HTML iframe on frame 1 without delay.
+    expect(container.querySelector('.app-loading-screen')).toBeNull();
     const iframe = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
     expect(iframe).not.toBeNull();
-    expect(iframe?.srcdoc).toContain('agent bridge active');
+    expect(iframe?.srcdoc).toContain('<canvas></canvas>');
+  });
+
+  it('holds mount while auth is loading for plausible reviewers, preventing iframe churn', async () => {
+    authState = { user: null, loading: true };
+    window.history.replaceState(null, '', '/play/transport-tycoon-remake?agent=1');
+    try {
+      root = createRoot(container);
+      await act(async () => {
+        root!.render(
+          <GameTheater
+            title="Transport Tycoon Remake"
+            badge={{ icon: 'wrench', label: 'Draft' }}
+            source={{ html: '<!DOCTYPE html><html><body><canvas></canvas></body></html>' }}
+            onExit={() => undefined}
+          />,
+        );
+      });
+
+      // While auth is unresolved, load screen holds mount.
+      expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+      expect(container.querySelector('iframe.game-frame')).toBeNull();
+
+      // Auth resolves as reviewer.
+      authState = {
+        user: { uid: 'reviewer-1', reviewer: true, tier: 'trusted' },
+        loading: false,
+      };
+      await act(async () => {
+        root!.render(
+          <GameTheater
+            title="Transport Tycoon Remake"
+            badge={{ icon: 'wrench', label: 'Draft' }}
+            source={{ html: '<!DOCTYPE html><html><body><canvas></canvas></body></html>' }}
+            onExit={() => undefined}
+          />,
+        );
+      });
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+
+      // Frame mounts cleanly with the bridge once ready.
+      const iframe = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
+      expect(iframe).not.toBeNull();
+      expect(iframe?.srcdoc).toContain('agent bridge active');
+    } finally {
+      window.history.replaceState(null, '', '/play/transport-tycoon-remake');
+    }
+  });
+
+  it('bounds the hold with a timeout if auth never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      authState = { user: null, loading: true };
+      window.history.replaceState(null, '', '/play/transport-tycoon-remake?agent=1');
+      root = createRoot(container);
+      await act(async () => {
+        root!.render(
+          <GameTheater
+            title="Transport Tycoon Remake"
+            badge={{ icon: 'wrench', label: 'Draft' }}
+            source={{ html: '<!DOCTYPE html><html><body><canvas></canvas></body></html>' }}
+            onExit={() => undefined}
+          />,
+        );
+      });
+
+      expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+      expect(container.querySelector('iframe.game-frame')).toBeNull();
+
+      // Advance past AUTH_HOLD_TIMEOUT_MS.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(AUTH_HOLD_TIMEOUT_MS + 50);
+      });
+
+      // Timeout fallback lifts loading screen and mounts frame.
+      expect(container.querySelector('.app-loading-screen')).toBeNull();
+      const iframe = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
+      expect(iframe).not.toBeNull();
+      expect(iframe?.srcdoc).toContain('<canvas></canvas>');
+    } finally {
+      vi.useRealTimers();
+      window.history.replaceState(null, '', '/play/transport-tycoon-remake');
+    }
   });
 });
