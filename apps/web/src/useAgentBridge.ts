@@ -11,13 +11,24 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 export type AgentBridgeState = string | null | undefined;
 
 export function useAgentBridge(enabled: boolean): AgentBridgeState {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const authLoading = Boolean(loading);
   // The hint spares others a certain 404; it grants nothing.
   const hinted = Boolean(user?.reviewer);
-  const [source, setSource] = useState<AgentBridgeState>(() => (!enabled || !hinted ? null : undefined));
+  const [source, setSource] = useState<AgentBridgeState>(() =>
+    !enabled || (!authLoading && !hinted) ? null : undefined,
+  );
 
   useEffect(() => {
-    if (!enabled || !hinted) {
+    if (!enabled) {
+      setSource(null);
+      return;
+    }
+    if (authLoading) {
+      setSource(undefined);
+      return;
+    }
+    if (!hinted) {
       setSource(null);
       return;
     }
@@ -40,7 +51,7 @@ export function useAgentBridge(enabled: boolean): AgentBridgeState {
       cancelled = true;
       abort.abort();
     };
-  }, [enabled, hinted]);
+  }, [enabled, authLoading, hinted]);
 
   return source;
 }

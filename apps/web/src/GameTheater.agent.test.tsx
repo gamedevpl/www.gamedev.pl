@@ -5,9 +5,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 
+let authState: {
+  user: { uid: string; reviewer: boolean; tier: 'trusted' } | null;
+  loading: boolean;
+} = {
+  user: { uid: 'reviewer-1', reviewer: true, tier: 'trusted' },
+  loading: false,
+};
+
 vi.mock('./AuthContext', () => ({
   useAuth: () => ({
-    user: { uid: 'reviewer-1', reviewer: true, tier: 'trusted' },
+    ...authState,
     signInWithGoogleToken: vi.fn(),
     logout: vi.fn(),
   }),
@@ -32,6 +40,10 @@ const originalFetch = globalThis.fetch;
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
+  authState = {
+    user: { uid: 'reviewer-1', reviewer: true, tier: 'trusted' },
+    loading: false,
+  };
   container = document.createElement('div');
   document.body.appendChild(container);
   globalThis.fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
@@ -122,5 +134,49 @@ describe('GameTheater agent play for draft games', () => {
     } finally {
       window.history.replaceState(null, '', '/play/transport-tycoon-remake');
     }
+  });
+
+  it('holds mount while auth is loading, preventing iframe churn', async () => {
+    authState = { user: null, loading: true };
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Transport Tycoon Remake"
+          badge={{ icon: 'wrench', label: 'Draft' }}
+          source={{ html: '<!DOCTYPE html><html><body><canvas></canvas></body></html>' }}
+          onExit={() => undefined}
+        />,
+      );
+    });
+
+    // While auth is unresolved, load screen holds mount.
+    expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+    expect(container.querySelector('iframe.game-frame')).toBeNull();
+
+    // Auth resolves as reviewer.
+    authState = {
+      user: { uid: 'reviewer-1', reviewer: true, tier: 'trusted' },
+      loading: false,
+    };
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Transport Tycoon Remake"
+          badge={{ icon: 'wrench', label: 'Draft' }}
+          source={{ html: '<!DOCTYPE html><html><body><canvas></canvas></body></html>' }}
+          onExit={() => undefined}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    // Frame mounts cleanly with the bridge once ready.
+    const iframe = container.querySelector('iframe.game-frame') as HTMLIFrameElement | null;
+    expect(iframe).not.toBeNull();
+    expect(iframe?.srcdoc).toContain('agent bridge active');
   });
 });
