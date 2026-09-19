@@ -91,6 +91,75 @@ one instance does not reach the others. On the instance that served the write, t
 next resolve is live. A derived-only abandon (newest live round closed, no GameAccess
 row) is not hooked and can sit until the window ends, on every instance.
 
+### The shelf is served from its document
+
+`/api/submissions/mine` is polled, and its source read grows with one creator's history:
+`listSubmissionsByOwner` returns a document per round, and `reconcileTransferredOwnership`
+then does a `getGameAccess` per record. On 2026-09-19 one creator's polls cost **680 billed
+reads each** — 126 of 139 requests on that route in three hours, about 99% of its reads.
+Everyone else cost under 100. Two populations, nothing between them.
+
+That is what `shelves/{ownerUid}` was built to remove, and readers now use it. A shelf read
+is a document get plus one aggregation that checks it.
+
+Trusting a document needs a reason. Four of them here, cheapest first:
+
+1. **Self-consistency, free.** `documentAnswersAlone` rejects a wrong `version`, a
+   `truncated` document, one whose `rounds` and `sourceCount` disagree, and one built before
+   `ownedCount` was recorded.
+2. **One aggregation, every read — for the owner's own rounds only.** The document stores
+   `ownedCount`, the size of the raw `ownerUid` query it was built from, so a single
+   `count()` says whether a round **of the owner's own** appeared or vanished since. It needs
+   both numbers, because `sourceCount` counts reconciled records and the two legitimately
+   differ for an owner with transfers. What this count **cannot** see: a round written by a
+   collaborator on a shared game, an editor added or removed, a transfer, a settlement, an
+   erasure. None of those move the reader's own count. Membership, invite, transfer and
+   settlement writes tombstone the affected shelves **in the same transaction** as the
+   change; a round on a shared game tombstones the co-editors right after it lands; erasure
+   tombstones the erased uid with its fence and its collaborators afterwards, best-effort.
+   The next read falls back to source. That, plus the sampled backstop, is the guarantee;
+   the count is not.
+3. **Full source, one read in a hundred, per owner.** Content that changes without changing
+   the count — a renamed title, a new status — needs the collapse comparison. Those reads
+   hand their records to the shadow, which judges the document and rebuilds it on any
+   verdict but `match` (and `truncated`, which a rebuild cannot change), and they serve
+   source. This is also the **backstop for the in-transaction invalidation above**: if that
+   write were ever missing — a new write path nobody hooked, a rollback revision — the stale
+   document is caught within a hundred of that owner's reads per instance or by the hourly pass. That is
+   the same-count stale window, and it is bounded, not zero.
+4. **Every owner's first read in a process verifies**, and then every hundredth of theirs.
+   The sampler counts per owner and is shared by both shelf routes, so one heavy poller
+   cannot consume a quiet owner's samples and the two routes do not double the bound. It is
+   still per **process**: with four Cloud Run instances behind round-robin, the worst case
+   before *some* instance samples an owner is about four hundred of their reads. The bounds
+   below say "a hundred of that owner's reads per instance" for that reason.
+
+`SHELF_DOCUMENT_READS=false` turns it off. It is threaded through both deploy paths and
+`infra/env-manifest.json` so a value set in the repo survives every deploy -- but it takes
+effect only on a deploy or a hand `gcloud run services update`; the incident procedure in
+"mirrored, and served" below has both steps.
+
+What this costs when it is wrong: a round of the owner's own appearing or disappearing is
+caught on the next read; a same-count change — content, a collaborator's round, membership,
+transfer, settlement — is caught by the in-transaction tombstone on that write, and if that
+write is ever missing, within a hundred of that owner's reads per instance or the hourly
+pass. One exception is deliberate: account erasure tombstones the erased uid atomically with
+its fence, but its collaborators' shelves are invalidated afterwards, best-effort, and a
+failure there is swallowed because an erasure must never fail on a cache — so a collaborator
+can keep an abandoned round as their tip for that same window. No shadow week preceded the
+switch to document reads; see "mirrored, and served" below.
+
+Measured on the gate fixture, whose owner has eight rounds:
+
+| Route                                                 | Reads |
+| ----------------------------------------------------- | ----: |
+| `GET /api/submissions/mine` (first read in a process) |    22 |
+| `GET /api/submissions/mine (document, steady state)`  | **2** |
+
+Two reads: the document, and the count that checks it. Against the 553-read average that
+route was serving its heaviest owner, the amortised cost including the one-in-a-hundred full
+read is about **7**.
+
 ## The gate
 
 A window in the table above is a promise the next edit can break without anyone noticing
@@ -131,17 +200,30 @@ reseal: #1408 took access-row `mine` from 44 to 39, the ceiling stayed at 44, an
 five reads sat spendable until #1410 locked them by hand. Making the other four exact is
 a separate decision; do not collapse the two rules without taking it.
 
-`/api/submissions/mine` is measured twice, because the two owner shapes have different
-cost curves. The existing creator has `gameAccess` rows, so `countSubmissionsByOwner`
-stays on the canonical reconcile (`listGameAccessByMember`, then a `count()` per
-canonical slug the owner query already covers). The derived-only owner has three slugged
+`/api/submissions/mine` is measured three times. Two are owner shapes with different
+source-path cost curves; the third is the document path that now serves the route.
+
+The existing creator has `gameAccess` rows. The derived-only owner has three slugged
 rounds and **no** `gameAccess` rows — the 193 slugs the GameAccess backfill left derived
-on purpose. With no canonical slugs, every record lands in `nonCanonical`, so that poll
-pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for every slugged round
-(the 30s derived-access window starts empty on each measurement: a new instance and every
-window expiry). Restoring the old `listGameAccessByMember` then `count()` pre-check in
-`countSubmissionsByOwner` moves only this second number; the access-row owner cannot see
-the difference.
+on purpose. With no canonical slugs, every record lands in `nonCanonical`, so a source
+read for that owner pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for
+every slugged round (the 30s derived-access window starts empty on each measurement: a
+new instance and every window expiry). That is why the two source-path numbers differ.
+
+`countSubmissionsByOwner` is the raw `ownerUid` aggregation on both stores — one billed
+read, no reconciliation. It is not a shelf comparison any more; it is the read fence's
+cheap check that no round of the owner's own appeared or vanished since the document was
+built, and it has to match the `ownedCount` the mirror recorded from the same raw query.
+#1408 briefly made it reconcile so a shadow comparison would line up; #1416 reverted
+that once the shadow took its count from the records it was handed. A transfer, an
+editor change, or another member's round moves none of these counts, which is why every
+write that changes a shelf's contents invalidates it in the same transaction rather than
+trusting this number to notice.
+
+The third measurement, `(document, steady state)`, is the second read in a process: the
+first always verifies against source, so the existing gate route only ever measured a
+source read. Steady state is **2** billed reads — the count and the document — and the
+gate holds it exactly.
 
 ```bash
 npm run firestore-read-cost                                            # report
@@ -345,7 +427,7 @@ That shape does not scale with traffic and it does not scale with the catalog. I
 it grows without anybody visiting. A per-request ranking never flags it, because on six of the
 seven accounts it is cheap.
 
-### The shelf itself: mirrored, and on probation
+### The shelf itself: mirrored, and served
 
 The narrow query above fixes the callers that wanted one game. The shelf readers genuinely
 need every round: `collapseJobsToOwnerGames` picks each game's newest live round as its tip,
@@ -380,10 +462,16 @@ write directly — and submissions carry no `updatedAt`:
    one more pass instead of joining a snapshot that is already behind. Same invariant as the
    sweep cadence — _void the deferral when the record moves_.
 
-2. **A count on read.** The document stores `sourceCount`; the reader spends one `count()`
-   aggregate and rebuilds on disagreement. This catches a create or a reassignment without
-   knowing who wrote. It cannot catch an in-place field update, which is why there is a third
-   layer.
+2. **A count on read, and invalidation on write.** The document stores `ownedCount`; the
+   reader spends one `count()` aggregate against the raw `ownerUid` query and falls back to
+   source on disagreement. That catches the owner's own rounds appearing or vanishing and
+   **nothing else** — not a collaborator's round, not a membership, transfer, settlement or
+   erasure, none of which move the reader's count. Those are handled where they happen: the
+   membership, invite, transfer, settlement and erasure transactions each tombstone the
+   shelves they change, and a round written on a shared game tombstones the co-editors. A
+   tombstone is a document with `stale: true` and a bumped `seq`; it is never a delete,
+   because a delete resets the sequence a stale in-flight rebuild may still hold. It cannot
+   catch an in-place field update, which is why there is a third layer.
 3. **A bounded pass, never once-ever.** `runShelfRebuildPass` rebuilds shelves older than an
    hour, ten per run, riding `notify-sweep`. It reports failures by _inspecting the rebuild's
    answer_, because the mirror swallows its own errors — a `try`/`catch` around it can never
@@ -395,16 +483,22 @@ write directly — and submissions carry no `updatedAt`:
    knowing the document exists, so a once-ever marker would retire the only thing that
    notices it. Same lesson as `open-round-backfill.ts`.
 
-Staleness, stated: immediate on every instance for a hooked writer, **at most one hour** for a
-writer nobody hooked or a rollback revision.
+Staleness, stated: immediate on every instance for a hooked writer; for a writer nobody
+hooked or a rollback revision, **within a hundred of that owner's reads per instance or one hour**,
+whichever comes first — the same-count stale window.
 
-**Readers still read source.** This is a shadow: each shelf read also loads the document,
-judges it against what the reader is about to serve, and annotates its own `firestore reads`
-line with `shelfShadow` and, on disagreement, `shelfMismatch`. The comparison is on the
-**collapsed** output, so a difference the collapse would have hidden is not reported as drift,
-and `absent` / `version` / `truncated` / `count` / `collapse` are distinguished rather than
-lumped into one failure. The bar for pointing readers at the document is **zero mismatches
-over a full week**, not "it seemed fine".
+**Readers serve the document.** They were pointed at it on 2026-09-19 without the week of
+mismatch-free shadow this section originally required; the owner chose not to phase the
+rollout, and the review that replaced the week found and fixed the invalidation gaps the
+shadow would have surfaced. The shadow remains as the repair path: every sampled or
+fallen-back read still loads the document, judges it against what source returned, annotates
+its `firestore reads` line with `shelfShadow` (and `shelfMismatch` on disagreement), and
+rebuilds on any verdict but `match` or `truncated`. The comparison is on the **collapsed**
+output, so a difference the collapse would have hidden is not reported as drift, and
+`absent` / `stale` / `version` / `truncated` / `count` / `collapse` are distinguished. A
+concurrent rebuild losing the compare-and-set retries from the new sequence rather than
+trusting the winner, and gives up into a tombstone rather than leaving a document it could
+not order itself against.
 
 **A probation check is only as strong as its fingerprint**, and the first version of this one
 was not strong enough: it compared jobId, slug, title and status, and so would have certified
@@ -420,9 +514,36 @@ check specific rather than plausible.
 write now costs one owner-query plus one document write, so a heavy account's round pays its
 whole round count per write. That is cheaper than the poll it replaces only if writes are
 genuinely rarer than reads for that account, and during an active build they may not be.
-The shadow week is what settles it: sum `route=/api/submissions/mine` against the write path
-in the meter before flipping anything. If write amplification exceeds the read it saves, the
-right answer is to keep source as the reader and delete the document.
+Readers were flipped before that measurement was taken, so it has to be made live: sum
+`route=/api/submissions/mine` against the write path in the meter over a real week. If write
+amplification exceeds the read it saves, the right answer is `SHELF_DOCUMENT_READS=false`
+and then to delete the document. Flipping it is **not** free of a deploy: the value is baked
+into the Cloud Run revision at deploy time, so setting the repo variable alone changes
+nothing until the next rollout. In an incident, set it by hand for immediate effect
+(`gcloud run services update gamedev-app --region=europe-west1
+--update-env-vars=SHELF_DOCUMENT_READS=false`) **and** set the repo variable so a later
+deploy does not silently switch it back on -- a hand-set lever alone evaporates on the next
+deploy, which is the incident shape the env-manifest gate exists to prevent.
+
+Two steps are not the whole procedure, because a deploy **already running** when you set
+the variable read `vars.SHELF_DOCUMENT_READS` at job start and still holds `true`; deploys
+do not cancel each other (`concurrency` in `.github/workflows/deploy.yml`), and that run's
+candidate promotion will put a `true` revision back in front of traffic -- including over a
+hand update made before it finished. So, in order: (1) **cancel or wait out every in-flight
+deploy** in Actions first; (2) hand update for immediate effect; (3) set the repo variable;
+(4) start a fresh deploy so the durable value ships; (5) verify the *served* revision, not
+the workflow. If you made the hand update before draining because seconds mattered, repeat
+it after the last old run has stopped and before step (4). Verification, proven against a
+live revision on 2026-09-19 (the Revision resource keeps `containers` directly under
+`spec`; the Service-shaped `spec.template.spec.containers` path prints `null`):
+
+```bash
+REV=$(gcloud run services describe gamedev-app --region=europe-west1 --format='value(status.traffic[0].revisionName)')
+gcloud run revisions describe "$REV" --region=europe-west1 --format='yaml(spec.containers[0].env)' | grep -A1 SHELF_DOCUMENT_READS
+```
+
+A `shelfOrigin=document` line in the request logs after that is the switch not having
+taken.
 
 **A fourth gap, found live, not in review: an idle account cannot be reached by either
 mechanism.** Write-through needs a write to fire; the hourly pass needs an existing document
@@ -477,10 +598,13 @@ The two verdicts were two different unhooked writers, both real:
   served that round as the tip while source collapse dropped it. The diverging field is
   one the fingerprint already covers (`createdAt` / `jobId` of the tip, via `state`).
 
-Readers stay on source. Graduate them only after a later week of shadow logs is **zero
-mismatches** split by verdict (`count` and `collapse` both 0, not merely quieter). Do not
-flip in the same change that hooks the writers — the next week's log is the proof, and a
-reader flip needs its own revert.
+That was the plan of record when this section was written: keep readers on source and
+graduate them only after a week of shadow logs showed zero mismatches split by verdict, in a
+change separate from the one that hooked the writers, so the flip had its own revert. It did
+not happen that way. Readers were pointed at the document on 2026-09-19 in the same PR, by
+the owner's decision, and the invalidation gaps that week would have surfaced were found in
+review instead — see "mirrored, and served" above for the model that shipped. The revert is
+now the kill switch, and its procedure is written there.
 
 Dropping the `count()` early-exit looked like it would make the polled path more expensive.
 Measured against the read-cost gate (#1409) on this change, `GET /api/submissions/mine`

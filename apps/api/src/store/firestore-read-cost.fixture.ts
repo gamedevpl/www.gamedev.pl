@@ -22,6 +22,7 @@ export const POLLED_ROUTES = [
   'GET /api/submissions/:token',
   'GET /api/submissions/mine',
   'GET /api/submissions/mine (derived-only owner)',
+  'GET /api/submissions/mine (document, steady state)',
   'GET /api/review/status',
   'GET /api/notifications',
 ] as const;
@@ -326,6 +327,13 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       headers: { cookie: sessionCookie(CREATOR_UID) },
     });
   }
+  if (route === 'GET /api/submissions/mine (document, steady state)') {
+    return app.inject({
+      method: 'GET',
+      url: '/api/submissions/mine',
+      headers: { cookie: sessionCookie(CREATOR_UID) },
+    });
+  }
   if (route === 'GET /api/submissions/mine (derived-only owner)') {
     return app.inject({
       method: 'GET',
@@ -353,6 +361,10 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
   await seedReadCostFixture(store);
   const app = await createReadCostApp(store);
   try {
+    // A process verifies its first read; steady state is the second.
+    if (route === 'GET /api/submissions/mine (document, steady state)') {
+      await injectRoute(app, route);
+    }
     fake.resetBilledReads();
     const res = await injectRoute(app, route);
     return { route, reads: fake.billedReads(), statusCode: res.statusCode };

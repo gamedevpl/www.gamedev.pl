@@ -2,16 +2,28 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GameAccessRecord } from '../store/records/game-access.js';
 import { resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
 import { canActOnSubmissionOrSlug, isGameMember } from '../platform/game-access-permissions.js';
+import { documentAnswersAlone, noteShelfOrigin, ownerCountAgrees, recordsFromShelf } from './shelf-source.js';
 
 export type ShelfStore = Pick<
   Store,
-  'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission' | 'countSubmissionsBySlug'
+  | 'listSubmissionsByOwner'
+  | 'getSubmissionBySlug'
+  | 'getSubmission'
+  | 'countSubmissionsBySlug'
+  | 'getShelf'
+  | 'countSubmissionsByOwner'
 > &
   GameAccessResolveStore &
   Pick<Store, 'listGameAccessByMember'>;
 
 // Judged before the deep-link merge adds its record.
-export type ShelfRecordsObserver = (records: SubmissionRecord[]) => Promise<void>;
+export type ShelfRecordsObserver = (records: SubmissionRecord[], ownedNow?: number) => Promise<void>;
+
+// `verify` decides which reads pay source anyway; absent means never.
+export interface ShelfReadOptions {
+  fromDocument: boolean;
+  verify?: (ownerUid: string) => boolean;
+}
 
 function jobIdFromToken(token: string): number | null {
   try {
@@ -90,6 +102,54 @@ export async function reconcileTransferredOwnership(
   return [...canonicalJobs.flat(), ...kept];
 }
 
+// Reconciling source costs one read per round; the document costs one.
+export async function readOwnerShelfRecords(
+  store: ShelfStore,
+  ownerUid: string,
+  observe: ShelfRecordsObserver | undefined,
+  read: ShelfReadOptions | undefined,
+): Promise<SubmissionRecord[]> {
+  const fromSource = async (ownedNow?: number): Promise<SubmissionRecord[]> => {
+    const owned = await store.listSubmissionsByOwner(ownerUid);
+    const records = await reconcileTransferredOwnership(store, ownerUid, owned);
+    // The shadow judges the document against these, and backfills an absent one.
+
+    // owned.length is the raw count; sampled reads must catch drift too.
+    if (observe) await observe(records, ownedNow ?? owned.length);
+    return records;
+  };
+
+  if (!read?.fromDocument) {
+    noteShelfOrigin('source');
+    return fromSource();
+  }
+  // Sampled reads answer from source: caught and repaired at once.
+  if (read.verify?.(ownerUid)) {
+    noteShelfOrigin('verified');
+    return fromSource();
+  }
+  // The document is derived state: if checking it fails, source still answers.
+  let ownedNow: number;
+  let shelf: Awaited<ReturnType<typeof store.getShelf>>;
+  try {
+    // One aggregation catches a round added or removed since the build.
+    ownedNow = await store.countSubmissionsByOwner(ownerUid);
+
+    // Read last: it carries access, which the count cannot see.
+    shelf = await store.getShelf(ownerUid);
+  } catch {
+    noteShelfOrigin('source');
+    return fromSource();
+  }
+  if (!documentAnswersAlone(shelf) || !ownerCountAgrees(shelf, ownedNow)) {
+    noteShelfOrigin('source');
+    // With the count, or a matching collapse reads 'match' and never repairs.
+    return fromSource(ownedNow);
+  }
+  noteShelfOrigin('document');
+  return recordsFromShelf(shelf);
+}
+
 // Owner-query lag: document GET still finds a just-written draft.
 export async function loadShelfRecords(
   store: ShelfStore,
@@ -97,10 +157,9 @@ export async function loadShelfRecords(
   requested: string | undefined,
   mintStatusToken: (jobId: number) => string,
   observe?: ShelfRecordsObserver,
+  read?: ShelfReadOptions,
 ): Promise<SubmissionRecord[]> {
-  const owned = await store.listSubmissionsByOwner(ownerUid);
-  const records = await reconcileTransferredOwnership(store, ownerUid, owned);
-  if (observe) await observe(records);
+  const records = await readOwnerShelfRecords(store, ownerUid, observe, read);
   if (!requested) return records;
   const known = records.some((record) => record.slug === requested || mintStatusToken(record.jobId) === requested);
   if (known) return records;

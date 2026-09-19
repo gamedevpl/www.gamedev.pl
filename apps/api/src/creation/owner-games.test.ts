@@ -22,6 +22,29 @@ describe('collapseJobsToOwnerGames', () => {
     expect(collapsed[0]!.tip.jobId).toBe(2);
   });
 
+  // The shelf document and the owner query list rounds in different orders.
+  it('orders the same rounds the same way whatever order they arrive in', () => {
+    const same = '2026-01-01T00:00:00.000Z';
+    const jobs = [
+      job({ jobId: 1005, createdAt: same, slug: 'neon-lane' }),
+      job({ jobId: 1008, createdAt: same, slug: 'harbor-pilot' }),
+    ];
+
+    const forward = collapseJobsToOwnerGames(jobs, 'shelf').map((game) => game.tip.jobId);
+    const reversed = collapseJobsToOwnerGames([...jobs].reverse(), 'shelf').map((game) => game.tip.jobId);
+    expect(forward).toEqual(reversed);
+    // A createdAt tie keeps the newer jobId first, not whichever arrived first.
+    expect(forward).toEqual([1008, 1005]);
+  });
+
+  it('picks the same tip within a game when two rounds share a timestamp', () => {
+    const same = '2026-01-01T00:00:00.000Z';
+    const rounds = [job({ jobId: 7, createdAt: same, slug: 'sky' }), job({ jobId: 9, createdAt: same, slug: 'sky' })];
+
+    expect(collapseJobsToOwnerGames(rounds, 'shelf')[0]!.tip.jobId).toBe(9);
+    expect(collapseJobsToOwnerGames([...rounds].reverse(), 'shelf')[0]!.tip.jobId).toBe(9);
+  });
+
   it('treats slugless jobs as one game per issue', () => {
     const jobs = [
       job({ jobId: 10, createdAt: '2026-01-01T00:00:00.000Z' }),

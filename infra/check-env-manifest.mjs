@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { unsetValueRefs } from './env-value-refs.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(here, '..');
@@ -42,6 +43,11 @@ function readVarNames(relPath) {
   return names;
 }
 
+// Ordering and executability live in env-value-refs.mjs, where they are tested.
+function readUnsetValueRefs(relPath) {
+  return unsetValueRefs(readFileSync(path.join(repoRoot, relPath), 'utf8'));
+}
+
 function readSecretBindings(relPath) {
   const source = readFileSync(path.join(repoRoot, relPath), 'utf8');
   const bindings = new Map();
@@ -57,6 +63,9 @@ for (const [label, relPath] of [
   ['deploy.yml', WORKFLOW],
   ['deploy-api.sh', SCRIPT],
 ]) {
+  for (const name of [...readUnsetValueRefs(relPath)].sort()) {
+    problems.push(`${label} builds ENV_VARS from \${${name}}, which nothing in the file assigns`);
+  }
   const actual = readVarNames(relPath);
   for (const name of [...actual].sort()) {
     if (!declaredVars.has(name)) {

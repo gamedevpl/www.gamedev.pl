@@ -1,9 +1,8 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
-import { countCanonicalSubmissions } from './canonical-shelf-count.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
-import type { ShelfDocument } from './records/shelf.js';
+import { tombstoneShelf, type ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -122,8 +121,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   );
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
-  protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore((uid) =>
-    this.identityStore.users.has(uid),
+  protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore(
+    (uid) => this.identityStore.users.has(uid),
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
+    (slug) => [...this.submissions.values()].filter((record) => record.slug === slug).map((record) => record.ownerUid),
   );
   protected gameTransferStore = new InMemoryGameTransferStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
@@ -144,6 +145,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
         this.submissions.set(record.jobId, { ...record, roundGeneration: gen });
       }
     },
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
   );
   protected gameTransferProposalStore = new InMemoryGameTransferProposalStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
@@ -156,6 +158,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
     (slug, record) => this.gameAccessStore.access.set(slug, record),
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
@@ -175,12 +178,20 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     (slug, action, actorUid, subjectUid, at) => {
       this.gameEditorInviteStore.audits.push(newMembershipAudit(slug, action, actorUid, subjectUid, at));
     },
+    (ownerUid, at) => this.invalidateShelfDocument(ownerUid, at),
   );
   private gameQuotaStore = new InMemoryGameQuotaStore();
   protected submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private shelves = new Map<string, ShelfDocument>();
-  protected shelfStore = new InMemoryShelfStore(this.shelves, (uid) =>
-    countCanonicalSubmissions(uid, this.submissions.values(), this.gameAccessStore.access),
+
+  // Called lazily by the slices above, so `shelves` is initialised by then.
+  private invalidateShelfDocument(ownerUid: string, at: string): void {
+    this.shelves.set(ownerUid, tombstoneShelf(at, (this.shelves.get(ownerUid)?.seq ?? 0) + 1));
+  }
+  // The raw ownerUid query, which is what the document records as ownedCount.
+  protected shelfStore = new InMemoryShelfStore(
+    this.shelves,
+    (uid) => [...this.submissions.values()].filter((record) => record.ownerUid === uid).length,
   );
   private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
     this.quotaStore.getCreationLimits(),
@@ -406,6 +417,14 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void> {
     return this.shelfStore.putShelf(ownerUid, shelf);
+  }
+
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    return this.shelfStore.putShelfIfUnchanged(ownerUid, shelf, expectedSeq);
+  }
+
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    return this.shelfStore.tombstoneShelf(ownerUid, builtAt);
   }
 
   async deleteShelf(ownerUid: string): Promise<void> {

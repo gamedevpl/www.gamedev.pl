@@ -1,10 +1,14 @@
 import { buildShelfDocument, type ShelfDocument } from '../store/records/shelf.js';
-import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-records.js';
+import { erasedIncarnation } from '../store/records/game-access.js';
 
 // Structural, not Pick<Store>: the store builds the mirror.
 export type ShelfMirrorStore = ShelfStore & {
-  putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void>;
+  getAccountErasure(uid: string): Promise<string | null>;
+  getUser(uid: string): Promise<{ createdAt?: string } | null>;
+  putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
+  tombstoneShelf(ownerUid: string, builtAt: string): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
 };
 
@@ -24,6 +28,9 @@ export interface ShelfMirror {
   pending(): number;
 }
 
+// Exhausting these means giving up and serving nothing.
+const REBUILD_ATTEMPTS = 3;
+
 export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   const { store, now } = options;
   const inFlight = new Map<string, Promise<ShelfDocument | null>>();
@@ -35,13 +42,46 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   };
 
   async function rebuildNow(ownerUid: string): Promise<ShelfDocument | null> {
-    const owned = await store.listSubmissionsByOwner(ownerUid);
+    // First writer wins, not freshest reader, so reread on a loss.
+    for (let attempt = 0; attempt < REBUILD_ATTEMPTS; attempt += 1) {
+      // Read before source, so a write in between is seen.
+      const current = await store.getShelf(ownerUid);
+      const seq = current?.seq ?? 0;
 
-    // Mirror reconciles ownership identically to the shelf route.
-    const records = await reconcileTransferredOwnership(store, ownerUid, owned);
-    const shelf = buildShelfDocument(records, new Date(now()).toISOString());
-    await store.putShelf(ownerUid, shelf);
-    return shelf;
+      // Erasure tombstones before rewriting rows; source still holds them.
+      if (current?.stale && (await erasedForGood(ownerUid))) {
+        // Fresh builtAt, or the sweep keeps picking this.
+        await discard(ownerUid);
+        return null;
+      }
+
+      const owned = await store.listSubmissionsByOwner(ownerUid);
+
+      // Mirror reconciles ownership identically to the shelf route.
+      const records = await reconcileTransferredOwnership(store, ownerUid, owned);
+      const shelf = buildShelfDocument(records, new Date(now()).toISOString(), owned.length);
+      if (await store.putShelfIfUnchanged(ownerUid, shelf, seq)) return shelf;
+    }
+
+    // Stored by a pass this cannot order itself against: serve nothing.
+    report(new Error('shelf rebuild lost the sequence race'), { ownerUid });
+    await discard(ownerUid);
+    return null;
+  }
+
+  // A recreated uid is a new account; it may rebuild.
+  async function erasedForGood(ownerUid: string): Promise<boolean> {
+    const erasedAt = await store.getAccountErasure(ownerUid);
+    return erasedIncarnation(await store.getUser(ownerUid), erasedAt);
+  }
+
+  // A delete resets seq, so an earlier pass would win.
+  async function discard(ownerUid: string): Promise<void> {
+    try {
+      await store.tombstoneShelf(ownerUid, new Date(now()).toISOString());
+    } catch (error) {
+      report(error, { ownerUid });
+    }
   }
 
   function rebuild(ownerUid: string): Promise<ShelfDocument | null> {
@@ -61,6 +101,8 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
           built = await rebuildNow(ownerUid);
         } catch (error) {
           report(error, { ownerUid });
+          // A rebuild follows revocations too: a kept document serves a lost game.
+          await discard(ownerUid);
         }
         if (!requeued.has(ownerUid)) return built;
       }
@@ -81,11 +123,20 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
 
         // The author's shelf still lists it until it is rebuilt too.
         const owners = new Set([record.ownerUid]);
+        const editors = new Set<string>();
         if (record.slug) {
-          const owner = await currentOwnerUid(store, record.slug, record.ownerUid);
-          if (owner) owners.add(owner);
+          const access = await resolveGameAccess(store, record.slug);
+          owners.add(access.owner.kind === 'creator' ? access.owner.uid : record.ownerUid);
+          for (const uid of access.editorUids) editors.add(uid);
         }
         for (const ownerUid of owners) await rebuild(ownerUid);
+
+        // A co-editor's own count never moves; only this does.
+
+        // Tombstoned, not rebuilt: writes outpace a collaborator's reads.
+        for (const uid of editors) {
+          if (!owners.has(uid)) await discard(uid);
+        }
       } catch (error) {
         report(error, { jobId });
       }

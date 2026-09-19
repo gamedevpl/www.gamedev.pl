@@ -6,7 +6,9 @@ import { mintToken } from '../platform/submission-token.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
-import { reconcileTransferredOwnership } from './studio-shelf-records.js';
+import { readOwnerShelfRecords } from './studio-shelf-records.js';
+import { shelfVerifySamplerFor } from './shelf-source.js';
+import { shelfReadsFromDocument } from '../platform/shelf-reads-env.js';
 
 export interface CreatorSelfRoutesOptions {
   store?: Store;
@@ -23,6 +25,7 @@ export async function registerCreatorSelfRoutes(
   options: CreatorSelfRoutesOptions,
 ): Promise<void> {
   const { store, now, checkUserAccess, dailySubmissionQuota, submissionTokenSecret, managedAvailabilityGate } = options;
+  // Per process: a restart re-verifies before it trusts the document.
 
   // What's left of today's allowance — never increments, just reads.
   app.get('/api/me/quota', async (request, reply) => {
@@ -65,10 +68,13 @@ export async function registerCreatorSelfRoutes(
       return reply.send({ submissions: [] });
     }
 
-    const owned = await store.listSubmissionsByOwner(request.user!.uid);
-    const records = await reconcileTransferredOwnership(store, request.user!.uid, owned);
-    // Shadow only: source still answers, the document is judged against it.
-    await recordShelfShadow({ store, log: request.log }, request.user!.uid, records);
+    // The document answers; sampled reads pay source and judge it against them.
+    const records = await readOwnerShelfRecords(
+      store,
+      request.user!.uid,
+      (owned, ownedNow) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned, ownedNow).then(() => undefined),
+      { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySamplerFor(app) },
+    );
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
     return reply.send({
       submissions: shelf.map(({ tip, catalogPublishedAt }) => ({

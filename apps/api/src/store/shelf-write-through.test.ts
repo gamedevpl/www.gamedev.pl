@@ -3,6 +3,7 @@ import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js'
 import { fakeFirestore } from './fake-firestore.js';
 import { judgeShelfShadow, recordShelfShadow } from '../creation/shelf-shadow.js';
 import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
+import { SHELF_VERSION } from './records/shelf.js';
 
 // Both stores: the write-through spans facade and class.
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -24,8 +25,9 @@ function freezeClock(): (seconds: number) => void {
 async function agrees(store: Store, ownerUid: string): Promise<string> {
   const owned = await store.listSubmissionsByOwner(ownerUid);
   const records = await reconcileTransferredOwnership(store, ownerUid, owned);
-  const [shelf, count] = await Promise.all([store.getShelf(ownerUid), store.countSubmissionsByOwner(ownerUid)]);
-  return judgeShelfShadow(shelf, records, count).verdict;
+  const shelf = await store.getShelf(ownerUid);
+  // The count the production shadow uses: these records, not a second query.
+  return judgeShelfShadow(shelf, records, records.length).verdict;
 }
 
 async function acceptTransfer(store: Store, slug: string, senderUid: string, recipientUid: string): Promise<void> {
@@ -157,7 +159,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.createSubmission(1, 'g:owner', 'First');
       // Stands in for a rollback revision writing behind the document.
       await store.putShelf('g:owner', {
-        version: 1,
+        version: SHELF_VERSION,
         builtAt: '2026-01-01T00:00:00.000Z',
         sourceCount: 99,
         rounds: [],

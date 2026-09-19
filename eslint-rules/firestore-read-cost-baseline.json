@@ -4,7 +4,8 @@
     "GET /api/notifications": 8,
     "GET /api/review/status": 12,
     "GET /api/submissions/:token": 22,
-    "GET /api/submissions/mine": 21,
-    "GET /api/submissions/mine (derived-only owner)": 11
+    "GET /api/submissions/mine": 22,
+    "GET /api/submissions/mine (derived-only owner)": 11,
+    "GET /api/submissions/mine (document, steady state)": 2
   }
 }
