@@ -579,7 +579,7 @@
     "apps/web/src/creatorProfileApi.ts": 126,
     "apps/web/src/CreatorProfilePage.test.tsx": 246,
     "apps/web/src/CreatorProfilePage.tsx": 206,
-    "apps/web/src/CreatorQA.test.tsx": 689,
+    "apps/web/src/CreatorQA.test.tsx": 691,
     "apps/web/src/CreatorQA.tsx": 661,
     "apps/web/src/diffLines.test.ts": 50,
     "apps/web/src/editorBridge.controllerProtocol.test.tsx": 342,
