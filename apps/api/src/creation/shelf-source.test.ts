@@ -99,6 +99,27 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(listed).not.toHaveBeenCalled();
     });
 
+    // A revocation moves the document, never the count.
+    it('reads the document after the count, not before it', async () => {
+      const store = makeStore();
+      await seedOwner(store, 3);
+      const order: string[] = [];
+      vi.spyOn(store, 'countSubmissionsByOwner').mockImplementation(async () => {
+        order.push('count');
+        return 3;
+      });
+      const realGetShelf = store.getShelf.bind(store);
+      vi.spyOn(store, 'getShelf').mockImplementation(async (ownerUid: string) => {
+        order.push('getShelf');
+        return realGetShelf(ownerUid);
+      });
+
+      await readOwnerShelfRecords(store, OWNER, undefined, { fromDocument: true, verify: () => false });
+
+      expect(order).toEqual(['count', 'getShelf']);
+      vi.restoreAllMocks();
+    });
+
     it('serves the same rounds either way', async () => {
       const store = makeStore();
       await seedOwner(store, 3);

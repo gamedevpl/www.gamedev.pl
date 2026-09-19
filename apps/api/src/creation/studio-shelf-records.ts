@@ -121,18 +121,17 @@ export async function readOwnerShelfRecords(
     noteShelfOrigin('source');
     return fromSource();
   }
-  const shelf = await store.getShelf(ownerUid);
-  if (!documentAnswersAlone(shelf)) {
-    noteShelfOrigin('source');
-    return fromSource();
-  }
   // Sampled reads answer from source: caught and repaired at once.
   if (read.verify?.(ownerUid)) {
     noteShelfOrigin('verified');
     return fromSource();
   }
   // One aggregation catches a round added or removed since the build.
-  if (!ownerCountAgrees(shelf, await store.countSubmissionsByOwner(ownerUid))) {
+  const ownedNow = await store.countSubmissionsByOwner(ownerUid);
+
+  // Read last: it carries access, which the count cannot see.
+  const shelf = await store.getShelf(ownerUid);
+  if (!documentAnswersAlone(shelf) || !ownerCountAgrees(shelf, ownedNow)) {
     noteShelfOrigin('source');
     return fromSource();
   }
