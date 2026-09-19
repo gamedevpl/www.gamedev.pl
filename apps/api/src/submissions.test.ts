@@ -3637,6 +3637,42 @@ describe('submission preview route', () => {
     await app.close();
   });
 
+  // Holding a token says the caller was a member once, not still.
+  it('refuses a token holder who is not a member of the game', async () => {
+    const store = new InMemoryStore();
+    const jobId = 1_000_043;
+    const at = new Date().toISOString();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:outsider' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+    await store.ensureGameAccess('tv-tycoon', 'g:test-user', at, at);
+
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, _v: string, name: string) =>
+        name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+    } as unknown as GamesStore;
+
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+    const url = `/api/submissions/${mintToken(jobId, secret)}/preview`;
+
+    // The owner is served, so the token and the draft are both fine.
+    expect((await app.inject({ method: 'GET', url, headers: authHeaders })).statusCode).toBe(200);
+
+    // The same token, held by someone who is not a member, is not.
+    const outsider = await app.inject({ method: 'GET', url, headers: getAuthHeaders('g:outsider') });
+    expect(outsider.statusCode).toBe(404);
+
+    await app.close();
+  });
+
   it('serves a requested version override when specified in the query parameter', async () => {
     const store = new InMemoryStore();
     const jobId = 1_000_078;
@@ -4309,6 +4345,25 @@ describe('submission feedback route', () => {
     await app.close();
   });
 
+  // A missing record skipped the check and the write path ran anyway.
+  it('refuses a valid token whose round no longer exists', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    const { githubClient, createIssueComment } = createGithubClientStub({ linkedPr: openPr });
+    const { app, authHeaders } = await createApp({ store, githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(999_001, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the car faster and add a boost.' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(createIssueComment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('rejects feedback that is too short with 400', async () => {
     const { githubClient, createIssueComment } = createGithubClientStub({ linkedPr: openPr });
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
@@ -4327,11 +4382,14 @@ describe('submission feedback route', () => {
 
   it('enforces a daily feedback quota', async () => {
     const { githubClient } = createGithubClientStub({ linkedPr: openPr });
-    const { app, authHeaders } = await createApp({
+    const { app, authHeaders, store } = await createApp({
       githubClient,
       submissionTokenSecret: secret,
       dailyFeedbackQuota: 1,
     });
+    // A token names a round that exists; the route refuses one that does not.
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(123, 'g:test-user', 'Kart Racer');
     const token = mintToken(123, secret);
 
     const first = await app.inject({
