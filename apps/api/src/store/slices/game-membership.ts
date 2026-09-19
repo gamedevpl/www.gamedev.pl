@@ -103,13 +103,6 @@ export class FirestoreGameMembershipStore implements GameMembershipStore {
       if (expectedOwnerUid && access.ownerUid !== expectedOwnerUid) return 'stale_owner';
       const next = withEditorRemoved(access, editorUid, at);
       if (!next) return 'not_editor';
-      tx.set(accessRef, next);
-      const invite = inviteSnap.exists ? (inviteSnap.data() as GameEditorInvitation) : null;
-      if (isPendingEditorInvite(invite, at)) {
-        tx.set(inviteRef, { ...invite, status: 'cancelled', respondedAt: at });
-      }
-      const actor = expectedOwnerUid ?? editorUid;
-      tx.set(this.db.collection('gameMembershipAudit').doc(), newMembershipAudit(slug, action, actor, editorUid, at));
 
       let releasedLease = false;
       // Owner-remove keeps the live round; leave cancels it.
@@ -121,11 +114,21 @@ export class FirestoreGameMembershipStore implements GameMembershipStore {
         staleUids.add(next.ownerUid);
         for (const uid of next.editorUids) staleUids.add(uid);
       }
+
+      // Every read first: Firestore refuses one once this has written.
       const shelves = await Promise.all(
         [...staleUids].map(async (uid) =>
           uid === editorUid ? { uid, snap: shelfSnap } : { uid, snap: await tx.get(shelfRef(uid)) },
         ),
       );
+
+      tx.set(accessRef, next);
+      const invite = inviteSnap.exists ? (inviteSnap.data() as GameEditorInvitation) : null;
+      if (isPendingEditorInvite(invite, at)) {
+        tx.set(inviteRef, { ...invite, status: 'cancelled', respondedAt: at });
+      }
+      const actor = expectedOwnerUid ?? editorUid;
+      tx.set(this.db.collection('gameMembershipAudit').doc(), newMembershipAudit(slug, action, actor, editorUid, at));
 
       // Atomic with the access change; a later write can fail alone.
       for (const { uid, snap } of shelves) {
