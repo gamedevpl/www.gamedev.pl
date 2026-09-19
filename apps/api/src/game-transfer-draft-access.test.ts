@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintToken } from './platform/submission-token.js';
 import { InMemoryStore } from './platform/store.js';
 import type { ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
@@ -11,6 +11,7 @@ import {
   SECRET,
   SENDER,
   createTransferApp,
+  stubGamesStore,
   gameWithHistory,
   handOver,
   session,
@@ -84,6 +85,38 @@ describe('after a transfer, the sender cannot reach the draft', () => {
     const theirs = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(RECIPIENT) });
     expect(theirs.json().previewGate.report).toBe(GATE_REPORT);
     expect(theirs.json().recentBuilds[0].summary).toBe(BUILD_SUMMARY);
+  });
+
+  it('does not rebuild a redacted summary from a sibling round’s channel', async () => {
+    const store = new InMemoryStore();
+    // An older round, whose build left a changelog event.
+    const priorJobId = await store.allocateJobId();
+    await store.createSubmission(priorJobId, SENDER, 'Comet Courier');
+    await store.appendBuildEvent(priorJobId, {
+      kind: 'done',
+      step: 'polishing',
+      text: 'Rebuilt the comet trail.',
+      createdAt: '2026-08-31T00:00:30.000Z',
+    });
+    const { jobId, at } = await gameWithHistory(store);
+    const app = await createTransferApp(store, apps, undefined, stubGamesStore(priorJobId));
+    const token = mintToken(jobId, SECRET);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    const readEvents = vi.spyOn(store, 'listBuildEvents');
+    const priorOf = (body: { recentBuilds?: Array<{ version: string; summary?: string }> }) =>
+      body.recentBuilds?.find((build) => build.version === 'v0');
+
+    const sender = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(SENDER) });
+    expect(priorOf(sender.json())).toBeDefined();
+    // No stored summary: the only source is that round's channel.
+    expect(priorOf(sender.json())?.summary).toBeUndefined();
+    expect(readEvents.mock.calls.map((call) => call[0])).not.toContain(priorJobId);
+
+    const member = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(RECIPIENT) });
+    expect(priorOf(member.json())?.summary).toBe('Rebuilt the comet trail.');
+    expect(readEvents.mock.calls.map((call) => call[0])).toContain(priorJobId);
   });
 
   it('does not read the owner’s quota to answer a non-member', async () => {

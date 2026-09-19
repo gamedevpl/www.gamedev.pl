@@ -48,8 +48,8 @@ export function stubBackend(): AgentBackend {
   };
 }
 
-// Serves one playable version and describes it.
-export function stubGamesStore(): GamesStore {
+// One playable version; `priorJobId` adds a second with no stored summary.
+export function stubGamesStore(priorJobId?: number): GamesStore {
   const manifest = {
     version: 'v1',
     createdAt: '2026-09-01T00:00:00.000Z',
@@ -59,11 +59,19 @@ export function stubGamesStore(): GamesStore {
     authorship: 'agent' as const,
     sourceFiles: ['game.js'],
   };
+  const prior = {
+    version: 'v0',
+    createdAt: '2026-08-31T00:00:00.000Z',
+    deliveryMode: 'preview' as const,
+    previewGate: { green: true, ranAt: '2026-08-31T00:01:00.000Z' },
+    jobId: priorJobId,
+  };
+  const versions = priorJobId === undefined ? [manifest] : [manifest, prior];
   return {
     getDerivedArtifact: async (_slug: string, _version: string, name: string) =>
       name === 'bundle.html' ? Buffer.from(BUNDLE_HTML, 'utf8') : null,
     getManifest: async () => manifest,
-    listVersions: async () => [manifest],
+    listVersions: async () => versions,
   } as unknown as GamesStore;
 }
 
@@ -72,6 +80,7 @@ export async function createTransferApp(
   store: InMemoryStore,
   apps: FastifyInstance[],
   managedAvailabilityGate?: ManagedAvailabilityGate,
+  gamesStore: GamesStore = stubGamesStore(),
 ) {
   const app = await buildApp({
     store,
@@ -82,7 +91,7 @@ export async function createTransferApp(
       githubToken: 'gh-token',
       submissionTokenSecret: SECRET,
       agentBackend: stubBackend(),
-      agentChannel: { gamesStore: stubGamesStore() } as { gamesStore?: GamesStore },
+      agentChannel: { gamesStore } as { gamesStore?: GamesStore },
       chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
       ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
     },
