@@ -75,10 +75,13 @@ export class InMemoryGameAccessStore implements GameAccessStore {
   ) {}
 
   // The first canonical row strips every other legacy author.
+
+  // Derived showed the owner only their rounds; canonical shows all.
   private invalidateOtherAuthors(slug: string, ownerUid: string, at: string): void {
-    for (const uid of new Set(this.authorsOf(slug))) {
-      if (uid !== ownerUid) this.invalidateShelf(uid, at);
-    }
+    const authors = new Set(this.authorsOf(slug));
+    authors.delete(ownerUid);
+    if (authors.size === 0) return;
+    for (const uid of [...authors, ownerUid]) this.invalidateShelf(uid, at);
   }
 
   // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
@@ -265,8 +268,10 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     const authors = new Set(rounds.docs.map((doc) => (doc.data() as { ownerUid?: string }).ownerUid));
     authors.delete(ownerUid);
     authors.delete(undefined);
+    // Derived showed the owner only their rounds; canonical shows all.
+    if (authors.size === 0) return [];
     return Promise.all(
-      [...authors].map(async (uid) => {
+      [...authors, ownerUid].map(async (uid) => {
         const ref = this.db.collection('shelves').doc(uid!);
         const snap = await tx.get(ref);
         return { ref, seq: snap.exists ? ((snap.data() as ShelfDocument).seq ?? 0) : 0 };

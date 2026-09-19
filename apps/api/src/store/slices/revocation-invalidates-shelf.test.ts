@@ -81,9 +81,18 @@ for (const [name, make] of implementations)
         await wipeAccess('legacy-sky');
       }
       expect(await store.getGameAccess('legacy-sky')).toBeNull();
-      await store.rebuildShelf('g:second');
-      expect((await store.getShelf('g:second'))?.stale).toBeUndefined();
-      expect((await store.getShelf('g:second'))?.rounds.length).toBeGreaterThan(0);
+      for (const uid of ['g:first', 'g:second']) {
+        await store.rebuildShelf(uid);
+        expect((await store.getShelf(uid))?.stale).toBeUndefined();
+        expect((await store.getShelf(uid))?.rounds.length).toBeGreaterThan(0);
+      }
+    }
+
+    // Derived, the owner saw one round; canonical shows both.
+    function expectBothInvalidated(store: Store): Promise<void> {
+      return Promise.all(
+        ['g:first', 'g:second'].map(async (uid) => expect((await store.getShelf(uid))?.stale).toBe(true)),
+      ).then(() => undefined);
     }
 
     // Going canonical strips the other author; their own count does not move.
@@ -97,7 +106,7 @@ for (const [name, make] of implementations)
       await store.ensureGameAccess('legacy-sky', 'g:first', at, at);
 
       expect(await store.countSubmissionsByOwner('g:second')).toBe(ownedBySecond);
-      expect((await store.getShelf('g:second'))?.stale).toBe(true);
+      await expectBothInvalidated(store);
     });
 
     it('invalidates other legacy authors when settlement creates the first row', async () => {
@@ -108,7 +117,7 @@ for (const [name, make] of implementations)
 
       expect(await store.recordSettledOwner('legacy-sky', 'g:first', 1, at, at)).toMatchObject({ ownerUid: 'g:first' });
 
-      expect((await store.getShelf('g:second'))?.stale).toBe(true);
+      await expectBothInvalidated(store);
     });
 
     it('invalidates other legacy authors when the backfill creates the first row', async () => {
@@ -121,7 +130,7 @@ for (const [name, make] of implementations)
         ownerUid: 'g:first',
       });
 
-      expect((await store.getShelf('g:second'))?.stale).toBe(true);
+      await expectBothInvalidated(store);
     });
 
     // A fresh single-author game has nobody else to invalidate.
