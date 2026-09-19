@@ -212,7 +212,11 @@ export function fakeFirestore() {
       },
       get: async () => {
         billDocs(1);
+        const self = makeRef(collection, id);
         return {
+          id,
+          // Real snapshots carry their ref; the shelf guard reads it.
+          ref: self,
           get exists() {
             return docs.has(key(collection, id));
           },

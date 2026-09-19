@@ -8,6 +8,7 @@ import type { DocumentReference, Transaction } from '@google-cloud/firestore';
 // The store takes its handle here, so guarding is not optional.
 export { FieldValue, Firestore };
 import { SHELF_MIRRORED_FIELDS, SHELF_VERSION } from './records/shelf.js';
+import { noteReadTally } from './read-meter.js';
 
 declare const shelfGuarded: unique symbol;
 
@@ -17,6 +18,15 @@ export type GuardedFirestore = Firestore & { readonly [shelfGuarded]: true };
 export interface ShelfGuardLog {
   warn(context: object, message: string): void;
 }
+
+// A swallowed failure leaves a servable stale shelf with no signal.
+
+// Never optional: the store builds the guard without passing one.
+const defaultLog: ShelfGuardLog = {
+  warn(context, message) {
+    console.warn(JSON.stringify({ level: 'warn', msg: message, ...context }));
+  },
+};
 
 type Data = Record<string, unknown>;
 
@@ -60,6 +70,7 @@ function changesShelf(before: Data | null, patch: unknown): boolean {
   return named.some((key) => patch[key] !== before[key]);
 }
 
+// Deduplicated: memberUids and editorUids overlap, and each costs a write.
 function membersOf(record: Data | null): string[] {
   if (!record) return [];
   const uids = [
@@ -67,13 +78,16 @@ function membersOf(record: Data | null): string[] {
     ...((record.memberUids as string[]) ?? []),
     ...((record.editorUids as string[]) ?? []),
   ];
-  return uids.filter((uid): uid is string => typeof uid === 'string');
+  return [...new Set(uids.filter((uid): uid is string => typeof uid === 'string'))];
 }
 
-// Only a query can answer these, so they wait for commit.
+// Only a read can answer these, so they wait for commit.
 export interface DeferredInvalidation {
   jobIds: string[];
-  slugs: string[];
+  // Owners of any round on the slug, which only a query finds.
+  claimantSlugs: string[];
+  // A shared game's co-editors, from the access document.
+  memberSlugs: string[];
 }
 
 interface Session {
@@ -87,7 +101,8 @@ function createSession(real: Transaction, db: Firestore, at: string): Session {
   const seen = new Map<string, Data | null>();
   const owners = new Set<string>();
   const unread = new Set<string>();
-  const slugs = new Set<string>();
+  const claimantSlugs = new Set<string>();
+  const memberSlugs = new Set<string>();
 
   const remember = (snap: unknown): void => {
     const target = guardedPath((snap as { ref?: unknown }).ref);
@@ -113,13 +128,24 @@ function createSession(real: Transaction, db: Firestore, at: string): Session {
       for (const uid of membersOf(before)) owners.add(uid);
       for (const uid of membersOf(isData(patch) ? patch : null)) owners.add(uid);
       // Canonical access drops the slug from every non-member's shelf.
-      slugs.add(target.id);
+      claimantSlugs.add(target.id);
       return;
     }
     if (method !== 'delete' && !changesShelf(before, patch)) return;
     // A round this transaction never read: owner resolved after commit.
-    if (!before) unread.add(String(target.id));
-    else for (const uid of membersOf(before)) owners.add(uid);
+    if (!before) {
+      unread.add(String(target.id));
+      return;
+    }
+    if (typeof before.ownerUid === 'string') owners.add(before.ownerUid);
+
+    // A shared game's co-editors see this round too.
+    const slug = (isData(patch) && typeof patch.slug === 'string' ? patch.slug : before.slug) as string | undefined;
+    if (typeof slug !== 'string') return;
+    const access = seen.get(`gameAccess/${slug}`);
+    // Free when the transaction read it; one read after commit otherwise.
+    if (access === undefined) memberSlugs.add(slug);
+    else for (const uid of membersOf(access)) owners.add(uid);
   };
 
   const handler: ProxyHandler<Transaction> = {
@@ -154,51 +180,58 @@ function createSession(real: Transaction, db: Firestore, at: string): Session {
       }
     },
     get deferred() {
-      return { jobIds: [...unread], slugs: [...slugs] };
+      return { jobIds: [...unread], claimantSlugs: [...claimantSlugs], memberSlugs: [...memberSlugs] };
     },
   };
 }
 
-/**
- * Wraps a Firestore handle so its transactions invalidate the shelves they touch.
- *
- * Nothing per call site: a slice writes `submissions` or `gameAccess` as it always
- * did, and the shelves that write can be seen on are tombstoned in the same
- * transaction. Owners come from what the transaction already read, so the guard
- * costs one small write and no read.
- *
- * Co-editors of a shared game stay `shelf-mirror.afterJobWrite`'s job: expanding
- * membership here would mean a `gameAccess` read on every round write.
- */
-export function createGuardedFirestore(db: Firestore, log?: ShelfGuardLog): GuardedFirestore {
+// Nothing per call site: a slice writes as it always did.
+
+// Owners come from what the transaction already read, so no extra read.
+
+// See docs/firestore-read-cost.md for why this seam exists.
+export function createGuardedFirestore(db: Firestore, log: ShelfGuardLog = defaultLog): GuardedFirestore {
   const tombstone = async (ownerUid: string, at: string): Promise<void> => {
     await db.collection('shelves').doc(ownerUid).set(blindTombstone(at));
   };
 
-  const resolveDeferred = async (pending: DeferredInvalidation, at: string): Promise<void> => {
-    for (const jobId of pending.jobIds) {
-      try {
-        const snap = await db.collection('submissions').doc(jobId).get();
-        const ownerUid = (snap.data() as Data | undefined)?.ownerUid;
-        if (typeof ownerUid === 'string') await tombstone(ownerUid, at);
-      } catch (error) {
-        log?.warn({ jobId, err: error }, 'shelf guard could not invalidate after commit');
-      }
+  // Counted as well as logged, so a sweep of failures is visible.
+  const attempt = async (context: object, work: () => Promise<void>): Promise<void> => {
+    try {
+      await work();
+    } catch (error) {
+      noteReadTally('shelfGuardDeferredFailed', true);
+      log.warn({ ...context, err: error }, 'shelf guard could not invalidate after commit');
     }
-    for (const slug of pending.slugs) {
-      try {
+  };
+
+  const resolveDeferred = async (pending: DeferredInvalidation, at: string): Promise<void> => {
+    const slugs = new Set(pending.memberSlugs);
+    for (const jobId of pending.jobIds) {
+      await attempt({ jobId }, async () => {
+        const record = (await db.collection('submissions').doc(jobId).get()).data() as Data | undefined;
+        if (typeof record?.ownerUid === 'string') await tombstone(record.ownerUid, at);
+        if (typeof record?.slug === 'string') slugs.add(record.slug);
+      });
+    }
+    for (const slug of slugs) {
+      await attempt({ slug }, async () => {
+        const access = (await db.collection('gameAccess').doc(slug).get()).data() as Data | undefined;
+        for (const uid of membersOf(access ?? null)) await tombstone(uid, at);
+      });
+    }
+    for (const slug of pending.claimantSlugs) {
+      await attempt({ slug }, async () => {
         const snap = await db.collection('submissions').where('slug', '==', slug).select('ownerUid').get();
         const claimants = new Set(snap.docs.map((doc) => (doc.data() as Data).ownerUid));
         for (const uid of claimants) if (typeof uid === 'string') await tombstone(uid, at);
-      } catch (error) {
-        log?.warn({ slug, err: error }, 'shelf guard could not invalidate claimants');
-      }
+      });
     }
   };
 
   const runTransaction = async <T>(updateFunction: (tx: Transaction) => Promise<T>, options?: unknown): Promise<T> => {
     const at = new Date().toISOString();
-    let pending: DeferredInvalidation = { jobIds: [], slugs: [] };
+    let pending: DeferredInvalidation = { jobIds: [], claimantSlugs: [], memberSlugs: [] };
     const result = await (db.runTransaction as (fn: (tx: Transaction) => Promise<T>, o?: unknown) => Promise<T>)(
       async (real) => {
         const session = createSession(real, db, at);
@@ -210,7 +243,8 @@ export function createGuardedFirestore(db: Firestore, log?: ShelfGuardLog): Guar
       },
       options,
     );
-    if (pending.jobIds.length > 0 || pending.slugs.length > 0) await resolveDeferred(pending, at);
+    const deferred = pending.jobIds.length + pending.claimantSlugs.length + pending.memberSlugs.length;
+    if (deferred > 0) await resolveDeferred(pending, at);
     return result;
   };
 

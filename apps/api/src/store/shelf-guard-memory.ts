@@ -26,13 +26,9 @@ function affectedOwners(hooks: ShelfGuardHooks, rounds: readonly (SubmissionReco
   return uids;
 }
 
-/**
- * A submissions table that invalidates the shelves its writes can be seen on.
- *
- * `InMemoryStore` hands this one object to every slice, so a slice added later
- * inherits the invalidation without knowing the shelf exists. That is the whole
- * point: the nine bugs #1416 fixed were nine slices that each had to remember.
- */
+// One object, handed to every slice, so a new slice inherits this.
+
+// The nine bugs #1416 fixed were nine slices that each remembered.
 export class GuardedSubmissions extends Map<number, SubmissionRecord> {
   constructor(private readonly hooks: ShelfGuardHooksSource) {
     super();
@@ -65,12 +61,9 @@ export class GuardedSubmissions extends Map<number, SubmissionRecord> {
   }
 }
 
-/**
- * The same guard for `gameAccess`, whose every write is shelf-relevant.
- *
- * Membership and ownership are exactly what the reader's `ownedCount` fence
- * cannot see, so no field diff is worth attempting here.
- */
+// Membership is what the reader's ownedCount fence cannot see.
+
+// So every write counts; no field diff is worth attempting.
 export class GuardedGameAccess<
   T extends { ownerUid: string; memberUids?: string[]; editorUids?: string[] },
 > extends Map<string, T> {
