@@ -196,6 +196,10 @@ export function fakeFirestore() {
     };
     return {
       id,
+      // Real refs carry this; the shelf guard reads it.
+      get path() {
+        return `${collection}/${id}`;
+      },
       // `worlds/{id}/worldEntries` — the grandparent is what names a world, and the
       // erase path reads exactly that to report which worlds it touched.
       get parent() {
@@ -208,7 +212,11 @@ export function fakeFirestore() {
       },
       get: async () => {
         billDocs(1);
+        const self = makeRef(collection, id);
         return {
+          id,
+          // Real snapshots carry their ref; the shelf guard reads it.
+          ref: self,
           get exists() {
             return docs.has(key(collection, id));
           },

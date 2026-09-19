@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
@@ -275,7 +275,7 @@ export class InMemoryRoundsStore implements RoundsStore {
 }
 
 export class FirestoreRoundsStore implements RoundsStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private ref(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));

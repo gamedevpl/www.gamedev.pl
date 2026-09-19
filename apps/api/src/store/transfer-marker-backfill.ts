@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from './shelf-guard-firestore.js';
 import type { GameAccessRecord } from './records/game-access.js';
 import { classifyOwnerUid } from '../platform/game-access-resolve.js';
 
@@ -12,7 +12,7 @@ export const TRANSFER_MARKER_RESCAN_INTERVAL_MS = 10 * 60_000;
 // An unmarked game falls back to comparing the owner uid,
 
 // which a boomerang handover makes true again.
-export async function backfillTransferMarkers(db: Firestore, now: () => number = Date.now): Promise<number> {
+export async function backfillTransferMarkers(db: GuardedFirestore, now: () => number = Date.now): Promise<number> {
   const marker = db.collection('counters').doc(MARKER_DOC);
   const stored = (await marker.get()).data() as { at?: string } | undefined;
   const lastPass = stored?.at ? Date.parse(stored.at) : Number.NaN;
@@ -46,7 +46,7 @@ export async function backfillTransferMarkers(db: Firestore, now: () => number =
 
 // so the conclusion has to be drawn while the evidence is there.
 export async function preserveHandoverMarker(
-  db: Firestore,
+  db: GuardedFirestore,
   slug: string,
   invite: { status?: string; respondedAt?: string },
 ): Promise<boolean> {
@@ -58,7 +58,7 @@ export async function preserveHandoverMarker(
 }
 
 // Null when the game is marked, gone, or has no creator owner.
-async function unmarkedAccess(db: Firestore, slug: string): Promise<GameAccessRecord | null> {
+async function unmarkedAccess(db: GuardedFirestore, slug: string): Promise<GameAccessRecord | null> {
   const snap = await db.collection('gameAccess').doc(slug).get();
   if (!snap.exists) return null;
   const record = snap.data() as GameAccessRecord;
@@ -69,7 +69,7 @@ async function unmarkedAccess(db: Firestore, slug: string): Promise<GameAccessRe
 }
 
 // A round authored by someone else means a handover happened.
-async function authorDisagrees(db: Firestore, access: GameAccessRecord): Promise<boolean> {
+async function authorDisagrees(db: GuardedFirestore, access: GameAccessRecord): Promise<boolean> {
   const rounds = await db.collection('submissions').where('slug', '==', access.slug).get();
   return rounds.docs.some((doc) => {
     const uid = (doc.data() as { ownerUid?: string }).ownerUid;
@@ -78,7 +78,7 @@ async function authorDisagrees(db: Firestore, access: GameAccessRecord): Promise
 }
 
 // Per record: an accept landing mid-pass writes the real time.
-async function markHandover(db: Firestore, slug: string, at: string | undefined): Promise<boolean> {
+async function markHandover(db: GuardedFirestore, slug: string, at: string | undefined): Promise<boolean> {
   const ref = db.collection('gameAccess').doc(slug);
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

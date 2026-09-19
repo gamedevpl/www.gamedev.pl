@@ -1,10 +1,10 @@
 import { permitsRecoveryClaim } from './recovery-admission.js';
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { isActiveBuildRound } from '../../creation/job-state.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export async function claimManualRoundSlug(
-  db: Firestore,
+  db: GuardedFirestore,
   jobId: number,
   slug: string,
   sourceJobId: number,

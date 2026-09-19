@@ -1,4 +1,5 @@
-import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { FieldValue } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { SubmissionRecord } from '../records/submission.js';
 
 // Which of the three refused, so a caller never guesses between them.
@@ -153,7 +154,7 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
 }
 
 export class FirestoreRoundBudgetStore implements RoundBudgetStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private ref(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));

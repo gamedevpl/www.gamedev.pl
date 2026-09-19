@@ -2,11 +2,13 @@
 import relativeImportExtensions from './relative-import-extensions.mjs';
 import moduleBoundary from './module-boundary.mjs';
 import meteredCall from './metered-call.mjs';
+import shelfInvalidation from './shelf-invalidation.mjs';
 
 export default {
   rules: {
     ...relativeImportExtensions.rules,
     ...moduleBoundary.rules,
     ...meteredCall.rules,
+    ...shelfInvalidation.rules,
   },
 };

@@ -1,4 +1,5 @@
-import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { FieldValue } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { withEditorRemoved, type GameAccessRecord } from '../records/game-access.js';
 import { editorInviteDocId, isPendingEditorInvite, type GameEditorInvitation } from '../records/game-editor-invite.js';
 import { newMembershipAudit } from '../records/game-membership-audit.js';
@@ -73,7 +74,7 @@ export class InMemoryGameMembershipStore implements GameMembershipStore {
 }
 
 export class FirestoreGameMembershipStore implements GameMembershipStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private async changeMembership(
     slug: string,
