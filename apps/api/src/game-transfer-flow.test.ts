@@ -1,127 +1,31 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from './platform/app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import { mintToken } from './platform/submission-token.js';
 import { mintAgentToken } from './platform/agent-token.js';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { MAX_REVOKED_ROUNDS_PER_TRANSFER } from './store/slices/game-transfer.js';
-import type { AgentBackend } from './agent-surface/agent-backend.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
-import type { GamesStore } from './delivery/games-store.js';
 import { currentOwnerUid } from './platform/game-access-resolve.js';
 import { InMemoryStore } from './platform/store.js';
 import type { ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
+import {
+  RECIPIENT,
+  SECRET,
+  SENDER,
+  createTransferApp,
+  gameWithHistory,
+  handOver,
+  session,
+} from './game-transfer-fixtures.js';
 
 // The transfer walked end to end, from both sides, and back again.
-
-const SECRET = 'transfer-flow-secret';
-const SESSION_SECRET = 'dev-session-secret-change-me';
-const SENDER = 'g:sender';
-const RECIPIENT = 'g:recipient';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
   for (const app of apps.splice(0)) await app.close();
 });
 
-function session(uid: string) {
-  return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, SESSION_SECRET)}` };
-}
-
-function stubGitHub(): GitHubClient {
-  return {
-    getIssueState: async () => ({ state: 'open' as const }),
-    findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
-    createIssueComment: async () => ({ id: 1 }),
-    updateIssueBody: async () => {},
-    closeIssue: async () => {},
-    ensureOpenPullRequest: async () => ({ number: 1 }),
-    deleteBranch: async () => {},
-    getGameSources: async (): Promise<GameSources | null> => null,
-    getGameMedia: async () => null,
-    getCatalog: async (): Promise<CatalogGameEntry[]> => [],
-    getProgressNotes: async () => null,
-  };
-}
-
-function stubBackend(): AgentBackend {
-  return {
-    name: 'stub',
-    dispatch: async () => ({ ref: 'task-1', workspace: 'copilot/x' }),
-    resume: async () => ({ ref: 'task-2', workspace: 'copilot/y' }),
-    observe: async () => null,
-    cancel: async () => ({ enforced: false }),
-  };
-}
-
 async function createApp(store: InMemoryStore, managedAvailabilityGate?: ManagedAvailabilityGate) {
-  const app = await buildApp({
-    store,
-    sessionSecret: SESSION_SECRET,
-    contentChecker: { check: async () => ({ allowed: true }), checkFields: async () => ({ allowed: true }) },
-    submissionRoutes: {
-      githubClient: stubGitHub(),
-      githubToken: 'gh-token',
-      submissionTokenSecret: SECRET,
-      agentBackend: stubBackend(),
-      chatAgent: { decide: async () => ({ kind: 'build', text: 'On it.' }) },
-      agentChannel: {} as { gamesStore?: GamesStore },
-      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
-      ...(managedAvailabilityGate ? { managedAvailabilityGate } : {}),
-    },
-  });
-  apps.push(app);
-  return app;
-}
-
-// A game owned by SENDER, with a round's history behind it.
-async function gameWithHistory(store: InMemoryStore, opts?: { published?: boolean }) {
-  await store.upsertUser({ uid: SENDER });
-  await store.upsertUser({ uid: RECIPIENT });
-  const jobId = await store.allocateJobId();
-  await store.createSubmission(jobId, SENDER, 'Comet Courier');
-  const at = (await store.getSubmission(jobId))!.createdAt;
-  await store.setSubmissionSlug(jobId, 'comet-courier');
-  await store.setSubmissionDeliveredVersion(jobId, 'v1');
-  await store.appendCreatorMessage(jobId, 'Make the asteroids slower.');
-  await store.appendBuildEvent(jobId, {
-    kind: 'done',
-    step: 'polishing',
-    text: 'Asteroid speed reduced.',
-    createdAt: at,
-  });
-  await store.recordJobTransition(jobId, { to: 'ready_for_review', at, by: 'gate', reason: 'gate_green' });
-  const shot = await store.appendBuildShot(jobId, {
-    data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64'),
-    mediaType: 'image/png',
-    label: 'Opening screen',
-  });
-  if (opts?.published) {
-    await store.setSubmissionPublishedAt(jobId, at);
-    await store.setPublication({ slug: 'comet-courier', state: 'published', currentVersion: 'v1', publishedAt: at });
-  }
-  await store.ensureGameAccess('comet-courier', SENDER, at, at);
-  return { jobId, at, shotId: shot.id };
-}
-
-// The real handover, over the routes a creator uses.
-async function handOver(app: FastifyInstance, store: InMemoryStore, from: string, to: string, at: string) {
-  const code = await store.ensureRecipientCode(to, at);
-  const initiated = await app.inject({
-    method: 'POST',
-    url: '/api/me/studio/games/comet-courier/transfer',
-    headers: session(from),
-    payload: { recipientCode: code },
-  });
-  expect(initiated.statusCode).toBe(200);
-  const accepted = await app.inject({
-    method: 'POST',
-    url: '/api/me/transfers/comet-courier/accept',
-    headers: session(to),
-    payload: { invitationId: initiated.json().transfer.invitationId },
-  });
-  expect(accepted.statusCode).toBe(200);
+  return createTransferApp(store, apps, managedAvailabilityGate);
 }
 
 describe('after a transfer, the sender keeps nothing', () => {
