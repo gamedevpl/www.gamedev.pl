@@ -379,7 +379,7 @@
     "apps/api/src/platform/editor-kit-env.test.ts": 11,
     "apps/api/src/platform/editor-kit-env.ts": 4,
     "apps/api/src/platform/erase-account.test.ts": 99,
-    "apps/api/src/platform/erase-account.ts": 72,
+    "apps/api/src/platform/erase-account.ts": 77,
     "apps/api/src/platform/erase-player-signals.test.ts": 287,
     "apps/api/src/platform/erase-player-signals.ts": 240,
     "apps/api/src/platform/game-access-resolve-cache.test.ts": 158,
