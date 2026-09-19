@@ -4,7 +4,7 @@ import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-r
 
 // Structural, not Pick<Store>: the store builds the mirror.
 export type ShelfMirrorStore = ShelfStore & {
-  putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void>;
+  putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
   deleteShelf(ownerUid: string): Promise<void>;
 };
 
@@ -35,12 +35,18 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
   };
 
   async function rebuildNow(ownerUid: string): Promise<ShelfDocument | null> {
+    // Read before source, so a write in between is seen.
+    const seq = (await store.getShelf(ownerUid))?.seq ?? 0;
     const owned = await store.listSubmissionsByOwner(ownerUid);
 
     // Mirror reconciles ownership identically to the shelf route.
     const records = await reconcileTransferredOwnership(store, ownerUid, owned);
     const shelf = buildShelfDocument(records, new Date(now()).toISOString(), owned.length);
-    await store.putShelf(ownerUid, shelf);
+    if (!(await store.putShelfIfUnchanged(ownerUid, shelf, seq))) {
+      // The winner read source later, so its document is fresher.
+      report(new Error('shelf rebuild lost a concurrent write'), { ownerUid });
+      return null;
+    }
     return shelf;
   }
 

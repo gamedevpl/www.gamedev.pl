@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createShelfMirror } from './shelf-mirror.js';
-import type { ShelfDocument } from '../store/records/shelf.js';
+import { buildShelfDocument, type ShelfDocument } from '../store/records/shelf.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 const record = (jobId: number, extra: Partial<SubmissionRecord> = {}): SubmissionRecord =>
@@ -9,6 +9,7 @@ const record = (jobId: number, extra: Partial<SubmissionRecord> = {}): Submissio
 interface Harness {
   rows: SubmissionRecord[];
   writes: ShelfDocument[];
+  stored: Map<string, ShelfDocument>;
   deleted: string[];
   reads: number;
   release?: () => void;
@@ -16,7 +17,7 @@ interface Harness {
 
 // Holds the read open so a write lands mid-rebuild.
 function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
-  const state: Harness = { rows: [], writes: [], deleted: [], reads: 0 };
+  const state: Harness = { rows: [], writes: [], stored: new Map(), deleted: [], reads: 0 };
   let unblock: (() => void) | undefined;
   const gate = options.blockReads
     ? new Promise<void>((resolve) => {
@@ -35,12 +36,20 @@ function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
     async getSubmission(jobId: number) {
       return state.rows.find((row) => row.jobId === jobId) ?? null;
     },
-    async putShelf(_ownerUid: string, shelf: ShelfDocument) {
+    async getShelf(ownerUid: string) {
+      return state.stored.get(ownerUid) ?? null;
+    },
+    async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number) {
       if (options.failWrite) throw new Error('write refused');
-      state.writes.push(shelf);
+      if ((state.stored.get(ownerUid)?.seq ?? 0) !== expectedSeq) return false;
+      const written = { ...shelf, seq: expectedSeq + 1 };
+      state.stored.set(ownerUid, written);
+      state.writes.push(written);
+      return true;
     },
     async deleteShelf(ownerUid: string) {
       state.deleted.push(ownerUid);
+      state.stored.delete(ownerUid);
     },
     // No canonical access here: the reconcile keeps every row.
     async listGameAccessByMember() {
@@ -108,6 +117,30 @@ describe('createShelfMirror', () => {
 
     await expect(mirror.rebuild('g:owner')).resolves.toBeNull();
     expect(errors).toHaveLength(1);
+  });
+
+  // The coalescing above fences one process, not four.
+  it('refuses a rebuild whose source read predates another instance write', async () => {
+    const { state, store } = harness();
+    state.rows = [record(1, { slug: 'sky' })];
+    const instanceA = createShelfMirror({ store, now: () => 0, onError: () => {} });
+    const instanceB = createShelfMirror({ store, now: () => 0, onError: () => {} });
+
+    // A reads the round the owner still has.
+    const seqSeenByA = (await store.getShelf('g:owner'))?.seq ?? 0;
+
+    // Revoked, and B rebuilds from corrected source.
+    state.rows = [];
+    await instanceB.rebuild('g:owner');
+    expect(state.stored.get('g:owner')?.rounds).toEqual([]);
+
+    // A must lose: the count check cannot see a revoked round return.
+    const staleShelf = buildShelfDocument([record(1, { slug: 'sky' })], '', 1);
+    expect(await store.putShelfIfUnchanged('g:owner', staleShelf, seqSeenByA)).toBe(false);
+    expect(state.stored.get('g:owner')?.rounds).toEqual([]);
+
+    // A pass reading after B is honest, and allowed.
+    await expect(instanceA.rebuild('g:owner')).resolves.not.toBeNull();
   });
 
   // A kept document would serve a game the member just lost.

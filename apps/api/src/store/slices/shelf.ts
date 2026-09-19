@@ -6,6 +6,9 @@ export interface ShelfDocumentStore {
   putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
 
+  // Writes only if seq is unchanged; false means it lost.
+  putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
+
   // How many rounds the owner has, for the one-read agreement check.
   countSubmissionsByOwner(ownerUid: string): Promise<number>;
 
@@ -32,6 +35,12 @@ export class InMemoryShelfStore implements ShelfDocumentStore {
 
   async putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void> {
     this.shelves.set(ownerUid, structuredClone(shelf));
+  }
+
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    if ((this.shelves.get(ownerUid)?.seq ?? 0) !== expectedSeq) return false;
+    this.shelves.set(ownerUid, structuredClone({ ...shelf, seq: expectedSeq + 1 }));
+    return true;
   }
 
   async deleteShelf(ownerUid: string): Promise<void> {
@@ -66,6 +75,18 @@ export class FirestoreShelfStore implements ShelfDocumentStore {
   async putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void> {
     // Replaced whole: a merge would keep stale rounds.
     await this.ref(ownerUid).set(shelf);
+  }
+
+  // In-process coalescing fences one instance, not four.
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    const ref = this.ref(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? (snap.data() as ShelfDocument) : null;
+      if ((current?.seq ?? 0) !== expectedSeq) return false;
+      tx.set(ref, { ...shelf, seq: expectedSeq + 1 });
+      return true;
+    });
   }
 
   async deleteShelf(ownerUid: string): Promise<void> {

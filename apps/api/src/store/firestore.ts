@@ -433,6 +433,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.shelfStore.putShelf(ownerUid, shelf);
   }
 
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    return this.shelfStore.putShelfIfUnchanged(ownerUid, shelf, expectedSeq);
+  }
+
   async deleteShelf(ownerUid: string): Promise<void> {
     return this.shelfStore.deleteShelf(ownerUid);
   }

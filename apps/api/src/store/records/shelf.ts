@@ -33,6 +33,9 @@ export interface ShelfDocument {
 
   // The ownerUid query size, so one count() checks this.
   ownedCount?: number;
+
+  // Bumped per write; a stale rebuild elsewhere loses.
+  seq?: number;
   rounds: ShelfRound[];
   // Past the cap, so the reader must not trust `rounds` as complete.
   truncated?: true;
