@@ -717,6 +717,19 @@ cause goes in the log and the response rather than the notification body, becaus
 are create-only: adding `{{detail}}` to the body would render an empty slot in every alert
 already emitted.
 
+## A note on every production number in this file
+
+Until the meter fix in PR #1427, `fsReads` in production counted each single-document
+get **twice**: `DocumentReference.get()` is `Firestore.getAll(this)` in the client, and the
+meter patched both. The fake used by tests implements `get` directly, so every gate
+baseline in `firestore-read-cost-baseline.json` is a true billed count, while every figure
+quoted from production logs above it -- the 680 and 553 reads per request that opened the
+shelf work, the 246.7 average and 375 median measured before #1416 shipped, and the 3 seen
+on the document path afterwards -- is a *metered* count, high by one per document get in
+that request. Ratios between two metered numbers still hold; absolute "billed" claims from
+production do not. The shelf document path bills 2, as the gate says. Numbers logged after
+#1427 is deployed are billed counts and can be compared to the gate directly.
+
 ## Measuring
 
 ```bash
