@@ -369,7 +369,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     ]);
     // State is a receipt the token carries; what was said is not.
     const viewerOwns = Boolean(
-      store && record && viewerUid && (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read')),
+      store &&
+        record &&
+        viewerUid &&
+        // A blip denies; it used to 500 the member's own poll.
+        (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read').catch(() => false)),
     );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));

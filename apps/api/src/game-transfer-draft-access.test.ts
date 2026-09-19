@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mintToken } from './platform/submission-token.js';
 import { InMemoryStore } from './platform/store.js';
+import type { ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
 import {
   BUILD_SUMMARY,
   BUNDLE_HTML,
@@ -83,5 +84,34 @@ describe('after a transfer, the sender cannot reach the draft', () => {
     const theirs = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(RECIPIENT) });
     expect(theirs.json().previewGate.report).toBe(GATE_REPORT);
     expect(theirs.json().recentBuilds[0].summary).toBe(BUILD_SUMMARY);
+  });
+
+  it('does not read the owner’s quota to answer a non-member', async () => {
+    const store = new InMemoryStore();
+    const { jobId, at } = await gameWithHistory(store);
+    const asked: string[] = [];
+    const gate: ManagedAvailabilityGate = {
+      peek: async (uid) => {
+        asked.push(uid);
+        return { available: true };
+      },
+      checkAndSpend: async () => ({ available: true }),
+      resolveVendor: async () => undefined,
+    };
+    const app = await createTransferApp(store, apps, gate);
+    const token = mintToken(jobId, SECRET);
+
+    await handOver(app, store, SENDER, RECIPIENT, at);
+
+    asked.length = 0;
+    const sender = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(SENDER) });
+    expect(sender.statusCode).toBe(200);
+    expect(sender.json().platformBuilder).toBeUndefined();
+    // Redacting the answer is not enough: the read itself must not happen.
+    expect(asked).toEqual([]);
+
+    const member = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(RECIPIENT) });
+    expect(member.json().platformBuilder).toEqual({ available: true });
+    expect(asked).toContain(RECIPIENT);
   });
 });
