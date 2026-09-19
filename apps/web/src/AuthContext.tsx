@@ -67,7 +67,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: true,
+  loading: false,
   privateBeta: false,
   publicPlaySlugs: [],
   appleSignIn: false,
