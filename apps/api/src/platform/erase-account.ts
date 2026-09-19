@@ -45,14 +45,26 @@ export async function eraseAccount(options: {
   const identity = dryRun
     ? preview
     : await options.store.deleteAccountIdentity(options.uid, options.at ?? new Date().toISOString());
-  if (!dryRun) await moveShelf(options.store, options.uid);
+  if (!dryRun) await moveShelf(options.store, options.uid, identity);
   return { signals, identity };
 }
 
 // Rounds moved owner, so both shelves are wrong.
-async function moveShelf(store: Store, uid: string): Promise<void> {
+
+// Tombstoned, not deleted: a delete resets seq and a stale rebuild wins.
+async function moveShelf(store: Store, uid: string, identity: AccountIdentityDeletionResult): Promise<void> {
+  const at = new Date().toISOString();
   try {
-    await store.deleteShelf(uid);
+    await store.tombstoneShelf(uid, at);
+
+    // Bulk rewrite, never through the mirror; members keep the old tip.
+    for (const slug of new Set([...identity.publishedSlugs, ...identity.unpublishedSlugs])) {
+      const access = await store.getGameAccess(slug);
+      if (!access) continue;
+      for (const member of new Set([access.ownerUid, ...access.editorUids])) {
+        if (member !== uid) await store.tombstoneShelf(member, at);
+      }
+    }
     await store.rebuildShelf(DELETED_ACCOUNT_UID);
   } catch {
     // An erasure must never fail on a cache.

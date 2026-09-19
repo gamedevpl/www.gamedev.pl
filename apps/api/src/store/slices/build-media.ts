@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -219,7 +219,7 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 }
 
 export class FirestoreBuildMediaStore implements BuildMediaStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private shotsCollection(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId)).collection('shots');

@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import {
   fencedOut,
   MAX_GAME_MEMBERS,
@@ -14,6 +14,7 @@ import {
   type GameEditorInvitation,
 } from '../records/game-editor-invite.js';
 import { newMembershipAudit, type GameMembershipAuditRecord } from '../records/game-membership-audit.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 
 export type EditorInviteCreateResult =
   GameEditorInvitation | 'busy' | 'ineligible' | 'stale_owner' | 'already_member' | 'member_cap';
@@ -101,6 +102,8 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
       null,
     private getRecipientCodeOwner: (code: string) => string | null = () => null,
     private writeGameAccess: (slug: string, record: GameAccessRecord) => void = () => {},
+    // Same write as the access change; neither lands alone.
+    private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
   ) {}
 
   private read(slug: string, recipientUid: string, at: string): GameEditorInvitation | null {
@@ -162,6 +165,7 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
     const next = withEditorAdded(access!, recipientUid, at);
     if (!next) return 'member_cap';
     this.writeGameAccess(slug, next);
+    this.invalidateShelf(recipientUid, at);
     const accepted: GameEditorInvitation = { ...existing, status: 'accepted', respondedAt: at };
     this.invites.set(key, accepted);
     this.audits.push(newMembershipAudit(slug, 'editor_accepted', recipientUid, recipientUid, at));
@@ -234,7 +238,7 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
 }
 
 export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private doc(slug: string, recipientUid: string) {
     return this.db.collection('gameEditorInvites').doc(editorInviteDocId(slug, recipientUid));
@@ -308,6 +312,7 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
   ): Promise<EditorInviteAcceptResult> {
     const ref = this.doc(slug, recipientUid);
     const accessRef = this.db.collection('gameAccess').doc(slug);
+    const shelfRef = this.db.collection('shelves').doc(recipientUid);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameEditorInvitation) : null;
@@ -315,11 +320,12 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
       if (existing.status === 'accepted') return existing;
       if (!isPendingEditorInvite(existing, at)) return null;
 
-      const [senderFence, recipientFence, recipientSnap, accessSnap] = await Promise.all([
+      const [senderFence, recipientFence, recipientSnap, accessSnap, shelfSnap] = await Promise.all([
         tx.get(this.erasureFence(existing.senderUid)),
         tx.get(this.erasureFence(recipientUid)),
         tx.get(this.db.collection('users').doc(recipientUid)),
         tx.get(accessRef),
+        tx.get(shelfRef),
       ]);
       if (fencedOut(fenceAt(senderFence), existing.createdAt) || fencedOut(fenceAt(recipientFence), existing.createdAt))
         return 'ineligible';
@@ -333,6 +339,9 @@ export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
       const next = withEditorAdded(access!, recipientUid, at);
       if (!next) return 'member_cap';
       tx.set(accessRef, next);
+      // Atomic with the access change; gaining a game moves no ownerUid.
+      const shelf = shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null;
+      tx.set(shelfRef, tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
       const accepted: GameEditorInvitation = { ...existing, status: 'accepted', respondedAt: at };
       tx.set(ref, accepted);
       tx.set(this.auditRef(), newMembershipAudit(slug, 'editor_accepted', recipientUid, recipientUid, at));

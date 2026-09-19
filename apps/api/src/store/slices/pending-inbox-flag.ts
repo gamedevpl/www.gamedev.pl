@@ -1,4 +1,5 @@
-import type { DocumentReference, Firestore } from '@google-cloud/firestore';
+import type { DocumentReference } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
 import { isStudioOrigin } from '../records/build-log.js';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -30,7 +31,7 @@ export function stampLocalInbox(submissions: Map<number, SubmissionRecord>, jobI
 }
 
 export async function stampListedInbox(
-  db: Firestore,
+  db: GuardedFirestore,
   jobId: number,
   pendingCount: number,
   relist: () => Promise<readonly unknown[]>,
@@ -39,7 +40,7 @@ export async function stampListedInbox(
   else await writePendingInboxFlag(db, jobId, true);
 }
 
-export async function writePendingInboxFlag(db: Firestore, jobId: number, pending: boolean): Promise<void> {
+export async function writePendingInboxFlag(db: GuardedFirestore, jobId: number, pending: boolean): Promise<void> {
   const ref = db.collection('submissions').doc(String(jobId));
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -53,7 +54,7 @@ export async function writePendingInboxFlag(db: Firestore, jobId: number, pendin
 
 // Heal leftover true: clear, then restore if a row landed.
 export async function stampEmptyInbox(
-  db: Firestore,
+  db: GuardedFirestore,
   jobId: number,
   relist: () => Promise<readonly unknown[]>,
 ): Promise<void> {
@@ -67,7 +68,7 @@ export async function stampEmptyInbox(
   await writePendingInboxFlag(db, jobId, false);
 }
 
-export async function clearPendingInboxFlag(db: Firestore, jobId: number): Promise<void> {
+export async function clearPendingInboxFlag(db: GuardedFirestore, jobId: number): Promise<void> {
   const ref = db.collection('submissions').doc(String(jobId));
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -78,7 +79,7 @@ export async function clearPendingInboxFlag(db: Firestore, jobId: number): Promi
 
 // Write the message; skip the flag when the parent is missing.
 export async function queueInboxMessage(
-  db: Firestore,
+  db: GuardedFirestore,
   jobId: number,
   messageRef: DocumentReference,
   record: CreatorMessage,

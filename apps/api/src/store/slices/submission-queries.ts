@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { isRoundOpen, isSweepActive } from '../../platform/sweep-scope.js';
 import { OPEN_ROUND_RESCAN_INTERVAL_MS, backfillOpenRound } from '../open-round-backfill.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
@@ -144,7 +144,7 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
 }
 
 export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private migration: Promise<unknown> | null = null;
   private migratedAt = 0;

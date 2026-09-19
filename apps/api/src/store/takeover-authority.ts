@@ -1,4 +1,5 @@
-import type { Firestore, Transaction } from '@google-cloud/firestore';
+import type { Transaction } from '@google-cloud/firestore';
+import type { GuardedFirestore } from './shelf-guard-firestore.js';
 import { classifyOwnerUid, deriveOwnerFromSubmissions } from '../platform/game-access-resolve.js';
 import type { GameAccessRecord } from './records/game-access.js';
 import { fromStoredSubmission, type SubmissionRecord } from './records/submission.js';
@@ -22,7 +23,7 @@ export function ownsTakeoverRound(
 }
 
 export async function firestoreOwnsTakeoverRound(
-  db: Firestore,
+  db: GuardedFirestore,
   tx: Transaction,
   sub: SubmissionRecord,
   uid: string,

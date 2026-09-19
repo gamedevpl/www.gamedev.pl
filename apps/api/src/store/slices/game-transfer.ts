@@ -1,4 +1,5 @@
-import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { FieldValue } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { transferredAccess, type GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
@@ -7,6 +8,7 @@ import {
   type GameTransferInvitation,
 } from '../records/game-transfer.js';
 import { fencedOut } from '../records/game-access.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 import { isActiveBuildRound, revokedRoundGeneration } from '../../creation/job-state.js';
 import type { JobState } from '@gamedevpl/contract';
 import type { JobTransition } from '../../creation/job-state.js';
@@ -122,6 +124,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private resetGameAutonomy: (slug: string) => void = () => {},
     // Revokes the sender's round channel, session, upload and opener tokens.
     private revokeRoundCapabilities: (slug: string) => void = () => {},
+    // Same write as the access change; neither lands alone.
+    private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
   ) {}
 
   private erased(uid: string): boolean {
@@ -184,6 +188,8 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     if (current !== existing || !isPending(current, at)) return null;
 
     this.writeGameAccess(slug, transferredAccess(access, recipientUid, at));
+    this.invalidateShelf(existing.senderUid, at);
+    this.invalidateShelf(recipientUid, at);
     this.retireGameAgentKey(slug);
     this.resetGameAutonomy(slug);
     this.revokeRoundCapabilities(slug);
@@ -226,7 +232,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
 }
 
 export class FirestoreGameTransferStore implements GameTransferStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private doc(slug: string) {
     return this.db.collection('gameTransfers').doc(slug);
@@ -306,6 +312,7 @@ export class FirestoreGameTransferStore implements GameTransferStore {
     const gameRef = this.db.collection('games').doc(slug);
     const agentKeyRef = this.db.collection('gameAgentKeys').doc(slug);
     const activeQuery = this.db.collection('submissions').where('slug', '==', slug);
+    const shelfRef = (uid: string) => this.db.collection('shelves').doc(uid);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? (snap.data() as GameTransferInvitation) : null;
@@ -314,17 +321,29 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (existing.status === 'accepted') return existing;
       if (!isPending(existing, at)) return null;
 
-      const [senderFence, recipientFence, senderSnap, recipientSnap, accessSnap, activeSnap, gameSnap, agentKeySnap] =
-        await Promise.all([
-          tx.get(this.erasureFence(existing.senderUid)),
-          tx.get(this.erasureFence(recipientUid)),
-          tx.get(this.db.collection('users').doc(existing.senderUid)),
-          tx.get(this.db.collection('users').doc(recipientUid)),
-          tx.get(accessRef),
-          tx.get(activeQuery),
-          tx.get(gameRef),
-          tx.get(agentKeyRef),
-        ]);
+      const [
+        senderFence,
+        recipientFence,
+        senderSnap,
+        recipientSnap,
+        accessSnap,
+        activeSnap,
+        gameSnap,
+        agentKeySnap,
+        senderShelfSnap,
+        recipientShelfSnap,
+      ] = await Promise.all([
+        tx.get(this.erasureFence(existing.senderUid)),
+        tx.get(this.erasureFence(recipientUid)),
+        tx.get(this.db.collection('users').doc(existing.senderUid)),
+        tx.get(this.db.collection('users').doc(recipientUid)),
+        tx.get(accessRef),
+        tx.get(activeQuery),
+        tx.get(gameRef),
+        tx.get(agentKeyRef),
+        tx.get(shelfRef(existing.senderUid)),
+        tx.get(shelfRef(recipientUid)),
+      ]);
 
       const sender = senderSnap.exists ? (senderSnap.data() as { createdAt?: string }) : null;
       const recipient = recipientSnap.exists
@@ -354,6 +373,15 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (agentKeySnap.exists) tx.delete(agentKeyRef);
       // The recipient never opted into the sender's autonomy consent.
       if (gameSnap.data()?.autonomy !== undefined) tx.update(gameRef, { autonomy: FieldValue.delete() });
+
+      // Atomic with the access change; a transfer moves no ownerUid.
+      for (const [uid, shelfSnap] of [
+        [existing.senderUid, senderShelfSnap],
+        [recipientUid, recipientShelfSnap],
+      ] as const) {
+        const shelf = shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null;
+        tx.set(shelfRef(uid), tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
+      }
       const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
       tx.set(ref, accepted);
       return accepted;

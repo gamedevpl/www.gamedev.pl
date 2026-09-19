@@ -1,17 +1,22 @@
-import type { Firestore } from '@google-cloud/firestore';
-import type { ShelfDocument } from '../records/shelf.js';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 
 export interface ShelfDocumentStore {
   getShelf(ownerUid: string): Promise<ShelfDocument | null>;
   putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
 
+  // Writes only if seq is unchanged; false means it lost.
+  putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
+
+  // Unservable, but seq keeps climbing. Always writes.
+  tombstoneShelf(ownerUid: string, builtAt: string): Promise<void>;
+
   // How many rounds the owner has, for the one-read agreement check.
   countSubmissionsByOwner(ownerUid: string): Promise<number>;
 
   // Owners whose shelf is older than the cutoff, oldest first.
   listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]>;
-
 }
 
 // The Store adds the rebuild; the document store cannot.
@@ -34,6 +39,17 @@ export class InMemoryShelfStore implements ShelfDocumentStore {
     this.shelves.set(ownerUid, structuredClone(shelf));
   }
 
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    if ((this.shelves.get(ownerUid)?.seq ?? 0) !== expectedSeq) return false;
+    this.shelves.set(ownerUid, structuredClone({ ...shelf, seq: expectedSeq + 1 }));
+    return true;
+  }
+
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    const seq = (this.shelves.get(ownerUid)?.seq ?? 0) + 1;
+    this.shelves.set(ownerUid, tombstoneShelf(builtAt, seq));
+  }
+
   async deleteShelf(ownerUid: string): Promise<void> {
     this.shelves.delete(ownerUid);
   }
@@ -52,7 +68,7 @@ export class InMemoryShelfStore implements ShelfDocumentStore {
 }
 
 export class FirestoreShelfStore implements ShelfDocumentStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private ref(ownerUid: string) {
     return this.db.collection('shelves').doc(ownerUid);
@@ -66,6 +82,27 @@ export class FirestoreShelfStore implements ShelfDocumentStore {
   async putShelf(ownerUid: string, shelf: ShelfDocument): Promise<void> {
     // Replaced whole: a merge would keep stale rounds.
     await this.ref(ownerUid).set(shelf);
+  }
+
+  // In-process coalescing fences one instance, not four.
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    const ref = this.ref(ownerUid);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? (snap.data() as ShelfDocument) : null;
+      if ((current?.seq ?? 0) !== expectedSeq) return false;
+      tx.set(ref, { ...shelf, seq: expectedSeq + 1 });
+      return true;
+    });
+  }
+
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    const ref = this.ref(ownerUid);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? (snap.data() as ShelfDocument) : null;
+      tx.set(ref, tombstoneShelf(builtAt, (current?.seq ?? 0) + 1));
+    });
   }
 
   async deleteShelf(ownerUid: string): Promise<void> {

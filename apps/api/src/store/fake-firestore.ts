@@ -196,6 +196,10 @@ export function fakeFirestore() {
     };
     return {
       id,
+      // Real refs carry this; the shelf guard reads it.
+      get path() {
+        return `${collection}/${id}`;
+      },
       // `worlds/{id}/worldEntries` — the grandparent is what names a world, and the
       // erase path reads exactly that to report which worlds it touched.
       get parent() {
@@ -208,7 +212,11 @@ export function fakeFirestore() {
       },
       get: async () => {
         billDocs(1);
+        const self = makeRef(collection, id);
         return {
+          id,
+          // Real snapshots carry their ref; the shelf guard reads it.
+          ref: self,
           get exists() {
             return docs.has(key(collection, id));
           },
@@ -382,27 +390,44 @@ export function fakeFirestore() {
     },
     // Writes apply as each tx.* call runs; a failed one now rejects.
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
+      // Real Firestore refuses a read once the transaction has written.
+
+      // A leave read a shelf after writing access; production only.
+      let wrote = false;
+      const noReadAfterWrite = () => {
+        if (wrote) throw new Error('Firestore transactions require all reads to be executed before all writes.');
+      };
+      const willWrite = () => {
+        wrote = true;
+      };
       const tx = {
         // Aggregate queries are readable inside a transaction in the real client, and
         // the world write depends on that: its quota check has to be ordered against a
         // concurrent claim or two tabs can both spend the same last slot.
-        get: (target: { get: () => Promise<unknown> }) => target.get(),
+        get: (target: { get: () => Promise<unknown> }) => {
+          noReadAfterWrite();
+          return target.get();
+        },
         set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
+          willWrite();
           const op = ref._stage.set(data, options);
           op.validate();
           op.apply();
         },
         create: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
+          willWrite();
           const op = ref._stage.create(data);
           op.validate();
           op.apply();
         },
         update: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
+          willWrite();
           const op = ref._stage.update(data);
           op.validate();
           op.apply();
         },
         delete: (ref: ReturnType<typeof makeRef>) => {
+          willWrite();
           const op = ref._stage.delete();
           op.apply();
         },

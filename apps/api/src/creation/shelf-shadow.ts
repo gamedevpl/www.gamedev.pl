@@ -14,7 +14,7 @@ export interface ShelfShadowStore {
 }
 
 // Absent and stale are reported too, not hidden.
-export type ShelfShadowVerdict = 'match' | 'absent' | 'version' | 'truncated' | 'count' | 'collapse';
+export type ShelfShadowVerdict = 'match' | 'absent' | 'stale' | 'version' | 'truncated' | 'count' | 'collapse';
 
 export interface ShelfShadowResult {
   verdict: ShelfShadowVerdict;
@@ -48,6 +48,7 @@ export function judgeShelfShadow(
   sourceCount: number,
 ): ShelfShadowResult {
   if (!shelf) return { verdict: 'absent', sourceCount };
+  if (shelf.stale) return { verdict: 'stale', sourceCount };
   if (shelf.version !== SHELF_VERSION) return { verdict: 'version', sourceCount, shelfCount: shelf.sourceCount };
   if (shelf.truncated) return { verdict: 'truncated', sourceCount, shelfCount: shelf.sourceCount };
   if (!isShelfUsable(shelf, sourceCount)) return { verdict: 'count', sourceCount, shelfCount: shelf.sourceCount };
@@ -76,8 +77,8 @@ export async function recordShelfShadow(
       noteReadTally('shelfMismatch', true);
       deps.log.warn({ ownerUid, ...result }, 'shelf shadow mismatch');
     }
-    // Absent is unreachable by write-through or the hourly pass alike.
-    if (result.verdict === 'absent') await backfillAbsentShelf(deps, ownerUid);
+    // Readers serve this document, so any drift is wrong answers until rewritten.
+    if (result.verdict !== 'match') await repairShelf(deps, ownerUid);
     return result;
   } catch (error) {
     noteReadTally('shelfShadow', 'error');
@@ -88,13 +89,13 @@ export async function recordShelfShadow(
 
 // Awaited: unawaited work here can be suspended after the response ships.
 
-// A lost repair is silent -- the next poll just says 'absent' again.
+// A lost repair is silent; the next poll repeats the verdict.
 
 // The mirror answers false on failure rather than rejecting; check both.
-async function backfillAbsentShelf(deps: ShelfShadowDeps, ownerUid: string): Promise<void> {
-  const backfilled = await deps.store.rebuildShelf(ownerUid).catch((error: unknown) => {
-    deps.log.warn({ ownerUid, err: error }, 'shelf lazy backfill errored');
+async function repairShelf(deps: ShelfShadowDeps, ownerUid: string): Promise<void> {
+  const rebuilt = await deps.store.rebuildShelf(ownerUid).catch((error: unknown) => {
+    deps.log.warn({ ownerUid, err: error }, 'shelf repair errored');
     return false;
   });
-  if (!backfilled) deps.log.warn({ ownerUid }, 'shelf lazy backfill wrote nothing');
+  if (!rebuilt) deps.log.warn({ ownerUid }, 'shelf repair wrote nothing');
 }
