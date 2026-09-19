@@ -55,7 +55,7 @@ export function judgeShelfShadow(
   if (shelf.version !== SHELF_VERSION) return { verdict: 'version', sourceCount, shelfCount: shelf.sourceCount };
   if (shelf.truncated) return { verdict: 'truncated', sourceCount, shelfCount: shelf.sourceCount };
   if (!isShelfUsable(shelf, sourceCount)) return { verdict: 'count', sourceCount, shelfCount: shelf.sourceCount };
-  // The reader fell back on this; a matching collapse must not hide it.
+  // A matching collapse must not hide the count the reader saw.
   if (ownedNow !== undefined && shelf.ownedCount !== ownedNow) {
     return { verdict: 'count', sourceCount, shelfCount: shelf.sourceCount };
   }
