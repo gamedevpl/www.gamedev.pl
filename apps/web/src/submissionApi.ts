@@ -15,7 +15,7 @@ import type {
 } from '@gamedevpl/contract';
 import { fetchCached, invalidateCachedPrefix } from './core/dataLayer.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type { BuildEventKind, BuildStep, GateProgressLane, JobStall, JobState, SubmissionState };
 export type {
@@ -382,6 +382,7 @@ export type RefinedSpec = {
     options: Array<{ label: string; detail?: string }>;
     allowFreeText?: boolean;
     multiple?: boolean;
+    visual?: boolean;
   }>;
   /**
    * A name for the game, proposed from the concept. The creator confirms or replaces

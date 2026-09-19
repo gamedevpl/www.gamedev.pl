@@ -142,6 +142,10 @@ EDITORKIT_V2="${EDITORKIT_V2:-true}"
 DREAMS_ENABLED="${DREAMS_ENABLED:-false}"
 # The agent writer is its own switch; see .claude/skills/byoca-mcp.
 AGENT_PROPOSALS_ENABLED="${AGENT_PROPOSALS_ENABLED:-false}"
+# CreatorQA option tiles. Off until OPTION_IMAGE_MODEL names an image model.
+OPTION_IMAGE_MODEL="${OPTION_IMAGE_MODEL:-}"
+OPTION_IMAGE_BASE_URL="${OPTION_IMAGE_BASE_URL:-}"
+OPTION_IMAGE_TIMEOUT_MS="${OPTION_IMAGE_TIMEOUT_MS:-}"
 DREAM_IMAGE_MODEL="${DREAM_IMAGE_MODEL:-}"
 DREAM_TIMEOUT_MS="${DREAM_TIMEOUT_MS:-}"
 NEXT_IDEAS_TIMEOUT_MS="${NEXT_IDEAS_TIMEOUT_MS:-}"
@@ -266,6 +270,14 @@ fi
 if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
   echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
+fi
+# Its own secret, deliberately not meta-api-key: CreatorQA option tiles send real
+# creator text to the vendor, which legal-compliance-plan.md gates separately from
+# round-0 seeding. Sharing the seed credential would arm this the moment that one is
+# provisioned for its own, already-approved purpose.
+if gcloud secrets describe option-image-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("OPTION_IMAGE_API_KEY=option-image-api-key:latest")
+  echo "==> option-image-api-key found; draws CreatorQA option tiles once OPTION_IMAGE_MODEL is also set."
 fi
 # describe only proves the secret container exists, not that it has a version
 # — a container created without a version passes describe but makes
@@ -438,6 +450,14 @@ for SEED_VAR in \
   eval "SEED_VAL=\${${SEED_VAR}:-}"
   if [ -n "${SEED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
+  fi
+done
+# CreatorQA option tiles. Unset OPTION_IMAGE_MODEL leaves the feature off and the
+# panel renders plain text options, which is the pre-existing state.
+for OPTION_IMAGE_VAR in OPTION_IMAGE_MODEL OPTION_IMAGE_BASE_URL OPTION_IMAGE_TIMEOUT_MS; do
+  eval "OPTION_IMAGE_VAL=\${${OPTION_IMAGE_VAR}:-}"
+  if [ -n "${OPTION_IMAGE_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${OPTION_IMAGE_VAR}=${OPTION_IMAGE_VAL}"
   fi
 done
 # Concept proposals. Repointing the image model or either timeout must survive the

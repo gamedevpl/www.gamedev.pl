@@ -241,6 +241,9 @@ jobs:
           MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
           NOTIFY_SWEEP_AUDIENCE: ${{ vars.NOTIFY_SWEEP_AUDIENCE }}
           OPENAI_APPS_CHALLENGE_TOKEN: ${{ vars.OPENAI_APPS_CHALLENGE_TOKEN }}
+          OPTION_IMAGE_BASE_URL: ${{ vars.OPTION_IMAGE_BASE_URL }}
+          OPTION_IMAGE_MODEL: ${{ vars.OPTION_IMAGE_MODEL }}
+          OPTION_IMAGE_TIMEOUT_MS: ${{ vars.OPTION_IMAGE_TIMEOUT_MS }}
           PUBLIC_PLAY_SLUGS: ${{ vars.PUBLIC_PLAY_SLUGS }}
           REMIX_DEBUG: ${{ vars.REMIX_DEBUG }}
           REVIEWER_UIDS: ${{ vars.REVIEWER_UIDS }}
@@ -326,6 +329,13 @@ jobs:
           fi
           if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
+          fi
+          # Its own secret, deliberately not meta-api-key: CreatorQA option tiles send
+          # real creator text to the vendor, which legal-compliance-plan.md gates
+          # separately from round-0 seeding. Sharing the seed credential would arm this
+          # the moment that one is provisioned for its own, already-approved purpose.
+          if gcloud secrets describe option-image-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("OPTION_IMAGE_API_KEY=option-image-api-key:latest")
           fi
           # describe only proves the secret container exists, not that it has a
           # version — a container created without a version passes describe but
@@ -420,6 +430,14 @@ jobs:
             SEED_VAL="${!SEED_VAR}"
             if [ -n "$SEED_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
+            fi
+          done
+          # CreatorQA option tiles. Unset OPTION_IMAGE_MODEL leaves the feature off
+          # and the panel renders plain text options, which is the pre-existing state.
+          for OPTION_IMAGE_VAR in OPTION_IMAGE_MODEL OPTION_IMAGE_BASE_URL OPTION_IMAGE_TIMEOUT_MS; do
+            OPTION_IMAGE_VAL="${!OPTION_IMAGE_VAR}"
+            if [ -n "$OPTION_IMAGE_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${OPTION_IMAGE_VAR}=${OPTION_IMAGE_VAL}"
             fi
           done
           # Concept proposals. Repointing the image model or either timeout must survive
