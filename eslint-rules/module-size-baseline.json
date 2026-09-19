@@ -514,6 +514,7 @@
     "apps/web/src/activeBuilds.test.ts": 133,
     "apps/web/src/activeBuilds.ts": 69,
     "apps/web/src/agentActivity.ts": 20,
+    "apps/web/src/agentPlayBridge.test.ts": 534,
     "apps/web/src/App.anonymousPlay.test.ts": 169,
     "apps/web/src/App.bottomCta.test.ts": 101,
     "apps/web/src/App.catalog.test.ts": 491,

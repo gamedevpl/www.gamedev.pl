@@ -46,6 +46,11 @@ type FakeHarness = {
   pause: () => void;
   resume: () => void;
   screenshot: () => string;
+  ui?: unknown;
+  observation?: unknown;
+  api?: Record<string, (...args: unknown[]) => unknown>;
+  helpers?: Record<string, (...args: unknown[]) => unknown>;
+  camLookAt?: (...args: unknown[]) => unknown;
 };
 
 function installHarness(): FakeHarness {
@@ -120,6 +125,12 @@ describe('the agent bridge, running for real', () => {
     harness.frame = 0;
     harness.metadata = { state: 'playing', score: 0, observation: '{"room":"cellar"}' };
     harness.audio.length = 0;
+    delete harness.ui;
+    delete harness.observation;
+    delete harness.api;
+    delete harness.helpers;
+    delete harness.camLookAt;
+    delete (window as unknown as { GameKit?: unknown }).GameKit;
   });
 
   it('reports the sound the game played, which is the only way an agent hears it', async () => {
@@ -456,5 +467,68 @@ describe('the agent bridge, running for real', () => {
     window.postMessage({ source: 'gdpl-player', type: 'agent:enable' }, '*');
     await settle();
     expect(lastOf(received, 'agent:hello')).toBeUndefined();
+  });
+
+  it('merges GameKit widgets with harness.ui so a toolbar without the ui module is visible', async () => {
+    (window as unknown as { GameKit: { ui: { affordances: () => unknown[] } } }).GameKit = {
+      ui: {
+        affordances: () => [{ label: 'Score', enabled: true, x1: 0, y1: 0, x2: 0.2, y2: 0.1 }],
+      },
+    };
+    harness.ui = [{ label: 'Rail', enabled: true, selected: true, x: 0, y: 216, width: 48, height: 24 }];
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const ui = lastOf(received, 'agent:state')!.ui as Array<{ label: string; x1: number; selected?: boolean }>;
+    expect(ui.map((widget) => widget.label)).toEqual(['Score', 'Rail']);
+    expect(ui[1]?.selected).toBe(true);
+  });
+
+  it('fills observation from the harness when snapshot omitted it', async () => {
+    harness.metadata = { state: 'playing', cash: 12000 };
+    harness.observation = () => ({ tool: 'rail', cam: [8, 12] });
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+    expect(snapshot.observation).toContain('"tool":"rail"');
+    expect(snapshot.cash).toBe(12000);
+  });
+
+  it('lists helpers from harness.api and Object.assign, and policy can call them', async () => {
+    let looked = 0;
+    harness.api = { buildRail: (from: unknown, to: unknown) => ({ from, to }) };
+    harness.camLookAt = (x: unknown, y: unknown) => {
+      looked += 1;
+      return { x, y };
+    };
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    expect(lastOf(received, 'agent:state')!.api).toEqual(['buildRail', 'camLookAt']);
+
+    const result = await runPolicy(`function playAgent(agent) {
+      agent.log(agent.api().join(','));
+      const built = agent.call('buildRail', [0, 0], [1, 1]);
+      agent.log(JSON.stringify(built));
+      agent.call('camLookAt', 8, 12);
+    }`);
+    expect(result.outcome).toBe('completed');
+    const logs = result.logs as Array<{ text: string }>;
+    expect(logs.some((entry) => entry.text.includes('buildRail,camLookAt'))).toBe(true);
+    expect(logs.some((entry) => entry.text.includes('"from":[0,0]'))).toBe(true);
+    expect(looked).toBe(1);
+
+    received.length = 0;
+    send({ type: 'agent:command', command: { kind: 'call', name: 'camLookAt', args: [3, 4] } });
+    await settle();
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(log.some((entry) => entry.kind === 'call' && entry.detail.includes('camLookAt'))).toBe(true);
+    expect(looked).toBe(2);
   });
 });

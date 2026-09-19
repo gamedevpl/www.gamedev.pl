@@ -4,6 +4,8 @@
 
 // Takes the player bridge's helpers off window.__GDPL_BRIDGE__.
 
+import { AGENT_PLAY_BRIDGE_SURFACE } from './agent-play-bridge-surface.js';
+
 export const AGENT_PLAY_BRIDGE = `(function(){
   'use strict';
   var host=window.__GDPL_BRIDGE__;
@@ -26,24 +28,7 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
   // A policy runs in the game's own realm and can still read the harness directly;
   // that hole is documented rather than pretended away.
-  function agentSnapshot(){
-    var h=agentHarness(),out={},hidden=agentHidden(),i;
-    if(!h||!h.metadata)return out;
-    for(var k in h.metadata){
-      if(!Object.prototype.hasOwnProperty.call(h.metadata,k))continue;
-      var skip=false;
-      if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]===k)skip=true;
-      if(!skip)out[k]=h.metadata[k];
-    }
-    return out;
-  }
-  function agentUi(){
-    try{
-      var kit=window.GameKit;
-      if(!kit||!kit.ui||typeof kit.ui.affordances!=='function')return [];
-      return (kit.ui.affordances()||[]).slice(0,AGENT_UI_CAP);
-    }catch(err){return [];}
-  }
+` + AGENT_PLAY_BRIDGE_SURFACE + `
   // Set at assemble time once the games repo carries AGENT.json's hiddenFields into the
   // document; null until then, and the host renders that as a warning.
   function agentHidden(){
@@ -104,6 +89,7 @@ export const AGENT_PLAY_BRIDGE = `(function(){
       frame:agentFrameNo(),
       snapshot:agentSnapshot(),
       ui:agentUi(),
+      api:agentApiNames(),
       hiddenFields:agentHidden(),
       log:agentLog.slice(-20),
       stepped:host.isPaused(),
@@ -233,6 +219,15 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   function agentRun(command,id){
     var kind=command&&command.kind;
     if(kind==='look'){agentState('look',id);return;}
+    if(kind==='call'){
+      try{
+        var result=agentInvoke(command.name,command.args||[]);
+        var shown;try{shown=JSON.stringify(result);}catch(err){shown=String(result);}
+        agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
+      }catch(err){agentNote('error',String((err&&err.message)||err));}
+      agentState('call',id);
+      return;
+    }
     if(kind==='step'){agentStep(command.frames);agentState('step',id);return;}
     if(kind==='press'){
       agentKey('keydown',command.key,command.code);
@@ -352,6 +347,8 @@ export const AGENT_PLAY_BRIDGE = `(function(){
         try{return JSON.parse(raw);}catch(err){return raw;}
       },
       ui:function(){return agentUi();},
+      api:function(){return agentApiNames();},
+      call:function(name){return agentInvoke(name,Array.prototype.slice.call(arguments,1));},
       // Input, same verbs the command box has.
       press:function(key,frames,draw){
         var resolved=agentResolveKey(key);

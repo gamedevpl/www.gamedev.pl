@@ -8,7 +8,9 @@ import {
   AGENT_CAPABILITIES,
   AGENT_COMMANDS,
   AGENT_GUIDE,
+  AGENT_OBSERVATION_EMPTY,
   formatAffordances,
+  formatApi,
   formatObservation,
   formatSnapshotText,
   mergeAgentLog,
@@ -192,16 +194,19 @@ export function AgentPlayPanel({ open, frameRef, onClose }: AgentPlayPanelProps)
           <pre aria-live="polite">{stateText}</pre>
         </section>
 
-        {observationText ? (
-          <section className="agent-play-block">
-            <h3>seen</h3>
-            <pre>{observationText}</pre>
-          </section>
-        ) : null}
+        <section className="agent-play-block">
+          <h3>seen</h3>
+          <pre>{observationText ?? AGENT_OBSERVATION_EMPTY}</pre>
+        </section>
 
         <section className="agent-play-block">
           <h3>ui</h3>
           <pre>{formatAffordances(state?.ui ?? [])}</pre>
+        </section>
+
+        <section className="agent-play-block">
+          <h3>api</h3>
+          <pre>{formatApi(state?.api ?? [])}</pre>
         </section>
 
         {merged.length > 0 ? (

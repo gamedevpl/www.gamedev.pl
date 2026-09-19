@@ -22,6 +22,7 @@ export type AgentState = {
   frame: number;
   snapshot: AgentSnapshot;
   ui: AgentAffordance[];
+  api: string[];
   // null means the document declared no hidden fields.
   hiddenFields: string[] | null;
   log: AgentLogEntry[];
@@ -61,12 +62,29 @@ function readAffordances(value: unknown): AgentAffordance[] {
 }
 
 // Primitives only: a hostile frame cannot send an object graph.
+function readApiNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((name): name is string => typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+    .map((name) => name.slice(0, 40))
+    .slice(0, 40);
+}
+
 function readSnapshot(value: unknown): AgentSnapshot {
   if (!value || typeof value !== 'object') return {};
   const out: AgentSnapshot = {};
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (key === 'observation' && raw !== null && typeof raw === 'object') {
+      try {
+        out[key] = JSON.stringify(raw).slice(0, 16000);
+      } catch {
+        continue;
+      }
+      continue;
+    }
+    const cap = key === 'observation' ? 16000 : 2000;
     if (raw === null || typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
-      out[key] = typeof raw === 'string' ? raw.slice(0, 2000) : raw;
+      out[key] = typeof raw === 'string' ? raw.slice(0, cap) : raw;
     }
   }
   return out;
@@ -143,6 +161,7 @@ export function useAgentPlay(frameRef: MutableRefObject<HTMLIFrameElement | null
           frame: Number(data.frame) || 0,
           snapshot: readSnapshot(data.snapshot),
           ui: readAffordances(data.ui),
+          api: readApiNames(data.api),
           hiddenFields: Array.isArray(data.hiddenFields) ? data.hiddenFields.map((f) => asString(f, 60)) : null,
           log: readLog(data.log),
           stepped: Boolean(data.stepped),

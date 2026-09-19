@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   AGENT_MAX_FRAMES,
+  AGENT_OBSERVATION_EMPTY,
   AGENT_PLAY_MAX_MS,
   AGENT_SHARED_COMMANDS,
   agentModeRequested,
   formatAffordances,
+  formatApi,
   formatObservation,
   formatSnapshotText,
   mergeAgentLog,
@@ -82,6 +84,22 @@ describe('parseAgentCommand', () => {
     expect(() => parseAgentCommand('tilt 4')).toThrow(/-1\.\.1/);
     expect(() => parseAgentCommand('press')).toThrow(/requires a key/);
     expect(() => parseAgentCommand('teleport')).toThrow(/unknown command/);
+    expect(() => parseAgentCommand('call')).toThrow(/helper name/);
+    expect(() => parseAgentCommand('call camLookAt not-json')).toThrow(/JSON/);
+  });
+
+  it('parses call with no args, an array, or one object', () => {
+    expect(parseAgentCommand('call camLookAt')).toEqual({ kind: 'call', name: 'camLookAt', args: [] });
+    expect(parseAgentCommand('call camLookAt [8, 12]')).toEqual({
+      kind: 'call',
+      name: 'camLookAt',
+      args: [8, 12],
+    });
+    expect(parseAgentCommand('call buyVehicle {"kind":"train"}')).toEqual({
+      kind: 'call',
+      name: 'buyVehicle',
+      args: [{ kind: 'train' }],
+    });
   });
 });
 
@@ -101,6 +119,7 @@ describe('grammar parity with the games repo', () => {
     'drag <x1> <y1> <x2> <y2> [n]   # 0..1 canvas coords',
     'tilt <x> [y]    # -1..1 normalized device tilt',
     'restart',
+    'call <name> [json]   # named helper the game registered',
   ];
 
   it('offers exactly the shared verbs, worded the same way', () => {
@@ -122,6 +141,7 @@ describe('grammar parity with the games repo', () => {
       'drag 0 0 1 1 2',
       'tilt 0.5 0.5',
       'restart',
+      'call camLookAt [8, 12]',
     ];
     for (const sample of samples) expect(parseAgentCommand(sample)).not.toBeNull();
   });
@@ -162,8 +182,15 @@ describe('describing the screen', () => {
   it('pretty-prints a game-authored observation, and passes prose through', () => {
     expect(formatObservation('{"room":"cellar"}')).toContain('"room": "cellar"');
     expect(formatObservation('a dark cellar')).toBe('a dark cellar');
+    expect(formatObservation({ tool: 'rail' })).toContain('"tool": "rail"');
     expect(formatObservation(undefined)).toBeNull();
     expect(formatObservation('')).toBeNull();
+  });
+
+  it('lists registered helpers so a creator can see them without eval', () => {
+    expect(formatApi([])).toContain('none');
+    expect(formatApi(['buildRail', 'camLookAt'])).toBe('  call buildRail\n  call camLookAt');
+    expect(AGENT_OBSERVATION_EMPTY).toContain('snapshot.observation');
   });
 });
 

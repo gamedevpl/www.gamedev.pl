@@ -89,12 +89,20 @@ describe('AgentPlayPanel', () => {
       frame: 1,
       snapshot: { state: 'playing', observation: '{"exit":"north"}' },
       ui: [{ label: 'Restart', enabled: true, x1: 0, y1: 0, x2: 0.2, y2: 0.1 }],
+      api: ['buildRail'],
     });
 
     expect(container.textContent).toContain('"exit": "north"');
     expect(container.textContent).toContain('[Restart] click 0.10 0.05');
+    expect(container.textContent).toContain('call buildRail');
     // The observation never joins the one-line state.
     expect(container.textContent).not.toContain('observation=');
+  });
+
+  it('keeps seen and api visible when the game registered neither', async () => {
+    await receive({ type: 'agent:state', frame: 1, snapshot: { state: 'playing' }, ui: [], api: [] });
+    expect(container.textContent).toContain('snapshot.observation');
+    expect(container.textContent).toContain('agent.call');
   });
 
   it('warns when the document declares no hidden fields, so the gap is visible', async () => {
