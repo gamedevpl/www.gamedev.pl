@@ -97,5 +97,6 @@ async function repairShelf(deps: ShelfShadowDeps, ownerUid: string): Promise<voi
     deps.log.warn({ ownerUid, err: error }, 'shelf repair errored');
     return false;
   });
-  if (!rebuilt) deps.log.warn({ ownerUid }, 'shelf repair wrote nothing');
+  // False can mean a tombstone landed: a write, fail-closed.
+  if (!rebuilt) deps.log.warn({ ownerUid }, 'shelf repair did not rebuild');
 }

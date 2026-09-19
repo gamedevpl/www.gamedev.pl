@@ -382,27 +382,41 @@ export function fakeFirestore() {
     },
     // Writes apply as each tx.* call runs; a failed one now rejects.
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
+      // Firestore rejects a read after a write; so must this.
+      let written = false;
+      const beforeWrite = () => {
+        written = true;
+      };
       const tx = {
         // Aggregate queries are readable inside a transaction in the real client, and
         // the world write depends on that: its quota check has to be ordered against a
         // concurrent claim or two tabs can both spend the same last slot.
-        get: (target: { get: () => Promise<unknown> }) => target.get(),
+        get: (target: { get: () => Promise<unknown> }) => {
+          if (written) {
+            throw new Error('Firestore transactions require all reads to be executed before all writes.');
+          }
+          return target.get();
+        },
         set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
+          beforeWrite();
           const op = ref._stage.set(data, options);
           op.validate();
           op.apply();
         },
         create: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
+          beforeWrite();
           const op = ref._stage.create(data);
           op.validate();
           op.apply();
         },
         update: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
+          beforeWrite();
           const op = ref._stage.update(data);
           op.validate();
           op.apply();
         },
         delete: (ref: ReturnType<typeof makeRef>) => {
+          beforeWrite();
           const op = ref._stage.delete();
           op.apply();
         },

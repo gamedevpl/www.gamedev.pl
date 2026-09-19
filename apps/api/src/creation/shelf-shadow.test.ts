@@ -289,7 +289,7 @@ describe('recordShelfShadow', () => {
     expect(messages).toContain('shelf repair errored');
   });
 
-  it('reports a rebuild that resolves false, which is how a real store actually fails', async () => {
+  it('reports a rebuild that resolves false, which can also mean a tombstone landed', async () => {
     // The mirror answers false on failure; it never rejects.
     const messages: string[] = [];
     await recordShelfShadow(
@@ -304,6 +304,6 @@ describe('recordShelfShadow', () => {
       source,
     );
 
-    expect(messages).toContain('shelf repair wrote nothing');
+    expect(messages).toContain('shelf repair did not rebuild');
   });
 });
