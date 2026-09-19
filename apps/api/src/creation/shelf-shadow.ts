@@ -1,6 +1,8 @@
 // Shadow read: source still answers, the document is only judged against it.
 
-// The bar for flipping readers over is zero mismatches over a week.
+// Readers flipped without the week of shadow; the owner chose that.
+
+// What remains is the repair path: a mismatch rebuilds.
 
 import { collapseJobsToOwnerGames } from './owner-games.js';
 import { fromShelfRound, isShelfUsable, SHELF_VERSION, type ShelfDocument } from '../store/records/shelf.js';

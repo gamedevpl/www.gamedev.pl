@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { eraseAccount } from './erase-account.js';
 import { DELETED_ACCOUNT_UID, InMemoryStore } from './store.js';
 import { judgeShelfShadow } from '../creation/shelf-shadow.js';
@@ -127,6 +127,37 @@ describe('eraseAccount and the shelf', () => {
     const after = (await store.getShelf('g:leaving'))!;
     expect(after.stale).toBe(true);
     expect(after.seq ?? 0).toBeGreaterThan(before.seq ?? 0);
+  });
+
+  // One member failing must not skip the others or the sink.
+  it('keeps invalidating collaborators and rebuilds the sink after one failure', async () => {
+    const store = new InMemoryStore();
+    const at = new Date().toISOString();
+    for (const uid of ['g:owner', 'g:editor', 'g:leaving']) await store.upsertUser({ uid });
+    await store.ensureGameAccess('sky', 'g:owner', at, at);
+    const invite = await store.createEditorInvitation('sky', 'g:owner', 'g:editor', at);
+    await store.acceptEditorInvitation('sky', 'g:editor', at, (invite as { inviteId: string }).inviteId);
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:leaving', 'Their round');
+    await store.setSubmissionSlug(jobId, 'sky');
+    await store.rebuildShelf('g:owner');
+    await store.rebuildShelf('g:editor');
+
+    // The owner is iterated first, and fails.
+    const real = store.tombstoneShelf.bind(store);
+    vi.spyOn(store, 'tombstoneShelf').mockImplementation(async (uid, when) => {
+      if (uid === 'g:owner') throw new Error('firestore is having a day');
+      return real(uid, when);
+    });
+
+    await eraseAccount({ store, uid: 'g:leaving' });
+    vi.restoreAllMocks();
+
+    expect((await store.getShelf('g:editor'))?.stale).toBe(true);
+    // No sink shelf before; a live one proves the rebuild ran.
+    const sink = await store.getShelf(DELETED_ACCOUNT_UID);
+    expect(sink).not.toBeNull();
+    expect(sink?.stale).toBeUndefined();
   });
 
   it('leaves both shelves alone on a dry run', async () => {
