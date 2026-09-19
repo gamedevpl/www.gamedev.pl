@@ -528,14 +528,22 @@ deploy, which is the incident shape the env-manifest gate exists to prevent.
 Two steps are not the whole procedure, because a deploy **already running** when you set
 the variable read `vars.SHELF_DOCUMENT_READS` at job start and still holds `true`; deploys
 do not cancel each other (`concurrency` in `.github/workflows/deploy.yml`), and that run's
-candidate promotion will put a `true` revision back in front of traffic after your hand
-update. So, in order: (1) hand update for immediate effect; (2) set the repo variable;
-(3) **cancel or wait out every in-flight deploy** in Actions; (4) start a fresh deploy so
-the durable value ships; (5) verify the *served* revision, not the workflow --
-`gcloud run services describe gamedev-app --region=europe-west1 --format='value(status.traffic[0].revisionName)'`
-then `gcloud run revisions describe <rev> --region=europe-west1 --format='yaml(spec.template.spec.containers[0].env)'`
-and read `SHELF_DOCUMENT_READS` off it. A `shelfOrigin=document` line in the request logs
-after that is the switch not having taken.
+candidate promotion will put a `true` revision back in front of traffic -- including over a
+hand update made before it finished. So, in order: (1) **cancel or wait out every in-flight
+deploy** in Actions first; (2) hand update for immediate effect; (3) set the repo variable;
+(4) start a fresh deploy so the durable value ships; (5) verify the *served* revision, not
+the workflow. If you made the hand update before draining because seconds mattered, repeat
+it after the last old run has stopped and before step (4). Verification, proven against a
+live revision on 2026-09-19 (the Revision resource keeps `containers` directly under
+`spec`; the Service-shaped `spec.template.spec.containers` path prints `null`):
+
+```bash
+REV=$(gcloud run services describe gamedev-app --region=europe-west1 --format='value(status.traffic[0].revisionName)')
+gcloud run revisions describe "$REV" --region=europe-west1 --format='yaml(spec.containers[0].env)' | grep -A1 SHELF_DOCUMENT_READS
+```
+
+A `shelfOrigin=document` line in the request logs after that is the switch not having
+taken.
 
 **A fourth gap, found live, not in review: an idle account cannot be reached by either
 mechanism.** Write-through needs a write to fire; the hourly pass needs an existing document
