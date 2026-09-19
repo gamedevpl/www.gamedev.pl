@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import {
   fencedOut,
   newGameAccess,
@@ -72,6 +72,8 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
     // Every ownerUid with a round on the slug.
     private authorsOf: (slug: string) => string[] = () => [],
+    // Injected so the store can hand in a shelf-guarded map.
+    public access: Map<string, GameAccessRecord> = new Map(),
   ) {}
 
   // The first canonical row strips every other legacy author.
@@ -83,9 +85,6 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     if (authors.size === 0) return;
     for (const uid of [...authors, ownerUid]) this.invalidateShelf(uid, at);
   }
-
-  // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
-  access = new Map<string, GameAccessRecord>();
 
   // Not private -- InMemoryGameTransferStore fences new invitations against this.
   erasedAt = new Map<string, string>();
@@ -177,7 +176,7 @@ export class InMemoryGameAccessStore implements GameAccessStore {
 }
 
 export class FirestoreGameAccessStore implements GameAccessStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private doc(slug: string) {
     return this.db.collection('gameAccess').doc(slug);

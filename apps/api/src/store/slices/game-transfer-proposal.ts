@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { fencedOut } from '../records/game-access.js';
 import {
   newTransferProposal,
@@ -165,7 +165,7 @@ export class InMemoryGameTransferProposalStore implements GameTransferProposalSt
 }
 
 export class FirestoreGameTransferProposalStore implements GameTransferProposalStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private proposalDoc(id: string) {
     return this.db.collection('gameTransferProposals').doc(id);

@@ -104,3 +104,35 @@ export function isShelfUsable(shelf: ShelfDocument | null, sourceCount: number):
   if (shelf.truncated) return false;
   return shelf.sourceCount === sourceCount;
 }
+
+// Exhaustive by type: a new ShelfRound field cannot be forgotten here.
+const MIRRORED_FIELDS: Record<keyof ShelfRound, true> = {
+  jobId: true,
+  createdAt: true,
+  ownerUid: true,
+  title: true,
+  slug: true,
+  state: true,
+  abandonedAt: true,
+  publishedAt: true,
+  lastStatus: true,
+  lastNotifiedStatus: true,
+  previewVersion: true,
+  deliveredVersion: true,
+  draftSharedAt: true,
+};
+
+// What a shelf reader can see, so what a write must invalidate.
+export const SHELF_MIRRORED_FIELDS: readonly string[] = Object.keys(MIRRORED_FIELDS);
+
+// A patch naming none of them cannot change any shelf.
+export function patchTouchesShelf(patch: object): boolean {
+  return Object.keys(patch).some((key) => key in MIRRORED_FIELDS);
+}
+
+// Compares only mirrored fields; a counter bump is not a shelf change.
+export function shelfRoundChanged(before: SubmissionRecord, after: SubmissionRecord): boolean {
+  return SHELF_MIRRORED_FIELDS.some(
+    (key) => before[key as keyof SubmissionRecord] !== after[key as keyof SubmissionRecord],
+  );
+}

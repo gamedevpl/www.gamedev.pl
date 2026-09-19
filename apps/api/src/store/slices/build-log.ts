@@ -1,4 +1,5 @@
-import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { FieldValue } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { CreatorProposal } from '@gamedevpl/contract';
 import type { BuildEvent } from '../../platform/submission-status.js';
@@ -276,7 +277,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
 }
 
 export class FirestoreBuildLogStore implements BuildLogStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private submissionRef(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));

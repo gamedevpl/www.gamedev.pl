@@ -1,8 +1,9 @@
 import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { bindSubmissionSlug } from './bind-submission-slug.js';
 import type { LocalActivity } from '@gamedevpl/contract';
 import { claimManualRoundSlug } from './manual-round-claim.js';
-import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { FieldValue } from '@google-cloud/firestore';
 import { isRoundOpen } from '../../platform/sweep-scope.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
@@ -75,7 +76,7 @@ export interface SubmissionStore {
 export { InMemorySubmissionStore } from './submission-memory.js';
 
 export class FirestoreSubmissionStore implements SubmissionStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private ref(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));
