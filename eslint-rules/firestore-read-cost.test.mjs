@@ -36,6 +36,17 @@ describe('filterMeasuredRoutes', () => {
   it('a substring scopes to matching routes', () => {
     expect(filterMeasuredRoutes(measured, ['submissions/mine'])).toEqual(['GET /api/submissions/mine']);
   });
+
+  it('an exact route name does not also raise a labelled variant', () => {
+    const withVariant = {
+      'GET /api/submissions/mine': 39,
+      'GET /api/submissions/mine (derived-only owner)': 24,
+    };
+    expect(filterMeasuredRoutes(withVariant, ['GET /api/submissions/mine'])).toEqual(['GET /api/submissions/mine']);
+    expect(filterMeasuredRoutes(withVariant, ['derived-only'])).toEqual([
+      'GET /api/submissions/mine (derived-only owner)',
+    ]);
+  });
 });
 
 describe('compareRouteReads', () => {

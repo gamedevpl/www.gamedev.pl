@@ -43,7 +43,14 @@ export function baselineReadsFor(baseline, route) {
 export function filterMeasuredRoutes(measured, filters) {
   const routes = Object.keys(measured).sort();
   if (filters.length === 0) return routes;
-  return routes.filter((route) => filters.some((f) => route === f || route.includes(f)));
+  return routes.filter((route) =>
+    filters.some((f) => {
+      if (route === f) return true;
+      // Exact names win: "mine" must not also raise "mine (derived-only owner)".
+      if (Object.hasOwn(measured, f)) return false;
+      return route.includes(f);
+    }),
+  );
 }
 
 /**

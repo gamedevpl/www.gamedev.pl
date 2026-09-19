@@ -12,6 +12,7 @@ export const SUBMISSION_SECRET = 'read-cost-token-secret';
 export const AT = '2026-01-15T12:00:00.000Z';
 
 export const CREATOR_UID = 'g:creator';
+export const DERIVED_OWNER_UID = 'g:derived-owner';
 export const REVIEWER_UID = 'g:reviewer';
 export const DECOY_UID = 'g:decoy';
 export const DECOY_REVIEWER_UID = 'g:decoy-reviewer';
@@ -20,6 +21,7 @@ export const POLLED_JOB_ID = 1001;
 export const POLLED_ROUTES = [
   'GET /api/submissions/:token',
   'GET /api/submissions/mine',
+  'GET /api/submissions/mine (derived-only owner)',
   'GET /api/review/status',
   'GET /api/notifications',
 ] as const;
@@ -49,6 +51,13 @@ const CREATOR_ROUNDS: Array<{ jobId: number; slug: string; title: string }> = [
   { jobId: 1006, slug: 'dune-runner', title: 'Dune Runner' },
   { jobId: 1007, slug: 'dune-runner', title: 'Dune Runner' },
   { jobId: 1008, slug: 'harbor-pilot', title: 'Harbor Pilot' },
+];
+
+// No gameAccess rows: the 193 slugs the backfill left derived.
+const DERIVED_OWNER_ROUNDS: Array<{ jobId: number; slug: string; title: string }> = [
+  { jobId: 3001, slug: 'tide-pool', title: 'Tide Pool' },
+  { jobId: 3002, slug: 'glass-reef', title: 'Glass Reef' },
+  { jobId: 3003, slug: 'ember-drift', title: 'Ember Drift' },
 ];
 
 const DECOY_ROUNDS: Array<{ jobId: number; slug: string; title: string }> = [
@@ -169,6 +178,25 @@ async function seedRound(
   await store.ensureGameAccess(round.slug, ownerUid, AT, AT);
 }
 
+// No public skip of that row; wrapping this delete drops the shape.
+async function dropGameAccess(store: Store, slug: string): Promise<void> {
+  const firestore = store as unknown as {
+    db?: { collection: (name: string) => { doc: (id: string) => { delete: () => Promise<unknown> } } };
+  };
+  if (!firestore.db) throw new Error(`no gameAccess store for ${slug}`);
+  await firestore.db.collection('gameAccess').doc(slug).delete();
+}
+
+async function seedDerivedOnlyRound(
+  store: Store,
+  ownerUid: string,
+  round: { jobId: number; slug: string; title: string },
+): Promise<void> {
+  await store.createSubmission(round.jobId, ownerUid, round.title);
+  await store.setSubmissionSlug(round.jobId, round.slug);
+  await dropGameAccess(store, round.slug);
+}
+
 async function seedNotification(store: Store, uid: string, id: string, index: number): Promise<void> {
   const second = String(index + 1).padStart(2, '0');
   await store.createNotification(uid, {
@@ -200,11 +228,13 @@ async function seedAssessment(store: Store, reviewerUid: string, slug: string): 
 
 export async function seedReadCostFixture(store: Store): Promise<void> {
   await seedUser(store, CREATOR_UID);
+  await seedUser(store, DERIVED_OWNER_UID);
   await seedUser(store, REVIEWER_UID);
   await seedUser(store, DECOY_UID);
   await seedUser(store, DECOY_REVIEWER_UID);
 
   for (const round of CREATOR_ROUNDS) await seedRound(store, CREATOR_UID, round);
+  for (const round of DERIVED_OWNER_ROUNDS) await seedDerivedOnlyRound(store, DERIVED_OWNER_UID, round);
   for (const round of DECOY_ROUNDS) await seedRound(store, DECOY_UID, round);
 
   await store.recordJobTransition(POLLED_JOB_ID, { to: 'building', at: AT, by: 'agent', reason: 'started' });
@@ -294,6 +324,13 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       method: 'GET',
       url: '/api/submissions/mine',
       headers: { cookie: sessionCookie(CREATOR_UID) },
+    });
+  }
+  if (route === 'GET /api/submissions/mine (derived-only owner)') {
+    return app.inject({
+      method: 'GET',
+      url: '/api/submissions/mine',
+      headers: { cookie: sessionCookie(DERIVED_OWNER_UID) },
     });
   }
   if (route === 'GET /api/review/status') {

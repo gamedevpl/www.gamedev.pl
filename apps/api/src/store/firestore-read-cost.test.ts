@@ -6,6 +6,7 @@ import { FirestoreStore } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
 import {
   CREATOR_UID,
+  DERIVED_OWNER_UID,
   POLLED_ROUTES,
   measurePolledRoute,
   measurePolledRouteReads,
@@ -84,6 +85,16 @@ describe('read-cost fixture', () => {
     await fake.db.collection('submissions').get();
     expect(fake.billedReads()).toBeGreaterThan(bounded);
   });
+
+  it('the derived-only mine owner has slugged rounds and no gameAccess rows', async () => {
+    const fake = fakeFirestore();
+    const store = new FirestoreStore(fake.db);
+    await seedReadCostFixture(store);
+    expect(await store.listGameAccessByMember(DERIVED_OWNER_UID)).toEqual([]);
+    const rounds = await store.listSubmissionsByOwner(DERIVED_OWNER_UID);
+    expect(rounds).toHaveLength(3);
+    expect(rounds.every((round) => Boolean(round.slug))).toBe(true);
+  });
 });
 
 describe('polled route read baseline', () => {
@@ -101,5 +112,16 @@ describe('polled route read baseline', () => {
     const row = await measurePolledRoute('GET /api/submissions/mine');
     expect(row.statusCode).toBe(200);
     expect(row.reads).toBeGreaterThan(0);
+  });
+
+  // Exact: this route exists to see movement either way.
+  it('GET /api/submissions/mine (derived-only owner) records that cost exactly', async () => {
+    const baseline = loadBaseline();
+    const route = 'GET /api/submissions/mine (derived-only owner)';
+    const accessRows = await measurePolledRoute('GET /api/submissions/mine');
+    const row = await measurePolledRoute(route);
+    expect(row.statusCode).toBe(200);
+    expect(row.reads).toBe(baseline.routes[route]);
+    expect(row.reads).not.toBe(accessRows.reads);
   });
 });
