@@ -9,7 +9,9 @@
 // a commented-out assignment matches too. Only an executable line that precedes the
 // expansion counts.
 
-const ASSIGNMENT = (name) => new RegExp(`(^|[\\s"'])${name}=`);
+// Only the shapes the deploy files use, anchored to the start of a command,
+// so `echo "NAME=..."` or `: # NAME=...` earlier in the file cannot satisfy it.
+const ASSIGNMENT = (name) => new RegExp(`^\\s*(?:export\\s+|eval\\s+")?${name}=`);
 
 function executable(line) {
   const trimmed = line.trimStart();

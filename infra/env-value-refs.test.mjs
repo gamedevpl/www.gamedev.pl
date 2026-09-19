@@ -25,6 +25,18 @@ describe('unsetValueRefs', () => {
     expect([...unsetValueRefs(src)]).toEqual(['SHELF_DOCUMENT_READS_VAL']);
   });
 
+  // The name inside a string or after a no-op is not an assignment.
+  it('rejects an echo or a no-op comment that merely mentions the assignment', () => {
+    for (const decoy of ['echo "SHELF_DOCUMENT_READS_VAL=true"', ': # SHELF_DOCUMENT_READS_VAL=true']) {
+      expect([...unsetValueRefs([decoy, expansion].join('\n'))]).toEqual(['SHELF_DOCUMENT_READS_VAL']);
+    }
+  });
+
+  it('accepts an exported assignment', () => {
+    const src = ['export SHELF_DOCUMENT_READS_VAL="true"', expansion].join('\n');
+    expect([...unsetValueRefs(src)]).toEqual([]);
+  });
+
   it('rejects a name nothing assigns at all', () => {
     expect([...unsetValueRefs(expansion)]).toEqual(['SHELF_DOCUMENT_READS_VAL']);
   });
