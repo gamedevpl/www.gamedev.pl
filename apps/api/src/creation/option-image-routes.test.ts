@@ -100,7 +100,33 @@ describe('POST /api/submissions/option-images', () => {
     expect(res.json().images).toEqual([]);
   });
 
-  it('refuses more options than it will illustrate', async () => {
+  it('serves no tiles, rather than a 400, for a question with more options than it illustrates', async () => {
+    // Refine bounds questions at four, never options, so five is legitimate.
+    let called = false;
+    const { app, authHeaders } = await createApp(
+      stubGenerator(async () => {
+        called = true;
+        return [];
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions/option-images',
+      headers: authHeaders,
+      payload: {
+        ...PAYLOAD,
+        options: Array.from({ length: 5 }, (_, i) => ({ label: `Option ${i}` })),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().images).toEqual([]);
+    // Nothing generated: tiles need every option covered.
+    expect(called).toBe(false);
+  });
+
+  it('still refuses an option list far past anything a refiner would produce', async () => {
     const { app, authHeaders } = await createApp(stubGenerator(async () => []));
 
     const res = await app.inject({
@@ -109,7 +135,7 @@ describe('POST /api/submissions/option-images', () => {
       headers: authHeaders,
       payload: {
         ...PAYLOAD,
-        options: Array.from({ length: 9 }, (_, i) => ({ label: `Option ${i}` })),
+        options: Array.from({ length: 40 }, (_, i) => ({ label: `Option ${i}` })),
       },
     });
 

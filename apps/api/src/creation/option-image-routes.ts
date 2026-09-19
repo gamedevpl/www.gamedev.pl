@@ -13,6 +13,9 @@ import {
   type OptionImageGenerator,
 } from './option-images.js';
 
+// A sanity bound against abuse, not the product limit below.
+const MAX_OPTIONS_ACCEPTED = 24;
+
 // Same bounds refine accepts, because this is the same concept text.
 const OptionImageRequestSchema = z.object({
   concept: z.string().trim().min(30, 'concept must be at least 30 characters').max(4000),
@@ -25,7 +28,7 @@ const OptionImageRequestSchema = z.object({
       }),
     )
     .min(1, 'at least one option is required')
-    .max(MAX_OPTION_IMAGES, `at most ${MAX_OPTION_IMAGES} options may be illustrated`),
+    .max(MAX_OPTIONS_ACCEPTED, `at most ${MAX_OPTIONS_ACCEPTED} options may be sent`),
 });
 
 export interface OptionImageRouteOptions {
@@ -63,8 +66,18 @@ export async function registerOptionImageRoutes(app: FastifyInstance, options: O
       return reply.status(429).send({ error: 'too many option image requests, please try again later' });
     }
 
-    // Nothing here proves this text came from a refine.
     const { concept, question, options: askedOptions } = parseResult.data;
+
+    // All-or-nothing in the UI: a partial set is wasted spend.
+    if (askedOptions.length > MAX_OPTION_IMAGES) {
+      request.log.info(
+        { asked: askedOptions.length, cap: MAX_OPTION_IMAGES },
+        'option images skipped: too many options',
+      );
+      return { images: [] satisfies OptionImage[] };
+    }
+
+    // Nothing here proves this text came from a refine.
     const moderatedFields = [concept, question, ...askedOptions.flatMap((o) => [o.label, o.detail ?? ''])].filter(
       (field) => field.length > 0,
     );

@@ -135,9 +135,9 @@ export class MuseOptionImageGenerator implements OptionImageGenerator {
         if (result.value) images.push(result.value);
         continue;
       }
+      // Index, never the label: creator text must not be retained in logs.
       if (process.env.NODE_ENV !== 'test') {
-        const label = wanted[index]?.label;
-        console.warn(`option image generation failed (budget ${this.timeoutMs}ms) for "${label}":`, result.reason);
+        console.warn(`option image ${index} failed (budget ${this.timeoutMs}ms):`, result.reason);
       }
     }
     return images;
