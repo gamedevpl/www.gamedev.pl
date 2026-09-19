@@ -126,6 +126,25 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       vi.restoreAllMocks();
     });
 
+    // Once source-only; a cache hiccup must not 500.
+    it('falls back to source when a cache-validation read fails', async () => {
+      for (const failing of ['getShelf', 'countSubmissionsByOwner'] as const) {
+        const store = makeStore();
+        await seedOwner(store, 2);
+        vi.spyOn(store, failing).mockRejectedValue(new Error('firestore is having a day'));
+        const listed = vi.spyOn(store, 'listSubmissionsByOwner');
+
+        const records = await readOwnerShelfRecords(store, OWNER, undefined, {
+          fromDocument: true,
+          verify: () => false,
+        });
+
+        expect(records).toHaveLength(2);
+        expect(listed).toHaveBeenCalled();
+        vi.restoreAllMocks();
+      }
+    });
+
     it('serves the same rounds either way', async () => {
       const store = makeStore();
       await seedOwner(store, 3);

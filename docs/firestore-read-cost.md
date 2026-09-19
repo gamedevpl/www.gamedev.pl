@@ -178,17 +178,30 @@ reseal: #1408 took access-row `mine` from 44 to 39, the ceiling stayed at 44, an
 five reads sat spendable until #1410 locked them by hand. Making the other four exact is
 a separate decision; do not collapse the two rules without taking it.
 
-`/api/submissions/mine` is measured twice, because the two owner shapes have different
-cost curves. The existing creator has `gameAccess` rows, so `countSubmissionsByOwner`
-stays on the canonical reconcile (`listGameAccessByMember`, then a `count()` per
-canonical slug the owner query already covers). The derived-only owner has three slugged
+`/api/submissions/mine` is measured three times. Two are owner shapes with different
+source-path cost curves; the third is the document path that now serves the route.
+
+The existing creator has `gameAccess` rows. The derived-only owner has three slugged
 rounds and **no** `gameAccess` rows — the 193 slugs the GameAccess backfill left derived
-on purpose. With no canonical slugs, every record lands in `nonCanonical`, so that poll
-pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for every slugged round
-(the 30s derived-access window starts empty on each measurement: a new instance and every
-window expiry). Restoring the old `listGameAccessByMember` then `count()` pre-check in
-`countSubmissionsByOwner` moves only this second number; the access-row owner cannot see
-the difference.
+on purpose. With no canonical slugs, every record lands in `nonCanonical`, so a source
+read for that owner pays `listSubmissionsByOwner` plus a cold `resolveGameAccess` for
+every slugged round (the 30s derived-access window starts empty on each measurement: a
+new instance and every window expiry). That is why the two source-path numbers differ.
+
+`countSubmissionsByOwner` is the raw `ownerUid` aggregation on both stores — one billed
+read, no reconciliation. It is not a shelf comparison any more; it is the read fence's
+cheap check that no round of the owner's own appeared or vanished since the document was
+built, and it has to match the `ownedCount` the mirror recorded from the same raw query.
+#1408 briefly made it reconcile so a shadow comparison would line up; #1416 reverted
+that once the shadow took its count from the records it was handed. A transfer, an
+editor change, or another member's round moves none of these counts, which is why every
+write that changes a shelf's contents invalidates it in the same transaction rather than
+trusting this number to notice.
+
+The third measurement, `(document, steady state)`, is the second read in a process: the
+first always verifies against source, so the existing gate route only ever measured a
+source read. Steady state is **2** billed reads — the count and the document — and the
+gate holds it exactly.
 
 ```bash
 npm run firestore-read-cost                                            # report
