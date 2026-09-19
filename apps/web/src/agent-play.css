@@ -21,6 +21,7 @@
 }
 
 .is-playing-full-viewport.has-agent-panel .game-viewport-container {
+  align-self: stretch;
   margin-right: var(--agent-inset-right);
   margin-bottom: var(--agent-inset-bottom);
   width: auto;
@@ -28,6 +29,7 @@
 
 .is-playing-full-viewport.has-agent-panel .game-theater-bar {
   right: var(--agent-inset-right);
+  width: auto;
 }
 
 .is-playing-full-viewport.has-agent-panel .theater-reveal-btn {
@@ -35,6 +37,7 @@
 }
 
 .is-playing-full-viewport.has-agent-panel .theater-exit-fullscreen {
+  left: auto;
   right: calc(var(--agent-inset-right) + max(12px, env(safe-area-inset-right)));
   bottom: calc(var(--agent-inset-bottom) + max(12px, env(safe-area-inset-bottom)));
 }

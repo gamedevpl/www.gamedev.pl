@@ -23,12 +23,14 @@ describe('agent play mode layout', () => {
 
   it('insets the game viewport container and bar without overlapping the canvas', () => {
     const container = ruleBody('.is-playing-full-viewport.has-agent-panel .game-viewport-container');
+    expect(container).toMatch(/align-self:\s*stretch/);
     expect(container).toMatch(/margin-right:\s*var\(--agent-inset-right\)/);
     expect(container).toMatch(/margin-bottom:\s*var\(--agent-inset-bottom\)/);
     expect(container).toMatch(/width:\s*auto/);
 
     const bar = ruleBody('.is-playing-full-viewport.has-agent-panel .game-theater-bar');
     expect(bar).toMatch(/right:\s*var\(--agent-inset-right\)/);
+    expect(bar).toMatch(/width:\s*auto/);
   });
 
   it('keeps the theater reveal and fullscreen exit buttons in the visible game area', () => {
@@ -38,6 +40,7 @@ describe('agent play mode layout', () => {
     );
 
     const exitFullscreen = ruleBody('.is-playing-full-viewport.has-agent-panel .theater-exit-fullscreen');
+    expect(exitFullscreen).toMatch(/left:\s*auto/);
     expect(exitFullscreen).toMatch(
       /right:\s*calc\(var\(--agent-inset-right\)\s*\+\s*max\(12px,\s*env\(safe-area-inset-right\)\)\)/,
     );
