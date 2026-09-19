@@ -14,7 +14,7 @@ export function useAgentBridge(enabled: boolean): AgentBridgeState {
   const { user } = useAuth();
   // The hint spares others a certain 404; it grants nothing.
   const hinted = Boolean(user?.reviewer);
-  const [source, setSource] = useState<AgentBridgeState>(undefined);
+  const [source, setSource] = useState<AgentBridgeState>(() => (!enabled || !hinted ? null : undefined));
 
   useEffect(() => {
     if (!enabled || !hinted) {
