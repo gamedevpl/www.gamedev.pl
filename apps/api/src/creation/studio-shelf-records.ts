@@ -22,7 +22,7 @@ export type ShelfRecordsObserver = (records: SubmissionRecord[]) => Promise<void
 // `verify` decides which reads pay source anyway; absent means never.
 export interface ShelfReadOptions {
   fromDocument: boolean;
-  verify?: () => boolean;
+  verify?: (ownerUid: string) => boolean;
 }
 
 function jobIdFromToken(token: string): number | null {
@@ -127,7 +127,7 @@ export async function readOwnerShelfRecords(
     return fromSource();
   }
   // Sampled reads answer from source: caught and repaired at once.
-  if (read.verify?.()) {
+  if (read.verify?.(ownerUid)) {
     noteShelfOrigin('verified');
     return fromSource();
   }

@@ -46,19 +46,31 @@ describe('documentAnswersAlone', () => {
 describe('createShelfVerifySampler', () => {
   it('verifies the first read, then one in every window', () => {
     const verify = createShelfVerifySampler(3);
-    expect([verify(), verify(), verify(), verify(), verify(), verify()]).toEqual([
-      true,
-      false,
-      false,
-      true,
-      false,
-      false,
-    ]);
+    const reads = [verify(OWNER), verify(OWNER), verify(OWNER), verify(OWNER), verify(OWNER), verify(OWNER)];
+    expect(reads).toEqual([true, false, false, true, false, false]);
+  });
+
+  it('counts each owner separately, so a heavy poller cannot starve a quiet one', () => {
+    const verify = createShelfVerifySampler(3);
+    // Heavy poller burns its own window, not the quiet owner's.
+    expect([verify('g:heavy'), verify('g:heavy'), verify('g:heavy')]).toEqual([true, false, false]);
+    expect(verify('g:quiet')).toBe(true);
+    expect(verify('g:heavy')).toBe(true);
+  });
+
+  it('evicts the coldest owner once it is full, which only costs a source read', () => {
+    const verify = createShelfVerifySampler(3, 2);
+    expect(verify('g:a')).toBe(true);
+    expect(verify('g:b')).toBe(true);
+    expect(verify('g:a')).toBe(false);
+    // 'b' is coldest, so 'c' evicts it and 'b' restarts.
+    expect(verify('g:c')).toBe(true);
+    expect(verify('g:b')).toBe(true);
   });
 
   it('verifies every read when the window is zero', () => {
     const verify = createShelfVerifySampler(0);
-    expect([verify(), verify()]).toEqual([true, true]);
+    expect([verify(OWNER), verify(OWNER)]).toEqual([true, true]);
   });
 });
 

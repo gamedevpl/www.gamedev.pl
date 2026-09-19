@@ -42,6 +42,24 @@ function readVarNames(relPath) {
   return names;
 }
 
+// A `_VAL` is computed in the file itself, right before ENV_VARS is built, to fold a repo
+// variable together with its default. Threading one the file never assigns reaches Cloud
+// Run empty, and the name check above still passes, because the name is there -- only the
+// value is gone. That is how a kill switch ships dead. Other names may come from the
+// caller's environment, so only this convention can be checked.
+function readUnsetValueRefs(relPath) {
+  const source = readFileSync(path.join(repoRoot, relPath), 'utf8');
+  const missing = new Set();
+  for (const line of source.split('\n')) {
+    if (!/\bENV_VARS=/.test(line)) continue;
+    for (const ref of line.matchAll(/=\$\{([A-Z][A-Z0-9_]*_VAL)\}/g)) {
+      // `eval "NAME=` counts, so the quote is part of what can precede it.
+      if (!new RegExp(`(^|[\\s"'])${ref[1]}=`, 'm').test(source)) missing.add(ref[1]);
+    }
+  }
+  return missing;
+}
+
 function readSecretBindings(relPath) {
   const source = readFileSync(path.join(repoRoot, relPath), 'utf8');
   const bindings = new Map();
@@ -57,6 +75,9 @@ for (const [label, relPath] of [
   ['deploy.yml', WORKFLOW],
   ['deploy-api.sh', SCRIPT],
 ]) {
+  for (const name of [...readUnsetValueRefs(relPath)].sort()) {
+    problems.push(`${label} builds ENV_VARS from \${${name}}, which nothing in the file assigns`);
+  }
   const actual = readVarNames(relPath);
   for (const name of [...actual].sort()) {
     if (!declaredVars.has(name)) {

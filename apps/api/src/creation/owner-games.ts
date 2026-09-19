@@ -46,9 +46,13 @@ export function collapseJobsToOwnerGames(jobs: readonly SubmissionRecord[], mode
     else groups.set(key, [job]);
   }
 
+  // jobId breaks a createdAt tie, so round order cannot change the answer.
+  const byNewest = (a: SubmissionRecord, b: SubmissionRecord): number =>
+    b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId;
+
   const collapsed: OwnerGame[] = [];
   for (const group of groups.values()) {
-    const sorted = [...group].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const sorted = [...group].sort(byNewest);
     const tip = sorted[0]!;
 
     if (mode === 'published' && !group.some(hasPublishedAt)) continue;
@@ -61,7 +65,7 @@ export function collapseJobsToOwnerGames(jobs: readonly SubmissionRecord[], mode
     collapsed.push(ownerGame);
   }
 
-  return collapsed.sort((a, b) => b.tip.createdAt.localeCompare(a.tip.createdAt));
+  return collapsed.sort((a, b) => byNewest(a.tip, b.tip));
 }
 
 /** Apply the shelf ceiling after collapsing jobs to distinct games. */

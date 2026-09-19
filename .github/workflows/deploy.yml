@@ -369,6 +369,8 @@ jobs:
            DREAMS_ENABLED_VAL="${DREAMS_ENABLED_VAL:-false}"
            AGENT_PROPOSALS_ENABLED_VAL="${AGENT_PROPOSALS_ENABLED}"
            AGENT_PROPOSALS_ENABLED_VAL="${AGENT_PROPOSALS_ENABLED_VAL:-false}"
+           SHELF_DOCUMENT_READS_VAL="${SHELF_DOCUMENT_READS}"
+           SHELF_DOCUMENT_READS_VAL="${SHELF_DOCUMENT_READS_VAL:-true}"
           if [ "true" = "true" ] && [ -z "$BETA_ALLOWED_UIDS_VAL" ] && [ -z "$BETA_ALLOWED_EMAILS_VAL" ]; then
             echo "Error: PRIVATE_BETA=true but both BETA_ALLOWED_UIDS and BETA_ALLOWED_EMAILS are empty. Set at least one allowlist variable."
             exit 1
