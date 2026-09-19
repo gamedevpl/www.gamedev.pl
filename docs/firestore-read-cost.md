@@ -125,7 +125,7 @@ Trusting a document needs a reason. Four of them here, cheapest first:
    verdict but `match` (and `truncated`, which a rebuild cannot change), and they serve
    source. This is also the **backstop for the in-transaction invalidation above**: if that
    write were ever missing — a new write path nobody hooked, a rollback revision — the stale
-   document is caught within a hundred of that owner's reads or by the hourly pass. That is
+   document is caught within a hundred of that owner's reads per instance or by the hourly pass. That is
    the same-count stale window, and it is bounded, not zero.
 4. **Every owner's first read in a process verifies**, and then every hundredth of theirs.
    The sampler counts per owner and is shared by both shelf routes, so one heavy poller

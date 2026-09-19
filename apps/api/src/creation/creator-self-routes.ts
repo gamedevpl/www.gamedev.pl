@@ -72,7 +72,7 @@ export async function registerCreatorSelfRoutes(
     const records = await readOwnerShelfRecords(
       store,
       request.user!.uid,
-      (owned) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned).then(() => undefined),
+      (owned, ownedNow) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned, ownedNow).then(() => undefined),
       { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySamplerFor(app) },
     );
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');

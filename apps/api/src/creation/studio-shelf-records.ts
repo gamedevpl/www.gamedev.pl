@@ -17,7 +17,7 @@ export type ShelfStore = Pick<
   Pick<Store, 'listGameAccessByMember'>;
 
 // Judged before the deep-link merge adds its record.
-export type ShelfRecordsObserver = (records: SubmissionRecord[]) => Promise<void>;
+export type ShelfRecordsObserver = (records: SubmissionRecord[], ownedNow?: number) => Promise<void>;
 
 // `verify` decides which reads pay source anyway; absent means never.
 export interface ShelfReadOptions {
@@ -109,11 +109,11 @@ export async function readOwnerShelfRecords(
   observe: ShelfRecordsObserver | undefined,
   read: ShelfReadOptions | undefined,
 ): Promise<SubmissionRecord[]> {
-  const fromSource = async (): Promise<SubmissionRecord[]> => {
+  const fromSource = async (ownedNow?: number): Promise<SubmissionRecord[]> => {
     const owned = await store.listSubmissionsByOwner(ownerUid);
     const records = await reconcileTransferredOwnership(store, ownerUid, owned);
     // The shadow judges the document against these, and backfills an absent one.
-    if (observe) await observe(records);
+    if (observe) await observe(records, ownedNow);
     return records;
   };
 
@@ -141,7 +141,9 @@ export async function readOwnerShelfRecords(
   }
   if (!documentAnswersAlone(shelf) || !ownerCountAgrees(shelf, ownedNow)) {
     noteShelfOrigin('source');
-    return fromSource();
+    // With the count: a document whose collapse still matches would otherwise
+    // read as 'match', never be repaired, and send every poll back here.
+    return fromSource(ownedNow);
   }
   noteShelfOrigin('document');
   return recordsFromShelf(shelf);

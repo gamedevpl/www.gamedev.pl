@@ -48,12 +48,17 @@ export function judgeShelfShadow(
   shelf: ShelfDocument | null,
   sourceRecords: readonly SubmissionRecord[],
   sourceCount: number,
+  ownedNow?: number,
 ): ShelfShadowResult {
   if (!shelf) return { verdict: 'absent', sourceCount };
   if (shelf.stale) return { verdict: 'stale', sourceCount };
   if (shelf.version !== SHELF_VERSION) return { verdict: 'version', sourceCount, shelfCount: shelf.sourceCount };
   if (shelf.truncated) return { verdict: 'truncated', sourceCount, shelfCount: shelf.sourceCount };
   if (!isShelfUsable(shelf, sourceCount)) return { verdict: 'count', sourceCount, shelfCount: shelf.sourceCount };
+  // The reader fell back on this number; a matching collapse must not hide it.
+  if (ownedNow !== undefined && shelf.ownedCount !== ownedNow) {
+    return { verdict: 'count', sourceCount, shelfCount: shelf.sourceCount };
+  }
   const mirrored = shelf.rounds.map(fromShelfRound);
   const same = collapsedFingerprint(mirrored) === collapsedFingerprint(sourceRecords);
   return { verdict: same ? 'match' : 'collapse', sourceCount, shelfCount: shelf.sourceCount };
@@ -69,11 +74,12 @@ export async function recordShelfShadow(
   deps: ShelfShadowDeps,
   ownerUid: string,
   sourceRecords: readonly SubmissionRecord[],
+  ownedNow?: number,
 ): Promise<ShelfShadowResult | null> {
   try {
     // The caller already reconciled these; counting them again costs a second pass.
     const shelf = await deps.store.getShelf(ownerUid);
-    const result = judgeShelfShadow(shelf, sourceRecords, sourceRecords.length);
+    const result = judgeShelfShadow(shelf, sourceRecords, sourceRecords.length, ownedNow);
     noteReadTally('shelfShadow', result.verdict);
     if (result.verdict !== 'match') {
       noteReadTally('shelfMismatch', true);

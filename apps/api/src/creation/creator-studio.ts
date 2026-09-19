@@ -173,7 +173,7 @@ export async function registerCreatorStudioRoutes(
       request.user!.uid,
       parsed.data.game,
       mint,
-      (owned) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned).then(() => undefined),
+      (owned, ownedNow) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned, ownedNow).then(() => undefined),
       { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySamplerFor(app) },
     );
     const collapsed = collapseJobsToOwnerGames(records, 'shelf');

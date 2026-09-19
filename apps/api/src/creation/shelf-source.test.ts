@@ -5,6 +5,7 @@ import { buildShelfDocument, SHELF_VERSION } from '../store/records/shelf.js';
 import { createShelfVerifySampler, documentAnswersAlone, ownerCountAgrees } from './shelf-source.js';
 import { tombstoneShelf } from '../store/records/shelf.js';
 import { readOwnerShelfRecords } from './studio-shelf-records.js';
+import { recordShelfShadow } from './shelf-shadow.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 const AT = '2026-01-01T00:00:00.000Z';
@@ -143,6 +144,25 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
         expect(listed).toHaveBeenCalled();
         vi.restoreAllMocks();
       }
+    });
+
+    // Same rounds, wrong ownedCount: the shadow must not call that 'match'.
+    it('repairs a document that fell back on ownedCount alone', async () => {
+      const store = makeStore();
+      await seedOwner(store, 3);
+      const built = (await store.getShelf(OWNER))!;
+      await store.putShelf(OWNER, { ...built, ownedCount: (built.ownedCount ?? 0) + 1 });
+      const shadow = vi.fn(async (records: SubmissionRecord[], ownedNow?: number) => {
+        await recordShelfShadow({ store, log: { warn: () => {} } }, OWNER, records, ownedNow);
+      });
+
+      await readOwnerShelfRecords(store, OWNER, shadow, { fromDocument: true, verify: () => false });
+
+      expect(shadow).toHaveBeenCalled();
+      // Repaired: the next read agrees again instead of falling back forever.
+      const repaired = (await store.getShelf(OWNER))!;
+      expect(repaired.ownedCount).toBe(3);
+      expect(repaired.seq ?? 0).toBeGreaterThan(built.seq ?? 0);
     });
 
     it('serves the same rounds either way', async () => {
