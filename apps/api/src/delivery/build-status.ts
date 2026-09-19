@@ -15,6 +15,7 @@ import type {
   CreatorRevision,
   PriorRoundEntry,
   PriorRoundHistory,
+  RecentBuild,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
 import { currentOwnerUidSoft } from '../platform/game-access-resolve.js';
@@ -27,6 +28,24 @@ import type {
 } from '../platform/store.js';
 
 // 'studio_ack' displays exactly like 'studio' — only the backend tells them apart.
+
+// Share link sees the red verdict, never the report.
+function withoutGateReport(
+  gate: NonNullable<SubmissionStatusResponse['previewGate']>,
+): NonNullable<SubmissionStatusResponse['previewGate']> {
+  const { report, ...rest } = gate;
+  void report;
+  return rest;
+}
+
+// Verdict is state; the changelog prose is not.
+function withoutAuthoredDetail(build: RecentBuild): RecentBuild {
+  const { summary, authorship, fileCount, ...rest } = build;
+  void summary;
+  void authorship;
+  void fileCount;
+  return rest;
+}
 
 // Newest stamp that means this round moved.
 function sinceMovement(
@@ -350,7 +369,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     ]);
     // State is a receipt the token carries; what was said is not.
     const viewerOwns = Boolean(
-      store && record && viewerUid && (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read')),
+      store &&
+        record &&
+        viewerUid &&
+        // A blip denies; it used to 500 the member's own poll.
+        (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read').catch(() => false)),
     );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
@@ -368,6 +391,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
             },
           }
         : {}),
+      // Authored prose, not state: same viewer test as events.
+      ...(!viewerOwns && status.previewGate ? { previewGate: withoutGateReport(status.previewGate) } : {}),
+      ...(!viewerOwns && status.recentBuilds ? { recentBuilds: status.recentBuilds.map(withoutAuthoredDetail) } : {}),
     };
     if (!record) return next;
 
@@ -378,11 +404,14 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     else delete next.lastAgentPresence;
     if (record.agentEndedAt) next.agentEndedAt = record.agentEndedAt;
     else delete next.agentEndedAt;
-    if (managedAvailabilityGate) {
+    // Only a member picks a builder; the quota is theirs.
+    if (managedAvailabilityGate && viewerOwns) {
       // The quota belongs to whoever owns the game now, not the author.
       const quotaUid =
         store && record.slug ? await currentOwnerUidSoft(store, record.slug, record.ownerUid) : record.ownerUid;
       next.platformBuilder = await managedAvailabilityGate.peek(quotaUid, new Date(now()).toISOString().slice(0, 10));
+    } else {
+      delete next.platformBuilder;
     }
 
     const stall = detectStall({
@@ -434,7 +463,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       delete next.priorRounds;
     }
 
-    if (next.recentBuilds && next.recentBuilds.length > 0) {
+    // Backfilled from the channel, which only a member reads.
+    if (viewerOwns && next.recentBuilds && next.recentBuilds.length > 0) {
       try {
         next.recentBuilds = await hydrateRecentBuildSummaries({
           builds: next.recentBuilds,
