@@ -52,8 +52,14 @@ export function createShelfVerifySampler(
   };
 }
 
-// One cadence per process; two counters would double the bound.
-export const shelfVerifySampler = createShelfVerifySampler();
+// One cadence per app, shared by both routes; fresh per test app.
+const SAMPLER = Symbol.for('gamedevpl.shelfVerifySampler');
+type SamplerHost = { [SAMPLER]?: (ownerUid: string) => boolean };
+export function shelfVerifySamplerFor(app: object): (ownerUid: string) => boolean {
+  const host = app as SamplerHost;
+  host[SAMPLER] ??= createShelfVerifySampler();
+  return host[SAMPLER];
+}
 
 // Surfaces in the request's `firestore reads` line, next to fsReads.
 export function noteShelfOrigin(origin: ShelfOrigin): void {

@@ -7,7 +7,7 @@ import type { ManagedAvailabilityGate } from '../agent-surface/managed-availabil
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { readOwnerShelfRecords } from './studio-shelf-records.js';
-import { shelfVerifySampler } from './shelf-source.js';
+import { shelfVerifySamplerFor } from './shelf-source.js';
 import { shelfReadsFromDocument } from '../platform/shelf-reads-env.js';
 
 export interface CreatorSelfRoutesOptions {
@@ -73,7 +73,7 @@ export async function registerCreatorSelfRoutes(
       store,
       request.user!.uid,
       (owned) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned).then(() => undefined),
-      { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySampler },
+      { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySamplerFor(app) },
     );
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
     return reply.send({
