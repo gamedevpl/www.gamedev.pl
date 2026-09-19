@@ -31,6 +31,7 @@ export type UseSpecSubmissionFlowOptions = {
   setIsAuthModalOpen: Dispatch<SetStateAction<boolean>>;
   setSavedSpecs: Dispatch<SetStateAction<SavedSpec[]>>;
   setMyGamesRefreshKey: Dispatch<SetStateAction<number>>;
+  onCancelPrompt?: (concept: string) => void;
 };
 
 export type UseSpecSubmissionFlowResult = {
@@ -58,6 +59,7 @@ export function useSpecSubmissionFlow({
   setIsAuthModalOpen,
   setSavedSpecs,
   setMyGamesRefreshKey,
+  onCancelPrompt,
 }: UseSpecSubmissionFlowOptions): UseSpecSubmissionFlowResult {
   const { t, i18n } = useTranslation();
 
@@ -306,6 +308,9 @@ export function useSpecSubmissionFlow({
   };
 
   const handleQaCancel = () => {
+    if (pendingSpec?.concept) {
+      onCancelPrompt?.(pendingSpec.concept);
+    }
     setQaQuestions([]);
     setPendingSpec(null);
     pendingReferenceImagesRef.current = undefined;

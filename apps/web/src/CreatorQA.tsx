@@ -648,6 +648,7 @@ export function CreatorQA({
 
       {showConfirmExit && (
         <CreatorQADiscardModal
+          openerElement={exitTriggerRef.current}
           onKeep={handleKeep}
           onDiscard={() => {
             setShowConfirmExit(false);

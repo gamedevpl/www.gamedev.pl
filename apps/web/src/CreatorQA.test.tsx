@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
-import i18n from './i18n/index.js';
+import i18n, { i18nReady } from './i18n/index.js';
 
 async function flushEffects() {
   await Promise.resolve();
@@ -42,6 +42,7 @@ const heading = () => find('.qa-title')?.textContent ?? '';
 
 async function render(props: Record<string, unknown>): Promise<Root> {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18nReady;
   await i18n.changeLanguage('en');
   const container = document.createElement('div');
   document.body.appendChild(container);

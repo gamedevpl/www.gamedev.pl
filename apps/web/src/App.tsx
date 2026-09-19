@@ -142,7 +142,17 @@ export function App() {
     handleQaAnswersChange,
     handleQaTitleChange,
     handleQaBuilderChange,
-  } = useSpecSubmissionFlow({ user, navigate, setIsAuthModalOpen, setSavedSpecs, setMyGamesRefreshKey });
+  } = useSpecSubmissionFlow({
+    user,
+    navigate,
+    setIsAuthModalOpen,
+    setSavedSpecs,
+    setMyGamesRefreshKey,
+    onCancelPrompt: (concept) => {
+      setRetryPrompt(concept);
+      setPendingScrollTarget('hero-prompt');
+    },
+  });
 
   // Unpublished `/play/<slug>` title, reported once the document loads.
   const [unpublishedPlayTitle, setUnpublishedPlayTitle] = useState<string | null>(null);

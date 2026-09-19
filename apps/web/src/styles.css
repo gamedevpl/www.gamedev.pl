@@ -4083,6 +4083,7 @@ a.user-name--profile:focus-visible {
 
 /* Discard confirmation dialog when the creator exits with unsaved progress. */
 .qa-confirm-backdrop {
+  box-sizing: border-box;
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -4097,6 +4098,7 @@ a.user-name--profile:focus-visible {
 }
 
 .qa-confirm-dialog {
+  box-sizing: border-box;
   width: 100%;
   max-width: 420px;
   background: var(--panel, #161b22);
@@ -4242,7 +4244,9 @@ a.user-name--profile:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qa-stage {
+  .qa-stage,
+  .qa-confirm-backdrop,
+  .qa-confirm-dialog {
     animation: none;
   }
 }
