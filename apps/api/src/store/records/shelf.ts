@@ -36,6 +36,9 @@ export interface ShelfDocument {
 
   // Bumped per write; a stale rebuild elsewhere loses.
   seq?: number;
+
+  // A tombstone: keeps seq advancing where a delete would reset it.
+  stale?: true;
   rounds: ShelfRound[];
   // Past the cap, so the reader must not trust `rounds` as complete.
   truncated?: true;
@@ -87,9 +90,16 @@ export function buildShelfDocument(
   };
 }
 
+// Deleting resets seq, letting an earlier pass win.
+export function tombstoneShelf(builtAt: string, seq: number): ShelfDocument {
+  // Self-consistent otherwise, so `stale` alone rejects it.
+  return { version: SHELF_VERSION, builtAt, sourceCount: 0, ownedCount: 0, rounds: [], stale: true, seq };
+}
+
 // Usable means this reader may answer from it without reading source.
 export function isShelfUsable(shelf: ShelfDocument | null, sourceCount: number): boolean {
   if (!shelf) return false;
+  if (shelf.stale) return false;
   if (shelf.version !== SHELF_VERSION) return false;
   if (shelf.truncated) return false;
   return shelf.sourceCount === sourceCount;

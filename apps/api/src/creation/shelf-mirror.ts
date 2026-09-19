@@ -5,6 +5,7 @@ import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-r
 // Structural, not Pick<Store>: the store builds the mirror.
 export type ShelfMirrorStore = ShelfStore & {
   putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
+  tombstoneShelf(ownerUid: string, builtAt: string): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
 };
 
@@ -50,10 +51,10 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
     return shelf;
   }
 
-  // Source costs reads; a stale document costs access.
+  // A delete resets seq, so an earlier pass would win.
   async function discard(ownerUid: string): Promise<void> {
     try {
-      await store.deleteShelf(ownerUid);
+      await store.tombstoneShelf(ownerUid, new Date(now()).toISOString());
     } catch (error) {
       report(error, { ownerUid });
     }

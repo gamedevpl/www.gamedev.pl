@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createShelfMirror } from './shelf-mirror.js';
-import { buildShelfDocument, type ShelfDocument } from '../store/records/shelf.js';
+import { buildShelfDocument, tombstoneShelf, type ShelfDocument } from '../store/records/shelf.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 const record = (jobId: number, extra: Partial<SubmissionRecord> = {}): SubmissionRecord =>
@@ -50,6 +50,10 @@ function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
     async deleteShelf(ownerUid: string) {
       state.deleted.push(ownerUid);
       state.stored.delete(ownerUid);
+    },
+    async tombstoneShelf(ownerUid: string, builtAt: string) {
+      state.deleted.push(ownerUid);
+      state.stored.set(ownerUid, tombstoneShelf(builtAt, (state.stored.get(ownerUid)?.seq ?? 0) + 1));
     },
     // No canonical access here: the reconcile keeps every row.
     async listGameAccessByMember() {
@@ -141,6 +145,29 @@ describe('createShelfMirror', () => {
 
     // A pass reading after B is honest, and allowed.
     await expect(instanceA.rebuild('g:owner')).resolves.not.toBeNull();
+  });
+
+  // A delete resets seq to 0, which the earlier pass also holds.
+  it('leaves a sequenced tombstone on discard, not a gap another pass can win', async () => {
+    const { state, store } = harness();
+    state.rows = [record(1, { slug: 'sky' })];
+    const stale = createShelfMirror({ store, now: () => 0, onError: () => {} });
+
+    // A starts from an absent, pre-fence shelf.
+    const seqSeenByA = (await store.getShelf('g:owner'))?.seq ?? 0;
+    expect(seqSeenByA).toBe(0);
+
+    // Revoked, and the rebuild that follows fails, so it discards.
+    state.rows = [];
+    await store.tombstoneShelf('g:owner', '');
+
+    // A must still lose, though nothing servable is stored.
+    const staleShelf = buildShelfDocument([record(1, { slug: 'sky' })], '', 1);
+    expect(await store.putShelfIfUnchanged('g:owner', staleShelf, seqSeenByA)).toBe(false);
+    expect(state.stored.get('g:owner')?.stale).toBe(true);
+
+    // The tombstone is unservable, so the next read pays source.
+    await expect(stale.rebuild('g:owner')).resolves.not.toBeNull();
   });
 
   // A kept document would serve a game the member just lost.

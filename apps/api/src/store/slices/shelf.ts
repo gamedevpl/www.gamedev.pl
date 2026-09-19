@@ -1,5 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
-import type { ShelfDocument } from '../records/shelf.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 
 export interface ShelfDocumentStore {
   getShelf(ownerUid: string): Promise<ShelfDocument | null>;
@@ -8,6 +8,9 @@ export interface ShelfDocumentStore {
 
   // Writes only if seq is unchanged; false means it lost.
   putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
+
+  // Unservable, but seq keeps climbing. Always writes.
+  tombstoneShelf(ownerUid: string, builtAt: string): Promise<void>;
 
   // How many rounds the owner has, for the one-read agreement check.
   countSubmissionsByOwner(ownerUid: string): Promise<number>;
@@ -41,6 +44,11 @@ export class InMemoryShelfStore implements ShelfDocumentStore {
     if ((this.shelves.get(ownerUid)?.seq ?? 0) !== expectedSeq) return false;
     this.shelves.set(ownerUid, structuredClone({ ...shelf, seq: expectedSeq + 1 }));
     return true;
+  }
+
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    const seq = (this.shelves.get(ownerUid)?.seq ?? 0) + 1;
+    this.shelves.set(ownerUid, tombstoneShelf(builtAt, seq));
   }
 
   async deleteShelf(ownerUid: string): Promise<void> {
@@ -86,6 +94,15 @@ export class FirestoreShelfStore implements ShelfDocumentStore {
       if ((current?.seq ?? 0) !== expectedSeq) return false;
       tx.set(ref, { ...shelf, seq: expectedSeq + 1 });
       return true;
+    });
+  }
+
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    const ref = this.ref(ownerUid);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? (snap.data() as ShelfDocument) : null;
+      tx.set(ref, tombstoneShelf(builtAt, (current?.seq ?? 0) + 1));
     });
   }
 

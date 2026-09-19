@@ -3,6 +3,7 @@ import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js'
 import { fakeFirestore } from '../store/fake-firestore.js';
 import { buildShelfDocument, SHELF_VERSION } from '../store/records/shelf.js';
 import { createShelfVerifySampler, documentAnswersAlone, ownerCountAgrees } from './shelf-source.js';
+import { tombstoneShelf } from '../store/records/shelf.js';
 import { readOwnerShelfRecords } from './studio-shelf-records.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
@@ -35,6 +36,14 @@ describe('documentAnswersAlone', () => {
     expect(documentAnswersAlone({ ...shelf, sourceCount: 9 })).toBe(false);
     // Built before the count was recorded: nothing cheap can check it.
     expect(documentAnswersAlone({ ...shelf, ownedCount: undefined })).toBe(false);
+  });
+
+  // A transferred-in owner also counts 0; only `stale` differs.
+  it('refuses a tombstone, which agrees with itself on every other field', () => {
+    const grave = tombstoneShelf(AT, 1);
+    expect(grave.ownedCount).toBe(0);
+    expect(grave.rounds.length).toBe(grave.sourceCount);
+    expect(documentAnswersAlone(grave)).toBe(false);
   });
 
   it('checks the owner count the document was built from', () => {
@@ -166,6 +175,21 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
 
       expect(listed).toHaveBeenCalled();
       expect(records).toHaveLength(3);
+    });
+
+    it('never answers from a tombstone, whose whole purpose is to be unservable', async () => {
+      const store = makeStore();
+      await seedOwner(store, 2);
+      await store.tombstoneShelf(OWNER, AT);
+      const listed = vi.spyOn(store, 'listSubmissionsByOwner');
+
+      const records = await readOwnerShelfRecords(store, OWNER, undefined, {
+        fromDocument: true,
+        verify: () => false,
+      });
+
+      expect(listed).toHaveBeenCalled();
+      expect(records).toHaveLength(2);
     });
 
     it('falls back to source when no document can answer', async () => {

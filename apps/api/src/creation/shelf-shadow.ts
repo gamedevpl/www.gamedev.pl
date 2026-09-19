@@ -14,7 +14,7 @@ export interface ShelfShadowStore {
 }
 
 // Absent and stale are reported too, not hidden.
-export type ShelfShadowVerdict = 'match' | 'absent' | 'version' | 'truncated' | 'count' | 'collapse';
+export type ShelfShadowVerdict = 'match' | 'absent' | 'stale' | 'version' | 'truncated' | 'count' | 'collapse';
 
 export interface ShelfShadowResult {
   verdict: ShelfShadowVerdict;
@@ -48,6 +48,7 @@ export function judgeShelfShadow(
   sourceCount: number,
 ): ShelfShadowResult {
   if (!shelf) return { verdict: 'absent', sourceCount };
+  if (shelf.stale) return { verdict: 'stale', sourceCount };
   if (shelf.version !== SHELF_VERSION) return { verdict: 'version', sourceCount, shelfCount: shelf.sourceCount };
   if (shelf.truncated) return { verdict: 'truncated', sourceCount, shelfCount: shelf.sourceCount };
   if (!isShelfUsable(shelf, sourceCount)) return { verdict: 'count', sourceCount, shelfCount: shelf.sourceCount };

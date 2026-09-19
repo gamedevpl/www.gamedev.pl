@@ -413,6 +413,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.shelfStore.putShelfIfUnchanged(ownerUid, shelf, expectedSeq);
   }
 
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    return this.shelfStore.tombstoneShelf(ownerUid, builtAt);
+  }
+
   async deleteShelf(ownerUid: string): Promise<void> {
     return this.shelfStore.deleteShelf(ownerUid);
   }

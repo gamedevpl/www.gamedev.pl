@@ -13,6 +13,7 @@ export type ShelfOrigin = 'document' | 'source' | 'verified';
 // Free checks only. A round added or removed needs the count below.
 export function documentAnswersAlone(shelf: ShelfDocument | null): shelf is ShelfDocument {
   if (!shelf) return false;
+  if (shelf.stale) return false;
   if (shelf.version !== SHELF_VERSION) return false;
   if (shelf.truncated) return false;
   if (shelf.ownedCount === undefined) return false;

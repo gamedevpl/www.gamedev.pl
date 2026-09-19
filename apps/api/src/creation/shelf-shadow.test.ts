@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { judgeShelfShadow, recordShelfShadow } from './shelf-shadow.js';
-import { buildShelfDocument, SHELF_VERSION } from '../store/records/shelf.js';
+import { buildShelfDocument, SHELF_VERSION, tombstoneShelf } from '../store/records/shelf.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 const record = (jobId: number, extra: Partial<SubmissionRecord> = {}): SubmissionRecord =>
@@ -204,6 +204,27 @@ describe('recordShelfShadow', () => {
     );
     expect(result?.verdict).toBe('match');
     expect(rebuildCalled).toBe(false);
+  });
+
+  // A discard leaves this behind; it must not read as agreement.
+  it('repairs a tombstone rather than treating an empty one as a match', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => tombstoneShelf(at, 3),
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      [],
+    );
+    expect(result?.verdict).toBe('stale');
+    expect(rebuildCalled).toBe(true);
   });
 
   // A pre-ownedCount shelf would otherwise read from source forever.
