@@ -1,4 +1,4 @@
-// Readers serve the document; source is read only to verify and repair it.
+// Steady state serves the document; samples and fallbacks serve source.
 
 // Readers flipped without the week of shadow; the owner chose that.
 
