@@ -12,6 +12,13 @@ import { useClampToViewport } from './useClampToViewport.js';
 // Mirrors MAX_REFERENCE_IMAGES in submissions.ts.
 const MAX_ATTACHMENTS = 4;
 
+const REFINING_STEPS = [
+  'qa.analyzing',
+  'qa.analyzingStepMechanics',
+  'qa.analyzingStepQuestions',
+  'qa.analyzingStepFinalizing',
+] as const;
+
 // Gemini-style composer: attach, prompt, mic, build in one pill.
 
 type HeroPromptSectionProps = {
@@ -203,13 +210,35 @@ export function HeroPromptSection({
     }
   };
 
+  const [refiningStepIndex, setRefiningStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (submissionStatus !== 'refining') {
+      setRefiningStepIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setRefiningStepIndex((prev) => {
+        const next = prev + 1;
+        if (next >= REFINING_STEPS.length - 1) {
+          clearInterval(interval);
+          return REFINING_STEPS.length - 1;
+        }
+        return next;
+      });
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [submissionStatus]);
+
   const isBusy = submissionStatus !== 'idle' || isPreparingAttachments;
   const busyLabel =
     submissionStatus === 'refining'
-      ? t('qa.analyzing')
+      ? t(REFINING_STEPS[refiningStepIndex])
       : submissionStatus === 'loading'
         ? t('submit.submitting')
-        : null;
+        : isPreparingAttachments
+          ? t('hero.preparingAttachments')
+          : null;
 
   const localMatchedGame = useMemo(
     () => (enableCatalogMatch ? findMatchingGame(promptText, catalogEntries) : null),
@@ -506,10 +535,15 @@ export function HeroPromptSection({
           </div>
 
           {busyLabel ? (
-            <p className="prompt-busy-status" role="status" aria-live="polite">
-              <span className="build-btn-spinner" aria-hidden="true" />
-              {busyLabel}
-            </p>
+            <div className="prompt-busy-container">
+              <p className="prompt-busy-status" role="status" aria-live="polite">
+                <span className="build-btn-spinner" aria-hidden="true" />
+                <span className="prompt-busy-text">{busyLabel}</span>
+              </p>
+              <div className="prompt-busy-progress-bar" aria-hidden="true">
+                <div className="prompt-busy-progress-fill" />
+              </div>
+            </div>
           ) : null}
 
           {(micNotice || isListening) && !isBusy && (
@@ -602,10 +636,15 @@ export function HeroPromptSection({
                 </button>
                 <button
                   type="submit"
-                  className="match-build-link"
+                  className={`match-build-link${isBusy ? ' is-busy' : ''}`}
                   disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
                 >
-                  <PixelIcon name="sparkle" size={12} /> {t('hero.orBuildOwnGame')}
+                  {isBusy ? (
+                    <span className="build-btn-spinner" aria-hidden="true" />
+                  ) : (
+                    <PixelIcon name="sparkle" size={12} />
+                  )}
+                  {isBusy && busyLabel ? busyLabel : t('hero.orBuildOwnGame')}
                 </button>
               </div>
             </div>
@@ -628,10 +667,15 @@ export function HeroPromptSection({
               <div className="creation-actions">
                 <button
                   type="submit"
-                  className="primary-btn build-match-btn"
+                  className={`primary-btn build-match-btn${isBusy ? ' is-busy' : ''}`}
                   disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
                 >
-                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartBuildBtn')}
+                  {isBusy ? (
+                    <span className="build-btn-spinner" aria-hidden="true" />
+                  ) : (
+                    <PixelIcon name="sparkle" size={14} />
+                  )}
+                  {isBusy && busyLabel ? busyLabel : t('hero.smartBuildBtn')}
                 </button>
               </div>
             </div>

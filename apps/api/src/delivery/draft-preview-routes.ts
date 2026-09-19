@@ -62,20 +62,6 @@ export async function registerDraftPreviewRoutes(
     draftPreviewCache.set(jobId, entry);
   }
 
-  // Token and slug must grant the same access.
-  async function grantForRecord(record: SubmissionRecord | null, uid: string | undefined): Promise<DraftGrant | null> {
-    if (!store || !record || record.abandonedAt) return null;
-    // The owner sees their own red build; a stranger never does.
-    if (uid && (await canActOnSubmissionOrSlug(store, record, uid, 'read'))) return { jobId: record.jobId };
-    // A pulled game is not re-opened by flipping the switch.
-    if (record.moderationBlockedAt) return null;
-    if (!record.draftSharedAt || !record.slug) return null;
-    const version = sharedDraftVersion(record);
-    if (!version || !(await shareGate.isGreen(record.slug, version))) return null;
-    // Pinned: a delivery landing now must not ride this answer.
-    return { jobId: record.jobId, version };
-  }
-
   // Playable only by its owner, or anyone the creator shared it with.
   async function canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null> {
     if (!store) return null;
@@ -85,7 +71,16 @@ export async function registerDraftPreviewRoutes(
     if (!record && uid) {
       record = (await listAuthorizedRoundsForSlug(store, uid, slug))[0] ?? null;
     }
-    return grantForRecord(record, uid);
+    if (!record || record.abandonedAt) return null;
+    // The owner sees their own red build; a stranger never does.
+    if (uid && (await canActOnSubmissionOrSlug(store, record, uid, 'read'))) return { jobId: record.jobId };
+    // A pulled game is not re-opened by flipping the switch.
+    if (record.moderationBlockedAt) return null;
+    if (!record.draftSharedAt) return null;
+    const version = sharedDraftVersion(record);
+    if (!version || !(await shareGate.isGreen(slug, version))) return null;
+    // Pinned: a delivery landing now must not ride this answer.
+    return { jobId: record.jobId, version };
   }
 
   // Serves the gate's own bundle, never raw delivered sources.
@@ -172,7 +167,7 @@ export async function registerDraftPreviewRoutes(
     return reply.status(409).send({ error: 'no preview available for this submission yet' });
   }
 
-  // Same rule as the slug route; a token only names the job.
+  // Holding a token says the caller was a member once, not still.
   app.get(
     '/api/submissions/:token/preview',
     { config: { rateLimit: { max: maxPreviewsPerWindow, timeWindow: previewRateLimitWindowMs } } },
@@ -204,14 +199,12 @@ export async function registerDraftPreviewRoutes(
         throw error;
       }
 
-      // Resolved live, so a removed member's token stops playing.
-      const grant = await grantForRecord(store ? ((await store.getSubmission(jobId)) ?? null) : null, request.user?.uid);
-      if (!grant) {
-        return reply.status(404).send({ error: 'draft not found' });
+      const owned = store ? await store.getSubmission(jobId) : null;
+      if (store && !(owned && (await canActOnSubmissionOrSlug(store, owned, request.user!.uid, 'read')))) {
+        return reply.status(404).send({ error: 'no preview available for this submission yet' });
       }
 
-      // Pinned: the query must not steer a non-member elsewhere.
-      await replyWithDraft(request, reply, grant.jobId, grant.version ?? requestedVersion);
+      await replyWithDraft(request, reply, jobId, requestedVersion);
       return reply; // resolve only after that send finished
     },
   );
