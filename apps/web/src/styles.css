@@ -1745,10 +1745,10 @@ body.player-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
+  /* Vertical only. Container queries use the content box, so horizontal padding
+     on this element would compact a 769px full-width bar (24px+24px → 721px). */
+  padding: 12px 0;
   padding-top: max(12px, env(safe-area-inset-top));
-  padding-left: max(24px, env(safe-area-inset-left));
-  padding-right: max(24px, env(safe-area-inset-right));
   background: rgba(12, 18, 24, 0.72);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
@@ -1827,6 +1827,7 @@ body.player-open {
   gap: 12px;
   min-width: 0;
   flex: 1 1 auto;
+  padding-left: max(24px, env(safe-area-inset-left));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1900,6 +1901,7 @@ body.player-open {
   align-items: center;
   gap: 10px;
   flex: none;
+  padding-right: max(24px, env(safe-area-inset-right));
 }
 
 /* Fixed width so toggling On/Off doesn't jiggle the layout. */
@@ -2319,15 +2321,22 @@ body.player-open {
    game. A landscape phone hits both.
 
    Compact chrome is a container query on the bar so the same rules cover a
-   phone window and a desktop window whose agent rail has eaten the rest. The
-   bar cannot query its own padding box, so padding stays on the viewport. */
+   phone window and a desktop window whose agent rail has eaten the rest.
+   Horizontal padding lives on the meta/actions row, not this box, so a
+   full-width bar still matches the old 768/900 viewport breakpoints. */
 @media (max-width: 768px) {
   .game-theater-bar {
-    padding: 8px 12px;
+    padding: 8px 0;
     padding-top: max(8px, env(safe-area-inset-top));
-    padding-left: max(12px, env(safe-area-inset-left));
-    padding-right: max(12px, env(safe-area-inset-right));
     gap: 8px;
+  }
+
+  .game-theater-meta {
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .game-theater-actions {
+    padding-right: max(12px, env(safe-area-inset-right));
   }
 
   .theater-camera-indicator {

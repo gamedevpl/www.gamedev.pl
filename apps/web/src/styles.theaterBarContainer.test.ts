@@ -25,4 +25,13 @@ describe('theater bar container queries', () => {
       /@container\s+theater-bar\s+\(max-width:\s*768px\)[\s\S]*?\.theater-desktop-chrome\s*\{[\s\S]*?display:\s*none/,
     );
   });
+
+  it('keeps horizontal padding off the named container so a full-width bar still follows 768/900', () => {
+    const bar = ruleBody('.game-theater-bar');
+    expect(bar).toMatch(/padding:\s*12px\s+0/);
+    expect(bar).not.toMatch(/padding-left:/);
+    expect(bar).not.toMatch(/padding-right:/);
+    expect(ruleBody('.game-theater-meta')).toMatch(/padding-left:\s*max\(24px/);
+    expect(ruleBody('.game-theater-actions')).toMatch(/padding-right:\s*max\(24px/);
+  });
 });
