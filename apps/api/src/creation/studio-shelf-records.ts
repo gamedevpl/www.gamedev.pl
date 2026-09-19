@@ -141,8 +141,7 @@ export async function readOwnerShelfRecords(
   }
   if (!documentAnswersAlone(shelf) || !ownerCountAgrees(shelf, ownedNow)) {
     noteShelfOrigin('source');
-    // With the count: a document whose collapse still matches would otherwise
-    // read as 'match', never be repaired, and send every poll back here.
+    // With the count, or a matching collapse reads 'match' and never repairs.
     return fromSource(ownedNow);
   }
   noteShelfOrigin('document');

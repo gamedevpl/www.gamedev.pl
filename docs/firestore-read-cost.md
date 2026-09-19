@@ -484,7 +484,7 @@ write directly — and submissions carry no `updatedAt`:
    notices it. Same lesson as `open-round-backfill.ts`.
 
 Staleness, stated: immediate on every instance for a hooked writer; for a writer nobody
-hooked or a rollback revision, **within a hundred of that owner's reads or one hour**,
+hooked or a rollback revision, **within a hundred of that owner's reads per instance or one hour**,
 whichever comes first — the same-count stale window.
 
 **Readers serve the document.** They were pointed at it on 2026-09-19 without the week of
