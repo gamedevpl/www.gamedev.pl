@@ -4,6 +4,7 @@ import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-r
 
 // Structural, not Pick<Store>: the store builds the mirror.
 export type ShelfMirrorStore = ShelfStore & {
+  getAccountErasure(uid: string): Promise<string | null>;
   putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean>;
   tombstoneShelf(ownerUid: string, builtAt: string): Promise<void>;
   deleteShelf(ownerUid: string): Promise<void>;
@@ -42,7 +43,12 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
     // First writer wins, not freshest reader, so reread on a loss.
     for (let attempt = 0; attempt < REBUILD_ATTEMPTS; attempt += 1) {
       // Read before source, so a write in between is seen.
-      const seq = (await store.getShelf(ownerUid))?.seq ?? 0;
+      const current = await store.getShelf(ownerUid);
+      const seq = current?.seq ?? 0;
+
+      // Erasure tombstones before rewriting rows; source still holds them.
+      if (current?.stale && (await store.getAccountErasure(ownerUid))) return null;
+
       const owned = await store.listSubmissionsByOwner(ownerUid);
 
       // Mirror reconciles ownership identically to the shelf route.

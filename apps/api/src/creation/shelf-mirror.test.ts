@@ -10,6 +10,7 @@ interface Harness {
   rows: SubmissionRecord[];
   writes: ShelfDocument[];
   stored: Map<string, ShelfDocument>;
+  erasedAt: string | null;
   deleted: string[];
   reads: number;
   release?: () => void;
@@ -17,7 +18,7 @@ interface Harness {
 
 // Holds the read open so a write lands mid-rebuild.
 function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
-  const state: Harness = { rows: [], writes: [], stored: new Map(), deleted: [], reads: 0 };
+  const state: Harness = { rows: [], writes: [], stored: new Map(), erasedAt: null, deleted: [], reads: 0 };
   let unblock: (() => void) | undefined;
   const gate = options.blockReads
     ? new Promise<void>((resolve) => {
@@ -38,6 +39,9 @@ function harness(options: { blockReads?: boolean; failWrite?: boolean } = {}) {
     },
     async getShelf(ownerUid: string) {
       return state.stored.get(ownerUid) ?? null;
+    },
+    async getAccountErasure() {
+      return state.erasedAt;
     },
     async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number) {
       if (options.failWrite) throw new Error('write refused');

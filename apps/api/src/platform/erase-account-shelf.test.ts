@@ -74,6 +74,24 @@ describe('eraseAccount and the shelf', () => {
     expect((await store.getShelf('g:owner'))?.stale).toBe(true);
   });
 
+  // The fence tombstones before the rows move, so source still holds them.
+  it('refuses to rebuild an erased shelf while the rows are still there', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:leaving', 'Theirs');
+    await store.setSubmissionSlug(1, 'sky');
+
+    // Erasure has fenced and tombstoned, but has not rewritten the rounds yet.
+    await store.beginAccountErasure('g:leaving', new Date().toISOString());
+    expect((await store.getShelf('g:leaving'))?.stale).toBe(true);
+    expect(await store.listSubmissionsByOwner('g:leaving')).toHaveLength(1);
+
+    // A concurrent rebuild would otherwise make the pre-erasure shelf servable.
+    expect(await store.rebuildShelf('g:leaving')).toBe(false);
+    const after = await store.getShelf('g:leaving');
+    expect(after?.stale).toBe(true);
+    expect(after?.rounds).toEqual([]);
+  });
+
   it('leaves both shelves alone on a dry run', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:leaving', 'Theirs');
