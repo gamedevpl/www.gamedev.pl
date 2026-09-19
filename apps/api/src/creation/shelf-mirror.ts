@@ -1,5 +1,5 @@
 import { buildShelfDocument, type ShelfDocument } from '../store/records/shelf.js';
-import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { reconcileTransferredOwnership, type ShelfStore } from './studio-shelf-records.js';
 
 // Structural, not Pick<Store>: the store builds the mirror.
@@ -105,11 +105,20 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
 
         // The author's shelf still lists it until it is rebuilt too.
         const owners = new Set([record.ownerUid]);
+        const editors = new Set<string>();
         if (record.slug) {
-          const owner = await currentOwnerUid(store, record.slug, record.ownerUid);
-          if (owner) owners.add(owner);
+          const access = await resolveGameAccess(store, record.slug);
+          owners.add(access.owner.kind === 'creator' ? access.owner.uid : record.ownerUid);
+          for (const uid of access.editorUids) editors.add(uid);
         }
         for (const ownerUid of owners) await rebuild(ownerUid);
+
+        // A co-editor's own count never moves; only this does.
+
+        // Tombstoned, not rebuilt: writes outpace a collaborator's reads.
+        for (const uid of editors) {
+          if (!owners.has(uid)) await discard(uid);
+        }
       } catch (error) {
         report(error, { jobId });
       }

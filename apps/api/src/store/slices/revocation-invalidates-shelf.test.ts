@@ -48,6 +48,28 @@ for (const [name, make] of implementations)
       vi.restoreAllMocks();
     });
 
+    // Another's round moves no count of the editor's own.
+    it('invalidates a co-editor when a round lands on a shared game', async () => {
+      const store = make();
+      const at = new Date().toISOString();
+      await sharedGame(store, at);
+
+      // The editor has a shelf holding the shared game.
+      await store.rebuildShelf('g:editor');
+      const before = await store.getShelf('g:editor');
+      expect(before?.stale).toBeUndefined();
+      const ownedByEditor = await store.countSubmissionsByOwner('g:editor');
+
+      // The owner adds a round the editor did not write.
+      const newer = await store.allocateJobId();
+      await store.createSubmission(newer, 'g:owner', 'Newer round');
+      await store.setSubmissionSlug(newer, 'sky-dodge');
+
+      // Their own count is unchanged, so only the document can say so.
+      expect(await store.countSubmissionsByOwner('g:editor')).toBe(ownedByEditor);
+      expect((await store.getShelf('g:editor'))?.stale).toBe(true);
+    });
+
     // The loser keeps serving the name otherwise.
     it('invalidates the loser when settlement moves the canonical owner', async () => {
       const store = make();
