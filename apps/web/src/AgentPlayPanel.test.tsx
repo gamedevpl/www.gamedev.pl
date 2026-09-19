@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
+import { POLICY_API_HELP } from './agentPolicy.js';
 
 type Posted = Record<string, unknown>;
 
@@ -134,5 +135,11 @@ describe('AgentPlayPanel', () => {
       root!.render(<AgentPlayPanel open={false} frameRef={frameRef} onClose={() => undefined} />);
     });
     expect(posted.some((message) => message.type === 'agent:disable')).toBe(true);
+  });
+
+  it('documents agent.game() as window.GameKit, not a game instance', () => {
+    expect(POLICY_API_HELP).toContain('agent.game()');
+    expect(POLICY_API_HELP).toContain('window.GameKit');
+    expect(POLICY_API_HELP).not.toContain('game instance');
   });
 });

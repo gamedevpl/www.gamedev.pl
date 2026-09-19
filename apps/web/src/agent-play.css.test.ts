@@ -31,6 +31,7 @@ describe('agent play mode layout', () => {
     const bar = ruleBody('.is-playing-full-viewport.has-agent-panel .game-theater-bar');
     expect(bar).toMatch(/right:\s*var\(--agent-inset-right\)/);
     expect(bar).toMatch(/width:\s*auto/);
+    expect(bar).toMatch(/z-index:\s*90/);
   });
 
   it('keeps the theater reveal and fullscreen exit buttons in the visible game area', () => {
@@ -52,5 +53,22 @@ describe('agent play mode layout', () => {
   it('flips the insets on phones so the canvas keeps the top and panel stays at the bottom', () => {
     expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?--agent-inset-right:\s*0px/);
     expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?--agent-inset-bottom:\s*55dvh/);
+  });
+
+  it('raises the inset theater bar above the rail so the More popup stays usable', () => {
+    const bar = ruleBody('.is-playing-full-viewport.has-agent-panel .game-theater-bar');
+    const rail = ruleBody('.agent-play');
+    const barZ = Number(/z-index:\s*(\d+)/.exec(bar)?.[1]);
+    const railZ = Number(/z-index:\s*(\d+)/.exec(rail)?.[1]);
+    expect(barZ).toBeGreaterThan(railZ);
+  });
+
+  it('sizes the phone split against the visual viewport once the stage is tracked', () => {
+    const tracked = ruleBody('.is-playing-full-viewport.has-agent-panel.is-viewport-tracked');
+    expect(tracked).toMatch(/height:\s*var\(--agent-visual-height,\s*100dvh\)/);
+    expect(tracked).toMatch(/transform:\s*translateY\(var\(--agent-visual-offset,\s*0px\)\)/);
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*760px\)[\s\S]*?\.has-agent-panel\.is-viewport-tracked\s*\{[\s\S]*?--agent-inset-bottom:\s*55%/,
+    );
   });
 });

@@ -60,6 +60,7 @@ afterEach(() => {
   container.remove();
   agentBridgeMock.source = null;
   window.history.pushState(null, '', '/');
+  window.sessionStorage.clear();
 });
 
 async function draw() {
@@ -97,5 +98,63 @@ describe('GameTheater agent mode panel', () => {
     const stage = container.querySelector('.stage') as HTMLElement;
     expect(stage.classList.contains('has-agent-panel')).toBe(false);
     expect(container.querySelector('.agent-play')).toBeNull();
+  });
+
+  it('toggles has-agent-panel from the theater menu when the bridge is available', async () => {
+    agentBridgeMock.source = 'console.log("bridge");';
+    window.history.pushState(null, '', '/play/brick-storm');
+    window.sessionStorage.clear();
+    await draw();
+    const stage = container.querySelector('.stage') as HTMLElement;
+    expect(stage.classList.contains('has-agent-panel')).toBe(false);
+    expect(container.querySelector('.agent-play')).toBeNull();
+
+    await act(async () => {
+      container.querySelector('.theater-more-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const toggle = [...container.querySelectorAll('.theater-more-panel .theater-menu-item')].find((el) =>
+      el.textContent?.includes('Agent mode'),
+    ) as HTMLButtonElement | undefined;
+    expect(toggle).toBeDefined();
+    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(stage.classList.contains('has-agent-panel')).toBe(true);
+    expect(container.querySelector('.agent-play')).not.toBeNull();
+  });
+
+  it('sizes the stage to the visual viewport while agent mode is open', async () => {
+    const listeners = new Map<string, Set<() => void>>();
+    const viewport = {
+      height: 400,
+      offsetTop: 12,
+      addEventListener: (type: string, listener: () => void) => {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type)!.add(listener);
+      },
+      removeEventListener: (type: string, listener: () => void) => listeners.get(type)?.delete(listener),
+    };
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true, writable: true });
+    try {
+      agentBridgeMock.source = 'console.log("bridge");';
+      window.history.pushState(null, '', '?agent=1');
+      await draw();
+      const stage = container.querySelector('.stage') as HTMLElement;
+      expect(stage.classList.contains('is-viewport-tracked')).toBe(true);
+      expect(stage.style.getPropertyValue('--agent-visual-height')).toBe('400px');
+      expect(stage.style.getPropertyValue('--agent-visual-offset')).toBe('12px');
+
+      await act(async () => {
+        viewport.height = 360;
+        viewport.offsetTop = 40;
+        listeners.get('resize')?.forEach((listener) => listener());
+      });
+      expect(stage.style.getPropertyValue('--agent-visual-height')).toBe('360px');
+      expect(stage.style.getPropertyValue('--agent-visual-offset')).toBe('40px');
+    } finally {
+      Reflect.deleteProperty(window, 'visualViewport');
+    }
   });
 });

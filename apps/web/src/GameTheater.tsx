@@ -22,6 +22,7 @@ import { useSensingBridge, type BackdropFacing } from './sensing.js';
 import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
+import { useAgentViewportTrack, useTheaterMidWidth, useTheaterNarrow } from './useTheaterLayout.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
 import { creatorPath, gamePath } from './core/router.js';
 import './remix-result.css';
@@ -185,6 +186,7 @@ export function GameTheater({
   const [agentWanted, setAgentWanted] = useState(() => agentModeRequested() || isAgentModeEnabled(agentModeKey));
   const agentOpen = agentAvailable && agentWanted;
   useEffect(() => setAgentModeEnabled(agentModeKey, agentOpen), [agentModeKey, agentOpen]);
+  const tracksViewport = useAgentViewportTrack(agentOpen, stageRef);
   const [playerEngaged, setPlayerEngaged] = useState(false);
   const [chromeIdle, setChromeIdle] = useState(false);
   const [chromeFocused, setChromeFocused] = useState(false);
@@ -365,30 +367,8 @@ export function GameTheater({
   // Phone bar is title · More · Exit; sound/fullscreen move into the menu. Track
   // the breakpoint in JS so we don't render an empty More control on desktop for
   // drafts that have no vote/share/report row.
-  const [isNarrow, setIsNarrow] = useState(false);
-
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return;
-    const query = matchMedia('(max-width: 768px)');
-    const update = () => setIsNarrow(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-
-  // Where the how-to-play bar copy is hidden but the rest of the chrome is still on the
-  // bar. Tracked in JS for the same reason `isNarrow` is: the menu must not be rendered
-  // empty, so whether it exists is a render decision, not something CSS can make.
-  const [isMidWidth, setIsMidWidth] = useState(false);
-
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return;
-    const query = matchMedia('(max-width: 900px)');
-    const update = () => setIsMidWidth(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
+  const isNarrow = useTheaterNarrow(agentOpen);
+  const isMidWidth = useTheaterMidWidth(agentOpen);
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -622,7 +602,7 @@ export function GameTheater({
 
   return (
     <section
-      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${agentOpen ? ' has-agent-panel' : ''}`}
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${agentOpen ? ' has-agent-panel' : ''}${tracksViewport ? ' is-viewport-tracked' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}

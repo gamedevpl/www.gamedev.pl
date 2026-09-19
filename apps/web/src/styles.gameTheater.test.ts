@@ -88,4 +88,15 @@ describe('play loading covers the site chrome', () => {
     expect(nested).toMatch(/z-index:\s*1/);
     expect(ruleBody('.game-theater-bar')).toMatch(/z-index:\s*10/);
   });
+
+  it('compacts chrome from the bar width, so an inset agent rail still sheds controls', () => {
+    const bar = ruleBody('.game-theater-bar');
+    expect(bar).toMatch(/container-type:\s*inline-size/);
+    expect(bar).toMatch(/container-name:\s*theater-bar/);
+    expect(css).toMatch(/@container\s+theater-bar\s+\(max-width:\s*768px\)/);
+    expect(css).toMatch(/@container\s+theater-bar\s+\(max-width:\s*900px\)/);
+    expect(css).toMatch(
+      /@container\s+theater-bar\s+\(max-width:\s*768px\)[\s\S]*?\.theater-desktop-chrome\s*\{[\s\S]*?display:\s*none/,
+    );
+  });
 });

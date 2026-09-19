@@ -1759,6 +1759,10 @@ body.player-open {
   /* The overflow menu hangs below the bar; clipping it would make the hamburger
      look broken — the panel opens but nothing appears. */
   overflow: visible;
+  /* Compact chrome keys off this box, not the window: agent mode insets the bar
+     by up to 460px / 46vw, so a 769px desktop is already phone-narrow. */
+  container-type: inline-size;
+  container-name: theater-bar;
   z-index: 10;
   opacity: 1;
   visibility: visible;
@@ -2312,7 +2316,11 @@ body.player-open {
    Two independent squeezes. Narrow (portrait phone): the bar can't fit three
    labelled buttons plus a description, so labels and secondary text go. Short
    (landscape phone, ~380px tall): the overlay shrinks so it obscures less of the
-   game. A landscape phone hits both. */
+   game. A landscape phone hits both.
+
+   Compact chrome is a container query on the bar so the same rules cover a
+   phone window and a desktop window whose agent rail has eaten the rest. The
+   bar cannot query its own padding box, so padding stays on the viewport. */
 @media (max-width: 768px) {
   .game-theater-bar {
     padding: 8px 12px;
@@ -2322,6 +2330,12 @@ body.player-open {
     gap: 8px;
   }
 
+  .theater-camera-indicator {
+    top: calc(max(8px, env(safe-area-inset-top)) + 57px);
+  }
+}
+
+@container theater-bar (max-width: 768px) {
   /* The badge and description are context you already had on the way in; the
      title alone identifies what's on screen. */
   .theater-badge,
@@ -2365,10 +2379,6 @@ body.player-open {
 
   .game-theater-actions {
     gap: 6px;
-  }
-
-  .theater-camera-indicator {
-    top: calc(max(8px, env(safe-area-inset-top)) + 57px);
   }
 
   /* Phone: sound + fullscreen leave the bar and appear as menu rows instead. */
@@ -2996,20 +3006,21 @@ a.user-name--profile:focus-visible {
 }
 
 /* How-to-play and Mic shed to the More menu earlier than sound and fullscreen do
-   (900px, not 768px). Measured at 800px: with them on the bar, the actions row grows
-   until the vote widget overlaps the game title, because the meta column does not
-   shrink — Mic's Polish labels make that worse. Below the breakpoint the bar copy is
-   hidden and the menu copy takes over; above it, the reverse. The second query starts
-   at 900.02px (not 901px) so fractional widths between 900 and 901 — ordinary at
-   non-integer zoom / HiDPI — do not leave both copies visible. */
-@media (max-width: 900px) {
+   (900px of *bar*, not 768px). Measured at 800px: with them on the bar, the actions
+   row grows until the vote widget overlaps the game title, because the meta column
+   does not shrink — Mic's Polish labels make that worse. Below the breakpoint the
+   bar copy is hidden and the menu copy takes over; above it, the reverse. The
+   second query starts at 900.02px (not 901px) so fractional widths between 900 and
+   901 — ordinary at non-integer zoom / HiDPI — do not leave both copies visible.
+   Container, not viewport: an open agent rail makes a 1000px window a 540px bar. */
+@container theater-bar (max-width: 900px) {
   .game-theater-actions .howto-bar,
   .game-theater-actions .mic-bar {
     display: none !important;
   }
 }
 
-@media (min-width: 900.02px) {
+@container theater-bar (min-width: 900.02px) {
   .game-theater-actions .theater-more-panel .howto-menu,
   .game-theater-actions .theater-more-panel .mic-menu {
     display: none !important;

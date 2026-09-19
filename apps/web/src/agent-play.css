@@ -18,6 +18,21 @@
     --agent-inset-right: 0px;
     --agent-inset-bottom: 55dvh;
   }
+
+  /* dvh tracks browser chrome, not the keyboard. Once the stage is sized to the
+     visual viewport, 55% is the same split against the part of the screen that
+     is actually visible — including when the command box raises the keys. */
+  .has-agent-panel.is-viewport-tracked {
+    --agent-inset-bottom: 55%;
+  }
+}
+
+/* iOS shrinks only the visual viewport for the keyboard. Size the theater to
+   that box so the canvas and the rail share what remains, matching CreatorQA. */
+.is-playing-full-viewport.has-agent-panel.is-viewport-tracked {
+  bottom: auto;
+  height: var(--agent-visual-height, 100dvh);
+  transform: translateY(var(--agent-visual-offset, 0px));
 }
 
 .is-playing-full-viewport.has-agent-panel .game-viewport-container {
@@ -30,6 +45,10 @@
 .is-playing-full-viewport.has-agent-panel .game-theater-bar {
   right: var(--agent-inset-right);
   width: auto;
+  /* The More popup hangs below the bar into the phone rail. The bar's own
+     stacking context is z-index 10; the rail is 80, so the menu's z-index 40
+     cannot win on its own. */
+  z-index: 90;
 }
 
 .is-playing-full-viewport.has-agent-panel .theater-reveal-btn {
