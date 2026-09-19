@@ -113,7 +113,9 @@ export async function readOwnerShelfRecords(
     const owned = await store.listSubmissionsByOwner(ownerUid);
     const records = await reconcileTransferredOwnership(store, ownerUid, owned);
     // The shadow judges the document against these, and backfills an absent one.
-    if (observe) await observe(records, ownedNow);
+
+    // owned.length is the raw count; sampled reads must catch drift too.
+    if (observe) await observe(records, ownedNow ?? owned.length);
     return records;
   };
 

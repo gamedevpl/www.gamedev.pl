@@ -37,6 +37,24 @@ describe('unsetValueRefs', () => {
     expect([...unsetValueRefs(src)]).toEqual([]);
   });
 
+  // Steps do not share a shell: an assignment in the previous `run:` is gone.
+  it('rejects an assignment made in an earlier workflow step', () => {
+    const src = [
+      '      - name: Prepare',
+      '        run: |',
+      '          SHELF_DOCUMENT_READS_VAL="true"',
+      '      - name: Deploy',
+      '        run: |',
+      '          ' + expansion,
+    ].join('\n');
+    expect([...unsetValueRefs(src)]).toEqual(['SHELF_DOCUMENT_READS_VAL']);
+  });
+
+  it('accepts an assignment made earlier in the same workflow step', () => {
+    const src = ['        run: |', '          SHELF_DOCUMENT_READS_VAL="true"', '          ' + expansion].join('\n');
+    expect([...unsetValueRefs(src)]).toEqual([]);
+  });
+
   it('rejects a name nothing assigns at all', () => {
     expect([...unsetValueRefs(expansion)]).toEqual(['SHELF_DOCUMENT_READS_VAL']);
   });

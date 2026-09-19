@@ -21,6 +21,15 @@ function executable(line) {
   return trimmed.length > 0 && !trimmed.startsWith('#');
 }
 
+// In a workflow each `run:` is its own shell; a variable set in one step
+// does not exist in the next. A plain script is one unit from top to bottom.
+function unitStart(lines, index) {
+  for (let i = index; i >= 0; i -= 1) {
+    if (/^\s*-?\s*run:\s*[|>]?\s*$/.test(lines[i])) return i + 1;
+  }
+  return 0;
+}
+
 export function unsetValueRefs(source) {
   const lines = source.split('\n');
   const missing = new Set();
@@ -29,7 +38,7 @@ export function unsetValueRefs(source) {
     for (const ref of line.matchAll(/=\$\{([A-Z][A-Z0-9_]*_VAL)\}/g)) {
       const name = ref[1];
       const assignedBefore = lines
-        .slice(0, index)
+        .slice(unitStart(lines, index), index)
         .some((earlier) => executable(earlier) && ASSIGNMENT(name).test(earlier));
       if (!assignedBefore) missing.add(name);
     }

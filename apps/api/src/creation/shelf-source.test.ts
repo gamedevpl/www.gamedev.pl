@@ -165,6 +165,21 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(repaired.seq ?? 0).toBeGreaterThan(built.seq ?? 0);
     });
 
+    // A sampled read holds the raw count; the shadow needs it.
+    it('repairs ownedCount drift on a sampled read as well', async () => {
+      const store = makeStore();
+      await seedOwner(store, 3);
+      const built = (await store.getShelf(OWNER))!;
+      await store.putShelf(OWNER, { ...built, ownedCount: (built.ownedCount ?? 0) + 1 });
+      const shadow = async (records: SubmissionRecord[], ownedNow?: number) => {
+        await recordShelfShadow({ store, log: { warn: () => {} } }, OWNER, records, ownedNow);
+      };
+
+      await readOwnerShelfRecords(store, OWNER, shadow, { fromDocument: true, verify: () => true });
+
+      expect((await store.getShelf(OWNER))!.ownedCount).toBe(3);
+    });
+
     it('serves the same rounds either way', async () => {
       const store = makeStore();
       await seedOwner(store, 3);
