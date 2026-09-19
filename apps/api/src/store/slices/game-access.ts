@@ -8,6 +8,7 @@ import {
   type GameAccessRecord,
 } from '../records/game-access.js';
 import { DELETED_ACCOUNT_UID } from '../records/identity.js';
+import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 import { TRANSFER_MARKER_RESCAN_INTERVAL_MS, backfillTransferMarkers } from '../transfer-marker-backfill.js';
 
 // Read plus conditional creates, each fenced against account erasure.
@@ -65,7 +66,11 @@ const clone = (record: GameAccessRecord): GameAccessRecord => ({
 });
 
 export class InMemoryGameAccessStore implements GameAccessStore {
-  constructor(private hasAccount: (uid: string) => boolean = () => true) {}
+  constructor(
+    private hasAccount: (uid: string) => boolean = () => true,
+    // Same write as the access change; neither lands alone.
+    private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
+  ) {}
 
   // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
   access = new Map<string, GameAccessRecord>();
@@ -75,6 +80,7 @@ export class InMemoryGameAccessStore implements GameAccessStore {
 
   async beginAccountErasure(uid: string, at: string): Promise<void> {
     this.erasedAt.set(uid, at);
+    this.invalidateShelf(uid, at);
   }
 
   async getAccountErasure(uid: string): Promise<string | null> {
@@ -123,6 +129,11 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     if (fencedOut(this.erasedAt.get(ownerUid) ?? null, workAt)) return existing ? clone(existing) : null;
     const record = settledOver(existing ?? null, slug, ownerUid, at, jobId);
     this.access.set(slug, record);
+    // Settlement moved the name; the loser keeps serving it otherwise.
+    if (existing && existing.ownerUid !== ownerUid) {
+      this.invalidateShelf(existing.ownerUid, at);
+      this.invalidateShelf(ownerUid, at);
+    }
     return clone(record);
   }
 
@@ -166,8 +177,15 @@ export class FirestoreGameAccessStore implements GameAccessStore {
     return snap.exists ? ((snap.data() as { at?: string }).at ?? null) : null;
   }
 
+  // With the fence: a post-commit tombstone can fail on its own.
   async beginAccountErasure(uid: string, at: string): Promise<void> {
-    await this.erasureFence(uid).set({ uid, at });
+    const shelfRef = this.db.collection('shelves').doc(uid);
+    await this.db.runTransaction(async (tx) => {
+      const shelfSnap = await tx.get(shelfRef);
+      const shelf = shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null;
+      tx.set(this.erasureFence(uid), { uid, at });
+      tx.set(shelfRef, tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
+    });
   }
 
   async getAccountErasure(uid: string): Promise<string | null> {
@@ -255,9 +273,23 @@ export class FirestoreGameAccessStore implements GameAccessStore {
       if (existing && (!isPristine(existing) || !settlementWins(existing, jobId))) return existing;
       if (existing?.ownerUid === ownerUid && existing.settledJobId === jobId) return existing;
       if (fencedOut(await this.fenceAt(tx, ownerUid), workAt)) return existing;
+
+      // Settlement moved the name; read before writing below.
+      const moved = Boolean(existing && existing.ownerUid !== ownerUid);
+      const shelves = moved
+        ? await Promise.all(
+            [existing!.ownerUid, ownerUid].map(async (uid) => {
+              const shelfRef = this.db.collection('shelves').doc(uid);
+              const shelfSnap = await tx.get(shelfRef);
+              return { shelfRef, shelf: shelfSnap.exists ? (shelfSnap.data() as ShelfDocument) : null };
+            }),
+          )
+        : [];
+
       const record = settledOver(existing, slug, ownerUid, at, jobId);
       if (existing) tx.set(ref, record);
       else tx.create(ref, record);
+      for (const { shelfRef, shelf } of shelves) tx.set(shelfRef, tombstoneShelf(at, (shelf?.seq ?? 0) + 1));
       return record;
     });
   }

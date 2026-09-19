@@ -36,6 +36,21 @@ describe('eraseAccount and the shelf', () => {
     expect(await verdict(store, DELETED_ACCOUNT_UID)).toBe('match');
   });
 
+  // Post-commit: identity gone, old shelf still servable.
+  it('invalidates with the erasure fence, not after it', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:leaving', 'Theirs');
+    await store.setSubmissionSlug(1, 'sky');
+    const before = await store.getShelf('g:leaving');
+
+    // The fence alone, which is erasure's first durable write.
+    await store.beginAccountErasure('g:leaving', new Date().toISOString());
+
+    const after = await store.getShelf('g:leaving');
+    expect(after?.stale).toBe(true);
+    expect(after?.seq ?? 0).toBeGreaterThan(before?.seq ?? 0);
+  });
+
   it('leaves both shelves alone on a dry run', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:leaving', 'Theirs');

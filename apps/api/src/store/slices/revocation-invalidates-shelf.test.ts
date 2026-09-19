@@ -48,6 +48,30 @@ for (const [name, make] of implementations)
       vi.restoreAllMocks();
     });
 
+    // The loser keeps serving the name otherwise.
+    it('invalidates the loser when settlement moves the canonical owner', async () => {
+      const store = make();
+      const at = new Date().toISOString();
+      await store.upsertUser({ uid: 'g:first' });
+      await store.upsertUser({ uid: 'g:second' });
+
+      // 'g:first' holds the name tentatively, with a shelf.
+      const early = await store.allocateJobId();
+      await store.createSubmission(early, 'g:first', 'Sky Dodge');
+      await store.setSubmissionSlug(early, 'sky-dodge');
+      await store.ensureGameAccess('sky-dodge', 'g:first', at, at);
+      await store.rebuildShelf('g:first');
+      const before = await store.getShelf('g:first');
+      expect(before?.stale).toBeUndefined();
+
+      // An older round settles the name onto 'g:second' instead.
+      const settled = await store.recordSettledOwner('sky-dodge', 'g:second', 1, at, at);
+      expect(settled?.ownerUid).toBe('g:second');
+
+      // Without this the loser's shelf still serves the slug's rounds.
+      expect((await store.getShelf('g:first'))?.stale).toBe(true);
+    });
+
     // Gaining a game moves no ownerUid either, so the count still agrees.
     it('invalidates the recipient shelf when an editor invite is accepted', async () => {
       const store = make();
