@@ -65,21 +65,21 @@ export function useGameTheater({
   // `/play/<slug>` auto-opens theater once the catalog confirms the game.
   useEffect(() => {
     if (stageContent?.type === 'catalog') {
-      if (route.view !== 'play' && route.view !== 'game') {
+      if (route.view !== 'play' && route.view !== 'game' && route.view !== 'creator') {
         setStageContent(null);
         return;
       }
-      if (stageContent.game.slug !== route.slug) {
-        if (route.view === 'play') {
-          const nextEntry = catalogEntries.find((game) => game.slug === route.slug);
-          if (catalogStatus === 'ready' && !nextEntry) {
-            setStageContent(null);
-          } else if (nextEntry) {
-            setStageContent({ type: 'catalog', game: nextEntry });
-          }
-        } else {
+      if (route.view === 'play' && stageContent.game.slug !== route.slug) {
+        const nextEntry = catalogEntries.find((game) => game.slug === route.slug);
+        if (catalogStatus === 'ready' && !nextEntry) {
           setStageContent(null);
+        } else if (nextEntry) {
+          setStageContent({ type: 'catalog', game: nextEntry });
         }
+        return;
+      }
+      if (route.view === 'game' && stageContent.game.slug !== route.slug) {
+        setStageContent(null);
         return;
       }
       const entry = catalogEntries.find((game) => game.slug === stageContent.game.slug);
@@ -116,7 +116,7 @@ export function useGameTheater({
   function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     const fullEntry = catalogEntries.find((e) => e.slug === game.slug) ?? game;
     setStageContent({ type: 'catalog', game: fullEntry, ...(via === undefined ? {} : { via }) });
-    if (route.view !== 'game') {
+    if (route.view !== 'game' && route.view !== 'creator') {
       navigate(playPath(game.slug));
     }
     // Soft refresh so "continue" / genre picks update after the next home visit.
@@ -126,13 +126,13 @@ export function useGameTheater({
   // The remix sheet opens on the first frame, no theater detour.
   function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
     setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
-    if (route.view !== 'game') {
+    if (route.view !== 'game' && route.view !== 'creator') {
       navigate(playPath(game.slug));
     }
   }
 
   function handleExitCatalogTheater() {
-    if (stageContent?.type === 'catalog') {
+    if (route.view === 'play' && stageContent?.type === 'catalog') {
       const game = stageContent.game;
       const canonical = gamePath(gamePageHandle(game), game.slug);
       if (exitOverlay) {
@@ -147,7 +147,7 @@ export function useGameTheater({
   }
 
   function handleExitPartyTheater() {
-    if (stageContent?.type === 'party') {
+    if (route.view === 'play' && stageContent?.type === 'party') {
       const game = stageContent.game;
       const canonical = gamePath(gamePageHandle(game), game.slug);
       if (exitOverlay) {
