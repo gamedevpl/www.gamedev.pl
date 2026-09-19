@@ -24,8 +24,9 @@ function freezeClock(): (seconds: number) => void {
 async function agrees(store: Store, ownerUid: string): Promise<string> {
   const owned = await store.listSubmissionsByOwner(ownerUid);
   const records = await reconcileTransferredOwnership(store, ownerUid, owned);
-  const [shelf, count] = await Promise.all([store.getShelf(ownerUid), store.countSubmissionsByOwner(ownerUid)]);
-  return judgeShelfShadow(shelf, records, count).verdict;
+  const shelf = await store.getShelf(ownerUid);
+  // The count the production shadow uses: these records, not a second query.
+  return judgeShelfShadow(shelf, records, records.length).verdict;
 }
 
 async function acceptTransfer(store: Store, slug: string, senderUid: string, recipientUid: string): Promise<void> {

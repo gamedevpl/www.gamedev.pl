@@ -1,7 +1,6 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
-import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import { eraseTransferRows } from './erase-transfer-rows.js';
 import type { ShelfDocument } from './records/shelf.js';
@@ -439,8 +438,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   }
 
   async countSubmissionsByOwner(ownerUid: string): Promise<number> {
-    // Must match the rebuilt shelf, not the ownerUid query.
-    return (await reconcileTransferredOwnership(this, ownerUid, await this.listSubmissionsByOwner(ownerUid))).length;
+    // The ownerUid query's own size, which is what the document records.
+    return this.shelfStore.countSubmissionsByOwner(ownerUid);
   }
 
   async listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]> {

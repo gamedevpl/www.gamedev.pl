@@ -4,18 +4,24 @@ import { fromShelfRound, SHELF_VERSION, type ShelfDocument } from '../store/reco
 import { noteReadTally } from '../store/read-meter.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
-// Source grows with a creator's history; the poll does not.
-export const SHELF_VERIFY_EVERY = 20;
+// A count() checks each read, so full source stays rare.
+export const SHELF_VERIFY_EVERY = 100;
 
 // 'source' means the document could not answer; 'verified' is a sampled read.
 export type ShelfOrigin = 'document' | 'source' | 'verified';
 
-// Self-consistency only. Staleness needs source, which is what sampling buys.
+// Free checks only. A round added or removed needs the count below.
 export function documentAnswersAlone(shelf: ShelfDocument | null): shelf is ShelfDocument {
   if (!shelf) return false;
   if (shelf.version !== SHELF_VERSION) return false;
   if (shelf.truncated) return false;
+  if (shelf.ownedCount === undefined) return false;
   return shelf.rounds.length === shelf.sourceCount;
+}
+
+// One aggregation against the size the document was built from.
+export function ownerCountAgrees(shelf: ShelfDocument, ownedNow: number): boolean {
+  return shelf.ownedCount === ownedNow;
 }
 
 export function recordsFromShelf(shelf: ShelfDocument): SubmissionRecord[] {

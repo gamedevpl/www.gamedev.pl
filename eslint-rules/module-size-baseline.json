@@ -264,7 +264,7 @@
     "apps/api/src/creation/session-crash.test.ts": 76,
     "apps/api/src/creation/session-crash.ts": 41,
     "apps/api/src/creation/studio-shelf-records.test.ts": 324,
-    "apps/api/src/creation/studio-shelf-records.ts": 160,
+    "apps/api/src/creation/studio-shelf-records.ts": 170,
     "apps/api/src/creation/symbol-map.test.ts": 77,
     "apps/api/src/creation/symbol-map.ts": 257,
     "apps/api/src/creation/tab-complete.test.ts": 96,

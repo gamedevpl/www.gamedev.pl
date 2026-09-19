@@ -28,6 +28,9 @@ export interface ShelfDocument {
   builtAt: string;
   // Rounds at build time; the reader checks with count().
   sourceCount: number;
+
+  // The ownerUid query size, so one count() checks this.
+  ownedCount?: number;
   rounds: ShelfRound[];
   // Past the cap, so the reader must not trust `rounds` as complete.
   truncated?: true;
@@ -61,7 +64,11 @@ export function fromShelfRound(round: ShelfRound): SubmissionRecord {
   return { ...round } as SubmissionRecord;
 }
 
-export function buildShelfDocument(records: readonly SubmissionRecord[], builtAt: string): ShelfDocument {
+export function buildShelfDocument(
+  records: readonly SubmissionRecord[],
+  builtAt: string,
+  ownedCount?: number,
+): ShelfDocument {
   const ordered = [...records].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
   const kept = ordered.slice(0, MAX_SHELF_ROUNDS);
   return {
@@ -69,6 +76,7 @@ export function buildShelfDocument(records: readonly SubmissionRecord[], builtAt
     builtAt,
     // Counts the source, not what was kept.
     sourceCount: records.length,
+    ...(ownedCount === undefined ? {} : { ownedCount }),
     rounds: kept.map(toShelfRound),
     ...(ordered.length > kept.length ? { truncated: true as const } : {}),
   };

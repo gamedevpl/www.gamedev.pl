@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from '../store/fake-firestore.js';
 import { buildShelfDocument, SHELF_VERSION } from '../store/records/shelf.js';
-import { createShelfVerifySampler, documentAnswersAlone } from './shelf-source.js';
+import { createShelfVerifySampler, documentAnswersAlone, ownerCountAgrees } from './shelf-source.js';
 import { readOwnerShelfRecords } from './studio-shelf-records.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 const AT = '2026-01-01T00:00:00.000Z';
+const OWNED = 1;
 const OWNER = 'g:owner';
 
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
@@ -23,7 +24,7 @@ async function seedOwner(store: Store, rounds: number): Promise<void> {
 
 describe('documentAnswersAlone', () => {
   const source = [{ jobId: 1, ownerUid: OWNER, createdAt: AT, title: 'One' } as SubmissionRecord];
-  const shelf = buildShelfDocument(source, AT);
+  const shelf = buildShelfDocument(source, AT, OWNED);
 
   it('refuses anything it cannot check without reading source', () => {
     expect(documentAnswersAlone(shelf)).toBe(true);
@@ -32,6 +33,13 @@ describe('documentAnswersAlone', () => {
     expect(documentAnswersAlone({ ...shelf, truncated: true })).toBe(false);
     // Rounds and sourceCount disagreeing means the document dropped one.
     expect(documentAnswersAlone({ ...shelf, sourceCount: 9 })).toBe(false);
+    // Built before the count was recorded: nothing cheap can check it.
+    expect(documentAnswersAlone({ ...shelf, ownedCount: undefined })).toBe(false);
+  });
+
+  it('checks the owner count the document was built from', () => {
+    expect(ownerCountAgrees(shelf, 1)).toBe(true);
+    expect(ownerCountAgrees(shelf, 2)).toBe(false);
   });
 });
 
@@ -119,6 +127,24 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       const stale = (await store.getShelf(OWNER))!;
       // Same rounds, a sourceCount that says one is missing.
       await store.putShelf(OWNER, { ...stale, sourceCount: stale.sourceCount + 1 });
+      const listed = vi.spyOn(store, 'listSubmissionsByOwner');
+
+      const records = await readOwnerShelfRecords(store, OWNER, undefined, {
+        fromDocument: true,
+        verify: () => false,
+      });
+
+      expect(listed).toHaveBeenCalled();
+      expect(records).toHaveLength(3);
+    });
+
+    it('catches a round added since the build, without sampling', async () => {
+      const store = makeStore();
+      await seedOwner(store, 2);
+      const built = (await store.getShelf(OWNER))!;
+      // A round the document does not know about yet.
+      await store.createSubmission(99, OWNER, 'Newer');
+      await store.putShelf(OWNER, built);
       const listed = vi.spyOn(store, 'listSubmissionsByOwner');
 
       const records = await readOwnerShelfRecords(store, OWNER, undefined, {

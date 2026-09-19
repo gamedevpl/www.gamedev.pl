@@ -39,7 +39,7 @@ export function createShelfMirror(options: ShelfMirrorOptions): ShelfMirror {
 
     // Mirror reconciles ownership identically to the shelf route.
     const records = await reconcileTransferredOwnership(store, ownerUid, owned);
-    const shelf = buildShelfDocument(records, new Date(now()).toISOString());
+    const shelf = buildShelfDocument(records, new Date(now()).toISOString(), owned.length);
     await store.putShelf(ownerUid, shelf);
     return shelf;
   }

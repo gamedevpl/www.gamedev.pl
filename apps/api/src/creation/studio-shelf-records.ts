@@ -2,11 +2,16 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GameAccessRecord } from '../store/records/game-access.js';
 import { resolveGameAccess, type GameAccessResolveStore } from '../platform/game-access-resolve.js';
 import { canActOnSubmissionOrSlug, isGameMember } from '../platform/game-access-permissions.js';
-import { documentAnswersAlone, noteShelfOrigin, recordsFromShelf } from './shelf-source.js';
+import { documentAnswersAlone, noteShelfOrigin, ownerCountAgrees, recordsFromShelf } from './shelf-source.js';
 
 export type ShelfStore = Pick<
   Store,
-  'listSubmissionsByOwner' | 'getSubmissionBySlug' | 'getSubmission' | 'countSubmissionsBySlug' | 'getShelf'
+  | 'listSubmissionsByOwner'
+  | 'getSubmissionBySlug'
+  | 'getSubmission'
+  | 'countSubmissionsBySlug'
+  | 'getShelf'
+  | 'countSubmissionsByOwner'
 > &
   GameAccessResolveStore &
   Pick<Store, 'listGameAccessByMember'>;
@@ -124,6 +129,11 @@ export async function readOwnerShelfRecords(
   // Sampled reads answer from source: caught and repaired at once.
   if (read.verify?.()) {
     noteShelfOrigin('verified');
+    return fromSource();
+  }
+  // One aggregation catches a round added or removed since the build.
+  if (!ownerCountAgrees(shelf, await store.countSubmissionsByOwner(ownerUid))) {
+    noteShelfOrigin('source');
     return fromSource();
   }
   noteShelfOrigin('document');
