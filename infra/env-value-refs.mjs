@@ -4,10 +4,13 @@
 // variable together with its default. Threading one the file never assigns reaches Cloud
 // Run empty while the name check still passes -- that is how a kill switch ships dead.
 //
-// Two things a plain "does an assignment exist" regex gets wrong, both proven against the
-// real file: an assignment placed after the ENV_VARS line still matches but never ran, and
-// a commented-out assignment matches too. Only an executable line that precedes the
-// expansion counts.
+// The contract, exactly: an assignment counts when it is a top-level command of the
+// form NAME=, export NAME= or eval "NAME=, on an uncommented line that precedes the
+// ENV_VARS expansion. Not modelled, on purpose: shell control flow. An assignment under
+// `if false` or inside an uncalled function is accepted. This guards one convention in
+// two files we own, against the mistakes actually made in them; a shell parser would be
+// a larger surface than the thing it guards. If a deploy file grows conditional setup,
+// extend the fixtures first.
 
 // Only the shapes the deploy files use, anchored to the start of a command,
 // so `echo "NAME=..."` or `: # NAME=...` earlier in the file cannot satisfy it.

@@ -52,6 +52,9 @@ export function createShelfVerifySampler(
   };
 }
 
+// One cadence per process; two counters would double the bound.
+export const shelfVerifySampler = createShelfVerifySampler();
+
 // Surfaces in the request's `firestore reads` line, next to fsReads.
 export function noteShelfOrigin(origin: ShelfOrigin): void {
   noteReadTally('shelfOrigin', origin);

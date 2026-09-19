@@ -113,9 +113,12 @@ Trusting a document needs a reason. Four of them here, cheapest first:
    both numbers, because `sourceCount` counts reconciled records and the two legitimately
    differ for an owner with transfers. What this count **cannot** see: a round written by a
    collaborator on a shared game, an editor added or removed, a transfer, a settlement, an
-   erasure. None of those move the reader's own count. Every one of those writes therefore
-   tombstones the affected shelves **in the same transaction** as the change, so the next
-   read falls back to source. That is the guarantee; the count is not.
+   erasure. None of those move the reader's own count. Membership, invite, transfer and
+   settlement writes tombstone the affected shelves **in the same transaction** as the
+   change; a round on a shared game tombstones the co-editors right after it lands; erasure
+   tombstones the erased uid with its fence and its collaborators afterwards, best-effort.
+   The next read falls back to source. That, plus the sampled backstop, is the guarantee;
+   the count is not.
 3. **Full source, one read in a hundred, per owner.** Content that changes without changing
    the count — a renamed title, a new status — needs the collapse comparison. Those reads
    hand their records to the shadow, which judges the document and rebuilds it on any
@@ -125,16 +128,24 @@ Trusting a document needs a reason. Four of them here, cheapest first:
    document is caught within a hundred of that owner's reads or by the hourly pass. That is
    the same-count stale window, and it is bounded, not zero.
 4. **Every owner's first read in a process verifies**, and then every hundredth of theirs.
-   The sampler counts per owner, not per process, so one heavy poller cannot consume the
-   samples a quiet owner would have had.
+   The sampler counts per owner and is shared by both shelf routes, so one heavy poller
+   cannot consume a quiet owner's samples and the two routes do not double the bound. It is
+   still per **process**: with four Cloud Run instances behind round-robin, the worst case
+   before *some* instance samples an owner is about four hundred of their reads. The bounds
+   below say "a hundred of that owner's reads per instance" for that reason.
 
 `SHELF_DOCUMENT_READS=false` turns it off, threaded through both deploy paths and
 `infra/env-manifest.json` so it cannot evaporate under the next deploy.
 
-What this costs when it is wrong: a round appearing or disappearing is caught immediately; a
-same-count content change can be up to a hundred reads stale. Write-through keeps the
-document current on every shelf-relevant writer, the hourly rebuild pass is the backstop, and
-the shadow ran clean before this was turned on.
+What this costs when it is wrong: a round of the owner's own appearing or disappearing is
+caught on the next read; a same-count change — content, a collaborator's round, membership,
+transfer, settlement — is caught by the in-transaction tombstone on that write, and if that
+write is ever missing, within a hundred of that owner's reads per instance or the hourly
+pass. One exception is deliberate: account erasure tombstones the erased uid atomically with
+its fence, but its collaborators' shelves are invalidated afterwards, best-effort, and a
+failure there is swallowed because an erasure must never fail on a cache — so a collaborator
+can keep an abandoned round as their tip for that same window. No shadow week preceded the
+switch to document reads; see "mirrored, and served" below.
 
 Measured on the gate fixture, whose owner has eight rounds:
 
@@ -501,9 +512,10 @@ check specific rather than plausible.
 write now costs one owner-query plus one document write, so a heavy account's round pays its
 whole round count per write. That is cheaper than the poll it replaces only if writes are
 genuinely rarer than reads for that account, and during an active build they may not be.
-The shadow week is what settles it: sum `route=/api/submissions/mine` against the write path
-in the meter before flipping anything. If write amplification exceeds the read it saves, the
-right answer is to keep source as the reader and delete the document.
+Readers were flipped before that measurement was taken, so it has to be made live: sum
+`route=/api/submissions/mine` against the write path in the meter over a real week. If write
+amplification exceeds the read it saves, the right answer is `SHELF_DOCUMENT_READS=false`,
+which is one repo variable and no deploy, and then to delete the document.
 
 **A fourth gap, found live, not in review: an idle account cannot be reached by either
 mechanism.** Write-through needs a write to fire; the hourly pass needs an existing document

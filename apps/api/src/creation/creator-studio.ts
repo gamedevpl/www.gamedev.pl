@@ -7,7 +7,7 @@ import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
-import { createShelfVerifySampler } from './shelf-source.js';
+import { shelfVerifySampler } from './shelf-source.js';
 import { shelfReadsFromDocument } from '../platform/shelf-reads-env.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { viewerRoleOnGame } from '../platform/game-access-permissions.js';
@@ -133,7 +133,6 @@ export async function registerCreatorStudioRoutes(
   const { store } = options;
   const now = options.now ?? Date.now;
   // Per process: a restart re-verifies, same rule the sweep cadence follows.
-  const verifyShelfRead = createShelfVerifySampler();
 
   function requireUser(
     request: { user?: { uid: string; tier?: string } | null },
@@ -175,7 +174,7 @@ export async function registerCreatorStudioRoutes(
       parsed.data.game,
       mint,
       (owned) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned).then(() => undefined),
-      { fromDocument: shelfReadsFromDocument(), verify: verifyShelfRead },
+      { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySampler },
     );
     const collapsed = collapseJobsToOwnerGames(records, 'shelf');
     const total = collapsed.length;
