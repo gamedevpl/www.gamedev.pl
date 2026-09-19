@@ -108,10 +108,10 @@ import { FirestoreTelemetryStore } from './slices/telemetry.js';
 import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
-import { FieldValue, Firestore } from '@google-cloud/firestore';
+import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } from './shelf-guard-firestore.js';
 
 export class FirestoreStore extends SubmissionFacade implements Store {
-  private db: Firestore;
+  private db: GuardedFirestore;
   private telemetryStore: FirestoreTelemetryStore;
   private oauthStore: FirestoreOAuthStore;
   private playerDataStore: FirestorePlayerDataStore;
@@ -150,7 +150,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   constructor(db?: Firestore) {
     super();
-    this.db = db ?? new Firestore();
+    this.db = createGuardedFirestore(db ?? new Firestore());
     this.telemetryStore = new FirestoreTelemetryStore(this.db);
     this.oauthStore = new FirestoreOAuthStore(this.db);
     this.playerDataStore = new FirestorePlayerDataStore(this.db);

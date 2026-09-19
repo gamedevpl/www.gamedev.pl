@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { lastRoundActivityAt } from '../../platform/quiet-round.js';
 import {
   nextRoundGeneration,
@@ -215,7 +215,7 @@ export class InMemoryDispatchStore implements DispatchStore {
 }
 
 export class FirestoreDispatchStore implements DispatchStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private ref(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));

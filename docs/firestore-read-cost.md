@@ -407,10 +407,11 @@ precomputed tips — the collapse differs by mode (shelf mode drops canceled rou
 grouping, published mode does not, so one precomputed tip cannot serve both), and a document
 that reimplemented the rules would drift from `owner-games.ts` the first time either changed.
 
-**Three consistency layers, because no single one is enough.** There is no write chokepoint
-to hook — `createSubmission`, `recordJobTransition`, the two status setters, `publishedAt`,
+**Three consistency layers, because no single one is enough.** Submissions carry no
+`updatedAt`, and until the guard below there was no write chokepoint to hook either:
+`createSubmission`, `recordJobTransition`, the two status setters, `publishedAt`,
 `abandonedAt`, the slug/title/version setters and the erase path's `ownerUid` reassignment all
-write directly — and submissions carry no `updatedAt`:
+write directly:
 
 1. **Write-through, rebuilt from source.** Every shelf-relevant writer rebuilds the whole
    document from `listSubmissionsByOwner`. A rebuild rather than a patch of one entry, so it
@@ -441,6 +442,44 @@ write directly — and submissions carry no `updatedAt`:
    that one happened — a rollback puts code in front of traffic that writes rounds without
    knowing the document exists, so a once-ever marker would retire the only thing that
    notices it. Same lesson as `open-round-backfill.ts`.
+
+### The guard: why "a writer nobody hooked" is no longer a category
+
+Layer 1 says "every shelf-relevant writer rebuilds". Nine review findings on #1416 were nine
+places where that sentence was false, and each was invisible: the stale document stayed
+self-consistent, the reader's `count()` still agreed, and nothing surfaced until a sampled
+read or the hourly pass. Enumerating the write sites afterwards turned up two more —
+`claimSeal`, which moves a round's `state`, and `ensureGameAccess`/`backfillGameAccess`, which
+drop a slug from every rival claimant's shelf by creating canonical access for somebody else.
+A list of writers that has to be kept correct by hand is not a consistency layer.
+
+So invalidation is structural now, at the two seams that exist:
+
+- **In memory**, every slice shares one `Map<number, SubmissionRecord>` by reference.
+  `GuardedSubmissions` is that map; its `set`/`delete` diff the mirrored fields and tombstone
+  the affected owners. `GuardedGameAccess` does the same for the access map, where every write
+  is shelf-visible because membership is exactly what the reader's count cannot see. A slice
+  added later inherits this without knowing the shelf exists.
+- **In Firestore**, `FirestoreStore` hands every slice a `GuardedFirestore` — a branded
+  `Firestore` whose `runTransaction` supplies a transaction that remembers which
+  `submissions` and `gameAccess` documents it read, and tombstones the shelves its writes can
+  be seen on before the transaction commits. A slice that declares a bare `Firestore` does not
+  type-check, which is the actual guarantee; the `gamedev/shelf-invalidation` lint rule covers
+  only what a type cannot, a write made outside any transaction.
+
+Two properties make this affordable. Resolving owners costs **no extra read**, because they
+come from documents the transaction had already read for its own sake. And the tombstone is a
+**blind write**: `seq: FieldValue.increment(1)` needs no read of the current sequence, so it
+can be issued after the transaction's writes have begun. Tombstoning rather than rebuilding is
+deliberate — a rebuild costs a full source read per write, a tombstone costs one small write
+and collapses repeated writes between two reads. Never a delete: a delete resets `seq` to 0,
+which an in-flight rebuild may also hold, so its stale write then wins the compare-and-set.
+That bug was introduced three separate times during #1416 review.
+
+What the guard does not do: expand a shared game's co-editors on an ordinary round write. That
+stays `shelfMirror.afterJobWrite`'s job, because doing it at the seam would mean a `gameAccess`
+read on every round write. A `gameAccess` write does expand — including a post-commit query for
+rival claimants of the slug, which is rare enough to pay for.
 
 Staleness, stated: immediate on every instance for a hooked writer, **at most one hour** for a
 writer nobody hooked or a rollback revision.

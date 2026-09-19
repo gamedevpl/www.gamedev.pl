@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { tombstoneShelf, type ShelfDocument } from '../records/shelf.js';
 
 export interface ShelfDocumentStore {
@@ -17,7 +17,6 @@ export interface ShelfDocumentStore {
 
   // Owners whose shelf is older than the cutoff, oldest first.
   listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]>;
-
 }
 
 // The Store adds the rebuild; the document store cannot.
@@ -69,7 +68,7 @@ export class InMemoryShelfStore implements ShelfDocumentStore {
 }
 
 export class FirestoreShelfStore implements ShelfDocumentStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private ref(ownerUid: string) {
     return this.db.collection('shelves').doc(ownerUid);

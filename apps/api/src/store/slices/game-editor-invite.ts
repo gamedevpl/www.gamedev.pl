@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import {
   fencedOut,
   MAX_GAME_MEMBERS,
@@ -238,7 +238,7 @@ export class InMemoryGameEditorInviteStore implements GameEditorInviteStore {
 }
 
 export class FirestoreGameEditorInviteStore implements GameEditorInviteStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private doc(slug: string, recipientUid: string) {
     return this.db.collection('gameEditorInvites').doc(editorInviteDocId(slug, recipientUid));

@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from './shelf-guard-firestore.js';
 import { isRoundOpen } from '../platform/sweep-scope.js';
 import { fromStoredSubmission } from './records/submission.js';
 
@@ -14,7 +14,7 @@ export const OPEN_ROUND_RESCAN_INTERVAL_MS = 10 * 60_000;
 const RESCAN_OVERLAP_MS = 5 * 60_000;
 
 // Never once-ever: a rollback serves code writing no flag.
-export async function backfillOpenRound(db: Firestore, now: () => number = Date.now): Promise<number> {
+export async function backfillOpenRound(db: GuardedFirestore, now: () => number = Date.now): Promise<number> {
   const marker = db.collection('counters').doc(MARKER_DOC);
   const stored = (await marker.get()).data() as { at?: string } | undefined;
   const lastPass = stored?.at ? Date.parse(stored.at) : Number.NaN;

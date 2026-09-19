@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import {
   fencedOut,
   newGameAccess,
@@ -70,10 +70,9 @@ export class InMemoryGameAccessStore implements GameAccessStore {
     private hasAccount: (uid: string) => boolean = () => true,
     // Same write as the access change; neither lands alone.
     private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
+    // Injected so the store can hand in a shelf-guarded map.
+    public access: Map<string, GameAccessRecord> = new Map(),
   ) {}
-
-  // Not private -- deleteAccountIdentity reaches across these, as it does for agent keys.
-  access = new Map<string, GameAccessRecord>();
 
   // Not private -- InMemoryGameTransferStore fences new invitations against this.
   erasedAt = new Map<string, string>();
@@ -162,7 +161,7 @@ export class InMemoryGameAccessStore implements GameAccessStore {
 }
 
 export class FirestoreGameAccessStore implements GameAccessStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private doc(slug: string) {
     return this.db.collection('gameAccess').doc(slug);

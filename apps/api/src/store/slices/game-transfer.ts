@@ -1,4 +1,5 @@
-import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { FieldValue } from '@google-cloud/firestore';
+import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { transferredAccess, type GameAccessRecord } from '../records/game-access.js';
 import {
   effectiveStatus,
@@ -231,7 +232,7 @@ export class InMemoryGameTransferStore implements GameTransferStore {
 }
 
 export class FirestoreGameTransferStore implements GameTransferStore {
-  constructor(private db: Firestore) {}
+  constructor(private db: GuardedFirestore) {}
 
   private doc(slug: string) {
     return this.db.collection('gameTransfers').doc(slug);
