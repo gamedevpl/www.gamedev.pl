@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
-import i18n from './i18n/index.js';
+import i18n, { i18nReady } from './i18n/index.js';
 
 async function flushEffects() {
   await Promise.resolve();
@@ -42,6 +42,7 @@ const heading = () => find('.qa-title')?.textContent ?? '';
 
 async function render(props: Record<string, unknown>): Promise<Root> {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18nReady;
   await i18n.changeLanguage('en');
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -276,8 +277,6 @@ describe('CreatorQA', () => {
   });
 
   it('labels the exit for what it does — dismiss, not submit', async () => {
-    // It used to read "Skip Clarifications", which promises the thing the primary
-    // button does. Whatever the wording becomes, it must not imply a submission.
     let submitted = false;
     let cancelled = false;
     const root = await render({
@@ -291,11 +290,130 @@ describe('CreatorQA', () => {
     });
 
     const exit = find<HTMLButtonElement>('.qa-wizard-exit');
-    expect(exit?.textContent).toContain('Back to editing');
+    expect(exit?.getAttribute('aria-label')).toBe('Close');
 
+    // Without progress, clicking exit immediately cancels
     await click(exit);
     expect(cancelled).toBe(true);
     expect(submitted).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('prompts to confirm before discarding unsaved progress on exit', async () => {
+    let cancelled = false;
+    const root = await render({
+      ...baseProps,
+      initialAnswers: { selected: { mechanics: ['Card drafting'] }, custom: {} },
+      onCancel: () => {
+        cancelled = true;
+      },
+    });
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit');
+    await click(exit);
+
+    // Confirmation dialog appears because user has progress
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    expect(find('.qa-confirm-title')?.textContent).toBe('Discard game creation?');
+    expect(cancelled).toBe(false);
+
+    // Clicking "Keep creating" dismisses the confirmation
+    await click(find('.qa-confirm-keep'));
+    expect(find('.qa-confirm-dialog')).toBeNull();
+    expect(cancelled).toBe(false);
+
+    // Clicking exit again and confirming discards and cancels
+    await click(exit);
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    await click(find('.qa-confirm-discard'));
+    expect(cancelled).toBe(true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('prompts to confirm if user advanced steps and navigated back to name stage', async () => {
+    let cancelled = false;
+    const root = await render({
+      ...baseProps,
+      onCancel: () => {
+        cancelled = true;
+      },
+    });
+
+    await next(); // question stage (step 1)
+    const backBtn = find<HTMLButtonElement>('.qa-back');
+    await click(backBtn); // back to name stage (step 0)
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit');
+    await click(exit);
+
+    // Confirmation dialog appears because user had advanced
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    expect(cancelled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('prompts to confirm when title is edited even if parent re-renders with new initialTitle', async () => {
+    let cancelled = false;
+    let currentTitle = 'Original Title';
+    const onTitleChange = vi.fn((newTitle: string) => {
+      currentTitle = newTitle;
+    });
+
+    const root = await render({
+      ...baseProps,
+      initialTitle: currentTitle,
+      onTitleChange,
+      onCancel: () => {
+        cancelled = true;
+      },
+    });
+
+    const input = find<HTMLInputElement>('.qa-name-input')!;
+    await type(input, 'Renamed Game');
+
+    // Simulate parent re-render passing updated initialTitle
+    await act(async () => {
+      root.render(
+        createElement(CreatorQA, {
+          ...baseProps,
+          initialTitle: 'Renamed Game',
+          onTitleChange,
+          onCancel: () => {
+            cancelled = true;
+          },
+        } as never),
+      );
+      await flushEffects();
+    });
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit');
+    await click(exit);
+
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+    expect(cancelled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('restores focus to exit button after dismissing confirmation modal', async () => {
+    const root = await render({
+      ...baseProps,
+      initialAnswers: { selected: { mechanics: ['Card drafting'] }, custom: {} },
+      onCancel: vi.fn(),
+    });
+
+    const exit = find<HTMLButtonElement>('.qa-wizard-exit')!;
+    exit.focus();
+    await click(exit);
+
+    expect(find('.qa-confirm-dialog')).not.toBeNull();
+
+    await click(find('.qa-confirm-keep'));
+    expect(find('.qa-confirm-dialog')).toBeNull();
+    expect(document.activeElement).toBe(exit);
 
     await act(async () => root.unmount());
   });
@@ -491,13 +609,10 @@ describe('CreatorQA', () => {
     await act(async () => root.unmount());
   });
 
-  it('names the exit even when its label is hidden on a narrow screen', async () => {
-    // Below 560px the CSS hides the span, and the icon is decorative — without an
-    // explicit label that leaves a phone user with an unnamed button as the only
-    // way back to editing.
+  it('names the icon exit button with an accessible label', async () => {
     const root = await render({ ...baseProps, onSubmitWithConcept: vi.fn(), onCancel: vi.fn() });
 
-    expect(find('.qa-wizard-exit')?.getAttribute('aria-label')).toBe('Back to editing');
+    expect(find('.qa-wizard-exit')?.getAttribute('aria-label')).toBe('Close');
 
     await act(async () => root.unmount());
   });

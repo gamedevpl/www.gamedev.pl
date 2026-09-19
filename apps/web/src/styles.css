@@ -4107,7 +4107,6 @@ a.user-name--profile:focus-visible {
 .qa-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   background: none;
   border: 1px solid var(--panel-border, #33383d);
   border-radius: 8px;
@@ -4129,9 +4128,132 @@ a.user-name--profile:focus-visible {
   cursor: not-allowed;
 }
 
+.qa-back {
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
 .qa-wizard-exit {
-  padding: 7px 12px;
-  font-size: 0.8rem;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.qa-wizard-exit:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Discard confirmation dialog when the creator exits with unsaved progress. */
+.qa-confirm-backdrop {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 20px;
+  animation: qaFadeIn 0.15s ease-out;
+}
+
+.qa-confirm-dialog {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel, #161b22);
+  border: 1px solid var(--panel-border, #30363d);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
+  animation: qaScaleIn 0.15s ease-out;
+}
+
+.qa-confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text, #e2e8f0);
+}
+
+.qa-confirm-desc {
+  margin: 0 0 24px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted, #94a3b8);
+}
+
+.qa-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.qa-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.qa-confirm-keep {
+  background: none;
+  border: 1px solid var(--panel-border, #33383d);
+  color: var(--text, #e2e8f0);
+}
+
+.qa-confirm-keep:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--muted, #94a3b8);
+  color: var(--text, #ffffff);
+}
+
+.qa-confirm-discard {
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  color: #f85149;
+}
+
+.qa-confirm-discard:hover {
+  background: rgba(248, 81, 73, 0.25);
+  border-color: #f85149;
+  color: #ff7b72;
+}
+
+@keyframes qaFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes qaScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* One cell per stage, filled as it is passed: how far in, and how much is left, in
@@ -4191,7 +4313,9 @@ a.user-name--profile:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qa-stage {
+  .qa-stage,
+  .qa-confirm-backdrop,
+  .qa-confirm-dialog {
     animation: none;
   }
 }
@@ -4836,15 +4960,6 @@ button.builder-mode-selector:disabled {
   .qa-wizard-footer .qa-primary,
   .qa-next {
     margin-left: auto;
-  }
-
-  /* The label is the escape hatch, not the action — it can shed its words first. */
-  .qa-wizard-exit span {
-    display: none;
-  }
-
-  .qa-wizard-exit {
-    padding: 7px 10px;
   }
 }
 
