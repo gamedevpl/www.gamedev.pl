@@ -4,13 +4,47 @@
  * A side rail rather than a sheet over the game. Both audiences need the canvas and the
  * text at the same time: the agent screenshots them together, and a human watching an
  * agent play wants to see the move land. On a phone the rail becomes the bottom half.
+ *
+ * When open, `.has-agent-panel` insets the game viewport and chrome so the canvas reflows
+ * beside or above the rail and nothing is obscured.
  */
+.has-agent-panel {
+  --agent-inset-right: min(460px, 46vw);
+  --agent-inset-bottom: 0px;
+}
+
+@media (max-width: 760px) {
+  .has-agent-panel {
+    --agent-inset-right: 0px;
+    --agent-inset-bottom: 55dvh;
+  }
+}
+
+.is-playing-full-viewport.has-agent-panel .game-viewport-container {
+  margin-right: var(--agent-inset-right);
+  margin-bottom: var(--agent-inset-bottom);
+  width: auto;
+}
+
+.is-playing-full-viewport.has-agent-panel .game-theater-bar {
+  right: var(--agent-inset-right);
+}
+
+.is-playing-full-viewport.has-agent-panel .theater-reveal-btn {
+  right: calc(var(--agent-inset-right) + max(12px, env(safe-area-inset-right)));
+}
+
+.is-playing-full-viewport.has-agent-panel .theater-exit-fullscreen {
+  right: calc(var(--agent-inset-right) + max(12px, env(safe-area-inset-right)));
+  bottom: calc(var(--agent-inset-bottom) + max(12px, env(safe-area-inset-bottom)));
+}
+
 .agent-play {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(460px, 46vw);
+  width: var(--agent-inset-right, min(460px, 46vw));
   z-index: 80;
   display: flex;
   flex-direction: column;
@@ -173,7 +207,7 @@
     top: auto;
     left: 0;
     width: auto;
-    height: 55dvh;
+    height: var(--agent-inset-bottom, 55dvh);
     border-left: none;
     border-top: 1px solid var(--panel-border);
   }

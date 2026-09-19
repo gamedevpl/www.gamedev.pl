@@ -622,7 +622,7 @@ export function GameTheater({
 
   return (
     <section
-      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}`}
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${agentOpen ? ' has-agent-panel' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}

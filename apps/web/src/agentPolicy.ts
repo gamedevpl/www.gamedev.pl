@@ -120,7 +120,7 @@ export const POLICY_API_HELP = [
   'agent.observation()      its description of the screen, parsed when it is JSON',
   'agent.ui()               registered widgets with 0..1 bounds',
   'agent.frame()            frames elapsed; framesUsed() / framesLeft() for the budget',
-  'agent.game()             window.GameKit; agent.canvas() the canvas element',
+  'agent.game()             window.GameKit / game instance; agent.canvas() the canvas element',
   '',
   'agent.log(...)           a line in the transcript (console.log is captured too)',
   'agent.watch(name, value) a named series over the run — a trajectory, not a snapshot',
@@ -135,6 +135,7 @@ export const POLICY_EXAMPLE = `function playAgent(agent) {
     agent.step(5);
   }
   agent.log('after intro:', agent.state());
+  if (agent.observation()) agent.log('observation:', agent.observation());
   agent.capture('round-start');
 
   // Play, and watch what moves. A trajectory is what tells you whether input lands.
@@ -142,8 +143,9 @@ export const POLICY_EXAMPLE = `function playAgent(agent) {
     const before = agent.state();
     agent.press('right', 10);
     const after = agent.state();
-    agent.watch('score', after.score);
-    agent.watch('state', after.state);
+    if (after.score !== undefined) agent.watch('score', after.score);
+    if (after.cash !== undefined) agent.watch('cash', after.cash);
+    if (after.state !== undefined) agent.watch('state', after.state);
     if (JSON.stringify(before) === JSON.stringify(after)) {
       agent.log('nothing changed at frame', agent.frame(), '— input may not reach this game');
       break;
