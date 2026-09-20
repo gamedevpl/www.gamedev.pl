@@ -7,6 +7,9 @@ export const RECHECK_NOW_MS = 0;
 export const RECHECK_TEN_MINUTES_MS = 10 * 60_000;
 export const RECHECK_HOURLY_MS = 60 * 60_000;
 
+// Health recheck cooldown; shared as the operator-alert escalation window.
+export const RED_RECHECK_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
+
 const MAX_TRACKED_JOBS = 2_000;
 
 // A record still for a day cannot change in two minutes.

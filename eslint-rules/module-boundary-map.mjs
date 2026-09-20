@@ -563,6 +563,7 @@ const FILE_BUCKET = {
   'uncollected-feedback': 'notifications',
   'notification-email-retry': 'notifications',
   'notify-sweep-routes': 'notifications',
+  'health-verdict': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,
   // ~5,400 lines) Phase 3 Wave B dismantles piece by piece, not a Wave A move target -- every
