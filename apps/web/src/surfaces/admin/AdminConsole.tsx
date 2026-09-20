@@ -171,11 +171,18 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
   }, []);
 
   useEffect(() => {
-    void load();
-    // Same cadence and the same reason as the queue's own poll: this is a page someone
-    // leaves open while a build runs, and it costs one store read.
-    const timer = setInterval(() => void load(), 30_000);
-    return () => clearInterval(timer);
+    // A hidden console shows nothing, and this summary costs ~93 reads.
+    const tick = () => {
+      if (!document.hidden) void load();
+    };
+    tick();
+    // Catch up on the way back rather than waiting out the interval.
+    document.addEventListener('visibilitychange', tick);
+    const timer = setInterval(tick, 30_000);
+    return () => {
+      document.removeEventListener('visibilitychange', tick);
+      clearInterval(timer);
+    };
   }, [load]);
 
   // The same answer the API gives a non-operator: nothing here, and no hint that there
