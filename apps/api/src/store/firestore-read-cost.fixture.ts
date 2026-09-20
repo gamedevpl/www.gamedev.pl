@@ -20,6 +20,8 @@ export const POLLED_JOB_ID = 1001;
 
 export const POLLED_ROUTES = [
   'GET /api/submissions/:token',
+  'GET /api/submissions/:token (steady state)',
+  'GET /api/submissions/:token (share link, steady state)',
   'GET /api/submissions/mine',
   'GET /api/submissions/mine (derived-only owner)',
   'GET /api/submissions/mine (document, steady state)',
@@ -320,6 +322,18 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       headers: { cookie: sessionCookie(CREATOR_UID) },
     });
   }
+  if (route === 'GET /api/submissions/:token (steady state)') {
+    const token = mintToken(POLLED_JOB_ID, SUBMISSION_SECRET);
+    return app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: { cookie: sessionCookie(CREATOR_UID) },
+    });
+  }
+  if (route === 'GET /api/submissions/:token (share link, steady state)') {
+    const token = mintToken(POLLED_JOB_ID, SUBMISSION_SECRET);
+    return app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+  }
   if (route === 'GET /api/submissions/mine') {
     return app.inject({
       method: 'GET',
@@ -363,6 +377,14 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
   try {
     // A process verifies its first read; steady state is the second.
     if (route === 'GET /api/submissions/mine (document, steady state)') {
+      await injectRoute(app, route);
+    }
+    // What a 3s poll costs with the route's caches warm.
+    if (route === 'GET /api/submissions/:token (steady state)') {
+      await injectRoute(app, route);
+    }
+    // The same poll with no session resolves no access.
+    if (route === 'GET /api/submissions/:token (share link, steady state)') {
       await injectRoute(app, route);
     }
     fake.resetBilledReads();
