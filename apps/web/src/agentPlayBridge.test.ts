@@ -4,7 +4,7 @@
 
 // jsdom is parent === window, so posts land back on this window.
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, beforeEach } from 'vitest';
 import { AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 import { embedGameHtml } from './gamePlayer.js';
 
@@ -530,5 +530,90 @@ describe('the agent bridge, running for real', () => {
     const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
     expect(log.some((entry) => entry.kind === 'call' && entry.detail.includes('camLookAt'))).toBe(true);
     expect(looked).toBe(2);
+  });
+
+  // A hidden key one level down used to reach the agent.
+  describe('hiddenFields reach the structured surfaces too', () => {
+    const setHidden = (names: string[] | null) => {
+      const scope = window as unknown as { __GAME_AGENT_HIDDEN__?: string[] };
+      if (names) scope.__GAME_AGENT_HIDDEN__ = names;
+      else delete scope.__GAME_AGENT_HIDDEN__;
+    };
+
+    afterEach(() => setHidden(null));
+
+    it('drops a hidden key nested inside observation', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', clue: { targetWord: 'RAVEN', letters: 5 } });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).not.toContain('RAVEN');
+      // Redaction, not deletion: what is not hidden still reaches the agent.
+      expect(snapshot.observation).toContain('"room":"cellar"');
+      expect(snapshot.observation).toContain('"letters":5');
+    });
+
+    // The kit stringifies first, so JSON text is walked too.
+    it('drops a hidden key inside an observation the kit already stringified', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing', observation: JSON.stringify({ room: 'cellar', targetWord: 'RAVEN' }) };
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).not.toContain('RAVEN');
+      expect(snapshot.observation).toContain('"room":"cellar"');
+    });
+
+    it("keeps a helper's hidden return value out of the log that crosses the bridge", async () => {
+      setHidden(['targetWord']);
+      harness.api = { peekRound: () => ({ cash: 100, targetWord: 'RAVEN' }) };
+      send({ type: 'agent:enable' });
+      await settle();
+      received.length = 0;
+      send({ type: 'agent:command', command: { kind: 'call', name: 'peekRound', args: [] } });
+      await settle();
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+      // One bridge serves the file, so its log outlives a test.
+      const note = log.find((entry) => entry.kind === 'call' && entry.detail.startsWith('peekRound'));
+      expect(note?.detail).toContain('"cash":100');
+      expect(note?.detail).not.toContain('RAVEN');
+    });
+
+    // A policy reads the harness directly; redacting here is theatre.
+    it('still hands the policy the unredacted value', async () => {
+      setHidden(['targetWord']);
+      harness.api = { peekRound: () => ({ cash: 100, targetWord: 'RAVEN' }) };
+      send({ type: 'agent:enable' });
+      await settle();
+
+      const result = await runPolicy(`function playAgent(agent) {
+        agent.log(JSON.stringify(agent.call('peekRound')));
+      }`);
+      expect(result.outcome).toBe('completed');
+      const logs = result.logs as Array<{ text: string }>;
+      expect(logs.some((entry) => entry.text.includes('RAVEN'))).toBe(true);
+    });
+
+    it('leaves a game that declares nothing untouched', async () => {
+      setHidden(null);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', clue: { targetWord: 'RAVEN' } });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('RAVEN');
+    });
   });
 });

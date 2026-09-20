@@ -5,6 +5,41 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(typeof value==='function'){try{return value();}catch(err){return null;}}
     return value;
   }
+  // hiddenFields names a key at any depth, not just the snapshot's top level.
+  var AGENT_REDACT_DEPTH=8;
+  function agentHiddenKey(hidden,key){
+    for(var i=0;i<hidden.length;i++)if(hidden[i]===key)return true;
+    return false;
+  }
+  function agentRedact(value,hidden,depth){
+    if(!hidden||!hidden.length||value==null||typeof value!=='object')return value;
+    // Past the cap a cycle is likelier than real data; drop rather than risk a leak.
+    if(depth>=AGENT_REDACT_DEPTH)return null;
+    var i,k,out;
+    if(Object.prototype.toString.call(value)==='[object Array]'){
+      out=[];
+      for(i=0;i<value.length;i++)out.push(agentRedact(value[i],hidden,depth+1));
+      return out;
+    }
+    out={};
+    for(k in value){
+      if(!Object.prototype.hasOwnProperty.call(value,k))continue;
+      if(agentHiddenKey(hidden,k))continue;
+      out[k]=agentRedact(value[k],hidden,depth+1);
+    }
+    return out;
+  }
+  // The kit stringifies observation before it gets here, so walk into JSON text too.
+  function agentRedactMaybeJson(value,hidden){
+    if(!hidden||!hidden.length)return value;
+    if(typeof value==='string'){
+      var parsed;
+      try{parsed=JSON.parse(value);}catch(err){return value;}
+      if(parsed==null||typeof parsed!=='object')return value;
+      try{return JSON.stringify(agentRedact(parsed,hidden,0));}catch(err){return value;}
+    }
+    return agentRedact(value,hidden,0);
+  }
   function agentJsonValue(value,cap){
     if(value==null)return '';
     if(typeof value==='string')return value.slice(0,cap);
@@ -25,6 +60,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(!obsHidden){
       var obs=out.observation;
       if(obs==null||obs==='')obs=agentReadMaybeFn(h.observation);
+      obs=agentRedactMaybeJson(obs,hidden);
       var text=agentJsonValue(obs,16000);
       if(text)out.observation=text;
       else delete out.observation;

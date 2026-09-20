@@ -113,7 +113,11 @@ twice would read as a sound heard twice.
   so in the guide it hands the agent.
 - **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
   the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
-  answer never reaches the host at all. Redacting only at render would have put it on the
+  answer never reaches the host at all. The list names a key at **any depth**, not just the
+  snapshot's top level: `observation` is walked before it is stringified (including one the
+  kit stringified already), and a `call` result is walked before it reaches the log. Both
+  carry structured state, so filtering only the top level would have left the answer one
+  nesting level from the agent. Redacting only at render would have put it on the
   wire and into React state first. The frame learns the list from
   `window.__GAME_AGENT_HIDDEN__`, which `assembleGameHtml` writes ahead of the game's own
   code from the `AGENT.json` the catalog read now carries. A game that declares none still
@@ -129,6 +133,10 @@ twice would read as a sound heard twice.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
+  `agent.call` returns the helper's value to the policy unredacted for the same reason —
+  filtering there would break real helpers while changing nothing about what a policy can
+  already read. What is redacted is the note that call writes to the log, because that is
+  what crosses the bridge.
 - **Synthesized input is released when the mode closes.** A `keyDown` with no `keyUp`, or a
   policy that threw mid-`press`, would otherwise hand the next human a stuck key.
 - **An agent-capable session stays out of the play funnel.** `trackPlay` is off wherever
@@ -265,12 +273,12 @@ The panel does **not** eval into the sandboxed iframe, and Check 17 in the games
 forbids game sources from writing `window.` or `__GAME_HARNESS__`. Mutating the harness at
 runtime (via `globalThis` name-stitching) is therefore the wrong contract. Use the kit:
 
-| Surface | Official registration | What the panel shows |
-| --- | --- | --- |
-| **State** | `defineGame().snapshot(() => ({ cash, loan, … }))` | the `state` line (primitives only) |
-| **Seen** | `snapshot.observation` as a JSON **string**, or `defineGame().observation(() => …)` | the `seen` block; empty is visible, not hidden |
-| **UI** | `GameKit.ui.register(draw, label, enabled, { x, y, width, height })` during paint, or `defineGame().ui(() => widgets)` | `ui` hit-targets; `click x y` uses the midpoint |
-| **Helpers** | `defineGame().agentApi(() => ({ buildRail, camLookAt, … }))` or `harness.api` | the `api` list; `call name [json]` / `agent.call(name, …args)` |
+| Surface     | Official registration                                                                                                  | What the panel shows                                           |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **State**   | `defineGame().snapshot(() => ({ cash, loan, … }))`                                                                     | the `state` line (primitives only)                             |
+| **Seen**    | `snapshot.observation` as a JSON **string**, or `defineGame().observation(() => …)`                                    | the `seen` block; empty is visible, not hidden                 |
+| **UI**      | `GameKit.ui.register(draw, label, enabled, { x, y, width, height })` during paint, or `defineGame().ui(() => widgets)` | `ui` hit-targets; `click x y` uses the midpoint                |
+| **Helpers** | `defineGame().agentApi(() => ({ buildRail, camLookAt, … }))` or `harness.api`                                          | the `api` list; `call name [json]` / `agent.call(name, …args)` |
 
 A tycoon toolbar is the same widget contract as an arcade button — register each tool's
 canvas rectangle, do not invent a parallel `harness.ui` format unless the `ui` engine

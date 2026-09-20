@@ -6,7 +6,8 @@
 
 import { AGENT_PLAY_BRIDGE_SURFACE } from './agent-play-bridge-surface.js';
 
-export const AGENT_PLAY_BRIDGE = `(function(){
+export const AGENT_PLAY_BRIDGE =
+  `(function(){
   'use strict';
   var host=window.__GDPL_BRIDGE__;
   if(!host)return;
@@ -28,7 +29,9 @@ export const AGENT_PLAY_BRIDGE = `(function(){
   // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
   // A policy runs in the game's own realm and can still read the harness directly;
   // that hole is documented rather than pretended away.
-` + AGENT_PLAY_BRIDGE_SURFACE + `
+` +
+  AGENT_PLAY_BRIDGE_SURFACE +
+  `
   // Set at assemble time once the games repo carries AGENT.json's hiddenFields into the
   // document; null until then, and the host renders that as a warning.
   function agentHidden(){
@@ -222,7 +225,10 @@ export const AGENT_PLAY_BRIDGE = `(function(){
     if(kind==='call'){
       try{
         var result=agentInvoke(command.name,command.args||[]);
-        var shown;try{shown=JSON.stringify(result);}catch(err){shown=String(result);}
+        // Redacted before the note, which is what crosses the bridge. The value the
+        // policy gets is not: a policy runs in the game's realm and is exempt anyway.
+        var safe=agentRedact(result,agentHidden(),0);
+        var shown;try{shown=JSON.stringify(safe);}catch(err){shown=String(safe);}
         agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
       }catch(err){agentNote('error',String((err&&err.message)||err));}
       agentState('call',id);
