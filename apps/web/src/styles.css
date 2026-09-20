@@ -2046,6 +2046,12 @@ body.player-open {
   min-width: 240px;
   padding: 8px;
   border-radius: 12px;
+  /* The report/feedback forms open inline below their row and can run taller than
+     the panel itself. Scroll rather than let the submit button fall off-screen —
+     the page behind stays locked while the player is open, so it has no other way
+     back into view. Bar height below matches theater-camera-indicator's offset. */
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 58px - 12px);
+  overflow-y: auto;
   /* Near-opaque so menu rows stay readable over bright game pixels underneath. */
   background: rgba(16, 22, 28, 0.98);
   -webkit-backdrop-filter: blur(16px);
@@ -2505,6 +2511,7 @@ body.player-open {
     right: calc(-1 * (44px + 6px));
     min-width: 240px;
     max-width: min(300px, calc(100vw - 24px));
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 57px - 12px);
   }
 
   /* Labels stay visible inside the open menu — icon-only there is opaque. */
@@ -2534,6 +2541,12 @@ body.player-open {
   .game-theater-actions > .report-btn {
     min-height: 36px;
     padding: 7px 9px;
+  }
+
+  /* Shortest viewport of the three: the report/feedback form is likelier here to
+     run past the bottom, especially with an on-screen keyboard shrinking it further. */
+  .theater-more-panel {
+    max-height: calc(100dvh - max(4px, env(safe-area-inset-top)) - 45px - 8px);
   }
 }
 

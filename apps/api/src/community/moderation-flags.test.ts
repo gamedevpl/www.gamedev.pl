@@ -365,6 +365,27 @@ describe('moderation flags', () => {
       expect(await store.listModerationFlags()).toEqual([]);
     });
 
+    it('reports a store-published game absent from the repo catalog', async () => {
+      // Self-build games publish via store.setPublication, never catalog.json.
+      const { app, store } = await makeApp({ published: [] });
+      await store.setPublication({
+        slug: 'neon-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      });
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      const queue = await app.inject({
+        method: 'GET',
+        url: '/api/admin/moderation-flags',
+        headers: { cookie: await cookie(app, 'boss') },
+      });
+      expect(queue.json().flags).toMatchObject([{ slug: 'neon-courier', source: 'player' }]);
+    });
+
     it('rate-limits repeated reports from the same account', async () => {
       const { app } = await makeApp({ published: ['sky-dodge', 'neon-courier'] });
       const alice = await cookie(app, 'alice');
