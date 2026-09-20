@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "operations": {
+    "claimSeal (24 rounds) reads": 2,
+    "claimSeal (24 rounds) writes": 3,
+    "claimSeal (3 rounds) reads": 2,
+    "claimSeal (3 rounds) writes": 3,
+    "recordJobTransition (24 rounds) reads": 79,
+    "recordJobTransition (24 rounds) writes": 4,
+    "recordJobTransition (3 rounds) reads": 16,
+    "recordJobTransition (3 rounds) writes": 4,
+    "setSubmissionAbandoned (24 rounds) reads": 76,
+    "setSubmissionAbandoned (24 rounds) writes": 2,
+    "setSubmissionAbandoned (3 rounds) reads": 13,
+    "setSubmissionAbandoned (3 rounds) writes": 2,
+    "setSubmissionLastStatus (24 rounds) reads": 79,
+    "setSubmissionLastStatus (24 rounds) writes": 4,
+    "setSubmissionLastStatus (3 rounds) reads": 16,
+    "setSubmissionLastStatus (3 rounds) writes": 4,
+    "setSubmissionTitle (24 rounds) reads": 76,
+    "setSubmissionTitle (24 rounds) writes": 2,
+    "setSubmissionTitle (3 rounds) reads": 13,
+    "setSubmissionTitle (3 rounds) writes": 2
+  }
+}
