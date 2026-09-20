@@ -19,6 +19,7 @@ import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { retryPendingNotificationEmails } from './notification-email-retry.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import { resolveHealthVerdict } from './health-verdict.js';
 import { uncollectedFeedbackCause, type UncollectedFeedbackCause } from './uncollected-feedback.js';
 
 // Max wait for a handoff ack before the sweep forces it.
@@ -269,16 +270,14 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             if (!health || Date.parse(health.ranAt) < Date.parse(check.requestedAt)) continue;
 
             healthResolved += 1;
-            const resolved = { ...check, green: health.green, verdictAt: health.ranAt };
-            if (health.green) {
-              await store.setPublicationHealthCheck(publication.slug, resolved);
+            const verdict = resolveHealthVerdict(publication.slug, check, health);
+            if (verdict.green) {
+              await store.setPublicationHealthCheck(publication.slug, verdict.patch);
               publicationsCache = null;
               continue;
             }
 
             unhealthy += 1;
-            // Red: the baked bundle still serves, but rebuilding would fail.
-
             // Notified-at is written after both emits, so failures retry next sweep.
             const submission = manifest ? await store.getSubmission(manifest.jobId) : null;
             // The game's owner now, not whoever's job last published it.
@@ -296,18 +295,18 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
               await emitOperatorAlert(
                 { ...buildNotifyDeps(), adminUids },
                 {
-                  id: `op-health-${publication.slug}-${check.version}`,
+                  id: verdict.alertId,
                   kind: 'game_unhealthy',
                   jobId: manifest?.jobId ?? 0,
                   title: submission?.title ?? publication.slug,
                   ownerUid: healthUid ?? '',
                   slug: publication.slug,
-                  since: health.ranAt,
+                  since: verdict.unhealthySinceAt,
                 },
               );
             }
             await store.setPublicationHealthCheck(publication.slug, {
-              ...resolved,
+              ...verdict.patch,
               notifiedAt: new Date(now()).toISOString(),
             });
             publicationsCache = null;

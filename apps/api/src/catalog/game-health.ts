@@ -28,6 +28,7 @@ import type { GitHubClient } from './github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import type { Store } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { RED_RECHECK_COOLDOWN_MS } from '../platform/sweep-cadence.js';
 
 /** The configured Cloud Build gate trigger — the same seam the delivery path uses. */
 export type HealthGateTrigger = (input: {
@@ -56,7 +57,7 @@ export type HealthCheckStart =
  */
 export async function startHealthCheck(
   deps: HealthCheckDeps,
-  publication: Pick<PublicationRecord, 'slug' | 'currentVersion'>,
+  publication: Pick<PublicationRecord, 'slug' | 'currentVersion' | 'healthCheck'>,
 ): Promise<HealthCheckStart> {
   const now = deps.now ?? Date.now;
   const { slug, currentVersion: version } = publication;
@@ -68,7 +69,16 @@ export async function startHealthCheck(
   const triggered = await deps.gateTrigger({ jobId: manifest.jobId, slug, version, mode: 'health' });
   const buildId = triggered && typeof triggered === 'object' ? triggered.buildId : undefined;
 
-  await deps.store.setPublicationHealthCheck(slug, { version, requestedAt, ...(buildId ? { buildId } : {}) });
+  // Carried forward so a repeatedly-rechecked version remembers when it first went red.
+  const priorCheck = publication.healthCheck;
+  const unhealthySinceAt = priorCheck?.version === version ? priorCheck.unhealthySinceAt : undefined;
+
+  await deps.store.setPublicationHealthCheck(slug, {
+    version,
+    requestedAt,
+    ...(buildId ? { buildId } : {}),
+    ...(unhealthySinceAt ? { unhealthySinceAt } : {}),
+  });
   // Booked to the job that built the game — a health run is a gate run on the bill, and
   // the manifest is the only place the issue number is known.
   if (buildId) {
@@ -94,19 +104,8 @@ export async function startHealthCheck(
  */
 const IN_FLIGHT_TTL_MS = 6 * 60 * 60 * 1000;
 
-/**
- * How long a game stays un-rechecked after a red verdict.
- *
- * The creator has already been nudged, and re-gating a game we know is broken every time
- * the engine moves buys a Cloud Build run and a second identical nudge for no new
- * information. It is also not how a red game recovers: the fix is an improvement round,
- * which produces a *new version* checked by the acceptance gate, which moves the game's
- * last-checked commit forward and makes it fresh here without the sweep touching it. The
- * cooldown only governs the other case — a game left broken — and two weeks is long
- * enough that an upstream engine fix is worth re-testing for. The console's Re-gate
- * button ignores it entirely; that is an operator making a deliberate call.
- */
-const RED_RECHECK_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
+// RED_RECHECK_COOLDOWN_MS moved to platform/sweep-cadence.ts — notify-sweep-routes.ts
+// needs it too, and domain modules don't import each other's internals.
 
 /**
  * How many checks one sweep run may start.

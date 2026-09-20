@@ -534,6 +534,14 @@ export interface PublicationHealthCheck {
   verdictAt?: string;
   /** Set once a red verdict has nudged the creator, so sweep re-runs stay quiet. */
   notifiedAt?: string;
+  /**
+   * When this *version* first came back red. Carried forward by `startHealthCheck`
+   * across every re-request for the same version, even though the rest of the record is
+   * replaced wholesale — otherwise a game stuck red for months looks, to the escalation
+   * check, exactly like one that just failed for the first time, forever. Cleared the
+   * moment a new version is published, because that is a different game health story.
+   */
+  unhealthySinceAt?: string;
 }
 
 /**
