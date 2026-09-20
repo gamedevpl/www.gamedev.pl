@@ -27,6 +27,7 @@ export function resolveHealthVerdict(
     green: false,
     patch: { ...check, green: false, verdictAt: health.ranAt, unhealthySinceAt },
     unhealthySinceAt,
-    alertId: `op-health-${slug}-${check.version}-${streakWindow}`,
+    // unhealthySinceAt names the streak; streakWindow alone would collide across relapses.
+    alertId: `op-health-${slug}-${check.version}-${unhealthySinceAt}-${streakWindow}`,
   };
 }

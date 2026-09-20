@@ -19,7 +19,7 @@ describe('resolveHealthVerdict', () => {
     expect(outcome).toMatchObject({
       green: false,
       unhealthySinceAt: '2026-07-30T12:20:00.000Z',
-      alertId: 'op-health-sky-dodge-v1-0',
+      alertId: 'op-health-sky-dodge-v1-2026-07-30T12:20:00.000Z-0',
     });
   });
 
@@ -31,7 +31,7 @@ describe('resolveHealthVerdict', () => {
     );
     expect(outcome).toMatchObject({
       unhealthySinceAt: '2026-07-01T00:00:00.000Z',
-      alertId: 'op-health-sky-dodge-v1-0',
+      alertId: 'op-health-sky-dodge-v1-2026-07-01T00:00:00.000Z-0',
     });
   });
 
@@ -43,7 +43,14 @@ describe('resolveHealthVerdict', () => {
     );
     expect(outcome).toMatchObject({
       unhealthySinceAt: '2026-07-01T00:00:00.000Z',
-      alertId: 'op-health-sky-dodge-v1-1',
+      alertId: 'op-health-sky-dodge-v1-2026-07-01T00:00:00.000Z-1',
     });
+  });
+
+  it('gives a relapse a different alert id than the original streak, even both at window 0', () => {
+    // Without the streak start in the id, both collide at window 0.
+    const original = resolveHealthVerdict('sky-dodge', check, { green: false, ranAt: '2026-07-01T00:00:00.000Z' });
+    const relapse = resolveHealthVerdict('sky-dodge', check, { green: false, ranAt: '2026-08-01T00:00:00.000Z' });
+    expect(original.alertId).not.toBe(relapse.alertId);
   });
 });
