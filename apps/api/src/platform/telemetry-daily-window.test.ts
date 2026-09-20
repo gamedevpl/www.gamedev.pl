@@ -192,6 +192,22 @@ describe('readDailyWindow', () => {
     expect(merged?.bounces).toBe(0);
   });
 
+  it('does not re-read a scanned day just because it was empty', async () => {
+    // A quiet 03:20 leaves today's partition empty.
+
+    // That tail is absent, not missing: reading twice inflates rescanned.
+    const byDay = new Map<string, TelemetryEvent[]>([
+      ['2026-09-13', []],
+      ['2026-09-12', session('2026-09-12', 'sky-dodge', 's1', { seconds: 30, frames: [60] })],
+    ]);
+    const source = reader(new Map(), byDay);
+
+    const window = await readDailyWindow(['2026-09-13', '2026-09-12'], budget, source, meta);
+
+    expect(window.rescanned).toBe(2);
+    expect(source.read.mock.calls.map(([dateStr]) => dateStr)).toEqual(['2026-09-13', '2026-09-12']);
+  });
+
   it('ignores a rollup written by an older version', async () => {
     const byDay = corpus();
     const stored = new Map<string, DailyTelemetryAggregate>();

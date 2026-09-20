@@ -381,8 +381,10 @@ export async function readDailyWindow(
   let reused = 0;
   // The newest day comes first, so its events are still in hand.
   let nextDayEvents: TelemetryEvent[] = [];
-  // The day just visited, in case its events must be fetched back.
-  let nextDate: string | undefined;
+  // Set only when the newer day came from a rollup.
+
+  // An empty scan is not this: the tail really is absent.
+  let tailToFetch: string | undefined;
 
   for (const dateStr of requested) {
     const stored = await reader.get(dateStr);
@@ -394,7 +396,7 @@ export async function readDailyWindow(
       reused += 1;
       // A sealed day yields no events; the day before reads them back.
       nextDayEvents = [];
-      nextDate = dateStr;
+      tailToFetch = dateStr;
       continue;
     }
 
@@ -406,9 +408,9 @@ export async function readDailyWindow(
     // Without the tail this day would seal a session as a bounce.
 
     // One scan beats a wrong number that never expires.
-    if (nextDate !== undefined && nextDayEvents.length === 0 && remaining > 0) {
+    if (tailToFetch !== undefined) {
       const tailLimit = Math.min(budget.perDay, remaining);
-      nextDayEvents = await reader.read(nextDate, tailLimit);
+      nextDayEvents = await reader.read(tailToFetch, tailLimit);
       remaining -= nextDayEvents.length;
       rescanned += 1;
     }
@@ -432,7 +434,7 @@ export async function readDailyWindow(
       nextDayEvents,
     });
     nextDayEvents = events;
-    nextDate = dateStr;
+    tailToFetch = undefined;
     if (aggregate.gamesTruncated || aggregate.tallyTruncated) truncated = true;
     days.push(aggregate);
     scanned.push(dateStr);
