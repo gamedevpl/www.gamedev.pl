@@ -2,7 +2,7 @@
 
 // Records when the last pass ran, never that one happened.
 
-// Why that matters on a rollback: docs/firestore-read-cost.md.
+// Why that matters on a rollback: ops repo read-cost doc.
 
 export const SHELF_REBUILD_INTERVAL_MS = 60 * 60_000;
 

@@ -903,7 +903,7 @@ EOF
 # The window is one weekday afternoon and it does not include a morning peak. Re-read both
 # thresholds against a full working week -- the same 2026-09-15 checkpoint as A29.
 #
-# THAT BADGE-POLLING FLOOR IS NOW FIXED (see docs/firestore-read-cost.md): /api/review/status
+# THAT BADGE-POLLING FLOOR IS NOW FIXED (see ops repo docs/firestore-read-cost.md): /api/review/status
 # and /api/notifications read once per window instead of once per poll, which by the read
 # counts each route was issuing should take the QUERY component down by roughly an order of
 # magnitude and the total well under 1/s. Both thresholds here are therefore calibrated
@@ -978,7 +978,7 @@ EOF
 # a second copy of them.
 #
 # Like A30, this number is calibrated against a floor that the badge-polling fix removes
-# (see docs/firestore-read-cost.md). At the 2026-09-15 recheck, take the post-fix daily
+# (see ops repo docs/firestore-read-cost.md). At the 2026-09-15 recheck, take the post-fix daily
 # totals for a full working week and re-derive: roughly 2x the busiest measured day, floored
 # at something that still leaves the 50K/day free tier visible as a target rather than a
 # rounding error. Do not lower it from an estimate -- measure first, the way A30 had to be.
@@ -1004,7 +1004,7 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Firestore served more than 600K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. Reference steady state as of 2026-09-08 is a pace of ~364K/day and falling as the per-window caches land, so a sustained 600K day means something regressed, not that traffic grew. The fix is always the same shape: read a collection once per window, never per request (catalog-routes.ts, catalog-enricher.ts, notify-sweep-routes.ts, and the badge routes in docs/firestore-read-cost.md).",
+    "content": "Firestore served more than 600K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. Reference steady state as of 2026-09-08 is a pace of ~364K/day and falling as the per-window caches land, so a sustained 600K day means something regressed, not that traffic grew. The fix is always the same shape: read a collection once per window, never per request (catalog-routes.ts, catalog-enricher.ts, notify-sweep-routes.ts, and the badge routes in ops repo docs/firestore-read-cost.md).",
     "mimeType": "text/markdown"
   }
 }

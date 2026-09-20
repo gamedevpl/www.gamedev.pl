@@ -35,7 +35,7 @@
     "cli:release": "node apps/cli/scripts/release.mjs",
     "// module-size": "No file may grow past its baseline; new files cap at 500 lines. See docs/module-size-debt.md.",
     "module-size": "node eslint-rules/module-size-check.mjs",
-    "// firestore-read-cost": "Polled routes may shrink their billed Firestore reads, never grow them. See docs/firestore-read-cost.md.",
+    "// firestore-read-cost": "Polled routes may shrink their billed Firestore reads, never grow them. See ops repo docs/firestore-read-cost.md.",
     "firestore-read-cost": "node eslint-rules/firestore-read-cost-check.mjs",
     "// module-boundary": "Phase 0 warn-mode ratchet: cross-N1-bucket imports in apps/api/src, visible not blocking. See docs/north-star-architecture.md.",
     "module-boundary": "eslint apps/api/src --rule \"{\\\"gamedev/module-boundary\\\":\\\"warn\\\"}\"",

@@ -7,7 +7,7 @@
 #   infra/read-cost-report.sh 7d              # the trailing week
 #   PROJECT_ID=other infra/read-cost-report.sh
 #
-# Why the split matters. docs/firestore-read-cost.md fixed QUERY reads: a collection scan
+# Why the split matters. ops repo docs/firestore-read-cost.md fixed QUERY reads: a collection scan
 # on a polled path, once per request. What no per-window cache removes is the LOOKUP
 # floor -- one users/{uid} read per authenticated request, plus whatever documents the
 # route itself fetches by id. If the day is mostly LOOKUP, the next fix is the session

@@ -1,4 +1,4 @@
-// Reviewer queue reads, one window each. See docs/firestore-read-cost.md.
+// Reviewer queue reads, one window each. See ops repo read-cost doc.
 
 import type { AssessmentSource, ReviewSweepSource } from '@gamedevpl/contract';
 import { rememberBounded } from '../platform/bounded-map.js';

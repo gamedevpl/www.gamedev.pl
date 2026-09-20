@@ -1,4 +1,4 @@
-// Derived GameAccess, one window. See docs/firestore-read-cost.md.
+// Derived GameAccess, one window. See ops repo docs/firestore-read-cost.md.
 
 import { rememberBounded } from './bounded-map.js';
 

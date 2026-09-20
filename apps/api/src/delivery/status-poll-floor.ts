@@ -2,7 +2,7 @@
 
 // Sized by what can still happen, never by the cache TTL.
 
-// Why the TTL is the wrong ceiling: docs/firestore-read-cost.md.
+// Why the TTL is the wrong ceiling: ops repo read-cost doc.
 
 
 // Nothing has moved recently, but an agent can rejoin at any moment.
