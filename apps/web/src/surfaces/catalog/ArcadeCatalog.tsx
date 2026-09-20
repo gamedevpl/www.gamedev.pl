@@ -35,7 +35,7 @@ type ArcadeCatalogProps = {
   recommendationsRefreshKey?: number;
   /** Bump after a new submission so Yours pins refresh. */
   creatorGamesRefreshKey?: number;
-  /** Builds in flight; a change re-reads the shelf. */
+  // Builds in flight; a change re-reads the shelf.
   activeBuildCount?: number;
 };
 

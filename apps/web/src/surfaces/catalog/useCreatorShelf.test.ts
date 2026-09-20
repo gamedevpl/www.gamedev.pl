@@ -29,18 +29,19 @@ async function show(hiddenNow: boolean) {
   });
 }
 
+// One type: a re-render re-runs the effect, not remounts.
+function Probe({ activeBuildCount, viewerUid = 'g:creator' }: { activeBuildCount: number; viewerUid?: string | null }) {
+  useCreatorShelf({ authLoading: false, viewerUid, locale: 'en', creatorGamesRefreshKey: 0, activeBuildCount });
+  return null;
+}
+
 async function mountShelf(): Promise<{ root: Root; setCount: (count: number) => Promise<void> }> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   const render = async (activeBuildCount: number) => {
     await act(async () => {
-      root.render(
-        createElement(function Probe() {
-          useCreatorShelf({ authLoading: false, viewerUid: 'g:creator', locale: 'en', creatorGamesRefreshKey: 0, activeBuildCount });
-          return null;
-        }),
-      );
+      root.render(createElement(Probe, { activeBuildCount }));
     });
   };
   await render(0);
@@ -68,7 +69,7 @@ describe('useCreatorShelf', () => {
 
     expect(mockedLoad).toHaveBeenCalledTimes(1);
 
-    // The old interval would have read 40 times over this stretch.
+    // The old interval would have read 40 times here.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(20 * 60_000);
     });
@@ -89,7 +90,7 @@ describe('useCreatorShelf', () => {
 
     expect(mockedLoad).not.toHaveBeenCalled();
 
-    // Mounted in a background tab; the first read waits for the way back.
+    // A background mount defers its first read to the return.
     await show(false);
     expect(mockedLoad).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
@@ -125,6 +126,21 @@ describe('useCreatorShelf', () => {
     await act(async () => root.unmount());
   });
 
+  it('does not let a stale floor skip the read a re-wired effect owes', async () => {
+    const { root, setCount } = await mountShelf();
+    mockedLoad.mockClear();
+
+    await show(true);
+    // Rewires while hidden, so the deferred read must survive the floor.
+    await setCount(1);
+    expect(mockedLoad).not.toHaveBeenCalled();
+
+    await show(false);
+
+    expect(mockedLoad).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
   it('drives the same symbol the hook imports', () => {
     expect(loadCreatorGames).toBe(mockedLoad);
   });
@@ -134,12 +150,7 @@ describe('useCreatorShelf', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     await act(async () => {
-      root.render(
-        createElement(function Probe() {
-          useCreatorShelf({ authLoading: false, viewerUid: null, locale: 'en', creatorGamesRefreshKey: 0, activeBuildCount: 0 });
-          return null;
-        }),
-      );
+      root.render(createElement(Probe, { activeBuildCount: 0, viewerUid: null }));
     });
 
     expect(mockedLoad).not.toHaveBeenCalled();

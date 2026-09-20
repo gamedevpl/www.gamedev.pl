@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from '../../creatorGames.js';
 
-// How stale a pin may get, and the slowest a visible tab re-reads.
+// How stale a pin may get, and the slowest re-read.
 const REFRESH_FLOOR_MS = 5 * 60_000;
 
 // Feeds the Studio chip and the Yours pins — never the grid itself.
@@ -49,12 +49,15 @@ export function useCreatorShelf({
       });
     };
 
-    // A hidden tab shows no pins, so it asks for none until it comes back.
+    // Fresh wiring owes a read, so no floor may skip it.
+    loadedAt.current = 0;
+
+    // A hidden tab shows no pins, so it asks for none.
     const tick = () => {
       if (!document.hidden) load(Date.now());
     };
 
-    // Re-runs on an activeBuildCount change: the only local reason a pin appears.
+    // Re-runs on an activeBuildCount change: a pin may have appeared.
     tick();
 
     // A transfer in, or a failed first read, changes no local signal.
