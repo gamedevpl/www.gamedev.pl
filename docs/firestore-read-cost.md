@@ -778,6 +778,46 @@ that request. Ratios between two metered numbers still hold; absolute "billed" c
 production do not. The shelf document path bills 2, as the gate says. Numbers logged after
 #1427 is deployed are billed counts and can be compared to the gate directly.
 
+## Where the cadence work ended, 2026-09-20
+
+Three changes landed together and closed the axis this file opens with. `/api/submissions/:token`
+resolved the same `GameAccess` document twice per request, once for the viewer test and once for
+the quota owner; one resolution now answers both (#1430). `useCreatorShelf` kept a bare 30s
+`setInterval` with no visibility check, so a signed-in home tab asked 2,880 times a day forever;
+it has no cadence of its own now, re-reading on a build-count change and on the way back to the
+tab, floored at five minutes (#1429). The operator console polled `/api/admin/summary` the same
+way, at about 93 reads a call (#1436).
+
+**Every polled surface is now gated.** The status poll stops while hidden and widens as it idles,
+the header badge and the operator console skip a hidden tab, and the shelf has no timer at all.
+`/api/submissions/mine` bills 2 reads and `:token` bills 2 in steady state.
+
+**Measure the warm poll, not the cold one.** The gate's baseline injects a route once against
+empty caches, and for a long time that cold number was quoted as if it were the per-poll cost. It
+is not: `:token` measures 19 cold and 2 warm, and a 3s poll is warm. The fixture now carries
+`(steady state)` and `(share link, steady state)` rows for exactly this reason, the second of
+which also gates the no-session path at one read. Production averages sit between the two and
+belong to neither.
+
+**What is left is cost per call, not cadence.** Measured on the serving revision over three hours
+on 2026-09-20:
+
+| route | requests | reads | avg |
+| --- | --- | --- | --- |
+| `/api/admin/summary` | 29 | 2,653 | 91.5 |
+| `/api/internal/notify-sweep` | 30 | 2,538 | 84.6 |
+| `/api/review/status` | 60 | 739 | 12.3 |
+| `/api/catalog` | 17 | 470 | 27.6 |
+| `/api/submissions/:token` | 24 | 329 | 13.7 |
+
+The top two are 74% of every metered read. Both scan the active submissions and read each one's
+messages, so they grow with the queue rather than with open tabs -- a different problem from
+everything above, and the next one worth taking.
+
+**Cost is no longer the reason to continue.** A 03:00-15:45Z window on 2026-09-20 metered 69,181
+reads over thirteen hours, a pace near 128K/day against 890K/day on 2026-09-12. That is under a
+dollar a month. Latency, and knowing which route is spending, are the reasons left.
+
 ## Measuring
 
 ```bash
@@ -915,10 +955,18 @@ described above. Give the change a full working week in production, then re-deri
 `infra/read-cost-report.sh 7d` and the per-route sums from the read meter, and put the type
 split in the PR that moves either threshold. Do not move them from the estimate.
 
-The fixes went live on 2026-09-12, so **the earliest honest re-derivation is the week ending
-2026-09-19**. Nothing before that is a working week of post-fix traffic, and a threshold moved
+The fixes went live on 2026-09-12, and the cadence work above landed on 2026-09-20, moving the
+floor a second time. **The earliest honest re-derivation is therefore the week ending
+2026-09-27.** Nothing before that is a working week of post-change traffic, and a threshold moved
 from one weekend's numbers is the same estimate the paragraph above forbids, just with a
-measurement attached.
+measurement attached. A frontend change also arrives gradually -- an already-open tab keeps
+polling its old bundle -- so the first days after it are not representative either.
+
+**Both thresholds are now insensitive, and that is the open risk.** A31 fires above 600K/day and
+A30's drift condition above 8/s; the pace measured on 2026-09-20 is near 128K/day and about
+1.5/s. A regression would have to be roughly **five times** the current floor before either
+speaks, which is larger than the 2026-09 incident this file exists because of. Until they are
+re-derived, nothing is watching for a repeat.
 
 `read-cost-report.sh` could not actually be run at the window it documents. It passed each
 Monitoring page to `node` as a command-line argument, and a week of per-minute `DELTA` points
