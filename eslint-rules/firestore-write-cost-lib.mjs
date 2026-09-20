@@ -75,19 +75,3 @@ export function nextOperationBaseline(baseline, measured, opts) {
     changed: changed.map(({ route, from, to }) => ({ operation: route, from, to })),
   };
 }
-
-/**
- * A slope is measured with one dimension moving. Rounds and games both cost,
- * and a seed with one game per round reports their sum as if it were per round.
- *
- * @param {Record<string, number>} measured
- * @param {string} operation
- * @param {{ from: string, to: string, steps: number }} axis
- * @param {'reads' | 'writes'} metric
- */
-export function slopeBetween(measured, operation, axis, metric) {
-  const from = measured[`${operation} (${axis.from}) ${metric}`];
-  const to = measured[`${operation} (${axis.to}) ${metric}`];
-  if (typeof from !== 'number' || typeof to !== 'number') return null;
-  return Math.round(((to - from) / axis.steps) * 100) / 100;
-}

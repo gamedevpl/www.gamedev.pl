@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadFirestoreWriteCostBaseline } from '../../../../eslint-rules/firestore-write-cost-lib.mjs';
 import {
   HEAVY_EDITORS,
+  MEASURED_AXES,
   HEAVY_GAMES,
   HEAVY_ROUNDS,
   LIGHT,
@@ -9,6 +10,8 @@ import {
   MEASURED_SHAPES,
   costLabel,
   measureWriteCost,
+  slopeLabel,
+  slopeOf,
   measureWriteCosts,
 } from './firestore-write-cost.fixture.js';
 
@@ -75,13 +78,40 @@ describe('write path cost baseline', () => {
   // An always-zero counter would satisfy every ceiling above.
   it('counts the writes each operation actually bills', async () => {
     const measured = await measureWriteCosts();
-    const writes = Object.entries(measured).filter(([label]) => label.endsWith(' writes'));
+    // Slope entries share the suffix and are legitimately zero.
+    const writes = Object.entries(measured).filter(([label]) => label.endsWith(' writes') && !label.includes(' (per '));
     expect(writes).toHaveLength(MEASURED_OPERATIONS.length * MEASURED_SHAPES.length);
     for (const [label, cost] of writes) expect(cost, label).toBeGreaterThan(0);
     // The source write plus the tombstone it forces.
     expect(measured[costLabel('setSubmissionTitle', LIGHT, 'writes')]).toBe(2);
     // One source write, then the guard tombstones twice: in-transaction and deferred.
     expect(measured[costLabel('claimSeal', LIGHT, 'writes')]).toBe(3);
+  });
+
+  // A total ceiling alone misses a slope that grew as overhead shrank.
+  it('seals the slopes, not only the totals they come from', async () => {
+    const baseline = loadFirestoreWriteCostBaseline();
+    const measured = await measureWriteCosts();
+    for (const operation of MEASURED_OPERATIONS) {
+      for (const axis of MEASURED_AXES) {
+        for (const metric of ['reads', 'writes'] as const) {
+          const label = slopeLabel(operation, axis, metric);
+          expect(baseline.operations, `${label} is not sealed`).toHaveProperty(label);
+          // Against the totals in the same run, so a stuck recorder fails.
+          expect(measured[label], label).toBe(slopeOf(measured, operation, axis, metric));
+          expect(measured[label], label).toBeLessThanOrEqual(baseline.operations[label]);
+        }
+      }
+    }
+  });
+
+  // The regression a totals-only gate would pass: overhead down, slope up.
+  it('reads a steeper slope even when both totals shrank', () => {
+    const totals = {
+      'setSubmissionTitle (3 rounds, 3 games, 0 editors) reads': 4,
+      'setSubmissionTitle (24 rounds, 3 games, 0 editors) reads': 33,
+    };
+    expect(slopeOf(totals, 'setSubmissionTitle', MEASURED_AXES[0]!, 'reads')).toBeGreaterThan(1);
   });
 
   // Guards the labels the baseline and the slope report are keyed on.

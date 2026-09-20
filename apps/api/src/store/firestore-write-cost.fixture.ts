@@ -27,6 +27,20 @@ export const HEAVY_EDITORS: OwnerShape = { rounds: 24, games: 3, editors: 12 };
 
 export const MEASURED_SHAPES: readonly OwnerShape[] = [LIGHT, HEAVY_ROUNDS, HEAVY_GAMES, HEAVY_EDITORS];
 
+export interface Axis {
+  name: string;
+  dimension: 'rounds' | 'games' | 'editors';
+  from: OwnerShape;
+  to: OwnerShape;
+}
+
+// Sealed like totals: the slope is what this gate exists for.
+export const MEASURED_AXES: readonly Axis[] = [
+  { name: 'round', dimension: 'rounds', from: LIGHT, to: HEAVY_ROUNDS },
+  { name: 'game', dimension: 'games', from: HEAVY_ROUNDS, to: HEAVY_GAMES },
+  { name: 'editor', dimension: 'editors', from: HEAVY_ROUNDS, to: HEAVY_EDITORS },
+];
+
 export function shapeLabel(shape: OwnerShape): string {
   return `${shape.rounds} rounds, ${shape.games} games, ${shape.editors} editors`;
 }
@@ -44,6 +58,23 @@ export type MeasuredOperation = (typeof MEASURED_OPERATIONS)[number];
 // One entry per operation per shape, so the baseline shows both slopes.
 export function costLabel(operation: MeasuredOperation, shape: OwnerShape, metric: 'reads' | 'writes'): string {
   return `${operation} (${shapeLabel(shape)}) ${metric}`;
+}
+
+export function slopeLabel(operation: MeasuredOperation, axis: Axis, metric: 'reads' | 'writes'): string {
+  return `${operation} (per ${axis.name}) ${metric}`;
+}
+
+// Two decimals: a slope need not be whole.
+export function slopeOf(
+  measured: Record<string, number>,
+  operation: MeasuredOperation,
+  axis: Axis,
+  metric: 'reads' | 'writes',
+): number {
+  const from = measured[costLabel(operation, axis.from, metric)] ?? 0;
+  const to = measured[costLabel(operation, axis.to, metric)] ?? 0;
+  const steps = axis.to[axis.dimension] - axis.from[axis.dimension];
+  return Math.round(((to - from) / steps) * 100) / 100;
 }
 
 export interface WriteCostRow {
@@ -115,6 +146,14 @@ export async function measureWriteCosts(): Promise<Record<string, number>> {
       const row = await measureWriteCost(operation, shape);
       measured[costLabel(operation, shape, 'reads')] = row.reads;
       measured[costLabel(operation, shape, 'writes')] = row.writes;
+    }
+  }
+  // Recorded, so a slope cannot grow under unchanged totals.
+  for (const operation of MEASURED_OPERATIONS) {
+    for (const axis of MEASURED_AXES) {
+      for (const metric of ['reads', 'writes'] as const) {
+        measured[slopeLabel(operation, axis, metric)] = slopeOf(measured, operation, axis, metric);
+      }
     }
   }
   return measured;

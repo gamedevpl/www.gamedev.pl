@@ -20,19 +20,10 @@ import {
   filterMeasuredOperations,
   loadFirestoreWriteCostBaseline,
   nextOperationBaseline,
-  slopeBetween,
 } from './firestore-write-cost-lib.mjs';
 
-// Kept in step with the fixture's LIGHT / HEAVY_ROUNDS / HEAVY_GAMES.
-const LIGHT = '3 rounds, 3 games, 0 editors';
-const HEAVY_ROUNDS = '24 rounds, 3 games, 0 editors';
-const HEAVY_GAMES = '24 rounds, 24 games, 0 editors';
-const HEAVY_EDITORS = '24 rounds, 3 games, 12 editors';
-const AXES = [
-  { name: 'round', from: LIGHT, to: HEAVY_ROUNDS, steps: 21 },
-  { name: 'game', from: HEAVY_ROUNDS, to: HEAVY_GAMES, steps: 21 },
-  { name: 'editor', from: HEAVY_ROUNDS, to: HEAVY_EDITORS, steps: 12 },
-];
+// The fixture measures the slopes; this only prints what it recorded.
+const AXES = ['round', 'game', 'editor'];
 
 function ensurePackagesBuilt() {
   // CI lint runs before type-check, so workspace dist is empty.
@@ -89,10 +80,10 @@ function reportSlopes(measured) {
   for (const operation of operationNames(measured)) {
     const parts = [];
     for (const axis of AXES) {
-      const reads = slopeBetween(measured, operation, axis, 'reads');
-      const writes = slopeBetween(measured, operation, axis, 'writes');
-      if (reads === null || writes === null) continue;
-      parts.push(reads === 0 && writes === 0 ? `flat/${axis.name}` : `${reads}r+${writes}w per ${axis.name}`);
+      const reads = measured[`${operation} (per ${axis}) reads`];
+      const writes = measured[`${operation} (per ${axis}) writes`];
+      if (typeof reads !== 'number' || typeof writes !== 'number') continue;
+      parts.push(reads === 0 && writes === 0 ? `flat/${axis}` : `${reads}r+${writes}w per ${axis}`);
     }
     if (parts.length > 0) console.log(`  ${operation.padEnd(26)} ${parts.join(', ')}`);
   }
