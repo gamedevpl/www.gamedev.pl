@@ -8,7 +8,7 @@ import { loadCreatorGames } from '../../creatorGames.js';
 
 const mockedLoad = vi.hoisted(() => vi.fn());
 
-vi.mock('../../creatorGames', async () => {
+vi.mock('../../creatorGames.js', async () => {
   const actual = await vi.importActual<typeof import('../../creatorGames.js')>('../../creatorGames.js');
   return { ...actual, loadCreatorGames: mockedLoad };
 });
@@ -63,16 +63,34 @@ describe('useCreatorShelf', () => {
     vi.restoreAllMocks();
   });
 
-  it('reads the shelf once on mount and never on a timer', async () => {
+  it('converges a visible tab on the floor, not on the old 30s cadence', async () => {
     const { root } = await mountShelf();
 
     expect(mockedLoad).toHaveBeenCalledTimes(1);
 
-    // The old 30s interval was 2,880 requests a day per tab.
+    // The old interval would have read 40 times over this stretch.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(20 * 60_000);
     });
 
+    expect(mockedLoad).toHaveBeenCalledTimes(5);
+    await act(async () => root.unmount());
+  });
+
+  it('reads nothing while the tab stays hidden', async () => {
+    hidden = true;
+    const { root } = await mountShelf();
+
+    expect(mockedLoad).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+    });
+
+    expect(mockedLoad).not.toHaveBeenCalled();
+
+    // Mounted in a background tab; the first read waits for the way back.
+    await show(false);
     expect(mockedLoad).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });

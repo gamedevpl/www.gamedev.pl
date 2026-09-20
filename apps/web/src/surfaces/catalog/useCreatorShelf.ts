@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from '../../creatorGames.js';
 
-// How stale a pin may get without a local signal.
-const RETURN_REFRESH_FLOOR_MS = 5 * 60_000;
+// How stale a pin may get, and the slowest a visible tab re-reads.
+const REFRESH_FLOOR_MS = 5 * 60_000;
 
 // Feeds the Studio chip and the Yours pins — never the grid itself.
 export function useCreatorShelf({
@@ -49,19 +49,28 @@ export function useCreatorShelf({
       });
     };
 
-    // Re-runs on an activeBuildCount change: the only local reason a pin appears.
-    load(Date.now());
+    // A hidden tab shows no pins, so it asks for none until it comes back.
+    const tick = () => {
+      if (!document.hidden) load(Date.now());
+    };
 
-    // Another device may have published; re-read on return, floored.
+    // Re-runs on an activeBuildCount change: the only local reason a pin appears.
+    tick();
+
+    // A transfer in, or a failed first read, changes no local signal.
+    const timer = window.setInterval(tick, REFRESH_FLOOR_MS);
+
+    // Catch up on the way back rather than waiting out the interval.
     const onVisible = () => {
       if (document.hidden) return;
       const at = Date.now();
-      if (at - loadedAt.current < RETURN_REFRESH_FLOOR_MS) return;
+      if (at - loadedAt.current < REFRESH_FLOOR_MS) return;
       load(at);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [authLoading, viewerUid, creatorGamesRefreshKey, locale, activeBuildCount]);
