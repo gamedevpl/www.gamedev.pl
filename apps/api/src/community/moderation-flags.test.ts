@@ -51,11 +51,11 @@ describe('moderation flags', () => {
     return `${SESSION_COOKIE_NAME}=${res.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
   }
 
-  async function makeApp(opts: { published?: string[] } = {}) {
+  async function makeApp(opts: { published?: string[]; contentChecker?: ContentChecker } = {}) {
     const store = new InMemoryStore();
     const app = await buildApp({
       store,
-      contentChecker: allowAll,
+      contentChecker: opts.contentChecker ?? allowAll,
       reviewerUids: 'dev:reviewer',
       adminUids: 'dev:boss',
       submissionRoutes: {
@@ -298,5 +298,82 @@ describe('moderation flags', () => {
       headers: { cookie: await cookie(app, 'boss') },
     });
     expect(open.json().flags).toHaveLength(0);
+  });
+
+  function report(app: Awaited<ReturnType<typeof buildApp>>, cookieHeader: string, slug = 'sky-dodge') {
+    return app.inject({
+      method: 'POST',
+      url: `/api/games/${slug}/report`,
+      headers: { cookie: cookieHeader },
+      payload: { reason: 'hate', note: 'a slur is painted on the title screen' },
+    });
+  }
+
+  describe('player report action', () => {
+    it('rejects an unauthenticated report with 401', async () => {
+      const { app } = await makeApp({ published: ['sky-dodge'] });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/games/sky-dodge/report',
+        payload: { reason: 'hate', note: 'a slur is painted on the title screen' },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('rejects a slug outside the published catalog with 404', async () => {
+      const { app } = await makeApp({ published: [] });
+      const res = await report(app, await cookie(app, 'alice'));
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('blocks a blocked-tier account with 403', async () => {
+      const { app, store } = await makeApp({ published: ['sky-dodge'] });
+      await store.upsertUser({ uid: 'g:blocked', tier: 'blocked' });
+      const res = await report(app, `${SESSION_COOKIE_NAME}=${mintSessionToken('g:blocked', sessionSecret)}`);
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('raises a flag into the same queue a reviewer uses, and it reaches the operator console', async () => {
+      const { app } = await makeApp({ published: ['sky-dodge'] });
+      const res = await report(app, await cookie(app, 'alice'));
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      const queue = await app.inject({
+        method: 'GET',
+        url: '/api/admin/moderation-flags',
+        headers: { cookie: await cookie(app, 'boss') },
+      });
+      expect(queue.json().flags).toMatchObject([
+        { slug: 'sky-dodge', reason: 'hate', source: 'player', raisedByUid: 'dev:alice' },
+      ]);
+    });
+
+    it('rejects moderated content without ever raising a flag', async () => {
+      const denyAll: ContentChecker = {
+        async check() {
+          return { allowed: false, category: 'hate' };
+        },
+        async checkFields() {
+          return { allowed: false, category: 'hate' };
+        },
+      };
+      const { app, store } = await makeApp({ published: ['sky-dodge'], contentChecker: denyAll });
+      const res = await report(app, await cookie(app, 'alice'));
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({ error: 'content_rejected', category: 'hate' });
+      expect(await store.listModerationFlags()).toEqual([]);
+    });
+
+    it('rate-limits repeated reports from the same account', async () => {
+      const { app } = await makeApp({ published: ['sky-dodge', 'neon-courier'] });
+      const alice = await cookie(app, 'alice');
+      const slugs = ['sky-dodge', 'neon-courier'];
+      let last: Awaited<ReturnType<typeof report>> | null = null;
+      for (let i = 0; i < 9; i += 1) {
+        last = await report(app, alice, slugs[i % slugs.length]);
+      }
+      expect(last?.statusCode).toBe(429);
+    });
   });
 });

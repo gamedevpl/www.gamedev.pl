@@ -1,5 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
-import type { AssessmentSource, ModerationFlagAction, ModerationFlagReason } from '@gamedevpl/contract';
+import type { ModerationFlagAction, ModerationFlagReason, ModerationFlagSource } from '@gamedevpl/contract';
 import {
   MODERATION_FLAGS_COLLECTION,
   hydrateModerationFlag,
@@ -9,7 +9,7 @@ import {
 
 export interface RaiseModerationFlagInput {
   slug: string;
-  source: AssessmentSource;
+  source: ModerationFlagSource;
   reason: ModerationFlagReason;
   note: string;
   raisedByUid: string;

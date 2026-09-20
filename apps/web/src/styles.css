@@ -2166,7 +2166,8 @@ body.player-open {
   padding-inline: 10px;
 }
 
-.feedback-popover {
+.feedback-popover,
+.report-popover {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -2205,6 +2206,31 @@ body.player-open {
   gap: 6px;
   color: var(--accent-blue);
   margin: 0;
+}
+
+/* The in-app report control shares the feedback popover's layout and inputs. */
+.report-widget {
+  position: relative;
+}
+
+.theater-more-panel .report-widget,
+.theater-more-panel .report-btn {
+  width: 100%;
+}
+
+.report-reason-label {
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+
+.report-reason-select {
+  width: 100%;
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
 }
 
 /* Immersive fullscreen: the bar is gone; one floating control exits it. */

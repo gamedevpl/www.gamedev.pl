@@ -1274,6 +1274,7 @@ export async function registerSubmissionRoutes(
   });
   await registerModerationFlagRoutes(app, {
     store,
+    contentChecker,
     notifyFlagRaised: adminUids?.size
       ? async (event) => {
           await emitModerationFlag({ ...buildNotifyDeps(), adminUids }, event);

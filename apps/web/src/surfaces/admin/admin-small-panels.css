@@ -234,6 +234,11 @@
   font-weight: 700;
 }
 
+.admin-moderation-source {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .admin-moderation-when {
   color: var(--muted);
   font-size: 0.8rem;

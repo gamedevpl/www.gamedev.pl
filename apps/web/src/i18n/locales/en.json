@@ -1508,7 +1508,26 @@
     "fieldGame": "Game",
     "fieldWhy": "Why I believe this content is illegal (please be specific)",
     "fieldWho": "My name and email address (you may omit this if the report concerns sexual offences)",
-    "goodFaith": "I declare that I believe, in good faith, that the information in this report is accurate and complete."
+    "goodFaith": "I declare that I believe, in good faith, that the information in this report is accurate and complete.",
+    "inApp": {
+      "action": "Report",
+      "signInToReport": "Sign in to report this game",
+      "signInTitle": "Sign in to report this game",
+      "signInSubtitle": "Reports are tied to your account so we can follow up and keep them from being abused.",
+      "reasonLabel": "What's wrong?",
+      "reasonSexual": "Sexual content",
+      "reasonHate": "Hate or slurs",
+      "reasonViolence": "Gratuitous violence",
+      "reasonTargetsPerson": "Targets a real person",
+      "reasonInfringing": "Infringing material",
+      "reasonOther": "Something else",
+      "placeholder": "What did you see, and where?",
+      "submit": "Send report",
+      "sending": "Sending…",
+      "sent": "Thanks — our team will review this.",
+      "rateLimited": "You've sent a lot of reports — please try again later.",
+      "error": "We couldn't send that right now. Please try again in a moment."
+    }
   },
   "party": {
     "badge": "Party mode",
