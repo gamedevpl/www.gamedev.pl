@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadFirestoreWriteCostBaseline } from '../../../../eslint-rules/firestore-write-cost-lib.mjs';
 import {
+  HEAVY_EDITORS,
   HEAVY_GAMES,
   HEAVY_ROUNDS,
   LIGHT,
@@ -33,7 +34,7 @@ describe('write path cost baseline', () => {
     }
   });
 
-  // The control: claimSeal tombstones, so neither dimension can cost it.
+  // The control: claimSeal tombstones, so history cannot cost it.
   it('claimSeal costs the same whatever the owner already owns', async () => {
     const light = await measureWriteCost('claimSeal', LIGHT);
     const rounds = await measureWriteCost('claimSeal', HEAVY_ROUNDS);
@@ -42,6 +43,14 @@ describe('write path cost baseline', () => {
       expect(heavy.reads, heavy.label).toBe(light.reads);
       expect(heavy.writes, heavy.label).toBe(light.writes);
     }
+  });
+
+  // Members are not history: each has a shelf to go stale.
+  it('claimSeal reads nothing extra for co-editors, and tombstones each', async () => {
+    const alone = await measureWriteCost('claimSeal', HEAVY_ROUNDS);
+    const shared = await measureWriteCost('claimSeal', HEAVY_EDITORS);
+    expect(shared.reads).toBe(alone.reads);
+    expect(shared.writes - alone.writes).toBe(HEAVY_EDITORS.editors);
   });
 
   // One game per round would report the two slopes added together.
@@ -53,6 +62,14 @@ describe('write path cost baseline', () => {
     const perGame = (games.reads - rounds.reads) / 21;
     expect(perRound).toBe(1);
     expect(perGame).toBe(2);
+  });
+
+  // A seed of one lone owner would record none of this.
+  it('charges a setter for every co-editor of the game it touches', async () => {
+    const alone = await measureWriteCost('setSubmissionTitle', HEAVY_ROUNDS);
+    const shared = await measureWriteCost('setSubmissionTitle', HEAVY_EDITORS);
+    expect(shared.reads).toBeGreaterThan(alone.reads);
+    expect(shared.writes - alone.writes).toBe(HEAVY_EDITORS.editors);
   });
 
   // An always-zero counter would satisfy every ceiling above.
@@ -69,6 +86,6 @@ describe('write path cost baseline', () => {
 
   // Guards the labels the baseline and the slope report are keyed on.
   it('labels a measurement by operation, shape and metric', () => {
-    expect(costLabel('claimSeal', LIGHT, 'reads')).toBe('claimSeal (3 rounds, 3 games) reads');
+    expect(costLabel('claimSeal', LIGHT, 'reads')).toBe('claimSeal (3 rounds, 3 games, 0 editors) reads');
   });
 });

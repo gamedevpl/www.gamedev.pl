@@ -83,10 +83,11 @@ export function nextOperationBaseline(baseline, measured, opts) {
  * @param {Record<string, number>} measured
  * @param {string} operation
  * @param {{ from: string, to: string, steps: number }} axis
+ * @param {'reads' | 'writes'} metric
  */
-export function slopeBetween(measured, operation, axis) {
-  const from = measured[`${operation} (${axis.from}) reads`];
-  const to = measured[`${operation} (${axis.to}) reads`];
+export function slopeBetween(measured, operation, axis, metric) {
+  const from = measured[`${operation} (${axis.from}) ${metric}`];
+  const to = measured[`${operation} (${axis.to}) ${metric}`];
   if (typeof from !== 'number' || typeof to !== 'number') return null;
-  return (to - from) / axis.steps;
+  return Math.round(((to - from) / axis.steps) * 100) / 100;
 }

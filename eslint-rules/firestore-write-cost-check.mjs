@@ -24,12 +24,14 @@ import {
 } from './firestore-write-cost-lib.mjs';
 
 // Kept in step with the fixture's LIGHT / HEAVY_ROUNDS / HEAVY_GAMES.
-const LIGHT = '3 rounds, 3 games';
-const HEAVY_ROUNDS = '24 rounds, 3 games';
-const HEAVY_GAMES = '24 rounds, 24 games';
+const LIGHT = '3 rounds, 3 games, 0 editors';
+const HEAVY_ROUNDS = '24 rounds, 3 games, 0 editors';
+const HEAVY_GAMES = '24 rounds, 24 games, 0 editors';
+const HEAVY_EDITORS = '24 rounds, 3 games, 12 editors';
 const AXES = [
   { name: 'round', from: LIGHT, to: HEAVY_ROUNDS, steps: 21 },
   { name: 'game', from: HEAVY_ROUNDS, to: HEAVY_GAMES, steps: 21 },
+  { name: 'editor', from: HEAVY_ROUNDS, to: HEAVY_EDITORS, steps: 12 },
 ];
 
 function ensurePackagesBuilt() {
@@ -83,13 +85,14 @@ function operationNames(measured) {
 }
 
 function reportSlopes(measured) {
-  console.log('Per-dimension read slope (0 = independent of how much the owner has):');
+  console.log('Per-dimension slope, reads/writes (0 = independent of that dimension):');
   for (const operation of operationNames(measured)) {
     const parts = [];
     for (const axis of AXES) {
-      const slope = slopeBetween(measured, operation, axis);
-      if (slope === null) continue;
-      parts.push(slope === 0 ? `flat per ${axis.name}` : `${slope}/${axis.name}`);
+      const reads = slopeBetween(measured, operation, axis, 'reads');
+      const writes = slopeBetween(measured, operation, axis, 'writes');
+      if (reads === null || writes === null) continue;
+      parts.push(reads === 0 && writes === 0 ? `flat/${axis.name}` : `${reads}r+${writes}w per ${axis.name}`);
     }
     if (parts.length > 0) console.log(`  ${operation.padEnd(26)} ${parts.join(', ')}`);
   }
