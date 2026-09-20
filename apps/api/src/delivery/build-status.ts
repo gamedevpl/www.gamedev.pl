@@ -5,7 +5,7 @@ import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-
 import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
-import { canActOnSlug, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
+import { canActOnGame, canActOnSlug, canonicalCreatorOwnerUid } from '../platform/game-access-permissions.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -18,7 +18,7 @@ import type {
   RecentBuild,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
-import { currentOwnerUidSoft } from '../platform/game-access-resolve.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import type {
   BuildPreviewSummary,
   BuildShotSummary,
@@ -367,13 +367,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
+    // One resolution serves the viewer test and the quota owner.
+    const access =
+      store && record?.slug && viewerUid ? await resolveGameAccess(store, record.slug).catch(() => null) : null;
     // State is a receipt the token carries; what was said is not.
     const viewerOwns = Boolean(
       store &&
         record &&
         viewerUid &&
-        // A blip denies; it used to 500 the member's own poll.
-        (await canActOnSubmissionOrSlug(store, record, viewerUid, 'read').catch(() => false)),
+        (record.slug ? access && canActOnGame(access, viewerUid, 'read') : record.ownerUid === viewerUid),
     );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
@@ -407,8 +409,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     // Only a member picks a builder; the quota is theirs.
     if (managedAvailabilityGate && viewerOwns) {
       // The quota belongs to whoever owns the game now, not the author.
-      const quotaUid =
-        store && record.slug ? await currentOwnerUidSoft(store, record.slug, record.ownerUid) : record.ownerUid;
+      const quotaUid = (access && canonicalCreatorOwnerUid(access)) || record.ownerUid;
       next.platformBuilder = await managedAvailabilityGate.peek(quotaUid, new Date(now()).toISOString().slice(0, 10));
     } else {
       delete next.platformBuilder;
