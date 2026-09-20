@@ -18,6 +18,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { platform } from './platform/index.js';
+import type { TiltReading } from './platform/types.js';
 
 export type Tilt = { x: number; y: number };
 
@@ -107,16 +109,6 @@ export function isFreeFall(sample: Vec3): boolean {
   return Math.hypot(sample.x, sample.y, sample.z) < FREE_FALL_MS2;
 }
 
-type OrientationConstructor = typeof DeviceOrientationEvent & {
-  requestPermission?: () => Promise<PermissionState | 'granted' | 'denied'>;
-};
-
-function orientationCtor(): OrientationConstructor | null {
-  if (typeof window === 'undefined') return null;
-  const ctor = (window as unknown as { DeviceOrientationEvent?: OrientationConstructor }).DeviceOrientationEvent;
-  return ctor ?? null;
-}
-
 export type DeviceTilt = {
   /** The browser exposes orientation events at all. */
   supported: boolean;
@@ -177,28 +169,19 @@ export function useDeviceTilt(enabled: boolean): DeviceTilt {
   }, []);
 
   useEffect(() => {
-    const ctor = orientationCtor();
-    if (!ctor) return;
-    setSupported(true);
-    // Only iOS defines requestPermission; everywhere else the events just flow.
-    setNeedsPermission(typeof ctor.requestPermission === 'function');
+    setSupported(platform.tilt.supported());
+    // Only iOS needs a gesture-initiated request; everywhere else events just flow.
+    setNeedsPermission(platform.tilt.needsPermission());
   }, []);
 
   const request = useCallback(() => {
-    const ctor = orientationCtor();
-    if (!ctor || typeof ctor.requestPermission !== 'function') return;
     // Must stay inside the gesture's task — no awaiting anything first.
-    ctor
-      .requestPermission()
-      .then((result) => {
-        if (result === 'granted') {
-          setGranted(true);
-          setNeedsPermission(false);
-        }
-      })
-      // A denial is a normal outcome, not an error to surface — the mascot simply
-      // keeps reacting to touch instead.
-      .catch(() => undefined);
+    void platform.tilt.requestPermission().then((result) => {
+      if (result === 'granted') {
+        setGranted(true);
+        setNeedsPermission(false);
+      }
+    });
   }, []);
 
   const listening = enabled && supported && (granted || !needsPermission);
@@ -230,7 +213,7 @@ export function useDeviceTilt(enabled: boolean): DeviceTilt {
       setTilt(published.current);
     };
 
-    const onOrientation = (event: DeviceOrientationEvent) => {
+    const onOrientation = (event: TiltReading) => {
       if (event.beta == null && event.gamma == null) return;
       if (!baseline.current) {
         baseline.current = { beta: event.beta ?? 0, gamma: event.gamma ?? 0 };
@@ -297,10 +280,10 @@ export function useDeviceTilt(enabled: boolean): DeviceTilt {
       emit('shake');
     };
 
-    window.addEventListener('deviceorientation', onOrientation);
+    const unsubscribeTilt = platform.tilt.subscribe(onOrientation);
     window.addEventListener('devicemotion', onMotion);
     return () => {
-      window.removeEventListener('deviceorientation', onOrientation);
+      unsubscribeTilt();
       window.removeEventListener('devicemotion', onMotion);
       if (frame) cancelAnimationFrame(frame);
       baseline.current = null;

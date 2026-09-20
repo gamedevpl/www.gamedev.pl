@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BootGate } from './BootGate.js';
 import { AuthProvider } from './AuthContext.js';
-import { recordVisit, watchInstallPrompt } from './pwa.js';
+import { platform } from './platform/index.js';
 import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
 import { startVisitTracking } from './visitTelemetry.js';
@@ -29,8 +29,8 @@ startVisitTracking();
  * `AppUpdateBanner` mounts. Without an early listener the message is gone and an
  * iPhone Home Screen reopen stays on a stale shell with no Reload offer.
  */
-watchInstallPrompt();
-recordVisit();
+platform.install.watch();
+platform.install.recordVisit();
 watchShellUpdates();
 
 // An async IIFE rather than a top-level await: the build targets Safari 14 / Chrome 87,

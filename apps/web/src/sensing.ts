@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { landmarksFromVideo, loadHandLandmarker } from './handLandmarker.js';
 import { createHandVerbState, sampleHandVerbs, type HandAim } from './handVerbs.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
+import { platform } from './platform/index.js';
+import type { TiltReading } from './platform/types.js';
 import { tiltFromOrientation } from './useDeviceTilt.js';
 
 /**
@@ -71,16 +73,6 @@ function rotateIntoScreen(tilt: { x: number; y: number }, angle: number): { x: n
   if (angle === -90 || angle === 270) return { x: -tilt.y, y: tilt.x };
   if (angle === 180) return { x: -tilt.x, y: -tilt.y };
   return tilt;
-}
-
-type OrientationConstructor = typeof DeviceOrientationEvent & {
-  requestPermission?: () => Promise<PermissionState | 'granted' | 'denied'>;
-};
-
-function orientationCtor(): OrientationConstructor | null {
-  if (typeof window === 'undefined') return null;
-  const ctor = (window as unknown as { DeviceOrientationEvent?: OrientationConstructor }).DeviceOrientationEvent;
-  return ctor ?? null;
 }
 
 function parseFacing(raw: unknown): BackdropFacing {
@@ -199,10 +191,9 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   const handReadyRef = useRef(false);
 
   useEffect(() => {
-    const ctor = orientationCtor();
-    setSupported(Boolean(ctor));
-    // Only iOS defines requestPermission; everywhere else the events just flow.
-    setNeedsPermission(Boolean(ctor && typeof ctor.requestPermission === 'function'));
+    setSupported(platform.tilt.supported());
+    // Only iOS needs a gesture-initiated request; everywhere else events just flow.
+    setNeedsPermission(platform.tilt.needsPermission());
     setBackdropSupported(cameraSupported());
   }, []);
 
@@ -237,20 +228,13 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   }, [postState]);
 
   const request = useCallback(() => {
-    const ctor = orientationCtor();
-    if (!ctor || typeof ctor.requestPermission !== 'function') return;
     // Must stay inside the gesture's task — no awaiting anything first.
-    ctor
-      .requestPermission()
-      .then((result) => {
-        if (result === 'granted') {
-          setGranted(true);
-          setNeedsPermission(false);
-        }
-      })
-      // A denial is a normal outcome, not an error to surface — the game simply keeps
-      // playing on keys, which it must be able to do anyway.
-      .catch(() => undefined);
+    void platform.tilt.requestPermission().then((result) => {
+      if (result === 'granted') {
+        setGranted(true);
+        setNeedsPermission(false);
+      }
+    });
   }, []);
 
   const startBackdrop = useCallback(() => {
@@ -375,7 +359,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
     }
 
-    const onOrientation = (event: DeviceOrientationEvent) => {
+    const onOrientation = (event: TiltReading) => {
       if (event.beta == null && event.gamma == null) return;
       // People do not hold phones flat: the first reading defines "level", so play is
       // relative to a comfortable grip (same rule as useDeviceTilt, and for phones the
@@ -417,10 +401,10 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       baseline.current = null;
     };
 
-    window.addEventListener('deviceorientation', onOrientation);
+    const unsubscribeTilt = platform.tilt.subscribe(onOrientation);
     window.addEventListener('orientationchange', onOrientationChange);
     return () => {
-      window.removeEventListener('deviceorientation', onOrientation);
+      unsubscribeTilt();
       window.removeEventListener('orientationchange', onOrientationChange);
       baseline.current = null;
       lastSent.current = { x: 0, y: 0, at: 0 };

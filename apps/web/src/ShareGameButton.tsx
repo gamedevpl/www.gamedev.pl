@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
+import { platform } from './platform/index.js';
 
 /**
  * One-tap share of a published game.
@@ -33,27 +34,10 @@ export function ShareGameButton({
 
   const share = async () => {
     const url = shareUrl();
-    const canShare =
-      typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ url, title, text: title }));
-
-    if (canShare) {
-      try {
-        await navigator.share({ title, text: title, url });
-        return;
-      } catch (error) {
-        // AbortError = user cancelled the sheet; leave quietly. Anything else
-        // falls through to the clipboard path below.
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(url);
+    const result = await platform.share.shareOrCopy({ url, title });
+    if (result === 'copied') {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // No clipboard permission — the address bar already has the permalink
-      // while playing, so there is nothing useful to surface as an error.
     }
   };
 

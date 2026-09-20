@@ -24,6 +24,9 @@ vi.mock('./AuthContext', () => ({
 }));
 
 vi.mock('./pushApi', () => ({
+  isPushSupported: () => false,
+  pushPermission: () => 'unsupported',
+  isSubscribed: async () => false,
   pushUiState: async () => ({ show: false, subscribed: false, permission: 'default' }),
   subscribeToPush: vi.fn(),
   unsubscribeFromPush: vi.fn(),

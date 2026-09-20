@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
+import { platform } from './platform/index.js';
 
 /**
  * Sign in with Apple, on the web.
@@ -13,35 +14,6 @@ import { useAuth } from './AuthContext.js';
  * the mark, the wording and the proportions are theirs, and it is what lets the control
  * match the height and shape of the Google button beside it instead of sitting 4px off.
  */
-
-interface AppleIdSignInResponse {
-  authorization?: { id_token?: string; code?: string; state?: string };
-  /**
-   * Present ONLY on the very first authorization for this Apple ID and this app. Apple
-   * never sends it again — not on the next sign-in, not after re-consent — so if it is
-   * dropped here the creator's name is gone for good.
-   */
-  user?: { name?: { firstName?: string; lastName?: string }; email?: string };
-}
-
-declare global {
-  interface Window {
-    AppleID?: {
-      auth: {
-        init: (config: {
-          clientId: string;
-          scope: string;
-          redirectURI: string;
-          state?: string;
-          usePopup?: boolean;
-        }) => void;
-        signIn: () => Promise<AppleIdSignInResponse>;
-      };
-    };
-  }
-}
-
-const APPLE_SDK_SRC = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
 
 interface AppleSignInButtonProps {
   onSuccess?: () => void;
@@ -65,31 +37,21 @@ export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignI
 
   useEffect(() => {
     if (!enabled) return;
-    if (window.AppleID?.auth) {
+    if (platform.auth.apple.isSdkLoaded()) {
       setReady(true);
       return;
     }
-
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${APPLE_SDK_SRC}"]`);
-    if (existing) {
-      existing.addEventListener('load', () => setReady(true));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = APPLE_SDK_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => onError?.('Failed to load Sign in with Apple');
-    document.body.appendChild(script);
+    platform.auth.apple.loadSdk(
+      () => setReady(true),
+      () => onError?.('Failed to load Sign in with Apple'),
+    );
   }, [enabled, onError]);
 
   useEffect(() => {
-    if (!ready || initialized.current || !window.AppleID?.auth) return;
+    if (!ready || initialized.current || !platform.auth.apple.isSdkLoaded()) return;
     initialized.current = true;
 
-    window.AppleID.auth.init({
+    platform.auth.apple.init({
       clientId: servicesId,
       scope: 'name email',
       // Apple validates this against the Return URLs registered on the Services ID and
@@ -101,10 +63,10 @@ export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignI
   }, [ready, servicesId]);
 
   const handleClick = useCallback(async () => {
-    if (!window.AppleID?.auth || busy) return;
+    if (!platform.auth.apple.isSdkLoaded() || busy) return;
     setBusy(true);
     try {
-      const response = await window.AppleID.auth.signIn();
+      const response = await platform.auth.apple.signIn();
       const idToken = response.authorization?.id_token;
       if (!idToken) {
         onError?.('Sign in failed');
