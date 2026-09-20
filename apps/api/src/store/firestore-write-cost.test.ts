@@ -3,6 +3,7 @@ import { loadFirestoreWriteCostBaseline } from '../../../../eslint-rules/firesto
 import {
   HEAVY_ROUNDS,
   LIGHT_ROUNDS,
+  MEASURED_OPERATIONS,
   costLabel,
   measureWriteCost,
   measureWriteCosts,
@@ -36,6 +37,18 @@ describe('write path cost baseline', () => {
     const heavy = await measureWriteCost('claimSeal', HEAVY_ROUNDS);
     expect(heavy.reads).toBe(light.reads);
     expect(heavy.writes).toBe(light.writes);
+  });
+
+  // An always-zero counter would satisfy every ceiling above.
+  it('counts the writes each operation actually bills', async () => {
+    const measured = await measureWriteCosts();
+    const writes = Object.entries(measured).filter(([label]) => label.endsWith(' writes'));
+    expect(writes).toHaveLength(MEASURED_OPERATIONS.length * 2);
+    for (const [label, cost] of writes) expect(cost, label).toBeGreaterThan(0);
+    // The source write plus the tombstone it forces.
+    expect(measured[costLabel('setSubmissionTitle', LIGHT_ROUNDS, 'writes')]).toBe(2);
+    // Seal, transition and tombstone, on one round.
+    expect(measured[costLabel('claimSeal', LIGHT_ROUNDS, 'writes')]).toBe(3);
   });
 
   // Guards the labels the baseline and the slope report are keyed on.
