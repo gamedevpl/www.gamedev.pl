@@ -178,9 +178,17 @@ export function PublishedGames() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), 60_000);
-    return () => clearInterval(timer);
+    // A hidden console shows nothing, so it asks for nothing.
+    const tick = () => {
+      if (!document.hidden) void load();
+    };
+    tick();
+    document.addEventListener('visibilitychange', tick);
+    const timer = setInterval(tick, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', tick);
+      clearInterval(timer);
+    };
   }, [load]);
 
   if (state === 'forbidden' || state === 'loading') return null;

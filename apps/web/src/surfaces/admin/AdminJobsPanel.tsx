@@ -66,9 +66,17 @@ export function AdminJobsPanel() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), 30_000);
-    return () => clearInterval(timer);
+    // A hidden console shows nothing, so it asks for nothing.
+    const tick = () => {
+      if (!document.hidden) void load();
+    };
+    tick();
+    document.addEventListener('visibilitychange', tick);
+    const timer = setInterval(tick, 30_000);
+    return () => {
+      document.removeEventListener('visibilitychange', tick);
+      clearInterval(timer);
+    };
   }, [load]);
 
   const jobs = useMemo(() => queue?.jobs ?? [], [queue]);

@@ -253,4 +253,30 @@ describe('AdminConsole', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('asks for nothing while the tab is hidden, and catches up on the way back', async () => {
+    mocked.fetchAdminSummary.mockResolvedValue(summary());
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let hidden = true;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+
+    const { root } = await render('queue');
+
+    expect(mocked.fetchAdminSummary).not.toHaveBeenCalled();
+
+    // This summary costs ~93 reads; a hidden console must not poll.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+    });
+    expect(mocked.fetchAdminSummary).not.toHaveBeenCalled();
+
+    hidden = false;
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(mocked.fetchAdminSummary).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  });
 });
