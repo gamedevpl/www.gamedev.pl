@@ -386,6 +386,16 @@ describe('moderation flags', () => {
       expect(queue.json().flags).toMatchObject([{ slug: 'neon-courier', source: 'player' }]);
     });
 
+    it('fails closed (404, not 500) when the store lane read throws', async () => {
+      // The shared gate must eat a transient Firestore error, like /play.
+      const { app, store } = await makeApp({ published: [] });
+      store.getPublication = async () => {
+        throw new Error('firestore unavailable');
+      };
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(404);
+    });
+
     it('rate-limits repeated reports from the same account', async () => {
       const { app } = await makeApp({ published: ['sky-dodge', 'neon-courier'] });
       const alice = await cookie(app, 'alice');

@@ -129,6 +129,11 @@ export interface CombinedPublishedSlugGateOptions {
  *
  * Cheap by construction: one `getPublication` read per miss on the repo gate, the
  * same cost `/play` already pays. The repo gate keeps its own TTL cache untouched.
+ *
+ * The report route (moderation-flags.ts) cannot use this one: its repo gate is env-derived,
+ * built before `registerSubmissionRoutes` returns the actual (possibly test-injected)
+ * githubClient, so wiring it in would be circular. See `isSlugPublishedAnyLane` in
+ * catalog/catalog-routes.ts for that caller's own OR, kept fail-closed the same way.
  */
 export function createCombinedPublishedSlugGate(options: CombinedPublishedSlugGateOptions): PublishedSlugGate {
   const { repoGate, store } = options;

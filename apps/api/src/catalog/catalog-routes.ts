@@ -199,12 +199,20 @@ export async function registerCatalogRoutes(
     return entries.find((entry) => entry.slug === slug && isPublishedEntry(entry)) ?? null;
   }
 
-  // OR of the two lanes /play already serves: repo catalog, store publications.
+  // Sibling of createCombinedPublishedSlugGate (catalog/published-slugs.ts): that one
+  // is built from env, blind to a githubClient injected here, so it cannot answer for
+  // the report route without a circular dependency. Keep both in mind on a slug-gate change.
   async function isSlugPublishedAnyLane(slug: string): Promise<boolean> {
     if (await isSlugPublished(slug)) return true;
     if (!store) return false;
-    const publication = await store.getPublication(slug);
-    return isPublished(publication);
+    try {
+      const publication = await store.getPublication(slug);
+      return isPublished(publication);
+    } catch {
+      // A transient store failure must not turn a report into a 500. See the
+      // matching fail-closed comment in createCombinedPublishedSlugGate.
+      return false;
+    }
   }
 
   async function storePublishedGame(slug: string): Promise<PublishedGame | null> {
