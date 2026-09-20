@@ -612,6 +612,7 @@ export function App() {
                     onRetryCatalog={handleRetryCatalog}
                     recommendationsRefreshKey={recommendationsRefreshKey}
                     creatorGamesRefreshKey={myGamesRefreshKey}
+                    activeBuildCount={activeBuildCount}
                   />
                 )}
 
