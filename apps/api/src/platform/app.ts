@@ -1190,6 +1190,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await app.register(fastifyStatic, {
       root: webDistDir,
       wildcard: false,
+      // `wildcard: false` globs the dist tree at boot, and glob skips dotfiles
+      // unless told otherwise — without this, /.well-known/* 404s silently.
+      serveDotFiles: true,
       // Serve build-time .br/.gz siblings (apps/web/scripts/precompress.mjs) —
       // never compress per-request: Cloud Run bills CPU.
       preCompressed: true,
@@ -1202,6 +1205,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           reply.header('cache-control', 'public, max-age=31536000, immutable');
         } else {
           reply.header('cache-control', 'no-cache');
+        }
+        // No extension, so mime lookup misses it; iOS requires this exact type.
+        if (filePath.endsWith(`${path.sep}apple-app-site-association`)) {
+          reply.header('content-type', 'application/json');
         }
       },
     });
