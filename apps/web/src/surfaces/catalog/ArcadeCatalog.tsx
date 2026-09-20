@@ -35,6 +35,8 @@ type ArcadeCatalogProps = {
   recommendationsRefreshKey?: number;
   /** Bump after a new submission so Yours pins refresh. */
   creatorGamesRefreshKey?: number;
+  // Builds in flight; a change re-reads the shelf.
+  activeBuildCount?: number;
 };
 
 export function ArcadeCatalog({
@@ -46,6 +48,7 @@ export function ArcadeCatalog({
   onRetryCatalog,
   recommendationsRefreshKey = 0,
   creatorGamesRefreshKey = 0,
+  activeBuildCount = 0,
 }: ArcadeCatalogProps) {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading } = useAuth();
@@ -59,6 +62,7 @@ export function ArcadeCatalog({
     viewerUid,
     locale,
     creatorGamesRefreshKey,
+    activeBuildCount,
   });
   const { featuredPool, featuredPoolReady } = useFeaturedPool();
 
