@@ -47,7 +47,7 @@ describe('write path cost baseline', () => {
     for (const [label, cost] of writes) expect(cost, label).toBeGreaterThan(0);
     // The source write plus the tombstone it forces.
     expect(measured[costLabel('setSubmissionTitle', LIGHT_ROUNDS, 'writes')]).toBe(2);
-    // Seal, transition and tombstone, on one round.
+    // One source write, then the guard tombstones twice: in-transaction and deferred.
     expect(measured[costLabel('claimSeal', LIGHT_ROUNDS, 'writes')]).toBe(3);
   });
 
