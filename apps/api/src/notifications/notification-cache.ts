@@ -1,4 +1,4 @@
-// The bell's list, one window. See docs/firestore-read-cost.md.
+// The bell's list, one window. See ops repo read-cost doc.
 
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { Store } from '../platform/store.js';

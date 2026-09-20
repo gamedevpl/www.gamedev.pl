@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Why this exists: docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
+// Why this exists: ops repo docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
 //
 //   node infra/check-deploy-freshness.mjs
 //   GRACE_MINUTES=40 DEPLOY_TIMEOUT_MINUTES=60 node infra/check-deploy-freshness.mjs

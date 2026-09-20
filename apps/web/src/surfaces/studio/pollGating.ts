@@ -2,7 +2,7 @@
 
 // Hidden stops, idle widens, the server floor caps both.
 
-// Rationale and measurements: docs/firestore-read-cost.md.
+// Rationale and measurements: ops repo docs/firestore-read-cost.md.
 
 
 // Untouched this long and nobody is watching.

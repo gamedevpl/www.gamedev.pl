@@ -46,7 +46,7 @@ const MAX_PROGRESS_LABELS = 8;
  */
 const MAX_TRACKED_LABELS_PER_SESSION = 20;
 
-// The midnight seam: docs/firestore-read-cost.md.
+// The midnight seam: ops repo docs/firestore-read-cost.md.
 export const CONTINUATION_GRACE_MS = 15 * 60_000;
 
 export interface SummarizeOptions {

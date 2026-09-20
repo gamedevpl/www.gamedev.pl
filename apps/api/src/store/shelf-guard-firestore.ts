@@ -189,7 +189,7 @@ function createSession(real: Transaction, db: Firestore, at: string): Session {
 
 // Owners come from what the transaction already read, so no extra read.
 
-// See docs/firestore-read-cost.md for why this seam exists.
+// See ops repo docs/firestore-read-cost.md for why this seam exists.
 export function createGuardedFirestore(db: Firestore, log: ShelfGuardLog = defaultLog): GuardedFirestore {
   const tombstone = async (ownerUid: string, at: string): Promise<void> => {
     await db.collection('shelves').doc(ownerUid).set(blindTombstone(at));

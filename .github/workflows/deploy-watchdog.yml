@@ -1,4 +1,4 @@
-# Why this exists: docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
+# Why this exists: ops repo docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
 name: Deploy watchdog
 
 on:

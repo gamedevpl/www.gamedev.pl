@@ -1,4 +1,4 @@
-// The studio health scan, one window. See docs/firestore-read-cost.md.
+// The studio health scan, one window. See ops repo read-cost doc.
 
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { GameHealth } from '../platform/telemetry-health.js';

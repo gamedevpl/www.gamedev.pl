@@ -1,4 +1,4 @@
-// The incoming-transfer inbox, one window. See docs/firestore-read-cost.md.
+// The incoming-transfer inbox, one window. See ops repo read-cost doc.
 
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { GameTransferInvitation, Store } from '../platform/store.js';
