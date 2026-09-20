@@ -4,6 +4,9 @@ import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from '.
 // How stale a pin may get, and the slowest re-read.
 const REFRESH_FLOOR_MS = 5 * 60_000;
 
+// Checked this often, so the floor decides the cadence, not the timer.
+const FLOOR_CHECK_MS = 60_000;
+
 // Feeds the Studio chip and the Yours pins — never the grid itself.
 export function useCreatorShelf({
   authLoading,
@@ -52,29 +55,25 @@ export function useCreatorShelf({
     // Fresh wiring owes a read, so no floor may skip it.
     loadedAt.current = 0;
 
-    // A hidden tab shows no pins, so it asks for none.
-    const tick = () => {
-      if (!document.hidden) load(Date.now());
-    };
-
-    // Re-runs on an activeBuildCount change: a pin may have appeared.
-    tick();
-
-    // A transfer in, or a failed first read, changes no local signal.
-    const timer = window.setInterval(tick, REFRESH_FLOOR_MS);
-
-    // Catch up on the way back rather than waiting out the interval.
-    const onVisible = () => {
+    // One floor for the clock and the way back.
+    const refresh = () => {
       if (document.hidden) return;
       const at = Date.now();
       if (at - loadedAt.current < REFRESH_FLOOR_MS) return;
       load(at);
     };
-    document.addEventListener('visibilitychange', onVisible);
+
+    // Re-runs on an activeBuildCount change: a pin may have appeared.
+    if (!document.hidden) load(Date.now());
+
+    // A transfer in, or a failed first read, changes no local signal.
+    const timer = window.setInterval(refresh, FLOOR_CHECK_MS);
+
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisible);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [authLoading, viewerUid, creatorGamesRefreshKey, locale, activeBuildCount]);
 

@@ -126,6 +126,26 @@ describe('useCreatorShelf', () => {
     await act(async () => root.unmount());
   });
 
+  it('does not read twice when a return lands just before a scheduled check', async () => {
+    const { root } = await mountShelf();
+    mockedLoad.mockClear();
+
+    await show(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9 * 60_000 + 59_000);
+    });
+    await show(false);
+    expect(mockedLoad).toHaveBeenCalledTimes(1);
+
+    // The tick a second later is inside the floor of that read.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(mockedLoad).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
   it('does not let a stale floor skip the read a re-wired effect owes', async () => {
     const { root, setCount } = await mountShelf();
     mockedLoad.mockClear();
