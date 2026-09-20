@@ -9,9 +9,20 @@ export const OWNER_UID = 'g:writer';
 export const EDITOR_UID = 'g:co-editor';
 export const AT = '2026-01-15T12:00:00.000Z';
 
-// Two sizes of one owner; a differing cost scales.
-export const LIGHT_ROUNDS = 3;
-export const HEAVY_ROUNDS = 24;
+export interface OwnerShape {
+  label: string;
+  rounds: number;
+  games: number;
+}
+
+// Each shape moves one dimension, so each slope stands alone.
+
+// A round-per-game seed would report both as one number.
+export const LIGHT: OwnerShape = { label: '3 rounds, 3 games', rounds: 3, games: 3 };
+export const HEAVY_ROUNDS: OwnerShape = { label: '24 rounds, 3 games', rounds: 24, games: 3 };
+export const HEAVY_GAMES: OwnerShape = { label: '24 rounds, 24 games', rounds: 24, games: 24 };
+
+export const MEASURED_SHAPES: readonly OwnerShape[] = [LIGHT, HEAVY_ROUNDS, HEAVY_GAMES];
 
 export const MEASURED_OPERATIONS = [
   'setSubmissionTitle',
@@ -23,9 +34,9 @@ export const MEASURED_OPERATIONS = [
 
 export type MeasuredOperation = (typeof MEASURED_OPERATIONS)[number];
 
-// One entry per operation per size, so the baseline shows the slope.
-export function costLabel(operation: MeasuredOperation, rounds: number, metric: 'reads' | 'writes'): string {
-  return `${operation} (${rounds} rounds) ${metric}`;
+// One entry per operation per shape, so the baseline shows both slopes.
+export function costLabel(operation: MeasuredOperation, shape: OwnerShape, metric: 'reads' | 'writes'): string {
+  return `${operation} (${shape.label}) ${metric}`;
 }
 
 export interface WriteCostRow {
@@ -39,14 +50,15 @@ function jobIdAt(index: number): number {
   return 9000 + index;
 }
 
-async function seedOwner(store: Store, rounds: number): Promise<number> {
+async function seedOwner(store: Store, shape: OwnerShape): Promise<number> {
   await store.upsertUser({ uid: OWNER_UID });
-  for (let index = 0; index < rounds; index += 1) {
+  for (let index = 0; index < shape.rounds; index += 1) {
     const jobId = jobIdAt(index);
     await store.createSubmission(jobId, OWNER_UID, `Round ${index}`);
-    await store.setSubmissionSlug(jobId, `game-${index}`);
+    // Rounds share games when there are fewer games than rounds.
+    await store.setSubmissionSlug(jobId, `game-${index % shape.games}`);
   }
-  const target = jobIdAt(rounds - 1);
+  const target = jobIdAt(shape.rounds - 1);
   // claimSeal needs a round already offered for review.
   await store.setSubmissionPreviewVersion(target, 'v1');
   await store.recordJobTransition(target, { to: 'ready_for_review', at: AT, by: 'agent', reason: 'delivered' });
@@ -66,23 +78,23 @@ async function runOperation(store: Store, operation: MeasuredOperation, jobId: n
   await store.claimSeal(jobId, AT);
 }
 
-export async function measureWriteCost(operation: MeasuredOperation, rounds: number): Promise<WriteCostRow> {
+export async function measureWriteCost(operation: MeasuredOperation, shape: OwnerShape): Promise<WriteCostRow> {
   const fake = fakeFirestore();
   const store = new FirestoreStore(fake.db);
-  const jobId = await seedOwner(store, rounds);
+  const jobId = await seedOwner(store, shape);
   fake.resetBilledReads();
   // afterJobWrite awaits its rebuild, so the store call already drained it.
   await runOperation(store, operation, jobId);
-  return { label: `${operation} (${rounds} rounds)`, reads: fake.billedReads(), writes: fake.billedWrites() };
+  return { label: `${operation} (${shape.label})`, reads: fake.billedReads(), writes: fake.billedWrites() };
 }
 
 export async function measureWriteCosts(): Promise<Record<string, number>> {
   const measured: Record<string, number> = {};
   for (const operation of MEASURED_OPERATIONS) {
-    for (const rounds of [LIGHT_ROUNDS, HEAVY_ROUNDS]) {
-      const row = await measureWriteCost(operation, rounds);
-      measured[costLabel(operation, rounds, 'reads')] = row.reads;
-      measured[costLabel(operation, rounds, 'writes')] = row.writes;
+    for (const shape of MEASURED_SHAPES) {
+      const row = await measureWriteCost(operation, shape);
+      measured[costLabel(operation, shape, 'reads')] = row.reads;
+      measured[costLabel(operation, shape, 'writes')] = row.writes;
     }
   }
   return measured;

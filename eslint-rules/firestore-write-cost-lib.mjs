@@ -77,16 +77,16 @@ export function nextOperationBaseline(baseline, measured, opts) {
 }
 
 /**
- * The slope between the two sizes, per round. Zero means the cost does not
- * depend on how much history the owner has, which is the goal.
+ * A slope is measured with one dimension moving. Rounds and games both cost,
+ * and a seed with one game per round reports their sum as if it were per round.
  *
  * @param {Record<string, number>} measured
  * @param {string} operation
- * @param {{ light: number, heavy: number }} sizes
+ * @param {{ from: string, to: string, steps: number }} axis
  */
-export function perRoundSlope(measured, operation, sizes) {
-  const light = measured[`${operation} (${sizes.light} rounds) reads`];
-  const heavy = measured[`${operation} (${sizes.heavy} rounds) reads`];
-  if (typeof light !== 'number' || typeof heavy !== 'number') return null;
-  return (heavy - light) / (sizes.heavy - sizes.light);
+export function slopeBetween(measured, operation, axis) {
+  const from = measured[`${operation} (${axis.from}) reads`];
+  const to = measured[`${operation} (${axis.to}) reads`];
+  if (typeof from !== 'number' || typeof to !== 'number') return null;
+  return (to - from) / axis.steps;
 }

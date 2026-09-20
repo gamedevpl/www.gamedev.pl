@@ -20,11 +20,17 @@ import {
   filterMeasuredOperations,
   loadFirestoreWriteCostBaseline,
   nextOperationBaseline,
-  perRoundSlope,
+  slopeBetween,
 } from './firestore-write-cost-lib.mjs';
 
-// Kept in step with the fixture's LIGHT_ROUNDS / HEAVY_ROUNDS.
-const SIZES = { light: 3, heavy: 24 };
+// Kept in step with the fixture's LIGHT / HEAVY_ROUNDS / HEAVY_GAMES.
+const LIGHT = '3 rounds, 3 games';
+const HEAVY_ROUNDS = '24 rounds, 3 games';
+const HEAVY_GAMES = '24 rounds, 24 games';
+const AXES = [
+  { name: 'round', from: LIGHT, to: HEAVY_ROUNDS, steps: 21 },
+  { name: 'game', from: HEAVY_ROUNDS, to: HEAVY_GAMES, steps: 21 },
+];
 
 function ensurePackagesBuilt() {
   // CI lint runs before type-check, so workspace dist is empty.
@@ -77,13 +83,15 @@ function operationNames(measured) {
 }
 
 function reportSlopes(measured) {
-  console.log('Per-round read slope (0 = independent of how much history the owner has):');
+  console.log('Per-dimension read slope (0 = independent of how much the owner has):');
   for (const operation of operationNames(measured)) {
-    const slope = perRoundSlope(measured, operation, SIZES);
-    if (slope === null) continue;
-    const at553 = Math.round(measured[`${operation} (${SIZES.light} rounds) reads`] + slope * (553 - SIZES.light));
-    const note = slope === 0 ? 'flat' : `${slope}/round — ~${at553} reads for a 553-round creator`;
-    console.log(`  ${operation.padEnd(26)} ${note}`);
+    const parts = [];
+    for (const axis of AXES) {
+      const slope = slopeBetween(measured, operation, axis);
+      if (slope === null) continue;
+      parts.push(slope === 0 ? `flat per ${axis.name}` : `${slope}/${axis.name}`);
+    }
+    if (parts.length > 0) console.log(`  ${operation.padEnd(26)} ${parts.join(', ')}`);
   }
 }
 

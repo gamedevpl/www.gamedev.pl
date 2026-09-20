@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { loadFirestoreWriteCostBaseline } from '../../../../eslint-rules/firestore-write-cost-lib.mjs';
 import {
+  HEAVY_GAMES,
   HEAVY_ROUNDS,
-  LIGHT_ROUNDS,
+  LIGHT,
   MEASURED_OPERATIONS,
+  MEASURED_SHAPES,
   costLabel,
   measureWriteCost,
   measureWriteCosts,
@@ -11,7 +13,7 @@ import {
 
 // The read ratchet pins the poll; this pins the write.
 
-// A cost differing between sizes is paid per round.
+// Rounds and games cost separately, so each shape moves one of them.
 describe('write path cost baseline', () => {
   it('every measured entry stays at or under its recorded cost', async () => {
     const baseline = loadFirestoreWriteCostBaseline();
@@ -31,28 +33,42 @@ describe('write path cost baseline', () => {
     }
   });
 
-  // The control: claimSeal tombstones, so history cannot cost it.
+  // The control: claimSeal tombstones, so neither dimension can cost it.
   it('claimSeal costs the same whatever the owner already owns', async () => {
-    const light = await measureWriteCost('claimSeal', LIGHT_ROUNDS);
-    const heavy = await measureWriteCost('claimSeal', HEAVY_ROUNDS);
-    expect(heavy.reads).toBe(light.reads);
-    expect(heavy.writes).toBe(light.writes);
+    const light = await measureWriteCost('claimSeal', LIGHT);
+    const rounds = await measureWriteCost('claimSeal', HEAVY_ROUNDS);
+    const games = await measureWriteCost('claimSeal', HEAVY_GAMES);
+    for (const heavy of [rounds, games]) {
+      expect(heavy.reads, heavy.label).toBe(light.reads);
+      expect(heavy.writes, heavy.label).toBe(light.writes);
+    }
+  });
+
+  // One game per round would report the two slopes added together.
+  it('separates what a round costs from what a game costs', async () => {
+    const light = await measureWriteCost('setSubmissionTitle', LIGHT);
+    const rounds = await measureWriteCost('setSubmissionTitle', HEAVY_ROUNDS);
+    const games = await measureWriteCost('setSubmissionTitle', HEAVY_GAMES);
+    const perRound = (rounds.reads - light.reads) / 21;
+    const perGame = (games.reads - rounds.reads) / 21;
+    expect(perRound).toBe(1);
+    expect(perGame).toBe(2);
   });
 
   // An always-zero counter would satisfy every ceiling above.
   it('counts the writes each operation actually bills', async () => {
     const measured = await measureWriteCosts();
     const writes = Object.entries(measured).filter(([label]) => label.endsWith(' writes'));
-    expect(writes).toHaveLength(MEASURED_OPERATIONS.length * 2);
+    expect(writes).toHaveLength(MEASURED_OPERATIONS.length * MEASURED_SHAPES.length);
     for (const [label, cost] of writes) expect(cost, label).toBeGreaterThan(0);
     // The source write plus the tombstone it forces.
-    expect(measured[costLabel('setSubmissionTitle', LIGHT_ROUNDS, 'writes')]).toBe(2);
+    expect(measured[costLabel('setSubmissionTitle', LIGHT, 'writes')]).toBe(2);
     // One source write, then the guard tombstones twice: in-transaction and deferred.
-    expect(measured[costLabel('claimSeal', LIGHT_ROUNDS, 'writes')]).toBe(3);
+    expect(measured[costLabel('claimSeal', LIGHT, 'writes')]).toBe(3);
   });
 
   // Guards the labels the baseline and the slope report are keyed on.
-  it('labels a measurement by operation, size and metric', () => {
-    expect(costLabel('claimSeal', LIGHT_ROUNDS, 'reads')).toBe(`claimSeal (${LIGHT_ROUNDS} rounds) reads`);
+  it('labels a measurement by operation, shape and metric', () => {
+    expect(costLabel('claimSeal', LIGHT, 'reads')).toBe('claimSeal (3 rounds, 3 games) reads');
   });
 });
