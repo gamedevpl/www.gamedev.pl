@@ -19,7 +19,10 @@ export function resolveHealthVerdict(
 
   // First red verdict starts the streak; later re-checks carry it forward.
   const unhealthySinceAt = check.unhealthySinceAt ?? health.ranAt;
-  const streakWindow = Math.floor((Date.parse(health.ranAt) - Date.parse(unhealthySinceAt)) / RED_RECHECK_COOLDOWN_MS);
+  const streakWindow = Math.max(
+    0,
+    Math.floor((Date.parse(health.ranAt) - Date.parse(unhealthySinceAt)) / RED_RECHECK_COOLDOWN_MS),
+  );
   return {
     green: false,
     patch: { ...check, green: false, verdictAt: health.ranAt, unhealthySinceAt },
