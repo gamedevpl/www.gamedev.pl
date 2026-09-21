@@ -51,7 +51,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       for(i=0;i<stack.length;i++)if(stack[i]===v)throw AGENT_OVER;
       stack.push(v);
       var parts=[],out,text;
-      if(Object.prototype.toString.call(v)==='[object Array]'){
+      // Array.isArray asks nothing of the value: a toStringTag getter is game code.
+      if(Array.isArray(v)){
         spend(2);
         for(i=0;i<v.length;i++){
           if(i)spend(1);
@@ -194,15 +195,20 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
     return seen;
   }
+  function agentSlot(holder,name){
+    // The registry property itself can be an accessor that throws.
+    try{return holder[name];}catch(err){return null;}
+  }
   function agentApiTable(){
     var h=agentHarness()||{},k,fn,seen=0;
+    var apiSrc=agentSlot(h,'api'),helperSrc=agentSlot(h,'helpers');
     // Even a bounded scan has to enumerate first, so a frame pays for it once.
-    if(AGENT_API_MEMO&&AGENT_API_MEMO.h===h&&AGENT_API_MEMO.api===h.api&&
-      AGENT_API_MEMO.helpers===h.helpers&&AGENT_API_MEMO.frame===h.frame)return AGENT_API_MEMO.table;
+    if(AGENT_API_MEMO&&AGENT_API_MEMO.h===h&&AGENT_API_MEMO.api===apiSrc&&
+      AGENT_API_MEMO.helpers===helperSrc&&AGENT_API_MEMO.frame===h.frame)return AGENT_API_MEMO.table;
     // Null prototype so call constructor misses instead of reaching Object.prototype.
     var table=Object.create(null);
-    seen=agentTakeFns(h.api,table,seen);
-    seen=agentTakeFns(h.helpers,table,seen);
+    seen=agentTakeFns(apiSrc,table,seen);
+    seen=agentTakeFns(helperSrc,table,seen);
     for(k in h){
       if(seen>=AGENT_API_SCAN)break;
       if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
@@ -210,7 +216,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       try{fn=h[k];}catch(err){continue;}
       if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
     }
-    AGENT_API_MEMO={h:h,api:h.api,helpers:h.helpers,frame:h.frame,table:table};
+    AGENT_API_MEMO={h:h,api:apiSrc,helpers:helperSrc,frame:h.frame,table:table};
     return table;
   }
   // A repaint can republish a changed registry inside one frame.

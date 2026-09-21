@@ -659,6 +659,25 @@ describe('the agent bridge, running for real', () => {
     expect(snapshot.observation).toContain('"cash":12');
   });
 
+  // The registry slot itself can be an accessor that throws.
+  it('survives a harness.api that throws when read', async () => {
+    Object.defineProperty(harness, 'api', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('no registry');
+      },
+    });
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state');
+    expect(state).toBeTruthy();
+    expect(state!.api as string[]).toEqual([]);
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
@@ -953,6 +972,27 @@ describe('the agent bridge, running for real', () => {
 
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).toContain('[null]');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // A toStringTag getter is game code the type test ran.
+    it('asks the value nothing to learn whether it is an array', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const clue: Record<string, unknown> = { targetWord: 'RAVEN' };
+      Object.defineProperty(clue, Symbol.toStringTag, {
+        get() {
+          clue.answer = clue.targetWord;
+          return 'Object';
+        },
+      });
+      harness.observation = () => ({ clue });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 

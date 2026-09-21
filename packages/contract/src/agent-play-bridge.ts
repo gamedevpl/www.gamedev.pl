@@ -362,7 +362,11 @@ export const AGENT_PLAY_BRIDGE =
       },
       ui:function(){return agentUi();},
       api:function(){return agentApiNames();},
-      call:function(name){return agentInvoke(name,Array.prototype.slice.call(arguments,1));},
+      // Forgotten after: a helper can register another without a frame passing.
+      call:function(name){
+        try{return agentInvoke(name,Array.prototype.slice.call(arguments,1));}
+        finally{agentForgetApi();}
+      },
       // Input, same verbs the command box has.
       press:function(key,frames,draw){
         var resolved=agentResolveKey(key);
