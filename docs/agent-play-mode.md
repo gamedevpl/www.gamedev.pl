@@ -138,7 +138,9 @@ twice would read as a sound heard twice.
   which answers for the internal slot only a genuine `Date` has, in any realm; an object
   that merely looks like one is written out as the object it is. An accessor is game
   code too, so where a game declares hidden fields its getters are not run and those
-  properties do not appear; a game declaring none keeps them.
+  properties do not appear; a game declaring none keeps them. What is written is the value
+  the descriptor reported, never a second read, so a `Proxy` cannot answer the check with
+  one value and the walk with another.
 - **A helper that throws is reported without its message** when the game declares hidden
   fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read

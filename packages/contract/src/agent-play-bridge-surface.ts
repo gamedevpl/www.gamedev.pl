@@ -29,11 +29,15 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   }
   // No global: self-comparison catches NaN, and the two infinities compare.
   function agentFinite(n){return typeof n==='number'&&n===n&&n!==1/0&&n!==-1/0;}
-  function agentIsData(holder,name){
+  // Returns the value the descriptor reported, so what we emit is what we
+  // checked: a read would go through a proxy trap the descriptor did not show.
+  var AGENT_NO_DATA={};
+  function agentDataValue(holder,name){
     try{
       var d=AGENT_DESC(holder,name);
-      return !!d&&!d.get&&!d.set;
-    }catch(err){return false;}
+      if(!d||d.get||d.set)return AGENT_NO_DATA;
+      return d.value;
+    }catch(err){return AGENT_NO_DATA;}
   }
   function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
@@ -64,7 +68,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       // A cycle would never end; nesting spends the budget, so depth needs no cap.
       for(i=0;i<depth;i++)if(stack[i]===v)throw AGENT_OVER;
       stack[depth++]=v;
-      var out,text,wrote=0;
+      var out,text,val,wrote=0;
       // Array.isArray asks nothing of the value: a toStringTag getter is game code.
       if(AGENT_IS_ARRAY(v)){
         spend(2);
@@ -72,14 +76,19 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         for(i=0;i<v.length;i++){
           if(i)out+=lit(',');
           // An index can be an accessor, and a slot names nothing.
-          if(names.length&&!agentIsData(v,''+i)){out+=lit('null');continue;}
-          text=write(v[i]);
+          if(names.length){
+            val=agentDataValue(v,''+i);
+            if(val===AGENT_NO_DATA){out+=lit('null');continue;}
+          }else{
+            try{val=v[i];}catch(err){out+=lit('null');continue;}
+          }
+          text=write(val);
           out+=(text===undefined?lit('null'):text);
         }
         out+=']';
       }else{
         spend(2);
-        var key,name,val;
+        var key,name;
         // Enumerated, not collected: a wide object must not cost a key array
         // before the budget has a chance to stop the walk.
         out='{';
@@ -91,8 +100,12 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
           if(declared(name))continue;
           // An accessor is game code, and this walk exists so none of it runs.
           // Only where something is declared: with nothing to protect it is the game's.
-          if(names.length&&!agentIsData(v,name))continue;
-          try{val=v[name];}catch(err){continue;}
+          if(names.length){
+            val=agentDataValue(v,name);
+            if(val===AGENT_NO_DATA)continue;
+          }else{
+            try{val=v[name];}catch(err){continue;}
+          }
           text=write(val);
           if(text===undefined)continue;
           // Cut before escaping, like a string value: a key is untrusted too.

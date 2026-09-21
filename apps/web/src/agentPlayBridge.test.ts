@@ -1082,6 +1082,27 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // A proxy get trap is game code the descriptor does not show.
+    it('emits the value it checked, not a second read', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const target = { targetWord: 'RAVEN', answer: null, letters: 5 };
+      const clue = new Proxy(target, {
+        get(inner, key) {
+          return key === 'answer' ? inner.targetWord : inner[key as keyof typeof inner];
+        },
+      });
+      harness.observation = () => ({ clue });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(String(snapshot.observation)).toContain('"letters":5');
+      expect(String(snapshot.observation)).not.toContain('RAVEN');
+    });
+
     // isFinite is a writable global; the check uses comparisons instead.
     it('judges numbers without the isFinite global', async () => {
       setHidden(['targetWord']);
