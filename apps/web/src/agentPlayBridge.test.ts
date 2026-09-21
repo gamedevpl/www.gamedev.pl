@@ -1218,6 +1218,27 @@ describe('the agent bridge, running for real', () => {
       }
     });
 
+    // A replaced String could rename a declared field out of the list.
+    it('keeps hidden names as written, never converted', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.api = { peek: () => ({ targetWord: 'RAVEN', cash: 1 }) } as unknown as typeof harness.api;
+      const original = globalThis.String;
+      globalThis.String = ((value: unknown) =>
+        value === 'targetWord' ? 'notHidden' : original(value)) as StringConstructor;
+      try {
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'call', name: 'peek', args: [] } });
+        await settle();
+      } finally {
+        globalThis.String = original;
+      }
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ detail: string }>;
+      expect(log.some((entry) => entry.detail.includes('RAVEN'))).toBe(false);
+    });
+
     // A replaced push could drop a declared name from the hidden list.
     it('collects hidden names without the array method', async () => {
       setHidden(['targetWord']);

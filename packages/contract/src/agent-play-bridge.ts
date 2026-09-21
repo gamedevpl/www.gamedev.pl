@@ -24,7 +24,12 @@ export const AGENT_PLAY_BRIDGE =
   function agentNote(kind,detail,frame){
     var at=typeof frame==='number'&&isFinite(frame)?frame:agentFrameNo();
     agentLog[agentLog.length]={frame:at,kind:String(kind),detail:AGENT_CUT(String(detail==null?'':detail),0,160)};
-    if(agentLog.length>AGENT_LOG_CAP)agentLog.splice(0,agentLog.length-AGENT_LOG_CAP);
+    // Rebuilt, not spliced: a replaced splice either throws or lets the log grow.
+    if(agentLog.length>AGENT_LOG_CAP){
+      var kept=[],from=agentLog.length-AGENT_LOG_CAP;
+      for(var k=from;k<agentLog.length;k++)kept[kept.length]=agentLog[k];
+      agentLog=kept;
+    }
   }
   // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
   // A policy runs in the game's own realm and can still read the harness directly;
@@ -38,8 +43,8 @@ export const AGENT_PLAY_BRIDGE =
     var list=window.__GAME_AGENT_HIDDEN__;
     if(!list||!list.length)return null;
     var out=[];
-    // By index: a replaced push could silently drop a declared name.
-    for(var i=0;i<list.length;i++)out[out.length]=String(list[i]);
+    // Kept as written, never converted: a replaced String could rename one.
+    for(var i=0;i<list.length;i++)if(typeof list[i]==='string')out[out.length]=list[i];
     return out;
   }
   function agentGoal(){

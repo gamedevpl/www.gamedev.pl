@@ -273,8 +273,17 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var table=agentApiTable(),names=[],k;
     // Skip rather than truncate: a shortened name is one call cannot resolve.
     for(k in table)if(AGENT_HAS(table,k)&&k.length<=40)names[names.length]=k;
-    names.sort();
-    return names.slice(0,AGENT_API_CAP);
+    // Ordered and capped by hand: sort and slice are the game's to replace.
+    var out=[],i,j,pick;
+    while(out.length<AGENT_API_CAP&&names.length){
+      pick=0;
+      for(i=1;i<names.length;i++)if(names[i]<names[pick])pick=i;
+      out[out.length]=names[pick];
+      var rest=[];
+      for(j=0;j<names.length;j++)if(j!==pick)rest[rest.length]=names[j];
+      names=rest;
+    }
+    return out;
   }
   function agentInvoke(name,args){
     var entry=agentApiTable()[String(name)];
