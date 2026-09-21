@@ -229,3 +229,16 @@ describe('mergeAgentLog', () => {
     expect(merged.map((entry) => `${entry.frame}:${entry.detail}`)).toEqual(['0:start', '1:a', '1:b', '3:7', '5:c']);
   });
 });
+
+// A helper named `all` also occurs inside `call`.
+describe('call argument parsing', () => {
+  it('derives the payload past the verb, not from the first match', () => {
+    expect(parseAgentCommand('call all [1]')).toEqual({ kind: 'call', name: 'all', args: [1] });
+    expect(parseAgentCommand('call call {"n":2}')).toEqual({ kind: 'call', name: 'call', args: [{ n: 2 }] });
+  });
+
+  it('still reads an ordinary helper and an argumentless one', () => {
+    expect(parseAgentCommand('call camLookAt [8, 12]')).toEqual({ kind: 'call', name: 'camLookAt', args: [8, 12] });
+    expect(parseAgentCommand('call ping')).toEqual({ kind: 'call', name: 'ping', args: [] });
+  });
+});

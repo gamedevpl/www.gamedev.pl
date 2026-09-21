@@ -195,7 +195,8 @@ export function parseAgentCommand(line: string): AgentCommand | null {
   if (head === 'call') {
     const name = tokens[1] ?? '';
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('call requires a helper name');
-    const rest = trimmed.slice(trimmed.indexOf(name) + name.length).trim();
+    // Search past the verb: a helper named `all` also occurs inside `call`.
+    const rest = trimmed.slice(trimmed.indexOf(name, head.length) + name.length).trim();
     let args: unknown[] = [];
     if (rest) {
       let parsed: unknown;

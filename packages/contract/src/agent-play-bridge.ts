@@ -231,6 +231,8 @@ export const AGENT_PLAY_BRIDGE =
         var shown;try{shown=JSON.stringify(safe);}catch(err){shown=String(safe);}
         agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
       }catch(err){agentNote('error',String((err&&err.message)||err));}
+      // A helper mutates the round; republish without advancing time.
+      try{var ph=agentHarness();if(ph&&typeof ph.paint==='function')ph.paint();}catch(err){}
       agentState('call',id);
       return;
     }
