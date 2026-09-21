@@ -25,6 +25,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_CUT=AGENT_CALL.bind(String.prototype.slice);
   // Invoking through Reflect: a function's own apply is the game's property.
   var AGENT_APPLY=Reflect.apply;
+  var AGENT_ARGS=AGENT_CALL.bind(Array.prototype.slice);
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}

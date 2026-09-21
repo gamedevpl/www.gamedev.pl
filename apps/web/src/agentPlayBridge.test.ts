@@ -608,6 +608,14 @@ describe('the agent bridge, running for real', () => {
     expect(state.api as string[]).not.toContain('landmine');
   });
 
+  // Replacing the global breaks the harness, so read the source.
+  it('collects policy arguments through a captured slice', () => {
+    const source = AGENT_PLAY_BRIDGE;
+    expect(source).toContain('AGENT_ARGS(arguments,1)');
+    expect(source).not.toContain('Array.prototype.slice.call');
+    expect(source).toContain('AGENT_ARGS=AGENT_CALL.bind(Array.prototype.slice)');
+  });
+
   // An own apply property is data, not an invocation path.
   it('calls a helper that carries its own apply property', async () => {
     const helper = () => 'real';

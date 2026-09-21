@@ -23,7 +23,7 @@ export const AGENT_PLAY_BRIDGE =
   // frame is optional: a replayed signal carries the frame it happened on, not now.
   function agentNote(kind,detail,frame){
     var at=typeof frame==='number'&&isFinite(frame)?frame:agentFrameNo();
-    agentLog.push({frame:at,kind:String(kind),detail:String(detail==null?'':detail).slice(0,160)});
+    agentLog.push({frame:at,kind:String(kind),detail:AGENT_CUT(String(detail==null?'':detail),0,160)});
     if(agentLog.length>AGENT_LOG_CAP)agentLog.splice(0,agentLog.length-AGENT_LOG_CAP);
   }
   // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
@@ -94,7 +94,7 @@ export const AGENT_PLAY_BRIDGE =
       ui:agentUi(),
       api:agentApiNames(),
       hiddenFields:agentHidden(),
-      log:agentLog.slice(-20),
+      log:AGENT_ARGS(agentLog,-20),
       stepped:host.isPaused(),
       fps:agentFps
     });
@@ -130,7 +130,7 @@ export const AGENT_PLAY_BRIDGE =
     for(i=agentHeldKeys.length-1;i>=0;i--)if(agentHeldKeys[i].key===key)agentHeldKeys.splice(i,1);
   }
   function agentReleaseInput(){
-    var held=agentHeldKeys.slice();
+    var held=AGENT_ARGS(agentHeldKeys,0);
     for(var i=0;i<held.length;i++)agentKey('keyup',held[i].key,held[i].code);
     agentHeldKeys=[];
     if(agentPointerIsDown){
@@ -228,12 +228,12 @@ export const AGENT_PLAY_BRIDGE =
         // Redacted before the note, which is what crosses the bridge. The value the
         // policy gets is not: a policy runs in the game's realm and is exempt anyway.
         var shown=agentSafeJson(result,agentHidden(),140);
-        agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
+        agentNote('call',String(command.name)+' '+AGENT_CUT(String(shown),0,140));
       }catch(err){
         // A thrown message is game-authored text we do not inspect, so a game
         // that declares hidden fields gets the failure without the message.
         var hid=agentHidden();
-        var why=(hid&&hid.length)?'helper failed':String((err&&err.message)||err).slice(0,140);
+        var why=(hid&&hid.length)?'helper failed':AGENT_CUT(String((err&&err.message)||err),0,140);
         agentNote('error',String(command.name)+': '+why);
       }
       // A helper mutates the round; republish without advancing time.
@@ -328,7 +328,7 @@ export const AGENT_PLAY_BRIDGE =
         try{parts.push(typeof value==='string'?value:JSON.stringify(value));}
         catch(err){parts.push(String(value));}
       }
-      logs.push({frame:agentFrameNo(),kind:kind,text:parts.join(' ').slice(0,400)});
+      logs.push({frame:agentFrameNo(),kind:kind,text:AGENT_CUT(parts.join(' '),0,400)});
     }
     function spend(count){
       used+=count;
@@ -364,7 +364,7 @@ export const AGENT_PLAY_BRIDGE =
       api:function(){return agentApiNames();},
       // Forgotten after: a helper can register another without a frame passing.
       call:function(name){
-        try{return agentInvoke(name,Array.prototype.slice.call(arguments,1));}
+        try{return agentInvoke(name,AGENT_ARGS(arguments,1));}
         finally{agentForgetApi();}
       },
       // Input, same verbs the command box has.
@@ -404,12 +404,12 @@ export const AGENT_PLAY_BRIDGE =
         if(watches.length>=AGENT_WATCH_POINTS)return;
         var reading;
         try{reading=typeof value==='function'?value():value;}catch(err){reading='error: '+String(err&&err.message||err);}
-        watches.push({frame:agentFrameNo(),name:String(name).slice(0,40),value:reading});
+        watches.push({frame:agentFrameNo(),name:AGENT_CUT(String(name),0,40),value:reading});
       },
       // A painted frame, kept for the answer. Paints first: stepping does not draw.
       capture:function(name){
         api.paint();
-        shots.push({name:String(name||('frame '+agentFrameNo())).slice(0,60),frame:agentFrameNo(),png:capturePng()});
+        shots.push({name:AGENT_CUT(String(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()});
       },
       // The game's own globals, for a policy that needs more than the snapshot.
       game:function(){return window.GameKit;},
@@ -450,7 +450,7 @@ export const AGENT_PLAY_BRIDGE =
       }
     }catch(err){
       outcome='failed';
-      message=String((err&&err.stack)||(err&&err.message)||err).slice(0,600);
+      message=AGENT_CUT(String((err&&err.stack)||(err&&err.message)||err),0,600);
     }finally{
       agentReleaseInput();
       console.log=realConsole.log;console.warn=realConsole.warn;console.error=realConsole.error;
