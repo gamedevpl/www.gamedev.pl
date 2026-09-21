@@ -22,10 +22,11 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       // Only when something is declared: with nothing to protect, toJSON is the game's business.
       if(names.length){
         var raw=this&&typeof this==='object'?this[key]:undefined;
-        // toJSON runs before the replacer and can rename a declared key out of reach.
-        // Judged on what it produced, not on which realm its prototype came from:
-        // a Date becomes a string and keeps no keys, an object could hide some.
-        if(raw&&typeof raw==='object'&&typeof raw.toJSON==='function'&&val&&typeof val==='object')throw AGENT_UNSAFE;
+        // toJSON ran before this replacer and can rename a declared key out of reach.
+        // Asked of the pair, not of the value: a converter can delete itself on the
+        // way out, so a leftover toJSON proves nothing, while val!==raw proves it ran.
+        // A conversion to a primitive keeps no keys, in any realm, so a Date reads out.
+        if(val!==raw&&val&&typeof val==='object')throw AGENT_UNSAFE;
       }
       for(var i=0;i<names.length;i++)if(names[i]===key)return undefined;
       // Keys and punctuation cost too; escaping is settled by the exact check below.
@@ -119,21 +120,28 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_HARNESS_CORE={version:1,captureMode:1,ready:1,frame:1,metadata:1,signals:1,audio:1,
     record:1,step:1,paint:1,pause:1,resume:1,restart:1,injectSensing:1,screenshot:1,
     snapshotState:1,restoreState:1,ui:1,observation:1,api:1,helpers:1};
-  function agentTakeFns(src,into){
+  // Entries we reject still cost a look, and the table is rebuilt every frame.
+  var AGENT_API_CAP=40,AGENT_API_SCAN=AGENT_API_CAP*10;
+  function agentTakeFns(src,into,seen){
     var k;
-    if(!src||typeof src!=='object')return;
+    if(!src||typeof src!=='object')return seen;
     for(k in src){
+      if(seen>=AGENT_API_SCAN)return seen;
       if(!Object.prototype.hasOwnProperty.call(src,k))continue;
+      seen++;
       if(typeof src[k]==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]=src[k];
     }
+    return seen;
   }
   function agentApiTable(){
     // Null prototype so call constructor misses instead of reaching Object.prototype.
-    var h=agentHarness()||{},table=Object.create(null),k;
-    agentTakeFns(h.api,table);
-    agentTakeFns(h.helpers,table);
+    var h=agentHarness()||{},table=Object.create(null),k,seen=0;
+    seen=agentTakeFns(h.api,table,seen);
+    seen=agentTakeFns(h.helpers,table,seen);
     for(k in h){
+      if(seen>=AGENT_API_SCAN)break;
       if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
+      seen++;
       if(typeof h[k]==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]=h[k];
     }
     return table;
@@ -143,7 +151,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     // Skip rather than truncate: a shortened name is one call cannot resolve.
     for(k in table)if(Object.prototype.hasOwnProperty.call(table,k)&&String(k).length<=40)names.push(String(k));
     names.sort();
-    return names.slice(0,40);
+    return names.slice(0,AGENT_API_CAP);
   }
   function agentInvoke(name,args){
     var fn=agentApiTable()[String(name)];

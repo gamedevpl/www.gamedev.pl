@@ -571,6 +571,23 @@ describe('the agent bridge, running for real', () => {
     expect(api.some((name) => longName.startsWith(name) && name !== longName)).toBe(false);
   });
 
+  // A registry of junk was scanned whole, every frame, to publish nothing.
+  it('bounds the scan over a large helper registry', async () => {
+    const junk: Record<string, unknown> = {};
+    for (let i = 0; i < 5000; i++) junk[`junk${i}`] = i;
+    junk.lateHelper = () => 'ok';
+    harness.api = junk;
+    const started = Date.now();
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const api = lastOf(received, 'agent:state')!.api as string[];
+    expect(api).not.toContain('lateHelper');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
@@ -782,6 +799,29 @@ describe('the agent bridge, running for real', () => {
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).toContain('custom toJSON');
       expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // A converter that deletes itself leaves no toJSON to find.
+    it('withholds a value whose toJSON erases itself on the way out', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({
+        clue: {
+          targetWord: 'RAVEN',
+          toJSON(this: Record<string, unknown>) {
+            delete this.toJSON;
+            return { answer: this.targetWord };
+          },
+        },
+      });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).not.toContain('RAVEN');
+      expect(snapshot.observation).toContain('custom toJSON');
     });
 
     // Identity against Date.prototype.toJSON breaks across realms; the shape does not.
