@@ -608,7 +608,7 @@ describe('the agent bridge, running for real', () => {
     expect(state.api as string[]).not.toContain('landmine');
   });
 
-  // A function's own apply is the game's property, not an invocation.
+  // An own apply property is data, not an invocation path.
   it('calls a helper that carries its own apply property', async () => {
     const helper = () => 'real';
     (helper as unknown as Record<string, unknown>).apply = () => 'shadow';
