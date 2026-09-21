@@ -23,7 +23,7 @@ import {
 } from './firestore-write-cost-lib.mjs';
 
 // The fixture measures the slopes; this only prints what it recorded.
-const AXES = ['round', 'game', 'editor'];
+const AXES = ['round', 'game', 'sharing', 'editor'];
 
 function ensurePackagesBuilt() {
   // CI lint runs before type-check, so workspace dist is empty.
