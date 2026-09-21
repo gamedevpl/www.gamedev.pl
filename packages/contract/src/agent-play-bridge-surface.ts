@@ -9,23 +9,27 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // One pass, no parse, no clone: drop declared keys while serializing, and stop
   // the moment the output would exceed its cap. Every earlier shape of this
   // walked or parsed game text first, and each stage grew its own escape hatch.
+  var AGENT_OVER={over:1};
   function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
     // Text the game hands over is text: capped, never inspected. See the docs.
     if(typeof value==='string')return value.slice(0,cap);
-    var names=hidden||[],used=0,over=false;
+    var names=hidden||[],used=0;
     function keep(key,val){
-      if(over)return undefined;
       for(var i=0;i<names.length;i++)if(names[i]===key)return undefined;
-      if(typeof val==='string')used+=val.length+2;else used+=8;
-      if(used>cap){over=true;return undefined;}
+      // Keys and punctuation cost too; escaping is settled by the exact check below.
+      used+=key.length+4;
+      used+=(typeof val==='string')?val.length+2:8;
+      // Thrown, not returned: an undefined array entry serializes as null and walks on.
+      if(used>cap)throw AGENT_OVER;
       return val;
     }
     var text;
-    // A cycle throws here and is withheld; depth needs no cap, since nesting spends the budget.
+    // A cycle throws here too; nesting spends the budget, so depth needs no cap.
     try{text=JSON.stringify(value,keep);}catch(err){return AGENT_TOO_LARGE;}
-    if(over||typeof text!=='string')return AGENT_TOO_LARGE;
-    return text.slice(0,cap);
+    // Never sliced: a cut JSON string is not JSON. Withhold instead.
+    if(typeof text!=='string'||text.length>cap)return AGENT_TOO_LARGE;
+    return text;
   }
   function agentSnapshot(){
     var h=agentHarness()||{},out={},hidden=agentHidden(),i,meta=h.metadata;

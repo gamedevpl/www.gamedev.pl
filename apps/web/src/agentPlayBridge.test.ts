@@ -734,6 +734,23 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // A long key outran the counter and the result was sliced.
+    it('withholds rather than emitting a truncated document', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ ['k'.repeat(50000)]: 1 });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      const observation = String(snapshot.observation ?? '');
+      expect(observation).toContain('too large');
+      // The marker, never a cut JSON prefix.
+      expect(observation.startsWith('{')).toBe(false);
+    });
+
     it('leaves a game that declares nothing untouched', async () => {
       setHidden(null);
       harness.metadata = { state: 'playing' };
