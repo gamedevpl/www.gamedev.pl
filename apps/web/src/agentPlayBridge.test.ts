@@ -597,20 +597,6 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).toContain('"letters":5');
     });
 
-    // The kit stringifies first, so JSON text is walked too.
-    it('drops a hidden key inside an observation the kit already stringified', async () => {
-      setHidden(['targetWord']);
-      harness.metadata = { state: 'playing', observation: JSON.stringify({ room: 'cellar', targetWord: 'RAVEN' }) };
-      send({ type: 'agent:enable' });
-      await settle();
-      send({ type: 'agent:command', command: { kind: 'look' } });
-      await settle();
-
-      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
-      expect(snapshot.observation).not.toContain('RAVEN');
-      expect(snapshot.observation).toContain('"room":"cellar"');
-    });
-
     it("keeps a helper's hidden return value out of the log that crosses the bridge", async () => {
       setHidden(['targetWord']);
       harness.api = { peekRound: () => ({ cash: 100, targetWord: 'RAVEN' }) };
@@ -640,54 +626,6 @@ describe('the agent bridge, running for real', () => {
       expect(result.outcome).toBe('completed');
       const logs = result.logs as Array<{ text: string }>;
       expect(logs.some((entry) => entry.text.includes('RAVEN'))).toBe(true);
-    });
-
-    // A helper may return its result as JSON text, not an object.
-    it('redacts a helper result returned as JSON text', async () => {
-      setHidden(['targetWord']);
-      harness.api = { peekText: () => JSON.stringify({ cash: 100, targetWord: 'RAVEN' }) };
-      send({ type: 'agent:enable' });
-      await settle();
-      received.length = 0;
-      send({ type: 'agent:command', command: { kind: 'call', name: 'peekText', args: [] } });
-      await settle();
-
-      const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
-      const note = log.find((entry) => entry.kind === 'call' && entry.detail.startsWith('peekText'));
-      expect(note?.detail).toContain('cash');
-      expect(note?.detail).not.toContain('RAVEN');
-    });
-
-    // Parsing is synchronous, so an unbounded payload is withheld.
-    it('withholds JSON too large to redact rather than passing it through', async () => {
-      setHidden(['targetWord']);
-      const huge = JSON.stringify({ pad: 'x'.repeat(70000), targetWord: 'RAVEN' });
-      harness.metadata = { state: 'playing', observation: huge };
-      send({ type: 'agent:enable' });
-      await settle();
-      send({ type: 'agent:command', command: { kind: 'look' } });
-      await settle();
-
-      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
-      expect(snapshot.observation).not.toContain('RAVEN');
-      expect(snapshot.observation).toContain('too large to redact');
-    });
-
-    // JSON may lead with whitespace or a BOM.
-    it('withholds oversized JSON that leads with whitespace or a BOM', async () => {
-      setHidden(['targetWord']);
-      const huge = JSON.stringify({ targetWord: 'RAVEN', pad: 'x'.repeat(70000) });
-
-      for (const lead of ['', ' \n', '\uFEFF']) {
-        harness.metadata = { state: 'playing', observation: lead + huge };
-        send({ type: 'agent:enable' });
-        await settle();
-        send({ type: 'agent:command', command: { kind: 'look' } });
-        await settle();
-
-        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
-        expect(snapshot.observation).not.toContain('RAVEN');
-      }
     });
 
     // The parse cap guards strings; an object graph never met it.
@@ -745,6 +683,54 @@ describe('the agent bridge, running for real', () => {
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).toContain('"grid":[[1,2]]');
       expect(snapshot.observation).toContain('"x":4');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // Text a game formats itself is text: capped, never parsed, never inspected.
+    it('passes a JSON-shaped string through without parsing it', async () => {
+      setHidden(['targetWord']);
+      const json = JSON.stringify({ room: 'cellar', targetWord: 'RAVEN' });
+      harness.metadata = { state: 'playing', observation: json };
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toBe(json);
+    });
+
+    // A helper that throws could carry the answer in its message.
+    it('reports a helper failure without its message when fields are declared', async () => {
+      setHidden(['targetWord']);
+      harness.api = {
+        boom: () => {
+          throw new Error(JSON.stringify({ targetWord: 'RAVEN' }));
+        },
+      };
+      send({ type: 'agent:enable' });
+      await settle();
+      received.length = 0;
+      send({ type: 'agent:command', command: { kind: 'call', name: 'boom', args: [] } });
+      await settle();
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+      const note = log.find((entry) => entry.kind === 'error' && entry.detail.startsWith('boom'));
+      expect(note?.detail).toContain('helper failed');
+      expect(note?.detail).not.toContain('RAVEN');
+    });
+
+    it('withholds a structured value too large to serialize', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ pad: 'x'.repeat(2_000_000), targetWord: 'RAVEN' });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 

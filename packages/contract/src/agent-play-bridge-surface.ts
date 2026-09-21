@@ -1,79 +1,31 @@
 // Snapshot, widgets, and named helpers. Concatenated into AGENT_PLAY_BRIDGE.
 
 export const AGENT_PLAY_BRIDGE_SURFACE = `
-  var AGENT_TOO_LARGE='<withheld: too large to redact>';
+  var AGENT_TOO_LARGE='<withheld: too large>';
   function agentReadMaybeFn(value){
     if(typeof value==='function'){try{return value();}catch(err){return null;}}
     return value;
   }
-  // hiddenFields names a key at any depth, not just the snapshot's top level.
-  var AGENT_REDACT_DEPTH=8;
-  function agentHiddenKey(hidden,key){
-    for(var i=0;i<hidden.length;i++)if(hidden[i]===key)return true;
-    return false;
-  }
-  // Walking clones the graph, so the walk needs its own bound, not just the serializer.
-  var AGENT_REDACT_NODES=20000;
-  var agentRedactLeft=0;
-  function agentRedactNode(value,hidden,depth){
-    if(!hidden||!hidden.length||value==null||typeof value!=='object')return value;
-    // Past the cap a cycle is likelier than real data; drop rather than risk a leak.
-    if(depth>=AGENT_REDACT_DEPTH)return null;
-    if(--agentRedactLeft<0)throw new Error('over budget');
-    var i,k,out;
-    if(Object.prototype.toString.call(value)==='[object Array]'){
-      out=[];
-      for(i=0;i<value.length;i++)out.push(agentRedactNode(value[i],hidden,depth+1));
-      return out;
-    }
-    out={};
-    for(k in value){
-      if(!Object.prototype.hasOwnProperty.call(value,k))continue;
-      if(agentHiddenKey(hidden,k))continue;
-      out[k]=agentRedactNode(value[k],hidden,depth+1);
-    }
-    return out;
-  }
-  function agentRedact(value,hidden,depth){
-    agentRedactLeft=AGENT_REDACT_NODES;
-    try{return agentRedactNode(value,hidden,depth);}catch(err){return AGENT_TOO_LARGE;}
-  }
-  // Parsing is synchronous on the browser thread, so bound the input first.
-  var AGENT_PARSE_CAP=65536;
-  // The kit stringifies observation before it gets here, so walk into JSON text too.
-  function agentRedactMaybeJson(value,hidden){
-    if(!hidden||!hidden.length)return value;
-    if(typeof value==='string'){
-      if(value.length>AGENT_PARSE_CAP){
-        // Leading whitespace is valid JSON, so look past it; BOM counts too.
-        var lead=/^\\s*([\\s\\S])/.exec(value),ch=lead?lead[1]:'';
-        // JSON this big could hide a declared key and we will not parse it; prose could not.
-        return (ch==='{'||ch==='[')?AGENT_TOO_LARGE:value;
-      }
-      var parsed;
-      try{parsed=JSON.parse(value);}catch(err){return value;}
-      if(parsed==null||typeof parsed!=='object')return value;
-      try{return JSON.stringify(agentRedact(parsed,hidden,0));}catch(err){return value;}
-    }
-    return agentRedact(value,hidden,0);
-  }
-  // Serializing a whole graph to then slice it is the cost; abort instead of finishing.
-  var AGENT_SERIALIZE_BUDGET=262144;
-  function agentStringifyBounded(value){
-    var used=0;
-    try{
-      return JSON.stringify(value,function(key,val){
-        used+=typeof val==='string'?val.length+2:8;
-        if(used>AGENT_SERIALIZE_BUDGET)throw new Error('over budget');
-        return val;
-      });
-    }catch(err){return null;}
-  }
-  function agentJsonValue(value,cap){
+  // One pass, no parse, no clone: drop declared keys while serializing, and stop
+  // the moment the output would exceed its cap. Every earlier shape of this
+  // walked or parsed game text first, and each stage grew its own escape hatch.
+  function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
+    // Text the game hands over is text: capped, never inspected. See the docs.
     if(typeof value==='string')return value.slice(0,cap);
-    var text=agentStringifyBounded(value);
-    return text===null?AGENT_TOO_LARGE:text.slice(0,cap);
+    var names=hidden||[],used=0,over=false;
+    function keep(key,val){
+      if(over)return undefined;
+      for(var i=0;i<names.length;i++)if(names[i]===key)return undefined;
+      if(typeof val==='string')used+=val.length+2;else used+=8;
+      if(used>cap){over=true;return undefined;}
+      return val;
+    }
+    var text;
+    // A cycle throws here and is withheld; depth needs no cap, since nesting spends the budget.
+    try{text=JSON.stringify(value,keep);}catch(err){return AGENT_TOO_LARGE;}
+    if(over||typeof text!=='string')return AGENT_TOO_LARGE;
+    return text.slice(0,cap);
   }
   function agentSnapshot(){
     var h=agentHarness()||{},out={},hidden=agentHidden(),i,meta=h.metadata;
@@ -82,7 +34,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         if(!Object.prototype.hasOwnProperty.call(meta,k))continue;
         var skip=false;
         if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]===k)skip=true;
-        if(!skip)out[k]=meta[k];
+        if(skip)continue;
+        // A nested declared key rides inside an object value, so serialize it here.
+        out[k]=(meta[k]!==null&&typeof meta[k]==='object')?agentSafeJson(meta[k],hidden,16000):meta[k];
       }
     }
     var obsHidden=false;
@@ -90,8 +44,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(!obsHidden){
       var obs=out.observation;
       if(obs==null||obs==='')obs=agentReadMaybeFn(h.observation);
-      obs=agentRedactMaybeJson(obs,hidden);
-      var text=agentJsonValue(obs,16000);
+      var text=agentSafeJson(obs,hidden,16000);
       if(text)out.observation=text;
       else delete out.observation;
     }

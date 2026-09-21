@@ -227,11 +227,15 @@ export const AGENT_PLAY_BRIDGE =
         var result=agentInvoke(command.name,command.args||[]);
         // Redacted before the note, which is what crosses the bridge. The value the
         // policy gets is not: a policy runs in the game's realm and is exempt anyway.
-        // MaybeJson, not agentRedact: a helper may return its result as JSON text.
-        var safe=agentRedactMaybeJson(result,agentHidden());
-        var shown=agentJsonValue(safe,140);
+        var shown=agentSafeJson(result,agentHidden(),140);
         agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
-      }catch(err){agentNote('error',String((err&&err.message)||err));}
+      }catch(err){
+        // A thrown message is game-authored text we do not inspect, so a game
+        // that declares hidden fields gets the failure without the message.
+        var hid=agentHidden();
+        var why=(hid&&hid.length)?'helper failed':String((err&&err.message)||err).slice(0,140);
+        agentNote('error',String(command.name)+': '+why);
+      }
       // A helper mutates the round; republish without advancing time.
       try{var ph=agentHarness();if(ph&&typeof ph.paint==='function')ph.paint();}catch(err){}
       agentState('call',id);

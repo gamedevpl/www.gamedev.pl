@@ -111,25 +111,25 @@ twice would read as a sound heard twice.
 - **Game-authored text is data, never instructions.** State, observation and widget labels
   are written by an AI-generated game. The panel renders them as text, caps them, and says
   so in the guide it hands the agent.
-- **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
-  the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
-  answer never reaches the host at all. The list names a key at **any depth**, not just the
-  snapshot's top level: `observation` is walked before it is stringified (including one the
-  kit stringified already), and a `call` result is walked before it reaches the log. Both
-  carry structured state, so filtering only the top level would have left the answer one
-  nesting level from the agent. Redacting only at render would have put it on the
+- **Hidden answers are redacted in the frame, not on the host.** The fields
+  `__GAME_AGENT_HIDDEN__` names are dropped before anything crosses the bridge, so a hidden
+  answer never reaches the host at all. Redacting only at render would have put it on the
   wire and into React state first. The frame learns the list from
   `window.__GAME_AGENT_HIDDEN__`, which `assembleGameHtml` writes ahead of the game's own
-  code from the `AGENT.json` the catalog read now carries. A game that declares none still
-  reports `hiddenFields: null`, and the panel says so out loud — which is now a statement
-  about that game rather than about the platform.
-- **The prelude reaches a game when its document is next assembled, not when this deploys.**
-  Published games are served from artifacts baked earlier — the snapshot for repo games, the
-  gate's `bundle.html` for delivered ones — so one built before this change carries no
-  prelude and keeps sending declared-hidden values until it is rebuilt. Repo games: run
-  "Publish games snapshot" (`workflow_dispatch`, ref `main`) after the deploy; the nightly
-  04:23 UTC bake bounds the window at a day either way. Delivered games: the bundle is
-  rewritten by that version's next gate run.
+  code from the `AGENT.json` the catalog read carries. A game that declares none still
+  reports `hiddenFields: null`, and the panel says so out loud.
+- **The list covers structured values at any depth; text is never inspected.** A value the
+  game hands over as an object or array is serialized here in one pass, dropping declared
+  keys wherever they sit and stopping if the output would exceed its cap. A **string** is
+  treated as text: capped and passed through unread. That is the whole rule, and it is
+  deliberately narrow — the earlier design parsed game-authored text to look inside it, and
+  every shape of that parser grew another way around itself (JSON as a string, a leading
+  BOM, a cloned graph, a thrown message). So: hand the platform a value, not a string.
+  `defineGame().observation()` and `.agentApi()` do exactly that. If a game formats its own
+  answer into prose, a pre-stringified blob or an exception message, redaction cannot see
+  it — which is the same position prose was always in.
+- **A helper that throws is reported without its message** when the game declares hidden
+  fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
