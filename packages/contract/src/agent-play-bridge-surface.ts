@@ -10,38 +10,71 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // the moment the output would exceed its cap. Every earlier shape of this
   // walked or parsed game text first, and each stage grew its own escape hatch.
   var AGENT_OVER={over:1};
-  var AGENT_UNSAFE={unsafe:1};
-  var AGENT_CONVERTED='<withheld: custom toJSON>';
+  // We do the walking, so no toJSON ever runs: JSON.stringify calls one before any
+  // check can see it, and a converter can return a primitive, rename in place or
+  // delete itself, so every test of the converted value arrives too late.
+  function agentIsDate(v){
+    // Our own realm's method, against the internal slot only a real Date has.
+    try{Date.prototype.toISOString.call(v);return true;}catch(err){return false;}
+  }
   function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
     // Text the game hands over is text: capped, never inspected. See the docs.
     if(typeof value==='string')return value.slice(0,cap);
-    var names=hidden||[],used=0;
-    // The replacer holder: this[key] is the value BEFORE toJSON ran on it.
-    function keep(key,val){
-      // Only when something is declared: with nothing to protect, toJSON is the game's business.
-      if(names.length){
-        var raw=this&&typeof this==='object'?this[key]:undefined;
-        // toJSON ran before this replacer and can rename a declared key out of reach.
-        // Asked of the pair, not of the value: a converter can delete itself on the
-        // way out, so a leftover toJSON proves nothing, while val!==raw proves it ran.
-        // A conversion to a primitive keeps no keys, in any realm, so a Date reads out.
-        if(val!==raw&&val&&typeof val==='object')throw AGENT_UNSAFE;
-      }
-      for(var i=0;i<names.length;i++)if(names[i]===key)return undefined;
-      // Keys and punctuation cost too; escaping is settled by the exact check below.
-      used+=key.length+4;
-      used+=(typeof val==='string')?val.length+2:8;
-      // Thrown, not returned: an undefined array entry serializes as null and walks on.
-      if(used>cap)throw AGENT_OVER;
-      return val;
+    var names=hidden||[],used=0,stack=[];
+    function declared(k){
+      for(var i=0;i<names.length;i++)if(names[i]===k)return true;
+      return false;
     }
-    var text;
-    // A cycle throws here too; nesting spends the budget, so depth needs no cap.
-    try{text=JSON.stringify(value,keep);}catch(err){return err===AGENT_UNSAFE?AGENT_CONVERTED:AGENT_TOO_LARGE;}
+    // Every character is spent once, so the budget is the output length exactly.
+    function spend(n){used+=n;if(used>cap)throw AGENT_OVER;return n;}
+    function lit(text){spend(text.length);return text;}
+    function write(v){
+      var t=typeof v,i;
+      if(v===null)return lit('null');
+      if(t==='string')return lit(JSON.stringify(v));
+      if(t==='number')return lit(isFinite(v)?String(v):'null');
+      if(t==='boolean')return lit(v?'true':'false');
+      // A function, undefined or a symbol has no JSON form: the holder drops it.
+      if(t!=='object')return undefined;
+      if(agentIsDate(v))return lit(JSON.stringify(Date.prototype.toISOString.call(v)));
+      // A cycle would never end; nesting spends the budget, so depth needs no cap.
+      for(i=0;i<stack.length;i++)if(stack[i]===v)throw AGENT_OVER;
+      stack.push(v);
+      var parts=[],out,text;
+      if(Object.prototype.toString.call(v)==='[object Array]'){
+        spend(2);
+        for(i=0;i<v.length;i++){
+          if(i)spend(1);
+          text=write(v[i]);
+          parts.push(text===undefined?lit('null'):text);
+        }
+        out='['+parts.join(',')+']';
+      }else{
+        spend(2);
+        var keys=Object.keys(v),key;
+        for(i=0;i<keys.length;i++){
+          // Named before read: a declared key's getter never runs either.
+          if(declared(keys[i]))continue;
+          var val;
+          try{val=v[keys[i]];}catch(err){continue;}
+          text=write(val);
+          if(text===undefined)continue;
+          key=JSON.stringify(keys[i]);
+          spend(key.length+(parts.length?2:1));
+          parts.push(key+':'+text);
+        }
+        out='{'+parts.join(',')+'}';
+      }
+      stack.pop();
+      return out;
+    }
+    var result;
+    try{result=write(value);}catch(err){return AGENT_TOO_LARGE;}
+    if(result===undefined)return '';
     // Never sliced: a cut JSON string is not JSON. Withhold instead.
-    if(typeof text!=='string'||text.length>cap)return AGENT_TOO_LARGE;
-    return text;
+    if(result.length>cap)return AGENT_TOO_LARGE;
+    return result;
   }
   function agentSnapshot(){
     var h=agentHarness()||{},out={},hidden=agentHidden(),i,meta=h.metadata;

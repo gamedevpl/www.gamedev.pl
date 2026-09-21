@@ -781,54 +781,52 @@ describe('the agent bridge, running for real', () => {
       expect(Date.now() - started).toBeLessThan(1000);
     });
 
-    // toJSON runs before the replacer and can rename a declared key.
-    it('withholds a value whose toJSON could rename a declared key', async () => {
-      setHidden(['targetWord']);
-      harness.metadata = { state: 'playing' };
-      harness.observation = () => ({
-        targetWord: 'RAVEN',
-        toJSON() {
-          return { answer: 'RAVEN' };
-        },
-      });
-      send({ type: 'agent:enable' });
-      await settle();
-      send({ type: 'agent:command', command: { kind: 'look' } });
-      await settle();
-
-      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
-      expect(snapshot.observation).toContain('custom toJSON');
-      expect(snapshot.observation).not.toContain('RAVEN');
-    });
-
-    // A converter that deletes itself leaves no toJSON to find.
-    it('withholds a value whose toJSON erases itself on the way out', async () => {
-      setHidden(['targetWord']);
-      harness.metadata = { state: 'playing' };
-      harness.observation = () => ({
-        clue: {
+    // Each converter here runs before any check could see it.
+    it('never lets a toJSON carry a declared key out', async () => {
+      const shapes: Record<string, () => unknown> = {
+        renames: () => ({ targetWord: 'RAVEN', toJSON: () => ({ answer: 'RAVEN' }) }),
+        erasesItself: () => ({
           targetWord: 'RAVEN',
           toJSON(this: Record<string, unknown>) {
             delete this.toJSON;
             return { answer: this.targetWord };
           },
-        },
-      });
-      send({ type: 'agent:enable' });
-      await settle();
-      send({ type: 'agent:command', command: { kind: 'look' } });
-      await settle();
+        }),
+        returnsPrimitive: () => ({
+          targetWord: 'RAVEN',
+          toJSON(this: Record<string, unknown>) {
+            return this.targetWord;
+          },
+        }),
+        renamesInPlace: () => ({
+          targetWord: 'RAVEN',
+          toJSON(this: Record<string, unknown>) {
+            this.answer = this.targetWord;
+            delete this.targetWord;
+            return this;
+          },
+        }),
+      };
 
-      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
-      expect(snapshot.observation).not.toContain('RAVEN');
-      expect(snapshot.observation).toContain('custom toJSON');
+      for (const [name, make] of Object.entries(shapes)) {
+        setHidden(['targetWord']);
+        harness.metadata = { state: 'playing' };
+        harness.observation = () => ({ clue: make() });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation), name).not.toContain('RAVEN');
+      }
     });
 
-    // Identity against Date.prototype.toJSON breaks across realms; the shape does not.
-    it('serializes a date-like value from another realm', async () => {
+    // A game toJSON is never consulted, so nobody borrows the Date path.
+    it('reads a date-like object as the object it is', async () => {
       setHidden(['targetWord']);
       harness.metadata = { state: 'playing' };
-      const alien = { toJSON: () => '1970-01-01T00:00:00.000Z' };
+      const alien = { stamp: 0, toJSON: () => 'borrowed' };
       harness.observation = () => ({ when: alien, ok: 1 });
       send({ type: 'agent:enable' });
       await settle();
@@ -836,7 +834,8 @@ describe('the agent bridge, running for real', () => {
       await settle();
 
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
-      expect(snapshot.observation).toContain('1970-01-01');
+      expect(snapshot.observation).toContain('"stamp":0');
+      expect(snapshot.observation).not.toContain('borrowed');
     });
 
     // A Date cannot rename anything, so it still serializes.

@@ -128,12 +128,15 @@ twice would read as a sound heard twice.
   `defineGame().observation()` and `.agentApi()` do exactly that. If a game formats its own
   answer into prose, a pre-stringified blob or an exception message, redaction cannot see
   it — which is the same position prose was always in.
-- **A value that converts itself is withheld.** `JSON.stringify` calls a custom `toJSON`
-  _before_ the replacer sees it, so an object can hand back a different shape and carry a
-  declared key out under another name. When a game declares hidden fields, a value with its
-  own `toJSON` is withheld when that conversion produced an object, which is the only shape
-  that can carry keys. A conversion to a primitive keeps no keys, so a `Date` still reads
-  out as its timestamp, in any realm. A game declaring none is unaffected.
+- **No game code runs during serialization.** `JSON.stringify` calls a custom `toJSON`
+  _before_ a replacer sees anything, so every check of the converted value arrives too
+  late: a converter can rename a declared key, return the secret as a primitive, rename it
+  in place, or delete its own `toJSON` on the way out. So the platform does the walking
+  itself and never consults `toJSON`. An object is written from its own enumerable keys,
+  declared ones dropped before their value is even read, so a getter on a declared key does
+  not run either. A real `Date` is read through this realm's `Date.prototype.toISOString`,
+  which answers for the internal slot only a genuine `Date` has, in any realm; an object
+  that merely looks like one is written out as the object it is.
 - **A helper that throws is reported without its message** when the game declares hidden
   fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
