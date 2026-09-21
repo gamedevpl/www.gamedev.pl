@@ -22,10 +22,17 @@ export interface OwnerShape {
 export const LIGHT: OwnerShape = { rounds: 3, games: 3, editors: 0 };
 export const HEAVY_ROUNDS: OwnerShape = { rounds: 24, games: 3, editors: 0 };
 export const HEAVY_GAMES: OwnerShape = { rounds: 24, games: 24, editors: 0 };
-// Only this shape shows a shared game's per-member invalidation.
+// The first editor costs more; seal the steps apart.
+export const SHARED_ONE: OwnerShape = { rounds: 24, games: 3, editors: 1 };
 export const HEAVY_EDITORS: OwnerShape = { rounds: 24, games: 3, editors: 12 };
 
-export const MEASURED_SHAPES: readonly OwnerShape[] = [LIGHT, HEAVY_ROUNDS, HEAVY_GAMES, HEAVY_EDITORS];
+export const MEASURED_SHAPES: readonly OwnerShape[] = [
+  LIGHT,
+  HEAVY_ROUNDS,
+  HEAVY_GAMES,
+  SHARED_ONE,
+  HEAVY_EDITORS,
+];
 
 export interface Axis {
   name: string;
@@ -38,7 +45,10 @@ export interface Axis {
 export const MEASURED_AXES: readonly Axis[] = [
   { name: 'round', dimension: 'rounds', from: LIGHT, to: HEAVY_ROUNDS },
   { name: 'game', dimension: 'games', from: HEAVY_ROUNDS, to: HEAVY_GAMES },
-  { name: 'editor', dimension: 'editors', from: HEAVY_ROUNDS, to: HEAVY_EDITORS },
+  // One step: the fixed cost of becoming shared.
+  { name: 'sharing', dimension: 'editors', from: HEAVY_ROUNDS, to: SHARED_ONE },
+  // Both ends shared: the marginal member.
+  { name: 'editor', dimension: 'editors', from: SHARED_ONE, to: HEAVY_EDITORS },
 ];
 
 export function shapeLabel(shape: OwnerShape): string {

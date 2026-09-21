@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadFirestoreWriteCostBaseline } from '../../../../eslint-rules/firestore-write-cost-lib.mjs';
 import {
   HEAVY_EDITORS,
+  SHARED_ONE,
   MEASURED_AXES,
   HEAVY_GAMES,
   HEAVY_ROUNDS,
@@ -54,6 +55,17 @@ describe('write path cost baseline', () => {
     const shared = await measureWriteCost('claimSeal', HEAVY_EDITORS);
     expect(shared.reads).toBe(alone.reads);
     expect(shared.writes - alone.writes).toBe(HEAVY_EDITORS.editors);
+  });
+
+  // One slope would average two different costs.
+  it('seals becoming shared apart from the marginal editor', async () => {
+    const alone = await measureWriteCost('setSubmissionTitle', HEAVY_ROUNDS);
+    const one = await measureWriteCost('setSubmissionTitle', SHARED_ONE);
+    const many = await measureWriteCost('setSubmissionTitle', HEAVY_EDITORS);
+    const sharing = one.reads - alone.reads;
+    const marginal = (many.reads - one.reads) / (HEAVY_EDITORS.editors - SHARED_ONE.editors);
+    // The owner query stops covering access; no later member repeats it.
+    expect(sharing).toBeGreaterThan(marginal);
   });
 
   // One game per round would report the two slopes added together.
