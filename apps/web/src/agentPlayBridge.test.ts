@@ -784,6 +784,21 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // Identity against Date.prototype.toJSON breaks across realms; the shape does not.
+    it('serializes a date-like value from another realm', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const alien = { toJSON: () => '1970-01-01T00:00:00.000Z' };
+      harness.observation = () => ({ when: alien, ok: 1 });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('1970-01-01');
+    });
+
     // A Date cannot rename anything, so it still serializes.
     it('still serializes a Date', async () => {
       setHidden(['targetWord']);

@@ -23,7 +23,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       if(names.length){
         var raw=this&&typeof this==='object'?this[key]:undefined;
         // toJSON runs before the replacer and can rename a declared key out of reach.
-        if(raw&&typeof raw==='object'&&typeof raw.toJSON==='function'&&raw.toJSON!==Date.prototype.toJSON)throw AGENT_UNSAFE;
+        // Judged on what it produced, not on which realm its prototype came from:
+        // a Date becomes a string and keeps no keys, an object could hide some.
+        if(raw&&typeof raw==='object'&&typeof raw.toJSON==='function'&&val&&typeof val==='object')throw AGENT_UNSAFE;
       }
       for(var i=0;i<names.length;i++)if(names[i]===key)return undefined;
       // Keys and punctuation cost too; escaping is settled by the exact check below.
