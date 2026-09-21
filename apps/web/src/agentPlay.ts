@@ -333,7 +333,7 @@ export const AGENT_GUIDE = [
   '',
   "Read `state` for the game's own numbers, `seen` for its description of what is on",
   'screen, `ui` for the buttons you can click (coordinates are 0..1 of the canvas), `api`',
-  'for named helpers (`call buildRail [from, to]` or `agent.call` in a policy), and `log`',
+  'for named helpers (`call buildRail [[0,0],[1,1]]` or `agent.call` in a policy), and `log`',
   'for what happened while you were not looking. Sound the game played reaches the log as',
   '`sfx`, `loop` and `music` lines — that is how you hear it.',
   '',

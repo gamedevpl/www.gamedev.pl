@@ -79,14 +79,8 @@ function readSnapshot(value: unknown): AgentSnapshot {
   if (!value || typeof value !== 'object') return {};
   const out: AgentSnapshot = {};
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (key === 'observation' && raw !== null && typeof raw === 'object') {
-      try {
-        out[key] = JSON.stringify(raw).slice(0, 16000);
-      } catch {
-        continue;
-      }
-      continue;
-    }
+    // The frame serializes observations; an object here is forged, so drop it.
+    if (key === 'observation' && raw !== null && typeof raw === 'object') continue;
     const cap = key === 'observation' ? 16000 : 2000;
     if (raw === null || typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
       out[key] = typeof raw === 'string' ? raw.slice(0, cap) : raw;
