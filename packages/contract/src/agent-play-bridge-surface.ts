@@ -198,6 +198,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     AGENT_API_MEMO={h:h,api:h.api,helpers:h.helpers,frame:h.frame,table:table};
     return table;
   }
+  // A repaint can republish a changed registry inside one frame.
+  function agentForgetApi(){AGENT_API_MEMO=null;}
   function agentApiNames(){
     var table=agentApiTable(),names=[],k;
     // Skip rather than truncate: a shortened name is one call cannot resolve.

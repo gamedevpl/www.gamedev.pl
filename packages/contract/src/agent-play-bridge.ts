@@ -238,6 +238,7 @@ export const AGENT_PLAY_BRIDGE =
       }
       // A helper mutates the round; republish without advancing time.
       try{var ph=agentHarness();if(ph&&typeof ph.paint==='function')ph.paint();}catch(err){}
+      agentForgetApi();
       agentState('call',id);
       return;
     }
@@ -348,7 +349,7 @@ export const AGENT_PLAY_BRIDGE =
         }
         return api.state();
       },
-      paint:function(){var h=agentHarness();if(h&&typeof h.paint==='function')h.paint();},
+      paint:function(){var h=agentHarness();if(h&&typeof h.paint==='function')h.paint();agentForgetApi();},
       frame:function(){return agentFrameNo();},
       framesUsed:function(){return used;},
       framesLeft:function(){return Math.max(0,budget-used);},

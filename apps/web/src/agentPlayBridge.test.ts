@@ -627,6 +627,23 @@ describe('the agent bridge, running for real', () => {
     expect(log.some((entry) => entry.detail === 'increment 1')).toBe(true);
   });
 
+  // A helper registered during a call is callable in that frame.
+  it('sees a registry change made inside one frame', async () => {
+    const api: Record<string, (...args: unknown[]) => unknown> = {
+      openGate: () => {
+        api.walkThrough = () => 'through';
+        return 'open';
+      },
+    };
+    harness.api = api;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'call', name: 'openGate', args: [] } });
+    await settle();
+
+    expect(lastOf(received, 'agent:state')!.api as string[]).toContain('walkThrough');
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
