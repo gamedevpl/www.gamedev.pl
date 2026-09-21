@@ -932,6 +932,30 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // An index can be an accessor, and a slot names nothing.
+    it('does not run an indexed accessor while fields are declared', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const rounds: unknown[] = [];
+      Object.defineProperty(rounds, '0', {
+        enumerable: true,
+        configurable: true,
+        get() {
+          return 'RAVEN';
+        },
+      });
+      (rounds as { length: number }).length = 1;
+      harness.observation = () => ({ rounds });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('[null]');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
     // Each converter here runs before any check could see it.
     it('never lets a toJSON carry a declared key out', async () => {
       const shapes: Record<string, () => unknown> = {

@@ -55,6 +55,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         spend(2);
         for(i=0;i<v.length;i++){
           if(i)spend(1);
+          // An index can be an accessor, and a slot names nothing.
+          if(names.length&&!agentIsData(v,String(i))){parts.push(lit('null'));continue;}
           text=write(v[i]);
           parts.push(text===undefined?lit('null'):text);
         }
@@ -65,9 +67,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         // Enumerated, not collected: a wide object must not cost a key array
         // before the budget has a chance to stop the walk.
         for(name in v){
-          if(!Object.prototype.hasOwnProperty.call(v,name))continue;
-          // A key we drop still cost a look, so looking spends too.
+          // A name we drop still cost a look, inherited ones included.
           spend(1);
+          if(!Object.prototype.hasOwnProperty.call(v,name))continue;
           // Named before read: a declared key's getter never runs either.
           if(declared(name))continue;
           // An accessor is game code, and this walk exists so none of it runs.
