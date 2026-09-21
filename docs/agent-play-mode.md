@@ -136,7 +136,9 @@ twice would read as a sound heard twice.
   declared ones dropped before their value is even read, so a getter on a declared key does
   not run either. A real `Date` is read through this realm's `Date.prototype.toISOString`,
   which answers for the internal slot only a genuine `Date` has, in any realm; an object
-  that merely looks like one is written out as the object it is.
+  that merely looks like one is written out as the object it is. An accessor is game
+  code too, so where a game declares hidden fields its getters are not run and those
+  properties do not appear; a game declaring none keeps them.
 - **A helper that throws is reported without its message** when the game declares hidden
   fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read

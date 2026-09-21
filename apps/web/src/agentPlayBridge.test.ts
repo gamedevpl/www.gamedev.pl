@@ -644,6 +644,21 @@ describe('the agent bridge, running for real', () => {
     expect(lastOf(received, 'agent:state')!.api as string[]).toContain('walkThrough');
   });
 
+  // A registration written as a method must still see its harness.
+  it('reads a functional observation with its owner as receiver', async () => {
+    harness.metadata = { state: 'playing', cash: 12 };
+    harness.observation = function (this: { metadata: { cash: number } }) {
+      return { cash: this.metadata.cash };
+    };
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+    expect(snapshot.observation).toContain('"cash":12');
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
@@ -875,6 +890,28 @@ describe('the agent bridge, running for real', () => {
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).toContain('too large');
       expect(Date.now() - started).toBeLessThan(2000);
+    });
+
+    // An accessor is game code, and this walk runs none.
+    it('does not run an accessor while fields are declared', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const clue: Record<string, unknown> = { targetWord: 'RAVEN', letters: 5 };
+      Object.defineProperty(clue, 'answer', {
+        enumerable: true,
+        get() {
+          return clue.targetWord;
+        },
+      });
+      harness.observation = () => ({ clue });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"letters":5');
+      expect(snapshot.observation).not.toContain('RAVEN');
     });
 
     // Each converter here runs before any check could see it.

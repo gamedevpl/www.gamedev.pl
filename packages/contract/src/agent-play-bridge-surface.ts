@@ -2,8 +2,9 @@
 
 export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_TOO_LARGE='<withheld: too large>';
-  function agentReadMaybeFn(value){
-    if(typeof value==='function'){try{return value();}catch(err){return null;}}
+  // Called on its owner: a registration written as a method reads this.
+  function agentReadMaybeFn(value,self){
+    if(typeof value==='function'){try{return value.call(self);}catch(err){return null;}}
     return value;
   }
   // One pass, no parse, no clone: drop declared keys while serializing, and stop
@@ -16,6 +17,12 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentIsDate(v){
     // Our own realm's method, against the internal slot only a real Date has.
     try{Date.prototype.toISOString.call(v);return true;}catch(err){return false;}
+  }
+  function agentIsData(holder,name){
+    try{
+      var d=Object.getOwnPropertyDescriptor(holder,name);
+      return !!d&&!d.get&&!d.set;
+    }catch(err){return false;}
   }
   function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
@@ -61,6 +68,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
           if(!Object.prototype.hasOwnProperty.call(v,name))continue;
           // Named before read: a declared key's getter never runs either.
           if(declared(name))continue;
+          // An accessor is game code, and this walk exists so none of it runs.
+          // Only where something is declared: with nothing to protect it is the game's.
+          if(names.length&&!agentIsData(v,name))continue;
           try{val=v[name];}catch(err){continue;}
           text=write(val);
           if(text===undefined)continue;
@@ -101,7 +111,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]==='observation')obsHidden=true;
     if(!obsHidden){
       var obs=out.observation;
-      if(obs==null||obs==='')obs=agentReadMaybeFn(h.observation);
+      if(obs==null||obs==='')obs=agentReadMaybeFn(h.observation,h);
       var text=agentSafeJson(obs,hidden,16000);
       if(text)out.observation=text;
       else delete out.observation;
@@ -123,8 +133,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(raw.selected===true)item.selected=true;
     return item;
   }
-  function agentUiFrom(raw,w,h){
-    var list=agentReadMaybeFn(raw),out=[],i,item;
+  function agentUiFrom(raw,w,h,self){
+    var list=agentReadMaybeFn(raw,self),out=[],i,item;
     if(!list||typeof list.length!=='number')return out;
     // Entries rejected still cost a look, so bound the scan, not just what it keeps.
     var scan=Math.min(list.length,AGENT_UI_CAP*10);
@@ -151,11 +161,11 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
     try{
       var kit=window.GameKit;
-      if(kit&&kit.ui&&typeof kit.ui.affordances==='function')add(agentUiFrom(kit.ui.affordances(),w,hgt));
+      if(kit&&kit.ui&&typeof kit.ui.affordances==='function')add(agentUiFrom(kit.ui.affordances(),w,hgt,kit.ui));
     }catch(err){}
     try{
       var harness=agentHarness();
-      if(harness)add(agentUiFrom(harness.ui,w,hgt));
+      if(harness)add(agentUiFrom(harness.ui,w,hgt,harness));
     }catch(err){}
     return out;
   }
