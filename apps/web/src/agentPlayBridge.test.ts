@@ -4,7 +4,7 @@
 
 // jsdom is parent === window, so posts land back on this window.
 
-import { describe, it, expect, afterEach, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
 import { AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 import { embedGameHtml } from './gamePlayer.js';
 
@@ -117,6 +117,11 @@ describe('the agent bridge, running for real', () => {
     // Indirect eval on purpose: this test runs the real scripts.
     (0, eval)(playerBridgeSource());
     (0, eval)(AGENT_PLAY_BRIDGE);
+  });
+
+  // One 400ms retry is armed; let it land before jsdom goes.
+  afterAll(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
   });
 
   beforeEach(() => {
@@ -632,6 +637,52 @@ describe('the agent bridge, running for real', () => {
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).not.toContain('RAVEN');
       expect(snapshot.observation).toContain('too large to redact');
+    });
+
+    // JSON may lead with whitespace or a BOM.
+    it('withholds oversized JSON that leads with whitespace or a BOM', async () => {
+      setHidden(['targetWord']);
+      const huge = JSON.stringify({ targetWord: 'RAVEN', pad: 'x'.repeat(70000) });
+
+      for (const lead of ['', ' \n', '\uFEFF']) {
+        harness.metadata = { state: 'playing', observation: lead + huge };
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(snapshot.observation).not.toContain('RAVEN');
+      }
+    });
+
+    // The parse cap guards strings; an object graph never met it.
+    it('withholds an object observation too large to serialize', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', pad: 'x'.repeat(2_000_000) });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(String(snapshot.observation).length).toBeLessThan(200);
+    });
+
+    it('still serializes an ordinary object observation in full', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', tool: 'rail' });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"room":"cellar"');
+      expect(snapshot.observation).toContain('"tool":"rail"');
     });
 
     it('leaves a game that declares nothing untouched', async () => {

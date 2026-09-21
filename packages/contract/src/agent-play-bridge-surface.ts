@@ -37,9 +37,10 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(!hidden||!hidden.length)return value;
     if(typeof value==='string'){
       if(value.length>AGENT_PARSE_CAP){
-        var lead=value.charAt(0);
+        // Leading whitespace is valid JSON, so look past it; BOM counts too.
+        var lead=/^\\s*([\\s\\S])/.exec(value),ch=lead?lead[1]:'';
         // JSON this big could hide a declared key and we will not parse it; prose could not.
-        return (lead==='{'||lead==='[')?AGENT_TOO_LARGE:value;
+        return (ch==='{'||ch==='[')?AGENT_TOO_LARGE:value;
       }
       var parsed;
       try{parsed=JSON.parse(value);}catch(err){return value;}
@@ -48,10 +49,23 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
     return agentRedact(value,hidden,0);
   }
+  // Serializing a whole graph to then slice it is the cost; abort instead of finishing.
+  var AGENT_SERIALIZE_BUDGET=262144;
+  function agentStringifyBounded(value){
+    var used=0;
+    try{
+      return JSON.stringify(value,function(key,val){
+        used+=typeof val==='string'?val.length+2:8;
+        if(used>AGENT_SERIALIZE_BUDGET)throw new Error('over budget');
+        return val;
+      });
+    }catch(err){return null;}
+  }
   function agentJsonValue(value,cap){
     if(value==null)return '';
     if(typeof value==='string')return value.slice(0,cap);
-    try{return JSON.stringify(value).slice(0,cap);}catch(err){return String(value).slice(0,cap);}
+    var text=agentStringifyBounded(value);
+    return text===null?AGENT_TOO_LARGE:text.slice(0,cap);
   }
   function agentSnapshot(){
     var h=agentHarness()||{},out={},hidden=agentHidden(),i,meta=h.metadata;

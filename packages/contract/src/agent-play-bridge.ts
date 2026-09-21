@@ -229,7 +229,7 @@ export const AGENT_PLAY_BRIDGE =
         // policy gets is not: a policy runs in the game's realm and is exempt anyway.
         // MaybeJson, not agentRedact: a helper may return its result as JSON text.
         var safe=agentRedactMaybeJson(result,agentHidden());
-        var shown;try{shown=JSON.stringify(safe);}catch(err){shown=String(safe);}
+        var shown=agentJsonValue(safe,140);
         agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
       }catch(err){agentNote('error',String((err&&err.message)||err));}
       // A helper mutates the round; republish without advancing time.
