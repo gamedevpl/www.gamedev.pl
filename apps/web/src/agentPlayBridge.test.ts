@@ -678,6 +678,27 @@ describe('the agent bridge, running for real', () => {
     expect(state!.api as string[]).toEqual([]);
   });
 
+  // An off-canvas widget was advertised at bounds click refuses.
+  it('clips widget bounds to the canvas', async () => {
+    harness.ui = [
+      { label: 'OFF', x1: -2, y1: -2, x2: 3, y2: 3 },
+      { label: 'PIXELS', x: -400, y: -400, width: 4000, height: 4000 },
+    ] as unknown as typeof harness.ui;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const ui = lastOf(received, 'agent:state')!.ui as Array<Record<string, number>>;
+    expect(ui.length).toBeGreaterThan(0);
+    for (const widget of ui) {
+      for (const key of ['x1', 'y1', 'x2', 'y2']) {
+        expect(widget[key], key).toBeGreaterThanOrEqual(0);
+        expect(widget[key], key).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {

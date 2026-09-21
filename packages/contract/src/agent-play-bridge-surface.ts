@@ -123,6 +123,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
     return out;
   }
+  function agentClamp01(v){return v<0?0:(v>1?1:v);}
   function agentNormalizeWidget(raw,w,h){
     if(!raw||typeof raw!=='object')return null;
     var label=String(raw.label||'').slice(0,80);
@@ -133,6 +134,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       x1=raw.x/w;y1=raw.y/h;x2=(raw.x+Number(raw.width||0))/w;y2=(raw.y+Number(raw.height||0))/h;
     }else return null;
     if(!isFinite(x1)||!isFinite(y1)||!isFinite(x2)||!isFinite(y2)||x2<=x1||y2<=y1)return null;
+    // Clipped like the kit publisher: click refuses a midpoint outside 0..1.
+    x1=agentClamp01(x1);y1=agentClamp01(y1);x2=agentClamp01(x2);y2=agentClamp01(y2);
+    if(x2<=x1||y2<=y1)return null;
     var item={label:label,enabled:raw.enabled!==false,x1:x1,y1:y1,x2:x2,y2:y2};
     if(typeof raw.detail==='string')item.detail=String(raw.detail).slice(0,120);
     if(raw.selected===true)item.selected=true;
@@ -184,9 +188,10 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var k,fn;
     if(!src||typeof src!=='object')return seen;
     for(k in src){
-      if(seen>=AGENT_API_SCAN)return seen;
-      if(!Object.prototype.hasOwnProperty.call(src,k))continue;
+      // An inherited name cost a look, so the cap counts it too.
       seen++;
+      if(seen>AGENT_API_SCAN)return seen;
+      if(!Object.prototype.hasOwnProperty.call(src,k))continue;
       // A registration whose getter throws is skipped, not fatal to the surface.
       try{fn=src[k];}catch(err){continue;}
       // The registry travels with the function: a method that reads this must
@@ -210,9 +215,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     seen=agentTakeFns(apiSrc,table,seen);
     seen=agentTakeFns(helperSrc,table,seen);
     for(k in h){
-      if(seen>=AGENT_API_SCAN)break;
-      if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
       seen++;
+      if(seen>AGENT_API_SCAN)break;
+      if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
       try{fn=h[k];}catch(err){continue;}
       if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
     }
