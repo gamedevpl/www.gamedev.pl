@@ -1017,6 +1017,45 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // Redaction must not call a game's version of anything.
+    it('keeps redacting when the game replaces call, JSON and Date', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const originals = {
+        call: Function.prototype.call,
+        json: JSON.stringify,
+        iso: Date.prototype.toISOString,
+      };
+      Function.prototype.call = function (this: unknown, self: unknown, ...rest: unknown[]) {
+        if (this === originals.iso) {
+          const holder = self as { clue?: { targetWord?: string } } | undefined;
+          return holder?.clue ? holder.clue.targetWord : 'x';
+        }
+        const native = originals.call as (this: unknown, self: unknown, ...args: unknown[]) => unknown;
+        return native.apply(this, [self, ...rest]);
+      } as typeof Function.prototype.call;
+      JSON.stringify = (() => '"pwned"') as typeof JSON.stringify;
+      Date.prototype.toISOString = function () {
+        return 'nope';
+      };
+      try {
+        harness.observation = () => ({ clue: { targetWord: 'RAVEN', cash: 100 } });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).not.toContain('RAVEN');
+        expect(String(snapshot.observation)).not.toContain('pwned');
+      } finally {
+        Function.prototype.call = originals.call;
+        JSON.stringify = originals.json;
+        Date.prototype.toISOString = originals.iso;
+      }
+    });
+
     // Injected before the game script, so the intrinsic is ours.
     it('keeps reading Dates through the intrinsic the game replaced', async () => {
       setHidden(['targetWord']);

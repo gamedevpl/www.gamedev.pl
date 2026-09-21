@@ -64,10 +64,15 @@ function readAffordances(value: unknown): AgentAffordance[] {
 // Primitives only: a hostile frame cannot send an object graph.
 function readApiNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .filter((name): name is string => typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
-    .map((name) => name.slice(0, 40))
-    .slice(0, 40);
+  const out: string[] = [];
+  // Bounded by looks: a forged state can carry a million rejected names.
+  const scan = Math.min(value.length, 400);
+  for (let i = 0; i < scan && out.length < 40; i++) {
+    const name = value[i];
+    if (typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
+    out.push(name.slice(0, 40));
+  }
+  return out;
 }
 
 function readSnapshot(value: unknown): AgentSnapshot {

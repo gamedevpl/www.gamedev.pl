@@ -14,15 +14,21 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // We do the walking, so no toJSON ever runs: JSON.stringify calls one before any
   // check can see it, and a converter can return a primitive, rename in place or
   // delete itself, so every test of the converted value arrives too late.
-  // Bound before the game's script runs: a game can replace the prototype later.
-  var AGENT_DATE_ISO=Date.prototype.toISOString;
+  // Bound before the game's script runs: every one of these is replaceable, and
+  // redaction decides what crosses, so it must not call a game's version of them.
+  var AGENT_CALL=Function.prototype.call;
+  var AGENT_DATE_ISO=AGENT_CALL.bind(Date.prototype.toISOString);
+  var AGENT_HAS=AGENT_CALL.bind(Object.prototype.hasOwnProperty);
+  var AGENT_DESC=Object.getOwnPropertyDescriptor;
+  var AGENT_IS_ARRAY=Array.isArray;
+  var AGENT_JSON=JSON.stringify;
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
-    try{AGENT_DATE_ISO.call(v);return true;}catch(err){return false;}
+    try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
   }
   function agentIsData(holder,name){
     try{
-      var d=Object.getOwnPropertyDescriptor(holder,name);
+      var d=AGENT_DESC(holder,name);
       return !!d&&!d.get&&!d.set;
     }catch(err){return false;}
   }
@@ -43,18 +49,18 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       if(v===null)return lit('null');
       // Cut to what the budget could still hold before escaping: escaping only
       // grows a string, so a cut one that no longer fits never fitted either.
-      if(t==='string')return lit(JSON.stringify(v.length>cap-used?v.slice(0,cap-used+1):v));
+      if(t==='string')return lit(AGENT_JSON(v.length>cap-used?v.slice(0,cap-used+1):v));
       if(t==='number')return lit(isFinite(v)?String(v):'null');
       if(t==='boolean')return lit(v?'true':'false');
       // A function, undefined or a symbol has no JSON form: the holder drops it.
       if(t!=='object')return undefined;
-      if(agentIsDate(v))return lit(JSON.stringify(AGENT_DATE_ISO.call(v)));
+      if(agentIsDate(v))return lit(AGENT_JSON(AGENT_DATE_ISO(v)));
       // A cycle would never end; nesting spends the budget, so depth needs no cap.
       for(i=0;i<stack.length;i++)if(stack[i]===v)throw AGENT_OVER;
       stack.push(v);
       var parts=[],out,text;
       // Array.isArray asks nothing of the value: a toStringTag getter is game code.
-      if(Array.isArray(v)){
+      if(AGENT_IS_ARRAY(v)){
         spend(2);
         for(i=0;i<v.length;i++){
           if(i)spend(1);
@@ -72,7 +78,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         for(name in v){
           // A name we drop still cost a look, inherited ones included.
           spend(1);
-          if(!Object.prototype.hasOwnProperty.call(v,name))continue;
+          if(!AGENT_HAS(v,name))continue;
           // Named before read: a declared key's getter never runs either.
           if(declared(name))continue;
           // An accessor is game code, and this walk exists so none of it runs.
@@ -82,7 +88,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
           text=write(val);
           if(text===undefined)continue;
           // Cut before escaping, like a string value: a key is untrusted too.
-          key=JSON.stringify(name.length>cap-used?name.slice(0,cap-used+1):name);
+          key=AGENT_JSON(name.length>cap-used?name.slice(0,cap-used+1):name);
           spend(key.length+(parts.length?2:1));
           parts.push(key+':'+text);
         }
@@ -102,7 +108,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var h=agentHarness()||{},out={},hidden=agentHidden(),i,meta=h.metadata;
     if(meta){
       for(var k in meta){
-        if(!Object.prototype.hasOwnProperty.call(meta,k))continue;
+        if(!AGENT_HAS(meta,k))continue;
         var skip=false;
         if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]===k)skip=true;
         if(skip)continue;
@@ -193,7 +199,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       // An inherited name cost a look, so the cap counts it too.
       seen++;
       if(seen>AGENT_API_SCAN)return seen;
-      if(!Object.prototype.hasOwnProperty.call(src,k))continue;
+      if(!AGENT_HAS(src,k))continue;
       // A registration whose getter throws is skipped, not fatal to the surface.
       try{fn=src[k];}catch(err){continue;}
       // The registry travels with the function: a method that reads this must
@@ -219,7 +225,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     for(k in h){
       seen++;
       if(seen>AGENT_API_SCAN)break;
-      if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
+      if(!AGENT_HAS(h,k)||AGENT_HARNESS_CORE[k])continue;
       try{fn=h[k];}catch(err){continue;}
       if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
     }
@@ -231,7 +237,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentApiNames(){
     var table=agentApiTable(),names=[],k;
     // Skip rather than truncate: a shortened name is one call cannot resolve.
-    for(k in table)if(Object.prototype.hasOwnProperty.call(table,k)&&String(k).length<=40)names.push(String(k));
+    for(k in table)if(AGENT_HAS(table,k)&&String(k).length<=40)names.push(String(k));
     names.sort();
     return names.slice(0,AGENT_API_CAP);
   }
