@@ -128,6 +128,11 @@ twice would read as a sound heard twice.
   `defineGame().observation()` and `.agentApi()` do exactly that. If a game formats its own
   answer into prose, a pre-stringified blob or an exception message, redaction cannot see
   it — which is the same position prose was always in.
+- **A value that converts itself is withheld.** `JSON.stringify` calls a custom `toJSON`
+  _before_ the replacer sees it, so an object can hand back a different shape and carry a
+  declared key out under another name. When a game declares hidden fields, a value with its
+  own `toJSON` is withheld rather than trusted; `Date` is the exception, since its
+  conversion cannot rename anything. A game declaring none is unaffected.
 - **A helper that throws is reported without its message** when the game declares hidden
   fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read

@@ -10,12 +10,21 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // the moment the output would exceed its cap. Every earlier shape of this
   // walked or parsed game text first, and each stage grew its own escape hatch.
   var AGENT_OVER={over:1};
+  var AGENT_UNSAFE={unsafe:1};
+  var AGENT_CONVERTED='<withheld: custom toJSON>';
   function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
     // Text the game hands over is text: capped, never inspected. See the docs.
     if(typeof value==='string')return value.slice(0,cap);
     var names=hidden||[],used=0;
+    // The replacer holder: this[key] is the value BEFORE toJSON ran on it.
     function keep(key,val){
+      // Only when something is declared: with nothing to protect, toJSON is the game's business.
+      if(names.length){
+        var raw=this&&typeof this==='object'?this[key]:undefined;
+        // toJSON runs before the replacer and can rename a declared key out of reach.
+        if(raw&&typeof raw==='object'&&typeof raw.toJSON==='function'&&raw.toJSON!==Date.prototype.toJSON)throw AGENT_UNSAFE;
+      }
       for(var i=0;i<names.length;i++)if(names[i]===key)return undefined;
       // Keys and punctuation cost too; escaping is settled by the exact check below.
       used+=key.length+4;
@@ -26,7 +35,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
     var text;
     // A cycle throws here too; nesting spends the budget, so depth needs no cap.
-    try{text=JSON.stringify(value,keep);}catch(err){return AGENT_TOO_LARGE;}
+    try{text=JSON.stringify(value,keep);}catch(err){return err===AGENT_UNSAFE?AGENT_CONVERTED:AGENT_TOO_LARGE;}
     // Never sliced: a cut JSON string is not JSON. Withhold instead.
     if(typeof text!=='string'||text.length>cap)return AGENT_TOO_LARGE;
     return text;

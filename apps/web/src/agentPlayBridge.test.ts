@@ -764,6 +764,40 @@ describe('the agent bridge, running for real', () => {
       expect(Date.now() - started).toBeLessThan(1000);
     });
 
+    // toJSON runs before the replacer and can rename a declared key.
+    it('withholds a value whose toJSON could rename a declared key', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({
+        targetWord: 'RAVEN',
+        toJSON() {
+          return { answer: 'RAVEN' };
+        },
+      });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('custom toJSON');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // A Date cannot rename anything, so it still serializes.
+    it('still serializes a Date', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ when: new Date(0), ok: 1 });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('1970-01-01');
+    });
+
     it('leaves a game that declares nothing untouched', async () => {
       setHidden(null);
       harness.metadata = { state: 'playing' };
