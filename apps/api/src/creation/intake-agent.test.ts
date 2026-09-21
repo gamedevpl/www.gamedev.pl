@@ -291,4 +291,26 @@ describe('CLI session tools', () => {
     });
     await expect(agent.decide({ message: 'go', history: [], session })).rejects.toThrow('ambiguous');
   });
+
+  it('names the tool in the error when the model calls one that does not exist', async () => {
+    const agent = new IntakeChatAgent({
+      client: stubClient({
+        parts: [{ type: 'toolCall', toolCall: { name: 'delete_everything', arguments: {} } }],
+      }),
+    });
+    await expect(agent.decide({ message: 'go', history: [] })).rejects.toThrow('unknown CLI tool: delete_everything');
+  });
+
+  it('falls back to the reply text instead of failing closed when a bad tool call carries one', async () => {
+    const agent = new IntakeChatAgent({
+      client: stubClient({
+        parts: [
+          { type: 'text', text: 'Nie robię tego przez CLI, ale mogę pomóc inaczej.' },
+          { type: 'toolCall', toolCall: { name: 'delete_everything', arguments: {} } },
+        ],
+      }),
+    });
+    const decision = await agent.decide({ message: 'go', history: [] });
+    expect(decision).toMatchObject({ kind: 'reply', text: 'Nie robię tego przez CLI, ale mogę pomóc inaczej.' });
+  });
 });
