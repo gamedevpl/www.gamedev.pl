@@ -1017,6 +1017,30 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // Injected before the game script, so the intrinsic is ours.
+    it('keeps reading Dates through the intrinsic the game replaced', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const original = Date.prototype.toISOString;
+      Date.prototype.toISOString = function (this: Record<string, unknown>) {
+        const clue = this.clue as Record<string, unknown> | undefined;
+        return clue ? `peek:${String(clue.targetWord)}` : String(this.targetWord ?? 'x');
+      };
+      try {
+        harness.observation = () => ({ clue: { targetWord: 'RAVEN', cash: 100 } });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(snapshot.observation).toContain('"cash":100');
+        expect(snapshot.observation).not.toContain('RAVEN');
+      } finally {
+        Date.prototype.toISOString = original;
+      }
+    });
+
     // Each converter here runs before any check could see it.
     it('never lets a toJSON carry a declared key out', async () => {
       const shapes: Record<string, () => unknown> = {

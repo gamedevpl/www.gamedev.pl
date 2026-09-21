@@ -14,9 +14,11 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // We do the walking, so no toJSON ever runs: JSON.stringify calls one before any
   // check can see it, and a converter can return a primitive, rename in place or
   // delete itself, so every test of the converted value arrives too late.
+  // Bound before the game's script runs: a game can replace the prototype later.
+  var AGENT_DATE_ISO=Date.prototype.toISOString;
   function agentIsDate(v){
-    // Our own realm's method, against the internal slot only a real Date has.
-    try{Date.prototype.toISOString.call(v);return true;}catch(err){return false;}
+    // The bound intrinsic, against the internal slot only a real Date has.
+    try{AGENT_DATE_ISO.call(v);return true;}catch(err){return false;}
   }
   function agentIsData(holder,name){
     try{
@@ -46,7 +48,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       if(t==='boolean')return lit(v?'true':'false');
       // A function, undefined or a symbol has no JSON form: the holder drops it.
       if(t!=='object')return undefined;
-      if(agentIsDate(v))return lit(JSON.stringify(Date.prototype.toISOString.call(v)));
+      if(agentIsDate(v))return lit(JSON.stringify(AGENT_DATE_ISO.call(v)));
       // A cycle would never end; nesting spends the budget, so depth needs no cap.
       for(i=0;i<stack.length;i++)if(stack[i]===v)throw AGENT_OVER;
       stack.push(v);
