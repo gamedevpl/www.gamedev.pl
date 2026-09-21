@@ -32,7 +32,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     function write(v){
       var t=typeof v,i;
       if(v===null)return lit('null');
-      if(t==='string')return lit(JSON.stringify(v));
+      // Cut to what the budget could still hold before escaping: escaping only
+      // grows a string, so a cut one that no longer fits never fitted either.
+      if(t==='string')return lit(JSON.stringify(v.length>cap-used?v.slice(0,cap-used+1):v));
       if(t==='number')return lit(isFinite(v)?String(v):'null');
       if(t==='boolean')return lit(v?'true':'false');
       // A function, undefined or a symbol has no JSON form: the holder drops it.
@@ -52,15 +54,17 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         out='['+parts.join(',')+']';
       }else{
         spend(2);
-        var keys=Object.keys(v),key;
-        for(i=0;i<keys.length;i++){
+        var key,name,val;
+        // Enumerated, not collected: a wide object must not cost a key array
+        // before the budget has a chance to stop the walk.
+        for(name in v){
+          if(!Object.prototype.hasOwnProperty.call(v,name))continue;
           // Named before read: a declared key's getter never runs either.
-          if(declared(keys[i]))continue;
-          var val;
-          try{val=v[keys[i]];}catch(err){continue;}
+          if(declared(name))continue;
+          try{val=v[name];}catch(err){continue;}
           text=write(val);
           if(text===undefined)continue;
-          key=JSON.stringify(keys[i]);
+          key=JSON.stringify(name);
           spend(key.length+(parts.length?2:1));
           parts.push(key+':'+text);
         }
@@ -84,8 +88,12 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         var skip=false;
         if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]===k)skip=true;
         if(skip)continue;
+        var value;
+        // Read once: a getter that answers differently twice would place the
+        // second answer in the snapshot without it ever passing redaction.
+        try{value=meta[k];}catch(err){continue;}
         // A nested declared key rides inside an object value, so serialize it here.
-        out[k]=(meta[k]!==null&&typeof meta[k]==='object')?agentSafeJson(meta[k],hidden,16000):meta[k];
+        out[k]=(value!==null&&typeof value==='object')?agentSafeJson(value,hidden,16000):value;
       }
     }
     var obsHidden=false;
@@ -165,7 +173,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       seen++;
       // A registration whose getter throws is skipped, not fatal to the surface.
       try{fn=src[k];}catch(err){continue;}
-      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]=fn;
+      // The registry travels with the function: a method that reads this must
+      // still get the object it was registered on.
+      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]={fn:fn,self:src};
     }
     return seen;
   }
@@ -183,7 +193,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
       seen++;
       try{fn=h[k];}catch(err){continue;}
-      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]=fn;
+      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
     }
     AGENT_API_MEMO={h:h,api:h.api,helpers:h.helpers,frame:h.frame,table:table};
     return table;
@@ -196,8 +206,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     return names.slice(0,AGENT_API_CAP);
   }
   function agentInvoke(name,args){
-    var fn=agentApiTable()[String(name)];
-    if(typeof fn!=='function')throw new Error('unknown helper: '+name+' (try agent.api())');
-    return fn.apply(null,args||[]);
+    var entry=agentApiTable()[String(name)];
+    if(!entry||typeof entry.fn!=='function')throw new Error('unknown helper: '+name+' (try agent.api())');
+    return entry.fn.apply(entry.self,args||[]);
   }
 `;

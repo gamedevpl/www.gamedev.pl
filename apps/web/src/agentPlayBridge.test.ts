@@ -608,6 +608,25 @@ describe('the agent bridge, running for real', () => {
     expect(state.api as string[]).not.toContain('landmine');
   });
 
+  // A method registered on the registry must still see its own object.
+  it('calls a helper with the registry it was registered on', async () => {
+    harness.api = {
+      total: 0,
+      increment(this: { total: number }) {
+        this.total += 1;
+        return this.total;
+      },
+    } as unknown as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'call', name: 'increment', args: [] } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(log.some((entry) => entry.kind === 'error')).toBe(false);
+    expect(log.some((entry) => entry.detail === 'increment 1')).toBe(true);
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
@@ -799,6 +818,28 @@ describe('the agent bridge, running for real', () => {
 
       expect(lastOf(received, 'agent:state')!.ui).toEqual([]);
       expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    // A getter answering differently twice used to slip its second answer past.
+    it('reads each snapshot property once', async () => {
+      setHidden(['targetWord']);
+      let reads = 0;
+      const meta: Record<string, unknown> = { state: 'playing' };
+      Object.defineProperty(meta, 'clue', {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return reads > 1 ? { targetWord: 'RAVEN' } : null;
+        },
+      });
+      harness.metadata = meta;
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(JSON.stringify(snapshot)).not.toContain('RAVEN');
     });
 
     // Each converter here runs before any check could see it.
