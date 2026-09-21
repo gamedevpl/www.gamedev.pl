@@ -608,6 +608,21 @@ describe('the agent bridge, running for real', () => {
     expect(state.api as string[]).not.toContain('landmine');
   });
 
+  // A function's own apply is the game's property, not an invocation.
+  it('calls a helper that carries its own apply property', async () => {
+    const helper = () => 'real';
+    (helper as unknown as Record<string, unknown>).apply = () => 'shadow';
+    harness.api = { probe: helper } as unknown as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'call', name: 'probe', args: [] } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(log.some((entry) => entry.detail.includes('real'))).toBe(true);
+    expect(log.some((entry) => entry.detail.includes('shadow'))).toBe(false);
+  });
+
   // A method registered on the registry must still see its own object.
   it('calls a helper with the registry it was registered on', async () => {
     harness.api = {

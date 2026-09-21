@@ -4,7 +4,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_TOO_LARGE='<withheld: too large>';
   // Called on its owner: a registration written as a method reads this.
   function agentReadMaybeFn(value,self){
-    if(typeof value==='function'){try{return value.call(self);}catch(err){return null;}}
+    if(typeof value==='function'){try{return AGENT_APPLY(value,self,[]);}catch(err){return null;}}
     return value;
   }
   // One pass, no parse, no clone: drop declared keys while serializing, and stop
@@ -23,6 +23,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_IS_ARRAY=Array.isArray;
   var AGENT_JSON=JSON.stringify;
   var AGENT_CUT=AGENT_CALL.bind(String.prototype.slice);
+  // Invoking through Reflect: a function's own apply is the game's property.
+  var AGENT_APPLY=Reflect.apply;
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
@@ -275,6 +277,6 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentInvoke(name,args){
     var entry=agentApiTable()[String(name)];
     if(!entry||typeof entry.fn!=='function')throw new Error('unknown helper: '+name+' (try agent.api())');
-    return entry.fn.apply(entry.self,args||[]);
+    return AGENT_APPLY(entry.fn,entry.self,args||[]);
   }
 `;
