@@ -221,6 +221,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentTakeFns(src,into,seen){
     var k,fn;
     if(!src||typeof src!=='object')return seen;
+    // Enumeration itself can throw: a registry is the game's object.
+    try{
     for(k in src){
       // An inherited name cost a look, so the cap counts it too.
       seen++;
@@ -232,6 +234,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       // still get the object it was registered on.
       if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]={fn:fn,self:src};
     }
+    }catch(err){}
     return seen;
   }
   function agentSlot(holder,name){
@@ -248,6 +251,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var table=Object.create(null);
     seen=agentTakeFns(apiSrc,table,seen);
     seen=agentTakeFns(helperSrc,table,seen);
+    try{
     for(k in h){
       seen++;
       if(seen>AGENT_API_SCAN)break;
@@ -255,6 +259,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       try{fn=h[k];}catch(err){continue;}
       if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
     }
+    }catch(err){}
     AGENT_API_MEMO={h:h,api:apiSrc,helpers:helperSrc,frame:h.frame,table:table};
     return table;
   }

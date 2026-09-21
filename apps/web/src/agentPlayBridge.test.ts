@@ -679,6 +679,26 @@ describe('the agent bridge, running for real', () => {
     expect((state!.snapshot as Record<string, unknown>).state).toBe('playing');
   });
 
+  // Enumerating a registry can throw before any per-entry guard runs.
+  it('survives a harness.api whose enumeration throws', async () => {
+    harness.api = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error('no keys');
+        },
+      },
+    ) as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state');
+    expect(state).toBeTruthy();
+    expect(state!.api as string[]).toEqual([]);
+  });
+
   // The registry slot itself can be an accessor that throws.
   it('survives a harness.api that throws when read', async () => {
     Object.defineProperty(harness, 'api', {
