@@ -153,30 +153,39 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_HARNESS_CORE={version:1,captureMode:1,ready:1,frame:1,metadata:1,signals:1,audio:1,
     record:1,step:1,paint:1,pause:1,resume:1,restart:1,injectSensing:1,screenshot:1,
     snapshotState:1,restoreState:1,ui:1,observation:1,api:1,helpers:1};
-  // Entries we reject still cost a look, and the table is rebuilt every frame.
+  // Entries we reject still cost a look, so the scan is bounded, not just the keep.
   var AGENT_API_CAP=40,AGENT_API_SCAN=AGENT_API_CAP*10;
+  var AGENT_API_MEMO=null;
   function agentTakeFns(src,into,seen){
-    var k;
+    var k,fn;
     if(!src||typeof src!=='object')return seen;
     for(k in src){
       if(seen>=AGENT_API_SCAN)return seen;
       if(!Object.prototype.hasOwnProperty.call(src,k))continue;
       seen++;
-      if(typeof src[k]==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]=src[k];
+      // A registration whose getter throws is skipped, not fatal to the surface.
+      try{fn=src[k];}catch(err){continue;}
+      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]=fn;
     }
     return seen;
   }
   function agentApiTable(){
+    var h=agentHarness()||{},k,fn,seen=0;
+    // Even a bounded scan has to enumerate first, so a frame pays for it once.
+    if(AGENT_API_MEMO&&AGENT_API_MEMO.h===h&&AGENT_API_MEMO.api===h.api&&
+      AGENT_API_MEMO.helpers===h.helpers&&AGENT_API_MEMO.frame===h.frame)return AGENT_API_MEMO.table;
     // Null prototype so call constructor misses instead of reaching Object.prototype.
-    var h=agentHarness()||{},table=Object.create(null),k,seen=0;
+    var table=Object.create(null);
     seen=agentTakeFns(h.api,table,seen);
     seen=agentTakeFns(h.helpers,table,seen);
     for(k in h){
       if(seen>=AGENT_API_SCAN)break;
       if(!Object.prototype.hasOwnProperty.call(h,k)||AGENT_HARNESS_CORE[k])continue;
       seen++;
-      if(typeof h[k]==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]=h[k];
+      try{fn=h[k];}catch(err){continue;}
+      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]=fn;
     }
+    AGENT_API_MEMO={h:h,api:h.api,helpers:h.helpers,frame:h.frame,table:table};
     return table;
   }
   function agentApiNames(){

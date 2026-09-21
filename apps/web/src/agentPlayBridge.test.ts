@@ -588,6 +588,26 @@ describe('the agent bridge, running for real', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
+  // One bad registration must not take the whole surface down.
+  it('skips a helper registration whose getter throws', async () => {
+    const api: Record<string, unknown> = { good: () => 'ok' };
+    Object.defineProperty(api, 'landmine', {
+      enumerable: true,
+      get() {
+        throw new Error('no');
+      },
+    });
+    harness.api = api as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state')!;
+    expect(state.api as string[]).toContain('good');
+    expect(state.api as string[]).not.toContain('landmine');
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
