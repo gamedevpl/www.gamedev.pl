@@ -27,6 +27,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
   }
+  // No global: self-comparison catches NaN, and the two infinities compare.
+  function agentFinite(n){return typeof n==='number'&&n===n&&n!==1/0&&n!==-1/0;}
   function agentIsData(holder,name){
     try{
       var d=AGENT_DESC(holder,name);
@@ -54,7 +56,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       // grows a string, so a cut one that no longer fits never fitted either.
       if(t==='string')return lit(AGENT_JSON(v.length>cap-used?AGENT_CUT(v,0,cap-used+1):v));
       // ''+v, not String(v): the global is writable, and a number needs no hook.
-      if(t==='number')return lit(isFinite(v)?''+v:'null');
+      if(t==='number')return lit(agentFinite(v)?''+v:'null');
       if(t==='boolean')return lit(v?'true':'false');
       // A function, undefined or a symbol has no JSON form: the holder drops it.
       if(t!=='object')return undefined;
@@ -149,7 +151,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     else if(typeof raw.x==='number'&&w>0&&h>0){
       x1=raw.x/w;y1=raw.y/h;x2=(raw.x+Number(raw.width||0))/w;y2=(raw.y+Number(raw.height||0))/h;
     }else return null;
-    if(!isFinite(x1)||!isFinite(y1)||!isFinite(x2)||!isFinite(y2)||x2<=x1||y2<=y1)return null;
+    if(!agentFinite(x1)||!agentFinite(y1)||!agentFinite(x2)||!agentFinite(y2)||x2<=x1||y2<=y1)return null;
     // Clipped like the kit publisher: click refuses a midpoint outside 0..1.
     x1=agentClamp01(x1);y1=agentClamp01(y1);x2=agentClamp01(x2);y2=agentClamp01(y2);
     if(x2<=x1||y2<=y1)return null;
@@ -162,7 +164,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var list=agentReadMaybeFn(raw,self),out=[],i,item;
     if(!list||typeof list.length!=='number')return out;
     // Entries rejected still cost a look, so bound the scan, not just what it keeps.
-    var scan=Math.min(list.length,AGENT_UI_CAP*10);
+    // Compared, not Math.min: that global is writable too.
+    var bound=AGENT_UI_CAP*10,len=list.length;
+    var scan=(typeof len==='number'&&len<bound)?len:bound;
     for(i=0;i<scan&&out.length<AGENT_UI_CAP;i++){
       // One widget whose field throws costs that widget, not the rest of the list.
       try{item=agentNormalizeWidget(list[i],w,h);}catch(err){continue;}

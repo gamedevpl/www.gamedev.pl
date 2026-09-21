@@ -698,6 +698,32 @@ describe('the agent bridge, running for real', () => {
     expect(state!.api as string[]).toEqual([]);
   });
 
+  // Math.min is writable, so the scan bound compares instead.
+  it('bounds the widget scan without Math.min', async () => {
+    const original = Math.min;
+    Math.min = ((first: number) => first) as typeof Math.min;
+    try {
+      const reads: number[] = [];
+      const alien = new Proxy({ length: 1_000_000 } as unknown as unknown[], {
+        get(_target, key) {
+          if (key === 'length') return 1_000_000;
+          const index = Number(key);
+          if (Number.isFinite(index)) reads.push(index);
+          return { label: `w${String(key)}`, x1: 0, y1: 0, x2: 1, y2: 1 };
+        },
+      });
+      harness.ui = alien;
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      expect(reads.length).toBeLessThan(1000);
+    } finally {
+      Math.min = original;
+    }
+  });
+
   // One widget whose field throws must not take the list with it.
   it('skips a widget whose property read throws', async () => {
     const landmine: Record<string, unknown> = { x1: 0, y1: 0, x2: 1, y2: 1 };
@@ -1054,6 +1080,28 @@ describe('the agent bridge, running for real', () => {
 
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // isFinite is a writable global; the check uses comparisons instead.
+    it('judges numbers without the isFinite global', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const original = globalThis.isFinite;
+      globalThis.isFinite = (() => true) as typeof globalThis.isFinite;
+      try {
+        harness.observation = () => ({ cash: 100, nan: Number.NaN, inf: Number.POSITIVE_INFINITY });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).toContain('"nan":null');
+        expect(String(snapshot.observation)).toContain('"inf":null');
+      } finally {
+        globalThis.isFinite = original;
+      }
     });
 
     // The String global is writable, and a number needs no hook.
