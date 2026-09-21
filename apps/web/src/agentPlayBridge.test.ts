@@ -859,6 +859,24 @@ describe('the agent bridge, running for real', () => {
       expect(JSON.stringify(snapshot)).not.toContain('RAVEN');
     });
 
+    // A giant key was escaped whole before the budget could refuse it.
+    it('withholds an oversized key without escaping all of it', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const wide: Record<string, unknown> = {};
+      wide['k'.repeat(2_000_000)] = 1;
+      harness.observation = () => wide;
+      const started = Date.now();
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(Date.now() - started).toBeLessThan(2000);
+    });
+
     // Each converter here runs before any check could see it.
     it('never lets a toJSON carry a declared key out', async () => {
       const shapes: Record<string, () => unknown> = {

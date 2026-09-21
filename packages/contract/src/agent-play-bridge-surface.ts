@@ -64,7 +64,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
           try{val=v[name];}catch(err){continue;}
           text=write(val);
           if(text===undefined)continue;
-          key=JSON.stringify(name);
+          // Cut before escaping, like a string value: a key is untrusted too.
+          key=JSON.stringify(name.length>cap-used?name.slice(0,cap-used+1):name);
           spend(key.length+(parts.length?2:1));
           parts.push(key+':'+text);
         }
