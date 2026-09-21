@@ -158,7 +158,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
   }
   function agentApiTable(){
-    var h=agentHarness()||{},table={},k;
+    // Null prototype so call constructor misses instead of reaching Object.prototype.
+    var h=agentHarness()||{},table=Object.create(null),k;
     agentTakeFns(h.api,table);
     agentTakeFns(h.helpers,table);
     for(k in h){

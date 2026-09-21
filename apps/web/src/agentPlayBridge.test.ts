@@ -537,6 +537,26 @@ describe('the agent bridge, running for real', () => {
     expect(looked).toBe(2);
   });
 
+  // An ordinary table let call reach Object.prototype and report success.
+  it('refuses a prototype name no game registered', async () => {
+    harness.api = { realOne: () => 'ok' };
+    send({ type: 'agent:enable' });
+    await settle();
+
+    const result = await runPolicy(`function playAgent(agent) {
+      for (const name of ['constructor', 'toString', 'valueOf', 'hasOwnProperty']) {
+        try { agent.call(name); agent.log('RESOLVED ' + name); }
+        catch (err) { agent.log('refused ' + name); }
+      }
+      agent.log('real ' + agent.call('realOne'));
+    }`);
+    expect(result.outcome).toBe('completed');
+    const logs = (result.logs as Array<{ text: string }>).map((entry) => entry.text);
+    expect(logs.some((text) => text.startsWith('RESOLVED'))).toBe(false);
+    expect(logs.filter((text) => text.startsWith('refused'))).toHaveLength(4);
+    expect(logs).toContain('real ok');
+  });
+
   // A truncated name was advertised but could not be called.
   it('only lists helper names that call can resolve', async () => {
     const longName = 'buildRailFromTheDepotAllTheWayToTheHarbourSide';
