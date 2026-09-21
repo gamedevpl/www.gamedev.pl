@@ -22,6 +22,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_DESC=Object.getOwnPropertyDescriptor;
   var AGENT_IS_ARRAY=Array.isArray;
   var AGENT_JSON=JSON.stringify;
+  var AGENT_CUT=AGENT_CALL.bind(String.prototype.slice);
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
@@ -35,8 +36,10 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentSafeJson(value,hidden,cap){
     if(value==null)return '';
     // Text the game hands over is text: capped, never inspected. See the docs.
-    if(typeof value==='string')return value.slice(0,cap);
-    var names=hidden||[],used=0,stack=[];
+    if(typeof value==='string')return AGENT_CUT(value,0,cap);
+    // Written by index and concatenation: push and join are game code too, and
+    // push would receive the value we have not redacted yet.
+    var names=hidden||[],used=0,stack=[],depth=0;
     function declared(k){
       for(var i=0;i<names.length;i++)if(names[i]===k)return true;
       return false;
@@ -49,32 +52,34 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       if(v===null)return lit('null');
       // Cut to what the budget could still hold before escaping: escaping only
       // grows a string, so a cut one that no longer fits never fitted either.
-      if(t==='string')return lit(AGENT_JSON(v.length>cap-used?v.slice(0,cap-used+1):v));
+      if(t==='string')return lit(AGENT_JSON(v.length>cap-used?AGENT_CUT(v,0,cap-used+1):v));
       if(t==='number')return lit(isFinite(v)?String(v):'null');
       if(t==='boolean')return lit(v?'true':'false');
       // A function, undefined or a symbol has no JSON form: the holder drops it.
       if(t!=='object')return undefined;
       if(agentIsDate(v))return lit(AGENT_JSON(AGENT_DATE_ISO(v)));
       // A cycle would never end; nesting spends the budget, so depth needs no cap.
-      for(i=0;i<stack.length;i++)if(stack[i]===v)throw AGENT_OVER;
-      stack.push(v);
-      var parts=[],out,text;
+      for(i=0;i<depth;i++)if(stack[i]===v)throw AGENT_OVER;
+      stack[depth++]=v;
+      var out,text,wrote=0;
       // Array.isArray asks nothing of the value: a toStringTag getter is game code.
       if(AGENT_IS_ARRAY(v)){
         spend(2);
+        out='[';
         for(i=0;i<v.length;i++){
-          if(i)spend(1);
+          if(i)out+=lit(',');
           // An index can be an accessor, and a slot names nothing.
-          if(names.length&&!agentIsData(v,String(i))){parts.push(lit('null'));continue;}
+          if(names.length&&!agentIsData(v,''+i)){out+=lit('null');continue;}
           text=write(v[i]);
-          parts.push(text===undefined?lit('null'):text);
+          out+=(text===undefined?lit('null'):text);
         }
-        out='['+parts.join(',')+']';
+        out+=']';
       }else{
         spend(2);
         var key,name,val;
         // Enumerated, not collected: a wide object must not cost a key array
         // before the budget has a chance to stop the walk.
+        out='{';
         for(name in v){
           // A name we drop still cost a look, inherited ones included.
           spend(1);
@@ -88,13 +93,15 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
           text=write(val);
           if(text===undefined)continue;
           // Cut before escaping, like a string value: a key is untrusted too.
-          key=AGENT_JSON(name.length>cap-used?name.slice(0,cap-used+1):name);
-          spend(key.length+(parts.length?2:1));
-          parts.push(key+':'+text);
+          key=AGENT_JSON(name.length>cap-used?AGENT_CUT(name,0,cap-used+1):name);
+          spend(key.length+(wrote?2:1));
+          if(wrote)out+=',';
+          out+=key+':'+text;
+          wrote=1;
         }
-        out='{'+parts.join(',')+'}';
+        out+='}';
       }
-      stack.pop();
+      depth--;
       return out;
     }
     var result;
@@ -124,7 +131,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(hidden)for(i=0;i<hidden.length;i++)if(hidden[i]==='observation')obsHidden=true;
     if(!obsHidden){
       var obs=out.observation;
-      if(obs==null||obs==='')obs=agentReadMaybeFn(h.observation,h);
+      if(obs==null||obs==='')obs=agentReadMaybeFn(agentSlot(h,'observation'),h);
       var text=agentSafeJson(obs,hidden,16000);
       if(text)out.observation=text;
       else delete out.observation;

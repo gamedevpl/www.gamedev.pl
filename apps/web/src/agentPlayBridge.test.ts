@@ -659,6 +659,26 @@ describe('the agent bridge, running for real', () => {
     expect(snapshot.observation).toContain('"cash":12');
   });
 
+  // The observation slot can be an accessor that throws.
+  it('survives a harness.observation that throws when read', async () => {
+    harness.metadata = { state: 'playing' };
+    Object.defineProperty(harness, 'observation', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('no observation');
+      },
+    });
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state');
+    expect(state).toBeTruthy();
+    expect((state!.snapshot as Record<string, unknown>).state).toBe('playing');
+  });
+
   // The registry slot itself can be an accessor that throws.
   it('survives a harness.api that throws when read', async () => {
     Object.defineProperty(harness, 'api', {
@@ -1015,6 +1035,35 @@ describe('the agent bridge, running for real', () => {
 
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // push would receive the value before redaction saw it.
+    it('writes without calling array or string methods', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const originals = { push: Array.prototype.push, join: Array.prototype.join };
+      Array.prototype.push = function (this: unknown[], ...items: unknown[]) {
+        const first = items[0] as { targetWord?: string; answer?: string } | undefined;
+        if (first && first.targetWord) first.answer = first.targetWord;
+        return (originals.push as (...args: unknown[]) => number).apply(this, items);
+      };
+      Array.prototype.join = (() => 'pwned') as typeof Array.prototype.join;
+      try {
+        harness.observation = () => ({ targetWord: 'RAVEN', cash: 100, list: [1, 2] });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).toContain('[1,2]');
+        expect(String(snapshot.observation)).not.toContain('RAVEN');
+        expect(String(snapshot.observation)).not.toContain('pwned');
+      } finally {
+        Array.prototype.push = originals.push;
+        Array.prototype.join = originals.join;
+      }
     });
 
     // Redaction must not call a game's version of anything.
