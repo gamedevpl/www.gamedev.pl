@@ -141,6 +141,13 @@ twice would read as a sound heard twice.
   properties do not appear; a game declaring none keeps them. What is written is the value
   the descriptor reported, never a second read, so a `Proxy` cannot answer the check with
   one value and the walk with another.
+- **A `Proxy` is the limit of that rule, and the limit is the game's own data.** Enumerating
+  a value runs its `ownKeys` and descriptor traps; no JavaScript enumeration avoids that and
+  a proxy cannot be detected, so a game that wraps its observation can run code while we
+  read it. What that buys it is publishing its own state under a name it did not declare —
+  the same thing as writing `answer: theSecret` into the observation directly. A declared
+  name is still never read and never emitted, proxy or not. Redaction bounds what the
+  platform hands over; it cannot stop a game from handing over its own answer.
 - **A helper that throws is reported without its message** when the game declares hidden
   fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
