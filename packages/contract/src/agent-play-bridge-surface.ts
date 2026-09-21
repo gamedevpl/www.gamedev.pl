@@ -53,7 +53,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       // Cut to what the budget could still hold before escaping: escaping only
       // grows a string, so a cut one that no longer fits never fitted either.
       if(t==='string')return lit(AGENT_JSON(v.length>cap-used?AGENT_CUT(v,0,cap-used+1):v));
-      if(t==='number')return lit(isFinite(v)?String(v):'null');
+      // ''+v, not String(v): the global is writable, and a number needs no hook.
+      if(t==='number')return lit(isFinite(v)?''+v:'null');
       if(t==='boolean')return lit(v?'true':'false');
       // A function, undefined or a symbol has no JSON form: the holder drops it.
       if(t!=='object')return undefined;
@@ -141,7 +142,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentClamp01(v){return v<0?0:(v>1?1:v);}
   function agentNormalizeWidget(raw,w,h){
     if(!raw||typeof raw!=='object')return null;
-    var label=String(raw.label||'').slice(0,80);
+    var label=typeof raw.label==='string'?AGENT_CUT(raw.label,0,80):'';
     if(!label)return null;
     var x1,y1,x2,y2;
     if(typeof raw.x1==='number'){x1=raw.x1;y1=raw.y1;x2=raw.x2;y2=raw.y2;}
@@ -153,7 +154,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     x1=agentClamp01(x1);y1=agentClamp01(y1);x2=agentClamp01(x2);y2=agentClamp01(y2);
     if(x2<=x1||y2<=y1)return null;
     var item={label:label,enabled:raw.enabled!==false,x1:x1,y1:y1,x2:x2,y2:y2};
-    if(typeof raw.detail==='string')item.detail=String(raw.detail).slice(0,120);
+    if(typeof raw.detail==='string')item.detail=AGENT_CUT(raw.detail,0,120);
     if(raw.selected===true)item.selected=true;
     return item;
   }
@@ -163,8 +164,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     // Entries rejected still cost a look, so bound the scan, not just what it keeps.
     var scan=Math.min(list.length,AGENT_UI_CAP*10);
     for(i=0;i<scan&&out.length<AGENT_UI_CAP;i++){
-      item=agentNormalizeWidget(list[i],w,h);
-      if(item)out.push(item);
+      // One widget whose field throws costs that widget, not the rest of the list.
+      try{item=agentNormalizeWidget(list[i],w,h);}catch(err){continue;}
+      if(item)out[out.length]=item;
     }
     return out;
   }
@@ -244,7 +246,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentApiNames(){
     var table=agentApiTable(),names=[],k;
     // Skip rather than truncate: a shortened name is one call cannot resolve.
-    for(k in table)if(AGENT_HAS(table,k)&&String(k).length<=40)names.push(String(k));
+    for(k in table)if(AGENT_HAS(table,k)&&k.length<=40)names[names.length]=k;
     names.sort();
     return names.slice(0,AGENT_API_CAP);
   }

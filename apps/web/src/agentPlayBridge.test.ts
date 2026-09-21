@@ -698,6 +698,25 @@ describe('the agent bridge, running for real', () => {
     expect(state!.api as string[]).toEqual([]);
   });
 
+  // One widget whose field throws must not take the list with it.
+  it('skips a widget whose property read throws', async () => {
+    const landmine: Record<string, unknown> = { x1: 0, y1: 0, x2: 1, y2: 1 };
+    Object.defineProperty(landmine, 'label', {
+      enumerable: true,
+      get() {
+        throw new Error('no label');
+      },
+    });
+    harness.ui = [landmine, { label: 'GOOD', x1: 0, y1: 0, x2: 0.5, y2: 0.5 }] as unknown as typeof harness.ui;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const ui = lastOf(received, 'agent:state')!.ui as Array<{ label: string }>;
+    expect(ui.map((widget) => widget.label)).toContain('GOOD');
+  });
+
   // An off-canvas widget was advertised at bounds click refuses.
   it('clips widget bounds to the canvas', async () => {
     harness.ui = [
@@ -1035,6 +1054,27 @@ describe('the agent bridge, running for real', () => {
 
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // The String global is writable, and a number needs no hook.
+    it('serializes numbers without the String global', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const original = globalThis.String;
+      globalThis.String = ((x: unknown) => (typeof x === 'string' ? x : '"RAVEN"')) as StringConstructor;
+      try {
+        harness.observation = () => ({ targetWord: 'RAVEN', cash: 100 });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).not.toContain('RAVEN');
+      } finally {
+        globalThis.String = original;
+      }
     });
 
     // push would receive the value before redaction saw it.
