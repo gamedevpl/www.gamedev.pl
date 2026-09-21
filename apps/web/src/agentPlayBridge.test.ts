@@ -573,8 +573,8 @@ describe('the agent bridge, running for real', () => {
 
   // A registry of junk was scanned whole, every frame, to publish nothing.
   it('bounds the scan over a large helper registry', async () => {
-    const junk: Record<string, unknown> = {};
-    for (let i = 0; i < 5000; i++) junk[`junk${i}`] = i;
+    const junk: Record<string, (...args: unknown[]) => unknown> = {};
+    for (let i = 0; i < 5000; i++) junk[`junk${i}`] = i as unknown as () => unknown;
     junk.lateHelper = () => 'ok';
     harness.api = junk;
     const started = Date.now();
