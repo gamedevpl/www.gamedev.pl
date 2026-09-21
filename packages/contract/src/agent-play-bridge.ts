@@ -227,7 +227,8 @@ export const AGENT_PLAY_BRIDGE =
         var result=agentInvoke(command.name,command.args||[]);
         // Redacted before the note, which is what crosses the bridge. The value the
         // policy gets is not: a policy runs in the game's realm and is exempt anyway.
-        var safe=agentRedact(result,agentHidden(),0);
+        // MaybeJson, not agentRedact: a helper may return its result as JSON text.
+        var safe=agentRedactMaybeJson(result,agentHidden());
         var shown;try{shown=JSON.stringify(safe);}catch(err){shown=String(safe);}
         agentNote('call',String(command.name)+' '+String(shown).slice(0,140));
       }catch(err){agentNote('error',String((err&&err.message)||err));}

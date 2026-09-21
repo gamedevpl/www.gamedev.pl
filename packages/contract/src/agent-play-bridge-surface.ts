@@ -29,10 +29,18 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }
     return out;
   }
+  // Parsing is synchronous on the browser thread, so bound the input first.
+  var AGENT_PARSE_CAP=65536;
+  var AGENT_TOO_LARGE='<withheld: too large to redact>';
   // The kit stringifies observation before it gets here, so walk into JSON text too.
   function agentRedactMaybeJson(value,hidden){
     if(!hidden||!hidden.length)return value;
     if(typeof value==='string'){
+      if(value.length>AGENT_PARSE_CAP){
+        var lead=value.charAt(0);
+        // JSON this big could hide a declared key and we will not parse it; prose could not.
+        return (lead==='{'||lead==='[')?AGENT_TOO_LARGE:value;
+      }
       var parsed;
       try{parsed=JSON.parse(value);}catch(err){return value;}
       if(parsed==null||typeof parsed!=='object')return value;

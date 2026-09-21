@@ -603,6 +603,37 @@ describe('the agent bridge, running for real', () => {
       expect(logs.some((entry) => entry.text.includes('RAVEN'))).toBe(true);
     });
 
+    // A helper may return its result as JSON text, not an object.
+    it('redacts a helper result returned as JSON text', async () => {
+      setHidden(['targetWord']);
+      harness.api = { peekText: () => JSON.stringify({ cash: 100, targetWord: 'RAVEN' }) };
+      send({ type: 'agent:enable' });
+      await settle();
+      received.length = 0;
+      send({ type: 'agent:command', command: { kind: 'call', name: 'peekText', args: [] } });
+      await settle();
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+      const note = log.find((entry) => entry.kind === 'call' && entry.detail.startsWith('peekText'));
+      expect(note?.detail).toContain('cash');
+      expect(note?.detail).not.toContain('RAVEN');
+    });
+
+    // Parsing is synchronous, so an unbounded payload is withheld.
+    it('withholds JSON too large to redact rather than passing it through', async () => {
+      setHidden(['targetWord']);
+      const huge = JSON.stringify({ pad: 'x'.repeat(70000), targetWord: 'RAVEN' });
+      harness.metadata = { state: 'playing', observation: huge };
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).not.toContain('RAVEN');
+      expect(snapshot.observation).toContain('too large to redact');
+    });
+
     it('leaves a game that declares nothing untouched', async () => {
       setHidden(null);
       harness.metadata = { state: 'playing' };
