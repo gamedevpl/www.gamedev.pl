@@ -1,6 +1,7 @@
 // Snapshot, widgets, and named helpers. Concatenated into AGENT_PLAY_BRIDGE.
 
 export const AGENT_PLAY_BRIDGE_SURFACE = `
+  var AGENT_TOO_LARGE='<withheld: too large to redact>';
   function agentReadMaybeFn(value){
     if(typeof value==='function'){try{return value();}catch(err){return null;}}
     return value;
@@ -11,27 +12,34 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     for(var i=0;i<hidden.length;i++)if(hidden[i]===key)return true;
     return false;
   }
-  function agentRedact(value,hidden,depth){
+  // Walking clones the graph, so the walk needs its own bound, not just the serializer.
+  var AGENT_REDACT_NODES=20000;
+  var agentRedactLeft=0;
+  function agentRedactNode(value,hidden,depth){
     if(!hidden||!hidden.length||value==null||typeof value!=='object')return value;
     // Past the cap a cycle is likelier than real data; drop rather than risk a leak.
     if(depth>=AGENT_REDACT_DEPTH)return null;
+    if(--agentRedactLeft<0)throw new Error('over budget');
     var i,k,out;
     if(Object.prototype.toString.call(value)==='[object Array]'){
       out=[];
-      for(i=0;i<value.length;i++)out.push(agentRedact(value[i],hidden,depth+1));
+      for(i=0;i<value.length;i++)out.push(agentRedactNode(value[i],hidden,depth+1));
       return out;
     }
     out={};
     for(k in value){
       if(!Object.prototype.hasOwnProperty.call(value,k))continue;
       if(agentHiddenKey(hidden,k))continue;
-      out[k]=agentRedact(value[k],hidden,depth+1);
+      out[k]=agentRedactNode(value[k],hidden,depth+1);
     }
     return out;
   }
+  function agentRedact(value,hidden,depth){
+    agentRedactLeft=AGENT_REDACT_NODES;
+    try{return agentRedactNode(value,hidden,depth);}catch(err){return AGENT_TOO_LARGE;}
+  }
   // Parsing is synchronous on the browser thread, so bound the input first.
   var AGENT_PARSE_CAP=65536;
-  var AGENT_TOO_LARGE='<withheld: too large to redact>';
   // The kit stringifies observation before it gets here, so walk into JSON text too.
   function agentRedactMaybeJson(value,hidden){
     if(!hidden||!hidden.length)return value;
@@ -161,7 +169,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   }
   function agentApiNames(){
     var table=agentApiTable(),names=[],k;
-    for(k in table)if(Object.prototype.hasOwnProperty.call(table,k))names.push(String(k).slice(0,40));
+    // Skip rather than truncate: a shortened name is one call cannot resolve.
+    for(k in table)if(Object.prototype.hasOwnProperty.call(table,k)&&String(k).length<=40)names.push(String(k));
     names.sort();
     return names.slice(0,40);
   }

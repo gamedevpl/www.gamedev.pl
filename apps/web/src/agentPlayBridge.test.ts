@@ -537,6 +537,20 @@ describe('the agent bridge, running for real', () => {
     expect(looked).toBe(2);
   });
 
+  // A truncated name was advertised but could not be called.
+  it('only lists helper names that call can resolve', async () => {
+    const longName = 'buildRailFromTheDepotAllTheWayToTheHarbourSide';
+    harness.api = { [longName]: () => 'ok', shortOne: () => 'ok' };
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const api = lastOf(received, 'agent:state')!.api as string[];
+    expect(api).toContain('shortOne');
+    expect(api.some((name) => longName.startsWith(name) && name !== longName)).toBe(false);
+  });
+
   // A hidden key one level down used to reach the agent.
   describe('hiddenFields reach the structured surfaces too', () => {
     const setHidden = (names: string[] | null) => {
@@ -683,6 +697,35 @@ describe('the agent bridge, running for real', () => {
       const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
       expect(snapshot.observation).toContain('"room":"cellar"');
       expect(snapshot.observation).toContain('"tool":"rail"');
+    });
+
+    // The walk clones, so it needs its own bound too.
+    it('withholds an observation too wide to walk', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ rows: Array.from({ length: 500_000 }, (_, i) => i) });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+    });
+
+    it('still walks ordinary nested data', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ grid: [[1, 2]], camera: { x: 4 }, targetWord: 'RAVEN' });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"grid":[[1,2]]');
+      expect(snapshot.observation).toContain('"x":4');
+      expect(snapshot.observation).not.toContain('RAVEN');
     });
 
     it('leaves a game that declares nothing untouched', async () => {
