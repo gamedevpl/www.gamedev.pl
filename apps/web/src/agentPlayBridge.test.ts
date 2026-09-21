@@ -751,6 +751,19 @@ describe('the agent bridge, running for real', () => {
       expect(observation.startsWith('{')).toBe(false);
     });
 
+    // Rejected entries still cost a look, so bound the scan.
+    it('bounds the widget scan, not only what it accepts', async () => {
+      harness.ui = { length: 100_000_000 } as unknown as never;
+      send({ type: 'agent:enable' });
+      await settle();
+      const started = Date.now();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      expect(lastOf(received, 'agent:state')!.ui).toEqual([]);
+      expect(Date.now() - started).toBeLessThan(1000);
+    });
+
     it('leaves a game that declares nothing untouched', async () => {
       setHidden(null);
       harness.metadata = { state: 'playing' };

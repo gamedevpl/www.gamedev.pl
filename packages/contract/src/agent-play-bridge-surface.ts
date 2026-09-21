@@ -72,7 +72,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentUiFrom(raw,w,h){
     var list=agentReadMaybeFn(raw),out=[],i,item;
     if(!list||typeof list.length!=='number')return out;
-    for(i=0;i<list.length&&out.length<AGENT_UI_CAP;i++){
+    // Entries rejected still cost a look, so bound the scan, not just what it keeps.
+    var scan=Math.min(list.length,AGENT_UI_CAP*10);
+    for(i=0;i<scan&&out.length<AGENT_UI_CAP;i++){
       item=agentNormalizeWidget(list[i],w,h);
       if(item)out.push(item);
     }
