@@ -1218,6 +1218,29 @@ describe('the agent bridge, running for real', () => {
       }
     });
 
+    // A replaced push could drop a declared name from the hidden list.
+    it('collects hidden names without the array method', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.api = { peek: () => ({ targetWord: 'RAVEN', cash: 1 }) } as unknown as typeof harness.api;
+      const original = Array.prototype.push;
+      Array.prototype.push = function (this: unknown[], ...items: unknown[]) {
+        const kept = items.filter((item) => item !== 'targetWord');
+        return (original as (...args: unknown[]) => number).apply(this, kept);
+      } as typeof Array.prototype.push;
+      try {
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'call', name: 'peek', args: [] } });
+        await settle();
+      } finally {
+        Array.prototype.push = original;
+      }
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ detail: string }>;
+      expect(log.some((entry) => entry.detail.includes('RAVEN'))).toBe(false);
+    });
+
     // Redaction must not call a game's version of anything.
     it('keeps redacting when the game replaces call, JSON and Date', async () => {
       setHidden(['targetWord']);

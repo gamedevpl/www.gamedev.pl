@@ -26,6 +26,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // Invoking through Reflect: a function's own apply is the game's property.
   var AGENT_APPLY=Reflect.apply;
   var AGENT_ARGS=AGENT_CALL.bind(Array.prototype.slice);
+  var AGENT_JOIN=AGENT_CALL.bind(Array.prototype.join);
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
@@ -202,7 +203,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         key=item.label+'@'+item.x1+','+item.y1+','+item.x2+','+item.y2;
         if(seen[key])continue;
         seen[key]=1;
-        out.push(item);
+        out[out.length]=item;
       }
     }
     try{

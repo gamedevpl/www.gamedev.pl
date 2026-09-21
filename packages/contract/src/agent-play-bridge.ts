@@ -23,7 +23,7 @@ export const AGENT_PLAY_BRIDGE =
   // frame is optional: a replayed signal carries the frame it happened on, not now.
   function agentNote(kind,detail,frame){
     var at=typeof frame==='number'&&isFinite(frame)?frame:agentFrameNo();
-    agentLog.push({frame:at,kind:String(kind),detail:AGENT_CUT(String(detail==null?'':detail),0,160)});
+    agentLog[agentLog.length]={frame:at,kind:String(kind),detail:AGENT_CUT(String(detail==null?'':detail),0,160)};
     if(agentLog.length>AGENT_LOG_CAP)agentLog.splice(0,agentLog.length-AGENT_LOG_CAP);
   }
   // Redacted here, not on the host: a hidden answer must not cross the bridge at all.
@@ -38,7 +38,8 @@ export const AGENT_PLAY_BRIDGE =
     var list=window.__GAME_AGENT_HIDDEN__;
     if(!list||!list.length)return null;
     var out=[];
-    for(var i=0;i<list.length;i++)out.push(String(list[i]));
+    // By index: a replaced push could silently drop a declared name.
+    for(var i=0;i<list.length;i++)out[out.length]=String(list[i]);
     return out;
   }
   function agentGoal(){
@@ -124,10 +125,13 @@ export const AGENT_PLAY_BRIDGE =
     var i;
     if(type==='keydown'){
       for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key===key)return;
-      agentHeldKeys.push({key:key,code:code});
+      agentHeldKeys[agentHeldKeys.length]={key:key,code:code};
       return;
     }
-    for(i=agentHeldKeys.length-1;i>=0;i--)if(agentHeldKeys[i].key===key)agentHeldKeys.splice(i,1);
+    // Rebuilt, not spliced: a key left held is an input the reviewer cannot clear.
+    var keep=[];
+    for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key!==key)keep[keep.length]=agentHeldKeys[i];
+    agentHeldKeys=keep;
   }
   function agentReleaseInput(){
     var held=AGENT_ARGS(agentHeldKeys,0);
@@ -325,10 +329,10 @@ export const AGENT_PLAY_BRIDGE =
       var parts=[];
       for(var i=0;i<args.length;i++){
         var value=args[i];
-        try{parts.push(typeof value==='string'?value:JSON.stringify(value));}
-        catch(err){parts.push(String(value));}
+        try{parts[parts.length]=(typeof value==='string'?value:AGENT_JSON(value));}
+        catch(err){parts[parts.length]=String(value);}
       }
-      logs.push({frame:agentFrameNo(),kind:kind,text:AGENT_CUT(parts.join(' '),0,400)});
+      logs[logs.length]={frame:agentFrameNo(),kind:kind,text:AGENT_CUT(AGENT_JOIN(parts,' '),0,400)};
     }
     function spend(count){
       used+=count;
@@ -404,12 +408,12 @@ export const AGENT_PLAY_BRIDGE =
         if(watches.length>=AGENT_WATCH_POINTS)return;
         var reading;
         try{reading=typeof value==='function'?value():value;}catch(err){reading='error: '+String(err&&err.message||err);}
-        watches.push({frame:agentFrameNo(),name:AGENT_CUT(String(name),0,40),value:reading});
+        watches[watches.length]={frame:agentFrameNo(),name:AGENT_CUT(String(name),0,40),value:reading};
       },
       // A painted frame, kept for the answer. Paints first: stepping does not draw.
       capture:function(name){
         api.paint();
-        shots.push({name:AGENT_CUT(String(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()});
+        shots[shots.length]={name:AGENT_CUT(String(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()};
       },
       // The game's own globals, for a policy that needs more than the snapshot.
       game:function(){return window.GameKit;},
