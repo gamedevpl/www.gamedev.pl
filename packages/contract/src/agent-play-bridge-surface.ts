@@ -66,6 +66,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
         // before the budget has a chance to stop the walk.
         for(name in v){
           if(!Object.prototype.hasOwnProperty.call(v,name))continue;
+          // A key we drop still cost a look, so looking spends too.
+          spend(1);
           // Named before read: a declared key's getter never runs either.
           if(declared(name))continue;
           // An accessor is game code, and this walk exists so none of it runs.

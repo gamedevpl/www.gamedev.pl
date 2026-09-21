@@ -914,6 +914,24 @@ describe('the agent bridge, running for real', () => {
       expect(snapshot.observation).not.toContain('RAVEN');
     });
 
+    // Dropped fields cost a full traversal and still emitted nothing.
+    it('stops walking a wide object of fields that produce no output', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const junk: Record<string, unknown> = {};
+      for (let i = 0; i < 40_000; i++) junk[`h${i}`] = undefined;
+      junk.targetWord = 'RAVEN';
+      harness.observation = () => junk;
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
     // Each converter here runs before any check could see it.
     it('never lets a toJSON carry a declared key out', async () => {
       const shapes: Record<string, () => unknown> = {
