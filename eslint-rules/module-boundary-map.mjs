@@ -279,6 +279,7 @@ const FILE_BUCKET = {
   'remix-turns': 'creation',
   'chat-agent': 'creation',
   'intake-agent': 'creation',
+  'intake-tools': 'creation',
   'cli-chat-routes': 'creation',
   'chat-orchestration': 'creation',
   'chat-turns': 'creation',
