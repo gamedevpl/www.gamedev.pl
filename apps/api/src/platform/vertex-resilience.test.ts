@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { callWithVertexResilience, isRetryableVertexError } from './vertex-resilience.js';
 
 const capacity = () => new Error('429 Resource exhausted');
@@ -125,6 +126,24 @@ describe('surviving a moment of no capacity', () => {
     expect(isRetryableVertexError(new Error('503 UNAVAILABLE'))).toBe(true);
     expect(isRetryableVertexError(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(true);
     expect(isRetryableVertexError(new Error('400 invalid argument'))).toBe(false);
+    expect(isRetryableVertexError(new Error('got status: INTERNAL. {"error":{"code":500}}'))).toBe(true);
+    expect(isRetryableVertexError(Object.assign(new Error('x'), { status: 500 }))).toBe(true);
+    expect(isRetryableVertexError(Object.assign(new Error('x'), { status: 400 }))).toBe(false);
+  });
+
+  it.each([
+    ['unparseable', () => JSON.parse('{"questions": [')],
+    ['off-schema', () => z.object({ label: z.string() }).parse({ label: null })],
+  ])('draws again when the model answers with %s JSON', async (_kind, badReply) => {
+    let attempts = 0;
+    const value = await callWithVertexResilience({
+      attempt: async () => (attempts++ === 0 ? badReply() : 'ok'),
+      timeoutMs: 1_000,
+      retryDelayMs: 0,
+    });
+
+    expect(value).toBe('ok');
+    expect(attempts).toBe(2);
   });
 });
 
