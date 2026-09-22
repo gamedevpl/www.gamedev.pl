@@ -185,7 +185,7 @@
     "apps/api/src/copilot-mcp-deploy.test.ts": 40,
     "apps/api/src/creation/builder.test.ts": 178,
     "apps/api/src/creation/builder.ts": 119,
-    "apps/api/src/creation/chat-agent.test.ts": 351,
+    "apps/api/src/creation/chat-agent.test.ts": 358,
     "apps/api/src/creation/chat-agent.ts": 247,
     "apps/api/src/creation/chat-turns.test.ts": 14,
     "apps/api/src/creation/chat-turns.ts": 16,

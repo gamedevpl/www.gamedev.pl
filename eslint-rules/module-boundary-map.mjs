@@ -280,6 +280,8 @@ const FILE_BUCKET = {
   'chat-agent': 'creation',
   'intake-agent': 'creation',
   'intake-tools': 'creation',
+  'reply-tool': 'creation',
+  'chat-tools': 'creation',
   'cli-chat-routes': 'creation',
   'chat-orchestration': 'creation',
   'chat-turns': 'creation',
