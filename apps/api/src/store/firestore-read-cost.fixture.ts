@@ -21,12 +21,16 @@ export const POLLED_JOB_ID = 1001;
 // A second round on the same slug: its poll pays for history.
 export const PRIOR_ROUNDS_JOB_ID = 1002;
 
+// Stuck in dispatched long after boot, like prod job 1000167.
+export const STALE_DISPATCH_JOB_ID = 1009;
+
 export const POLLED_ROUTES = [
   'GET /api/submissions/:token',
   'GET /api/submissions/:token (steady state)',
   'GET /api/submissions/:token (share link, steady state)',
   'GET /api/submissions/:token (prior rounds)',
   'GET /api/submissions/:token (prior rounds, steady state)',
+  'GET /api/submissions/:token (stale dispatch, steady state)',
   'GET /api/submissions/mine',
   'GET /api/submissions/mine (derived-only owner)',
   'GET /api/submissions/mine (document, steady state)',
@@ -259,6 +263,12 @@ export async function seedReadCostFixture(store: Store): Promise<void> {
   }
   for (const text of POLLED_MESSAGES) await store.appendCreatorMessage(POLLED_JOB_ID, text);
 
+  // Dispatched long ago, with a real round's conversation.
+  await store.createSubmission(STALE_DISPATCH_JOB_ID, CREATOR_UID, 'Tabletop Turbos');
+  await store.setSubmissionSlug(STALE_DISPATCH_JOB_ID, 'tabletop-turbos');
+  await store.recordJobTransition(STALE_DISPATCH_JOB_ID, { to: 'dispatched', at: AT, by: 'agent', reason: 'dispatched' });
+  for (const text of POLLED_MESSAGES) await store.appendCreatorMessage(STALE_DISPATCH_JOB_ID, text);
+
   // The later round: its poll reads the slug's history.
   await store.recordJobTransition(PRIOR_ROUNDS_JOB_ID, { to: 'building', at: AT, by: 'agent', reason: 'started' });
   await store.setSubmissionNotifiedStatus(PRIOR_ROUNDS_JOB_ID, 'building');
@@ -313,7 +323,7 @@ export async function seedReadCostFixture(store: Store): Promise<void> {
   });
 }
 
-export async function createReadCostApp(store: Store): Promise<FastifyInstance> {
+export async function createReadCostApp(store: Store, now?: () => number): Promise<FastifyInstance> {
   return buildApp({
     store,
     sessionSecret: SESSION_SECRET,
@@ -323,6 +333,7 @@ export async function createReadCostApp(store: Store): Promise<FastifyInstance> 
       githubToken: 'gh-token',
       submissionTokenSecret: SUBMISSION_SECRET,
       agentBackend: stubBackend(),
+      ...(now ? { now } : {}),
     },
     reviewRoutes: { listCatalog: async () => CATALOG },
   });
@@ -353,6 +364,14 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
   }
   if (route === 'GET /api/submissions/:token (prior rounds)' || route === 'GET /api/submissions/:token (prior rounds, steady state)') {
     const token = mintToken(PRIOR_ROUNDS_JOB_ID, SUBMISSION_SECRET);
+    return app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: { cookie: sessionCookie(CREATOR_UID) },
+    });
+  }
+  if (route === 'GET /api/submissions/:token (stale dispatch, steady state)') {
+    const token = mintToken(STALE_DISPATCH_JOB_ID, SUBMISSION_SECRET);
     return app.inject({
       method: 'GET',
       url: `/api/submissions/${token}`,
@@ -402,7 +421,9 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
   const fake = fakeFirestore();
   const store = new FirestoreStore(fake.db);
   await seedReadCostFixture(store);
-  const app = await createReadCostApp(store);
+  // Moved by hand, so a poll can outlive a short cache.
+  let clock = Date.now();
+  const app = await createReadCostApp(store, () => clock);
   try {
     // A process verifies its first read; steady state is the second.
     if (route === 'GET /api/submissions/mine (document, steady state)') {
@@ -415,6 +436,12 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
     // The same poll with no session resolves no access.
     if (route === 'GET /api/submissions/:token (share link, steady state)') {
       await injectRoute(app, route);
+    }
+    // A stuck dispatch is polled for days; the second poll bills.
+    if (route === 'GET /api/submissions/:token (stale dispatch, steady state)') {
+      await injectRoute(app, route);
+      // The production cadence: past a 2s cache, well inside a 60s one.
+      clock += 4_000;
     }
     // A later round polls its history; the first has none.
     if (route === 'GET /api/submissions/:token (prior rounds, steady state)') {

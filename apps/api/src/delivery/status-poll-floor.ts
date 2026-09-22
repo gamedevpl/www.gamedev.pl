@@ -14,6 +14,15 @@ const DISPATCHED_MS = 2_000;
 
 const QUIET_AFTER_MS = 2 * 60_000;
 
+// Session boot takes seconds; a dispatch older than this is stuck.
+export const BOOT_WINDOW_MS = 10 * 60_000;
+
+// Only a fresh dispatch earns the 2s cache and floor.
+export function stillBooting(stateSince: string | undefined, at: number): boolean {
+  const since = stateSince ? Date.parse(stateSince) : Number.NaN;
+  return Number.isFinite(since) && at - since < BOOT_WINDOW_MS;
+}
+
 export interface StatusPollFloorInput {
   // Published or abandoned: the client stops polling on its own.
   terminal: boolean;

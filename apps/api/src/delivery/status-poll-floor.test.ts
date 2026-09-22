@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
+import { BOOT_WINDOW_MS, lastMovementAt, statusPollFloorMs, stillBooting } from './status-poll-floor.js';
 
 describe('statusPollFloorMs', () => {
   it('asks for no floor on a terminal round, which the client stops polling anyway', () => {
@@ -7,7 +7,7 @@ describe('statusPollFloorMs', () => {
   });
 
   it('lets session boot keep its fast cadence', () => {
-    expect(statusPollFloorMs({ terminal: false, dispatched: true, msSinceMovement: 60 * 60_000 })).toBe(2_000);
+    expect(statusPollFloorMs({ terminal: false, dispatched: true, msSinceMovement: 30_000 })).toBe(2_000);
   });
 
   it('widens once, and never past ten seconds', () => {
@@ -38,5 +38,24 @@ describe('lastMovementAt', () => {
   it('is undefined when nothing usable is known', () => {
     expect(lastMovementAt([])).toBeUndefined();
     expect(lastMovementAt([undefined, 'nope'])).toBeUndefined();
+  });
+});
+
+describe('stillBooting', () => {
+  const at = Date.parse('2026-09-22T19:00:00.000Z');
+
+  it('treats a dispatch from moments ago as a session booting', () => {
+    expect(stillBooting('2026-09-22T18:59:30.000Z', at)).toBe(true);
+  });
+
+  // Job 1000167 sat a week on the 2s cache and floor.
+  it('stops treating a dispatch as booting once it is past the window', () => {
+    expect(stillBooting(new Date(at - BOOT_WINDOW_MS).toISOString(), at)).toBe(false);
+    expect(stillBooting('2026-09-15T21:15:39.085Z', at)).toBe(false);
+  });
+
+  it('never calls an unknown dispatch time a boot', () => {
+    expect(stillBooting(undefined, at)).toBe(false);
+    expect(stillBooting('not a date', at)).toBe(false);
   });
 });
