@@ -1016,7 +1016,7 @@
     "apps/web/src/zone/protocol.ts": 292,
     "apps/web/src/zone/zoneClient.ts": 159,
     "apps/web/src/zoneApi.ts": 66,
-    "apps/web/vite.config.ts": 140,
+    "apps/web/vite.config.ts": 147,
     "apps/web/vitest.config.ts": 16,
     "apps/world/src/app.test.ts": 360,
     "apps/world/src/app.ts": 279,
