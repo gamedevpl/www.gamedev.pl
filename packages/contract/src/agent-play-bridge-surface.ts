@@ -29,6 +29,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_JOIN=AGENT_CALL.bind(Array.prototype.join);
   // Conversions and Object.create the game could replace after we load.
   var AGENT_STR=String,AGENT_NUM=Number,AGENT_CREATE=Object.create;
+  // A helper name is checked with our own test, not the game's prototype.
+  var AGENT_NAME=/^[A-Za-z_][A-Za-z0-9_]*$/;
+  var AGENT_TEST=AGENT_CALL.bind(RegExp.prototype.test);
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
@@ -239,7 +242,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       try{fn=src[k];}catch(err){continue;}
       // The registry travels with the function: a method that reads this must
       // still get the object it was registered on.
-      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))into[k]={fn:fn,self:src};
+      if(typeof fn==='function'&&AGENT_TEST(AGENT_NAME,k))into[k]={fn:fn,self:src};
     }
     }catch(err){}
     return seen;
@@ -264,7 +267,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
       if(seen>AGENT_API_SCAN)break;
       if(!AGENT_HAS(h,k)||AGENT_HAS(AGENT_HARNESS_CORE,k))continue;
       try{fn=h[k];}catch(err){continue;}
-      if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
+      if(typeof fn==='function'&&AGENT_TEST(AGENT_NAME,k))table[k]={fn:fn,self:h};
     }
     }catch(err){}
     AGENT_API_MEMO={h:h,api:apiSrc,helpers:helperSrc,frame:h.frame,table:table};

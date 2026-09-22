@@ -1415,6 +1415,25 @@ describe('the agent bridge, running for real', () => {
       expect(names).toEqual(['buildRail']);
     });
 
+    // A name check is ours; the game only supplies the name.
+    it('keeps the helper table when the game breaks RegExp.prototype.test', async () => {
+      const original = RegExp.prototype.test;
+      let names: unknown;
+      try {
+        RegExp.prototype.test = function (this: RegExp, value: string) {
+          if (this.source.indexOf('A-Za-z_') >= 0) throw new Error('no helpers for you');
+          return original.call(this, value);
+        };
+        harness.api = { buildRail: () => 'ok' };
+        send({ type: 'agent:enable' });
+        await settle();
+        names = lastOf(received, 'agent:state')!.api;
+      } finally {
+        RegExp.prototype.test = original;
+      }
+      expect(names).toEqual(['buildRail']);
+    });
+
     // Injected before the game script, so the intrinsic is ours.
     it('keeps reading Dates through the intrinsic the game replaced', async () => {
       setHidden(['targetWord']);
