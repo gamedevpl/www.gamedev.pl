@@ -203,7 +203,11 @@ export async function registerCatalogRoutes(
   // is built from env, blind to a githubClient injected here, so it cannot answer for
   // the report route without a circular dependency. Keep both in mind on a slug-gate change.
   async function isSlugPublishedAnyLane(slug: string): Promise<boolean> {
-    if (await isSlugPublished(slug)) return true;
+    try {
+      if (await isSlugPublished(slug)) return true;
+    } catch {
+      // A repo-lane outage must not hide healthy store-published games.
+    }
     if (!store) return false;
     try {
       const publication = await store.getPublication(slug);

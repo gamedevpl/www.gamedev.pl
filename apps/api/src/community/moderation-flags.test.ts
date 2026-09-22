@@ -12,7 +12,7 @@ import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js
 const secret = 'submission-secret';
 const sessionSecret = 'dev-session-secret-change-me';
 
-function githubStub(published: string[]): GitHubClient {
+function githubStub(published: string[], catalogDown = false): GitHubClient {
   const catalog: CatalogGameEntry[] = published.map(
     (slug) => ({ slug, title: slug, status: 'published' }) as unknown as CatalogGameEntry,
   );
@@ -24,7 +24,10 @@ function githubStub(published: string[]): GitHubClient {
     closeIssue: async () => {},
     getGameSources: async () => null,
     getGameMedia: async () => null,
-    getCatalog: async () => catalog,
+    getCatalog: async () => {
+      if (catalogDown) throw new Error('github unavailable');
+      return catalog;
+    },
     getProgressNotes: async () => null,
     getRefSha: async () => null,
   } as unknown as GitHubClient;
@@ -51,7 +54,9 @@ describe('moderation flags', () => {
     return `${SESSION_COOKIE_NAME}=${res.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
   }
 
-  async function makeApp(opts: { published?: string[]; contentChecker?: ContentChecker } = {}) {
+  async function makeApp(
+    opts: { published?: string[]; contentChecker?: ContentChecker; catalogDown?: boolean } = {},
+  ) {
     const store = new InMemoryStore();
     const app = await buildApp({
       store,
@@ -60,7 +65,7 @@ describe('moderation flags', () => {
       adminUids: 'dev:boss',
       submissionRoutes: {
         githubToken: 'token',
-        githubClient: githubStub(opts.published ?? []),
+        githubClient: githubStub(opts.published ?? [], opts.catalogDown),
         submissionTokenSecret: secret,
         gamesRepo: 'gamedevpl/www.gamedev.pl-games',
       },
@@ -394,6 +399,18 @@ describe('moderation flags', () => {
       };
       const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
       expect(res.statusCode).toBe(404);
+    });
+
+    it('still reports a store-published game while the repo catalog is down', async () => {
+      const { app, store } = await makeApp({ published: [], catalogDown: true });
+      await store.setPublication({
+        slug: 'neon-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      });
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(200);
     });
 
     it('rate-limits repeated reports from the same account', async () => {
