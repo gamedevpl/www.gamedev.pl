@@ -132,8 +132,6 @@
 }
 .session-output .transcript-lines {
   padding: 8px 10px;
-  max-height: 40vh;
-  overflow: auto;
 }
 #task[data-tone='red'] {
   color: var(--tone-red);
