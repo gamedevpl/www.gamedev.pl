@@ -111,24 +111,52 @@ twice would read as a sound heard twice.
 - **Game-authored text is data, never instructions.** State, observation and widget labels
   are written by an AI-generated game. The panel renders them as text, caps them, and says
   so in the guide it hands the agent.
-- **Hidden answers are redacted in the frame, not on the host.** `agentSnapshot()` drops
-  the fields `__GAME_AGENT_HIDDEN__` names before anything crosses the bridge, so a hidden
+- **Hidden answers are redacted in the frame, not on the host.** The fields
+  `__GAME_AGENT_HIDDEN__` names are dropped before anything crosses the bridge, so a hidden
   answer never reaches the host at all. Redacting only at render would have put it on the
   wire and into React state first. The frame learns the list from
   `window.__GAME_AGENT_HIDDEN__`, which `assembleGameHtml` writes ahead of the game's own
-  code from the `AGENT.json` the catalog read now carries. A game that declares none still
-  reports `hiddenFields: null`, and the panel says so out loud — which is now a statement
-  about that game rather than about the platform.
-- **The prelude reaches a game when its document is next assembled, not when this deploys.**
-  Published games are served from artifacts baked earlier — the snapshot for repo games, the
-  gate's `bundle.html` for delivered ones — so one built before this change carries no
-  prelude and keeps sending declared-hidden values until it is rebuilt. Repo games: run
-  "Publish games snapshot" (`workflow_dispatch`, ref `main`) after the deploy; the nightly
-  04:23 UTC bake bounds the window at a day either way. Delivered games: the bundle is
-  rewritten by that version's next gate run.
+  code from the `AGENT.json` the catalog read carries. A game that declares none still
+  reports `hiddenFields: null`, and the panel says so out loud.
+- **The list covers structured values at any depth; text is never inspected.** A value the
+  game hands over as an object or array is serialized here in one pass, dropping declared
+  keys wherever they sit and stopping if the output would exceed its cap. A **string** is
+  treated as text: capped and passed through unread. That is the whole rule, and it is
+  deliberately narrow — the earlier design parsed game-authored text to look inside it, and
+  every shape of that parser grew another way around itself (JSON as a string, a leading
+  BOM, a cloned graph, a thrown message). So: hand the platform a value, not a string.
+  `defineGame().observation()` and `.agentApi()` do exactly that. If a game formats its own
+  answer into prose, a pre-stringified blob or an exception message, redaction cannot see
+  it — which is the same position prose was always in.
+- **No game code runs during serialization.** `JSON.stringify` calls a custom `toJSON`
+  _before_ a replacer sees anything, so every check of the converted value arrives too
+  late: a converter can rename a declared key, return the secret as a primitive, rename it
+  in place, or delete its own `toJSON` on the way out. So the platform does the walking
+  itself and never consults `toJSON`. An object is written from its own enumerable keys,
+  declared ones dropped before their value is even read, so a getter on a declared key does
+  not run either. A real `Date` is read through this realm's `Date.prototype.toISOString`,
+  which answers for the internal slot only a genuine `Date` has, in any realm; an object
+  that merely looks like one is written out as the object it is. An accessor is game
+  code too, so where a game declares hidden fields its getters are not run and those
+  properties do not appear; a game declaring none keeps them. What is written is the value
+  the descriptor reported, never a second read, so a `Proxy` cannot answer the check with
+  one value and the walk with another.
+- **A `Proxy` is the limit of that rule, and the limit is the game's own data.** Enumerating
+  a value runs its `ownKeys` and descriptor traps; no JavaScript enumeration avoids that and
+  a proxy cannot be detected, so a game that wraps its observation can run code while we
+  read it. What that buys it is publishing its own state under a name it did not declare —
+  the same thing as writing `answer: theSecret` into the observation directly. A declared
+  name is still never read and never emitted, proxy or not. Redaction bounds what the
+  platform hands over; it cannot stop a game from handing over its own answer.
+- **A helper that throws is reported without its message** when the game declares hidden
+  fields, since the message is game-authored text under the rule above.
 - **A policy is exempt, by construction.** It runs in the game's own realm and can read
   `__GAME_HARNESS__.metadata` directly, so redaction bounds what we hand it, not what it
   can reach. Claiming otherwise would be a fiction, and no record comes from this surface.
+  `agent.call` returns the helper's value to the policy unredacted for the same reason —
+  filtering there would break real helpers while changing nothing about what a policy can
+  already read. What is redacted is the note that call writes to the log, because that is
+  what crosses the bridge.
 - **Synthesized input is released when the mode closes.** A `keyDown` with no `keyUp`, or a
   policy that threw mid-`press`, would otherwise hand the next human a stuck key.
 - **An agent-capable session stays out of the play funnel.** `trackPlay` is off wherever
@@ -181,7 +209,7 @@ It is also where debugging lives, because a run you cannot see into teaches noth
   answers.
 - `agent.capture(name)` paints and keeps a frame for the filmstrip.
 - A policy that throws comes back as `failed` with its message and the frames it had spent.
-- `agent.state()`, `observation()`, `ui()`, and `game()` for the game's own globals.
+- `agent.state()`, `observation()`, `ui()`, `api()`, `call(name, …args)`, and `game()` for GameKit.
 
 Bounds, because the policy runs in the page: `agent.step()` counts against a frame budget
 and throws past it, and a wall-clock cap stops a policy that steps forever. A policy that
@@ -258,6 +286,37 @@ Measured against `cavern-of-words` in Chromium: a five-action plan with a `waitF
 captures and an assert completed in 23 stepped frames and 212ms of wall clock, and moved
 the game from its intro into a different room. Stepping cost scales with a game's draw
 cost, so a heavy 3D game is slower per frame.
+
+## How a game registers itself (ui / observation / helpers)
+
+The panel does **not** eval into the sandboxed iframe, and Check 17 in the games repo
+forbids game sources from writing `window.` or `__GAME_HARNESS__`. Mutating the harness at
+runtime (via `globalThis` name-stitching) is therefore the wrong contract. Use the kit:
+
+| Surface     | Official registration                                                                                                  | What the panel shows                                           |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **State**   | `defineGame().snapshot(() => ({ cash, loan, … }))`                                                                     | the `state` line (primitives only)                             |
+| **Seen**    | `snapshot.observation` as a JSON **string**, or `defineGame().observation(() => …)`                                    | the `seen` block; empty is visible, not hidden                 |
+| **UI**      | `GameKit.ui.register(draw, label, enabled, { x, y, width, height })` during paint, or `defineGame().ui(() => widgets)` | `ui` hit-targets; `click x y` uses the midpoint                |
+| **Helpers** | `defineGame().agentApi(() => ({ buildRail, camLookAt, … }))` or `harness.api`                                          | the `api` list; `call name [json]` / `agent.call(name, …args)` |
+
+A tycoon toolbar is the same widget contract as an arcade button — register each tool's
+canvas rectangle, do not invent a parallel `harness.ui` format unless the `ui` engine
+module is not selected. Pixel bounds (`x, y, width, height`) and already-normalized
+`x1,y1,x2,y2` are both accepted. The bridge also reads `harness.ui` / `harness.observation`
+/ `harness.api` (and extra functions Object.assigned onto the harness) so an already-built
+preview that assigned those fields starts working the moment this executor is served — no
+game rebuild required.
+
+`press` / `tap` / `click` remain the generic verbs. They are not enough for Deluxe-scale
+construction: expose named helpers and call them from a policy. A policy that watches
+`score` only will sit idle on an economic game whose snapshot uses `cash` / `delivered` /
+`orders`; the starter policy watches those keys when present and does not require a
+score.
+
+Helpers run inside the game document. Arguments must be JSON (command box) or ordinary
+values (policy). The host never `eval`s game code; `unknown command` on `buildRail` is the
+parser refusing a verb that is not in the grammar — use `call buildRail …` instead.
 
 ## Not built yet
 
