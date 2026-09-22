@@ -42,8 +42,16 @@ function respondWith(b64: string): Response {
   });
 }
 
-function makeGenerator(fetchImpl: typeof fetch, timeoutMs = 5_000) {
-  return new MuseOptionImageGenerator({ apiKey: 'k', model: 'muse-image-1.0', fetchImpl, timeoutMs });
+const ALLOW_ALL = { isSafe: async () => true };
+
+function makeGenerator(fetchImpl: typeof fetch, timeoutMs = 5_000, safetyChecker = ALLOW_ALL) {
+  return new MuseOptionImageGenerator({
+    apiKey: 'k',
+    model: 'muse-image-1.0',
+    fetchImpl,
+    timeoutMs,
+    safetyChecker,
+  });
 }
 
 describe('MuseOptionImageGenerator', () => {
@@ -129,6 +137,48 @@ describe('MuseOptionImageGenerator', () => {
     expect(prompt).toContain('not cover art');
     // The HUD language follows the option label.
     expect(prompt).toContain('Pixel Art');
+  });
+});
+
+describe('MuseOptionImageGenerator safety verdict', () => {
+  it('drops a tile the safety checker refuses', async () => {
+    const b64 = await sourceImage(320, 240);
+    const generator = makeGenerator(async () => respondWith(b64), 5_000, {
+      isSafe: async () => false,
+    });
+
+    const images = await generator.generate(PARAMS);
+
+    expect(images).toEqual([]);
+  });
+
+  it('checks the downscaled bytes the creator would actually see', async () => {
+    const b64 = await sourceImage();
+    const seen: number[] = [];
+    const generator = makeGenerator(async () => respondWith(b64), 5_000, {
+      isSafe: async (bytes: Buffer) => {
+        const decoded = await decodeWebp(bytes);
+        seen.push(decoded?.width ?? -1);
+        return true;
+      },
+    });
+
+    await generator.generate({ ...PARAMS, options: [{ label: 'Pixel Art' }] });
+
+    expect(seen).toEqual([OPTION_IMAGE_WIDTH]);
+  });
+
+  it('keeps the safe tiles when one of them is refused', async () => {
+    const b64 = await sourceImage(320, 240);
+    let call = 0;
+    const generator = makeGenerator(async () => respondWith(b64), 5_000, {
+      // Refuse the second tile only.
+      isSafe: async () => ++call !== 2,
+    });
+
+    const images = await generator.generate(PARAMS);
+
+    expect(images).toHaveLength(2);
   });
 });
 

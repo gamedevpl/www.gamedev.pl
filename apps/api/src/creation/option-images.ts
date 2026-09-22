@@ -2,6 +2,7 @@
 
 import { decodeWebp, encodeWebp } from '../platform/image-webp.js';
 import { downscaleRgba } from '../platform/image-rgba.js';
+import { VertexOptionImageSafetyChecker, type OptionImageSafetyChecker } from './option-image-safety.js';
 
 export interface OptionImageOption {
   label: string;
@@ -39,6 +40,8 @@ export const MAX_OPTION_IMAGES = 4;
 export interface MuseOptionImageGeneratorOptions {
   apiKey: string;
   model: string;
+  // Required, not optional: an unchecked tile must be unconstructable.
+  safetyChecker: OptionImageSafetyChecker;
   baseUrl?: string;
   timeoutMs?: number;
   // Seam for tests; production leaves it to the global fetch.
@@ -77,13 +80,11 @@ interface MuseImageResponse {
 }
 
 // Null on failure: a missing tile is a plain option.
-async function toTile(bytes: Buffer): Promise<string | null> {
+async function toScaledWebp(bytes: Buffer): Promise<Buffer | null> {
   const decoded = await decodeWebp(bytes);
   if (!decoded) return null;
   const scaled = downscaleRgba(decoded, OPTION_IMAGE_WIDTH);
-  const encoded = await encodeWebp(scaled ?? decoded);
-  if (!encoded) return null;
-  return `data:image/webp;base64,${encoded.toString('base64')}`;
+  return encodeWebp(scaled ?? decoded);
 }
 
 export class MuseOptionImageGenerator implements OptionImageGenerator {
@@ -120,8 +121,13 @@ export class MuseOptionImageGenerator implements OptionImageGenerator {
     const b64 = body.data?.[0]?.b64_json;
     if (!b64) return null;
 
-    const tile = await toTile(Buffer.from(b64, 'base64'));
-    return tile ? { label: option.label, image: tile } : null;
+    const scaled = await toScaledWebp(Buffer.from(b64, 'base64'));
+    if (!scaled) return null;
+
+    // Input moderation clears the creator's text, never the vendor's output.
+    if (!(await this.options.safetyChecker.isSafe(scaled))) return null;
+
+    return { label: option.label, image: `data:image/webp;base64,${scaled.toString('base64')}` };
   }
 
   // One slow option must not cost the creator the other two.
@@ -162,6 +168,7 @@ export function createOptionImageGeneratorFromEnv(env: OptionImageEnv = process.
   return new MuseOptionImageGenerator({
     apiKey,
     model,
+    safetyChecker: new VertexOptionImageSafetyChecker(),
     ...(baseUrl ? { baseUrl } : {}),
     ...(Number.isFinite(timeout) && timeout > 0 ? { timeoutMs: timeout } : {}),
   });

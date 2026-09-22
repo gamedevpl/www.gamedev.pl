@@ -334,7 +334,8 @@ jobs:
           # real creator text to the vendor, which legal-compliance-plan.md gates
           # separately from round-0 seeding. Sharing the seed credential would arm this
           # the moment that one is provisioned for its own, already-approved purpose.
-          if gcloud secrets describe option-image-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+          # Version-checked, not described, for the 2026-08-21 reason given below.
+          if gcloud secrets versions access latest --secret=option-image-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("OPTION_IMAGE_API_KEY=option-image-api-key:latest")
           fi
           # describe only proves the secret container exists, not that it has a
