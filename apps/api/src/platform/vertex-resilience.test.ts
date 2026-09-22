@@ -146,3 +146,126 @@ describe('surviving a moment of no capacity', () => {
     expect(attempts).toBe(2);
   });
 });
+
+// A call past the deadline is billed against a spent budget.
+describe('the budget after sleeping', () => {
+  it('does not start an attempt the retry delay has outlived', async () => {
+    const attempts: number[] = [];
+    let clock = 0;
+    await expect(
+      callWithVertexResilience({
+        timeoutMs: 30,
+        retryDelayMs: 50,
+        now: () => clock,
+        sleepImpl: async (ms) => {
+          clock += ms;
+        },
+        attempt: async (_model, timeoutMs) => {
+          attempts.push(timeoutMs);
+          clock += 5;
+          throw new Error('429 Resource exhausted');
+        },
+      }),
+    ).rejects.toThrow(/429/);
+
+    // 60% without a stand-in; the retry delay outlives the rest.
+    expect(attempts).toEqual([18]);
+  });
+});
+
+// The stand-in exists for a primary that stalls to its deadline.
+describe('leaving room for the stand-in', () => {
+  it('reaches the fallback even when every primary attempt burns its whole share', async () => {
+    const tried: (string | undefined)[] = [];
+    let clock = 0;
+    await callWithVertexResilience({
+      timeoutMs: 1000,
+      retryDelayMs: 0,
+      fallbackModel: 'stand-in',
+      now: () => clock,
+      sleepImpl: async (ms) => {
+        clock += ms;
+      },
+      attempt: async (model, timeoutMs) => {
+        tried.push(model);
+        clock += timeoutMs;
+        if (model === undefined) throw Object.assign(new Error('stalled'), { name: 'AbortError' });
+        return 'ok';
+      },
+    });
+
+    expect(tried).toEqual([undefined, undefined, 'stand-in']);
+  });
+
+  it('never hands one attempt the whole budget when a stand-in is configured', async () => {
+    const budgets: number[] = [];
+    let clock = 0;
+    await expect(
+      callWithVertexResilience({
+        timeoutMs: 1000,
+        retryDelayMs: 0,
+        fallbackModel: 'stand-in',
+        now: () => clock,
+        sleepImpl: async (ms) => {
+          clock += ms;
+        },
+        attempt: async (_model, timeoutMs) => {
+          budgets.push(timeoutMs);
+          clock += timeoutMs;
+          throw new Error('429 Resource exhausted');
+        },
+      }),
+    ).rejects.toThrow();
+
+    expect(budgets.every((budget) => budget < 1000)).toBe(true);
+    expect(budgets.reduce((sum, budget) => sum + budget, 0)).toBeLessThanOrEqual(1000);
+  });
+});
+
+// A stand-in that 404s takes budget and hides the cause.
+describe('an unreachable stand-in', () => {
+  it('leaves the real attempts under two thirds of the budget', async () => {
+    const budgets: number[] = [];
+    const attempt = async (_model: string | undefined, timeoutMs: number) => {
+      budgets.push(timeoutMs);
+      throw new Error('503 UNAVAILABLE');
+    };
+    // Frozen, so each share is exact rather than whatever the clock left.
+    const run = (fallbackModel?: string) =>
+      callWithVertexResilience({
+        attempt,
+        timeoutMs: 20_000,
+        retryDelayMs: 0,
+        now: () => 0,
+        ...(fallbackModel ? { fallbackModel } : {}),
+      }).catch(() => undefined);
+
+    await run('absent-model');
+    const standInBudgets = budgets.splice(0);
+    const real = standInBudgets.slice(0, 2).reduce((a, b) => a + b, 0);
+
+    await run();
+    const withoutStandIn = budgets.splice(0).reduce((a, b) => a + b, 0);
+
+    expect(withoutStandIn).toBe(20_000);
+    expect(standInBudgets).toHaveLength(3);
+    expect(real).toBeLessThan((withoutStandIn * 2) / 3);
+  });
+
+  it('replaces a retryable cause with the stand-in 404', async () => {
+    const attempt = async (model: string | undefined) => {
+      if (model) throw new Error('404 Publisher model not found');
+      throw new Error('503 UNAVAILABLE');
+    };
+
+    const err = await callWithVertexResilience({
+      attempt,
+      timeoutMs: 1_000,
+      retryDelayMs: 0,
+      fallbackModel: 'absent-model',
+    }).catch((error: unknown) => error);
+
+    expect(String(err)).toContain('404');
+    expect(isRetryableVertexError(err)).toBe(false);
+  });
+});
