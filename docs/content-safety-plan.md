@@ -173,7 +173,7 @@ this is the half of its mitigation that reads the artifact.
 > **Amended 2026-09-12.** Vertex remains the classifier. What changed is what happens
 > when it cannot answer: a 429 from Google's global endpoint stopped creation twice in
 > one evening, with project quota nowhere near its limit. The checker now retries, then
-> tries one peer-or-better model on a **second vendor** (OpenAI `gpt-5.6-luna` by
+> tries one peer-or-better model on a **second vendor** (OpenAI `gpt-6-luna` by
 > default, the model this platform already runs for managed agents and seeds), and only
 > then fails closed.
 >

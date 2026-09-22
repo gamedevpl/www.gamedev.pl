@@ -9,6 +9,7 @@ import {
   rejectionFor,
   VertexChecker,
 } from './moderation.js';
+import { OPENAI_FALLBACK_MODEL as LUNA } from './moderation.js';
 
 // Stub provider: exercises the real genaicode request/response path (prompt
 // assembly, JSON parsing, schema validation) with no GCP calls.
@@ -363,7 +364,7 @@ describe('surviving a moment of no capacity', () => {
     const models: (string | undefined)[] = [];
     const checker = new VertexChecker({
       retryDelayMs: 0,
-      fallbackModel: 'gpt-5.6-luna',
+      fallbackModel: LUNA,
       fallbackApiKey: 'test-key',
       vertexFetcher: async (_prompt, model) => {
         models.push(model);
@@ -373,7 +374,7 @@ describe('surviving a moment of no capacity', () => {
     });
 
     expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
-    expect(models).toEqual([undefined, undefined, 'gpt-5.6-luna']);
+    expect(models).toEqual([undefined, undefined, LUNA]);
   });
 
   it('does not retry a failure a retry cannot fix', async () => {
@@ -499,28 +500,32 @@ describe('checking several fields', () => {
 // Degrading to a weaker classifier lowers the bar silently.
 describe('what may stand in for the classifier', () => {
   it('accepts a peer-or-better model on the second vendor', () => {
-    expect(resolveFallbackModel({ configured: undefined, provider: 'openai', hasApiKey: true })).toBe('gpt-5.6-luna');
+    expect(resolveFallbackModel({ configured: undefined, provider: 'openai', hasApiKey: true })).toBe(LUNA);
     expect(resolveFallbackModel({ configured: 'gemini-3.8-flash', provider: 'vertex', hasApiKey: true })).toBe(
       'gemini-3.8-flash',
     );
   });
 
   it('refuses a cheaper model, whoever configured it', () => {
-    expect(resolveFallbackModel({ configured: 'gemini-3.0-flash', provider: 'openai', hasApiKey: true })).toBeUndefined();
+    expect(
+      resolveFallbackModel({ configured: 'gemini-3.0-flash', provider: 'openai', hasApiKey: true }),
+    ).toBeUndefined();
     expect(resolveFallbackModel({ configured: 'gpt-4o-mini', provider: 'openai', hasApiKey: true })).toBeUndefined();
   });
 
   // A model the provider cannot serve reads as an outage.
   it('refuses a peer model the configured provider does not serve', () => {
     expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'openai', hasApiKey: true })).toBeUndefined();
-    expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'vertex', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: LUNA, provider: 'vertex', hasApiKey: true })).toBeUndefined();
     // Vertex 404s Claude here; the seed providers are its way in.
     expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBeUndefined();
-    expect(resolveFallbackModel({ configured: 'claude-sonnet-5', provider: 'vertex', hasApiKey: true })).toBeUndefined();
+    expect(
+      resolveFallbackModel({ configured: 'claude-sonnet-5', provider: 'vertex', hasApiKey: true }),
+    ).toBeUndefined();
   });
 
   it('has no fallback at all without a key for the second vendor', () => {
-    expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'openai', hasApiKey: false })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: LUNA, provider: 'openai', hasApiKey: false })).toBeUndefined();
   });
 });
 
