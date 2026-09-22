@@ -4874,6 +4874,45 @@ button.builder-mode-selector:disabled {
   color: var(--muted, #94a3b8);
 }
 
+/* With tiles the options stop being a list and become pictures to compare, which
+   only reads side by side. The tile bleeds to the card edge; the tick and the text
+   keep the padding it gives up. */
+.qa-options--art {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.qa-options--art .qa-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'art art'
+    'tick text';
+  align-items: start;
+  gap: 0 12px;
+  padding: 0 0 14px;
+  overflow: hidden;
+}
+
+.qa-option__art {
+  grid-area: art;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #0b0f12;
+}
+
+.qa-options--art .qa-option__tick {
+  grid-area: tick;
+  margin: 12px 0 0 16px;
+}
+
+.qa-options--art .qa-option__text {
+  grid-area: text;
+  margin: 12px 16px 0 0;
+}
+
 /* Dashed until it has focus: it is the answer for people none of the options fit,
    and it should read as an invitation rather than as one more empty required field. */
 .qa-custom-input input {

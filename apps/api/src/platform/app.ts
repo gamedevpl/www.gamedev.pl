@@ -106,6 +106,8 @@ import { registerScorecardRoutes, type ScorecardRoutesOptions } from '../creatio
 import { createDefaultThemeExtractor } from '../community/feedback-themes.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
+import { registerOptionImageRoutes } from '../creation/option-image-routes.js';
+import type { OptionImageGenerator } from '../creation/option-images.js';
 import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
@@ -145,6 +147,7 @@ export interface BuildAppOptions {
   platformConnectorSecret?: string;
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
+  optionImageGenerator?: OptionImageGenerator;
   /** The editor's NL tuning router. Defaults to the Vertex one; stubbed in tests. */
   editorAssistant?: EditorAssistant;
   // Ghost-text completer (TA-01). Defaults to Vertex; stubbed in tests.
@@ -522,6 +525,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     contentChecker,
     specRefiner: options.specRefiner,
+  });
+
+  await registerOptionImageRoutes(app, {
+    store,
+    contentChecker,
+    ...(options.optionImageGenerator ? { generator: options.optionImageGenerator } : {}),
   });
 
   await registerNotificationRoutes(app, { store });

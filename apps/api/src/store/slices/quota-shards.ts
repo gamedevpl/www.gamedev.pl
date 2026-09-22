@@ -22,15 +22,29 @@ export async function shardedCount(db: Firestore, dateStr: string, field: string
   }, 0);
 }
 
+// Below ten, only the first `limit` shards have a slot.
+export function activeShards(limit: number): number {
+  return Math.max(0, Math.min(COUNTER_SHARDS, Math.floor(limit)));
+}
+
+// Remainder to the low shards, so the ceilings sum to the cap.
+export function shardCapacity(limit: number, shard: number): number {
+  const whole = Math.floor(limit / COUNTER_SHARDS);
+  return whole + (shard < limit % COUNTER_SHARDS ? 1 : 0);
+}
+
 export async function spendShard(
   db: Firestore,
   dateStr: string,
   field: string,
   limit: number,
 ): Promise<{ allowed: boolean; current: number }> {
-  const shard = Math.floor(Math.random() * COUNTER_SHARDS);
+  const active = activeShards(limit);
+  // A cap of zero has no shard to spend on.
+  if (active === 0) return { allowed: false, current: 0 };
+  const shard = Math.floor(Math.random() * active);
   const ref = shardRef(db, dateStr, field, shard);
-  const shardLimit = Math.ceil(limit / COUNTER_SHARDS);
+  const shardLimit = shardCapacity(limit, shard);
   return await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     const value = snap.data()?.count;

@@ -49,6 +49,7 @@ export function emptyUsageCounters(): UsageCounters {
     searchQueries: 0,
     worldWrites: 0,
     remixEdits: 0,
+    optionImages: 0,
   };
 }
 
@@ -166,6 +167,14 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.globalDailyTabCompleteTokenCap !== undefined
           ? patch.globalDailyTabCompleteTokenCap
           : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
+      globalDailyOptionImageCap:
+        patch.globalDailyOptionImageCap !== undefined
+          ? patch.globalDailyOptionImageCap
+          : (this.creationLimits?.globalDailyOptionImageCap ?? null),
+      dailyOptionImageUserCap:
+        patch.dailyOptionImageUserCap !== undefined
+          ? patch.dailyOptionImageUserCap
+          : (this.creationLimits?.dailyOptionImageUserCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
       ...((patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents)
         ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents }
@@ -321,6 +330,9 @@ export class FirestoreQuotaStore implements QuotaStore {
       globalDailyGateRunCap: typeof data?.globalDailyGateRunCap === 'number' ? data.globalDailyGateRunCap : null,
       globalDailySearchEmbeddingCap:
         typeof data?.globalDailySearchEmbeddingCap === 'number' ? data.globalDailySearchEmbeddingCap : null,
+      globalDailyOptionImageCap:
+        typeof data?.globalDailyOptionImageCap === 'number' ? data.globalDailyOptionImageCap : null,
+      dailyOptionImageUserCap: typeof data?.dailyOptionImageUserCap === 'number' ? data.dailyOptionImageUserCap : null,
       managedBuilderMode:
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
@@ -385,6 +397,14 @@ export class FirestoreQuotaStore implements QuotaStore {
           patch.globalDailyTabCompleteTokenCap !== undefined
             ? patch.globalDailyTabCompleteTokenCap
             : (existing.globalDailyTabCompleteTokenCap ?? null),
+        globalDailyOptionImageCap:
+          patch.globalDailyOptionImageCap !== undefined
+            ? patch.globalDailyOptionImageCap
+            : (existing.globalDailyOptionImageCap ?? null),
+        dailyOptionImageUserCap:
+          patch.dailyOptionImageUserCap !== undefined
+            ? patch.dailyOptionImageUserCap
+            : (existing.dailyOptionImageUserCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
         ...((patch.handledBrakeIncidents ?? existing.handledBrakeIncidents)
           ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? existing.handledBrakeIncidents }

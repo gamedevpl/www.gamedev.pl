@@ -18,6 +18,8 @@ function effective(overrides: Partial<CreationLimits['effective']> = {}): Creati
     tabCompletePaused: false,
     globalDailyTabCompleteTokenCap: 2_000_000,
     globalDailyGateRunCap: 400,
+    globalDailyOptionImageCap: 100,
+    dailyOptionImageUserCap: 10,
     seedingMode: 'auto',
     seedProvider: {
       stored: null,

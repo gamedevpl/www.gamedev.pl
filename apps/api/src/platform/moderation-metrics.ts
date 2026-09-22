@@ -43,6 +43,7 @@ export interface ModerationLogger {
 export type ModerationSurface =
   | 'submission' // a creator filing a new game spec
   | 'refine' // spec refinement / clarifying-questions pass
+  | 'option_images' // tiles illustrating a visual clarifying question
   | 'creator_feedback' // a creator steering their own build
   | 'player_feedback' // written feedback on someone else's published game
   | 'world_text' // text placed into a persistent world, seen by other players

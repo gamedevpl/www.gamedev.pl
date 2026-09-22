@@ -97,6 +97,44 @@ cannot spend the pipeline out of the ability to ship), body `{ title, spec }`:
   theme details. Language: questions come back in the creator's UI language
   (en/pl — pass the locale).
 
+`POST /api/submissions/option-images` — session, called after refine for a question the
+refiner marked `visual`, body `{ concept, question, options }`. Returns
+`{ images: [{ label, image }] }`, or `{ images: [] }` for every refusal there is: no
+credential, no model, too many options, moderation-clean but over a ceiling, or a vendor
+outage. It never answers with an error, because the wizard's fallback for "no tiles" is the
+plain text options it already renders.
+
+Three bounds, because it is the most expensive thing CreatorQA can do — one request is up to
+four Muse generations plus four Vertex safety verdicts:
+
+- 30 requests/hour/IP, in-memory, as a first-order flood stop;
+- `optionImageGate` on the `creation-limits.ts` rail, which spends two counters in order —
+  the creator's own day (`dailyOptionImageUserCap`, env floor `DAILY_OPTION_IMAGE_QUOTA`,
+  default 10, counted as `optionImages`) and then the shared day
+  (`globalDailyOptionImageCap`, env floor `GLOBAL_DAILY_OPTION_IMAGE_CAP`, default 100).
+  The creator's ceiling is checked first so their refusal never spends a global slot.
+- a free `peek()` at the global ceiling before moderation, so a full day costs no vendor
+  call and no moderation call.
+
+Both ceilings are stored in `opsConfig/creationLimits`, so they move without a deploy, and
+both are shown and settable on `/admin` beside the gate-run and tab-complete caps. Setting
+the global one to 0 closes the route, which is why this gate has no separate pause flag.
+
+Ordering follows the cost-control invariant exactly: the free peek first, then moderation,
+then the two counters that spend, then the vendor. Automation accounts are not exempt from
+the peek — the point of the free refusal is that a closed day costs nobody a moderation call,
+and a bot smoke run is exactly the caller that would otherwise burn its allowance for nothing. A rejected prompt costs the creator
+nothing, and a day with no headroom costs nobody a moderation call. The opening
+values are guesses — ops: cost-controls-execution-plan.md CC-35 records that and what to
+re-derive them from.
+
+Measurement, per the instrumentation contract's creator-funnel question: `qa_tiles_shown`
+joins `CREATE_STEPS` and fires once per visit when a question renders with a complete tile
+set. It distinguishes an illustrated question from the plain-text fallback, which `qa_shown`
+cannot, and the read side picks it up automatically because `summarizeVisitFunnel` maps over
+the vocabulary. No content and no new identifier: the same per-tab visit session everything
+else in that funnel uses.
+
 ## Web UX
 
 - After the creator types a prompt and hits "Continue", show the questions as

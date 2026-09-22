@@ -253,6 +253,36 @@ reopen it, and neither is in scope today:
    that sound effects do not. Curated review still applies, but the risk profile is
    different enough to deserve its own decision rather than inheriting this one.
 
+### Image moderation — revisited 2026-09-22, now needed
+
+The deferral above said "revisit if generated images appear." They have: CreatorQA option
+tiles (website#1421) generate an illustration per answer to a visual clarifying question.
+
+This is the reopening case the audio revisit named — _creator-driven generation_, a creator
+prompt reaching a metered vendor — and every pillar the audio decision rested on fails here:
+
+- **Creator input does reach the vendor.** The creator's concept and the option labels are
+  the prompt. That is exactly the untrusted-text-in-front-of-a-generator shape L1/L1b exist
+  for, and L1 clearing the _input_ says nothing about the _output_: a permitted prompt can
+  still return an image we would not show.
+- **Nothing is auditioned.** Tiles are generated per request and rendered straight to the
+  creator. There is no commit step, so no human sees the image before its audience does.
+- **Nothing is pinned.** Tiles are ephemeral and regenerated on the next request, so there
+  is no reviewed-bytes guarantee to fall back on.
+
+So an output verdict is required, and it is enforced structurally rather than by convention:
+`MuseOptionImageGenerator` takes an `OptionImageSafetyChecker` as a **required** constructor
+argument, so a generator that skips the check cannot be built. The check runs on the
+downscaled bytes the creator would actually see, and it **fails closed** — a refusal, a
+timeout, a malformed verdict or an outage all drop the tile. Because the wizard illustrates a
+question only when every option has a tile, one refused tile quietly returns the whole
+question to plain text, which is the same degraded state the feature already has for a vendor
+outage.
+
+Scope of this decision: the tile is shown to the one creator who wrote the prompt and is
+never stored, attached to a submission, or published (spike D4). That bounds the blast radius
+but does not remove it, which is why the control is a hard gate rather than a log line.
+
 ## Rollout
 
 1. **Slice 1 (before any public flip)**: L1 module + tests + web i18n feedback; L3

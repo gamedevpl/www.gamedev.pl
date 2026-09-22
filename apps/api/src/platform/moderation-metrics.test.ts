@@ -109,6 +109,7 @@ describe('every moderating module reports its rejections', () => {
       'creation/creator-feedback-handler.ts',
       'creation/editor-drafts.ts',
       'creation/improve-routes.ts',
+      'creation/option-image-routes.ts',
       'creation/refine.ts',
       'creation/remix.ts',
       'delivery/delivery-moderation.ts',

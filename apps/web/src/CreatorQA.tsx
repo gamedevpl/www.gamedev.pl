@@ -8,6 +8,8 @@ import { hasCreatorQaProgress } from './creatorQaProgress.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
+import { pickQuestionArt, useOptionImages } from './useOptionImages.js';
+import { recordCreateStep } from './visitTelemetry.js';
 
 export interface QAOption {
   label: string;
@@ -21,6 +23,8 @@ export interface QAQuestion {
   allowFreeText?: boolean;
   /** Some dimensions are naturally plural ("which mechanics?"); the refiner marks those. */
   multiple?: boolean;
+  // Options differ by how the game looks, so tiles help.
+  visual?: boolean;
 }
 
 interface CreatorQAProps {
@@ -151,10 +155,19 @@ export function CreatorQA({
     [questions],
   );
 
+  const optionImages = useOptionImages(questions, initialConcept);
+
   // Guards against a restored session pointing past the end of a shorter question list.
   const stepIndex = Math.min(step, stages.length - 1);
   const stage = stages[stepIndex];
   const reviewIndex = stages.length - 1;
+
+  const questionArt = stage.kind === 'question' ? pickQuestionArt(optionImages, stage.question) : undefined;
+
+  // Counts the funnel step, not the tiles: recordCreateStep fires once per visit.
+  useEffect(() => {
+    if (questionArt) recordCreateStep('qa_tiles_shown');
+  }, [questionArt]);
 
   const wizardRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -456,7 +469,7 @@ export function CreatorQA({
               </h2>
               <p className="qa-stage-lede">{stage.question.multiple ? t('qa.pickSeveral') : t('qa.pickOneOrSkip')}</p>
 
-              <div className="qa-options">
+              <div className={`qa-options${questionArt ? ' qa-options--art' : ''}`}>
                 {stage.question.options.map((opt) => {
                   // Stays lit while free text is typed: the two are now one answer,
                   // and un-highlighting the option was how the old behaviour hid itself.
@@ -474,6 +487,9 @@ export function CreatorQA({
                       disabled={submitting}
                       onClick={() => handleSelectOption(stage.question, opt.label)}
                     >
+                      {questionArt && (
+                        <img className="qa-option__art" src={questionArt[opt.label]} alt="" loading="lazy" />
+                      )}
                       <span className="qa-option__tick" aria-hidden="true" />
                       <span className="qa-option__text">
                         <span className="qa-option__label">{opt.label}</span>

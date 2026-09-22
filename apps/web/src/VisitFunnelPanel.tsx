@@ -26,6 +26,7 @@ const STEP_LABELS: Record<string, string> = {
   spec_submitted: 'pressed create',
   signin_required: 'hit sign-in wall',
   qa_shown: 'asked questions',
+  qa_tiles_shown: 'saw an illustrated question',
   submission_created: 'game submitted',
 };
 
