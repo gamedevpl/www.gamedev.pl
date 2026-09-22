@@ -200,6 +200,8 @@ describe('MCP editor session actor', () => {
     );
     expect(published.isError).toBe(true);
     expect((published.structured as { error: string }).error).toMatch(/only the owner can publish/i);
+    // This reads as a permission problem, not a schema one.
+    expect((published.structured as { code?: string }).code).toBe('not_owner');
   });
 
   it('refuses leftover editor sessionKey after the owner removes them', async () => {

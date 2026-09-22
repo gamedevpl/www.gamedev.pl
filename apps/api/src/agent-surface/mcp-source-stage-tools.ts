@@ -194,8 +194,8 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         'Stage new or fully rewritten source file(s) when you have curl/shell egress. ' +
         'ALWAYS mint upload URLs in batch: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
         `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; split larger sets into batches of at most ${MAX_STAGE_UPLOAD_BATCH}; do NOT make individual parallel calls per file). Pass \`path\` only for a lone single file. ` +
-        'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) ' +
-        '(curl --upload-file <file> "$url") or `uploadScript`. The file bytes never enter the model; the PUT applies the same ' +
+        'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) verbatim ' +
+        '(curl -H "Content-Type: text/plain; charset=utf-8" --upload-file <file> "$url") or `uploadScript`. The file bytes never enter the model; the PUT applies the same ' +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
         'staging receipt with stop/pendingMessages. Then submit_sources({ fromStaged: true, … }). ' +
         'Use stage_source_file / patch_source_file when you have no shell. ' +
@@ -349,7 +349,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       },
       description:
         'Upload ONE game source file into this round’s staging buffer (full rewrite) via inline content. ' +
-        'Use stage_upload_url + curl --upload-file when you have shell egress — re-emitting file contents ' +
+        'Use stage_upload_url + its returned `upload` one-liner (it carries the Content-Type header) when you have shell egress — re-emitting file contents ' +
         'as a tool argument burns output tokens. Use this tool for new files when you have no shell; ' +
         'for edits to an existing path use patch_source_file so you do not re-emit a whole large file. ' +
         'For a large tree, staging file-by-file avoids one giant submit_sources files[] payload, which some clients truncate. ' +
@@ -410,6 +410,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           hint?: string;
           manifestHint?: string;
           typecheckHint?: string;
+          budgetHint?: string;
           audioHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
@@ -439,6 +440,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
             ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
             ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
+            ...(body.budgetHint ? [{ code: 'byte_budget_low' as const, message: body.budgetHint }] : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });

@@ -1075,7 +1075,7 @@ describe('agent build channel', () => {
     expect(image.rawPayload.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   });
 
-  it('mints a curl one-liner that sets Content-Type, because no parser claims a missing one', async () => {
+  it('mints a curl one-liner that sets Content-Type, and still takes an upload that declares none', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     app = await createApp(store);
@@ -1098,13 +1098,22 @@ describe('agent build channel', () => {
     expect(Math.floor(Date.parse(expiresAt) / 1000)).toBe(claims.exp);
     expect(expiresInSeconds).toBeGreaterThan(0);
 
-    // Untyped body must not buffer — a '' parser hits everything.
+    // curl sends no type of its own, and a 415 here left the upload silently undone.
     const untyped = await app.inject({
       method: 'PUT',
       url: String(url).replace(/^https?:\/\/[^/]+/, ''),
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
-    expect(untyped.statusCode).not.toBe(200);
+    expect(untyped.statusCode).toBe(200);
+
+    // Scoped to the raw upload routes: a '' parser would hit everything.
+    const untypedElsewhere = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: 'text=nope',
+    });
+    expect(untypedElsewhere.statusCode).not.toBe(200);
   });
 
   it('retires base64 POST /shot and refuses a non-PNG PUT body', async () => {

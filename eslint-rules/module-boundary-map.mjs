@@ -408,6 +408,8 @@ const FILE_BUCKET = {
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
+  'kit-upcoming-rules': 'agent-surface',
+  'staged-budget': 'agent-surface',
 
   // delivery: staging, games-store, gate
   'build-status': 'delivery',
