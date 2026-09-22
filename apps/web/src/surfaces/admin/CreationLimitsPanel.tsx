@@ -41,6 +41,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const [managedUserCapDraft, setManagedUserCapDraft] = useState('');
   const [tabCapDraft, setTabCapDraft] = useState('');
   const [gateCapDraft, setGateCapDraft] = useState('');
+  const [tileCapDraft, setTileCapDraft] = useState('');
+  const [tileUserCapDraft, setTileUserCapDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +59,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       );
       setTabCapDraft(String(response.effective.globalDailyTabCompleteTokenCap));
       setGateCapDraft(String(response.effective.globalDailyGateRunCap));
+      setTileCapDraft(String(response.effective.globalDailyOptionImageCap));
+      setTileUserCapDraft(String(response.effective.dailyOptionImageUserCap));
       setState('ready');
     } catch {
       setState('error');
@@ -80,6 +84,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         globalDailyTabCompleteTokenCap?: number | null;
         gatePaused?: boolean;
         globalDailyGateRunCap?: number | null;
+        globalDailyOptionImageCap?: number | null;
+        dailyOptionImageUserCap?: number | null;
         seedingMode?: SeedingMode;
         seedProviderOverride?: string | null;
       },
@@ -100,6 +106,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         );
         setTabCapDraft(String(result.effective.globalDailyTabCompleteTokenCap));
         setGateCapDraft(String(result.effective.globalDailyGateRunCap));
+        setTileCapDraft(String(result.effective.globalDailyOptionImageCap));
+        setTileUserCapDraft(String(result.effective.dailyOptionImageUserCap));
         // The change lands in Firestore, and instances read it through a cache — so say
         // when it will be everywhere rather than implying it already is.
         setMessage(`in force everywhere within ${relative(result.propagationMs)}`);
@@ -132,6 +140,10 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
 
   const parsedGateCap = Number(gateCapDraft);
   const gateCapValid = Number.isInteger(parsedGateCap) && parsedGateCap >= 0;
+  const parsedTileCap = Number(tileCapDraft);
+  const tileCapValid = Number.isInteger(parsedTileCap) && parsedTileCap >= 0;
+  const parsedTileUserCap = Number(tileUserCapDraft);
+  const tileUserCapValid = Number.isInteger(parsedTileUserCap) && parsedTileUserCap >= 0;
 
   const managedStatusLine = !effective.hasPlatformBackend
     ? 'Not configured in this environment (reads as "coming soon" regardless of the switch below).'
@@ -465,6 +477,67 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
           Each run is a 30-minute Cloud Build job, so this is the ceiling on build minutes spent across every creator's
           preview and publish deliveries, not a per-creator quota. Reaches every instance within{' '}
           {relative(limits.propagationMs)}.
+        </p>
+      </section>
+
+      <section className="admin-limits">
+        <h2 className="health-section-title">CreatorQA option tiles</h2>
+        <p className="health-summary">
+          {today.optionImages} of {effective.globalDailyOptionImageCap} tile requests used today ({today.dateStr}), at
+          most {effective.dailyOptionImageUserCap} per creator.
+        </p>
+
+        <div className="admin-limits-controls">
+          <label className="admin-limits-cap">
+            Daily cap
+            <input
+              type="number"
+              min={0}
+              value={tileCapDraft}
+              disabled={busy}
+              onChange={(event) => setTileCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !tileCapValid || parsedTileCap === effective.globalDailyOptionImageCap}
+            onClick={() => void apply({ globalDailyOptionImageCap: parsedTileCap })}
+          >
+            Set cap
+          </button>
+
+          <label className="admin-limits-cap">
+            Per creator
+            <input
+              type="number"
+              min={0}
+              value={tileUserCapDraft}
+              disabled={busy}
+              onChange={(event) => setTileUserCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !tileUserCapValid || parsedTileUserCap === effective.dailyOptionImageUserCap}
+            onClick={() => void apply({ dailyOptionImageUserCap: parsedTileUserCap })}
+          >
+            Set per-creator cap
+          </button>
+          <button
+            type="button"
+            disabled={busy || (stored?.globalDailyOptionImageCap == null && stored?.dailyOptionImageUserCap == null)}
+            onClick={() => void apply({ globalDailyOptionImageCap: null, dailyOptionImageUserCap: null })}
+          >
+            Use the deployed defaults
+          </button>
+        </div>
+
+        {message && <p className="admin-limits-message">{message}</p>}
+
+        <p className="health-note">
+          One request is up to four generated tiles, each billing an image model and a safety verdict, so the day's
+          ceiling is four times the number above. A daily cap of 0 closes the route; the feature is dark until
+          `OPTION_IMAGE_MODEL` is set either way. Reaches every instance within {relative(limits.propagationMs)}.
         </p>
       </section>
 

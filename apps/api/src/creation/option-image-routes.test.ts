@@ -5,7 +5,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { PatternChecker } from '../platform/moderation.js';
 import { InMemoryStore } from '../platform/store.js';
 import type { OptionImage, OptionImageGenerator, OptionImageParams } from './option-images.js';
-import { DEFAULT_DAILY_OPTION_IMAGE_QUOTA } from './option-image-routes.js';
+import { DEFAULT_DAILY_OPTION_IMAGE_USER_CAP } from './creation-limits.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const CONCEPT = 'Dodge the falling rocks and survive as long as possible in a 2D canvas arena';
@@ -204,7 +204,7 @@ describe('POST /api/submissions/option-images', () => {
     );
     // Spend the whole allowance, so the next request is refused.
     const today = new Date().toISOString().slice(0, 10);
-    for (let i = 0; i < DEFAULT_DAILY_OPTION_IMAGE_QUOTA; i++) {
+    for (let i = 0; i < DEFAULT_DAILY_OPTION_IMAGE_USER_CAP; i++) {
       await store.checkAndIncrementQuota('g:test-user', today, Number.MAX_SAFE_INTEGER, 'optionImages');
     }
 

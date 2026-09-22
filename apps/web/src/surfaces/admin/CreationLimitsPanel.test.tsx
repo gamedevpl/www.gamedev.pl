@@ -40,6 +40,8 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
       globalDailyGateRunCap: 400,
+      globalDailyOptionImageCap: 100,
+      dailyOptionImageUserCap: 10,
       seedingMode: 'auto',
       seedProvider: {
         stored: null,
@@ -49,7 +51,14 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
         defaultProvider: 'vertex',
       },
     },
-    today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3, tabCompleteTokens: 0, gateRuns: 0 },
+    today: {
+      dateStr: '2026-07-30',
+      submissions: 12,
+      managedBuilds: 3,
+      tabCompleteTokens: 0,
+      gateRuns: 0,
+      optionImages: 0,
+    },
     propagationMs: 60_000,
     ...overrides,
   };
@@ -120,6 +129,8 @@ describe('CreationLimitsPanel', () => {
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
           globalDailyGateRunCap: 400,
+          globalDailyOptionImageCap: 100,
+          dailyOptionImageUserCap: 10,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -181,6 +192,8 @@ describe('CreationLimitsPanel', () => {
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
           globalDailyGateRunCap: 400,
+          globalDailyOptionImageCap: 100,
+          dailyOptionImageUserCap: 10,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -211,6 +224,8 @@ describe('CreationLimitsPanel', () => {
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
           globalDailyGateRunCap: 400,
+          globalDailyOptionImageCap: 100,
+          dailyOptionImageUserCap: 10,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,
@@ -261,6 +276,8 @@ describe('CreationLimitsPanel', () => {
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
           globalDailyGateRunCap: 400,
+          globalDailyOptionImageCap: 100,
+          dailyOptionImageUserCap: 10,
           seedingMode: 'auto',
           seedProvider: {
             stored: null,

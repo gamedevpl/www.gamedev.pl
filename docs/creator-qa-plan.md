@@ -108,12 +108,17 @@ Three bounds, because it is the most expensive thing CreatorQA can do — one re
 four Muse generations plus four Vertex safety verdicts:
 
 - 30 requests/hour/IP, in-memory, as a first-order flood stop;
-- a per-creator daily quota (`DAILY_OPTION_IMAGE_QUOTA`, default 10; `bot:` accounts get
-  `DAILY_OPTION_IMAGE_QUOTA_BOT`, default 100), counted as `optionImages`;
-- `optionImageGate`, a global daily ceiling on the `creation-limits.ts` rail
-  (`GLOBAL_DAILY_OPTION_IMAGE_CAP`, default 100), with a free `peek()` before moderation so a
-  full day costs no vendor call. Both ceilings move through `opsConfig/creationLimits`
-  without a deploy and show on `/admin`; setting the global one to 0 closes the route.
+- `optionImageGate` on the `creation-limits.ts` rail, which spends two counters in order —
+  the creator's own day (`dailyOptionImageUserCap`, env floor `DAILY_OPTION_IMAGE_QUOTA`,
+  default 10, counted as `optionImages`) and then the shared day
+  (`globalDailyOptionImageCap`, env floor `GLOBAL_DAILY_OPTION_IMAGE_CAP`, default 100).
+  The creator's ceiling is checked first so their refusal never spends a global slot.
+- a free `peek()` at the global ceiling before moderation, so a full day costs no vendor
+  call and no moderation call.
+
+Both ceilings are stored in `opsConfig/creationLimits`, so they move without a deploy, and
+both are shown and settable on `/admin` beside the gate-run and tab-complete caps. Setting
+the global one to 0 closes the route, which is why this gate has no separate pause flag.
 
 Ordering follows the cost-control invariant exactly: the free peek first, then moderation,
 then the two counters that spend, then the vendor. A rejected prompt costs the creator

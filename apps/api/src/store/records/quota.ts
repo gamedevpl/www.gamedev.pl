@@ -68,6 +68,8 @@ export interface CreationLimits {
   globalDailyTabCompleteTokenCap?: number | null;
   // Daily CreatorQA tile requests, everyone together. Zero turns the route off.
   globalDailyOptionImageCap?: number | null;
+  // Daily tile requests one creator may spend; null uses the floor.
+  dailyOptionImageUserCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: ManagedBuilderMode;
   // Alerts the brake acted on, bounded; any of them again pauses nothing.

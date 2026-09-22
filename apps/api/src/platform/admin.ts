@@ -46,6 +46,7 @@ import {
   resolveDefaultGlobalDailySearchEmbeddingCap,
   resolveDefaultGlobalDailyGateRunCap,
   resolveDefaultGlobalDailyOptionImageCap,
+  resolveDefaultDailyOptionImageUserCap,
 } from '../creation/creation-limits.js';
 import {
   BOT_UID_PREFIX,
@@ -178,6 +179,7 @@ export interface CreationLimitsResponse {
     globalDailySearchEmbeddingCap: number;
     // CreatorQA tiles: two paid vendor calls per tile.
     globalDailyOptionImageCap: number;
+    dailyOptionImageUserCap: number;
     // Each gate run is a 30-minute E2_HIGHCPU_8 build.
     gatePaused: boolean;
     globalDailyGateRunCap: number;
@@ -246,6 +248,7 @@ const CreationLimitsPatchShape = z.object({
   searchPaused: z.boolean().optional(),
   globalDailySearchEmbeddingCap: z.number().int().min(0).max(10_000_000).nullable().optional(),
   globalDailyOptionImageCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  dailyOptionImageUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
   gatePaused: z.boolean().optional(),
   globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
   dreamsPaused: z.boolean().optional(),
@@ -527,6 +530,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         globalDailySearchEmbeddingCap:
           stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
         globalDailyOptionImageCap: stored?.globalDailyOptionImageCap ?? resolveDefaultGlobalDailyOptionImageCap(),
+        dailyOptionImageUserCap: stored?.dailyOptionImageUserCap ?? resolveDefaultDailyOptionImageUserCap(),
         gatePaused: stored?.gatePaused === true,
         globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
         dreamsPaused: stored?.dreamsPaused === true,

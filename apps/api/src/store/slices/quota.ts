@@ -171,6 +171,10 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.globalDailyOptionImageCap !== undefined
           ? patch.globalDailyOptionImageCap
           : (this.creationLimits?.globalDailyOptionImageCap ?? null),
+      dailyOptionImageUserCap:
+        patch.dailyOptionImageUserCap !== undefined
+          ? patch.dailyOptionImageUserCap
+          : (this.creationLimits?.dailyOptionImageUserCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
       ...((patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents)
         ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents }
@@ -328,6 +332,7 @@ export class FirestoreQuotaStore implements QuotaStore {
         typeof data?.globalDailySearchEmbeddingCap === 'number' ? data.globalDailySearchEmbeddingCap : null,
       globalDailyOptionImageCap:
         typeof data?.globalDailyOptionImageCap === 'number' ? data.globalDailyOptionImageCap : null,
+      dailyOptionImageUserCap: typeof data?.dailyOptionImageUserCap === 'number' ? data.dailyOptionImageUserCap : null,
       managedBuilderMode:
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
@@ -396,6 +401,10 @@ export class FirestoreQuotaStore implements QuotaStore {
           patch.globalDailyOptionImageCap !== undefined
             ? patch.globalDailyOptionImageCap
             : (existing.globalDailyOptionImageCap ?? null),
+        dailyOptionImageUserCap:
+          patch.dailyOptionImageUserCap !== undefined
+            ? patch.dailyOptionImageUserCap
+            : (existing.dailyOptionImageUserCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
         ...((patch.handledBrakeIncidents ?? existing.handledBrakeIncidents)
           ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? existing.handledBrakeIncidents }

@@ -669,8 +669,23 @@ export function resolveDefaultGlobalDailyOptionImageCap(
   return DEFAULT_GLOBAL_DAILY_OPTION_IMAGE_CAP;
 }
 
+// One creator's day: ten requests is at most forty tiles.
+export const DEFAULT_DAILY_OPTION_IMAGE_USER_CAP = 10;
+const DEFAULT_DAILY_OPTION_IMAGE_USER_CAP_BOT = 100;
+
+// Same not-configured semantics as the submission cap resolver above.
+export function resolveDefaultDailyOptionImageUserCap(override?: number, env: NodeJS.ProcessEnv = process.env): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.DAILY_OPTION_IMAGE_QUOTA?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_DAILY_OPTION_IMAGE_USER_CAP;
+}
+
 export interface OptionImageGate {
-  // Spends one of the day's tile requests, or refuses.
+  // Spends the creator's slot and then the day's, or refuses.
   checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
   // Read-only headroom, so a refusal costs no vendor call.
   peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
@@ -682,6 +697,7 @@ export function createOptionImageGate(options: CreationGateOptions): OptionImage
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
   const defaultCap = resolveDefaultGlobalDailyOptionImageCap(options.defaultGlobalDailyCap);
+  const defaultUserCap = resolveDefaultDailyOptionImageUserCap();
   const logWarn = options.logWarn ?? (() => {});
 
   const defaults: CreationLimits = {
@@ -690,6 +706,7 @@ export function createOptionImageGate(options: CreationGateOptions): OptionImage
     editingPaused: false,
     globalDailyEditCap: null,
     globalDailyOptionImageCap: null,
+    dailyOptionImageUserCap: null,
     managedDailyCap: null,
     managedDailyUserCap: null,
   };
@@ -728,10 +745,29 @@ export function createOptionImageGate(options: CreationGateOptions): OptionImage
     },
 
     async checkAndSpend(uid, dateStr) {
-      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
+      if (isAutomationAccount(uid)) {
+        const bot = await spendBotAllowance(store, dateStr, logWarn);
+        if (!bot.allowed) return bot;
+      }
       const value = await limits();
       const cap = value.globalDailyOptionImageCap ?? defaultCap;
       if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+
+      // The creator's own ceiling first: their refusal must not spend a global slot.
+      const userCap = isAutomationAccount(uid)
+        ? DEFAULT_DAILY_OPTION_IMAGE_USER_CAP_BOT
+        : (value.dailyOptionImageUserCap ?? defaultUserCap);
+      try {
+        const mine = await store.checkAndIncrementQuota(uid, dateStr, userCap, 'optionImages');
+        if (!mine.allowed) {
+          logWarn({ dateStr, userCap, tier: mine.tier }, 'creator daily option image quota spent');
+          return { allowed: false, reason: 'over_capacity' };
+        }
+      } catch (error) {
+        // Same posture as the global counter: a blip is not over capacity.
+        logWarn({ err: error, dateStr }, 'creator option image quota unreachable; admitting uncounted');
+      }
+
       let spent: { allowed: boolean; current: number };
       try {
         spent = await store.checkAndIncrementGlobalOptionImages(dateStr, cap);
