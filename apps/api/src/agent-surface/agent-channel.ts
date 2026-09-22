@@ -1,3 +1,4 @@
+import { stagedBudgetWarning } from './staged-budget.js';
 import { knowledgeCapWarning } from './agent-knowledge-warning.js';
 import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -1459,6 +1460,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
+          ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
           ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
@@ -1564,6 +1566,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
+          ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
           ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
@@ -1914,6 +1917,7 @@ export async function registerAgentChannelRoutes(
             maxFiles: staged.maxFiles,
             updatedAt: staged.updatedAt,
           },
+          ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
           ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {

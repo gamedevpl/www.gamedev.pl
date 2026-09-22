@@ -2109,6 +2109,36 @@ declare const GameKit: { defineGame(): unknown };
     expect(secondWarnings.some((w) => w.code === 'call_end')).toBe(true);
   });
 
+  // The raw PUT is the advertised path and never enters the MCP wrapper, so the
+  // budget hint has to come from the channel itself.
+  it('warns about the byte budget on a raw PUT, not only on the inline stage', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const sid = { 'mcp-session-id': sessionId };
+    const started = await callTool(app, 'start', { key: roundKey() }, sid);
+    const sessionKey = (started.structured as Record<string, string>).sessionKey;
+
+    // One file cannot fill the staging budget, so the total is what crosses it.
+    let body: { staged?: { totalBytes: number; maxBytes: number }; budgetHint?: string } = {};
+    for (const path of ['game/big-one.ts', 'game/big-two.ts']) {
+      const minted = await callTool(app, 'stage_upload_url', { sessionKey, path }, sid);
+      const { url } = minted.structured as Record<string, string>;
+      const put = await app.inject({
+        method: 'PUT',
+        url: url.replace(/^https?:\/\/[^/]+/, ''),
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+        payload: Buffer.from(`export const big = '${'x'.repeat(740_000)}';\n`, 'utf8'),
+      });
+      expect(put.statusCode).toBe(200);
+      body = put.json();
+    }
+    expect(body.staged!.totalBytes).toBeGreaterThan(body.staged!.maxBytes * 0.95);
+    expect(body.budgetHint).toContain('budget');
+  });
+
   // curl guesses a type from the extension, or sends none. Fastify refused before any
   // handler ran, so staging stayed empty and submit_sources found nothing.
   it('stages a raw PUT that declares no content type at all', async () => {

@@ -7,7 +7,6 @@ import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePat
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
-import { stagedBudgetWarning } from './staged-budget.js';
 import type { SubmissionRecord } from '../platform/store.js';
 import type { AgentTokenClaims } from '../platform/agent-token.js';
 import {
@@ -411,6 +410,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           hint?: string;
           manifestHint?: string;
           typecheckHint?: string;
+          budgetHint?: string;
           audioHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
@@ -440,9 +440,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
             ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
             ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
-            ...(stagedBudgetWarning(body.staged)
-              ? [{ code: 'byte_budget_low' as const, message: stagedBudgetWarning(body.staged)! }]
-              : []),
+            ...(body.budgetHint ? [{ code: 'byte_budget_low' as const, message: body.budgetHint }] : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });
