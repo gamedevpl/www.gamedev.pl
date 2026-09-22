@@ -96,6 +96,15 @@ describe('VertexStudioChatAgent', () => {
     expect(seen?.toolChoice).toBe('required'); // forced: only those two names possible
   });
 
+  it('refuses conflicting parallel calls rather than letting build win', async () => {
+    const parts = [
+      { type: 'toolCall' as const, toolCall: { name: 'send_message', arguments: { text: 'Which part?' } } },
+      { type: 'toolCall' as const, toolCall: { name: 'build', arguments: {} } },
+    ];
+    const agent = new VertexStudioChatAgent({ client: stubClient({ parts }) });
+    await expect(agent.decide({ message: 'go', status: STATUS, history: [] })).rejects.toThrow('ambiguous');
+  });
+
   it('returns the send_message text as a plain reply', async () => {
     const call = { type: 'toolCall' as const, toolCall: { name: 'send_message', arguments: { text: 'Jasne!' } } };
     const agent = new VertexStudioChatAgent({ client: stubClient({ parts: [call] }) });

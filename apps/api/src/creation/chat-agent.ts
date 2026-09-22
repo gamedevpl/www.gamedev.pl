@@ -174,12 +174,14 @@ export class VertexStudioChatAgent implements StudioChatAgent {
 
     const calls = resultToolCalls(result);
     const buildCall = calls.find((call) => call.name === 'build');
+    const messageCall = calls.find((call) => call.name === 'send_message');
+    // Repeated build calls collapse, but build and a message contradict each other.
+    if (buildCall && messageCall) throw new Error('ambiguous studio actions');
     if (buildCall) {
       const ack = typeof buildCall.arguments?.ack === 'string' ? buildCall.arguments.ack.trim() : '';
       return { kind: 'build', ...(ack ? { text: ack.slice(0, 2000) } : {}), ...(tokens ? { tokens } : {}), model };
     }
     // An empty reply fails open too — never show an empty bubble.
-    const messageCall = calls.find((call) => call.name === 'send_message');
     const messageArg = messageCall?.arguments?.text;
     const text = (typeof messageArg === 'string' ? messageArg.trim() : '') || resultText(result).trim();
     if (!text) throw new Error('chat agent returned neither a reply nor a build call');
