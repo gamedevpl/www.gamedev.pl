@@ -27,6 +27,8 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   var AGENT_APPLY=Reflect.apply;
   var AGENT_ARGS=AGENT_CALL.bind(Array.prototype.slice);
   var AGENT_JOIN=AGENT_CALL.bind(Array.prototype.join);
+  // Conversions and Object.create the game could replace after we load.
+  var AGENT_STR=String,AGENT_NUM=Number,AGENT_CREATE=Object.create;
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
@@ -166,7 +168,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var x1,y1,x2,y2;
     if(typeof raw.x1==='number'){x1=raw.x1;y1=raw.y1;x2=raw.x2;y2=raw.y2;}
     else if(typeof raw.x==='number'&&w>0&&h>0){
-      x1=raw.x/w;y1=raw.y/h;x2=(raw.x+Number(raw.width||0))/w;y2=(raw.y+Number(raw.height||0))/h;
+      x1=raw.x/w;y1=raw.y/h;x2=(raw.x+AGENT_NUM(raw.width||0))/w;y2=(raw.y+AGENT_NUM(raw.height||0))/h;
     }else return null;
     if(!agentFinite(x1)||!agentFinite(y1)||!agentFinite(x2)||!agentFinite(y2)||x2<=x1||y2<=y1)return null;
     // Clipped like the kit publisher: click refuses a midpoint outside 0..1.
@@ -253,7 +255,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(AGENT_API_MEMO&&AGENT_API_MEMO.h===h&&AGENT_API_MEMO.api===apiSrc&&
       AGENT_API_MEMO.helpers===helperSrc&&AGENT_API_MEMO.frame===h.frame)return AGENT_API_MEMO.table;
     // Null prototype so call constructor misses instead of reaching Object.prototype.
-    var table=Object.create(null);
+    var table=AGENT_CREATE(null);
     seen=agentTakeFns(apiSrc,table,seen);
     seen=agentTakeFns(helperSrc,table,seen);
     try{
@@ -287,7 +289,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     return out;
   }
   function agentInvoke(name,args){
-    var entry=agentApiTable()[String(name)];
+    var entry=agentApiTable()[AGENT_STR(name)];
     if(!entry||typeof entry.fn!=='function')throw new Error('unknown helper: '+name+' (try agent.api())');
     return AGENT_APPLY(entry.fn,entry.self,args||[]);
   }

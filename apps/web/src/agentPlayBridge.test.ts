@@ -1341,6 +1341,80 @@ describe('the agent bridge, running for real', () => {
       }
     });
 
+    // The result is already a string, so nothing converts it after redaction.
+    it('never runs a replaced String between redaction and the log', async () => {
+      setHidden(['targetWord']);
+      harness.api = { peek: () => ({ cash: 100, targetWord: 'RAVEN' }) };
+      const original = globalThis.String;
+      let detail = '';
+      try {
+        globalThis.String = function (this: unknown, ...args: unknown[]) {
+          if (args[0] === '{"cash":100}') return 'peek:RAVEN';
+          return (original as (...rest: unknown[]) => string)(...args);
+        } as unknown as StringConstructor;
+        send({ type: 'agent:enable' });
+        await settle();
+        received.length = 0;
+        send({ type: 'agent:command', command: { kind: 'call', name: 'peek', args: [] } });
+        await settle();
+        const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+        detail = log
+          .filter((entry) => entry.kind === 'call')
+          .map((entry) => entry.detail)
+          .join('|');
+      } finally {
+        globalThis.String = original;
+      }
+      expect(detail).toContain('{"cash":100}');
+      expect(detail).not.toContain('RAVEN');
+    });
+
+    // Pixel bounds are the documented widget shape, so the conversion is ours.
+    it('normalizes pixel bounds through the Number it captured', async () => {
+      const original = globalThis.Number;
+      let widgets: Array<Record<string, number>> = [];
+      try {
+        const fake = function (this: unknown, ...args: unknown[]) {
+          if (args[0] === 37) return 999;
+          return (original as (...rest: unknown[]) => number)(...args);
+        };
+        // Statics like Number.isFinite keep working; only the conversion lies.
+        Object.setPrototypeOf(fake, original);
+        fake.prototype = original.prototype;
+        globalThis.Number = fake as unknown as NumberConstructor;
+        harness.ui = [{ label: 'Rail', x: 10, y: 10, width: 37, height: 37 }];
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+        widgets = (lastOf(received, 'agent:state')!.ui || []) as Array<Record<string, number>>;
+      } finally {
+        globalThis.Number = original;
+      }
+      expect(widgets.length).toBe(1);
+      // Free of canvas size: 4.7 here, 99.9 through a swap.
+      expect(widgets[0].x2 / widgets[0].x1).toBeCloseTo(4.7, 5);
+    });
+
+    // A table built at call time would break the whole surface.
+    it('builds the helper table when the game breaks Object.create', async () => {
+      const original = Object.create;
+      let names: unknown = null;
+      try {
+        Object.create = ((proto: object | null, props?: PropertyDescriptorMap) => {
+          if (proto === null) throw new Error('no tables for you');
+          return original(proto, props as PropertyDescriptorMap);
+        }) as typeof Object.create;
+        harness.api = { buildRail: () => 'ok' };
+        send({ type: 'agent:enable' });
+        await settle();
+        names = lastOf(received, 'agent:state')!.api;
+      } finally {
+        Object.create = original;
+      }
+      expect(names).toEqual(['buildRail']);
+    });
+
     // Injected before the game script, so the intrinsic is ours.
     it('keeps reading Dates through the intrinsic the game replaced', async () => {
       setHidden(['targetWord']);

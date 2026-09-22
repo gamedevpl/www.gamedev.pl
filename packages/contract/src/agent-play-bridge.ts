@@ -23,7 +23,7 @@ export const AGENT_PLAY_BRIDGE =
   // frame is optional: a replayed signal carries the frame it happened on, not now.
   function agentNote(kind,detail,frame){
     var at=typeof frame==='number'&&isFinite(frame)?frame:agentFrameNo();
-    agentLog[agentLog.length]={frame:at,kind:String(kind),detail:AGENT_CUT(String(detail==null?'':detail),0,160)};
+    agentLog[agentLog.length]={frame:at,kind:AGENT_STR(kind),detail:AGENT_CUT(AGENT_STR(detail==null?'':detail),0,160)};
     // Rebuilt, not spliced: a replaced splice either throws or lets the log grow.
     if(agentLog.length>AGENT_LOG_CAP){
       var kept=[],from=agentLog.length-AGENT_LOG_CAP;
@@ -68,7 +68,7 @@ export const AGENT_PLAY_BRIDGE =
       +(count>1?' x'+count:'')
       +(entry.stopped?' (stopped)':'')
       +(entry.missing?' (missing)':''),
-      Number(entry.frame));
+      AGENT_NUM(entry.frame));
   }
   function agentDrainAudio(){
     var h=agentHarness(),log=h&&h.audio,i,entry,seq,total,fresh;
@@ -78,7 +78,7 @@ export const AGENT_PLAY_BRIDGE =
       entry=log[i];
       seq=entry&&typeof entry.seq==='number'?entry.seq:-1;
       if(seq<agentAudioSeq)continue;
-      total=Number(entry.count);
+      total=AGENT_NUM(entry.count);
       if(!(total>1))total=1;
       fresh=seq===agentAudioSeq?total-agentAudioCount:total;
       if(fresh<=0)continue;
@@ -111,14 +111,14 @@ export const AGENT_PLAY_BRIDGE =
     var dt=1/agentFps;
     for(var i=0;i<count;i++){
       if(agentTilt&&typeof h.injectSensing==='function'){try{h.injectSensing({tilt:agentTilt});}catch(err){}}
-      try{h.step(dt,{present:true});}catch(err){agentNote('error',String((err&&err.message)||err));break;}
+      try{h.step(dt,{present:true});}catch(err){agentNote('error',AGENT_STR((err&&err.message)||err));break;}
     }
   }
   var AGENT_KEY_ALIASES={left:{key:'ArrowLeft',code:'ArrowLeft'},right:{key:'ArrowRight',code:'ArrowRight'},
     up:{key:'ArrowUp',code:'ArrowUp'},down:{key:'ArrowDown',code:'ArrowDown'},space:{key:' ',code:'Space'},
     enter:{key:'Enter',code:'Enter'},escape:{key:'Escape',code:'Escape'}};
   function agentResolveKey(token){
-    var raw=String(token==null?'':token);
+    var raw=AGENT_STR(token==null?'':token);
     var lower=raw.toLowerCase();
     if(Object.prototype.hasOwnProperty.call(AGENT_KEY_ALIASES,lower))return AGENT_KEY_ALIASES[lower];
     if(raw.length===1)return {key:raw.toLowerCase(),code:'Key'+raw.toUpperCase()};
@@ -199,14 +199,14 @@ export const AGENT_PLAY_BRIDGE =
     if(!node||!('MutationObserver'in window))return;
     new MutationObserver(function(){
       if(!agentOn)return;
-      var value=String(node.textContent||'').trim();
+      var value=AGENT_STR(node.textContent||'').trim();
       if(!value||value===agentStatusSeen)return;
       agentStatusSeen=value;
       agentNote('announce',value);
     }).observe(node,{childList:true,characterData:true,subtree:true});
   }
   function agentEnable(fps){
-    var next=Number(fps);
+    var next=AGENT_NUM(fps);
     if(isFinite(next)&&next>=1&&next<=240)agentFps=Math.round(next);
     if(!agentOn){agentOn=true;agentWatchStatus();agentNote('agent','agent mode on — time is yours');}
     agentSetStepped(true);
@@ -237,13 +237,13 @@ export const AGENT_PLAY_BRIDGE =
         // Redacted before the note, which is what crosses the bridge. The value the
         // policy gets is not: a policy runs in the game's realm and is exempt anyway.
         var shown=agentSafeJson(result,agentHidden(),140);
-        agentNote('call',String(command.name)+' '+AGENT_CUT(String(shown),0,140));
+        agentNote('call',AGENT_STR(command.name)+' '+AGENT_CUT(shown,0,140));
       }catch(err){
         // A thrown message is game-authored text we do not inspect, so a game
         // that declares hidden fields gets the failure without the message.
         var hid=agentHidden();
-        var why=(hid&&hid.length)?'helper failed':AGENT_CUT(String((err&&err.message)||err),0,140);
-        agentNote('error',String(command.name)+': '+why);
+        var why=(hid&&hid.length)?'helper failed':AGENT_CUT(AGENT_STR((err&&err.message)||err),0,140);
+        agentNote('error',AGENT_STR(command.name)+': '+why);
       }
       // A helper mutates the round; republish without advancing time.
       try{var ph=agentHarness();if(ph&&typeof ph.paint==='function')ph.paint();}catch(err){}
@@ -335,7 +335,7 @@ export const AGENT_PLAY_BRIDGE =
       for(var i=0;i<args.length;i++){
         var value=args[i];
         try{parts[parts.length]=(typeof value==='string'?value:AGENT_JSON(value));}
-        catch(err){parts[parts.length]=String(value);}
+        catch(err){parts[parts.length]=AGENT_STR(value);}
       }
       logs[logs.length]={frame:agentFrameNo(),kind:kind,text:AGENT_CUT(AGENT_JOIN(parts,' '),0,400)};
     }
@@ -348,7 +348,7 @@ export const AGENT_PLAY_BRIDGE =
       // Time. Drawing is off by default: simulating without it is far cheaper,
       // and nothing needs a painted frame until something looks at one.
       step:function(count,draw){
-        var n=Math.max(1,Math.floor(Number(count)||1));
+        var n=Math.max(1,Math.floor(AGENT_NUM(count)||1));
         spend(n);
         var h=agentHarness();
         if(!h||typeof h.step!=='function')throw new Error('this game exposes no harness');
@@ -394,7 +394,7 @@ export const AGENT_PLAY_BRIDGE =
       },
       move:function(x,y){agentPointer('pointermove',x,y,0,false);},
       drag:function(x1,y1,x2,y2,frames){
-        var n=Math.max(1,Math.floor(Number(frames)||1));
+        var n=Math.max(1,Math.floor(AGENT_NUM(frames)||1));
         agentPointer('pointerdown',x1,y1,1,false);
         for(var i=1;i<=n;i++){
           var t=i/n;
@@ -404,7 +404,7 @@ export const AGENT_PLAY_BRIDGE =
         agentPointer('pointerup',x2,y2,0,false);
         return api.state();
       },
-      tilt:function(x,y){agentTilt={x:Number(x)||0,y:Number(y)||0};},
+      tilt:function(x,y){agentTilt={x:AGENT_NUM(x)||0,y:AGENT_NUM(y)||0};},
       restart:function(){var h=agentHarness();return !!(h&&typeof h.restart==='function'&&h.restart());},
       // Debugging, which is the point: a run you cannot see into teaches nothing.
       log:function(){note('log',arguments);},
@@ -412,13 +412,13 @@ export const AGENT_PLAY_BRIDGE =
       watch:function(name,value){
         if(watches.length>=AGENT_WATCH_POINTS)return;
         var reading;
-        try{reading=typeof value==='function'?value():value;}catch(err){reading='error: '+String(err&&err.message||err);}
-        watches[watches.length]={frame:agentFrameNo(),name:AGENT_CUT(String(name),0,40),value:reading};
+        try{reading=typeof value==='function'?value():value;}catch(err){reading='error: '+AGENT_STR(err&&err.message||err);}
+        watches[watches.length]={frame:agentFrameNo(),name:AGENT_CUT(AGENT_STR(name),0,40),value:reading};
       },
       // A painted frame, kept for the answer. Paints first: stepping does not draw.
       capture:function(name){
         api.paint();
-        shots[shots.length]={name:AGENT_CUT(String(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()};
+        shots[shots.length]={name:AGENT_CUT(AGENT_STR(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()};
       },
       // The game's own globals, for a policy that needs more than the snapshot.
       game:function(){return window.GameKit;},
@@ -428,7 +428,7 @@ export const AGENT_PLAY_BRIDGE =
   }
   function agentRunPolicy(code,budget){
     var logs=[],watches=[],shots=[];
-    var api=agentPolicyApi(Math.max(1,Math.min(Number(budget)||3600,20000)),logs,watches,shots);
+    var api=agentPolicyApi(Math.max(1,Math.min(AGENT_NUM(budget)||3600,20000)),logs,watches,shots);
     var startedAt=Date.now();
     var outcome='completed',message=null;
     // Console inside the frame is invisible to the host, so borrow it for the run.
@@ -459,7 +459,7 @@ export const AGENT_PLAY_BRIDGE =
       }
     }catch(err){
       outcome='failed';
-      message=AGENT_CUT(String((err&&err.stack)||(err&&err.message)||err),0,600);
+      message=AGENT_CUT(AGENT_STR((err&&err.stack)||(err&&err.message)||err),0,600);
     }finally{
       agentReleaseInput();
       console.log=realConsole.log;console.warn=realConsole.warn;console.error=realConsole.error;
@@ -482,13 +482,13 @@ export const AGENT_PLAY_BRIDGE =
 
   function handleAgentMessage(m){
     if(m.type==='agent:enable'){agentEnable(m.fps);return;}
-    if(m.type==='agent:policy'){if(!agentOn)agentEnable();agentRunPolicy(String(m.code||''),m.budget);return;}
+    if(m.type==='agent:policy'){if(!agentOn)agentEnable();agentRunPolicy(AGENT_STR(m.code||''),m.budget);return;}
     if(m.type==='agent:disable'){agentDisable();return;}
     if(m.type!=='agent:command')return;
     if(!agentOn){agentEnable();return;}
     try{agentRun(m.command||{},m.id);}
     catch(err){
-      agentNote('error',String((err&&err.message)||err));
+      agentNote('error',AGENT_STR((err&&err.message)||err));
       agentState('error',m.id);
     }
   }

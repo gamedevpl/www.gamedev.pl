@@ -1,5 +1,12 @@
 // The gate verdict vocabulary — `crashed` means there was no verdict at all.
-export const GATE_STATUS_VALUES = ['green', 'kit_outdated', 'preview_passed', 'preview_failed', 'red', 'crashed'] as const;
+export const GATE_STATUS_VALUES = [
+  'green',
+  'kit_outdated',
+  'preview_passed',
+  'preview_failed',
+  'red',
+  'crashed',
+] as const;
 
 export type GateStatus = (typeof GATE_STATUS_VALUES)[number];
 
