@@ -264,6 +264,17 @@ export async function seedReadCostFixture(store: Store): Promise<void> {
   await store.setSubmissionNotifiedStatus(PRIOR_ROUNDS_JOB_ID, 'building');
   await store.setSubmissionLastStatus(PRIOR_ROUNDS_JOB_ID, 'building');
 
+  // A live round carries its own events, not only history.
+  for (const [index, step] of POLLED_EVENTS.entries()) {
+    await store.appendBuildEvent(PRIOR_ROUNDS_JOB_ID, {
+      kind: 'step',
+      step,
+      text: `${step} the later round.`,
+      createdAt: `2026-01-15T12:02:0${index}.000Z`,
+    });
+  }
+  for (const text of POLLED_MESSAGES) await store.appendCreatorMessage(PRIOR_ROUNDS_JOB_ID, text);
+
   for (const [index, id] of CREATOR_NOTIFICATIONS.entries()) {
     await seedNotification(store, CREATOR_UID, id, index);
   }
