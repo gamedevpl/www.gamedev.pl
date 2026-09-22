@@ -18,10 +18,15 @@ export const DECOY_UID = 'g:decoy';
 export const DECOY_REVIEWER_UID = 'g:decoy-reviewer';
 export const POLLED_JOB_ID = 1001;
 
+// A second round on the same slug: its poll pays for history.
+export const PRIOR_ROUNDS_JOB_ID = 1002;
+
 export const POLLED_ROUTES = [
   'GET /api/submissions/:token',
   'GET /api/submissions/:token (steady state)',
   'GET /api/submissions/:token (share link, steady state)',
+  'GET /api/submissions/:token (prior rounds)',
+  'GET /api/submissions/:token (prior rounds, steady state)',
   'GET /api/submissions/mine',
   'GET /api/submissions/mine (derived-only owner)',
   'GET /api/submissions/mine (document, steady state)',
@@ -254,6 +259,22 @@ export async function seedReadCostFixture(store: Store): Promise<void> {
   }
   for (const text of POLLED_MESSAGES) await store.appendCreatorMessage(POLLED_JOB_ID, text);
 
+  // The later round: its poll reads the slug's history.
+  await store.recordJobTransition(PRIOR_ROUNDS_JOB_ID, { to: 'building', at: AT, by: 'agent', reason: 'started' });
+  await store.setSubmissionNotifiedStatus(PRIOR_ROUNDS_JOB_ID, 'building');
+  await store.setSubmissionLastStatus(PRIOR_ROUNDS_JOB_ID, 'building');
+
+  // A live round carries its own events, not only history.
+  for (const [index, step] of POLLED_EVENTS.entries()) {
+    await store.appendBuildEvent(PRIOR_ROUNDS_JOB_ID, {
+      kind: 'step',
+      step,
+      text: `${step} the later round.`,
+      createdAt: `2026-01-15T12:02:0${index}.000Z`,
+    });
+  }
+  for (const text of POLLED_MESSAGES) await store.appendCreatorMessage(PRIOR_ROUNDS_JOB_ID, text);
+
   for (const [index, id] of CREATOR_NOTIFICATIONS.entries()) {
     await seedNotification(store, CREATOR_UID, id, index);
   }
@@ -330,6 +351,14 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       headers: { cookie: sessionCookie(CREATOR_UID) },
     });
   }
+  if (route === 'GET /api/submissions/:token (prior rounds)' || route === 'GET /api/submissions/:token (prior rounds, steady state)') {
+    const token = mintToken(PRIOR_ROUNDS_JOB_ID, SUBMISSION_SECRET);
+    return app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: { cookie: sessionCookie(CREATOR_UID) },
+    });
+  }
   if (route === 'GET /api/submissions/:token (share link, steady state)') {
     const token = mintToken(POLLED_JOB_ID, SUBMISSION_SECRET);
     return app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -385,6 +414,10 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
     }
     // The same poll with no session resolves no access.
     if (route === 'GET /api/submissions/:token (share link, steady state)') {
+      await injectRoute(app, route);
+    }
+    // A later round polls its history; the first has none.
+    if (route === 'GET /api/submissions/:token (prior rounds, steady state)') {
       await injectRoute(app, route);
     }
     fake.resetBilledReads();

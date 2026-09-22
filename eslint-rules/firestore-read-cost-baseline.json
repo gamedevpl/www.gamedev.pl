@@ -4,6 +4,8 @@
     "GET /api/notifications": 8,
     "GET /api/review/status": 12,
     "GET /api/submissions/:token": 19,
+    "GET /api/submissions/:token (prior rounds, steady state)": 2,
+    "GET /api/submissions/:token (prior rounds)": 27,
     "GET /api/submissions/:token (share link, steady state)": 1,
     "GET /api/submissions/:token (steady state)": 2,
     "GET /api/submissions/mine": 22,
