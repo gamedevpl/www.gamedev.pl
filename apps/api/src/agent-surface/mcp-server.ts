@@ -5,6 +5,10 @@ import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '
 import {
   toolOk,
   toolErr,
+  toolRefusal,
+  withErrorBranch,
+  MCP_REFUSAL_CONTRACT,
+  MCP_WARNINGS_CONTRACT,
   BEHAVIOURAL_CONTRACT,
   MCP_VISIBLE_TOOLS,
   channelControlFields,
@@ -88,6 +92,7 @@ import {
   mcpToolRefusalFields,
   peekMcpSessionKeyForLog,
   toolErrorReason,
+  toolErrorCode,
 } from './mcp-debug-log.js';
 import { mcpMissingCredentialHint, sendMcpOAuthChallenge, shouldIssueMcpOAuthChallenge } from './mcp-oauth-metadata.js';
 import {
@@ -283,6 +288,18 @@ function pruneHits(buckets: Map<string, number[]>, key: string, currentTime: num
 
 function isOverInvalidStartLimit(buckets: Map<string, number[]>, key: string, currentTime: number): boolean {
   return pruneHits(buckets, key, currentTime).length >= MAX_INVALID_STARTS_PER_WINDOW;
+}
+
+// The oldest hit in the window is the one that frees the next attempt.
+function invalidStartRetryAfterSeconds(
+  buckets: Map<string, number[]>,
+  key: string,
+  currentTime: number,
+): number {
+  const hits = pruneHits(buckets, key, currentTime);
+  if (!hits.length) return 0;
+  const oldest = Math.min(...hits);
+  return Math.max(1, Math.ceil((INVALID_START_WINDOW_MS - (currentTime - oldest)) / 1000));
 }
 
 function noteInvalidStartHit(buckets: Map<string, number[]>, key: string, currentTime: number): void {
@@ -1036,8 +1053,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
 
         if (isOverInvalidStartLimit(invalidStartsByIp, ctx.request.clientIp, now())) {
-          return toolErr(
+          return toolRefusal(
             'too many invalid start attempts — ask the creator for the current prompt in their Studio thread',
+            'rate_limited',
+            { retryAfterSeconds: invalidStartRetryAfterSeconds(invalidStartsByIp, ctx.request.clientIp, now()) },
           );
         }
 
@@ -1421,6 +1440,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'before submit; normally call end after delivery and let Studio show the gate. get_gate_verdict is a ' +
               'one-shot check, never a loop: a pending delivery returns stop:true, while deliveryId:null means continue building. Do not poll the inbox on a schedule; ' +
               'a green verdict ends the round and the key retires.',
+            MCP_REFUSAL_CONTRACT,
+            MCP_WARNINGS_CONTRACT,
             BEHAVIOURAL_CONTRACT,
           ].join(' '),
         }),
@@ -1514,7 +1535,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                 name,
                 description: withoutRepeatedContract(tool.description),
                 inputSchema: tool.inputSchema,
-                outputSchema: tool.outputSchema,
+                // Declared once here, so a tool cannot forget that it can refuse.
+                outputSchema: withErrorBranch(tool.outputSchema),
                 ...(tool.annotations ? { annotations: tool.annotations } : {}),
                 ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
               };
@@ -1588,6 +1610,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             mcpToolRefusalFields({
               tool: name,
               reason,
+              code: toolErrorCode(result),
               bearer: bearerToken,
               sessionKey: sessionKeyArg,
               transportSessionId: sessionHeader,

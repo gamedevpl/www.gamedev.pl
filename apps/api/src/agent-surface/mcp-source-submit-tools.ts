@@ -11,6 +11,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import {
   toolOk,
   toolErr,
+  toolRefusal,
   BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   REPLY_CONTROL,
@@ -315,7 +316,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         const mode = await effectiveSubmitMode(requestedMode, fromLatestDelivery, auth.record, gamesStore);
         if (mode === 'publish' && auth.record.slug && store) {
           if (!(await canActOnSlug(store, auth.record.slug, auth.actorUid, 'publish'))) {
-            return toolErr('only the owner can publish this game');
+            return toolRefusal('only the owner can publish this game', 'not_owner');
           }
         }
 

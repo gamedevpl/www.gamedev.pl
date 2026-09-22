@@ -1090,6 +1090,34 @@ throwaway `Bearer handshake`; a case that means to arrive without one says so.
 - Platform rounds are excluded from that account-credential cleanup because these
   credentials cannot open them.
 
+## Refusals (`isError`) carry a code
+
+A refused call answers on the same tool with `structuredContent` `{ error, code?, retryAfterSeconds? }`
+and none of the success fields. Every tool's `outputSchema` admits that body through an `anyOf`
+branch requiring only `error` — added centrally in `tools/list` by `withErrorBranch`, so a new tool
+cannot forget it. Before that, a refusal failed the declared schema and clients raised
+`-32602 Structured content does not match the tool's output schema`, which made "not the owner" and
+"quota used up" both read as a platform defect.
+
+| Code                  | Meaning                                                      | Carries              |
+| --------------------- | ------------------------------------------------------------ | -------------------- |
+| `not_owner`           | The caller may build but not seal this game (`mode:"publish"`) | —                    |
+| `quota_exhausted`     | Daily improvement / feedback limit used up                    | `retryAfterSeconds`  |
+| `quota_blocked`       | Account is blocked; waiting never clears it                   | —                    |
+| `rate_limited`        | Too many attempts in the window (invalid `start`)             | `retryAfterSeconds`  |
+| `moderation_rejected` | Text refused by moderation                                    | `category`           |
+
+`code` is an open string, not an enum: refusals that pass an upstream channel body through
+`toolErr` may carry a code this list does not name. Branch on `code` when it is present and fall
+back to `error` text otherwise — never parse the message.
+
+The refusal vocabulary and the warnings vocabulary are both declared once in `initialize`
+(`MCP_REFUSAL_CONTRACT`, `MCP_WARNINGS_CONTRACT`), not per tool: `tools/list` is capped at 120 KB
+and every byte there is context the building agent pays for on connect.
+
+Adding a code: extend `MCP_ERROR_CODES` in `mcp-tool-support.ts`, return it with `toolRefusal`,
+and add a row here.
+
 ## Soft warnings (never `isError`)
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:

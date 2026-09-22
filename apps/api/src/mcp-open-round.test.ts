@@ -409,7 +409,11 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
 
     const { structured, isError } = await callOpenRound(app, { slug: SLUG, feedback: 'One more try.' }, headers);
     expect(isError).toBe(true);
-    expect(structured).toMatchObject({ error: IMPROVEMENT_QUOTA_EXHAUSTED_REASON });
+    expect(structured).toMatchObject({ error: IMPROVEMENT_QUOTA_EXHAUSTED_REASON, code: 'quota_exhausted' });
+    // A daily quota frees at UTC midnight, so the wait is never longer than a day.
+    const { retryAfterSeconds } = structured as { retryAfterSeconds?: number };
+    expect(retryAfterSeconds).toBeGreaterThan(0);
+    expect(retryAfterSeconds).toBeLessThanOrEqual(24 * 60 * 60);
   });
 
   it('moderates feedback on this path', async () => {

@@ -305,6 +305,14 @@ function validateValueAgainstSchema(value: unknown, schema: Record<string, unkno
     }
   }
 
+  if (Array.isArray(schema.anyOf)) {
+    const branches = schema.anyOf as Array<Record<string, unknown>>;
+    const branchErrors = branches.map((branch) => validateValueAgainstSchema(value, branch, path));
+    if (branchErrors.every((found) => found.length > 0)) {
+      errors.push(`${path}: matched no anyOf branch (${JSON.stringify(branchErrors)})`);
+    }
+  }
+
   if (Array.isArray(schema.enum)) {
     if (!schema.enum.includes(value as never)) {
       errors.push(`${path}: value ${JSON.stringify(value)} not in enum ${JSON.stringify(schema.enum)}`);
@@ -355,7 +363,9 @@ async function callTool(
     (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
   const isError = Boolean(body.result?.isError);
 
-  if (!isError && structured !== undefined) {
+  // Refusals are validated too: a client checks structuredContent either way, and
+  // skipping them here is why every refusal read as a broken schema in production.
+  if (structured !== undefined) {
     const listed = await mcpCall(app, 'tools/list', undefined, headers);
     const toolDef = (
       listed.json().result as { tools: Array<{ name: string; outputSchema?: Record<string, unknown> }> }
@@ -2892,18 +2902,33 @@ declare const GameKit: { defineGame(): unknown };
     const sessionId = await initialize(app);
 
     const res = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
-    const tools = (res.json().result as { tools: Array<{ name: string; outputSchema?: { type?: string } }> }).tools;
+    const tools = (
+      res.json().result as {
+        tools: Array<{
+          name: string;
+          outputSchema?: { type?: string; required?: string[]; anyOf?: Array<{ required?: string[] }> };
+        }>;
+      }
+    ).tools;
 
     expect(tools.length).toBeGreaterThan(0);
     for (const tool of tools) {
       expect(tool.outputSchema?.type, tool.name).toBe('object');
+      // A refusal answers on the same tool, so every schema admits an error body.
+      const branches = tool.outputSchema?.anyOf ?? [];
+      expect(branches.some((branch) => branch.required?.length === 1 && branch.required[0] === 'error'), tool.name).toBe(
+        true,
+      );
+      // A success list left at the top level would reject every refusal.
+      expect(tool.outputSchema?.required, tool.name).toBeUndefined();
     }
     const startSchema = tools.find((tool) => tool.name === 'start')?.outputSchema as {
       properties?: Record<string, unknown>;
-      required?: string[];
+      anyOf?: Array<{ required?: string[] }>;
     };
     expect(startSchema.properties?.sessionKey).toBeTruthy();
-    expect(startSchema.required).toContain('sessionKey');
+    // The success branch still names what a successful start returns.
+    expect(startSchema.anyOf?.[0]?.required).toContain('sessionKey');
   });
   describe('get_gate_media (BY-28)', () => {
     const MEDIA_METADATA = JSON.stringify({
