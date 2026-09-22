@@ -46,6 +46,7 @@
     "apps/api/src/agent-surface/mcp-oauth-metadata.test.ts": 73,
     "apps/api/src/agent-surface/mcp-oauth-metadata.ts": 304,
     "apps/api/src/agent-surface/mcp-presence.ts": 212,
+    "apps/api/src/agent-surface/mcp-round-reopen-tools.ts": 25,
     "apps/api/src/agent-surface/mcp-server-discovery.test.ts": 90,
     "apps/api/src/agent-surface/mcp-server-discovery.ts": 316,
     "apps/api/src/agent-surface/mcp-server.test.ts": 1608,

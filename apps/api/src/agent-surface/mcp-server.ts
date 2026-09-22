@@ -1020,6 +1020,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           workflow: { type: 'array', items: { type: 'string' } },
           inboxPolicy: { type: 'string' },
           whenRefused: { type: 'string' },
+          canPublish: {
+            type: 'boolean',
+            description: 'False when this round may deliver previews but not seal. See publishBlockedReason.',
+          },
+          publishBlockedReason: { type: 'string' },
           seedAvailable: { type: 'boolean' },
           seedStatus: { type: 'string', enum: ['pending', 'available', 'unavailable'] },
           seedNotice: { type: ['string', 'null'] },
@@ -1033,13 +1038,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             properties: { status: { type: 'string' }, deliveryId: { type: 'string' } },
           },
         },
-        required: ['sessionKey', 'jobId', 'workflow', 'seedAvailable', 'seedStatus'],
+        required: ['sessionKey', 'jobId', 'workflow', 'seedAvailable', 'seedStatus', 'canPublish'],
       },
       description:
         'Bind this MCP client to a round with Bearer (creator key or OAuth) plus slug, or a legacy round key. ' +
         'Call it once per round and keep sessionKey until expiresAt — do not re-run start to refresh it. ' +
         'Re-run start only if a later call is refused as unauthenticated. ' +
         'Returns sessionKey (pass it on every later call), workflow, seedAvailable/seedStatus/seedNotice, inbox policy, and refusal guidance. ' +
+        'canPublish false means this round may deliver mode=preview but not seal — publishBlockedReason says who can. ' +
         'Creator keys are openers only. OAuth access is identity only. Does not treat Mcp-Session-Id as authority. ' +
         CREATOR_TEXT_SAFETY,
       inputSchema: {

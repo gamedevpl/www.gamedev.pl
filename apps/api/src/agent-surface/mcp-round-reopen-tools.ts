@@ -242,7 +242,9 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           dailyImprovementQuota,
           'improvements',
           IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
-          now(),
+          // The same read the bucket was chosen from: a midnight in between would
+          // check yesterday's bucket and promise a wait the reset already served.
+          Date.parse(at),
         );
         if (noRoom) return toolRefusal(noRoom.message, noRoom.code, { retryAfterSeconds: noRoom.retryAfterSeconds });
 
@@ -453,7 +455,8 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           });
         }
 
-        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        const atMs = now();
+        const dateStr = new Date(atMs).toISOString().slice(0, 10);
         const noRoom = await quotaHeadroom(
           store,
           resolved.creatorUid,
@@ -461,7 +464,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           dailyFeedbackQuota,
           'feedback',
           FEEDBACK_QUOTA_EXHAUSTED_REASON,
-          now(),
+          atMs,
         );
         if (noRoom) return toolRefusal(noRoom.message, noRoom.code, { retryAfterSeconds: noRoom.retryAfterSeconds });
 
@@ -480,7 +483,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
 
         const quota = await store.checkAndIncrementQuota(resolved.creatorUid, dateStr, dailyFeedbackQuota, 'feedback');
         if (!quota.allowed) {
-          const refused = quotaRefusal(quota.tier, FEEDBACK_QUOTA_EXHAUSTED_REASON, now());
+          const refused = quotaRefusal(quota.tier, FEEDBACK_QUOTA_EXHAUSTED_REASON, atMs);
           return toolRefusal(refused.message, refused.code, { retryAfterSeconds: refused.retryAfterSeconds });
         }
 
