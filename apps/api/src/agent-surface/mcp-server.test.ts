@@ -2137,6 +2137,16 @@ declare const GameKit: { defineGame(): unknown };
     }
     expect(body.staged!.totalBytes).toBeGreaterThan(body.staged!.maxBytes * 0.95);
     expect(body.budgetHint).toContain('budget');
+
+    // patch_source_file is the preferred edit path, so it must warn too.
+    const patched = await callTool(
+      app,
+      'patch_source_file',
+      { sessionKey, path: 'game/big-one.ts', old: 'export const big', new: 'export const still' },
+      sid,
+    );
+    const warnings = (patched.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(warnings.map((warning) => warning.code)).toContain('byte_budget_low');
   });
 
   // curl guesses a type from the extension, or sends none. Fastify refused before any

@@ -1774,6 +1774,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(typecheckHint ? { typecheckHint } : {}),
           ...(audioHint ? { audioHint } : {}),
+          ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
           ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
