@@ -97,6 +97,30 @@ cannot spend the pipeline out of the ability to ship), body `{ title, spec }`:
   theme details. Language: questions come back in the creator's UI language
   (en/pl — pass the locale).
 
+`POST /api/submissions/option-images` — session, called after refine for a question the
+refiner marked `visual`, body `{ concept, question, options }`. Returns
+`{ images: [{ label, image }] }`, or `{ images: [] }` for every refusal there is: no
+credential, no model, too many options, moderation-clean but over a ceiling, or a vendor
+outage. It never answers with an error, because the wizard's fallback for "no tiles" is the
+plain text options it already renders.
+
+Three bounds, because it is the most expensive thing CreatorQA can do — one request is up to
+four Muse generations plus four Vertex safety verdicts:
+
+- 30 requests/hour/IP, in-memory, as a first-order flood stop;
+- a per-creator daily quota (`DAILY_OPTION_IMAGE_QUOTA`, default 10; `bot:` accounts get
+  `DAILY_OPTION_IMAGE_QUOTA_BOT`, default 100), counted as `optionImages`;
+- `optionImageGate`, a global daily ceiling on the `creation-limits.ts` rail
+  (`GLOBAL_DAILY_OPTION_IMAGE_CAP`, default 100), with a free `peek()` before moderation so a
+  full day costs no vendor call. Both ceilings move through `opsConfig/creationLimits`
+  without a deploy and show on `/admin`; setting the global one to 0 closes the route.
+
+Ordering follows the cost-control invariant exactly: the free peek first, then moderation,
+then the two counters that spend, then the vendor. A rejected prompt costs the creator
+nothing, and a day with no headroom costs nobody a moderation call. The opening
+values are guesses — ops: cost-controls-execution-plan.md CC-35 records that and what to
+re-derive them from.
+
 ## Web UX
 
 - After the creator types a prompt and hits "Continue", show the questions as

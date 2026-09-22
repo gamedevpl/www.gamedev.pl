@@ -528,6 +528,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await registerOptionImageRoutes(app, {
+    store,
     contentChecker,
     ...(options.optionImageGenerator ? { generator: options.optionImageGenerator } : {}),
   });

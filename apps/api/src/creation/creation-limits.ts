@@ -652,6 +652,106 @@ export function createSearchGate(options: CreationGateOptions): SearchGate {
   };
 }
 
+// CreatorQA tiles, ops plan CC-35. A request is four tiles.
+export const DEFAULT_GLOBAL_DAILY_OPTION_IMAGE_CAP = 100;
+
+// Same not-configured semantics as the submission cap resolver above.
+export function resolveDefaultGlobalDailyOptionImageCap(
+  override?: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.GLOBAL_DAILY_OPTION_IMAGE_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_OPTION_IMAGE_CAP;
+}
+
+export interface OptionImageGate {
+  // Spends one of the day's tile requests, or refuses.
+  checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+  // Read-only headroom, so a refusal costs no vendor call.
+  peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+}
+
+// Same chassis as the search gate, over the tile route's vendors.
+export function createOptionImageGate(options: CreationGateOptions): OptionImageGate {
+  const { store } = options;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const defaultCap = resolveDefaultGlobalDailyOptionImageCap(options.defaultGlobalDailyCap);
+  const logWarn = options.logWarn ?? (() => {});
+
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+    globalDailyOptionImageCap: null,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+  };
+  let cache: { value: CreationLimits; expiresAt: number } | null = null;
+
+  async function limits(): Promise<CreationLimits> {
+    if (cache && cache.expiresAt > now()) return cache.value;
+    try {
+      const stored = (await store.getCreationLimits()) ?? defaults;
+      cache = { value: stored, expiresAt: now() + ttlMs };
+      return stored;
+    } catch (error) {
+      if (cache) {
+        logWarn({ err: error }, 'creation limits unreadable; option image gate using the last known values');
+        return cache.value;
+      }
+      logWarn({ err: error }, 'creation limits unreadable and never read; option image gate using defaults');
+      return defaults;
+    }
+  }
+
+  return {
+    async peek(uid, dateStr) {
+      // Read-only by contract; checkAndSpend decides what is paid for.
+      if (isAutomationAccount(uid)) return { allowed: true };
+      const value = await limits();
+      const cap = value.globalDailyOptionImageCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      try {
+        const current = await store.getGlobalOptionImageCount(dateStr);
+        return current >= cap ? { allowed: false, reason: 'over_capacity' } : { allowed: true };
+      } catch (error) {
+        logWarn({ err: error, dateStr }, 'global option image counter unreachable; skipping the headroom peek');
+        return { allowed: true };
+      }
+    },
+
+    async checkAndSpend(uid, dateStr) {
+      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
+      const value = await limits();
+      const cap = value.globalDailyOptionImageCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      let spent: { allowed: boolean; current: number };
+      try {
+        spent = await store.checkAndIncrementGlobalOptionImages(dateStr, cap);
+      } catch (error) {
+        // A blip is not over capacity; the quota holds underneath.
+        logWarn({ err: error, dateStr }, 'global option image counter unreachable; admitting the request uncounted');
+        return { allowed: true };
+      }
+      if (!spent.allowed) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily option image cap reached; serving plain text');
+        return { allowed: false, reason: 'over_capacity' };
+      }
+      if (spent.current >= Math.ceil(cap * 0.8)) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily option image cap is over 80% spent');
+      }
+      return { allowed: true };
+    },
+  };
+}
+
 // Each gate run is a 30-minute E2_HIGHCPU_8 build; nothing counted them.
 export const DEFAULT_GLOBAL_DAILY_GATE_RUN_CAP = 400;
 

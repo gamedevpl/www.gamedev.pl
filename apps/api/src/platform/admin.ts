@@ -45,6 +45,7 @@ import {
   resolveDefaultGlobalDailyTabCompleteTokenCap,
   resolveDefaultGlobalDailySearchEmbeddingCap,
   resolveDefaultGlobalDailyGateRunCap,
+  resolveDefaultGlobalDailyOptionImageCap,
 } from '../creation/creation-limits.js';
 import {
   BOT_UID_PREFIX,
@@ -175,6 +176,8 @@ export interface CreationLimitsResponse {
     // Semantic catalog search — the one lane anonymous traffic can reach (CC-01).
     searchPaused: boolean;
     globalDailySearchEmbeddingCap: number;
+    // CreatorQA tiles: two paid vendor calls per tile.
+    globalDailyOptionImageCap: number;
     // Each gate run is a 30-minute E2_HIGHCPU_8 build.
     gatePaused: boolean;
     globalDailyGateRunCap: number;
@@ -205,6 +208,7 @@ export interface CreationLimitsResponse {
     managedBuilds: number;
     tabCompleteTokens: number;
     searchEmbeddings: number;
+    optionImages: number;
     gateRuns: number;
     seeds: number;
     dreams: number;
@@ -241,6 +245,7 @@ const CreationLimitsPatchShape = z.object({
   globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
   searchPaused: z.boolean().optional(),
   globalDailySearchEmbeddingCap: z.number().int().min(0).max(10_000_000).nullable().optional(),
+  globalDailyOptionImageCap: z.number().int().min(0).max(100_000).nullable().optional(),
   gatePaused: z.boolean().optional(),
   globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
   dreamsPaused: z.boolean().optional(),
@@ -466,6 +471,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       managedBuilds,
       tabCompleteTokens,
       searchEmbeddings,
+      optionImages,
       gateRuns,
       seeds,
       dreams,
@@ -477,6 +483,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       store.getGlobalManagedBuildCount(dateStr),
       store.getGlobalTabCompleteTokenCount(dateStr),
       store.getGlobalSearchEmbeddingCount(dateStr),
+      store.getGlobalOptionImageCount(dateStr),
       store.getGlobalGateRunCount(dateStr),
       store.getGlobalSeedCount(dateStr),
       store.getGlobalDreamCount(dateStr),
@@ -519,6 +526,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         searchPaused: stored?.searchPaused === true,
         globalDailySearchEmbeddingCap:
           stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
+        globalDailyOptionImageCap: stored?.globalDailyOptionImageCap ?? resolveDefaultGlobalDailyOptionImageCap(),
         gatePaused: stored?.gatePaused === true,
         globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
         dreamsPaused: stored?.dreamsPaused === true,
@@ -544,6 +552,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         managedBuilds,
         tabCompleteTokens,
         searchEmbeddings,
+        optionImages,
         gateRuns,
         seeds,
         dreams,

@@ -1,7 +1,6 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { bumpShard, shardedCount, spendShard } from './quota-shards.js';
 
-
 export interface GlobalQuotaStore {
   // How many submissions everyone together has made on `dateStr`.
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
@@ -64,6 +63,10 @@ export interface GlobalQuotaStore {
     limit: number,
   ): Promise<{ allowed: boolean; current: number }>;
 
+  // CreatorQA tile requests everyone together has spent on `dateStr`.
+  getGlobalOptionImageCount(dateStr: string): Promise<number>;
+  checkAndIncrementGlobalOptionImages(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+
   // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
 
@@ -78,6 +81,7 @@ export class InMemoryGlobalQuotaStore implements GlobalQuotaStore {
   private globalManagedBuilds = new Map<string, number>();
   private globalTabCompleteTokens = new Map<string, number>();
   private globalSearchEmbeddings = new Map<string, number>();
+  private globalOptionImages = new Map<string, number>();
   private globalGateRuns = new Map<string, number>();
   private globalSeeds = new Map<string, number>();
   private globalModerationCalls = new Map<string, number>();
@@ -218,6 +222,17 @@ export class InMemoryGlobalQuotaStore implements GlobalQuotaStore {
     return { allowed: true, current: current + 1 };
   }
 
+  async getGlobalOptionImageCount(dateStr: string): Promise<number> {
+    return this.globalOptionImages.get(dateStr) ?? 0;
+  }
+
+  async checkAndIncrementGlobalOptionImages(dateStr: string, limit: number) {
+    const current = this.globalOptionImages.get(dateStr) ?? 0;
+    if (current >= limit) return { allowed: false, current };
+    this.globalOptionImages.set(dateStr, current + 1);
+    return { allowed: true, current: current + 1 };
+  }
+
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
     return this.globalManagedBuilds.get(dateStr) ?? 0;
   }
@@ -242,7 +257,6 @@ export class FirestoreGlobalQuotaStore implements GlobalQuotaStore {
   private globalUsageRef(dateStr: string) {
     return this.db.collection('globalUsage').doc(dateStr);
   }
-
 
   async getGlobalSubmissionCount(dateStr: string): Promise<number> {
     const snap = await this.globalUsageRef(dateStr).get();
@@ -444,6 +458,15 @@ export class FirestoreGlobalQuotaStore implements GlobalQuotaStore {
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
     return spendShard(this.db, dateStr, 'searchEmbeddings', limit);
+  }
+
+  // Sharded too: one request can be four generations of spend.
+  async getGlobalOptionImageCount(dateStr: string): Promise<number> {
+    return shardedCount(this.db, dateStr, 'optionImages');
+  }
+
+  async checkAndIncrementGlobalOptionImages(dateStr: string, limit: number) {
+    return spendShard(this.db, dateStr, 'optionImages', limit);
   }
 
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {

@@ -1019,6 +1019,17 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.globalQuotaStore.checkAndIncrementGlobalSearchEmbeddings(dateStr, limit);
   }
 
+  async getGlobalOptionImageCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalOptionImageCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalOptionImages(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalOptionImages(dateStr, limit);
+  }
+
   async getGlobalGateRunCount(dateStr: string): Promise<number> {
     return this.globalQuotaStore.getGlobalGateRunCount(dateStr);
   }

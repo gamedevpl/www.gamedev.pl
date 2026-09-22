@@ -504,6 +504,7 @@ function effectiveLimits(overrides: Partial<CreationLimitsResponse['effective']>
     chatPaused: false,
     searchPaused: false,
     globalDailySearchEmbeddingCap: 20_000,
+    globalDailyOptionImageCap: 100,
     gatePaused: false,
     globalDailyGateRunCap: 400,
     dreamsPaused: false,

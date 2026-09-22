@@ -4,6 +4,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
+import { BOT_UID_PREFIX, type Store } from '../platform/store.js';
+import { createOptionImageGate, type OptionImageGate } from './creation-limits.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import {
@@ -33,7 +35,22 @@ const OptionImageRequestSchema = z.object({
 
 export interface OptionImageRouteOptions {
   contentChecker: ContentChecker;
+  // Required: two paid vendor calls per tile (ops plan CC-35).
+  store: Store;
   generator?: OptionImageGenerator;
+  gate?: OptionImageGate;
+}
+
+// Ten requests is at most forty tiles: a day's use, bounded.
+export const DEFAULT_DAILY_OPTION_IMAGE_QUOTA = 10;
+const DEFAULT_DAILY_OPTION_IMAGE_QUOTA_BOT = 100;
+
+// A blank variable means unset, not zero, which would close the route.
+function resolveQuota(raw: string | undefined, fallback: number): number {
+  const trimmed = raw?.trim();
+  if (!trimmed) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 // Refine's own ceiling; the app calls this only after refine.
@@ -43,7 +60,12 @@ const MAX_REQUESTS_PER_WINDOW_PER_IP = 30;
 export async function registerOptionImageRoutes(app: FastifyInstance, options: OptionImageRouteOptions): Promise<void> {
   const contentChecker = options.contentChecker;
   const generator = options.generator ?? createOptionImageGeneratorFromEnv();
+  const store = options.store;
+  const gate =
+    options.gate ?? createOptionImageGate({ store, logWarn: (payload, message) => app.log.warn(payload, message) });
   const requestsByIp = new Map<string, number[]>();
+  const dailyQuota = resolveQuota(process.env.DAILY_OPTION_IMAGE_QUOTA, DEFAULT_DAILY_OPTION_IMAGE_QUOTA);
+  const botDailyQuota = resolveQuota(process.env.DAILY_OPTION_IMAGE_QUOTA_BOT, DEFAULT_DAILY_OPTION_IMAGE_QUOTA_BOT);
 
   app.post('/api/submissions/option-images', async (request: FastifyRequest, reply) => {
     if (!checkUserAccess(request, reply)) {
@@ -77,6 +99,16 @@ export async function registerOptionImageRoutes(app: FastifyInstance, options: O
       return { images: [] satisfies OptionImage[] };
     }
 
+    const uid = request.user!.uid;
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    // Free check first, so a refusal costs no vendor call.
+    const headroom = await gate.peek(uid, dateStr);
+    if (!headroom.allowed) {
+      request.log.info({ reason: headroom.reason }, 'option images skipped: no headroom');
+      return { images: [] satisfies OptionImage[] };
+    }
+
     // Nothing here proves this text came from a refine.
     const moderatedFields = [concept, question, ...askedOptions.flatMap((o) => [o.label, o.detail ?? ''])].filter(
       (field) => field.length > 0,
@@ -91,6 +123,20 @@ export async function registerOptionImageRoutes(app: FastifyInstance, options: O
       });
       const rejection = rejectionFor(moderation);
       return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
+    }
+
+    // Moderation first, then spend: a refused prompt must cost the creator nothing.
+    const limit = uid.startsWith(BOT_UID_PREFIX) ? botDailyQuota : dailyQuota;
+    const quota = await store.checkAndIncrementQuota(uid, dateStr, limit, 'optionImages');
+    if (!quota.allowed) {
+      request.log.info({ tier: quota.tier, limit }, 'option images skipped: daily quota spent');
+      return { images: [] satisfies OptionImage[] };
+    }
+
+    const spent = await gate.checkAndSpend(uid, dateStr);
+    if (!spent.allowed) {
+      request.log.info({ reason: spent.reason }, 'option images skipped: global cap reached');
+      return { images: [] satisfies OptionImage[] };
     }
 
     const startedAt = Date.now();

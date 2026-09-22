@@ -66,6 +66,8 @@ export interface CreationLimits {
   globalDailySearchEmbeddingCap?: number | null;
   // Shared daily token ceiling for ghost-text completion, everyone together.
   globalDailyTabCompleteTokenCap?: number | null;
+  // Daily CreatorQA tile requests, everyone together. Zero turns the route off.
+  globalDailyOptionImageCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: ManagedBuilderMode;
   // Alerts the brake acted on, bounded; any of them again pauses nothing.
@@ -127,4 +129,6 @@ export interface UsageCounters {
   worldWrites: number;
   // Remix model calls today. Studio's lanes count separately, under `assists`.
   remixEdits: number;
+  // CreatorQA tile requests today; each bills up to eight calls.
+  optionImages: number;
 }
