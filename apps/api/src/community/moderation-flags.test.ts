@@ -413,6 +413,44 @@ describe('moderation flags', () => {
       expect(res.statusCode).toBe(200);
     });
 
+    it('pages again when a dismissed report is reopened, but not while it is open', async () => {
+      const { app, store } = await makeApp({ published: ['sky-dodge'] });
+      await store.upsertUser({ uid: 'dev:boss' });
+      const alerts = async () =>
+        (await store.listNotifications('dev:boss')).filter((row) => row.type === 'operator.moderation_flag');
+      const settle = async (count: number) => {
+        for (let attempt = 0; attempt < 50 && (await alerts()).length < count; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+      };
+      const alice = await cookie(app, 'alice');
+
+      expect((await report(app, alice)).statusCode).toBe(200);
+      expect((await report(app, alice)).statusCode).toBe(200);
+      await settle(1);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(await alerts()).toHaveLength(1);
+
+      const [flag] = (
+        await app.inject({
+          method: 'GET',
+          url: '/api/admin/moderation-flags',
+          headers: { cookie: await cookie(app, 'boss') },
+        })
+      ).json().flags as Array<{ id: string }>;
+      const dismissed = await app.inject({
+        method: 'POST',
+        url: `/api/admin/moderation-flags/${encodeURIComponent(flag!.id)}/resolve`,
+        headers: { cookie: await cookie(app, 'boss') },
+        payload: { action: 'dismissed', note: 'looked, it is fine' },
+      });
+      expect(dismissed.statusCode).toBe(200);
+
+      expect((await report(app, alice)).statusCode).toBe(200);
+      await settle(2);
+      expect(await alerts()).toHaveLength(2);
+    });
+
     it('rate-limits repeated reports from the same account', async () => {
       const { app } = await makeApp({ published: ['sky-dodge', 'neon-courier'] });
       const alice = await cookie(app, 'alice');

@@ -7,6 +7,7 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
 import type { Store } from '../platform/store.js';
+import { moderationFlagId, type ModerationFlag } from '../store/records/moderation-flag.js';
 import { isReviewerSession } from './review.js';
 
 export interface ModerationFlagRoutesOptions {
@@ -92,6 +93,11 @@ export async function takeDownSlug(input: {
   return { blocked, unshared, unpublished, stillPublic };
 }
 
+// Reopened flags page again; still-open ones must not page twice.
+function alertFlagId(prior: ModerationFlag | null, flag: ModerationFlag): string {
+  return prior?.status === 'resolved' ? `${flag.id}@${flag.createdAt}` : flag.id;
+}
+
 export async function registerModerationFlagRoutes(
   app: FastifyInstance,
   options: ModerationFlagRoutesOptions,
@@ -120,6 +126,7 @@ export async function registerModerationFlagRoutes(
       const note = sanitizeCreatorText(parsed.data.note, { singleLine: false }).slice(0, MAX_NOTE);
       if (!note) return reply.status(400).send({ error: 'note is required' });
 
+      const prior = await store.getModerationFlag(moderationFlagId(parsed.data.slug, request.user!.uid));
       const flag = await store.raiseModerationFlag({
         slug: parsed.data.slug,
         source: parsed.data.source,
@@ -134,7 +141,7 @@ export async function registerModerationFlagRoutes(
         'moderation flag raised on a game',
       );
       // Detached: mail and push must not hold the reviewer's request open.
-      void notifyFlagRaised?.({ flagId: flag.id, slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+      void notifyFlagRaised?.({ flagId: alertFlagId(prior, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
         request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
       });
       return reply.send({ flag });
@@ -179,6 +186,7 @@ export async function registerModerationFlagRoutes(
         return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
+      const prior = await store.getModerationFlag(moderationFlagId(params.data.slug, request.user.uid));
       const flag = await store.raiseModerationFlag({
         slug: params.data.slug,
         source: 'player',
@@ -190,7 +198,7 @@ export async function registerModerationFlagRoutes(
       });
       request.log.warn({ slug: flag.slug, reason: flag.reason }, 'player reported a game');
       // Detached, same as the reviewer path above.
-      void notifyFlagRaised?.({ flagId: flag.id, slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+      void notifyFlagRaised?.({ flagId: alertFlagId(prior, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
         request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a player game report');
       });
       return reply.send({ ok: true });
