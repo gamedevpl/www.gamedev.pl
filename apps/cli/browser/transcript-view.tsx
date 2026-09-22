@@ -66,7 +66,7 @@ export function TranscriptLines({ lines }: { lines: string[] }) {
   );
 }
 
-/** The most urgent styled line in a block, so a collapsed summary can still surface failures. */
+// Most urgent line, so collapsed summaries still surface failures.
 export function headline(lines: string[]): { line: string; style: LineStyle } {
   let best = { line: lines[0] ?? '', style: lineStyle(lines[0] ?? '') };
   for (const line of lines) {
@@ -94,7 +94,7 @@ export function SessionOutput() {
   );
 }
 
-/** Keeps a log pinned to its newest line unless the reader scrolled up, including when a hidden panel opens. */
+// Pins to the newest line unless scrolled up; re-pins when shown.
 export function useFollowScroll(content: unknown, slack = 30) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
