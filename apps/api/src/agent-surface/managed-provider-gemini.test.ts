@@ -47,7 +47,7 @@ describe('gemini managed provider', () => {
     expect(url).not.toContain(apiKey);
     expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe(apiKey);
     expect(body).toMatchObject({
-      agent: 'antigravity-preview-05-2026',
+      agent: 'antigravity-preview-09-2026',
       input: 'build it',
       background: true,
       store: true,

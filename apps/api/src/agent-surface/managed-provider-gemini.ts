@@ -10,7 +10,7 @@ import {
 } from './managed-agent.js';
 
 export const GEMINI_VENDOR = 'gemini';
-export const GEMINI_DEFAULT_AGENT = 'antigravity-preview-05-2026';
+export const GEMINI_DEFAULT_AGENT = 'antigravity-preview-09-2026';
 export const GEMINI_DEFAULT_MODEL = 'gemini-3.8-flash';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
