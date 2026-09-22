@@ -68,6 +68,7 @@ describe('visit vocab', () => {
       'spec_submitted',
       'signin_required',
       'qa_shown',
+      'qa_tiles_shown',
       'title_confirmed',
       'submission_created',
       'handoff_shown',

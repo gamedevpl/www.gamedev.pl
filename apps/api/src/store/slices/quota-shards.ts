@@ -30,7 +30,8 @@ export async function spendShard(
 ): Promise<{ allowed: boolean; current: number }> {
   const shard = Math.floor(Math.random() * COUNTER_SHARDS);
   const ref = shardRef(db, dateStr, field, shard);
-  const shardLimit = Math.ceil(limit / COUNTER_SHARDS);
+  // Remainder to the low shards, so the ceilings sum to the cap.
+  const shardLimit = Math.floor(limit / COUNTER_SHARDS) + (shard < limit % COUNTER_SHARDS ? 1 : 0);
   return await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     const value = snap.data()?.count;

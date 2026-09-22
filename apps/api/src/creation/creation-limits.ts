@@ -729,9 +729,9 @@ export function createOptionImageGate(options: CreationGateOptions): OptionImage
   }
 
   return {
-    async peek(uid, dateStr) {
+    async peek(_uid, dateStr) {
       // Read-only by contract; checkAndSpend decides what is paid for.
-      if (isAutomationAccount(uid)) return { allowed: true };
+      // Automation is not exempt: the free refusal is what saves the moderation call.
       const value = await limits();
       const cap = value.globalDailyOptionImageCap ?? defaultCap;
       if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
@@ -745,18 +745,13 @@ export function createOptionImageGate(options: CreationGateOptions): OptionImage
     },
 
     async checkAndSpend(uid, dateStr) {
-      if (isAutomationAccount(uid)) {
-        const bot = await spendBotAllowance(store, dateStr, logWarn);
-        if (!bot.allowed) return bot;
-      }
       const value = await limits();
       const cap = value.globalDailyOptionImageCap ?? defaultCap;
       if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
 
-      // The creator's own ceiling first: their refusal must not spend a global slot.
-      const userCap = isAutomationAccount(uid)
-        ? DEFAULT_DAILY_OPTION_IMAGE_USER_CAP_BOT
-        : (value.dailyOptionImageUserCap ?? defaultUserCap);
+      // Cheapest refusal first, so a closed day spends no budget of any kind.
+      const bot = isAutomationAccount(uid);
+      const userCap = bot ? DEFAULT_DAILY_OPTION_IMAGE_USER_CAP_BOT : (value.dailyOptionImageUserCap ?? defaultUserCap);
       try {
         const mine = await store.checkAndIncrementQuota(uid, dateStr, userCap, 'optionImages');
         if (!mine.allowed) {
@@ -766,6 +761,11 @@ export function createOptionImageGate(options: CreationGateOptions): OptionImage
       } catch (error) {
         // Same posture as the global counter: a blip is not over capacity.
         logWarn({ err: error, dateStr }, 'creator option image quota unreachable; admitting uncounted');
+      }
+
+      if (bot) {
+        const allowance = await spendBotAllowance(store, dateStr, logWarn);
+        if (!allowance.allowed) return allowance;
       }
 
       let spent: { allowed: boolean; current: number };

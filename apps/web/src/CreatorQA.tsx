@@ -9,6 +9,7 @@ import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
 import { pickQuestionArt, useOptionImages } from './useOptionImages.js';
+import { recordCreateStep } from './visitTelemetry.js';
 
 export interface QAOption {
   label: string;
@@ -162,6 +163,11 @@ export function CreatorQA({
   const reviewIndex = stages.length - 1;
 
   const questionArt = stage.kind === 'question' ? pickQuestionArt(optionImages, stage.question) : undefined;
+
+  // Counts the funnel step, not the tiles: recordCreateStep fires once per visit.
+  useEffect(() => {
+    if (questionArt) recordCreateStep('qa_tiles_shown');
+  }, [questionArt]);
 
   const wizardRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
