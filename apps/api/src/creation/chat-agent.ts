@@ -4,8 +4,7 @@ import { image, resultText, resultToolCalls, user, type GenAIClient } from 'gena
 import { createVertexClient } from '../platform/genai.js';
 import type { ChatTurn } from './chat-turns.js';
 import type { JobStall } from './job-state.js';
-import { BUILD_TOOL, SYSTEM_PROMPT } from './chat-tools.js';
-import { REPLY_TOOL } from './reply-tool.js';
+import { BUILD_TOOL, MESSAGE_TOOL, SYSTEM_PROMPT } from './chat-tools.js';
 
 // Studio chat agent (docs/ops studio-mini-agent-plan.md). Never dispatches.
 
@@ -162,7 +161,7 @@ export class VertexStudioChatAgent implements StudioChatAgent {
       timeoutMs: this.options.timeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS,
       attempt: (_model, timeoutMs) =>
         builder
-          .tools([REPLY_TOOL, BUILD_TOOL], 'required')
+          .tools([MESSAGE_TOOL, BUILD_TOOL], 'required')
           .thinking({ level: 'low' })
           .temperature(0.2)
           .signal(AbortSignal.timeout(timeoutMs))
@@ -180,9 +179,9 @@ export class VertexStudioChatAgent implements StudioChatAgent {
       return { kind: 'build', ...(ack ? { text: ack.slice(0, 2000) } : {}), ...(tokens ? { tokens } : {}), model };
     }
     // An empty reply fails open too — never show an empty bubble.
-    const replyCall = calls.find((call) => call.name === 'reply');
-    const replyArg = replyCall?.arguments?.text;
-    const text = (typeof replyArg === 'string' ? replyArg.trim() : '') || resultText(result).trim();
+    const messageCall = calls.find((call) => call.name === 'send_message');
+    const messageArg = messageCall?.arguments?.text;
+    const text = (typeof messageArg === 'string' ? messageArg.trim() : '') || resultText(result).trim();
     if (!text) throw new Error('chat agent returned neither a reply nor a build call');
     return { kind: 'reply', text: text.slice(0, 2000), ...(tokens ? { tokens } : {}), model };
   }

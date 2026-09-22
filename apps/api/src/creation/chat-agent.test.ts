@@ -86,18 +86,18 @@ describe('VertexStudioChatAgent', () => {
     expect(decision).toEqual({ kind: 'build', model: expect.any(String) });
   });
 
-  it('is called with tools:[reply, build] and a forced toolChoice', async () => {
+  it('is called with tools:[send_message, build] and a forced toolChoice', async () => {
     let seen: GenerationRequest | undefined;
     const agent = new VertexStudioChatAgent({
       client: stubClient(textResult('ok'), (req) => (seen = req)),
     });
     await agent.decide({ message: 'hi', status: STATUS, history: [] });
-    expect(seen?.tools?.map((t) => t.name)).toEqual(['reply', 'build']);
+    expect(seen?.tools?.map((t) => t.name)).toEqual(['send_message', 'build']);
     expect(seen?.toolChoice).toBe('required'); // forced: only those two names possible
   });
 
-  it('returns the reply tool text as a plain reply', async () => {
-    const call = { type: 'toolCall' as const, toolCall: { name: 'reply', arguments: { text: 'Jasne!' } } };
+  it('returns the send_message text as a plain reply', async () => {
+    const call = { type: 'toolCall' as const, toolCall: { name: 'send_message', arguments: { text: 'Jasne!' } } };
     const agent = new VertexStudioChatAgent({ client: stubClient({ parts: [call] }) });
     const decision = await agent.decide({ message: 'hej', status: STATUS, history: [] });
     expect(decision).toMatchObject({ kind: 'reply', text: 'Jasne!' });
