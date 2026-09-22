@@ -1346,7 +1346,7 @@ describe('the agent bridge, running for real', () => {
       setHidden(['targetWord']);
       harness.api = { peek: () => ({ cash: 100, targetWord: 'RAVEN' }) };
       const original = globalThis.String;
-      let detail = '';
+      let detail: string | undefined;
       try {
         globalThis.String = function (this: unknown, ...args: unknown[]) {
           if (args[0] === '{"cash":100}') return 'peek:RAVEN';
@@ -1365,14 +1365,14 @@ describe('the agent bridge, running for real', () => {
       } finally {
         globalThis.String = original;
       }
-      expect(detail).toContain('{"cash":100}');
-      expect(detail).not.toContain('RAVEN');
+      expect(detail ?? '').toContain('{"cash":100}');
+      expect(detail ?? '').not.toContain('RAVEN');
     });
 
     // Pixel bounds are the documented widget shape, so the conversion is ours.
     it('normalizes pixel bounds through the Number it captured', async () => {
       const original = globalThis.Number;
-      let widgets: Array<Record<string, number>> = [];
+      let widgets: Array<Record<string, number>> | undefined;
       try {
         const fake = function (this: unknown, ...args: unknown[]) {
           if (args[0] === 37) return 999;
@@ -1391,15 +1391,15 @@ describe('the agent bridge, running for real', () => {
       } finally {
         globalThis.Number = original;
       }
-      expect(widgets.length).toBe(1);
+      expect(widgets?.length).toBe(1);
       // Free of canvas size: 4.7 here, 99.9 through a swap.
-      expect(widgets[0].x2 / widgets[0].x1).toBeCloseTo(4.7, 5);
+      expect(widgets![0].x2 / widgets![0].x1).toBeCloseTo(4.7, 5);
     });
 
     // A table built at call time would break the whole surface.
     it('builds the helper table when the game breaks Object.create', async () => {
       const original = Object.create;
-      let names: unknown = null;
+      let names: unknown;
       try {
         Object.create = ((proto: object | null, props?: PropertyDescriptorMap) => {
           if (proto === null) throw new Error('no tables for you');
