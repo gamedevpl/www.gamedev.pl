@@ -216,9 +216,10 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     }catch(err){}
     return out;
   }
+  // The shell owns validateState and canHotReload, so no game registers them.
   var AGENT_HARNESS_CORE={version:1,captureMode:1,ready:1,frame:1,metadata:1,signals:1,audio:1,
-    record:1,step:1,paint:1,pause:1,resume:1,restart:1,injectSensing:1,screenshot:1,
-    snapshotState:1,restoreState:1,ui:1,observation:1,api:1,helpers:1};
+    record:1,step:1,paint:1,pause:1,resume:1,restart:1,injectSensing:1,screenshot:1,snapshotState:1,
+    restoreState:1,validateState:1,canHotReload:1,ui:1,observation:1,api:1,helpers:1};
   // Entries we reject still cost a look, so the scan is bounded, not just the keep.
   var AGENT_API_CAP=40,AGENT_API_SCAN=AGENT_API_CAP*10;
   var AGENT_API_MEMO=null;
@@ -259,7 +260,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     for(k in h){
       seen++;
       if(seen>AGENT_API_SCAN)break;
-      if(!AGENT_HAS(h,k)||AGENT_HARNESS_CORE[k])continue;
+      if(!AGENT_HAS(h,k)||AGENT_HAS(AGENT_HARNESS_CORE,k))continue;
       try{fn=h[k];}catch(err){continue;}
       if(typeof fn==='function'&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))table[k]={fn:fn,self:h};
     }

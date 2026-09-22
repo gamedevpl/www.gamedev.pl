@@ -51,6 +51,8 @@ type FakeHarness = {
   api?: Record<string, (...args: unknown[]) => unknown>;
   helpers?: Record<string, (...args: unknown[]) => unknown>;
   camLookAt?: (...args: unknown[]) => unknown;
+  validateState?: (...args: unknown[]) => unknown;
+  canHotReload?: (...args: unknown[]) => unknown;
 };
 
 function installHarness(): FakeHarness {
@@ -135,6 +137,9 @@ describe('the agent bridge, running for real', () => {
     delete harness.api;
     delete harness.helpers;
     delete harness.camLookAt;
+    delete harness.validateState;
+    delete harness.canHotReload;
+    delete (harness as unknown as { toString?: unknown }).toString;
     delete (window as unknown as { GameKit?: unknown }).GameKit;
   });
 
@@ -535,6 +540,41 @@ describe('the agent bridge, running for real', () => {
     const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
     expect(log.some((entry) => entry.kind === 'call' && entry.detail.includes('camLookAt'))).toBe(true);
     expect(looked).toBe(2);
+  });
+
+  // The shell hot-swaps builds with these; no game helper.
+  it('never publishes the state-preservation hooks the shell owns', async () => {
+    harness.validateState = () => true;
+    harness.canHotReload = () => true;
+    harness.api = { buildRail: () => 'ok' };
+    send({ type: 'agent:enable' });
+    await settle();
+    expect(lastOf(received, 'agent:state')!.api).toEqual(['buildRail']);
+
+    const result = await runPolicy(`function playAgent(agent) {
+      try { agent.call('validateState', {}); agent.log('reached'); }
+      catch (err) { agent.log('refused'); }
+    }`);
+    const logs = result.logs as Array<{ text: string }>;
+    expect(logs.some((entry) => entry.text.includes('refused'))).toBe(true);
+  });
+
+  // A truthy core lookup hid every prototype name.
+  it('publishes a helper whose name Object.prototype also carries', async () => {
+    let called = 0;
+    (harness as unknown as { toString: () => unknown }).toString = () => {
+      called += 1;
+      return 'helper';
+    };
+    send({ type: 'agent:enable' });
+    await settle();
+    expect(lastOf(received, 'agent:state')!.api).toEqual(['toString']);
+
+    const result = await runPolicy(`function playAgent(agent) {
+      agent.log(JSON.stringify(agent.call('toString')));
+    }`);
+    expect(result.outcome).toBe('completed');
+    expect(called).toBe(1);
   });
 
   // An ordinary table let call reach Object.prototype and report success.
