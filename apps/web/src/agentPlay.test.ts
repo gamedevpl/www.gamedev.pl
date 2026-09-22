@@ -189,6 +189,7 @@ describe('describing the screen', () => {
 
   it('lists registered helpers so a creator can see them without eval', () => {
     expect(formatApi([])).toContain('none');
+    expect(formatApi([])).toContain('agentApi(() => ({');
     expect(formatApi(['buildRail', 'camLookAt'])).toBe('  call buildRail\n  call camLookAt');
     expect(AGENT_OBSERVATION_EMPTY).toContain('snapshot.observation');
   });

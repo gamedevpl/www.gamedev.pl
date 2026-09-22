@@ -288,7 +288,7 @@ export const AGENT_OBSERVATION_EMPTY =
 
 export function formatApi(names: readonly string[]): string {
   if (names.length === 0) {
-    return 'api: (none — defineGame().agentApi({ name() { … } }) or harness.api; then `call` / agent.call)';
+    return 'api: (none — defineGame().agentApi(() => ({ name() { … } })) or harness.api; then `call` / agent.call)';
   }
   return names.map((name) => `  call ${name}`).join('\n');
 }
