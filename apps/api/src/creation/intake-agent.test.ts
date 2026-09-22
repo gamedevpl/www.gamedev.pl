@@ -15,6 +15,10 @@ function textResult(text: string): GenerationResult {
   return { parts: [{ type: 'text', text }] };
 }
 
+function replyResult(text: string): GenerationResult {
+  return { parts: [{ type: 'toolCall', toolCall: { name: 'reply', arguments: { text } } }] };
+}
+
 function createResult(args: Record<string, unknown>): GenerationResult {
   return { parts: [{ type: 'toolCall', toolCall: { name: 'create_game', arguments: args } }] };
 }
@@ -290,6 +294,24 @@ describe('CLI session tools', () => {
       }),
     });
     await expect(agent.decide({ message: 'go', history: [], session })).rejects.toThrow('ambiguous');
+  });
+
+  it('forces a tool call, so the declared names are the only ones on offer', async () => {
+    let captured: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(replyResult('ok'), (request) => {
+        captured = request;
+      }),
+    });
+    await agent.decide({ message: 'hej', history: [] });
+    expect(captured!.toolChoice).toBe('required');
+    expect(captured!.tools?.map((tool) => tool.name)).toContain('reply');
+  });
+
+  it('returns the reply tool text as a plain reply', async () => {
+    const agent = new IntakeChatAgent({ client: stubClient(replyResult('Cześć! Jaką grę robimy?')) });
+    const decision = await agent.decide({ message: 'hej', history: [] });
+    expect(decision).toMatchObject({ kind: 'reply', text: 'Cześć! Jaką grę robimy?' });
   });
 
   it('names the tool in the error when the model calls one that does not exist', async () => {

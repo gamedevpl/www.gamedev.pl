@@ -86,14 +86,30 @@ describe('VertexStudioChatAgent', () => {
     expect(decision).toEqual({ kind: 'build', model: expect.any(String) });
   });
 
-  it('is called with tools:[build] and toolChoice "auto"', async () => {
+  it('is called with tools:[send_message, build] and a forced toolChoice', async () => {
     let seen: GenerationRequest | undefined;
     const agent = new VertexStudioChatAgent({
       client: stubClient(textResult('ok'), (req) => (seen = req)),
     });
     await agent.decide({ message: 'hi', status: STATUS, history: [] });
-    expect(seen?.tools?.map((t) => t.name)).toEqual(['build']);
-    expect(seen?.toolChoice).toBe('auto');
+    expect(seen?.tools?.map((t) => t.name)).toEqual(['send_message', 'build']);
+    expect(seen?.toolChoice).toBe('required'); // forced: only those two names possible
+  });
+
+  it('refuses conflicting parallel calls rather than letting build win', async () => {
+    const parts = [
+      { type: 'toolCall' as const, toolCall: { name: 'send_message', arguments: { text: 'Which part?' } } },
+      { type: 'toolCall' as const, toolCall: { name: 'build', arguments: {} } },
+    ];
+    const agent = new VertexStudioChatAgent({ client: stubClient({ parts }) });
+    await expect(agent.decide({ message: 'go', status: STATUS, history: [] })).rejects.toThrow('ambiguous');
+  });
+
+  it('returns the send_message text as a plain reply', async () => {
+    const call = { type: 'toolCall' as const, toolCall: { name: 'send_message', arguments: { text: 'Jasne!' } } };
+    const agent = new VertexStudioChatAgent({ client: stubClient({ parts: [call] }) });
+    const decision = await agent.decide({ message: 'hej', status: STATUS, history: [] });
+    expect(decision).toMatchObject({ kind: 'reply', text: 'Jasne!' });
   });
 
   it('throws when the model returns neither text nor a build call', async () => {
