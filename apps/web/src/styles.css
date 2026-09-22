@@ -2050,8 +2050,10 @@ body.player-open {
      the panel itself. Scroll rather than let the submit button fall off-screen —
      the page behind stays locked while the player is open, so it has no other way
      back into view. Bar height below matches theater-camera-indicator's offset. */
-  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 58px - 12px);
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 58px - 8px - 12px);
   overflow-y: auto;
+  /* Padding and border count against max-height; the extra 8px is `top`'s gap. */
+  box-sizing: border-box;
   /* Near-opaque so menu rows stay readable over bright game pixels underneath. */
   background: rgba(16, 22, 28, 0.98);
   -webkit-backdrop-filter: blur(16px);
@@ -2217,6 +2219,16 @@ body.player-open {
 /* The in-app report control shares the feedback popover's layout and inputs. */
 .report-widget {
   position: relative;
+}
+
+/* Inside the scrolling More panel the forms join the flow instead of floating:
+   an absolute 320px popover in a 240px scroller overflows on the start side,
+   which can never be scrolled to, so its left edge was simply clipped. */
+.theater-more-panel .feedback-popover,
+.theater-more-panel .report-popover {
+  position: static;
+  width: auto;
+  margin-top: 8px;
 }
 
 .theater-more-panel .report-widget,
@@ -2511,7 +2523,7 @@ body.player-open {
     right: calc(-1 * (44px + 6px));
     min-width: 240px;
     max-width: min(300px, calc(100vw - 24px));
-    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 57px - 12px);
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 57px - 8px - 12px);
   }
 
   /* Labels stay visible inside the open menu — icon-only there is opaque. */
@@ -2546,7 +2558,7 @@ body.player-open {
   /* Shortest viewport of the three: the report/feedback form is likelier here to
      run past the bottom, especially with an on-screen keyboard shrinking it further. */
   .theater-more-panel {
-    max-height: calc(100dvh - max(4px, env(safe-area-inset-top)) - 45px - 8px);
+    max-height: calc(100dvh - max(4px, env(safe-area-inset-top)) - 45px - 8px - 8px);
   }
 }
 
