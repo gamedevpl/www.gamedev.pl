@@ -23,6 +23,11 @@ interface QueryInternals {
 }
 
 const storage = new AsyncLocalStorage<ReadTally>();
+
+// DocumentReference.get delegates to getAll; both are metered.
+
+// Set inside a metered get so the nested getAll skips counting.
+const insideDocumentGet = new AsyncLocalStorage<true>();
 const INSTALLED = Symbol.for('gamedev.read-meter.installed');
 const AGGREGATES_INSTALLED = Symbol.for('gamedev.read-meter.aggregates-installed');
 
@@ -100,7 +105,7 @@ function patchDocumentGet(): void {
   const proto = DocumentReference.prototype as unknown as { get: AsyncFn };
   const original = proto.get;
   proto.get = async function meteredDocumentGet(this: DocumentReference, ...args: unknown[]) {
-    const snapshot = (await original.apply(this, args)) as MaybeSnapshot;
+    const snapshot = (await insideDocumentGet.run(true, () => original.apply(this, args))) as MaybeSnapshot;
     record(maskPath(this.path), 1, snapshot?.exists === false ? 1 : 0);
     return snapshot;
   } as AsyncFn;
@@ -170,7 +175,8 @@ function patchGetAll(): void {
   const original = proto.getAll;
   proto.getAll = async function meteredGetAll(this: Firestore, ...args: unknown[]) {
     const snapshots = (await original.apply(this, args)) as MaybeSnapshot[];
-    recordDocs(labelOfSnapshots(snapshots, 'getAll'), snapshots);
+    // A get() in flight already records its one document.
+    if (!insideDocumentGet.getStore()) recordDocs(labelOfSnapshots(snapshots, 'getAll'), snapshots);
     return snapshots;
   } as AsyncFn;
 }

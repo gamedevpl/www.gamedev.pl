@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
+import { POLICY_API_HELP } from './agentPolicy.js';
 
 type Posted = Record<string, unknown>;
 
@@ -88,12 +89,20 @@ describe('AgentPlayPanel', () => {
       frame: 1,
       snapshot: { state: 'playing', observation: '{"exit":"north"}' },
       ui: [{ label: 'Restart', enabled: true, x1: 0, y1: 0, x2: 0.2, y2: 0.1 }],
+      api: ['buildRail'],
     });
 
     expect(container.textContent).toContain('"exit": "north"');
     expect(container.textContent).toContain('[Restart] click 0.10 0.05');
+    expect(container.textContent).toContain('call buildRail');
     // The observation never joins the one-line state.
     expect(container.textContent).not.toContain('observation=');
+  });
+
+  it('keeps seen and api visible when the game registered neither', async () => {
+    await receive({ type: 'agent:state', frame: 1, snapshot: { state: 'playing' }, ui: [], api: [] });
+    expect(container.textContent).toContain('snapshot.observation');
+    expect(container.textContent).toContain('agent.call');
   });
 
   it('warns when the document declares no hidden fields, so the gap is visible', async () => {
@@ -134,5 +143,11 @@ describe('AgentPlayPanel', () => {
       root!.render(<AgentPlayPanel open={false} frameRef={frameRef} onClose={() => undefined} />);
     });
     expect(posted.some((message) => message.type === 'agent:disable')).toBe(true);
+  });
+
+  it('documents agent.game() as window.GameKit, not a game instance', () => {
+    expect(POLICY_API_HELP).toContain('agent.game()');
+    expect(POLICY_API_HELP).toContain('window.GameKit');
+    expect(POLICY_API_HELP).not.toContain('game instance');
   });
 });

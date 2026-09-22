@@ -12,6 +12,7 @@ import {
   DRAFT_NOT_CONTINUABLE_REASON,
   OPEN_ROUND_IN_PROGRESS_REASON,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+  FEEDBACK_QUOTA_EXHAUSTED_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
 import { canActOnGame, canActOnSlug, canonicalCreatorOwnerUid } from '../platform/game-access-permissions.js';
@@ -20,12 +21,13 @@ import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import { quotaHeadroom } from './agent-quota-headroom.js';
+import { quotaHeadroom, quotaRefusal, type QuotaRefusal } from './agent-quota-headroom.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import {
   toolOk,
   toolErr,
+  toolRefusal,
   RETIRED_GAME_KEY_REASON,
   PLATFORM_CONNECTOR_ONLY_REASON,
   matchesPlatformConnectorSecret,
@@ -213,15 +215,15 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const at = new Date(now()).toISOString();
         const access = await resolveGameAccess(store, resolved.slug);
         if (!canActOnGame(access, resolved.creatorUid, 'build')) {
-          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
         }
         const ownerUid = canonicalCreatorOwnerUid(access);
-        if (!ownerUid) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+        if (!ownerUid) return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
         // Game key stays owner-bound; editors use their own creator key.
         const lockRecord = await store.ensureGameAgentKey(resolved.slug, ownerUid, at);
         if (!lockRecord) {
           // Existing doc owned by someone else — do not touch their admission lock.
-          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
         }
 
         if (resolved.activeRound) {
@@ -240,8 +242,11 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           dailyImprovementQuota,
           'improvements',
           IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+          // The same read the bucket was chosen from: a midnight in between would
+          // check yesterday's bucket and promise a wait the reset already served.
+          Date.parse(at),
         );
-        if (noRoom) return toolErr(noRoom);
+        if (noRoom) return toolRefusal(noRoom.message, noRoom.code, { retryAfterSeconds: noRoom.retryAfterSeconds });
 
         const moderation = await contentChecker.checkFields([feedbackRaw]);
         if (!moderation.allowed) {
@@ -251,7 +256,9 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             category: moderation.category,
             unavailable: moderation.unavailable,
           });
-          return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
+          return toolRefusal(rejectionFor(moderation).error, 'moderation_rejected', {
+            category: rejectionFor(moderation).category,
+          });
         }
 
         const admitted = await store.beginAgentOpenRound(resolved.slug, at);
@@ -278,7 +285,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           }
 
           const dateStr = at.slice(0, 10);
-          let quotaError: string | undefined;
+          let quotaError: QuotaRefusal | undefined;
 
           const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
           const sanitizedTitle = sanitizeCreatorText(`Improve ${resolved.publishedRecord.title}`, {
@@ -296,7 +303,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
                 action: 'improvements',
               });
               if (quota.allowed) return true;
-              quotaError = quota.tier === 'blocked' ? 'account is blocked' : IMPROVEMENT_QUOTA_EXHAUSTED_REASON;
+              quotaError = quotaRefusal(quota.tier, IMPROVEMENT_QUOTA_EXHAUSTED_REASON, Date.parse(at));
               return false;
             },
             text: sanitizedFeedback,
@@ -310,7 +317,10 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             // Authorized creator wins over the published record's owner after a transfer.
             ownerUid: resolved.creatorUid,
           });
-          if (quotaError) return toolErr(quotaError);
+          if (quotaError)
+            return toolRefusal(quotaError.message, quotaError.code, {
+              retryAfterSeconds: quotaError.retryAfterSeconds,
+            });
           if (!started || started.route === 'unavailable') {
             return toolErr('could not open an improvement round for this game');
           }
@@ -395,13 +405,13 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           const verified = await verifyDurableCreatorAgentKey(store, bearer, agentTokenSecret, now());
           if (!verified.ok) return toolErr(verified.reason);
           if (!(await canActOnSlug(store, slugArg, verified.claims.creatorUid, 'build'))) {
-            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+            return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           }
           if (await store.getPublishedSubmissionBySlug(slugArg)) {
             return toolErr(GAME_ALREADY_PUBLISHED_REASON);
           }
           const draft = await findDraftJobForSlug(store, slugArg, verified.claims.creatorUid);
-          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          if (!draft) return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           resolved = { creatorUid: verified.claims.creatorUid, slug: slugArg, draft };
         } else if (!key && bearer && looksLikeAsAccessToken(bearer)) {
           const asAccess = await verifyAsAccessToken(store, bearer, now());
@@ -412,13 +422,13 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             return toolErr('slug is required when using OAuth — pass the game slug to continue');
           }
           if (!(await canActOnSlug(store, slugArg, asAccess.ownerUid, 'build'))) {
-            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+            return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           }
           if (await store.getPublishedSubmissionBySlug(slugArg)) {
             return toolErr(GAME_ALREADY_PUBLISHED_REASON);
           }
           const draft = await findDraftJobForSlug(store, slugArg, asAccess.ownerUid);
-          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          if (!draft) return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           resolved = { creatorUid: asAccess.ownerUid, slug: slugArg, draft };
         } else if (key && looksLikeGameAgentKey(key)) {
           return toolErr(RETIRED_GAME_KEY_REASON);
@@ -445,16 +455,18 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           });
         }
 
-        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        const atMs = now();
+        const dateStr = new Date(atMs).toISOString().slice(0, 10);
         const noRoom = await quotaHeadroom(
           store,
           resolved.creatorUid,
           dateStr,
           dailyFeedbackQuota,
           'feedback',
-          "today's feedback limit is used up — try again tomorrow, or from the Studio",
+          FEEDBACK_QUOTA_EXHAUSTED_REASON,
+          atMs,
         );
-        if (noRoom) return toolErr(noRoom);
+        if (noRoom) return toolRefusal(noRoom.message, noRoom.code, { retryAfterSeconds: noRoom.retryAfterSeconds });
 
         const moderation = await contentChecker.checkFields([feedbackRaw]);
         if (!moderation.allowed) {
@@ -464,15 +476,15 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             category: moderation.category,
             unavailable: moderation.unavailable,
           });
-          return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
+          return toolRefusal(rejectionFor(moderation).error, 'moderation_rejected', {
+            category: rejectionFor(moderation).category,
+          });
         }
 
         const quota = await store.checkAndIncrementQuota(resolved.creatorUid, dateStr, dailyFeedbackQuota, 'feedback');
         if (!quota.allowed) {
-          if (quota.tier === 'blocked') {
-            return toolErr('account is blocked');
-          }
-          return toolErr("today's feedback limit is used up — try again tomorrow, or from the Studio");
+          const refused = quotaRefusal(quota.tier, FEEDBACK_QUOTA_EXHAUSTED_REASON, atMs);
+          return toolRefusal(refused.message, refused.code, { retryAfterSeconds: refused.retryAfterSeconds });
         }
 
         const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });

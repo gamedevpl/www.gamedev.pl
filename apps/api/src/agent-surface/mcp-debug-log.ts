@@ -52,6 +52,7 @@ export function peekMcpSessionKeyForLog(
 export function mcpToolRefusalFields(input: {
   tool: string;
   reason: string;
+  code?: string | null;
   bearer: string | null | undefined;
   sessionKey: string | null | undefined;
   transportSessionId: string | null | undefined;
@@ -64,6 +65,7 @@ export function mcpToolRefusalFields(input: {
     event: 'mcp_tool_refused',
     tool: input.tool,
     reason: input.reason,
+    ...(input.code ? { code: input.code } : {}),
     bearerKind: classifyMcpBearerKind(input.bearer),
     sessionKeyShape: classifyMcpSessionKeyShape(input.sessionKey),
     transportSessionId,
@@ -124,4 +126,15 @@ export function toolErrorReason(result: {
     }
   }
   return 'unknown error';
+}
+
+// The code is what a dashboard groups by; the message is prose that changes.
+export function toolErrorCode(result: { isError?: boolean; structuredContent?: unknown }): string | null {
+  if (!result.isError) return null;
+  const structured = result.structuredContent;
+  if (structured && typeof structured === 'object' && 'code' in structured) {
+    const code = (structured as { code?: unknown }).code;
+    if (typeof code === 'string' && code.trim()) return code.trim();
+  }
+  return null;
 }

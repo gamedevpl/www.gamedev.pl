@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from '../../creatorGames.js';
+
+// How stale a pin may get, and the slowest re-read.
+const REFRESH_FLOOR_MS = 5 * 60_000;
+
+// Checked this often, so the floor decides the cadence, not the timer.
+const FLOOR_CHECK_MS = 60_000;
 
 // Feeds the Studio chip and the Yours pins — never the grid itself.
 export function useCreatorShelf({
@@ -7,15 +13,19 @@ export function useCreatorShelf({
   viewerUid,
   locale,
   creatorGamesRefreshKey,
+  activeBuildCount,
 }: {
   authLoading: boolean;
   viewerUid: string | null;
   locale: string;
   creatorGamesRefreshKey: number;
+  // Badge count; a change means a build started or finished.
+  activeBuildCount: number;
 }): { mySlugs: Set<string>; creatorGamesReady: boolean } {
   const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
   // Starts false until auth resolves, so the grid never paints unpinned first.
   const [creatorGamesReady, setCreatorGamesReady] = useState(false);
+  const loadedAt = useRef(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -32,21 +42,40 @@ export function useCreatorShelf({
   useEffect(() => {
     if (authLoading || !viewerUid) return;
     let cancelled = false;
-    void loadCreatorGames(locale).then((items) => {
-      if (cancelled) return;
-      setCreatorItems(items);
-      setCreatorGamesReady(true);
-    });
-    const timer = window.setInterval(() => {
+
+    const load = (at: number) => {
+      loadedAt.current = at;
       void loadCreatorGames(locale).then((items) => {
-        if (!cancelled) setCreatorItems(items);
+        if (cancelled) return;
+        setCreatorItems(items);
+        setCreatorGamesReady(true);
       });
-    }, 30_000);
+    };
+
+    // Fresh wiring owes a read, so no floor may skip it.
+    loadedAt.current = 0;
+
+    // One floor for the clock and the way back.
+    const refresh = () => {
+      if (document.hidden) return;
+      const at = Date.now();
+      if (at - loadedAt.current < REFRESH_FLOOR_MS) return;
+      load(at);
+    };
+
+    // Re-runs on an activeBuildCount change: a pin may have appeared.
+    if (!document.hidden) load(Date.now());
+
+    // A transfer in, or a failed first read, changes no local signal.
+    const timer = window.setInterval(refresh, FLOOR_CHECK_MS);
+
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
     };
-  }, [authLoading, viewerUid, creatorGamesRefreshKey, locale]);
+  }, [authLoading, viewerUid, creatorGamesRefreshKey, locale, activeBuildCount]);
 
   const mySlugs = useMemo(() => publishedCreatorSlugs(creatorItems), [creatorItems]);
 

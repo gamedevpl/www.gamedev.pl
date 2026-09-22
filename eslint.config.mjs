@@ -77,6 +77,15 @@ export default [
     },
   },
   {
+    // The shelf's read fence cannot see a write nobody invalidated;
+    // the guarded transaction is the seam, this pins what sits outside it.
+    files: ['apps/api/src/store/**/*.ts'],
+    ignores: ['apps/api/src/store/**/*.test.ts', 'apps/api/src/store/**/*.fixture.ts'],
+    rules: {
+      'gamedev/shelf-invalidation': 'error',
+    },
+  },
+  {
     files: ['apps/cli/**/*.tsx'],
     plugins: { 'react-hooks': reactHooks },
     rules: {

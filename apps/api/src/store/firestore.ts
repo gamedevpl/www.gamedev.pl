@@ -1,7 +1,6 @@
 import { SubmissionFacade } from './submission-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
-import { reconcileTransferredOwnership } from '../creation/studio-shelf-records.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
 import { eraseTransferRows } from './erase-transfer-rows.js';
 import type { ShelfDocument } from './records/shelf.js';
@@ -109,10 +108,10 @@ import { FirestoreTelemetryStore } from './slices/telemetry.js';
 import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
-import { FieldValue, Firestore } from '@google-cloud/firestore';
+import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } from './shelf-guard-firestore.js';
 
 export class FirestoreStore extends SubmissionFacade implements Store {
-  private db: Firestore;
+  private db: GuardedFirestore;
   private telemetryStore: FirestoreTelemetryStore;
   private oauthStore: FirestoreOAuthStore;
   private playerDataStore: FirestorePlayerDataStore;
@@ -151,7 +150,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   constructor(db?: Firestore) {
     super();
-    this.db = db ?? new Firestore();
+    this.db = createGuardedFirestore(db ?? new Firestore());
     this.telemetryStore = new FirestoreTelemetryStore(this.db);
     this.oauthStore = new FirestoreOAuthStore(this.db);
     this.playerDataStore = new FirestorePlayerDataStore(this.db);
@@ -434,13 +433,21 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.shelfStore.putShelf(ownerUid, shelf);
   }
 
+  async putShelfIfUnchanged(ownerUid: string, shelf: ShelfDocument, expectedSeq: number): Promise<boolean> {
+    return this.shelfStore.putShelfIfUnchanged(ownerUid, shelf, expectedSeq);
+  }
+
+  async tombstoneShelf(ownerUid: string, builtAt: string): Promise<void> {
+    return this.shelfStore.tombstoneShelf(ownerUid, builtAt);
+  }
+
   async deleteShelf(ownerUid: string): Promise<void> {
     return this.shelfStore.deleteShelf(ownerUid);
   }
 
   async countSubmissionsByOwner(ownerUid: string): Promise<number> {
-    // Must match the rebuilt shelf, not the ownerUid query.
-    return (await reconcileTransferredOwnership(this, ownerUid, await this.listSubmissionsByOwner(ownerUid))).length;
+    // The ownerUid query's own size, which is what the document records.
+    return this.shelfStore.countSubmissionsByOwner(ownerUid);
   }
 
   async listStaleShelfOwners(builtBefore: string, limit: number): Promise<string[]> {

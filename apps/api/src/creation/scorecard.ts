@@ -162,7 +162,7 @@ export function buildScorecard(
  * with votes but no plays in the window gets no scorecard — acceptable while the loop's
  * entire purpose is reasoning about games that are actually played.
  */
-// Days come from telemetryDaily rollups; see docs/firestore-read-cost.md.
+// Days come from telemetryDaily rollups; see ops repo read-cost doc.
 export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<ScorecardSweepResult> {
   const { store } = deps;
   const now = deps.now ?? Date.now;

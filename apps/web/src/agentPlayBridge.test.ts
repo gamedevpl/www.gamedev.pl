@@ -4,7 +4,7 @@
 
 // jsdom is parent === window, so posts land back on this window.
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
 import { AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 import { embedGameHtml } from './gamePlayer.js';
 
@@ -46,6 +46,13 @@ type FakeHarness = {
   pause: () => void;
   resume: () => void;
   screenshot: () => string;
+  ui?: unknown;
+  observation?: unknown;
+  api?: Record<string, (...args: unknown[]) => unknown>;
+  helpers?: Record<string, (...args: unknown[]) => unknown>;
+  camLookAt?: (...args: unknown[]) => unknown;
+  validateState?: (...args: unknown[]) => unknown;
+  canHotReload?: (...args: unknown[]) => unknown;
 };
 
 function installHarness(): FakeHarness {
@@ -114,12 +121,26 @@ describe('the agent bridge, running for real', () => {
     (0, eval)(AGENT_PLAY_BRIDGE);
   });
 
+  // One 400ms retry is armed; let it land before jsdom goes.
+  afterAll(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
+  });
+
   beforeEach(() => {
     received.length = 0;
     harness.steps = 0;
     harness.frame = 0;
     harness.metadata = { state: 'playing', score: 0, observation: '{"room":"cellar"}' };
     harness.audio.length = 0;
+    delete harness.ui;
+    delete harness.observation;
+    delete harness.api;
+    delete harness.helpers;
+    delete harness.camLookAt;
+    delete harness.validateState;
+    delete harness.canHotReload;
+    delete (harness as unknown as { toString?: unknown }).toString;
+    delete (window as unknown as { GameKit?: unknown }).GameKit;
   });
 
   it('reports the sound the game played, which is the only way an agent hears it', async () => {
@@ -456,5 +477,1102 @@ describe('the agent bridge, running for real', () => {
     window.postMessage({ source: 'gdpl-player', type: 'agent:enable' }, '*');
     await settle();
     expect(lastOf(received, 'agent:hello')).toBeUndefined();
+  });
+
+  it('merges GameKit widgets with harness.ui so a toolbar without the ui module is visible', async () => {
+    (window as unknown as { GameKit: { ui: { affordances: () => unknown[] } } }).GameKit = {
+      ui: {
+        affordances: () => [{ label: 'Score', enabled: true, x1: 0, y1: 0, x2: 0.2, y2: 0.1 }],
+      },
+    };
+    harness.ui = [{ label: 'Rail', enabled: true, selected: true, x: 0, y: 216, width: 48, height: 24 }];
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const ui = lastOf(received, 'agent:state')!.ui as Array<{ label: string; x1: number; selected?: boolean }>;
+    expect(ui.map((widget) => widget.label)).toEqual(['Score', 'Rail']);
+    expect(ui[1]?.selected).toBe(true);
+  });
+
+  it('fills observation from the harness when snapshot omitted it', async () => {
+    harness.metadata = { state: 'playing', cash: 12000 };
+    harness.observation = () => ({ tool: 'rail', cam: [8, 12] });
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+    expect(snapshot.observation).toContain('"tool":"rail"');
+    expect(snapshot.cash).toBe(12000);
+  });
+
+  it('lists helpers from harness.api and Object.assign, and policy can call them', async () => {
+    let looked = 0;
+    harness.api = { buildRail: (from: unknown, to: unknown) => ({ from, to }) };
+    harness.camLookAt = (x: unknown, y: unknown) => {
+      looked += 1;
+      return { x, y };
+    };
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+    expect(lastOf(received, 'agent:state')!.api).toEqual(['buildRail', 'camLookAt']);
+
+    const result = await runPolicy(`function playAgent(agent) {
+      agent.log(agent.api().join(','));
+      const built = agent.call('buildRail', [0, 0], [1, 1]);
+      agent.log(JSON.stringify(built));
+      agent.call('camLookAt', 8, 12);
+    }`);
+    expect(result.outcome).toBe('completed');
+    const logs = result.logs as Array<{ text: string }>;
+    expect(logs.some((entry) => entry.text.includes('buildRail,camLookAt'))).toBe(true);
+    expect(logs.some((entry) => entry.text.includes('"from":[0,0]'))).toBe(true);
+    expect(looked).toBe(1);
+
+    received.length = 0;
+    send({ type: 'agent:command', command: { kind: 'call', name: 'camLookAt', args: [3, 4] } });
+    await settle();
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(log.some((entry) => entry.kind === 'call' && entry.detail.includes('camLookAt'))).toBe(true);
+    expect(looked).toBe(2);
+  });
+
+  // The shell hot-swaps builds with these; no game helper.
+  it('never publishes the state-preservation hooks the shell owns', async () => {
+    harness.validateState = () => true;
+    harness.canHotReload = () => true;
+    harness.api = { buildRail: () => 'ok' };
+    send({ type: 'agent:enable' });
+    await settle();
+    expect(lastOf(received, 'agent:state')!.api).toEqual(['buildRail']);
+
+    const result = await runPolicy(`function playAgent(agent) {
+      try { agent.call('validateState', {}); agent.log('reached'); }
+      catch (err) { agent.log('refused'); }
+    }`);
+    const logs = result.logs as Array<{ text: string }>;
+    expect(logs.some((entry) => entry.text.includes('refused'))).toBe(true);
+  });
+
+  // A truthy core lookup hid every prototype name.
+  it('publishes a helper whose name Object.prototype also carries', async () => {
+    let called = 0;
+    (harness as unknown as { toString: () => unknown }).toString = () => {
+      called += 1;
+      return 'helper';
+    };
+    send({ type: 'agent:enable' });
+    await settle();
+    expect(lastOf(received, 'agent:state')!.api).toEqual(['toString']);
+
+    const result = await runPolicy(`function playAgent(agent) {
+      agent.log(JSON.stringify(agent.call('toString')));
+    }`);
+    expect(result.outcome).toBe('completed');
+    expect(called).toBe(1);
+  });
+
+  // An ordinary table let call reach Object.prototype and report success.
+  it('refuses a prototype name no game registered', async () => {
+    harness.api = { realOne: () => 'ok' };
+    send({ type: 'agent:enable' });
+    await settle();
+
+    const result = await runPolicy(`function playAgent(agent) {
+      for (const name of ['constructor', 'toString', 'valueOf', 'hasOwnProperty']) {
+        try { agent.call(name); agent.log('RESOLVED ' + name); }
+        catch (err) { agent.log('refused ' + name); }
+      }
+      agent.log('real ' + agent.call('realOne'));
+    }`);
+    expect(result.outcome).toBe('completed');
+    const logs = (result.logs as Array<{ text: string }>).map((entry) => entry.text);
+    expect(logs.some((text) => text.startsWith('RESOLVED'))).toBe(false);
+    expect(logs.filter((text) => text.startsWith('refused'))).toHaveLength(4);
+    expect(logs).toContain('real ok');
+  });
+
+  // A truncated name was advertised but could not be called.
+  it('only lists helper names that call can resolve', async () => {
+    const longName = 'buildRailFromTheDepotAllTheWayToTheHarbourSide';
+    harness.api = { [longName]: () => 'ok', shortOne: () => 'ok' };
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const api = lastOf(received, 'agent:state')!.api as string[];
+    expect(api).toContain('shortOne');
+    expect(api.some((name) => longName.startsWith(name) && name !== longName)).toBe(false);
+  });
+
+  // A registry of junk was scanned whole, every frame, to publish nothing.
+  it('bounds the scan over a large helper registry', async () => {
+    const junk: Record<string, (...args: unknown[]) => unknown> = {};
+    for (let i = 0; i < 5000; i++) junk[`junk${i}`] = i as unknown as () => unknown;
+    junk.lateHelper = () => 'ok';
+    harness.api = junk;
+    const started = Date.now();
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const api = lastOf(received, 'agent:state')!.api as string[];
+    expect(api).not.toContain('lateHelper');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  // One bad registration must not take the whole surface down.
+  it('skips a helper registration whose getter throws', async () => {
+    const api: Record<string, unknown> = { good: () => 'ok' };
+    Object.defineProperty(api, 'landmine', {
+      enumerable: true,
+      get() {
+        throw new Error('no');
+      },
+    });
+    harness.api = api as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state')!;
+    expect(state.api as string[]).toContain('good');
+    expect(state.api as string[]).not.toContain('landmine');
+  });
+
+  // Replacing the global breaks the harness, so read the source.
+  it('collects policy arguments through a captured slice', () => {
+    const source = AGENT_PLAY_BRIDGE;
+    expect(source).toContain('AGENT_ARGS(arguments,1)');
+    expect(source).not.toContain('Array.prototype.slice.call');
+    expect(source).toContain('AGENT_ARGS=AGENT_CALL.bind(Array.prototype.slice)');
+  });
+
+  // An own apply property is data, not an invocation path.
+  it('calls a helper that carries its own apply property', async () => {
+    const helper = () => 'real';
+    (helper as unknown as Record<string, unknown>).apply = () => 'shadow';
+    harness.api = { probe: helper } as unknown as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'call', name: 'probe', args: [] } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(log.some((entry) => entry.detail.includes('real'))).toBe(true);
+    expect(log.some((entry) => entry.detail.includes('shadow'))).toBe(false);
+  });
+
+  // A method registered on the registry must still see its own object.
+  it('calls a helper with the registry it was registered on', async () => {
+    harness.api = {
+      total: 0,
+      increment(this: { total: number }) {
+        this.total += 1;
+        return this.total;
+      },
+    } as unknown as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'call', name: 'increment', args: [] } });
+    await settle();
+
+    const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+    expect(log.some((entry) => entry.kind === 'error')).toBe(false);
+    expect(log.some((entry) => entry.detail === 'increment 1')).toBe(true);
+  });
+
+  // A helper registered during a call is callable in that frame.
+  it('sees a registry change made inside one frame', async () => {
+    const api: Record<string, (...args: unknown[]) => unknown> = {
+      openGate: () => {
+        api.walkThrough = () => 'through';
+        return 'open';
+      },
+    };
+    harness.api = api;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'call', name: 'openGate', args: [] } });
+    await settle();
+
+    expect(lastOf(received, 'agent:state')!.api as string[]).toContain('walkThrough');
+  });
+
+  // A registration written as a method must still see its harness.
+  it('reads a functional observation with its owner as receiver', async () => {
+    harness.metadata = { state: 'playing', cash: 12 };
+    harness.observation = function (this: { metadata: { cash: number } }) {
+      return { cash: this.metadata.cash };
+    };
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+    expect(snapshot.observation).toContain('"cash":12');
+  });
+
+  // The observation slot can be an accessor that throws.
+  it('survives a harness.observation that throws when read', async () => {
+    harness.metadata = { state: 'playing' };
+    Object.defineProperty(harness, 'observation', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('no observation');
+      },
+    });
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state');
+    expect(state).toBeTruthy();
+    expect((state!.snapshot as Record<string, unknown>).state).toBe('playing');
+  });
+
+  // Enumerating a registry can throw before any per-entry guard runs.
+  it('survives a harness.api whose enumeration throws', async () => {
+    harness.api = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error('no keys');
+        },
+      },
+    ) as Record<string, (...args: unknown[]) => unknown>;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state');
+    expect(state).toBeTruthy();
+    expect(state!.api as string[]).toEqual([]);
+  });
+
+  // The registry slot itself can be an accessor that throws.
+  it('survives a harness.api that throws when read', async () => {
+    Object.defineProperty(harness, 'api', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('no registry');
+      },
+    });
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const state = lastOf(received, 'agent:state');
+    expect(state).toBeTruthy();
+    expect(state!.api as string[]).toEqual([]);
+  });
+
+  // Math.min is writable, so the scan bound compares instead.
+  it('bounds the widget scan without Math.min', async () => {
+    const original = Math.min;
+    Math.min = ((first: number) => first) as typeof Math.min;
+    try {
+      const reads: number[] = [];
+      const alien = new Proxy({ length: 1_000_000 } as unknown as unknown[], {
+        get(_target, key) {
+          if (key === 'length') return 1_000_000;
+          const index = Number(key);
+          if (Number.isFinite(index)) reads.push(index);
+          return { label: `w${String(key)}`, x1: 0, y1: 0, x2: 1, y2: 1 };
+        },
+      });
+      harness.ui = alien;
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      expect(reads.length).toBeLessThan(1000);
+    } finally {
+      Math.min = original;
+    }
+  });
+
+  // One widget whose field throws must not take the list with it.
+  it('skips a widget whose property read throws', async () => {
+    const landmine: Record<string, unknown> = { x1: 0, y1: 0, x2: 1, y2: 1 };
+    Object.defineProperty(landmine, 'label', {
+      enumerable: true,
+      get() {
+        throw new Error('no label');
+      },
+    });
+    harness.ui = [landmine, { label: 'GOOD', x1: 0, y1: 0, x2: 0.5, y2: 0.5 }] as unknown as typeof harness.ui;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const ui = lastOf(received, 'agent:state')!.ui as Array<{ label: string }>;
+    expect(ui.map((widget) => widget.label)).toContain('GOOD');
+  });
+
+  // An off-canvas widget was advertised at bounds click refuses.
+  it('clips widget bounds to the canvas', async () => {
+    harness.ui = [
+      { label: 'OFF', x1: -2, y1: -2, x2: 3, y2: 3 },
+      { label: 'PIXELS', x: -400, y: -400, width: 4000, height: 4000 },
+    ] as unknown as typeof harness.ui;
+    send({ type: 'agent:enable' });
+    await settle();
+    send({ type: 'agent:command', command: { kind: 'look' } });
+    await settle();
+
+    const ui = lastOf(received, 'agent:state')!.ui as Array<Record<string, number>>;
+    expect(ui.length).toBeGreaterThan(0);
+    for (const widget of ui) {
+      for (const key of ['x1', 'y1', 'x2', 'y2']) {
+        expect(widget[key], key).toBeGreaterThanOrEqual(0);
+        expect(widget[key], key).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  // A hidden key one level down used to reach the agent.
+  describe('hiddenFields reach the structured surfaces too', () => {
+    const setHidden = (names: string[] | null) => {
+      const scope = window as unknown as { __GAME_AGENT_HIDDEN__?: string[] };
+      if (names) scope.__GAME_AGENT_HIDDEN__ = names;
+      else delete scope.__GAME_AGENT_HIDDEN__;
+    };
+
+    afterEach(() => setHidden(null));
+
+    it('drops a hidden key nested inside observation', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', clue: { targetWord: 'RAVEN', letters: 5 } });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).not.toContain('RAVEN');
+      // Redaction, not deletion: what is not hidden still reaches the agent.
+      expect(snapshot.observation).toContain('"room":"cellar"');
+      expect(snapshot.observation).toContain('"letters":5');
+    });
+
+    it("keeps a helper's hidden return value out of the log that crosses the bridge", async () => {
+      setHidden(['targetWord']);
+      harness.api = { peekRound: () => ({ cash: 100, targetWord: 'RAVEN' }) };
+      send({ type: 'agent:enable' });
+      await settle();
+      received.length = 0;
+      send({ type: 'agent:command', command: { kind: 'call', name: 'peekRound', args: [] } });
+      await settle();
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+      // One bridge serves the file, so its log outlives a test.
+      const note = log.find((entry) => entry.kind === 'call' && entry.detail.startsWith('peekRound'));
+      expect(note?.detail).toContain('"cash":100');
+      expect(note?.detail).not.toContain('RAVEN');
+    });
+
+    // A policy reads the harness directly; redacting here is theatre.
+    it('still hands the policy the unredacted value', async () => {
+      setHidden(['targetWord']);
+      harness.api = { peekRound: () => ({ cash: 100, targetWord: 'RAVEN' }) };
+      send({ type: 'agent:enable' });
+      await settle();
+
+      const result = await runPolicy(`function playAgent(agent) {
+        agent.log(JSON.stringify(agent.call('peekRound')));
+      }`);
+      expect(result.outcome).toBe('completed');
+      const logs = result.logs as Array<{ text: string }>;
+      expect(logs.some((entry) => entry.text.includes('RAVEN'))).toBe(true);
+    });
+
+    // The parse cap guards strings; an object graph never met it.
+    it('withholds an object observation too large to serialize', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', pad: 'x'.repeat(2_000_000) });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(String(snapshot.observation).length).toBeLessThan(200);
+    });
+
+    it('still serializes an ordinary object observation in full', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', tool: 'rail' });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"room":"cellar"');
+      expect(snapshot.observation).toContain('"tool":"rail"');
+    });
+
+    // The walk clones, so it needs its own bound too.
+    it('withholds an observation too wide to walk', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ rows: Array.from({ length: 500_000 }, (_, i) => i) });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+    });
+
+    it('still walks ordinary nested data', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ grid: [[1, 2]], camera: { x: 4 }, targetWord: 'RAVEN' });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"grid":[[1,2]]');
+      expect(snapshot.observation).toContain('"x":4');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // Text a game formats itself is text: capped, never parsed, never inspected.
+    it('passes a JSON-shaped string through without parsing it', async () => {
+      setHidden(['targetWord']);
+      const json = JSON.stringify({ room: 'cellar', targetWord: 'RAVEN' });
+      harness.metadata = { state: 'playing', observation: json };
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toBe(json);
+    });
+
+    // A helper that throws could carry the answer in its message.
+    it('reports a helper failure without its message when fields are declared', async () => {
+      setHidden(['targetWord']);
+      harness.api = {
+        boom: () => {
+          throw new Error(JSON.stringify({ targetWord: 'RAVEN' }));
+        },
+      };
+      send({ type: 'agent:enable' });
+      await settle();
+      received.length = 0;
+      send({ type: 'agent:command', command: { kind: 'call', name: 'boom', args: [] } });
+      await settle();
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+      const note = log.find((entry) => entry.kind === 'error' && entry.detail.startsWith('boom'));
+      expect(note?.detail).toContain('helper failed');
+      expect(note?.detail).not.toContain('RAVEN');
+    });
+
+    it('withholds a structured value too large to serialize', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ pad: 'x'.repeat(2_000_000), targetWord: 'RAVEN' });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // A long key outran the counter and the result was sliced.
+    it('withholds rather than emitting a truncated document', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ ['k'.repeat(50000)]: 1 });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      const observation = String(snapshot.observation ?? '');
+      expect(observation).toContain('too large');
+      // The marker, never a cut JSON prefix.
+      expect(observation.startsWith('{')).toBe(false);
+    });
+
+    // Rejected entries still cost a look, so bound the scan.
+    it('bounds the widget scan, not only what it accepts', async () => {
+      harness.ui = { length: 100_000_000 } as unknown as never;
+      send({ type: 'agent:enable' });
+      await settle();
+      const started = Date.now();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      expect(lastOf(received, 'agent:state')!.ui).toEqual([]);
+      expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    // A getter answering differently twice used to slip its second answer past.
+    it('reads each snapshot property once', async () => {
+      setHidden(['targetWord']);
+      let reads = 0;
+      const meta: Record<string, unknown> = { state: 'playing' };
+      Object.defineProperty(meta, 'clue', {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return reads > 1 ? { targetWord: 'RAVEN' } : null;
+        },
+      });
+      harness.metadata = meta;
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(JSON.stringify(snapshot)).not.toContain('RAVEN');
+    });
+
+    // A giant key was escaped whole before the budget could refuse it.
+    it('withholds an oversized key without escaping all of it', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const wide: Record<string, unknown> = {};
+      wide['k'.repeat(2_000_000)] = 1;
+      harness.observation = () => wide;
+      const started = Date.now();
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(Date.now() - started).toBeLessThan(2000);
+    });
+
+    // An accessor is game code, and this walk runs none.
+    it('does not run an accessor while fields are declared', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const clue: Record<string, unknown> = { targetWord: 'RAVEN', letters: 5 };
+      Object.defineProperty(clue, 'answer', {
+        enumerable: true,
+        get() {
+          return clue.targetWord;
+        },
+      });
+      harness.observation = () => ({ clue });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"letters":5');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // Dropped fields cost a full traversal and still emitted nothing.
+    it('stops walking a wide object of fields that produce no output', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const junk: Record<string, unknown> = {};
+      for (let i = 0; i < 40_000; i++) junk[`h${i}`] = undefined;
+      junk.targetWord = 'RAVEN';
+      harness.observation = () => junk;
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('too large');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // An index can be an accessor, and a slot names nothing.
+    it('does not run an indexed accessor while fields are declared', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const rounds: unknown[] = [];
+      Object.defineProperty(rounds, '0', {
+        enumerable: true,
+        configurable: true,
+        get() {
+          return 'RAVEN';
+        },
+      });
+      (rounds as { length: number }).length = 1;
+      harness.observation = () => ({ rounds });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('[null]');
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // A toStringTag getter is game code the type test ran.
+    it('asks the value nothing to learn whether it is an array', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const clue: Record<string, unknown> = { targetWord: 'RAVEN' };
+      Object.defineProperty(clue, Symbol.toStringTag, {
+        get() {
+          clue.answer = clue.targetWord;
+          return 'Object';
+        },
+      });
+      harness.observation = () => ({ clue });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).not.toContain('RAVEN');
+    });
+
+    // A proxy get trap is game code the descriptor does not show.
+    it('emits the value it checked, not a second read', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const target = { targetWord: 'RAVEN', answer: null, letters: 5 };
+      const clue = new Proxy(target, {
+        get(inner, key) {
+          return key === 'answer' ? inner.targetWord : inner[key as keyof typeof inner];
+        },
+      });
+      harness.observation = () => ({ clue });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(String(snapshot.observation)).toContain('"letters":5');
+      expect(String(snapshot.observation)).not.toContain('RAVEN');
+    });
+
+    // isFinite is a writable global; the check uses comparisons instead.
+    it('judges numbers without the isFinite global', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const original = globalThis.isFinite;
+      globalThis.isFinite = (() => true) as typeof globalThis.isFinite;
+      try {
+        harness.observation = () => ({ cash: 100, nan: Number.NaN, inf: Number.POSITIVE_INFINITY });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).toContain('"nan":null');
+        expect(String(snapshot.observation)).toContain('"inf":null');
+      } finally {
+        globalThis.isFinite = original;
+      }
+    });
+
+    // The String global is writable, and a number needs no hook.
+    it('serializes numbers without the String global', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const original = globalThis.String;
+      globalThis.String = ((x: unknown) => (typeof x === 'string' ? x : '"RAVEN"')) as StringConstructor;
+      try {
+        harness.observation = () => ({ targetWord: 'RAVEN', cash: 100 });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).not.toContain('RAVEN');
+      } finally {
+        globalThis.String = original;
+      }
+    });
+
+    // push would receive the value before redaction saw it.
+    it('writes without calling array or string methods', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const originals = { push: Array.prototype.push, join: Array.prototype.join };
+      Array.prototype.push = function (this: unknown[], ...items: unknown[]) {
+        const first = items[0] as { targetWord?: string; answer?: string } | undefined;
+        if (first && first.targetWord) first.answer = first.targetWord;
+        return (originals.push as (...args: unknown[]) => number).apply(this, items);
+      };
+      Array.prototype.join = (() => 'pwned') as typeof Array.prototype.join;
+      try {
+        harness.observation = () => ({ targetWord: 'RAVEN', cash: 100, list: [1, 2] });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).toContain('[1,2]');
+        expect(String(snapshot.observation)).not.toContain('RAVEN');
+        expect(String(snapshot.observation)).not.toContain('pwned');
+      } finally {
+        Array.prototype.push = originals.push;
+        Array.prototype.join = originals.join;
+      }
+    });
+
+    // A replaced String could rename a declared field out of the list.
+    it('keeps hidden names as written, never converted', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.api = { peek: () => ({ targetWord: 'RAVEN', cash: 1 }) } as unknown as typeof harness.api;
+      const original = globalThis.String;
+      globalThis.String = ((value: unknown) =>
+        value === 'targetWord' ? 'notHidden' : original(value)) as StringConstructor;
+      try {
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'call', name: 'peek', args: [] } });
+        await settle();
+      } finally {
+        globalThis.String = original;
+      }
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ detail: string }>;
+      expect(log.some((entry) => entry.detail.includes('RAVEN'))).toBe(false);
+    });
+
+    // A replaced push could drop a declared name from the hidden list.
+    it('collects hidden names without the array method', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.api = { peek: () => ({ targetWord: 'RAVEN', cash: 1 }) } as unknown as typeof harness.api;
+      const original = Array.prototype.push;
+      Array.prototype.push = function (this: unknown[], ...items: unknown[]) {
+        const kept = items.filter((item) => item !== 'targetWord');
+        return (original as (...args: unknown[]) => number).apply(this, kept);
+      } as typeof Array.prototype.push;
+      try {
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'call', name: 'peek', args: [] } });
+        await settle();
+      } finally {
+        Array.prototype.push = original;
+      }
+
+      const log = lastOf(received, 'agent:state')!.log as Array<{ detail: string }>;
+      expect(log.some((entry) => entry.detail.includes('RAVEN'))).toBe(false);
+    });
+
+    // Redaction must not call a game's version of anything.
+    it('keeps redacting when the game replaces call, JSON and Date', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const originals = {
+        call: Function.prototype.call,
+        json: JSON.stringify,
+        iso: Date.prototype.toISOString,
+      };
+      Function.prototype.call = function (this: unknown, self: unknown, ...rest: unknown[]) {
+        if (this === originals.iso) {
+          const holder = self as { clue?: { targetWord?: string } } | undefined;
+          return holder?.clue ? holder.clue.targetWord : 'x';
+        }
+        const native = originals.call as (this: unknown, self: unknown, ...args: unknown[]) => unknown;
+        return native.apply(this, [self, ...rest]);
+      } as typeof Function.prototype.call;
+      JSON.stringify = (() => '"pwned"') as typeof JSON.stringify;
+      Date.prototype.toISOString = function () {
+        return 'nope';
+      };
+      try {
+        harness.observation = () => ({ clue: { targetWord: 'RAVEN', cash: 100 } });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation)).toContain('"cash":100');
+        expect(String(snapshot.observation)).not.toContain('RAVEN');
+        expect(String(snapshot.observation)).not.toContain('pwned');
+      } finally {
+        Function.prototype.call = originals.call;
+        JSON.stringify = originals.json;
+        Date.prototype.toISOString = originals.iso;
+      }
+    });
+
+    // The result is already a string, so nothing converts it after redaction.
+    it('never runs a replaced String between redaction and the log', async () => {
+      setHidden(['targetWord']);
+      harness.api = { peek: () => ({ cash: 100, targetWord: 'RAVEN' }) };
+      const original = globalThis.String;
+      let detail: string | undefined;
+      try {
+        globalThis.String = function (this: unknown, ...args: unknown[]) {
+          if (args[0] === '{"cash":100}') return 'peek:RAVEN';
+          return (original as (...rest: unknown[]) => string)(...args);
+        } as unknown as StringConstructor;
+        send({ type: 'agent:enable' });
+        await settle();
+        received.length = 0;
+        send({ type: 'agent:command', command: { kind: 'call', name: 'peek', args: [] } });
+        await settle();
+        const log = lastOf(received, 'agent:state')!.log as Array<{ kind: string; detail: string }>;
+        detail = log
+          .filter((entry) => entry.kind === 'call')
+          .map((entry) => entry.detail)
+          .join('|');
+      } finally {
+        globalThis.String = original;
+      }
+      expect(detail ?? '').toContain('{"cash":100}');
+      expect(detail ?? '').not.toContain('RAVEN');
+    });
+
+    // Pixel bounds are the documented widget shape, so the conversion is ours.
+    it('normalizes pixel bounds through the Number it captured', async () => {
+      const original = globalThis.Number;
+      let widgets: Array<Record<string, number>> | undefined;
+      try {
+        const fake = function (this: unknown, ...args: unknown[]) {
+          if (args[0] === 37) return 999;
+          return (original as (...rest: unknown[]) => number)(...args);
+        };
+        // Statics like Number.isFinite keep working; only the conversion lies.
+        Object.setPrototypeOf(fake, original);
+        fake.prototype = original.prototype;
+        globalThis.Number = fake as unknown as NumberConstructor;
+        harness.ui = [{ label: 'Rail', x: 10, y: 10, width: 37, height: 37 }];
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+        widgets = (lastOf(received, 'agent:state')!.ui || []) as Array<Record<string, number>>;
+      } finally {
+        globalThis.Number = original;
+      }
+      expect(widgets?.length).toBe(1);
+      // Free of canvas size: 4.7 here, 99.9 through a swap.
+      expect(widgets![0].x2 / widgets![0].x1).toBeCloseTo(4.7, 5);
+    });
+
+    // A table built at call time would break the whole surface.
+    it('builds the helper table when the game breaks Object.create', async () => {
+      const original = Object.create;
+      let names: unknown;
+      try {
+        Object.create = ((proto: object | null, props?: PropertyDescriptorMap) => {
+          if (proto === null) throw new Error('no tables for you');
+          return original(proto, props as PropertyDescriptorMap);
+        }) as typeof Object.create;
+        harness.api = { buildRail: () => 'ok' };
+        send({ type: 'agent:enable' });
+        await settle();
+        names = lastOf(received, 'agent:state')!.api;
+      } finally {
+        Object.create = original;
+      }
+      expect(names).toEqual(['buildRail']);
+    });
+
+    // A name check is ours; the game only supplies the name.
+    it('keeps the helper table when the game breaks RegExp.prototype.test', async () => {
+      const original = RegExp.prototype.test;
+      let names: unknown;
+      try {
+        RegExp.prototype.test = function (this: RegExp, value: string) {
+          if (this.source.indexOf('A-Za-z_') >= 0) throw new Error('no helpers for you');
+          return original.call(this, value);
+        };
+        harness.api = { buildRail: () => 'ok' };
+        send({ type: 'agent:enable' });
+        await settle();
+        names = lastOf(received, 'agent:state')!.api;
+      } finally {
+        RegExp.prototype.test = original;
+      }
+      expect(names).toEqual(['buildRail']);
+    });
+
+    // An index setter would see the value before the walk redacted it.
+    it('holds values on a stack no inherited setter can reach', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ targetWord: 'RAVEN', cash: 100 });
+      const slots = new WeakMap<object, unknown>();
+      let detail: string | undefined;
+      try {
+        Object.defineProperty(Array.prototype, 0, {
+          configurable: true,
+          get(this: object) {
+            return slots.get(this);
+          },
+          set(this: object, value: unknown) {
+            slots.set(this, value);
+            const held = value as { targetWord?: string; answer?: string };
+            if (held && typeof held === 'object' && 'targetWord' in held) held.answer = held.targetWord;
+          },
+        });
+        send({ type: 'agent:enable' });
+        await settle();
+        received.length = 0;
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        detail = typeof snapshot.observation === 'string' ? snapshot.observation : '';
+      } finally {
+        delete (Array.prototype as unknown as Record<number, unknown>)[0];
+      }
+      expect(detail ?? '').toContain('"cash":100');
+      expect(detail ?? '').not.toContain('RAVEN');
+    });
+
+    // Injected before the game script, so the intrinsic is ours.
+    it('keeps reading Dates through the intrinsic the game replaced', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const original = Date.prototype.toISOString;
+      Date.prototype.toISOString = function (this: Record<string, unknown>) {
+        const clue = this.clue as Record<string, unknown> | undefined;
+        return clue ? `peek:${String(clue.targetWord)}` : String(this.targetWord ?? 'x');
+      };
+      try {
+        harness.observation = () => ({ clue: { targetWord: 'RAVEN', cash: 100 } });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(snapshot.observation).toContain('"cash":100');
+        expect(snapshot.observation).not.toContain('RAVEN');
+      } finally {
+        Date.prototype.toISOString = original;
+      }
+    });
+
+    // Each converter here runs before any check could see it.
+    it('never lets a toJSON carry a declared key out', async () => {
+      const shapes: Record<string, () => unknown> = {
+        renames: () => ({ targetWord: 'RAVEN', toJSON: () => ({ answer: 'RAVEN' }) }),
+        erasesItself: () => ({
+          targetWord: 'RAVEN',
+          toJSON(this: Record<string, unknown>) {
+            delete this.toJSON;
+            return { answer: this.targetWord };
+          },
+        }),
+        returnsPrimitive: () => ({
+          targetWord: 'RAVEN',
+          toJSON(this: Record<string, unknown>) {
+            return this.targetWord;
+          },
+        }),
+        renamesInPlace: () => ({
+          targetWord: 'RAVEN',
+          toJSON(this: Record<string, unknown>) {
+            this.answer = this.targetWord;
+            delete this.targetWord;
+            return this;
+          },
+        }),
+      };
+
+      for (const [name, make] of Object.entries(shapes)) {
+        setHidden(['targetWord']);
+        harness.metadata = { state: 'playing' };
+        harness.observation = () => ({ clue: make() });
+        send({ type: 'agent:enable' });
+        await settle();
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        expect(String(snapshot.observation), name).not.toContain('RAVEN');
+      }
+    });
+
+    // A game toJSON is never consulted, so nobody borrows the Date path.
+    it('reads a date-like object as the object it is', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      const alien = { stamp: 0, toJSON: () => 'borrowed' };
+      harness.observation = () => ({ when: alien, ok: 1 });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('"stamp":0');
+      expect(snapshot.observation).not.toContain('borrowed');
+    });
+
+    // A Date cannot rename anything, so it still serializes.
+    it('still serializes a Date', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ when: new Date(0), ok: 1 });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('1970-01-01');
+    });
+
+    it('leaves a game that declares nothing untouched', async () => {
+      setHidden(null);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ room: 'cellar', clue: { targetWord: 'RAVEN' } });
+      send({ type: 'agent:enable' });
+      await settle();
+      send({ type: 'agent:command', command: { kind: 'look' } });
+      await settle();
+
+      const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+      expect(snapshot.observation).toContain('RAVEN');
+    });
   });
 });

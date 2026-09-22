@@ -9,6 +9,7 @@ import {
   classifyMcpSessionKeyShape,
   mcpToolRefusalFields,
   toolErrorReason,
+  toolErrorCode,
 } from './mcp-debug-log.js';
 import { mintMcpSessionKey, newMcpSessionId } from './mcp-session-key.js';
 import { generateAsAccessToken } from '../platform/oauth-tokens.js';
@@ -222,5 +223,13 @@ describe('mcp tool refusal logging', () => {
     expect(String(refused?.reason ?? '')).toMatch(/OAuth access proves your identity only/i);
     expect(JSON.stringify(lines)).not.toContain(oauthAccess);
     expect(JSON.stringify(lines)).not.toContain(roundKey);
+  });
+});
+
+describe('toolErrorCode', () => {
+  it('reads the code a refusal carries, and nothing from a success', () => {
+    expect(toolErrorCode({ isError: true, structuredContent: { error: 'no', code: 'not_owner' } })).toBe('not_owner');
+    expect(toolErrorCode({ isError: true, structuredContent: { error: 'no' } })).toBeNull();
+    expect(toolErrorCode({ structuredContent: { code: 'not_owner' } })).toBeNull();
   });
 });

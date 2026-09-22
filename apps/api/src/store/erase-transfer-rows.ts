@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import type { GuardedFirestore } from './shelf-guard-firestore.js';
 import { preserveHandoverMarker } from './transfer-marker-backfill.js';
 
 interface StoredInvite {
@@ -13,7 +13,11 @@ interface StoredInvite {
 // A slug-keyed doc can be overwritten first, so re-check it.
 
 // Returns the recipients whose cached inbox lost a row.
-export async function eraseTransferRows(db: Firestore, uid: string, slugs: Iterable<string>): Promise<Set<string>> {
+export async function eraseTransferRows(
+  db: GuardedFirestore,
+  uid: string,
+  slugs: Iterable<string>,
+): Promise<Set<string>> {
   const affectedRecipients = new Set<string>();
   for (const slug of slugs) {
     const ref = db.collection('gameTransfers').doc(slug);

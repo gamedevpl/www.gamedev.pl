@@ -1,4 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
+import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import type { PublicationHealthCheck, PublicationRecord } from '../../delivery/games-store.js';
 
 export interface PublicationStore {
@@ -79,7 +79,17 @@ export class FirestorePublicationStore implements PublicationStore {
       const snap = await tx.get(ref);
       const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
       if (!current) return false;
-      tx.set(ref, { publication: { ...current, healthCheck: check } }, { merge: true });
+      // A merge write leaves an omitted field's old value untouched.
+      const healthCheck = {
+        version: check.version,
+        requestedAt: check.requestedAt,
+        buildId: check.buildId ?? FieldValue.delete(),
+        green: check.green ?? FieldValue.delete(),
+        verdictAt: check.verdictAt ?? FieldValue.delete(),
+        notifiedAt: check.notifiedAt ?? FieldValue.delete(),
+        unhealthySinceAt: check.unhealthySinceAt ?? FieldValue.delete(),
+      };
+      tx.set(ref, { publication: { ...current, healthCheck } }, { merge: true });
       return true;
     });
   }

@@ -133,11 +133,16 @@ export function fakeFirestore() {
   const docs = new Map<string, Record<string, unknown>>();
   const key = (collection: string, id: string) => `${collection}/${id}`;
   let billedReads = 0;
+  // Firestore bills a write per document, batched or not.
+  let billedWrites = 0;
   const billDocs = (n: number) => {
     billedReads += n;
   };
   const billQuery = (returned: number) => {
     billedReads += Math.max(1, returned);
+  };
+  const billWrite = () => {
+    billedWrites += 1;
   };
 
   /** Document ids directly under `path` — not those in deeper subcollections. */
@@ -156,6 +161,7 @@ export function fakeFirestore() {
           rejectNestedArrays(data);
         },
         apply: () => {
+          billWrite();
           const previous = docs.get(docKey) ?? {};
           docs.set(
             docKey,
@@ -172,7 +178,10 @@ export function fakeFirestore() {
           rejectNestedArrays(data);
           if (docs.has(docKey)) throw alreadyExists(docKey);
         },
-        apply: () => docs.set(docKey, { ...data }),
+        apply: () => {
+          billWrite();
+          docs.set(docKey, { ...data });
+        },
       }),
       update: (data: Record<string, unknown>) => ({
         validate: () => {
@@ -181,9 +190,18 @@ export function fakeFirestore() {
           if (!docs.has(docKey)) throw new Error('no document to update');
         },
         // Same sentinel handling as a merge `set` -- update() honours FieldValue.delete() too.
-        apply: () => docs.set(docKey, mergeInto(docs.get(docKey)!, data)),
+        apply: () => {
+          billWrite();
+          docs.set(docKey, mergeInto(docs.get(docKey)!, data));
+        },
       }),
-      delete: () => ({ validate: () => {}, apply: () => docs.delete(docKey) }),
+      delete: () => ({
+        validate: () => {},
+        apply: () => {
+          billWrite();
+          docs.delete(docKey);
+        },
+      }),
     };
   };
 
@@ -196,6 +214,10 @@ export function fakeFirestore() {
     };
     return {
       id,
+      // Real refs carry this; the shelf guard reads it.
+      get path() {
+        return `${collection}/${id}`;
+      },
       // `worlds/{id}/worldEntries` — the grandparent is what names a world, and the
       // erase path reads exactly that to report which worlds it touched.
       get parent() {
@@ -208,7 +230,11 @@ export function fakeFirestore() {
       },
       get: async () => {
         billDocs(1);
+        const self = makeRef(collection, id);
         return {
+          id,
+          // Real snapshots carry their ref; the shelf guard reads it.
+          ref: self,
           get exists() {
             return docs.has(key(collection, id));
           },
@@ -382,27 +408,41 @@ export function fakeFirestore() {
     },
     // Writes apply as each tx.* call runs; a failed one now rejects.
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
+      // Firestore rejects a read after a write; so must this.
+      let written = false;
+      const beforeWrite = () => {
+        written = true;
+      };
       const tx = {
         // Aggregate queries are readable inside a transaction in the real client, and
         // the world write depends on that: its quota check has to be ordered against a
         // concurrent claim or two tabs can both spend the same last slot.
-        get: (target: { get: () => Promise<unknown> }) => target.get(),
+        get: (target: { get: () => Promise<unknown> }) => {
+          if (written) {
+            throw new Error('Firestore transactions require all reads to be executed before all writes.');
+          }
+          return target.get();
+        },
         set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
+          beforeWrite();
           const op = ref._stage.set(data, options);
           op.validate();
           op.apply();
         },
         create: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
+          beforeWrite();
           const op = ref._stage.create(data);
           op.validate();
           op.apply();
         },
         update: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
+          beforeWrite();
           const op = ref._stage.update(data);
           op.validate();
           op.apply();
         },
         delete: (ref: ReturnType<typeof makeRef>) => {
+          beforeWrite();
           const op = ref._stage.delete();
           op.apply();
         },
@@ -417,8 +457,11 @@ export function fakeFirestore() {
     key,
     // What Firestore bills, not what the code called.
     billedReads: () => billedReads,
+    // What the write path costs, which the read ratchet cannot see.
+    billedWrites: () => billedWrites,
     resetBilledReads: () => {
       billedReads = 0;
+      billedWrites = 0;
     },
   };
 }

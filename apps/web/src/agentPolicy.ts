@@ -119,6 +119,8 @@ export const POLICY_API_HELP = [
   'agent.state()            the game’s own snapshot, as an object',
   'agent.observation()      its description of the screen, parsed when it is JSON',
   'agent.ui()               registered widgets with 0..1 bounds',
+  'agent.api()              names of helpers the game registered (buildRail, …)',
+  'agent.call(name, ...args) invoke one helper; return value stays in-frame',
   'agent.frame()            frames elapsed; framesUsed() / framesLeft() for the budget',
   'agent.game()             window.GameKit; agent.canvas() the canvas element',
   '',
@@ -135,15 +137,19 @@ export const POLICY_EXAMPLE = `function playAgent(agent) {
     agent.step(5);
   }
   agent.log('after intro:', agent.state());
+  if (agent.observation()) agent.log('observation:', agent.observation());
+  agent.log('helpers:', agent.api());
   agent.capture('round-start');
 
-  // Play, and watch what moves. A trajectory is what tells you whether input lands.
+  // Watch whatever this game reports — arcade score, tycoon cash, or nothing.
   for (let turn = 0; turn < 30; turn++) {
     const before = agent.state();
     agent.press('right', 10);
     const after = agent.state();
-    agent.watch('score', after.score);
-    agent.watch('state', after.state);
+    for (const key of ['score', 'cash', 'delivered', 'orders', 'loan']) {
+      if (after[key] !== undefined) agent.watch(key, after[key]);
+    }
+    if (after.state !== undefined) agent.watch('state', after.state);
     if (JSON.stringify(before) === JSON.stringify(after)) {
       agent.log('nothing changed at frame', agent.frame(), '— input may not reach this game');
       break;

@@ -188,6 +188,7 @@ const FILE_BUCKET = {
   // env-flag reader -- neither has business logic tied to any one bucket.
   'github-rate-limit': 'platform',
   'editor-kit-env': 'platform',
+  'shelf-reads-env': 'platform',
   // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
   // node:crypto over a caller-supplied secret, with no agent-surface state at all.
   'agent-token': 'platform',
@@ -321,6 +322,7 @@ const FILE_BUCKET = {
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
   'shelf-shadow': 'creation',
+  'shelf-source': 'creation',
   'shelf-mirror': 'creation',
   'studio-shelf-records': 'creation',
   'game-transfer-routes': 'creation',
@@ -409,6 +411,8 @@ const FILE_BUCKET = {
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
+  'kit-upcoming-rules': 'agent-surface',
+  'staged-budget': 'agent-surface',
 
   // delivery: staging, games-store, gate
   'build-status': 'delivery',
@@ -564,6 +568,7 @@ const FILE_BUCKET = {
   'uncollected-feedback': 'notifications',
   'notification-email-retry': 'notifications',
   'notify-sweep-routes': 'notifications',
+  'health-verdict': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,
   // ~5,400 lines) Phase 3 Wave B dismantles piece by piece, not a Wave A move target -- every

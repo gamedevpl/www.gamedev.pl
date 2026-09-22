@@ -1,7 +1,9 @@
 import type { SubmissionRecord } from './submission.js';
 
 // A shelf document older than its version is rebuilt, never merged.
-export const SHELF_VERSION = 1;
+
+// 2 adds ownedCount; version 1 is repaired on sight.
+export const SHELF_VERSION = 2;
 
 // A creator this far past plausible reads from source instead.
 export const MAX_SHELF_ROUNDS = 2_000;
@@ -28,6 +30,15 @@ export interface ShelfDocument {
   builtAt: string;
   // Rounds at build time; the reader checks with count().
   sourceCount: number;
+
+  // The ownerUid query size, so one count() checks this.
+  ownedCount?: number;
+
+  // Bumped per write; a stale rebuild elsewhere loses.
+  seq?: number;
+
+  // A tombstone: keeps seq advancing where a delete would reset it.
+  stale?: true;
   rounds: ShelfRound[];
   // Past the cap, so the reader must not trust `rounds` as complete.
   truncated?: true;
@@ -61,7 +72,11 @@ export function fromShelfRound(round: ShelfRound): SubmissionRecord {
   return { ...round } as SubmissionRecord;
 }
 
-export function buildShelfDocument(records: readonly SubmissionRecord[], builtAt: string): ShelfDocument {
+export function buildShelfDocument(
+  records: readonly SubmissionRecord[],
+  builtAt: string,
+  ownedCount?: number,
+): ShelfDocument {
   const ordered = [...records].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
   const kept = ordered.slice(0, MAX_SHELF_ROUNDS);
   return {
@@ -69,15 +84,55 @@ export function buildShelfDocument(records: readonly SubmissionRecord[], builtAt
     builtAt,
     // Counts the source, not what was kept.
     sourceCount: records.length,
+    ...(ownedCount === undefined ? {} : { ownedCount }),
     rounds: kept.map(toShelfRound),
     ...(ordered.length > kept.length ? { truncated: true as const } : {}),
   };
 }
 
+// Deleting resets seq, letting an earlier pass win.
+export function tombstoneShelf(builtAt: string, seq: number): ShelfDocument {
+  // Self-consistent otherwise, so `stale` alone rejects it.
+  return { version: SHELF_VERSION, builtAt, sourceCount: 0, ownedCount: 0, rounds: [], stale: true, seq };
+}
+
 // Usable means this reader may answer from it without reading source.
 export function isShelfUsable(shelf: ShelfDocument | null, sourceCount: number): boolean {
   if (!shelf) return false;
+  if (shelf.stale) return false;
   if (shelf.version !== SHELF_VERSION) return false;
   if (shelf.truncated) return false;
   return shelf.sourceCount === sourceCount;
+}
+
+// Exhaustive by type: a new ShelfRound field cannot be forgotten here.
+const MIRRORED_FIELDS: Record<keyof ShelfRound, true> = {
+  jobId: true,
+  createdAt: true,
+  ownerUid: true,
+  title: true,
+  slug: true,
+  state: true,
+  abandonedAt: true,
+  publishedAt: true,
+  lastStatus: true,
+  lastNotifiedStatus: true,
+  previewVersion: true,
+  deliveredVersion: true,
+  draftSharedAt: true,
+};
+
+// What a shelf reader can see, so what a write must invalidate.
+export const SHELF_MIRRORED_FIELDS: readonly string[] = Object.keys(MIRRORED_FIELDS);
+
+// A patch naming none of them cannot change any shelf.
+export function patchTouchesShelf(patch: object): boolean {
+  return Object.keys(patch).some((key) => key in MIRRORED_FIELDS);
+}
+
+// Compares only mirrored fields; a counter bump is not a shelf change.
+export function shelfRoundChanged(before: SubmissionRecord, after: SubmissionRecord): boolean {
+  return SHELF_MIRRORED_FIELDS.some(
+    (key) => before[key as keyof SubmissionRecord] !== after[key as keyof SubmissionRecord],
+  );
 }

@@ -1329,7 +1329,6 @@ export async function registerSubmissionRoutes(
     store,
     now,
     builderOf,
-    managedAvailabilityGate,
     gamesStore: options.agentChannel?.gamesStore,
     sessionCrashStall,
     codeSurfaceEnabled,

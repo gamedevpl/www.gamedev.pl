@@ -82,6 +82,14 @@ export function settledOver(
 }
 
 // Work begun before erasure belongs to the erased incarnation.
+
+// A uid that signed up again is a different account.
+export function erasedIncarnation(user: { createdAt?: string } | null, erasedAt: string | null): boolean {
+  if (erasedAt === null) return false;
+  // No record to date: the fence covers it.
+  return user?.createdAt === undefined || fencedOut(erasedAt, user.createdAt);
+}
+
 export function fencedOut(erasedAt: string | null, workAt: string): boolean {
   return erasedAt !== null && workAt <= erasedAt;
 }

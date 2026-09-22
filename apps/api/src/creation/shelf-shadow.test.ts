@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { judgeShelfShadow, recordShelfShadow } from './shelf-shadow.js';
-import { buildShelfDocument, SHELF_VERSION } from '../store/records/shelf.js';
+import { buildShelfDocument, SHELF_VERSION, tombstoneShelf } from '../store/records/shelf.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 const record = (jobId: number, extra: Partial<SubmissionRecord> = {}): SubmissionRecord =>
@@ -148,7 +148,7 @@ describe('recordShelfShadow', () => {
   });
 
   // A purely-reading account would stay 'absent' forever without this.
-  it('waits for the backfill on absent, since unawaited work can be lost', async () => {
+  it('waits for the repair on absent, since unawaited work can be lost', async () => {
     let rebuildOwner: string | undefined;
     let resolveRebuild!: (value: boolean) => void;
     const rebuildDone = new Promise<boolean>((resolve) => {
@@ -186,9 +186,9 @@ describe('recordShelfShadow', () => {
     expect(result?.verdict).toBe('absent');
   });
 
-  it('does not backfill a shelf that already exists, agreeing or not', async () => {
+  it('leaves an agreeing shelf alone', async () => {
     let rebuildCalled = false;
-    await recordShelfShadow(
+    const result = await recordShelfShadow(
       {
         store: {
           getShelf: async () => buildShelfDocument(source, at),
@@ -202,9 +202,77 @@ describe('recordShelfShadow', () => {
       'g:owner',
       source,
     );
+    expect(result?.verdict).toBe('match');
     expect(rebuildCalled).toBe(false);
+  });
 
-    await recordShelfShadow(
+  // Rebuilding cannot un-truncate it, so repairing costs a rebuild per read.
+  it('reports a truncated shelf without rebuilding it', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => ({ ...buildShelfDocument(source, at), truncated: true as const }),
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    );
+    expect(result?.verdict).toBe('truncated');
+    expect(rebuildCalled).toBe(false);
+  });
+
+  // A discard leaves this behind; it must not read as agreement.
+  it('repairs a tombstone rather than treating an empty one as a match', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => tombstoneShelf(at, 3),
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      [],
+    );
+    expect(result?.verdict).toBe('stale');
+    expect(rebuildCalled).toBe(true);
+  });
+
+  // A pre-ownedCount shelf would otherwise read from source forever.
+  it('repairs a shelf left behind by an older version', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
+      {
+        store: {
+          getShelf: async () => ({ ...buildShelfDocument(source, at), version: SHELF_VERSION - 1 }),
+          rebuildShelf: async () => {
+            rebuildCalled = true;
+            return true;
+          },
+        },
+        log: { warn: () => {} },
+      },
+      'g:owner',
+      source,
+    );
+    expect(result?.verdict).toBe('version');
+    expect(rebuildCalled).toBe(true);
+  });
+
+  // Readers serve this document, so drift is wrong answers until rewritten.
+  it('repairs a shelf that exists but disagrees', async () => {
+    let rebuildCalled = false;
+    const result = await recordShelfShadow(
       {
         store: {
           // Document counts a round source lacks: 'count', not 'absent'.
@@ -219,7 +287,8 @@ describe('recordShelfShadow', () => {
       'g:owner',
       source,
     );
-    expect(rebuildCalled).toBe(false);
+    expect(result?.verdict).toBe('count');
+    expect(rebuildCalled).toBe(true);
   });
 
   it('reports a rebuild that throws, though the real stores never do', async () => {
@@ -238,10 +307,10 @@ describe('recordShelfShadow', () => {
       source,
     );
 
-    expect(messages).toContain('shelf lazy backfill errored');
+    expect(messages).toContain('shelf repair errored');
   });
 
-  it('reports a rebuild that resolves false, which is how a real store actually fails', async () => {
+  it('reports a rebuild that resolves false, which can also mean a tombstone landed', async () => {
     // The mirror answers false on failure; it never rejects.
     const messages: string[] = [];
     await recordShelfShadow(
@@ -256,6 +325,6 @@ describe('recordShelfShadow', () => {
       source,
     );
 
-    expect(messages).toContain('shelf lazy backfill wrote nothing');
+    expect(messages).toContain('shelf repair did not rebuild');
   });
 });

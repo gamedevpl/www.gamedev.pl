@@ -305,6 +305,14 @@ function validateValueAgainstSchema(value: unknown, schema: Record<string, unkno
     }
   }
 
+  if (Array.isArray(schema.anyOf)) {
+    const branches = schema.anyOf as Array<Record<string, unknown>>;
+    const branchErrors = branches.map((branch) => validateValueAgainstSchema(value, branch, path));
+    if (branchErrors.every((found) => found.length > 0)) {
+      errors.push(`${path}: matched no anyOf branch (${JSON.stringify(branchErrors)})`);
+    }
+  }
+
   if (Array.isArray(schema.enum)) {
     if (!schema.enum.includes(value as never)) {
       errors.push(`${path}: value ${JSON.stringify(value)} not in enum ${JSON.stringify(schema.enum)}`);
@@ -355,7 +363,9 @@ async function callTool(
     (body.result?.content?.[0]?.text ? JSON.parse(body.result.content[0].text) : undefined);
   const isError = Boolean(body.result?.isError);
 
-  if (!isError && structured !== undefined) {
+  // Refusals are validated too: a client checks structuredContent either way, and
+  // skipping them here is why every refusal read as a broken schema in production.
+  if (structured !== undefined) {
     const listed = await mcpCall(app, 'tools/list', undefined, headers);
     const toolDef = (
       listed.json().result as { tools: Array<{ name: string; outputSchema?: Record<string, unknown> }> }
@@ -489,7 +499,8 @@ describe('POST /api/mcp (BY-05)', () => {
       annotations?: { title?: string };
     }>;
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
-    expect(screenshotUpload?.description).toMatch(/curl --upload-file/i);
+    // The header is what makes the PUT parse; an example without it earned a 415.
+    expect(screenshotUpload?.description).toMatch(/curl -H "Content-Type: [^"]+" --upload-file/i);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
     expect(screenshotUpload?.description).toMatch(/--use-gl=angle/);
     expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
@@ -503,7 +514,9 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(screenshotUpload?.description).toMatch(/Without a shell or browser/i);
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
     expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
-    expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/curl --upload-file|prefer/i);
+    expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(
+      /curl -H "Content-Type: [^"]+" --upload-file/i,
+    );
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
@@ -708,9 +721,16 @@ describe('POST /api/mcp (BY-05)', () => {
     await store.recordDispatch(ISSUE, { backend: 'self', ref: 'attempt-2' });
     const secondSessionId = await initialize(app);
     const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': secondSessionId });
-    const structured = started.structured as { round: number; dispatchAttempt: number; sessionKey: string };
+    const structured = started.structured as {
+      round: number;
+      dispatchAttempt: number;
+      sessionKey: string;
+      canPublish?: boolean;
+    };
     expect(structured.round).toBe(1); // the round number genuinely did not move
     expect(structured.dispatchAttempt).toBe(2); // but this is not the first attempt
+    // The right to seal is reported up front, not discovered at submit_sources.
+    expect(structured.canPublish).toBe(true);
     const sessionKey = structured.sessionKey;
 
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': secondSessionId });
@@ -2089,6 +2109,78 @@ declare const GameKit: { defineGame(): unknown };
     expect(secondWarnings.some((w) => w.code === 'call_end')).toBe(true);
   });
 
+  // The raw PUT is the advertised path and never enters the MCP wrapper, so the
+  // budget hint has to come from the channel itself.
+  it('warns about the byte budget on a raw PUT, not only on the inline stage', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const sid = { 'mcp-session-id': sessionId };
+    const started = await callTool(app, 'start', { key: roundKey() }, sid);
+    const sessionKey = (started.structured as Record<string, string>).sessionKey;
+
+    // One file cannot fill the staging budget, so the total is what crosses it.
+    let body: { staged?: { totalBytes: number; maxBytes: number }; budgetHint?: string } = {};
+    for (const path of ['game/big-one.ts', 'game/big-two.ts']) {
+      const minted = await callTool(app, 'stage_upload_url', { sessionKey, path }, sid);
+      const { url } = minted.structured as Record<string, string>;
+      const put = await app.inject({
+        method: 'PUT',
+        url: url.replace(/^https?:\/\/[^/]+/, ''),
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+        payload: Buffer.from(`export const big = '${'x'.repeat(740_000)}';\n`, 'utf8'),
+      });
+      expect(put.statusCode).toBe(200);
+      body = put.json();
+    }
+    expect(body.staged!.totalBytes).toBeGreaterThan(body.staged!.maxBytes * 0.95);
+    expect(body.budgetHint).toContain('budget');
+
+    // patch_source_file is the preferred edit path, so it must warn too.
+    const patched = await callTool(
+      app,
+      'patch_source_file',
+      { sessionKey, path: 'game/big-one.ts', old: 'export const big', new: 'export const still' },
+      sid,
+    );
+    const warnings = (patched.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(warnings.map((warning) => warning.code)).toContain('byte_budget_low');
+  });
+
+  // curl guesses a type from the extension, or sends none. Fastify refused before any
+  // handler ran, so staging stayed empty and submit_sources found nothing.
+  it('stages a raw PUT that declares no content type at all', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const sid = { 'mcp-session-id': sessionId };
+    const started = await callTool(app, 'start', { key: roundKey() }, sid);
+    const sessionKey = (started.structured as Record<string, string>).sessionKey;
+
+    const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/typeless.ts' }, sid);
+    const { url } = minted.structured as Record<string, string>;
+    const content = 'export const typeless = true;\n';
+
+    for (const headers of [{}, { 'content-type': 'video/mp2t' }]) {
+      const put = await app.inject({
+        method: 'PUT',
+        url: url.replace(/^https?:\/\/[^/]+/, ''),
+        headers,
+        payload: Buffer.from(content, 'utf8'),
+      });
+      expect(put.statusCode, JSON.stringify(headers)).toBe(200);
+      expect(put.json()).toMatchObject({ accepted: true, path: 'game/typeless.ts' });
+    }
+
+    const listed = await callTool(app, 'list_staged_sources', { sessionKey }, sid);
+    const staged = (listed.structured as { files?: Array<{ path: string }> }).files ?? [];
+    expect(staged.map((file) => file.path)).toContain('game/typeless.ts');
+  });
+
   it('stage_upload_url + raw PUT stages without content in a tool argument', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -2892,18 +2984,34 @@ declare const GameKit: { defineGame(): unknown };
     const sessionId = await initialize(app);
 
     const res = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
-    const tools = (res.json().result as { tools: Array<{ name: string; outputSchema?: { type?: string } }> }).tools;
+    const tools = (
+      res.json().result as {
+        tools: Array<{
+          name: string;
+          outputSchema?: { type?: string; required?: string[]; anyOf?: Array<{ required?: string[] }> };
+        }>;
+      }
+    ).tools;
 
     expect(tools.length).toBeGreaterThan(0);
     for (const tool of tools) {
       expect(tool.outputSchema?.type, tool.name).toBe('object');
+      // A refusal answers on the same tool, so every schema admits an error body.
+      const branches = tool.outputSchema?.anyOf ?? [];
+      expect(
+        branches.some((branch) => branch.required?.length === 1 && branch.required[0] === 'error'),
+        tool.name,
+      ).toBe(true);
+      // A success list left at the top level would reject every refusal.
+      expect(tool.outputSchema?.required, tool.name).toBeUndefined();
     }
     const startSchema = tools.find((tool) => tool.name === 'start')?.outputSchema as {
       properties?: Record<string, unknown>;
-      required?: string[];
+      anyOf?: Array<{ required?: string[] }>;
     };
     expect(startSchema.properties?.sessionKey).toBeTruthy();
-    expect(startSchema.required).toContain('sessionKey');
+    // The success branch still names what a successful start returns.
+    expect(startSchema.anyOf?.[0]?.required).toContain('sessionKey');
   });
   describe('get_gate_media (BY-28)', () => {
     const MEDIA_METADATA = JSON.stringify({
