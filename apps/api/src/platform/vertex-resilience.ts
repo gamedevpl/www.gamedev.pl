@@ -1,9 +1,17 @@
 // Retry loop for Vertex capacity. See docs/content-safety-plan.md.
 
-// Capacity and deadlines merit a retry; bad input does not.
-const RETRYABLE = /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
+import { ZodError } from 'zod';
+
+// Capacity, deadlines, malformed model output merit a retry; bad input does not.
+const RETRYABLE =
+  /429|RESOURCE_EXHAUSTED|\b50[0234]\b|INTERNAL|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
 
 export function isRetryableVertexError(err: unknown): boolean {
+  // Unparseable or off-schema JSON is one bad sample: draw again.
+  if (err instanceof SyntaxError || err instanceof ZodError) return true;
+  // SDK ApiError carries the HTTP code; 5xx is Vertex's fault.
+  const status = (err as { status?: unknown } | null)?.status;
+  if (typeof status === 'number' && (status === 429 || status >= 500)) return true;
   const name = err instanceof Error ? err.name : '';
   const message = err instanceof Error ? err.message : String(err);
   return RETRYABLE.test(`${name} ${message}`);
