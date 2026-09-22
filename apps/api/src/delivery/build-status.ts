@@ -2,7 +2,7 @@ import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-state.js';
-import { lastMovementAt, statusPollFloorMs } from './status-poll-floor.js';
+import { lastMovementAt, statusPollFloorMs, stillBooting } from './status-poll-floor.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
 import { canActOnGame, canActOnSlug, canonicalCreatorOwnerUid } from '../platform/game-access-permissions.js';
@@ -430,7 +430,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     // Recomputed with the stall: a cache hit overlays a fresher signal.
     const floor = statusPollFloorMs({
       terminal: next.status === 'published' || next.status === 'abandoned',
-      dispatched: next.phase === 'dispatched',
+      dispatched: next.phase === 'dispatched' && stillBooting(record.stateSince, now()),
       msSinceMovement: sinceMovement(record, next, now()),
     });
     if (floor === undefined) delete next.pollAfterMs;

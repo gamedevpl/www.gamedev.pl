@@ -1,4 +1,5 @@
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
+import { stillBooting } from './delivery/status-poll-floor.js';
 import { canActOnGame } from './platform/game-access-permissions.js';
 import { resolveGameAccess } from './platform/game-access-resolve.js';
 import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
@@ -1547,7 +1548,8 @@ export async function registerSubmissionRoutes(
       // a 60s cache would freeze "Starting agent" while GitHub already reports
       // `in_progress`. Skip writing when invalidate raced this refresh.
       if ((statusCacheEpoch.get(jobId) ?? 0) === epochAtStart) {
-        const ttlMs = status.phase === 'dispatched' ? 2_000 : 60_000;
+        const booting = status.phase === 'dispatched' && stillBooting(record?.stateSince, now());
+        const ttlMs = booting ? 2_000 : 60_000;
         statusCache.set(cacheKey, { value: status, expiresAt: now() + ttlMs });
       }
       if (store && record) {
