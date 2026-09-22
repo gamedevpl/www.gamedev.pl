@@ -9,7 +9,7 @@ export function lineStyle(line: string): LineStyle {
   if (/^(?:✓|✔|\* static)|^static ladder green|^delivery accepted/.test(line))
     return { label: 'PASS', tone: 'green', space: true };
   if (
-    /^Validation needs changes|^verify failed|^error:|^Tool failed|^Delivery.*blocked|^this game is mid-round|^\s*- (?:Check \d+ failed|EDITOR)/i.test(
+    /^Validation needs changes|^verify failed|^Agent blocked:|^error:|^Tool failed|^Delivery.*blocked|^this game is mid-round|^\s*- (?:Check \d+ failed|EDITOR)/i.test(
       line,
     )
   )
