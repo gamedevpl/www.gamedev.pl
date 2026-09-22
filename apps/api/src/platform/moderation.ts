@@ -164,7 +164,11 @@ export interface VertexCheckerOptions {
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
-  vertexFetcher?: (prompt: string, model?: string, timeoutMs?: number) => Promise<{ allowed: boolean; category?: string }>;
+  vertexFetcher?: (
+    prompt: string,
+    model?: string,
+    timeoutMs?: number,
+  ) => Promise<{ allowed: boolean; category?: string }>;
   // Lower-level seam than `vertexFetcher`: swap the genaicode client (i.e. a stub
   // ModelProvider) to exercise real prompt/response handling with no network.
   client?: GenAIClient;
@@ -208,7 +212,10 @@ export class VertexChecker implements ContentChecker {
       );
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
-    this.fallbackProvider = options.fallbackProvider ?? (process.env.MODERATION_FALLBACK_PROVIDER as 'openai' | 'vertex' | undefined) ?? 'openai';
+    this.fallbackProvider =
+      options.fallbackProvider ??
+      (process.env.MODERATION_FALLBACK_PROVIDER as 'openai' | 'vertex' | undefined) ??
+      'openai';
     this.fallbackApiKey = options.fallbackApiKey ?? process.env.OPENAI_API_KEY;
     this.fallbackModel = resolveFallbackModel({
       configured: options.fallbackModel ?? process.env.MODERATION_FALLBACK_MODEL,
@@ -365,9 +372,12 @@ ${text}
 
 // Safety control, not a cost lever. See docs/content-safety-plan.md.
 
+// OpenAI stand-in for the classifier, and its only allowed model.
+export const OPENAI_FALLBACK_MODEL = 'gpt-6-luna';
+
 // Keyed by provider: a model it cannot serve dies on a 404.
 const SOTA_FALLBACK_MODELS: Record<'openai' | 'vertex', ReadonlySet<string>> = {
-  openai: new Set(['gpt-5.6-luna']),
+  openai: new Set([OPENAI_FALLBACK_MODEL]),
   vertex: new Set(['gemini-3.8-flash']),
 };
 
@@ -377,10 +387,12 @@ export function resolveFallbackModel(input: {
   hasApiKey: boolean;
 }): string | undefined {
   if (input.provider === 'openai' && !input.hasApiKey) return undefined;
-  const model = input.configured ?? (input.provider === 'openai' ? 'gpt-5.6-luna' : undefined);
+  const model = input.configured ?? (input.provider === 'openai' ? OPENAI_FALLBACK_MODEL : undefined);
   if (!model) return undefined;
   if (!SOTA_FALLBACK_MODELS[input.provider].has(model)) {
-    console.warn(`Refusing moderation fallback to '${model}' on ${input.provider}: not a peer-or-better classifier it serves.`);
+    console.warn(
+      `Refusing moderation fallback to '${model}' on ${input.provider}: not a peer-or-better classifier it serves.`,
+    );
     return undefined;
   }
   return model;
