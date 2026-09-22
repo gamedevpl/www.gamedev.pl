@@ -264,8 +264,8 @@ export class IntakeChatAgent implements IntakeAgent {
         throw new Error('unknown play target');
       return { kind: 'action', action, model };
     }
-    if (calls.some((call) => call.name !== 'create_game')) throw new Error('unknown CLI tool');
     const createCall = calls.find((call) => call.name === 'create_game');
+    if (!createCall && calls[0] && !resultText(result).trim()) throw new Error(`unknown CLI tool: ${calls[0].name}`);
     if (createCall) {
       const title = readString(createCall.arguments?.title);
       const concept = readString(createCall.arguments?.concept);
