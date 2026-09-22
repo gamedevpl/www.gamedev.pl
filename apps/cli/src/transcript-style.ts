@@ -36,12 +36,13 @@ export function lineStyle(line: string): LineStyle {
   if (/^──|^[◆*] gamedevpl/.test(line)) return { label: '◆', tone: 'green', space: true };
   if (/^(?:✓|✔|\* static)|^static ladder green|^delivery accepted/.test(line))
     return { label: 'PASS', tone: 'green', space: true };
-  if (FAILURE.test(line)) return { label: '!', tone: 'red' };
+  const agent = agentTranscriptLine(line);
+  if (agent ? /^Tool failed\b/.test(agent.text) : FAILURE.test(line)) return { label: '!', tone: 'red' };
   if (NOTICE.test(line)) return { label: '!', tone: 'yellow' };
   if (/^verifying|^preparing|^Preparing|^installing/.test(line)) return { label: 'CHECK', tone: 'yellow', space: true };
-  if (/^[\w-]+ · (?:Running|Tool:|\+\d+ more)/.test(line) || agentTranscriptLine(line)?.tool)
+  if (/^[\w-]+ · (?:Running|Tool:|\+\d+ more)/.test(line) || agent?.tool)
     return { label: '·', tone: 'blue', quiet: true };
-  if (agentTranscriptLine(line)) return { label: '●', tone: 'magenta' };
+  if (agent) return { label: '●', tone: 'magenta' };
   if (/^[\w-]+ · model:/.test(line)) return { label: 'AGENT', tone: 'magenta' };
   if (/^(?:Settings:|Full (?:transcript|diagnostics):|base |local-only:)/.test(line))
     return { label: '·', quiet: true };

@@ -13,6 +13,7 @@ it('marks failures and reported agent blockers red', () => {
     'Tool failed: shell',
     'Sending failed.',
     'Agent rejected the request.',
+    'codex ▸ Tool failed: shell — exit 2',
   ])
     expect(lineStyle(line).tone, line).toBe('red');
 });
@@ -21,6 +22,7 @@ it('flags uncertain outcomes as warnings, not failures', () => {
   expect(lineStyle('Delivery outcome unknown: agent acknowledgement timed out.').tone).toBe('yellow');
   expect(lineStyle('Kit update check timed out. Retry with /kit.').tone).toBe('yellow');
   expect(lineStyle('codex ▸ the request timed out once').tone).toBe('magenta');
+  expect(lineStyle('codex ▸ The test failed, so I tuned grip.').tone).toBe('magenta');
   expect(lineStyle('Some tools were denied; this alone does not mean the task failed.').tone).not.toBe('red');
 });
 
