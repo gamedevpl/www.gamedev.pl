@@ -32,6 +32,12 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   // A helper name is checked with our own test, not the game's prototype.
   var AGENT_NAME=/^[A-Za-z_][A-Za-z0-9_]*$/;
   var AGENT_TEST=AGENT_CALL.bind(RegExp.prototype.test);
+  var AGENT_DEF=Object.defineProperty;
+  // Appending defines the slot: a numeric setter on Array.prototype would see
+  // the value, and on an empty list would swallow it whole.
+  function agentPut(list,value){
+    AGENT_DEF(list,list.length,{value:value,writable:true,enumerable:true,configurable:true});
+  }
   function agentIsDate(v){
     // The bound intrinsic, against the internal slot only a real Date has.
     try{AGENT_DATE_ISO(v);return true;}catch(err){return false;}
@@ -54,7 +60,9 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     if(typeof value==='string')return AGENT_CUT(value,0,cap);
     // Written by index and concatenation: push and join are game code too, and
     // push would receive the value we have not redacted yet.
-    var names=hidden||[],used=0,stack=[],depth=0;
+    // The cycle stack has no prototype: an index setter on Array.prototype would
+    // otherwise see the value before redaction and could copy it elsewhere.
+    var names=hidden||[],used=0,stack=AGENT_CREATE(null),depth=0;
     function declared(k){
       for(var i=0;i<names.length;i++)if(names[i]===k)return true;
       return false;
@@ -137,7 +145,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     return result;
   }
   function agentSnapshot(){
-    var h=agentHarness()||{},out={},hidden=agentHidden(),i,meta=h.metadata;
+    var h=agentHarness()||{},out=AGENT_CREATE(null),hidden=agentHidden(),i,meta=h.metadata;
     if(meta){
       for(var k in meta){
         if(!AGENT_HAS(meta,k))continue;
@@ -192,7 +200,7 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     for(i=0;i<scan&&out.length<AGENT_UI_CAP;i++){
       // One widget whose field throws costs that widget, not the rest of the list.
       try{item=agentNormalizeWidget(list[i],w,h);}catch(err){continue;}
-      if(item)out[out.length]=item;
+      if(item)agentPut(out,item);
     }
     return out;
   }
@@ -201,14 +209,14 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
     var marked=canvas&&canvas.__gkLogicalSize;
     var w=(marked&&marked.width>0)?marked.width:((canvas&&canvas.width)||0);
     var hgt=(marked&&marked.height>0)?marked.height:((canvas&&canvas.height)||0);
-    var out=[],seen={},i,item,key;
+    var out=[],seen=AGENT_CREATE(null),i,item,key;
     function add(list){
       for(i=0;i<list.length&&out.length<AGENT_UI_CAP;i++){
         item=list[i];
         key=item.label+'@'+item.x1+','+item.y1+','+item.x2+','+item.y2;
         if(seen[key])continue;
         seen[key]=1;
-        out[out.length]=item;
+        agentPut(out,item);
       }
     }
     try{
@@ -278,15 +286,15 @@ export const AGENT_PLAY_BRIDGE_SURFACE = `
   function agentApiNames(){
     var table=agentApiTable(),names=[],k;
     // Skip rather than truncate: a shortened name is one call cannot resolve.
-    for(k in table)if(AGENT_HAS(table,k)&&k.length<=40)names[names.length]=k;
+    for(k in table)if(AGENT_HAS(table,k)&&k.length<=40)agentPut(names,k);
     // Ordered and capped by hand: sort and slice are the game's to replace.
     var out=[],i,j,pick;
     while(out.length<AGENT_API_CAP&&names.length){
       pick=0;
       for(i=1;i<names.length;i++)if(names[i]<names[pick])pick=i;
-      out[out.length]=names[pick];
+      agentPut(out,names[pick]);
       var rest=[];
-      for(j=0;j<names.length;j++)if(j!==pick)rest[rest.length]=names[j];
+      for(j=0;j<names.length;j++)if(j!==pick)agentPut(rest,names[j]);
       names=rest;
     }
     return out;

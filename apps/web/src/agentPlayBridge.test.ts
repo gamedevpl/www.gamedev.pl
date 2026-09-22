@@ -1434,6 +1434,39 @@ describe('the agent bridge, running for real', () => {
       expect(names).toEqual(['buildRail']);
     });
 
+    // An index setter would see the value before the walk redacted it.
+    it('holds values on a stack no inherited setter can reach', async () => {
+      setHidden(['targetWord']);
+      harness.metadata = { state: 'playing' };
+      harness.observation = () => ({ targetWord: 'RAVEN', cash: 100 });
+      const slots = new WeakMap<object, unknown>();
+      let detail: string | undefined;
+      try {
+        Object.defineProperty(Array.prototype, 0, {
+          configurable: true,
+          get(this: object) {
+            return slots.get(this);
+          },
+          set(this: object, value: unknown) {
+            slots.set(this, value);
+            const held = value as { targetWord?: string; answer?: string };
+            if (held && typeof held === 'object' && 'targetWord' in held) held.answer = held.targetWord;
+          },
+        });
+        send({ type: 'agent:enable' });
+        await settle();
+        received.length = 0;
+        send({ type: 'agent:command', command: { kind: 'look' } });
+        await settle();
+        const snapshot = lastOf(received, 'agent:state')!.snapshot as Record<string, unknown>;
+        detail = typeof snapshot.observation === 'string' ? snapshot.observation : '';
+      } finally {
+        delete (Array.prototype as unknown as Record<number, unknown>)[0];
+      }
+      expect(detail ?? '').toContain('"cash":100');
+      expect(detail ?? '').not.toContain('RAVEN');
+    });
+
     // Injected before the game script, so the intrinsic is ours.
     it('keeps reading Dates through the intrinsic the game replaced', async () => {
       setHidden(['targetWord']);

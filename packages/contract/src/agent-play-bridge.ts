@@ -23,11 +23,11 @@ export const AGENT_PLAY_BRIDGE =
   // frame is optional: a replayed signal carries the frame it happened on, not now.
   function agentNote(kind,detail,frame){
     var at=typeof frame==='number'&&isFinite(frame)?frame:agentFrameNo();
-    agentLog[agentLog.length]={frame:at,kind:AGENT_STR(kind),detail:AGENT_CUT(AGENT_STR(detail==null?'':detail),0,160)};
+    agentPut(agentLog,{frame:at,kind:AGENT_STR(kind),detail:AGENT_CUT(AGENT_STR(detail==null?'':detail),0,160)});
     // Rebuilt, not spliced: a replaced splice either throws or lets the log grow.
     if(agentLog.length>AGENT_LOG_CAP){
       var kept=[],from=agentLog.length-AGENT_LOG_CAP;
-      for(var k=from;k<agentLog.length;k++)kept[kept.length]=agentLog[k];
+      for(var k=from;k<agentLog.length;k++)agentPut(kept,agentLog[k]);
       agentLog=kept;
     }
   }
@@ -44,7 +44,7 @@ export const AGENT_PLAY_BRIDGE =
     if(!list||!list.length)return null;
     var out=[];
     // Kept as written, never converted: a replaced String could rename one.
-    for(var i=0;i<list.length;i++)if(typeof list[i]==='string')out[out.length]=list[i];
+    for(var i=0;i<list.length;i++)if(typeof list[i]==='string')agentPut(out,list[i]);
     return out;
   }
   function agentGoal(){
@@ -130,12 +130,12 @@ export const AGENT_PLAY_BRIDGE =
     var i;
     if(type==='keydown'){
       for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key===key)return;
-      agentHeldKeys[agentHeldKeys.length]={key:key,code:code};
+      agentPut(agentHeldKeys,{key:key,code:code});
       return;
     }
     // Rebuilt, not spliced: a key left held is an input the reviewer cannot clear.
     var keep=[];
-    for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key!==key)keep[keep.length]=agentHeldKeys[i];
+    for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key!==key)agentPut(keep,agentHeldKeys[i]);
     agentHeldKeys=keep;
   }
   function agentReleaseInput(){
@@ -334,10 +334,10 @@ export const AGENT_PLAY_BRIDGE =
       var parts=[];
       for(var i=0;i<args.length;i++){
         var value=args[i];
-        try{parts[parts.length]=(typeof value==='string'?value:AGENT_JSON(value));}
-        catch(err){parts[parts.length]=AGENT_STR(value);}
+        try{agentPut(parts,(typeof value==='string'?value:AGENT_JSON(value)));}
+        catch(err){agentPut(parts,AGENT_STR(value));}
       }
-      logs[logs.length]={frame:agentFrameNo(),kind:kind,text:AGENT_CUT(AGENT_JOIN(parts,' '),0,400)};
+      agentPut(logs,{frame:agentFrameNo(),kind:kind,text:AGENT_CUT(AGENT_JOIN(parts,' '),0,400)});
     }
     function spend(count){
       used+=count;
@@ -413,12 +413,12 @@ export const AGENT_PLAY_BRIDGE =
         if(watches.length>=AGENT_WATCH_POINTS)return;
         var reading;
         try{reading=typeof value==='function'?value():value;}catch(err){reading='error: '+AGENT_STR(err&&err.message||err);}
-        watches[watches.length]={frame:agentFrameNo(),name:AGENT_CUT(AGENT_STR(name),0,40),value:reading};
+        agentPut(watches,{frame:agentFrameNo(),name:AGENT_CUT(AGENT_STR(name),0,40),value:reading});
       },
       // A painted frame, kept for the answer. Paints first: stepping does not draw.
       capture:function(name){
         api.paint();
-        shots[shots.length]={name:AGENT_CUT(AGENT_STR(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()};
+        agentPut(shots,{name:AGENT_CUT(AGENT_STR(name||('frame '+agentFrameNo())),0,60),frame:agentFrameNo(),png:capturePng()});
       },
       // The game's own globals, for a policy that needs more than the snapshot.
       game:function(){return window.GameKit;},
