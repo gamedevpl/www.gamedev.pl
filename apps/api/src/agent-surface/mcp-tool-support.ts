@@ -49,7 +49,7 @@ export const MCP_ERROR_CODES = [
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 
 export interface RefusalDetail {
-  // Seconds to wait before this call can succeed. Daily quotas count to UTC midnight.
+  // Seconds until this call can succeed. Daily quotas: UTC midnight.
   retryAfterSeconds?: number;
   [key: string]: unknown;
 }

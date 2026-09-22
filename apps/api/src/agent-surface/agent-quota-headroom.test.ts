@@ -15,7 +15,7 @@ describe('quota refusals carry a code', () => {
       message: 'used up',
       retryAfterSeconds: 12 * 60 * 60,
     });
-    // Waiting never unblocks an account, so promising a retry would be a lie.
+    // A blocked account never clears by waiting, so no retry.
     expect(quotaRefusal('blocked', 'used up', at)).toEqual({
       code: 'quota_blocked',
       message: 'account is blocked',

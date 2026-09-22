@@ -200,7 +200,7 @@ describe('MCP editor session actor', () => {
     );
     expect(published.isError).toBe(true);
     expect((published.structured as { error: string }).error).toMatch(/only the owner can publish/i);
-    // The operator reading this refusal should see a permission problem, not a schema one.
+    // This reads as a permission problem, not a schema one.
     expect((published.structured as { code?: string }).code).toBe('not_owner');
   });
 
