@@ -37,11 +37,11 @@
   overflow-wrap: anywhere;
 }
 #transcript {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--muted);
+  max-height: 50vh;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--panel-card);
+  padding: 8px 10px;
 }
 #devices {
   display: grid;

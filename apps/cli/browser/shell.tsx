@@ -1,6 +1,7 @@
 import { WorkspaceHome } from './home.js';
 import { PixelIcon, type PixelIconName } from '../../web/src/PixelIcon.js';
 import { Conversation } from './conversation.js';
+import { SessionOutput } from './transcript-view.js';
 
 function Icon({ name }: { name: PixelIconName }) {
   return <PixelIcon name={name} size={16} />;
@@ -181,7 +182,7 @@ export function PlayShell() {
             <p id="shown-build">No build loaded yet</p>
             <p id="session-lifetime" className="hint" />
             <h3>Session output</h3>
-            <pre id="transcript" tabIndex={0} aria-label="Session output" />
+            <SessionOutput />
           </section>
         </div>
         <footer className="drawer-tabs">
