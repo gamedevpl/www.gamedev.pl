@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { stagedBudgetWarning } from './staged-budget.js';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import type { SubmissionRecord } from '../platform/store.js';
@@ -290,6 +291,9 @@ export function createSourcePatchTools(deps: SourcePatchToolsDeps): Record<strin
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
             ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
             ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
+            ...(stagedBudgetWarning(body.staged)
+              ? [{ code: 'byte_budget_low' as const, message: stagedBudgetWarning(body.staged)! }]
+              : []),
             ...(body.failed && body.failed.length > 0
               ? [
                   {

@@ -215,15 +215,15 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const at = new Date(now()).toISOString();
         const access = await resolveGameAccess(store, resolved.slug);
         if (!canActOnGame(access, resolved.creatorUid, 'build')) {
-          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
         }
         const ownerUid = canonicalCreatorOwnerUid(access);
-        if (!ownerUid) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+        if (!ownerUid) return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
         // Game key stays owner-bound; editors use their own creator key.
         const lockRecord = await store.ensureGameAgentKey(resolved.slug, ownerUid, at);
         if (!lockRecord) {
           // Existing doc owned by someone else — do not touch their admission lock.
-          return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
         }
 
         if (resolved.activeRound) {
@@ -316,7 +316,9 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             ownerUid: resolved.creatorUid,
           });
           if (quotaError)
-            return toolRefusal(quotaError.message, quotaError.code, { retryAfterSeconds: quotaError.retryAfterSeconds });
+            return toolRefusal(quotaError.message, quotaError.code, {
+              retryAfterSeconds: quotaError.retryAfterSeconds,
+            });
           if (!started || started.route === 'unavailable') {
             return toolErr('could not open an improvement round for this game');
           }
@@ -401,13 +403,13 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           const verified = await verifyDurableCreatorAgentKey(store, bearer, agentTokenSecret, now());
           if (!verified.ok) return toolErr(verified.reason);
           if (!(await canActOnSlug(store, slugArg, verified.claims.creatorUid, 'build'))) {
-            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+            return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           }
           if (await store.getPublishedSubmissionBySlug(slugArg)) {
             return toolErr(GAME_ALREADY_PUBLISHED_REASON);
           }
           const draft = await findDraftJobForSlug(store, slugArg, verified.claims.creatorUid);
-          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          if (!draft) return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           resolved = { creatorUid: verified.claims.creatorUid, slug: slugArg, draft };
         } else if (!key && bearer && looksLikeAsAccessToken(bearer)) {
           const asAccess = await verifyAsAccessToken(store, bearer, now());
@@ -418,13 +420,13 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             return toolErr('slug is required when using OAuth — pass the game slug to continue');
           }
           if (!(await canActOnSlug(store, slugArg, asAccess.ownerUid, 'build'))) {
-            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+            return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           }
           if (await store.getPublishedSubmissionBySlug(slugArg)) {
             return toolErr(GAME_ALREADY_PUBLISHED_REASON);
           }
           const draft = await findDraftJobForSlug(store, slugArg, asAccess.ownerUid);
-          if (!draft) return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+          if (!draft) return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           resolved = { creatorUid: asAccess.ownerUid, slug: slugArg, draft };
         } else if (key && looksLikeGameAgentKey(key)) {
           return toolErr(RETIRED_GAME_KEY_REASON);

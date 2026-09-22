@@ -614,6 +614,7 @@ export async function registerAgentChannelRoutes(
   const stageAdvisories = options.computeStageAdvisories ?? (async (): Promise<StageAdvisories> => ({}));
 
   // Raw PUT parsers for curl --upload-file (octet-stream / PNG / text).
+  const RAW_UPLOAD_TYPES = new Set(['application/octet-stream', 'image/png', 'text/plain']);
   const parseRawBuffer = (
     _request: FastifyRequest,
     body: Buffer | string | ArrayBuffer,
@@ -637,6 +638,20 @@ export async function registerAgentChannelRoutes(
       // Duplicate parser from a prior register on this app.
     }
   }
+  // `curl --upload-file` sends whatever type it guesses from the extension, or none.
+  // Fastify then refuses before any handler runs, so staging stayed empty and the
+  // agent learned nothing until submit_sources failed. These two routes take one
+  // raw body and decide by path, so an unnamed type is read as bytes, not refused.
+  const RAW_UPLOAD_ROUTES = new Set<string>([
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD,
+    AGENT_CHANNEL_ROUTES.SHOT_UPLOAD,
+  ]);
+  app.addHook('onRequest', async (request) => {
+    if (request.method !== 'PUT' || !RAW_UPLOAD_ROUTES.has(request.routeOptions?.url ?? '')) return;
+    const declared = request.headers['content-type'];
+    if (typeof declared === 'string' && RAW_UPLOAD_TYPES.has(declared.split(';')[0]!.trim().toLowerCase())) return;
+    request.headers['content-type'] = 'application/octet-stream';
+  });
   // A watcher pushes whatever currently builds, so previews arrive on a cadence rather
   // than on the agent's judgement. Only the newest few are worth keeping — each one
   // obsoletes the last — but the hourly allowance is generous, because a build that

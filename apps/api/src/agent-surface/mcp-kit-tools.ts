@@ -1,3 +1,4 @@
+import { KIT_UPCOMING_RULES } from './kit-upcoming-rules.js';
 import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
@@ -71,6 +72,15 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
               fragment: { type: 'string' },
             },
           },
+          upcomingRules: {
+            type: 'array',
+            description: 'Delivery rules decided but not yet enforced. Absorb them before the pin moves.',
+            items: {
+              type: 'object',
+              properties: { id: { type: 'string' }, summary: { type: 'string' } },
+              required: ['id', 'summary'],
+            },
+          },
         },
         required: ['engineRef', 'kitUrl', 'sha256', 'unpack', 'entry'],
       },
@@ -106,7 +116,11 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `kit failed (${res.statusCode})`, body);
         }
-        return toolOk(withAdvertisedBrowseTools(body));
+        return toolOk({
+          ...withAdvertisedBrowseTools(body),
+          // Omitted when empty: an empty array is noise every round.
+          ...(KIT_UPCOMING_RULES.length ? { upcomingRules: KIT_UPCOMING_RULES } : {}),
+        });
       },
     },
 

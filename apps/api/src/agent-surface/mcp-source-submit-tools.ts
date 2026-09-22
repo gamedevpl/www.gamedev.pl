@@ -7,6 +7,7 @@ import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
+import { PUBLISH_NOT_OWNER_REASON } from './agent-game-key.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   toolOk,
@@ -316,7 +317,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         const mode = await effectiveSubmitMode(requestedMode, fromLatestDelivery, auth.record, gamesStore);
         if (mode === 'publish' && auth.record.slug && store) {
           if (!(await canActOnSlug(store, auth.record.slug, auth.actorUid, 'publish'))) {
-            return toolRefusal('only the owner can publish this game', 'not_owner');
+            return toolRefusal(PUBLISH_NOT_OWNER_REASON, 'not_owner');
           }
         }
 

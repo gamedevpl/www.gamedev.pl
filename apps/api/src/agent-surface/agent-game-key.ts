@@ -67,6 +67,12 @@ export const DRAFT_NOT_CONTINUABLE_REASON =
 export const IMPROVEMENT_QUOTA_EXHAUSTED_REASON =
   "today's improvement limit is used up — the creator can start another round tomorrow, or from the Studio";
 
+/** Refusal when a builder holds build rights but not the right to seal. */
+export const PUBLISH_NOT_OWNER_REASON = 'only the owner can publish this game';
+
+/** What start reports up front, so the answer is not bought with a delivery. */
+export const PUBLISH_BLOCKED_REASON = `${PUBLISH_NOT_OWNER_REASON} — deliver mode:"preview" and let the creator seal it from Studio`;
+
 /** Creator daily feedback quota exhausted on the agent-continue path. */
 export const FEEDBACK_QUOTA_EXHAUSTED_REASON =
   "today's feedback limit is used up — try again tomorrow, or from the Studio";

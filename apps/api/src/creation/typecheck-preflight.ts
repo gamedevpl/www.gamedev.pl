@@ -24,8 +24,11 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
 };
 
 const ROOT = '/preflight';
-const MAX_GROUPED = 8;
-const MAX_ERROR_BYTES = 800;
+// Every finding not listed costs a whole round: the agent fixes what it was shown,
+// resubmits, and learns the next one. At a tight byte budget that is the expensive
+// direction, so the list is long enough to plan against.
+const MAX_GROUPED = 30;
+const MAX_ERROR_BYTES = 4000;
 // Soft wall, over budget skips. Raised from 10s: hit 12.9s once.
 export const TYPECHECK_PREFLIGHT_BUDGET_MS = 20_000;
 // Cap refusals; further submits accept.
@@ -139,7 +142,8 @@ function formatFindings(findings: RawFinding[]): string {
   let shown = lines.slice(0, MAX_GROUPED);
   let suppressed = lines.length - shown.length;
   const header = 'Typecheck preflight failed — fix these before submitting:\n';
-  const footer = (n: number) => (n > 0 ? `\n(${n} more finding${n === 1 ? '' : 's'} suppressed)` : '');
+  const footer = (n: number) =>
+    n > 0 ? `\n(${n} more finding${n === 1 ? '' : 's'} not listed — fix these, resubmit, and the rest follow)` : '';
 
   let body = header + shown.join('\n') + footer(suppressed);
   while (body.length > MAX_ERROR_BYTES && shown.length > 1) {

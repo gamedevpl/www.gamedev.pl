@@ -50,6 +50,7 @@ import {
   PLATFORM_ROUND_REASON,
   SESSION_KEY_IS_NOT_AN_OPENER_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
+  PUBLISH_BLOCKED_REASON,
 } from './agent-game-key.js';
 import { findActiveRoundForSlug } from './agent-game-key-resolve.js';
 import { canActOnSlug, writerUidForSlug } from '../platform/game-access-permissions.js';
@@ -291,11 +292,7 @@ function isOverInvalidStartLimit(buckets: Map<string, number[]>, key: string, cu
 }
 
 // The oldest hit in the window is the one that frees the next attempt.
-function invalidStartRetryAfterSeconds(
-  buckets: Map<string, number[]>,
-  key: string,
-  currentTime: number,
-): number {
+function invalidStartRetryAfterSeconds(buckets: Map<string, number[]>, key: string, currentTime: number): number {
   const hits = pruneHits(buckets, key, currentTime);
   if (!hits.length) return 0;
   const oldest = Math.min(...hits);
@@ -329,6 +326,20 @@ async function gateFieldForStart(
   const status = deriveGateStatusString(gate);
   if (!gateNeedsResubmit(status)) return {};
   return { gate: { status, deliveryId: gate.version } };
+}
+
+// Discovering at submit_sources that you may preview but not seal spends a
+// delivery on the answer. start says it while the plan is still being made.
+async function publishRightForStart(
+  store: Store | undefined,
+  slug: string | null | undefined,
+  actorUid: string | undefined,
+): Promise<{ canPublish: boolean; publishBlockedReason?: string }> {
+  // An unslugged round has nothing to publish yet, so no right to report on.
+  if (!store || !slug || !actorUid) return { canPublish: true };
+  const allowed = await canActOnSlug(store, slug, actorUid, 'publish').catch(() => true);
+  if (allowed) return { canPublish: true };
+  return { canPublish: false, publishBlockedReason: PUBLISH_BLOCKED_REASON };
 }
 
 function mustFixGateWarningForStatus(status: string, deliveryId?: string | null): NudgeWarning {
@@ -382,8 +393,8 @@ const SESSION_WORKFLOW: readonly string[] = [
   "get_kit — keep engineRef for submit_sources and for get_kit_api. This platform and its Creator Kit are not on the public web: for what the kit can build (module names — party, zone, commons, presence, and the rest — or the API itself), call get_kit_api or the kit browse tools, never a web search; the digest and browse tools are the complete, authoritative reference, and a web search for gamedev.pl documentation will not find anything, or worse, finds an unrelated platform's docs that do not describe this kit. With shell egress, unpack via the returned one-liner and follow SKILL.md locally instead of either. Never dump the whole kit into context, and never call a tool this session did not advertise.",
   'Capability and "how do I…" questions: check get_kit_api first for exact kit-API surface (signatures, module names). knowledge_query is for everything get_kit_api does not cover — EditorKit internals, example-game patterns, docs/process, and broader capability questions — with citations and an indexedCommit; treat its prose as a pointer to verify via get_kit_api / read_kit_file, not a source of truth for exact signatures.',
   'Build the game — continuing the sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
-  'Screenshots: without a shell or browser, skip mid-build shots — deliver mode=preview then end. On a later/resumed run call get_gate_verdict once (start does not surface preview_passed); if a preview verdict is already available, then get_gate_media (the gate captures with WebGL flags; do not call it right after submit). With a shell: launch headless Chromium with --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --enable-webgl --ignore-gpu-blocklist (never --disable-gpu; Chrome ≥150 may need --use-angle=swiftshader). Capture canvas.toDataURL("image/png") inside the same render callback (after compositing the default buffer is gone; preserveDrawingBuffer:true only in a disposable capture harness, never in shipped game source) — page.screenshot({path:"shot.png"}) writes PNG directly. Decode a data URL to disk in-process (fs.writeFileSync("shot.png", Buffer.from(dataUrl.split(",")[1], "base64")); never print or return the data URL). Keep PNG ≤700 KB, then screenshot_upload_url and curl --upload-file shot.png "$url". A black/blank frame means those WebGL flags were missing or the drawing buffer was already discarded. If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). There is no base64 send path — PNG bytes must never enter the model.',
-  'While iterating: run only npm run typecheck -- <slug> locally, then prefer batch stage_upload_url({ paths: [...] }) (or stage_upload_url({ path }) for a single lone file) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model; ALWAYS mint URLs in batch with paths: [...] up to 50 paths per call, chunking into batches of 50 if staging more, rather than looping or calling stage_upload_url per file). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
+  'Screenshots: without a shell or browser, skip mid-build shots — deliver mode=preview then end. On a later/resumed run call get_gate_verdict once (start does not surface preview_passed); if a preview verdict is already available, then get_gate_media (the gate captures with WebGL flags; do not call it right after submit). With a shell: launch headless Chromium with --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --enable-webgl --ignore-gpu-blocklist (never --disable-gpu; Chrome ≥150 may need --use-angle=swiftshader). Capture canvas.toDataURL("image/png") inside the same render callback (after compositing the default buffer is gone; preserveDrawingBuffer:true only in a disposable capture harness, never in shipped game source) — page.screenshot({path:"shot.png"}) writes PNG directly. Decode a data URL to disk in-process (fs.writeFileSync("shot.png", Buffer.from(dataUrl.split(",")[1], "base64")); never print or return the data URL). Keep PNG ≤700 KB, then screenshot_upload_url and the `upload` one-liner it returns (curl -H "Content-Type: application/octet-stream" --upload-file shot.png "$url"). A black/blank frame means those WebGL flags were missing or the drawing buffer was already discarded. If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). There is no base64 send path — PNG bytes must never enter the model.',
+  'While iterating: run only npm run typecheck -- <slug> locally, then prefer batch stage_upload_url({ paths: [...] }) (or stage_upload_url({ path }) for a single lone file) and the returned `upload` one-liner (curl -H "Content-Type: text/plain; charset=utf-8" --upload-file <file> "$url") for new/rewritten paths when you have shell egress (bytes never re-enter the model; ALWAYS mint URLs in batch with paths: [...] up to 50 paths per call, chunking into batches of 50 if staging more, rather than looping or calling stage_upload_url per file). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
   'Staging is already visible: once game.ts, GAME.json and markup are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Markup means GAME.json howToPlay carrying goal and hint, from which the body is generated — index.html is never accepted as a stage/patch/submit write, so do not author one. style.css is optional the same way: a GAME.json theme (accent/canvasBackground/canvasBorderColor/pixelArt) generates it when none is staged. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
   // The thread is the creator's whole view of the round.
@@ -1095,6 +1106,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
           const seed = seedPayload(active);
           const gateField = await gateFieldForStart(options.gamesStore, active);
+          const publishRight = await publishRightForStart(store, active.slug, actorUid);
           const structured = {
             sessionKey,
             sessionId,
@@ -1112,6 +1124,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             dispatchAttempt: await dispatchAttempt(store!, active),
             ...seed,
             ...gateField,
+            ...publishRight,
           };
           return startToolResult(structured);
         };
@@ -1140,12 +1153,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const actorUid = await writerUidForSlug(store, slugArg, asAccess.ownerUid);
           if (!actorUid) {
             noteInvalidStart(ctx.request);
-            return toolErr(SLUG_NOT_ON_ACCOUNT_REASON);
+            return toolRefusal(SLUG_NOT_ON_ACCOUNT_REASON, 'opener_required');
           }
           const active = await findActiveRoundForSlug(store, slugArg, actorUid);
           if (!active) {
             noteInvalidStart(ctx.request);
-            return toolErr(NO_OPEN_ROUND_REASON);
+            return toolRefusal(NO_OPEN_ROUND_REASON, 'opener_required');
           }
           const builder = active.builder ?? 'platform';
           if (builder !== 'self') {
@@ -1211,7 +1224,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         // an invalid build key. Name what was supplied instead.
         if (looksLikeMcpSessionKey(key || bearer || '')) {
           noteInvalidStart(ctx.request);
-          return toolErr(SESSION_KEY_IS_NOT_AN_OPENER_REASON);
+          return toolRefusal(SESSION_KEY_IS_NOT_AN_OPENER_REASON, 'opener_required');
         }
 
         // Every other tool answers a Bearer game key with "only opens a session via
@@ -1280,12 +1293,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const sessionId = ctx.sessionId && looksLikeMcpSessionId(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
         noteTransportSession(sessionId);
 
+        const legacyActorUid = claims.actorUid ?? record.ownerUid;
         const sessionKey = mintMcpSessionKey(agentTokenSecret, {
           sessionId,
           jobId,
           roundGeneration,
           now: now(),
-          actorUid: claims.actorUid ?? record.ownerUid,
+          actorUid: legacyActorUid,
           actorRevision: claims.actorRevision ?? (claims.actorUid ? undefined : record.accessEpoch),
         });
         const sessionClaims = verifyMcpSessionKey(sessionKey, agentTokenSecret);
@@ -1295,6 +1309,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         const seed = seedPayload(record);
         const gateField = await gateFieldForStart(options.gamesStore, record);
+        const publishRight = await publishRightForStart(store, record.slug, legacyActorUid);
         const structured = {
           sessionKey,
           sessionId,
@@ -1312,6 +1327,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           dispatchAttempt: await dispatchAttempt(store!, record),
           ...seed,
           ...gateField,
+          ...publishRight,
         };
         return startToolResult(structured);
       },
