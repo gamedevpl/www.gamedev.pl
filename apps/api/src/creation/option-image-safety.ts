@@ -58,7 +58,7 @@ export class VertexOptionImageSafetyChecker implements OptionImageSafetyChecker 
         projectId: this.options.projectId,
         region: this.options.region,
         defaultRegion: 'global',
-        defaultModel: 'gemini-3-flash-lite',
+        defaultModel: 'gemini-3.5-flash-lite',
         ...(this.options.model ? { model: this.options.model } : {}),
       });
     return this.client;
@@ -71,6 +71,8 @@ export class VertexOptionImageSafetyChecker implements OptionImageSafetyChecker 
         user(PROMPT, { images: [imagePart(image.toString('base64'), OPTION_IMAGE_MEDIA_TYPE)] }),
       )
         .temperature(0)
+        // Omitting this sends MINIMAL under `.json()`, which 3.8-flash rejects.
+        .thinking({ level: 'low' })
         .signal(AbortSignal.timeout(Math.max(1, this.timeoutMs)))
         .json((value) => VerdictSchema.parse(value));
       return verdict.safe;
