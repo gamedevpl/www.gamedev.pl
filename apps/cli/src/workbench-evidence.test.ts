@@ -66,6 +66,10 @@ it('passes staged screenshots to codex as image input', async () => {
   const trace = JSON.stringify({ name: 'trace.json', mime: 'application/json', path: '/tmp/e/trace.json' });
   const prompt = 'fix stripes' + EVIDENCE_MARKER + image + '\n' + trace;
   expect(evidenceImages(prompt)).toEqual(['/tmp/e/shot.png']);
+  const windows = JSON.stringify({ name: 'w.png', mime: 'image/png', path: 'C:\\Users\\me\\w.png' });
+  expect(evidenceImages('x' + EVIDENCE_MARKER + windows)).toEqual(['C:\\Users\\me\\w.png']);
+  const relative = JSON.stringify({ name: 'r.png', mime: 'image/png', path: 'r.png' });
+  expect(evidenceImages('x' + EVIDENCE_MARKER + relative)).toEqual([]);
   expect(turnInput('codex', prompt)).toEqual([
     { type: 'text', text: prompt },
     { type: 'localImage', path: '/tmp/e/shot.png' },
