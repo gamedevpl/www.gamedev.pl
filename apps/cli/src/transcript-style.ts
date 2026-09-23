@@ -7,7 +7,9 @@ export type LineStyle = { label: string; tone?: LineTone; quiet?: boolean; space
 const FIRST_CLAUSE = '^[^.;:—]{0,80}?';
 const FAILURE = new RegExp(
   [
-    FIRST_CLAUSE + "\\b(?:cannot|can't|could not|couldn't|unable to|failed|refused|rejected)\\b",
+    FIRST_CLAUSE +
+      "\\b(?:cannot|can't|could not|couldn't|unable to|failed|refused|rejected|not (?:deliverable|allowed|permitted))\\b",
+    '^illegal path:',
     '^Validation needs changes',
     '^Verification (?:failed|stopped)',
     '^(?:[\\w-]+ ){1,3}stopped(?: \\(exit|:| before| without success| —)',
