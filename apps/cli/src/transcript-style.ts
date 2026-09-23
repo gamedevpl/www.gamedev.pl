@@ -10,6 +10,8 @@ const FAILURE = new RegExp(
     '^Verification (?:failed|stopped)',
     '^[\\w-]+ stopped(?: \\(exit|:| before)',
     '^Agent (?:blocked|rejected)',
+    '(?:completion|successful edit) is not confirmed',
+    'could not obtain tool permissions',
     '^error:',
     '^Delivery.*blocked',
     '^this game is mid-round',

@@ -14,6 +14,8 @@ it('marks failures and reported agent blockers red', () => {
     'Sending failed.',
     'Agent rejected the request.',
     'codex ▸ Tool failed: shell — exit 2',
+    'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
+    'codex could not obtain tool permissions in headless mode. No successful edit is confirmed; review and retry.',
   ])
     expect(lineStyle(line).tone, line).toBe('red');
 });
