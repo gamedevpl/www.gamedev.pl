@@ -10,6 +10,7 @@ vi.mock('./visitTelemetry', () => ({ recordEditorStep: vi.fn() }));
 
 import { useEditorDraftBridge, type EditorControllerState } from './editorBridge.js';
 import type { EditorContentDoc } from './studioApi.js';
+import { dispatchFromFrame } from './test-utils/frameMessage.js';
 
 let latestController: EditorControllerState | null = null;
 const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: null };
@@ -57,9 +58,7 @@ describe('editor:check revision correlation', () => {
   }
 
   function send(data: Record<string, unknown>) {
-    const event = new MessageEvent('message', { data, origin: 'null' });
-    Object.defineProperty(event, 'source', { value: gameWindow });
-    act(() => window.dispatchEvent(event));
+    act(() => dispatchFromFrame(gameWindow, data));
   }
 
   function frame(body: Record<string, unknown>) {

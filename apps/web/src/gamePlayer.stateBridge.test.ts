@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { requestStateRestore, requestStateSnapshot } from './gamePlayer.js';
+import { dispatchFromFrame } from './test-utils/frameMessage.js';
 
 function makeFrame(): { frame: HTMLIFrameElement; posted: Array<Record<string, unknown>> } {
   const frame = document.createElement('iframe');
@@ -12,23 +13,22 @@ function makeFrame(): { frame: HTMLIFrameElement; posted: Array<Record<string, u
   return { frame, posted };
 }
 
-function replyFromGame(data: Record<string, unknown>) {
-  window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: { source: 'gdpl-player', ...data } }));
+function replyFromGame(frame: HTMLIFrameElement, data: Record<string, unknown>) {
+  dispatchFromFrame(frame.contentWindow!, { source: 'gdpl-player', ...data });
 }
-
 describe('requestStateSnapshot', () => {
   it('posts snapshotState and resolves with the reply data', async () => {
     const { frame, posted } = makeFrame();
     const pending = requestStateSnapshot(frame);
     expect(posted).toEqual([{ source: 'gdpl-host', type: 'snapshotState' }]);
-    replyFromGame({ type: 'stateSnapshot', data: { score: 7 } });
+    replyFromGame(frame, { type: 'stateSnapshot', data: { score: 7 } });
     await expect(pending).resolves.toEqual({ score: 7 });
   });
 
   it('resolves null when the game has nothing to snapshot', async () => {
     const { frame } = makeFrame();
     const pending = requestStateSnapshot(frame);
-    replyFromGame({ type: 'stateSnapshot', data: null });
+    replyFromGame(frame, { type: 'stateSnapshot', data: null });
     await expect(pending).resolves.toBeNull();
   });
 
@@ -52,9 +52,9 @@ describe('requestStateSnapshot', () => {
   it('ignores a reply of the wrong type or from a stale request', async () => {
     const { frame } = makeFrame();
     const pending = requestStateSnapshot(frame, 50);
-    replyFromGame({ type: 'stateRestored', ok: true });
-    replyFromGame({ source: 'other', type: 'stateSnapshot', data: { score: 1 } });
-    replyFromGame({ type: 'stateSnapshot', data: { score: 2 } });
+    replyFromGame(frame, { type: 'stateRestored', ok: true });
+    replyFromGame(frame, { source: 'other', type: 'stateSnapshot', data: { score: 1 } });
+    replyFromGame(frame, { type: 'stateSnapshot', data: { score: 2 } });
     await expect(pending).resolves.toEqual({ score: 2 });
   });
 });
@@ -64,14 +64,14 @@ describe('requestStateRestore', () => {
     const { frame, posted } = makeFrame();
     const pending = requestStateRestore(frame, { score: 7 });
     expect(posted).toEqual([{ source: 'gdpl-host', type: 'restoreState', data: { score: 7 } }]);
-    replyFromGame({ type: 'stateRestored', ok: true });
+    replyFromGame(frame, { type: 'stateRestored', ok: true });
     await expect(pending).resolves.toBe(true);
   });
 
   it('resolves false when the game declines the restore', async () => {
     const { frame } = makeFrame();
     const pending = requestStateRestore(frame, { score: 7 });
-    replyFromGame({ type: 'stateRestored', ok: false });
+    replyFromGame(frame, { type: 'stateRestored', ok: false });
     await expect(pending).resolves.toBe(false);
   });
 

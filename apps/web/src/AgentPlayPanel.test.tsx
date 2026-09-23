@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { POLICY_API_HELP } from './agentPolicy.js';
+import { dispatchFromFrame } from './test-utils/frameMessage.js';
 
 type Posted = Record<string, unknown>;
 
@@ -29,7 +30,7 @@ function fakeFrame(): HTMLIFrameElement {
 // A message shaped like one the bridge would post back.
 async function receive(message: Posted): Promise<void> {
   await act(async () => {
-    window.dispatchEvent(new MessageEvent('message', { data: { source: 'gdpl-player', ...message }, origin: 'null' }));
+    dispatchFromFrame(frameRef.current!.contentWindow!, { source: 'gdpl-player', ...message });
   });
 }
 

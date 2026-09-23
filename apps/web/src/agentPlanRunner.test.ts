@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseAgentPlan } from './agentPlan.js';
 import { runAgentPlan } from './agentPlanRunner.js';
+import { dispatchFromFrame } from './test-utils/frameMessage.js';
 
 type Sent = { type?: string; id?: number; command?: { kind?: string; frames?: number } };
 
@@ -42,7 +43,7 @@ function fakeGame(options: { startsPlayingAfter?: number; score?: (frame: number
   function reply(data: Record<string, unknown>) {
     // Asynchronous, like a real postMessage round trip.
     setTimeout(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { source: 'gdpl-player', ...data }, origin: 'null' }));
+      dispatchFromFrame(contentWindow, { source: 'gdpl-player', ...data });
     }, 0);
   }
 

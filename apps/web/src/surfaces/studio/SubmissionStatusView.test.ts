@@ -19,6 +19,7 @@ import {
 } from '../../submissionApi.js';
 import { submitImprovement } from '../../studioApi.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
+import { dispatchFromFrame } from '../../test-utils/frameMessage.js';
 
 vi.mock('../../visitTelemetry', async () => {
   const actual = await vi.importActual<typeof import('../../visitTelemetry')>('../../visitTelemetry');
@@ -1627,12 +1628,11 @@ describe('SubmissionStatusView', () => {
       // listener — it goes to the focused game iframe, which relays it over the
       // bridge — so that's the path exercised here.
       await act(async () => {
-        window.dispatchEvent(
-          new MessageEvent('message', {
-            origin: 'null',
-            data: { source: 'gdpl-player', type: 'key', key: 'Escape' },
-          }),
-        );
+        dispatchFromFrame((iframe as HTMLIFrameElement).contentWindow!, {
+          source: 'gdpl-player',
+          type: 'key',
+          key: 'Escape',
+        });
         await flushEffects();
       });
       expect(container.querySelector('iframe')).toBeNull();
