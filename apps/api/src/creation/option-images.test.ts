@@ -3,7 +3,7 @@ import { decodeWebp, encodeWebp } from '../platform/image-webp.js';
 import {
   createOptionImageGeneratorFromEnv,
   MAX_OPTION_IMAGES,
-  MuseOptionImageGenerator,
+  ImagesApiOptionImageGenerator,
   OPTION_IMAGE_WIDTH,
   type OptionImageParams,
 } from './option-images.js';
@@ -45,16 +45,16 @@ function respondWith(b64: string): Response {
 const ALLOW_ALL = { isSafe: async () => true };
 
 function makeGenerator(fetchImpl: typeof fetch, timeoutMs = 5_000, safetyChecker = ALLOW_ALL) {
-  return new MuseOptionImageGenerator({
+  return new ImagesApiOptionImageGenerator({
     apiKey: 'k',
-    model: 'muse-image-1.0',
+    model: 'gpt-image-2.5-flare',
     fetchImpl,
     timeoutMs,
     safetyChecker,
   });
 }
 
-describe('MuseOptionImageGenerator', () => {
+describe('ImagesApiOptionImageGenerator', () => {
   it('returns one downscaled webp tile per option', async () => {
     const b64 = await sourceImage();
     const generator = makeGenerator(async () => respondWith(b64));
@@ -135,12 +135,12 @@ describe('MuseOptionImageGenerator', () => {
     expect(prompt).toContain('Never reproduce anything recognisable');
     expect(prompt).toContain('2D canvas');
     expect(prompt).toContain('not cover art');
-    // The HUD language follows the option label.
-    expect(prompt).toContain('Pixel Art');
+    // A label like "Pixel Art" got printed as the HUD itself.
+    expect(prompt).toContain('same language as this question: "Jaki styl graficzny ma mieć gra?"');
   });
 });
 
-describe('MuseOptionImageGenerator safety verdict', () => {
+describe('ImagesApiOptionImageGenerator safety verdict', () => {
   it('drops a tile the safety checker refuses', async () => {
     const b64 = await sourceImage(320, 240);
     const generator = makeGenerator(async () => respondWith(b64), 5_000, {
@@ -182,6 +182,34 @@ describe('MuseOptionImageGenerator safety verdict', () => {
   });
 });
 
+describe('ImagesApiOptionImageGenerator request', () => {
+  it('asks OpenAI for low-quality WebP, the only format the downscaler reads', async () => {
+    const b64 = await sourceImage();
+    const seen: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const generator = new ImagesApiOptionImageGenerator({
+      apiKey: 'k',
+      model: 'gpt-image-2.5-flare',
+      safetyChecker: ALLOW_ALL,
+      fetchImpl: (async (url: string, init?: RequestInit) => {
+        seen.push({ url, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+        return respondWith(b64);
+      }) as typeof fetch,
+    });
+
+    await generator.generate({ ...PARAMS, options: PARAMS.options.slice(0, 1) });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe('https://api.openai.com/v1/images/generations');
+    expect(seen[0]!.body).toMatchObject({
+      model: 'gpt-image-2.5-flare',
+      n: 1,
+      quality: 'low',
+      size: '1024x768',
+      output_format: 'webp',
+    });
+  });
+});
+
 describe('createOptionImageGeneratorFromEnv', () => {
   it('stays off until both the key and the model are set', () => {
     expect(createOptionImageGeneratorFromEnv({})).toBeUndefined();
@@ -191,6 +219,6 @@ describe('createOptionImageGeneratorFromEnv', () => {
 
   it('builds a generator once both are present', () => {
     const generator = createOptionImageGeneratorFromEnv({ OPTION_IMAGE_API_KEY: 'k', OPTION_IMAGE_MODEL: 'm' });
-    expect(generator).toBeInstanceOf(MuseOptionImageGenerator);
+    expect(generator).toBeInstanceOf(ImagesApiOptionImageGenerator);
   });
 });

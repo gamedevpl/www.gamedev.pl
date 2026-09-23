@@ -201,6 +201,10 @@ export const privacyPl: LegalDocument = {
             'Twój opis gry przechodzi automatyczną moderację (model Google Gemini, a gdy jest niedostępny — model ' +
               'OpenAI), która może go odrzucić.',
             'Opis jest następnie doprecyzowywany przez model AI, który może zadać Ci pytania pomocnicze.',
+            'Gdy pytanie pomocnicze dotyczy wyglądu gry, model graficzny OpenAI może narysować ilustrację do każdej ' +
+              'odpowiedzi — na podstawie Twojego opisu i treści odpowiedzi. Każdą ilustrację, zanim ją zobaczysz, ' +
+              'sprawdza model Google Gemini. Nie przechowujemy tych ilustracji; nie są częścią Twojego zgłoszenia ' +
+              'i nie trafiają do agenta kodującego.',
             'Zaakceptowany opis trafia jako zadanie do agenta kodującego (GitHub Copilot), który pisze kod gry ' +
               'w naszym prywatnym repozytorium. Repozytorium gier nie jest publiczne — Twój opis nie staje się ' +
               'publicznie widoczny w wyniku samego zgłoszenia.',
@@ -299,7 +303,8 @@ export const privacyPl: LegalDocument = {
             ['Google (logowanie kontem Google)', 'Uwierzytelnianie', 'USA — Data Privacy Framework'],
             [
               'Google Cloud Vertex AI (Gemini)',
-              'Moderacja i doprecyzowanie opisu gry; podpowiedzi uzupełnień kodu w edytorze kodu',
+              'Moderacja i doprecyzowanie opisu gry; sprawdzanie bezpieczeństwa ilustracji do odpowiedzi na pytania ' +
+                'pomocnicze; podpowiedzi uzupełnień kodu w edytorze kodu',
               'USA / globalnie — standardowe klauzule umowne',
             ],
             [
@@ -314,7 +319,8 @@ export const privacyPl: LegalDocument = {
             ],
             [
               'OpenAI',
-              'Generuje wstępny szkic Twojej gry; pisze Twoją grę jako agent kodujący, gdy wybrany jest ten model; ' +
+              'Generuje wstępny szkic Twojej gry; rysuje ilustracje do odpowiedzi na pytanie pomocnicze o wygląd ' +
+                'gry; pisze Twoją grę jako agent kodujący, gdy wybrany jest ten model; ' +
                 'zastępuje klasyfikator Gemini, gdy ten jest niedostępny, żeby moderacja nigdy po prostu nie ustała',
               'USA — standardowe klauzule umowne',
             ],
