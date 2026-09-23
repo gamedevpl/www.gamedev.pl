@@ -28,6 +28,7 @@ import {
   toolOk,
   toolErr,
   toolRefusal,
+  toolErrForReason,
   RETIRED_GAME_KEY_REASON,
   PLATFORM_CONNECTOR_ONLY_REASON,
   matchesPlatformConnectorSecret,
@@ -175,7 +176,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             now(),
           );
           if (!creatorResolved.ok) {
-            return toolErr(creatorResolved.reason);
+            return toolErrForReason(creatorResolved.reason);
           }
           resolved = {
             creatorUid: creatorResolved.claims.creatorUid,
@@ -194,7 +195,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           }
           const oauthResolved = await resolveOwnedSlugForOpenRound(store, slugArg, asAccess.ownerUid);
           if (!oauthResolved.ok) {
-            return toolErr(oauthResolved.reason);
+            return toolErrForReason(oauthResolved.reason);
           }
           resolved = {
             creatorUid: asAccess.ownerUid,

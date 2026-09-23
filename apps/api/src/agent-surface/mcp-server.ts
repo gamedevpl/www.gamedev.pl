@@ -6,6 +6,7 @@ import {
   toolOk,
   toolErr,
   toolRefusal,
+  toolErrForReason,
   withErrorBranch,
   MCP_REFUSAL_CONTRACT,
   MCP_WARNINGS_CONTRACT,
@@ -1142,7 +1143,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const resolved = await resolveCreatorAgentKeyForStart(store, bearer, agentTokenSecret, slugArg, now());
           if (!resolved.ok) {
             noteInvalidStart(ctx.request);
-            return toolErr(resolved.reason);
+            return toolErrForReason(resolved.reason);
           }
           return await bindActiveRound(resolved.record, resolved.claims.creatorUid);
         }

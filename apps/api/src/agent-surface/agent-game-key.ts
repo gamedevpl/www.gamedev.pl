@@ -39,8 +39,11 @@ export const PLATFORM_ROUND_REASON =
  * Names the slug — never the key — so a mistype does not push a destructive rotate.
  * Same wording for "does not exist" and "belongs to someone else" (games are public).
  */
+// OAuth signs in as whichever account approved it, often not the owner's.
 export const SLUG_NOT_ON_ACCOUNT_REASON =
-  'no game with that slug on your account — check the slug in your Studio thread';
+  'no game with that slug that this account can build — check the slug in your Studio thread; ' +
+  'if it is right, this account is neither the owner nor an editor: sign your agent in as the owner, ' +
+  'or have the owner invite this account as an editor (editors build and preview, only the owner publishes)';
 
 export const SESSION_KEY_IS_NOT_AN_OPENER_REASON =
   'that is a sessionKey from an earlier start() — start needs Authorization Bearer ' +
