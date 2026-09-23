@@ -3,15 +3,16 @@ import { agentTranscriptLine } from './transcript-line.js';
 export type LineTone = 'cyan' | 'green' | 'red' | 'yellow' | 'blue' | 'magenta';
 export type LineStyle = { label: string; tone?: LineTone; quiet?: boolean; space?: boolean };
 
+// Failure words in the first clause, before any `.;:—` explanation.
+const FIRST_CLAUSE = '^[^.;:—]{0,80}?';
 const FAILURE = new RegExp(
   [
+    FIRST_CLAUSE + "\\b(?:cannot|can't|could not|couldn't|unable to|(?<!\\b0 )failed|refused|rejected)\\b",
     '^Validation needs changes',
-    '^(?:[\\w-]+ ){0,3}failed\\b',
     '^Verification (?:failed|stopped)',
     '^(?:[\\w-]+ ){1,3}stopped(?: \\(exit|:| before| without success| —)',
     '^Agent (?:blocked|rejected)',
     '(?:completion|successful edit) is not confirmed',
-    'could not obtain tool permissions',
     'gate did not start',
     '^error:',
     '^Delivery.*blocked',
@@ -22,6 +23,7 @@ const FAILURE = new RegExp(
 );
 const NOTICE = new RegExp(
   [
+    FIRST_CLAUSE + '\\b(?:unavailable|conflict)\\b',
     '^Update available:',
     '^Sending validation',
     '^No new output',
