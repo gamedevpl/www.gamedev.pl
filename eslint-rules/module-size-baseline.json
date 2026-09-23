@@ -690,7 +690,7 @@
     "apps/web/src/NavHeader.tsx": 394,
     "apps/web/src/NotFoundPage.test.tsx": 41,
     "apps/web/src/NotFoundPage.tsx": 33,
-    "apps/web/src/NotificationBell.test.tsx": 175,
+    "apps/web/src/NotificationBell.test.tsx": 178,
     "apps/web/src/NotificationBell.tsx": 328,
     "apps/web/src/notificationPanelPosition.ts": 12,
     "apps/web/src/notificationsApi.test.ts": 74,

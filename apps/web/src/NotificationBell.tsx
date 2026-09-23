@@ -12,10 +12,10 @@ import {
   type NotificationPreferences,
   type NotificationType,
 } from './notificationsApi.js';
-import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi.js';
 import { notificationPanelShiftX } from './notificationPanelPosition.js';
+import { platform } from './platform/index.js';
+import type { PushUiState } from './pushApi.js';
 import './NotificationBell.css';
-
 const POLL_MS = 60_000;
 
 // English fallbacks used until locale keys land in i18n/locales/*.json. Rendering
@@ -75,7 +75,7 @@ export function NotificationBell() {
   useEffect(() => {
     if (!user) return;
     let alive = true;
-    void pushUiState().then((state) => {
+    void platform.push.uiState().then((state) => {
       if (alive) setPush(state);
     });
     return () => {
@@ -111,14 +111,14 @@ export function NotificationBell() {
     setPushBusy(true);
     try {
       if (push.subscribed) {
-        await unsubscribeFromPush();
+        await platform.push.unsubscribe();
       } else {
-        await subscribeToPush();
+        await platform.push.subscribe();
       }
-      setPush(await pushUiState());
+      setPush(await platform.push.uiState());
     } catch {
       // Surface nothing intrusive — re-read state so the toggle reflects reality.
-      setPush(await pushUiState());
+      setPush(await platform.push.uiState());
     } finally {
       setPushBusy(false);
     }
