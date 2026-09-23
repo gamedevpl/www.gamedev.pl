@@ -2,6 +2,7 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { BUILDERS, type BuilderKind } from '@gamedevpl/contract';
+import { NO_OPEN_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 
 // text is the JSON body; image is a rendered frame (get_gate_media).
 type ToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
@@ -57,6 +58,13 @@ export interface RefusalDetail {
 
 export function toolRefusal(message: string, code: McpErrorCode, detail?: RefusalDetail): ToolResult {
   return toolErr(message, { code, ...(detail ?? {}) });
+}
+
+const OPENER_REASONS: ReadonlySet<string> = new Set([SLUG_NOT_ON_ACCOUNT_REASON, NO_OPEN_ROUND_REASON]);
+
+// Resolvers return bare reasons; keep the code the direct refusals carry.
+export function toolErrForReason(reason: string): ToolResult {
+  return OPENER_REASONS.has(reason) ? toolRefusal(reason, 'opener_required') : toolErr(reason);
 }
 
 // The refusal shape is `{ error, code?, retryAfterSeconds? }`. It is described once

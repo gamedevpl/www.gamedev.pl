@@ -150,7 +150,7 @@ async function callCreateGame(
 const GAME_CONCEPT = 'A tycoon game where you run a small television station, buy shows, and keep the audience awake.';
 
 /** Full CIMD-free OAuth flow: register, approve, exchange — returns an access token. */
-async function oauthAccessToken(app: FastifyInstance): Promise<string> {
+async function oauthAccessToken(app: FastifyInstance, uid = OWNER): Promise<string> {
   const register = await app.inject({
     method: 'POST',
     url: '/oauth/register',
@@ -167,7 +167,7 @@ async function oauthAccessToken(app: FastifyInstance): Promise<string> {
   const approve = await app.inject({
     method: 'POST',
     url: '/oauth/authorize',
-    headers: { cookie: authHeaders().cookie, 'content-type': 'application/x-www-form-urlencoded' },
+    headers: { cookie: authHeaders(uid).cookie, 'content-type': 'application/x-www-form-urlencoded' },
     payload: new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
@@ -177,7 +177,7 @@ async function oauthAccessToken(app: FastifyInstance): Promise<string> {
       code_challenge: challenge,
       code_challenge_method: 'S256',
       action: 'approve',
-      consent_token: consentToken({ uid: OWNER, clientId, codeChallenge: challenge, secret: sessionSecret }),
+      consent_token: consentToken({ uid, clientId, codeChallenge: challenge, secret: sessionSecret }),
     }).toString(),
   });
   const code = new URL(approve.headers.location as string).searchParams.get('code');
@@ -404,6 +404,8 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect((viaCreator.structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
     expect((viaOAuth.structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
     expect((viaCreator.structured as { error: string }).error).toBe((viaOAuth.structured as { error: string }).error);
+    expect(viaCreator.structured).toMatchObject({ code: 'opener_required' });
+    expect(viaOAuth.structured).toMatchObject({ code: 'opener_required' });
   });
 
   it('reuses no-open-round and platform-round refusals', async () => {
@@ -773,6 +775,39 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(isError).toBe(true);
     // Names the slug, never the credential — a mistype must not push a destructive rotate.
     expect((structured as { error: string }).error).toBe(SLUG_NOT_ON_ACCOUNT_REASON);
+    // A connector signed in as the wrong account is told how to get access.
+    expect(structured).toMatchObject({ code: 'opener_required' });
+    expect((structured as { error: string }).error).toMatch(/owner.*editor/);
+  });
+
+  // #1444: a connector signed in as a second account opens rounds once invited.
+  it('opens an improvement round over OAuth for an invited editor', async () => {
+    const store = new InMemoryStore();
+    await seedPublishedGame(store);
+    const at = new Date().toISOString();
+    for (const uid of [OWNER, OTHER]) await store.upsertUser({ uid });
+    await store.ensureGameAccess(SLUG, OWNER, at, at);
+    app = await createApp(store);
+
+    const editorToken = await oauthAccessToken(app, OTHER);
+    const before = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Tighten the jump arc.' },
+      { authorization: `Bearer ${editorToken}` },
+    );
+    expect(before.isError).toBe(true);
+    expect(before.structured).toMatchObject({ code: 'opener_required' });
+
+    const invite = await store.createEditorInvitation(SLUG, OWNER, OTHER, at);
+    await store.acceptEditorInvitation(SLUG, OTHER, at, (invite as { inviteId: string }).inviteId);
+
+    const after = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Tighten the jump arc.' },
+      { authorization: `Bearer ${editorToken}` },
+    );
+    expect(after.isError).toBe(false);
+    expect(after.structured).toMatchObject({ slug: SLUG, alreadyOpen: false });
   });
 
   // The gap CP-2's ChatGPT screenshot showed: a connected client could join a round on

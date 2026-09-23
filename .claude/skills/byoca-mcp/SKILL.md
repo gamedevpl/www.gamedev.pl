@@ -1099,10 +1099,16 @@ The same right is still enforced at submit (`not_owner`); this only moves the ne
 earlier. An unslugged round reports `canPublish: true` because there is nothing to
 seal yet.
 
-`opener_required` is the other half: an OAuth connector account is not automatically a
-round opener. `continue_draft` / `start` need a creator key or an OAuth grant that
-carries opener rights for that game; a sessionKey from an earlier `start` never does.
-Hand a creator key over through Studio, never by pasting it into a chat.
+`opener_required` is the other half. An OAuth connector already opens rounds
+(`open_round`, `continue_draft`, `start`) for every game its account can build: the
+owner's, or one it was invited to as an editor. The grant carries the account that
+approved it, which is often not the owner's — a second or bot account. That account
+gets `opener_required` with a message naming both ways in: sign the connector in as
+the owner, or have the owner invite it as an editor. Editors build and preview; only
+the owner publishes (`canPublish`). A creator key resolver refusal (unknown slug, no
+open round) carries the same code through `toolErrForReason`. A sessionKey from an
+earlier `start` never opens anything. Hand a creator key over through Studio, never by
+pasting it into a chat.
 
 `get_kit` may carry `upcomingRules: [{ id, summary }]` — delivery rules that are
 decided but not yet enforced, so a build can absorb one on its own schedule instead of
@@ -1129,14 +1135,14 @@ cannot forget it. Before that, a refusal failed the declared schema and clients 
 `-32602 Structured content does not match the tool's output schema`, which made "not the owner" and
 "quota used up" both read as a platform defect.
 
-| Code                  | Meaning                                                             | Carries             |
-| --------------------- | ------------------------------------------------------------------- | ------------------- |
-| `not_owner`           | The caller may build but not seal this game (`mode:"publish"`)      | —                   |
-| `opener_required`     | A sessionKey or the wrong bearer was used where an opener is needed | —                   |
-| `quota_exhausted`     | Daily improvement / feedback limit used up                          | `retryAfterSeconds` |
-| `quota_blocked`       | Account is blocked; waiting never clears it                         | —                   |
-| `rate_limited`        | Too many attempts in the window (invalid `start`)                   | `retryAfterSeconds` |
-| `moderation_rejected` | Text refused by moderation                                          | `category`          |
+| Code                  | Meaning                                                            | Carries             |
+| --------------------- | ------------------------------------------------------------------ | ------------------- |
+| `not_owner`           | The caller may build but not seal this game (`mode:"publish"`)     | —                   |
+| `opener_required`     | The account is not the game's owner or editor, or no round is open | —                   |
+| `quota_exhausted`     | Daily improvement / feedback limit used up                         | `retryAfterSeconds` |
+| `quota_blocked`       | Account is blocked; waiting never clears it                        | —                   |
+| `rate_limited`        | Too many attempts in the window (invalid `start`)                  | `retryAfterSeconds` |
+| `moderation_rejected` | Text refused by moderation                                         | `category`          |
 
 `code` is an open string, not an enum: refusals that pass an upstream channel body through
 `toolErr` may carry a code this list does not name. Branch on `code` when it is present and fall
