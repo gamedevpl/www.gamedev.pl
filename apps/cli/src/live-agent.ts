@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { AdapterSpec } from './adapters.js';
 import { agentRpc, type RpcValue } from './agent-rpc.js';
+import { evidenceImages } from './workbench-evidence.js';
 
 export type Steer = (text: string) => Promise<void>;
 export type LiveRunInput = {
@@ -46,6 +47,11 @@ export function liveArgs(spec: AdapterSpec): string[] | undefined {
     args.push(arg);
   }
   return spec.name === 'codex' ? [...args, 'app-server'] : ['serve', ...args];
+}
+// Codex reads staged screenshots as images, not only as file paths.
+export function turnInput(name: string, text: string): RpcValue[] {
+  const images = name === 'codex' ? evidenceImages(text) : [];
+  return [{ type: 'text', text }, ...images.map((path) => ({ type: 'localImage', path }))];
 }
 export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number; permissionSession?: string }> {
   const args = liveArgs(input.spec);
@@ -151,7 +157,7 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
     if (!session) throw new Error('Agent did not return a session ID.');
     const started = await rpc.request('turn/start', {
       [name === 'muse' ? 'sessionId' : 'threadId']: session,
-      input: [{ type: 'text', text: input.prompt }],
+      input: turnInput(name, input.prompt),
       ...(name === 'muse'
         ? { commandId: uuid7(), reasoningEffort: input.spec.selection?.effort }
         : { effort: input.spec.selection?.effort }),
@@ -168,7 +174,7 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
           const result = await rpc.request('turn/steer', {
             [name === 'muse' ? 'sessionId' : 'threadId']: session,
             expectedTurnId: turn,
-            input: [{ type: 'text', text }],
+            input: turnInput(name, text),
             ...(name === 'muse' ? { commandId: uuid7() } : {}),
           });
           if (result.turnId !== turn)

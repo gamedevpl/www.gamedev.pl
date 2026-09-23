@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { lineStyle, type LineStyle } from '../src/transcript-style.js';
 import { isMascotLine } from '../src/tui/mascot.js';
 
-const TOKEN = /(`[^`\n]+`|https?:\/\/[^\s<>"'`]+|\/[a-z][\w-]*\b)/g;
+const TOKEN = /(`[^`\n]+`|https?:\/\/[^\s<>"'`]+|(?<![\w./:-])\/[a-z][\w-]*\b)/g;
 
 // Drop sentence punctuation and unbalanced closing brackets from a prose URL.
 export function trimUrl(url: string): string {

@@ -51,3 +51,24 @@ it('retains local references when a proposal becomes a new game brief', async ()
   });
   expect(executeChoice).toHaveBeenCalledWith(expect.objectContaining({ request: 'Make a racer' + evidence }));
 });
+
+it('shows the typed prompt and attachment names, never the agent-only evidence block', async () => {
+  const { shownPrompt } = await import('./workbench-evidence.js');
+  const record = JSON.stringify({ name: 'screenshot.png', mime: 'image/png', purpose: 'diagnostic' });
+  expect(shownPrompt('add shadows' + EVIDENCE_MARKER + record)).toBe('add shadows · 📎 screenshot.png');
+  expect(shownPrompt('no attachments')).toBe('no attachments');
+});
+
+it('passes staged screenshots to codex as image input', async () => {
+  const { evidenceImages } = await import('./workbench-evidence.js');
+  const { turnInput } = await import('./live-agent.js');
+  const image = JSON.stringify({ name: 'shot.png', mime: 'image/png', path: '/tmp/e/shot.png' });
+  const trace = JSON.stringify({ name: 'trace.json', mime: 'application/json', path: '/tmp/e/trace.json' });
+  const prompt = 'fix stripes' + EVIDENCE_MARKER + image + '\n' + trace;
+  expect(evidenceImages(prompt)).toEqual(['/tmp/e/shot.png']);
+  expect(turnInput('codex', prompt)).toEqual([
+    { type: 'text', text: prompt },
+    { type: 'localImage', path: '/tmp/e/shot.png' },
+  ]);
+  expect(turnInput('muse', prompt)).toEqual([{ type: 'text', text: prompt }]);
+});

@@ -2,7 +2,7 @@ import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 import { SESSION_BROWSER_SCRIPT } from './session-browser-script.js';
 
-it.each(['ordinary', 'question', 'choice'])('retains staged evidence across a %s answer', async (kind) => {
+it.each(['ordinary', 'question', 'choice'])('clears staged evidence only once a %s answer sends it', async (kind) => {
   const fields = new Map<string, { textContent: string }>();
   const attachments = [{ id: 'image' }, { id: 'trace' }];
   const api = vi.fn(async () => ({ status: 'accepted' }));
@@ -37,7 +37,7 @@ it.each(['ordinary', 'question', 'choice'])('retains staged evidence across a %s
   const client = context as typeof context & { send(command: unknown): void };
   client.send({ kind: 'input', promptId: 1, text: draft.value });
   await vi.waitFor(() => expect(context.pending).toBeUndefined());
-  expect(context.attachments).toEqual(attachments);
+  expect(context.attachments).toEqual(kind === 'ordinary' ? [] : attachments);
   expect(draft.value).toBe(kind === 'choice' ? 'Fix this image' : '');
   const sent = (api.mock.calls[0] as unknown as [string, { command: object }])[1].command;
   if (kind === 'ordinary') expect(sent).toHaveProperty('attachments', ['image', 'trace']);
@@ -52,7 +52,10 @@ it.each(['ordinary', 'question', 'choice'])('retains staged evidence across a %s
   expect(api.mock.calls[1]).toEqual([
     '/commands',
     expect.objectContaining({
-      command: expect.objectContaining({ text: 'Make the car red', attachments: ['image', 'trace'] }),
+      command:
+        kind === 'ordinary'
+          ? expect.not.objectContaining({ attachments: expect.anything() })
+          : expect.objectContaining({ text: 'Make the car red', attachments: ['image', 'trace'] }),
     }),
   ]);
 });

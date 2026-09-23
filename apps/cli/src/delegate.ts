@@ -7,6 +7,7 @@ import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
+import { evidenceImages } from './workbench-evidence.js';
 
 // A PAT reaches the whole account, not just one round.
 export const CREATOR_TOKEN_PATTERN = /gdpl_(oat|pat)_/;
@@ -152,7 +153,13 @@ export async function spawnAdapter(input: {
         args: input.spec.headless,
         abort: input.abort,
       }));
-  return spawnCommand({ ...input, env, command: input.spec.command, args: [...input.spec.headless, input.prompt] });
+  const images = input.spec.name === 'codex' ? evidenceImages(input.prompt).map((path) => `--image=${path}`) : [];
+  return spawnCommand({
+    ...input,
+    env,
+    command: input.spec.command,
+    args: [...input.spec.headless, ...images, input.prompt],
+  });
 }
 
 export function spawnCommand(input: {
