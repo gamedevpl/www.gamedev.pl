@@ -1,8 +1,9 @@
 # Security Model
 
-> **Current model:** gamedev.pl serves a catalog, renders untrusted static games, and accepts
-> public game specs. Coding agents work in a dedicated repository and submit pull requests.
-> The app does not run agents or containers on creators' behalf.
+> **Current model:** gamedev.pl serves a catalog and accepts game specs. Generated game code
+> runs in a sandboxed browser iframe, and shared-zone simulations run in `isolated-vm`.
+> Creator builds pass through a Cloud Build gate. Managed and external agents use scoped
+> credentials for the current round when interacting with the platform's MCP tools.
 
 ## Trust boundaries
 
@@ -24,6 +25,13 @@ This protects the parent app's DOM, cookies, and storage. It does not solve ever
 
 The separate games origin is defense in depth: even if iframe configuration later regresses,
 the games origin must not carry app cookies, credentials, or privileged APIs.
+
+#### Frame messages
+
+The player, playtest, and agent-play handlers accept a game message only when its origin is
+`"null"` and its source is that game's iframe window. `isFromGameFrame` in
+`apps/web/src/frameMessage.ts` applies both checks. A message from another frame or window
+does not update the game's state or telemetry.
 
 ### 2. Public specs and issue text
 
