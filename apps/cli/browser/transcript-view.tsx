@@ -3,7 +3,6 @@ import { lineStyle, type LineStyle } from '../src/transcript-style.js';
 import { isMascotLine } from '../src/tui/mascot.js';
 
 const TOKEN = /(`[^`\n]+`|https?:\/\/[^\s<>"'`]+|\/[a-z][\w-]*\b)/g;
-const SEVERITY: Record<string, number> = { red: 3, yellow: 2, green: 1 };
 
 export function RichText({ text }: { text: string }) {
   return (
@@ -66,12 +65,15 @@ export function TranscriptLines({ lines }: { lines: string[] }) {
   );
 }
 
-// Most urgent line, so collapsed summaries still surface failures.
+// Latest outcome wins: a later pass resolves failures; warnings never hide them.
 export function headline(lines: string[]): { line: string; style: LineStyle } {
   let best = { line: lines[0] ?? '', style: lineStyle(lines[0] ?? '') };
   for (const line of lines) {
     const style = lineStyle(line);
-    if ((SEVERITY[style.tone ?? ''] ?? 0) > (SEVERITY[best.style.tone ?? ''] ?? 0)) best = { line, style };
+    const pass = style.label === 'PASS';
+    const alert = style.label === '!';
+    if (!pass && !alert) continue;
+    if (pass || style.tone === 'red' || best.style.tone !== 'red') best = { line, style };
   }
   return best;
 }
