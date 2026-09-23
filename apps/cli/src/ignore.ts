@@ -23,7 +23,6 @@ type Rule = {
   regex: RegExp;
 };
 
-const MAX_PATTERN = 240;
 const MAX_IGNORE_BYTES = 256 * 1024;
 
 function escapeRegex(text: string): string {
@@ -42,7 +41,6 @@ function trimTrailingSpaces(line: string): string {
 }
 
 function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null {
-  if (raw.length > MAX_PATTERN) return null;
   let pattern = raw;
   let dirOnly = false;
   if (pattern.endsWith('/') && !pattern.endsWith('\\/')) {

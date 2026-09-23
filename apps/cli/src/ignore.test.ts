@@ -78,6 +78,15 @@ describe('ignore matcher', () => {
     expect(match.ignored('foo', false)).toBeNull();
   });
 
+  it('honors a pattern longer than 240 characters', () => {
+    const dir = root();
+    const name = `${'a'.repeat(241)}.secret`;
+    writeFileSync(join(dir, '.gitignore'), `${name}\n`);
+    const match = createIgnoreMatcher(dir);
+    expect(match.ignored(name, false)?.pattern).toBe(name);
+    expect(match.ignored('short.secret', false)).toBeNull();
+  });
+
   it('does not follow a symlinked ignore file', () => {
     const dir = root();
     const outside = root();
