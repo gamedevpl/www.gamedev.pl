@@ -5,7 +5,7 @@ import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
 import type { Store } from '../platform/store.js';
-import { moderationFlagId, type ModerationFlag } from '../store/records/moderation-flag.js';
+import type { ModerationFlag } from '../store/records/moderation-flag.js';
 import { isReviewerSession } from './review.js';
 
 export interface ModerationFlagRoutesOptions {
@@ -91,8 +91,8 @@ export async function takeDownSlug(input: {
 }
 
 // Reopened flags page again; still-open ones must not page twice.
-function alertFlagId(prior: ModerationFlag | null, flag: ModerationFlag): string {
-  return prior?.status === 'resolved' ? `${flag.id}@${flag.createdAt}` : flag.id;
+function alertFlagId(reopened: boolean, flag: ModerationFlag): string {
+  return reopened ? `${flag.id}@${flag.createdAt}` : flag.id;
 }
 
 export async function registerModerationFlagRoutes(
@@ -123,8 +123,7 @@ export async function registerModerationFlagRoutes(
       const note = sanitizeCreatorText(parsed.data.note, { singleLine: false }).slice(0, MAX_NOTE);
       if (!note) return reply.status(400).send({ error: 'note is required' });
 
-      const prior = await store.getModerationFlag(moderationFlagId(parsed.data.slug, request.user!.uid));
-      const flag = await store.raiseModerationFlag({
+      const { flag, reopened } = await store.raiseModerationFlag({
         slug: parsed.data.slug,
         source: parsed.data.source,
         reason: parsed.data.reason,
@@ -138,7 +137,7 @@ export async function registerModerationFlagRoutes(
         'moderation flag raised on a game',
       );
       // Detached: mail and push must not hold the reviewer's request open.
-      void notifyFlagRaised?.({ flagId: alertFlagId(prior, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
         request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
       });
       return reply.send({ flag });
@@ -170,8 +169,7 @@ export async function registerModerationFlagRoutes(
       if (!sanitized) return reply.status(400).send({ error: 'note is required' });
 
       // Not content-moderated: quoting the abuse is the evidence operators need.
-      const prior = await store.getModerationFlag(moderationFlagId(params.data.slug, request.user.uid));
-      const flag = await store.raiseModerationFlag({
+      const { flag, reopened } = await store.raiseModerationFlag({
         slug: params.data.slug,
         source: 'player',
         reason: body.data.reason,
@@ -182,7 +180,7 @@ export async function registerModerationFlagRoutes(
       });
       request.log.warn({ slug: flag.slug, reason: flag.reason }, 'player reported a game');
       // Detached, same as the reviewer path above.
-      void notifyFlagRaised?.({ flagId: alertFlagId(prior, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
         request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a player game report');
       });
       return reply.send({ ok: true });

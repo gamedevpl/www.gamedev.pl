@@ -27,9 +27,15 @@ export interface ResolveModerationFlagInput {
 export type ResolveModerationFlagResult =
   { ok: true; flag: ModerationFlag } | { ok: false; reason: 'not_found' | 'already_resolved' };
 
+// `reopened` is decided inside the write, so it cannot race a resolve.
+export interface RaisedModerationFlag {
+  flag: ModerationFlag;
+  reopened: boolean;
+}
+
 export interface ModerationFlagStore {
   // Opens a report, or reopens the reviewer's resolved one.
-  raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag>;
+  raiseModerationFlag(input: RaiseModerationFlagInput): Promise<RaisedModerationFlag>;
 
   getModerationFlag(id: string): Promise<ModerationFlag | null>;
 
@@ -76,10 +82,11 @@ function touchesUid(flag: ModerationFlag, uid: string): boolean {
 export class InMemoryModerationFlagStore implements ModerationFlagStore {
   private flags = new Map<string, ModerationFlag>();
 
-  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<RaisedModerationFlag> {
     const flag = openFlag(input);
+    const reopened = this.flags.get(flag.id)?.status === 'resolved';
     this.flags.set(flag.id, flag);
-    return { ...flag };
+    return { flag: { ...flag }, reopened };
   }
 
   async getModerationFlag(id: string): Promise<ModerationFlag | null> {
@@ -145,10 +152,14 @@ export class FirestoreModerationFlagStore implements ModerationFlagStore {
     return this.db.collection(MODERATION_FLAGS_COLLECTION).doc(id);
   }
 
-  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<RaisedModerationFlag> {
     const flag = openFlag(input);
-    await this.ref(flag.id).set(flag);
-    return flag;
+    const ref = this.ref(flag.id);
+    return this.db.runTransaction(async (tx) => {
+      const prior = (await tx.get(ref)).data() as Omit<ModerationFlag, 'id'> | undefined;
+      tx.set(ref, flag);
+      return { flag, reopened: prior?.status === 'resolved' };
+    });
   }
 
   async getModerationFlag(id: string): Promise<ModerationFlag | null> {
