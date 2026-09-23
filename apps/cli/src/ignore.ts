@@ -89,9 +89,10 @@ function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null
     if (char === '[') {
       const end = pattern.indexOf(']', i + 1);
       const cls = end > i + 1 ? pattern.slice(i + 1, end) : '';
-      if (cls && /^!?[\w.-]+$/u.test(cls)) {
-        const neg = cls.startsWith('!') ? '^' : '';
-        const rest = cls.startsWith('!') ? cls.slice(1) : cls;
+      if (cls && /^[!^]?[\w.-]+$/u.test(cls)) {
+        const isNeg = cls.startsWith('!') || cls.startsWith('^');
+        const neg = isNeg ? '^' : '';
+        const rest = isNeg ? cls.slice(1) : cls;
         body += `[${neg}${rest}]`;
         i = end + 1;
         continue;

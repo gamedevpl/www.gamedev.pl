@@ -108,6 +108,16 @@ describe('materializePushCheckout', () => {
     expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('*.working\n');
   });
 
+  it('does not materialize an ignore symlink from the pushed ref as regular rules', () => {
+    const repo = dirtyRepo();
+    symlinkSync('secret.ts', join(repo, '.gitignore'));
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'symlinked ignore']);
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(existsSync(join(dest, '.gitignore'))).toBe(false);
+  });
+
   it('refuses a missing games tree on the source ref', () => {
     const repo = mkdtempSync(join(tmpdir(), 'gdpl-empty-'));
     git(repo, ['init']);

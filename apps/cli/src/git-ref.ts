@@ -73,8 +73,11 @@ export function materializePushCheckout(input: {
 
 const ROOT_IGNORE = ['.gitignore', '.gamedevplignore'];
 
-function refHasBlob(repo: string, srcRef: string, path: string): boolean {
-  return spawnSync('git', ['-C', repo, 'cat-file', '-e', `${srcRef}:${path}`]).status === 0;
+function refHasRegularBlob(repo: string, srcRef: string, path: string): boolean {
+  const result = spawnSync('git', ['-C', repo, 'ls-tree', srcRef, '--', path]);
+  if (result.status !== 0) return false;
+  const line = result.stdout.toString('utf8').trim();
+  return /^100\d{3}\s+blob\s+/u.test(line);
 }
 
 function unlinkCopied(target: string): void {
@@ -91,7 +94,7 @@ function materializeRootIgnore(repo: string, srcRef: string, dest: string): void
   for (const name of ROOT_IGNORE) {
     const target = join(dest, name);
     unlinkCopied(target);
-    if (!refHasBlob(repo, srcRef, name)) continue;
+    if (!refHasRegularBlob(repo, srcRef, name)) continue;
     writeFileSync(target, spawnOrThrow('git', ['-C', repo, 'show', `${srcRef}:${name}`]));
   }
 }

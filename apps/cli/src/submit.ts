@@ -157,19 +157,20 @@ async function submitGameUnlocked(input: {
 
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, latest.tree.version);
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
+  const remoteFiles = trackedTree(input.dest, input.slug, latest.tree.files);
   const paths =
     takenOver || recovered
       ? [
           ...new Set(
             [
               ...localGameFiles(input.dest, input.slug),
-              ...latest.tree.files,
+              ...remoteFiles,
               ...(recovered ? recoveryPaths(input.dest).map((path) => ({ path })) : []),
             ].map((file) => file.path),
           ),
         ].sort()
       : input.force
-        ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
+        ? changedPathsForced(localGameFiles(input.dest, input.slug), remoteFiles)
         : latest.sync.local;
   let extra: string[] = [];
   try {

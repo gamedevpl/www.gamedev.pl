@@ -111,4 +111,75 @@ describe('push ignore notice', () => {
     expect(readBase(dest)?.files['game.ts']).toBe(hashContent('B'));
     expect(existsSync(join(dest, 'games', SLUG, 'extra.log'))).toBe(false);
   });
+
+  it('preserves an ignored platform file during takeover without deleting it', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-takeover-'));
+    writeGameFiles(dest, SLUG, [{ path: 'game.ts', content: 'A' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, '.gamedev-slug'), SLUG);
+    writeFileSync(join(dest, '.gitignore'), '*.log\n');
+    writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');
+    const deleted: string[] = [];
+    const staged: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        const path = String(url);
+        if (path.endsWith('/versions') && !path.includes('/tree')) {
+          return json({
+            versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts', 'extra.log'] }],
+          });
+        }
+        if (path.includes('/tree')) {
+          return json({
+            version: 'v1',
+            files: [
+              { path: 'game.ts', content: 'A' },
+              { path: 'extra.log', content: 'platform\n' },
+            ],
+          });
+        }
+        if (path.endsWith('/sources/session')) {
+          return json(
+            init?.method === 'POST'
+              ? { accepted: true }
+              : { locked: true, canTakeOver: true, jobId: 10, generation: 1 },
+          );
+        }
+        if (path.endsWith('/sources')) {
+          return json({
+            files: [
+              { path: 'game.ts', content: 'A' },
+              { path: 'extra.log', content: 'platform\n' },
+            ],
+          });
+        }
+        if (path.includes('/sources/stage') && init?.method === 'DELETE') {
+          const u = new URL(path);
+          deleted.push(u.searchParams.get('path') ?? '');
+          return json({ accepted: true });
+        }
+        if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
+          const body = JSON.parse(String(init?.body ?? '{}')) as { path: string };
+          staged.push(body.path);
+          return json({ accepted: true });
+        }
+        if (path.endsWith('/sources/deliver')) {
+          return json({ accepted: true, version: 'v2', mode: 'preview', gateStarted: true });
+        }
+        return json({}, 404);
+      },
+    });
+    const result = await submitGame({
+      api,
+      slug: SLUG,
+      dest,
+      takeover: true,
+      run: () => ({ status: 0, stderr: '' }),
+    });
+    expect(result.kind).toBe('delivered');
+    expect(deleted).toEqual([]);
+    expect(staged).toEqual(['game.ts']);
+  });
 });

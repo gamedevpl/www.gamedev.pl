@@ -78,6 +78,18 @@ describe('ignore matcher', () => {
     expect(match.ignored('foo', false)).toBeNull();
   });
 
+  it('supports character classes with caret and exclamation negation', () => {
+    const dir = root();
+    writeFileSync(join(dir, '.gitignore'), '[^a]*.ts\n[!b]*.js\n[a-z].txt\n');
+    const match = createIgnoreMatcher(dir);
+    expect(match.ignored('game.ts', false)?.pattern).toBe('[^a]*.ts');
+    expect(match.ignored('apple.ts', false)).toBeNull();
+    expect(match.ignored('apple.js', false)?.pattern).toBe('[!b]*.js');
+    expect(match.ignored('banana.js', false)).toBeNull();
+    expect(match.ignored('c.txt', false)?.pattern).toBe('[a-z].txt');
+    expect(match.ignored('1.txt', false)).toBeNull();
+  });
+
   it('keeps earlier rules when one character class is not a JavaScript regexp', () => {
     const dir = root();
     writeFileSync(join(dir, '.gitignore'), '*.secret\n[z-a]\n');
