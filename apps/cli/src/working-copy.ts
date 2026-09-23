@@ -1,20 +1,20 @@
 import { cliUsage } from './bin-name.js';
 import { formatSyncLines, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
-import { stripTerminalControls } from './ansi.js';
+import { sanitizePath } from './ansi.js';
 import { unifiedDiff } from './text-diff.js';
 
 const LIST_LIMIT = 12;
 
 export function formatPathList(paths: string[]): string {
-  const clean = paths.map(stripTerminalControls);
+  const clean = paths.map(sanitizePath);
   const shown = clean.slice(0, LIST_LIMIT);
   const more = clean.length > LIST_LIMIT ? `, and ${clean.length - LIST_LIMIT} more` : '';
   return `${shown.join(', ')}${more}`;
 }
 
 function ignoredLabel(hit: IgnoredHit): string {
-  const clean = stripTerminalControls(hit.path);
+  const clean = sanitizePath(hit.path);
   return hit.directory ? `${clean}/` : clean;
 }
 

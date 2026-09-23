@@ -8,7 +8,7 @@ function linesOf(text: string): { lines: string[]; newline: boolean } {
   if (!text) return { lines: [], newline: false };
   const newline = text.endsWith('\n');
   const body = newline ? text.slice(0, -1) : text;
-  return { lines: body ? body.split('\n') : [], newline };
+  return { lines: body.split('\n'), newline };
 }
 
 function lineDiff(before: string[], after: string[]): Edit[] {

@@ -204,13 +204,13 @@ describe('what a refused sync tells you to do next', () => {
     expect(refused.message).toContain('gamedevpl diff');
   });
 
-  it('strips terminal controls from paths in sync lines', () => {
+  it('strips terminal controls and line breaks from paths in sync lines', () => {
     const esc = '\u001b';
     const lines = formatSyncLines({
       kind: 'conflict',
       version: 'v1',
-      local: [`${esc}[2Jlocal.ts`],
-      platform: [`${esc}]0;evil\u0007plat.ts`],
+      local: [`${esc}[2Jlocal\n.ts`],
+      platform: [`${esc}]0;evil\u0007plat\r.ts`],
       conflict: [`${esc}[31mconf.ts`],
     });
     const joined = lines.join('\n');
@@ -219,22 +219,25 @@ describe('what a refused sync tells you to do next', () => {
     expect(joined).toContain('conflict: conf.ts');
     expect(joined).not.toContain(esc);
     expect(joined).not.toContain('\u0007');
+    expect(joined).not.toContain('\r');
   });
 
-  it('strips terminal controls from paths in refusal messages', () => {
+  it('strips terminal controls and line breaks from paths in refusal messages', () => {
     const esc = '\u001b';
     const refused = syncRefuse(
       {
         kind: 'conflict',
         version: 'v1',
-        local: [`${esc}[2Jlocal.ts`],
+        local: [`${esc}[2Jlocal\n.ts`],
         platform: [],
-        conflict: [`${esc}[31mconf.ts`],
+        conflict: [`${esc}[31mconf\r.ts`],
       },
       'pull',
     );
     expect(refused.message).toContain('conflict on conf.ts');
     expect(refused.message).toContain('discards local.ts as well');
     expect(refused.message).not.toContain(esc);
+    expect(refused.message).not.toContain('\n.ts');
+    expect(refused.message).not.toContain('\r');
   });
 });

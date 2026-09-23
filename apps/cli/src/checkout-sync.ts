@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { stripTerminalControls } from './ansi.js';
+import { sanitizePath } from './ansi.js';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
@@ -128,7 +128,7 @@ function changedKeys(left: Record<string, string>, right: Record<string, string>
 }
 
 function cleanPaths(paths: string[]): string {
-  return paths.map(stripTerminalControls).join(', ');
+  return paths.map(sanitizePath).join(', ');
 }
 
 export function formatSyncLines(sync: SyncResult): string[] {

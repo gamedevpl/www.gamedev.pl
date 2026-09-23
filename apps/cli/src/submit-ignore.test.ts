@@ -195,16 +195,26 @@ describe('push ignore notice', () => {
         files: [{ path: 'game.ts', content: 'A' }],
         ignored: [
           {
-            path: 'secret\x1b[31m.log\x1b[0m',
+            path: 'secret\x1b[31m\n.log\x1b[0m',
             source: 'gitignore',
             pattern: '*.log',
+            directory: false,
+          },
+          {
+            path: 'draft\r.txt',
+            source: 'gamedevplignore',
+            pattern: '*.txt',
             directory: false,
           },
         ],
       },
       SLUG,
     );
-    expect(lines.join('\n')).toContain('secret.log');
-    expect(lines.join('\n')).not.toContain('\x1b[');
+    const joined = lines.join('\n');
+    expect(joined).toContain('secret.log');
+    expect(joined).toContain('draft.txt');
+    expect(joined).not.toContain('\x1b[');
+    expect(joined).not.toContain('\n.log');
+    expect(joined).not.toContain('\r');
   });
 });

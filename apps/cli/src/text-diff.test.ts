@@ -33,6 +33,15 @@ describe('unifiedDiff', () => {
     expect(formatPatches(sync, [{ path: 'empty.ts', content: '' }], []).join('\n')).toContain('+++ local/empty.ts');
   });
 
+  it('preserves a blank line when an added file has a single newline', () => {
+    expect(unifiedDiff('newline.ts', null, '\n')).toEqual([
+      '--- /dev/null',
+      '+++ local/newline.ts',
+      '@@ -1,0 +1,1 @@',
+      '+',
+    ]);
+  });
+
   it('strips terminal controls from patch lines', () => {
     const esc = '\u001b';
     const patch = unifiedDiff('game.ts', 'ok\n', `ok${esc}[2J${esc}]0;title\u0007\n`).join('\n');
