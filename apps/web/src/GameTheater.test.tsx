@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
+import { messageFromFrame } from './test-utils/frameMessage.js';
 
 vi.mock('./AuthContext', () => ({
   useAuth: () => ({ user: null, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
@@ -57,7 +58,8 @@ import { setVisitSessionForTesting, VisitSession, type WireVisitEvent } from './
 
 let container: HTMLDivElement;
 let root: Root | null = null;
-
+const gameMessage = (init: MessageEventInit<unknown>) =>
+  messageFromFrame(container.querySelector('iframe')!.contentWindow!, init.data, init.origin ?? 'null');
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
@@ -145,10 +147,8 @@ describe('GameTheater more menu', () => {
     expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
 
     await act(async () => {
-      // Opaque-origin sandboxed frames post with origin "null"; jsdom synthesizes "".
-      // useGamePlayer accepts both via the event.source === null test path for synthetics.
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'pointer' },
           origin: 'null',
         }),
@@ -276,9 +276,8 @@ describe('GameTheater how-to-play', () => {
     await click(container.querySelector('.howto-btn'));
 
     await act(async () => {
-      // Opaque-origin frames post with origin "null"; the bridge relays the key here.
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'key', key: 'Escape' },
           origin: 'null',
         }),
@@ -294,13 +293,11 @@ describe('GameTheater how-to-play', () => {
     await draw({ controls: CONTROLS, onExit });
 
     await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }),
-      );
+      window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }));
     });
     await act(async () => {
       window.dispatchEvent(
-        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'key', key: 'Escape' }, origin: 'null' }),
+        gameMessage({ data: { source: 'gdpl-player', type: 'key', key: 'Escape' }, origin: 'null' }),
       );
     });
 
@@ -312,14 +309,10 @@ describe('GameTheater how-to-play', () => {
     await draw({ controls: CONTROLS, onExit });
 
     await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }),
-      );
+      window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }));
     });
     await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'exit-game' }, origin: 'null' }),
-      );
+      window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'exit-game' }, origin: 'null' }));
     });
 
     expect(onExit).toHaveBeenCalledTimes(1);
@@ -331,7 +324,7 @@ describe('GameTheater how-to-play', () => {
 
     await act(async () => {
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'shell-menu', loadId: 'game-a' },
           origin: 'null',
         }),
@@ -340,7 +333,7 @@ describe('GameTheater how-to-play', () => {
     // A different loadId simulates a remix swapping the document underneath.
     await act(async () => {
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'key', key: 'Escape', loadId: 'game-b' },
           origin: 'null',
         }),
@@ -358,7 +351,7 @@ describe('GameTheater controls reported by the game', () => {
   async function report(payload: Record<string, unknown>) {
     await act(async () => {
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'controls', ...payload },
           origin: 'null',
         }),
@@ -408,7 +401,7 @@ describe('GameTheater controls reported by the game', () => {
     await act(async () => {
       // Same shape, wrong origin — another window trying to put text on our card.
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'controls', rows: [{ keys: 'X', action: 'Spoofed' }] },
           origin: 'https://evil.example',
         }),
@@ -450,7 +443,7 @@ describe('GameTheater how-to-play reachability', () => {
     });
     await act(async () => {
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'controls', rows: [{ keys: 'W', action: 'Jump' }] },
           origin: 'null',
         }),
@@ -520,7 +513,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
       await act(async () => {
         (container.querySelector('iframe') as HTMLIFrameElement).focus();
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'pointer' },
             origin: 'null',
           }),
@@ -554,7 +547,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
       // constantly, and a click-heavy tactics game would flap the chrome on every tap.
       await act(async () => {
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'activity' },
             origin: 'null',
           }),
@@ -565,7 +558,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
 
       await act(async () => {
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'pointer' },
             origin: 'null',
           }),
@@ -595,7 +588,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
       await act(async () => {
         frame.focus();
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'activity' },
             origin: 'null',
           }),
@@ -608,7 +601,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
 
       await act(async () => {
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'activity' },
             origin: 'null',
           }),
@@ -636,13 +629,13 @@ describe('GameTheater how-to-play visit telemetry', () => {
 
     await act(async () => {
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'end', outcome: 'lost' },
           origin: 'null',
         }),
       );
       window.dispatchEvent(
-        new MessageEvent('message', {
+        gameMessage({
           data: { source: 'gdpl-player', type: 'activity' },
           origin: 'null',
         }),
@@ -665,7 +658,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
       await act(async () => {
         frame.focus();
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'pointer' },
             origin: 'null',
           }),
@@ -697,7 +690,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
       await act(async () => {
         frame.focus();
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'pointer' },
             origin: 'null',
           }),
@@ -710,7 +703,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
 
       await act(async () => {
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'end', outcome: 'lost' },
             origin: 'null',
           }),
@@ -724,7 +717,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
 
       await act(async () => {
         window.dispatchEvent(
-          new MessageEvent('message', {
+          gameMessage({
             data: { source: 'gdpl-player', type: 'activity' },
             origin: 'null',
           }),

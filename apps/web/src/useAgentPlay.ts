@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { postGameHostMessage } from './gamePlayer.js';
+import { isFromGameFrame } from './frameMessage.js';
 import { parseAgentCommand, type AgentAffordance, type AgentSnapshot } from './agentPlay.js';
 
 // One line of what happened while the agent was not looking.
@@ -120,9 +121,7 @@ export function useAgentPlay(frameRef: MutableRefObject<HTMLIFrameElement | null
     }
 
     function onMessage(event: MessageEvent) {
-      // Same guards as the player bridge: opaque origin, this frame.
-      if (event.origin !== 'null') return;
-      if (event.source !== null && event.source !== frameRef.current?.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const data = event.data as Record<string, unknown> | null;
       if (!data || data.source !== 'gdpl-player') return;
       // New document: its enable retries are long over, so ask again.

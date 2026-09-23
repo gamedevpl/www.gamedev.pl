@@ -3,6 +3,7 @@
 // One attempt is one submission; see docs/agent-play-mode.md.
 
 import { postGameHostMessage } from './gamePlayer.js';
+import { isFromGameFrame } from './frameMessage.js';
 import type { AgentCommand } from './agentPlay.js';
 import {
   commandForAction,
@@ -53,8 +54,7 @@ function awaitFrom(
       reject(new Error(`the game did not answer ${type} in time`));
     }, timeoutMs);
     function onMessage(event: MessageEvent) {
-      if (event.origin !== 'null') return;
-      if (event.source !== null && event.source !== contentWindow) return;
+      if (!isFromGameFrame(event, contentWindow)) return;
       const data = event.data as { source?: string; type?: string; id?: unknown } | null;
       if (!data || data.source !== 'gdpl-player' || data.type !== type) return;
       if (data.id !== id) return;

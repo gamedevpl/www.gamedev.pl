@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { embedGameHtml } from './gamePlayer.js';
+import { dispatchFromFrame } from './test-utils/frameMessage.js';
 
 /**
  * Runs the injected bridge for real rather than grepping its source.
@@ -36,21 +37,20 @@ type BridgeMessage = { source?: string; type?: string; message?: string; frames?
 function runBridge(bodyHtml = '') {
   const frame = document.createElement('iframe');
   document.body.appendChild(frame);
-  // The frame's own realm has its own constructors, and using them (rather than this
-  // module's) is what makes the dispatched events visible to listeners inside it.
   const frameWindow = frame.contentWindow as (Window & typeof globalThis) | null;
   if (!frameWindow) throw new Error('no iframe realm');
   frameWindow.document.body.innerHTML = bodyHtml;
 
   const received: BridgeMessage[] = [];
   const listener = (event: MessageEvent) => {
-    // Production sandboxed frames use origin "null". jsdom's iframe postMessage
-    // reports "" here; accept both so the harness still sees bridge traffic.
-    if (event.origin !== 'null' && event.origin !== '') return;
+    if (event.origin === '') {
+      dispatchFromFrame(frameWindow, event.data);
+      return;
+    }
+    if (event.origin !== 'null') return;
     received.push(event.data as BridgeMessage);
   };
   window.addEventListener('message', listener);
-
   // Runs in the frame's realm, so the bridge's `parent` is this window — exactly the
   // relationship it has in the real player.
   new frameWindow.Function(BRIDGE_SOURCE)();

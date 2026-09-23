@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
+import { isFromGameFrame } from './frameMessage.js';
 
 export { embedGameHtml } from '@gamedevpl/contract';
 const HOST = 'gdpl-host';
@@ -36,8 +37,7 @@ function awaitBridgeReply<T>(
       resolve(fallback);
     }, timeoutMs);
     function onMessage(event: MessageEvent) {
-      if (event.origin !== 'null') return;
-      if (event.source !== null && event.source !== contentWindow) return;
+      if (!isFromGameFrame(event, contentWindow)) return;
       const data = event.data as { source?: string; type?: string } | null;
       if (!data || data.source !== PLAYER || data.type !== type) return;
       window.clearTimeout(timer);
@@ -136,7 +136,14 @@ export function bindPlayRecorder(): (event: TelemetryEvent) => void {
  *   `game_opened` and `play_started` every time, inflating the denominators instead.
  *   Read through a ref so toggling it never re-runs the effect.
  */
-export function useGameTelemetry(slug: string, enabled: boolean, slots?: number, active = true, via?: PlayVia) {
+export function useGameTelemetry(
+  slug: string,
+  frameRef: MutableRefObject<HTMLIFrameElement | null>,
+  enabled: boolean,
+  slots?: number,
+  active = true,
+  via?: PlayVia,
+) {
   const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
@@ -172,9 +179,7 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number,
     // from games using the games-repo telemetry module; nothing sends them yet, and
     // accepting them now means adding it later touches no app code.
     function onMessage(event: MessageEvent) {
-      // Sandboxed game frames (no allow-same-origin) report origin "null".
-      // Reject anything else so a hostile frame can't spoof player telemetry.
-      if (event.origin !== 'null') return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const data = event.data as {
         source?: string;
         type?: string;
@@ -293,12 +298,7 @@ export function useGamePlayer(
     // A changed loadId (window.__GDPL_LOAD_ID__) means a new document swapped in.
     let lastLoadId: unknown;
     function onMessage(event: MessageEvent) {
-      // Opaque-origin sandboxed iframe → origin string is "null".
-      if (event.origin !== 'null') return;
-      // Also pin to this theater's iframe so any other null-origin frame can't
-      // spoof gdpl-player traffic. Synthetic MessageEvents in unit tests omit
-      // `source` (null) — still accept those so the handler path is exercised.
-      if (event.source !== null && event.source !== frameRef.current?.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const data = event.data as {
         source?: string;
         type?: string;
@@ -414,6 +414,7 @@ export function useCreatorPlaytest(frameRef: MutableRefObject<HTMLIFrameElement 
     startedAtRef.current = performance.now();
 
     function onMessage(event: MessageEvent) {
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const data = event.data as {
         source?: string;
         type?: string;
@@ -477,7 +478,7 @@ export function useCreatorPlaytest(frameRef: MutableRefObject<HTMLIFrameElement 
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [active]);
+  }, [active, frameRef]);
 
   const post = useCallback(
     (message: Record<string, unknown>) => {

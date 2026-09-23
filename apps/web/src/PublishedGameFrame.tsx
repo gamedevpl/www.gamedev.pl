@@ -124,7 +124,7 @@ export function PublishedGameFrame({
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
   // catalog problem, and this is not the place that would report it.
-  useGameTelemetry(slug, trackPlay && html !== null, slots, active, via);
+  useGameTelemetry(slug, activeFrameRef, trackPlay && html !== null, slots, active, via);
 
   // Account play affinity (signed-in) + device-local recent list (everyone). Both are
   // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.

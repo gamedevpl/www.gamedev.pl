@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement, useState } from 'react';
+import { act, createElement, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,10 +32,10 @@ vi.mock('./visitTelemetry.js', () => ({ recordVisitEvent: vi.fn() }));
 import { useGameTelemetry } from './gamePlayer.js';
 
 const HEARTBEAT_MS = 15_000;
-
 function Harness({ initialActive }: { initialActive: boolean }) {
   const [active, setActive] = useState(initialActive);
-  useGameTelemetry('neon-courier', true, undefined, active);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  useGameTelemetry('neon-courier', frameRef, true, undefined, active);
   return createElement('button', { onClick: () => setActive((value) => !value) }, 'toggle');
 }
 

@@ -3,6 +3,7 @@
 // A plan cannot branch; see docs/agent-play-mode.md.
 
 import { postGameHostMessage } from './gamePlayer.js';
+import { isFromGameFrame } from './frameMessage.js';
 import type { PlanSnapshot } from './agentPlan.js';
 
 export type PolicyLogLine = { frame: number; kind: string; text: string };
@@ -75,8 +76,7 @@ export function runAgentPolicy(
     }, timeoutMs);
 
     function onMessage(event: MessageEvent) {
-      if (event.origin !== 'null') return;
-      if (event.source !== null && event.source !== contentWindow) return;
+      if (!isFromGameFrame(event, contentWindow)) return;
       const data = event.data as Record<string, unknown> | null;
       if (!data || data.source !== 'gdpl-player' || data.type !== 'agent:policy-result') return;
       window.clearTimeout(timer);
