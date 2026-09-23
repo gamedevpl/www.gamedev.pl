@@ -95,6 +95,25 @@ export function classify(input: {
     else if (localChanged && !remoteChanged) localOnly.push(path);
     else if (remoteChanged && !localChanged) platformOnly.push(path);
   }
+  const structuralConflicts: string[] = [];
+  for (const l of localOnly) {
+    for (const p of platformOnly) {
+      if (p.startsWith(`${l}/`) || l.startsWith(`${p}/`)) {
+        structuralConflicts.push(l, p);
+      }
+    }
+  }
+  if (structuralConflicts.length) {
+    conflict.push(...structuralConflicts);
+    const conflictSet = new Set(conflict);
+    const filteredLocal = localOnly.filter((p) => !conflictSet.has(p));
+    const filteredPlatform = platformOnly.filter((p) => !conflictSet.has(p));
+    localOnly.length = 0;
+    localOnly.push(...filteredLocal);
+    platformOnly.length = 0;
+    platformOnly.push(...filteredPlatform);
+  }
+  conflict.sort();
   let kind: SyncKind = 'clean';
   if (conflict.length) kind = 'conflict';
   else if (localOnly.length && platformOnly.length) kind = 'both';

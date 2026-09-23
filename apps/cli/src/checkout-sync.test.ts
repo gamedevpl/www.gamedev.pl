@@ -52,6 +52,19 @@ describe('three-way checkout sync', () => {
     expect(sync.conflict).toEqual(['game.ts']);
   });
 
+  it('detects structural parent-child collisions as a conflict', () => {
+    const sync = classify({
+      local: [{ path: 'cache', content: 'local file' }],
+      remote: [{ path: 'cache/state.json', content: 'remote child' }],
+      remoteVersion: 'v2',
+      base: { version: 'v1', files: {} },
+    });
+    expect(sync.kind).toBe('conflict');
+    expect(sync.conflict).toEqual(['cache', 'cache/state.json']);
+    expect(sync.local).toEqual([]);
+    expect(sync.platform).toEqual([]);
+  });
+
   it('keeps non-overlapping edits as both, not a conflict', () => {
     const sync = classify({
       local: [

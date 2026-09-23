@@ -47,10 +47,10 @@ const POSIX_CLASSES: Record<string, string> = {
   '[:blank:]': ' \\t',
   '[:cntrl:]': '\\x00-\\x1f\\x7f',
   '[:digit:]': '0-9',
-  '[:graph:]': '\\x21-\\x7e',
+  '[:graph:]': '\\x21-\\x2e\\x30-\\x7e',
   '[:lower:]': 'a-z',
-  '[:print:]': '\\x20-\\x7e',
-  '[:punct:]': '\\x21-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\x7e',
+  '[:print:]': '\\x20-\\x2e\\x30-\\x7e',
+  '[:punct:]': '\\x21-\\x2e\\x3a-\\x40\\x5b-\\x60\\x7b-\\x7e',
   '[:space:]': '\\s',
   '[:upper:]': 'A-Z',
   '[:xdigit:]': '0-9A-Fa-f',
@@ -92,8 +92,8 @@ function compileClass(cls: string): string | null {
   if (hasUnknownClass) return null;
   if (rest.startsWith(']')) rest = `\\]${rest.slice(1)}`;
   if (rest.startsWith('-')) rest = `\\-${rest.slice(1)}`;
-  const prefix = isNeg ? '^/' : '';
-  return `[${prefix}${rest}]`;
+  if (isNeg) return `[^/${rest}]`;
+  return `(?!/)[${rest}]`;
 }
 
 function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null {

@@ -102,6 +102,16 @@ describe('ignore matcher', () => {
     expect(match.ignored('readme.txt', false)).toBeNull();
   });
 
+  it('never matches slashes in positive or negated character classes', () => {
+    const dir = root();
+    writeFileSync(join(dir, '.gitignore'), 'foo[[:graph:]]bar\nfoo[[:punct:]]bar\n');
+    const match = createIgnoreMatcher(dir);
+    expect(match.ignored('foo-bar', false)?.pattern).toBe('foo[[:punct:]]bar');
+    expect(match.ignored('foo/bar', false)).toBeNull();
+    expect(match.ignored('foo.bar', false)?.pattern).toBe('foo[[:punct:]]bar');
+    expect(match.ignored('foo0bar', false)?.pattern).toBe('foo[[:graph:]]bar');
+  });
+
   it('keeps earlier rules when one character class is not a JavaScript regexp', () => {
     const dir = root();
     writeFileSync(join(dir, '.gitignore'), '*.secret\n[z-a]\n');

@@ -213,7 +213,7 @@ export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ v
   return { version: tree.version, files: tree.files };
 }
 
-export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): void {
+export function writeGameFiles(dest: string, slug: string, files: TreeFile[], options?: { force?: boolean }): void {
   const keep = new Set(files.map((file) => file.path));
   const root = join(dest, 'games', slug);
   for (const stale of localGameFiles(dest, slug)) {
@@ -222,20 +222,24 @@ export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): v
   for (const file of files) {
     if (file.path.split('/').includes('.git')) continue;
     const abs = pathInside(root, file.path);
-    let ancestor = root;
-    for (const segment of file.path.split('/').slice(0, -1)) {
-      ancestor = join(ancestor, segment);
-      if (existsSync(ancestor)) {
-        const stat = lstatSync(ancestor);
-        if (stat.isSymbolicLink() || !stat.isDirectory()) {
-          rmSync(ancestor, { force: true });
+    if (options?.force) {
+      let ancestor = root;
+      for (const segment of file.path.split('/').slice(0, -1)) {
+        ancestor = join(ancestor, segment);
+        if (existsSync(ancestor)) {
+          const stat = lstatSync(ancestor);
+          if (stat.isSymbolicLink() || !stat.isDirectory()) {
+            rmSync(ancestor, { force: true });
+          }
         }
       }
     }
     mkdirSync(dirname(abs), { recursive: true });
     if (existsSync(abs)) {
       const stat = lstatSync(abs);
-      if (stat.isSymbolicLink() || stat.isDirectory()) rmSync(abs, { recursive: true, force: true });
+      if (stat.isSymbolicLink() || (options?.force && stat.isDirectory())) {
+        rmSync(abs, { recursive: true, force: true });
+      }
     }
     writeFileSync(abs, file.content);
   }
@@ -287,7 +291,7 @@ export async function checkoutGame(input: {
     const tree = await fetchLatestTree(input.api, input.slug);
     if (tree.version !== 'undelivered') {
       const incoming = classifyIncoming(input.dest, input.slug, tree.files);
-      writeGameFiles(input.dest, input.slug, tree.files);
+      writeGameFiles(input.dest, input.slug, tree.files, { force: true });
       notices.push(...formatCheckoutIncoming(incoming));
     }
     writeBase(input.dest, tree.version, trackedTree(input.dest, input.slug, tree.files));
@@ -340,7 +344,7 @@ async function pullGameUnlocked(input: {
   const kept: string[] = [];
   const tracked = trackedTree(input.dest, input.slug, tree.files);
   if (input.force) {
-    writeGameFiles(input.dest, input.slug, tree.files);
+    writeGameFiles(input.dest, input.slug, tree.files, { force: true });
     writeBase(input.dest, tree.version, tree.files);
     return { version: tree.version, sync, kept: [], notices };
   }
