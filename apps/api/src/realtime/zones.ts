@@ -15,10 +15,7 @@ import type { ZoneSchemaSource } from './zone-source.js';
  *
  * What crosses that line is deliberately thin. The host is told the zone, the game, the
  * declared input vocabulary it must enforce, and a **per-zone pseudonym** for the
- * arriving player. Never a uid, never an email, never a session. The reasoning is the
- * one P2 settled on for `ownerTag`, applied to a cage rather than a document: an
- * identifier that is stable in one place and uncorrelatable anywhere else is enough to
- * give somebody their seat back and not enough to learn anything about them.
+ * arriving player. Never a uid, never an email, never a session.
  *
  * Guests may enter. §9 of the plan proposes the line — visiting is anonymous, persisting
  * is not — and this is where it is drawn: a guest gets a per-connection tag rather than a
@@ -42,7 +39,8 @@ export interface ZoneRoutesOptions {
    * capability takes when its infrastructure is not configured.
    */
   hostUrl?: string | null;
-  secret?: string;
+  ticketSecret?: string;
+  playerTagSecret?: string;
   now?: () => number;
 }
 
@@ -60,11 +58,13 @@ export async function registerZoneRoutes(app: FastifyInstance, options: ZoneRout
   const hostUrl = (options.hostUrl ?? process.env.ZONE_HOST_URL ?? '').trim() || null;
   const now = options.now ?? Date.now;
 
-  const secret = options.secret ?? process.env.SESSION_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
-    throw new Error('SESSION_SECRET is required to sign zone tickets in production');
+  const ticketSecret = options.ticketSecret ?? process.env.ZONE_TICKET_SECRET ?? process.env.SESSION_SECRET;
+  const playerTagSecret = options.playerTagSecret ?? process.env.ZONE_PLAYER_SECRET ?? process.env.SESSION_SECRET;
+  if ((!ticketSecret || !playerTagSecret) && process.env.NODE_ENV === 'production') {
+    throw new Error('ZONE_TICKET_SECRET and ZONE_PLAYER_SECRET are required in production');
   }
-  const signingSecret = secret ?? 'dev-session-secret-change-me';
+  const signingSecret = ticketSecret ?? 'dev-session-secret-change-me';
+  const playerSecret = playerTagSecret ?? 'dev-session-secret-change-me';
 
   // A ticket is cheap to mint and short-lived, but each one is a seat somebody may
   // claim, so the rate is set where a player reconnecting through a bad ten minutes of
@@ -90,7 +90,7 @@ export async function registerZoneRoutes(app: FastifyInstance, options: ZoneRout
     // coming back lands them in the seat their character is standing in. A guest's is
     // random per ticket, which is the same thing said about somebody with no
     // durable identity to be stable against.
-    const player = uid ? zonePlayerTag(uid, zone, signingSecret) : guestPlayerTag(randomBytes(16).toString('hex'));
+    const player = uid ? zonePlayerTag(uid, zone, playerSecret) : guestPlayerTag(randomBytes(16).toString('hex'));
     const expiresAt = now() + ZONE_TICKET_TTL_MS;
 
     return reply.send({

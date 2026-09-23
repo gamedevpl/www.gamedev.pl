@@ -1,25 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Admission to a zone (docs/p3-zone-host-infra.md §2).
- *
- * The zone host is a separate Cloud Run service on its own origin, so the session cookie
- * that authenticates everything else on this platform does not reach it. The main API
- * stays the front door: an authenticated request here mints a short-lived HMAC ticket,
- * the shell presents it in the socket's first frame, and the host verifies it without
- * ever seeing a cookie, a session, or a user record.
- *
- * That is the same shape party mode's room tokens take, for the same reason, and the two
- * are kept apart by their scope string: both are keyed off `SESSION_SECRET`, and a ticket
- * that could be replayed as a room token (or a session) would make one secret's blast
- * radius the whole platform.
- *
- * What a ticket carries is deliberately minimal. It names the zone, the game, and who is
- * arriving — and `who` is a **per-zone hash**, never the uid. The host is a place where
- * untrusted game code runs; handing it durable identity would make the sim isolate a
- * privacy boundary as well as a safety one, and one cage should not have two jobs. The
- * hash is stable for one person in one zone (so a reconnect returns to the same seat)
- * and uncorrelatable across zones, which is exactly the `ownerTag` design P2 landed on.
+ * Zone admission tickets carry a zone, game, per-zone player tag, and expiry.
+ * The API mints them; the separate host verifies them without a session.
+ * Ticket and player-tag keys are separate from the session key.
  */
 
 /** Ten minutes: long enough to survive a slow load and a reconnect, short enough that a
@@ -49,11 +33,11 @@ export interface ZoneTicketClaims {
  *
  * Salted with the zone id so the same person is a different string in every zone — no
  * game, and no compromised host, can correlate its visitors against another zone's. The
- * secret is in the hash as well, so the mapping cannot be recomputed by anyone holding
- * only a uid and a zone name.
+ * playerTagSecret is separate from the ticket signing key, so the mapping cannot be
+ * recomputed by anyone holding only a uid and a zone name.
  */
-export function zonePlayerTag(uid: string, zone: string, secret: string): string {
-  return createHmac('sha256', secret).update(`zone-player-v1:${zone}:${uid}`).digest('hex').slice(0, 24);
+export function zonePlayerTag(uid: string, zone: string, playerTagSecret: string): string {
+  return createHmac('sha256', playerTagSecret).update(`zone-player-v1:${zone}:${uid}`).digest('hex').slice(0, 24);
 }
 
 /** A guest's tag, which is per-connection rather than per-person: they have no identity
@@ -70,9 +54,9 @@ function sign(zone: string, slug: string, player: string, expiresAt: number, sec
   return createHmac('sha256', secret).update(`${SCOPE}:${zone}:${slug}:${player}:${expiresAt}`).digest('hex');
 }
 
-export function mintZoneTicket(claims: ZoneTicketClaims, secret: string): string {
+export function mintZoneTicket(claims: ZoneTicketClaims, ticketSecret: string): string {
   const { zone, slug, player, expiresAt } = claims;
-  const signature = sign(zone, slug, player, expiresAt, secret);
+  const signature = sign(zone, slug, player, expiresAt, ticketSecret);
   return Buffer.from(`${zone}.${slug}.${player}.${expiresAt}.${signature}`, 'utf8').toString('base64url');
 }
 
@@ -80,7 +64,12 @@ export function mintZoneTicket(claims: ZoneTicketClaims, secret: string): string
  * Verifies a ticket presented on the socket. Throws rather than returning null, so a
  * caller cannot forget to check — the party token code made the same call.
  */
-export function verifyZoneTicket(ticket: string, secret: string, now: number = Date.now()): ZoneTicketClaims {
+export function verifyZoneTicket(
+  ticket: string,
+  ticketSecret: string,
+  now: number = Date.now(),
+  prevTicketSecret?: string,
+): ZoneTicketClaims {
   if (typeof ticket !== 'string' || ticket.length > 512) throw new InvalidZoneTicketError();
 
   let decoded: string;
@@ -100,10 +89,12 @@ export function verifyZoneTicket(ticket: string, secret: string, now: number = D
   const expiresAt = Number.parseInt(expiresAtRaw, 10);
   if (!Number.isSafeInteger(expiresAt) || expiresAt <= now) throw new InvalidZoneTicketError();
 
-  const expected = sign(zone, slug, player, expiresAt, secret);
   const actualBuffer = Buffer.from(signature, 'utf8');
-  const expectedBuffer = Buffer.from(expected, 'utf8');
-  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) {
+  const matches = (secret: string) => {
+    const expectedBuffer = Buffer.from(sign(zone, slug, player, expiresAt, secret), 'utf8');
+    return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+  };
+  if (!matches(ticketSecret) && (!prevTicketSecret || !matches(prevTicketSecret))) {
     throw new InvalidZoneTicketError();
   }
 

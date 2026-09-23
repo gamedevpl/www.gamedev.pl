@@ -51,7 +51,7 @@ const ClientFrameSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('bye') }),
 ]);
 
-export interface WorldAppOptions extends Omit<ZoneHostOptions, 'secret'> {
+export interface WorldAppOptions extends Omit<ZoneHostOptions, 'secret' | 'prevSecret'> {
   secret?: string;
   logger?: boolean;
   maxSocketsPerIp?: number;
@@ -63,11 +63,11 @@ export interface WorldApp {
 }
 
 export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp> {
-  const secret = options.secret ?? process.env.SESSION_SECRET;
+  const secret = options.secret ?? process.env.ZONE_TICKET_SECRET;
   if (!secret) {
     // The host cannot verify a ticket without it, so every connection would be refused.
     // Failing at boot says that once instead of once per player.
-    throw new Error('SESSION_SECRET is required: it is what zone tickets are signed with');
+    throw new Error('ZONE_TICKET_SECRET is required to verify zone tickets');
   }
 
   // Cloud Run appends the real client IP to X-Forwarded-For rather than replacing it, so
@@ -77,6 +77,7 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
   const host = new ZoneHost({
     ...options,
     secret,
+    prevSecret: process.env.ZONE_TICKET_SECRET_PREV,
     onWarn:
       options.onWarn ??
       ((event) => {
