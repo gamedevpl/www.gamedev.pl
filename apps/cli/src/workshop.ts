@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
-import { changedPaths, localGameFiles, formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
+import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles, type SyncResult } from './checkout.js';
 import { childEnv, createDelegateStream } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
@@ -109,8 +109,8 @@ export async function openWorkshop(input: {
   const adapters = detectLocalAdapters(input.env, input.which);
   input.write(`◆ ${input.slug} — the checkout at ${input.root}`);
   try {
-    const { sync } = await inspectGame({ api: input.api, slug: input.slug, dest: input.root });
-    input.write(formatSyncLines(sync).join('\n'));
+    const { sync, ignored } = await inspectGame({ api: input.api, slug: input.slug, dest: input.root });
+    input.write(formatWorkingCopy({ sync, ignored }).join('\n'));
     const warning = syncWarning(sync);
     if (warning) input.write(`! ${warning}`);
   } catch (error) {

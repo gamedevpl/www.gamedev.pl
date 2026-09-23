@@ -10,6 +10,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Added
 
 - Play's conversation and session output use the terminal's colours and labels (YOU, AGENT, CHECK, PASS, !), link URLs, and open failing output blocks automatically (#1455).
+- `status` inside a checkout lists the working copy, and `diff` prints a patch against the platform (#1456).
+- Checkouts skip `.git`, follow `.gitignore`, and also read `.gamedevplignore`. Push names ignored files it left out. Pull refuses when an ignored file on disk would be overwritten, and leaves a platform file unwritten when it is not already in the checkout (#1456).
 
 ## 0.19.0 — 2026-09-17
 

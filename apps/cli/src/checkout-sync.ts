@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { sanitizePath } from './ansi.js';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
@@ -57,7 +58,8 @@ export function readBase(dest: string): BaseRecord | null {
 }
 
 export function writeBase(dest: string, version: string, files: TreeFile[]): void {
-  const record: BaseRecord = { version, files: hashesOf(files) };
+  const tracked = files.filter((file) => !file.path.split('/').includes('.git'));
+  const record: BaseRecord = { version, files: hashesOf(tracked) };
   writeFileSync(join(dest, BASE_FILE), `${JSON.stringify(record, null, 2)}\n`);
 }
 
@@ -93,6 +95,25 @@ export function classify(input: {
     else if (localChanged && !remoteChanged) localOnly.push(path);
     else if (remoteChanged && !localChanged) platformOnly.push(path);
   }
+  const structuralConflicts: string[] = [];
+  for (const l of localOnly) {
+    for (const p of platformOnly) {
+      if (p.startsWith(`${l}/`) || l.startsWith(`${p}/`)) {
+        structuralConflicts.push(l, p);
+      }
+    }
+  }
+  if (structuralConflicts.length) {
+    conflict.push(...structuralConflicts);
+    const conflictSet = new Set(conflict);
+    const filteredLocal = localOnly.filter((p) => !conflictSet.has(p));
+    const filteredPlatform = platformOnly.filter((p) => !conflictSet.has(p));
+    localOnly.length = 0;
+    localOnly.push(...filteredLocal);
+    platformOnly.length = 0;
+    platformOnly.push(...filteredPlatform);
+  }
+  conflict.sort();
   let kind: SyncKind = 'clean';
   if (conflict.length) kind = 'conflict';
   else if (localOnly.length && platformOnly.length) kind = 'both';
@@ -106,11 +127,15 @@ function changedKeys(left: Record<string, string>, right: Record<string, string>
   return [...names].filter((path) => left[path] !== right[path]).sort();
 }
 
+function cleanPaths(paths: string[]): string {
+  return paths.map(sanitizePath).join(', ');
+}
+
 export function formatSyncLines(sync: SyncResult): string[] {
   const lines = [`base ${sync.version || '(none)'} · ${sync.kind.replaceAll('_', ' ')}`];
-  if (sync.local.length) lines.push(`local-only: ${sync.local.join(', ')}`);
-  if (sync.platform.length) lines.push(`platform-only: ${sync.platform.join(', ')}`);
-  if (sync.conflict.length) lines.push(`conflict: ${sync.conflict.join(', ')}`);
+  if (sync.local.length) lines.push(`local-only: ${cleanPaths(sync.local)}`);
+  if (sync.platform.length) lines.push(`platform-only: ${cleanPaths(sync.platform)}`);
+  if (sync.conflict.length) lines.push(`conflict: ${cleanPaths(sync.conflict)}`);
   return lines;
 }
 
@@ -122,21 +147,21 @@ export function syncRefuse(sync: SyncResult, op: 'pull' | 'submit'): { message: 
     };
   }
   if (sync.kind === 'conflict') {
-    const alsoLost = sync.local.length ? ` It discards ${sync.local.join(', ')} as well.` : '';
+    const alsoLost = sync.local.length ? ` It discards ${cleanPaths(sync.local)} as well.` : '';
     return {
-      message: `conflict on ${sync.conflict.join(', ')} — ${cliUsage('diff')} shows both sides. Plain pull refuses while they disagree: copy the whole games/<slug> aside, then ${cliUsage('pull', '--force')} replaces it with the platform copy for you to merge yours back into.${alsoLost}`,
+      message: `conflict on ${cleanPaths(sync.conflict)} — ${cliUsage('diff')} shows both sides. Plain pull refuses while they disagree: copy the whole games/<slug> aside, then ${cliUsage('pull', '--force')} replaces it with the platform copy for you to merge yours back into.${alsoLost}`,
       next: cliUsage('diff'),
     };
   }
   if (op === 'pull' && (sync.kind === 'local_only' || sync.kind === 'both')) {
     return {
-      message: `local edits would be overwritten (${sync.local.join(', ')}) — ${cliUsage('submit')} delivers them first, or copy them aside and ${cliUsage('pull', '--force')} to discard them`,
+      message: `local edits would be overwritten (${cleanPaths(sync.local)}) — ${cliUsage('submit')} delivers them first, or copy them aside and ${cliUsage('pull', '--force')} to discard them`,
       next: cliUsage('submit'),
     };
   }
   if (op === 'submit' && sync.kind === 'platform_only') {
     return {
-      message: `platform is ahead (${sync.platform.join(', ')}) — ${cliUsage('pull')} brings those files down, and keeps anything you changed`,
+      message: `platform is ahead (${cleanPaths(sync.platform)}) — ${cliUsage('pull')} brings those files down, and keeps anything you changed`,
       next: cliUsage('pull'),
     };
   }

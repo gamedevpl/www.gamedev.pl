@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -56,6 +65,57 @@ describe('materializePushCheckout', () => {
     expect(readFileSync(join(dest, 'node_modules', 'marker'), 'utf8')).toBe('kit\n');
     expect(readFileSync(join(dest, 'games', SLUG, 'game.ts'), 'utf8')).toBe('COMMITTED-B');
     expect(existsSync(join(dest, '.git'))).toBe(false);
+  });
+
+  it('takes root ignore files from the pushed ref', () => {
+    const repo = dirtyRepo();
+    writeFileSync(join(repo, '.gitignore'), '*.committed\n');
+    writeFileSync(join(repo, '.gamedevplignore'), '*.also\n');
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'ignore']);
+    writeFileSync(join(repo, '.gitignore'), '*.working\n');
+    writeFileSync(join(repo, '.gamedevplignore'), '*.dirty\n');
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(readFileSync(join(dest, '.gitignore'), 'utf8')).toBe('*.committed\n');
+    expect(readFileSync(join(dest, '.gamedevplignore'), 'utf8')).toBe('*.also\n');
+    expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('*.working\n');
+  });
+
+  it('replaces a working-tree ignore symlink without writing through it', () => {
+    const repo = dirtyRepo();
+    writeFileSync(join(repo, '.gitignore'), '*.committed\n');
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'ignore']);
+    const outside = mkdtempSync(join(tmpdir(), 'gdpl-outside-'));
+    const secret = join(outside, 'secret.txt');
+    writeFileSync(secret, 'keep-me\n');
+    rmSync(join(repo, '.gitignore'));
+    symlinkSync(secret, join(repo, '.gitignore'));
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(readFileSync(secret, 'utf8')).toBe('keep-me\n');
+    expect(lstatSync(join(dest, '.gitignore')).isSymbolicLink()).toBe(false);
+    expect(readFileSync(join(dest, '.gitignore'), 'utf8')).toBe('*.committed\n');
+  });
+
+  it('drops a working-tree ignore file the pushed ref does not have', () => {
+    const repo = dirtyRepo();
+    writeFileSync(join(repo, '.gitignore'), '*.working\n');
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(existsSync(join(dest, '.gitignore'))).toBe(false);
+    expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('*.working\n');
+  });
+
+  it('does not materialize an ignore symlink from the pushed ref as regular rules', () => {
+    const repo = dirtyRepo();
+    symlinkSync('secret.ts', join(repo, '.gitignore'));
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'symlinked ignore']);
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(existsSync(join(dest, '.gitignore'))).toBe(false);
   });
 
   it('refuses a missing games tree on the source ref', () => {

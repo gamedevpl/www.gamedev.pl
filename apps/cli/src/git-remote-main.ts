@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline';
-import { stdin, stdout } from 'node:process';
+import { stderr, stdin, stdout } from 'node:process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -12,7 +12,8 @@ import { submitGame, type SubmitResult } from './submit.js';
 import { runRemoteHelper, type PushResult } from './git-remote.js';
 import { materializePushCheckout } from './git-ref.js';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
-import { localGameFiles, writeBase } from './checkout.js';
+import { localGameFiles, trackedTree, writeBase } from './checkout.js';
+import { formatIgnoredNotice } from './working-copy.js';
 
 function slugFromUrl(url: string): string {
   const prefix = `${GIT_REMOTE_SCHEME}://`;
@@ -37,7 +38,7 @@ function readSlugFile(cwd: string): string | null {
 }
 
 function adoptCheckoutBase(cwd: string, slug: string, dest: string, result: SubmitResult): void {
-  if (result.kind === 'delivered') writeBase(cwd, result.version, result.files);
+  if (result.kind === 'delivered') writeBase(cwd, result.version, trackedTree(cwd, slug, result.files));
   else writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
 }
 
@@ -59,6 +60,8 @@ export async function reconcilePush(input: {
     });
     const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
     adoptCheckoutBase(input.cwd, input.slug, dest, result);
+    const notice = formatIgnoredNotice(result.ignored);
+    if (notice.length) stderr.write(`${notice.join('\n')}\n`);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: describeError(error).message };

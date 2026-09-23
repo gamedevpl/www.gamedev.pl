@@ -1,5 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { BASE_FILE } from './checkout-sync.js';
@@ -42,6 +52,7 @@ export function materializePushCheckout(input: {
   dest: string;
 }): string {
   copyVerifyScaffold(input.cwd, input.dest);
+  materializeRootIgnore(input.repo, input.srcRef, input.dest);
   const archive = spawnOrThrow('git', [
     '-C',
     input.repo,
@@ -58,4 +69,32 @@ export function materializePushCheckout(input: {
   const base = join(input.cwd, BASE_FILE);
   if (existsSync(base)) copyFileSync(base, join(input.dest, BASE_FILE));
   return input.dest;
+}
+
+const ROOT_IGNORE = ['.gitignore', '.gamedevplignore'];
+
+function refHasRegularBlob(repo: string, srcRef: string, path: string): boolean {
+  const result = spawnSync('git', ['-C', repo, 'ls-tree', srcRef, '--', path]);
+  if (result.status !== 0) return false;
+  const line = result.stdout.toString('utf8').trim();
+  return /^100\d{3}\s+blob\s+/u.test(line);
+}
+
+function unlinkCopied(target: string): void {
+  try {
+    const stat = lstatSync(target);
+    if (stat.isSymbolicLink() || stat.isFile()) rmSync(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+}
+
+function materializeRootIgnore(repo: string, srcRef: string, dest: string): void {
+  for (const name of ROOT_IGNORE) {
+    const target = join(dest, name);
+    unlinkCopied(target);
+    if (!refHasRegularBlob(repo, srcRef, name)) continue;
+    writeFileSync(target, spawnOrThrow('git', ['-C', repo, 'show', `${srcRef}:${name}`]));
+  }
 }

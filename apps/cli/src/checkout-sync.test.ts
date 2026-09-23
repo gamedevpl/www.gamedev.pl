@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   classify,
+  formatSyncLines,
   hashesOf,
   pathInside,
   readBase,
@@ -49,6 +50,19 @@ describe('three-way checkout sync', () => {
     });
     expect(sync.kind).toBe('conflict');
     expect(sync.conflict).toEqual(['game.ts']);
+  });
+
+  it('detects structural parent-child collisions as a conflict', () => {
+    const sync = classify({
+      local: [{ path: 'cache', content: 'local file' }],
+      remote: [{ path: 'cache/state.json', content: 'remote child' }],
+      remoteVersion: 'v2',
+      base: { version: 'v1', files: {} },
+    });
+    expect(sync.kind).toBe('conflict');
+    expect(sync.conflict).toEqual(['cache', 'cache/state.json']);
+    expect(sync.local).toEqual([]);
+    expect(sync.platform).toEqual([]);
   });
 
   it('keeps non-overlapping edits as both, not a conflict', () => {
@@ -188,5 +202,42 @@ describe('what a refused sync tells you to do next', () => {
   it('still explains the fallback case instead of naming a state', () => {
     const refused = syncRefuse(refusal('clean'), 'pull');
     expect(refused.message).toContain('gamedevpl diff');
+  });
+
+  it('strips terminal controls and line breaks from paths in sync lines', () => {
+    const esc = '\u001b';
+    const lines = formatSyncLines({
+      kind: 'conflict',
+      version: 'v1',
+      local: [`${esc}[2Jlocal\n.ts`],
+      platform: [`${esc}]0;evil\u0007plat\r.ts`],
+      conflict: [`${esc}[31mconf.ts`],
+    });
+    const joined = lines.join('\n');
+    expect(joined).toContain('local-only: local.ts');
+    expect(joined).toContain('platform-only: plat.ts');
+    expect(joined).toContain('conflict: conf.ts');
+    expect(joined).not.toContain(esc);
+    expect(joined).not.toContain('\u0007');
+    expect(joined).not.toContain('\r');
+  });
+
+  it('strips terminal controls and line breaks from paths in refusal messages', () => {
+    const esc = '\u001b';
+    const refused = syncRefuse(
+      {
+        kind: 'conflict',
+        version: 'v1',
+        local: [`${esc}[2Jlocal\n.ts`],
+        platform: [],
+        conflict: [`${esc}[31mconf\r.ts`],
+      },
+      'pull',
+    );
+    expect(refused.message).toContain('conflict on conf.ts');
+    expect(refused.message).toContain('discards local.ts as well');
+    expect(refused.message).not.toContain(esc);
+    expect(refused.message).not.toContain('\n.ts');
+    expect(refused.message).not.toContain('\r');
   });
 });

@@ -24,7 +24,8 @@ import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { studioToken } from './studio.js';
-import { checkoutGame, diffGame, findCheckout, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { checkoutGame, diffGame, findCheckout, pullGame, readCheckoutSlug } from './checkout.js';
+import { formatDiffReport, formatWorkingCopy } from './working-copy.js';
 import { connectGame } from './connect.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
@@ -292,6 +293,15 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'status') {
+      if (!args[0]) {
+        const here = findCheckout(process.cwd());
+        if (here) {
+          const report = await diffGame({ api, slug: here.slug, dest: here.root });
+          const lines = formatWorkingCopy({ sync: report, ignored: report.ignored, clash: report.incoming.blocked });
+          io.stdout.write(asJson ? `${JSON.stringify(report)}\n` : `${lines.join('\n')}\n`);
+          return EXIT_GREEN;
+        }
+      }
       const token = args[0];
       if (!token) throw new CliError(cliUsage('status', '<token-or-slug>'), EXIT_INPUT, '<token>');
       const max = typeof flags.watch === 'string' ? Number(flags.watch) || 30 : flags.watch ? 30 : 1;
@@ -311,38 +321,45 @@ export async function runCli(
       const dest = args[1] ?? slug;
       const result = await checkoutGame({ api, slug, dest, allowUndelivered: true });
       io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
+      for (const notice of result.notices) io.stdout.write(`${notice}\n`);
       io.stdout.write(
         `Next: cd ${JSON.stringify(resolvePath(result.dest))} and run gamedevpl to edit interactively.\n`,
       );
       return EXIT_GREEN;
     }
     if (verb === 'pull') {
-      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      const here = args[0] ? null : findCheckout(process.cwd());
+      const slug = args[0] ?? here?.slug ?? null;
       if (!slug) throw new CliError(cliUsage('pull', '<slug>'), EXIT_INPUT, '<slug>');
-      const dest = args[1] ?? process.cwd();
+      const dest = args[1] ?? here?.root ?? process.cwd();
       const pulled = await pullGame({ api, slug, dest, force: flags.force === true });
       if (asJson) io.stdout.write(`${JSON.stringify(pulled)}\n`);
       else {
         const extra = pulled.kept.length ? `; kept local ${pulled.kept.join(', ')}` : '';
         io.stdout.write(`pulled ${slug} @ ${pulled.version} (${pulled.sync.kind.replaceAll('_', ' ')})${extra}\n`);
+        for (const notice of pulled.notices) io.stdout.write(`${notice}\n`);
       }
       return EXIT_GREEN;
     }
     if (verb === 'diff') {
-      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      const here = args[0] ? null : findCheckout(process.cwd());
+      const slug = args[0] ?? here?.slug ?? null;
       if (!slug) throw new CliError(cliUsage('diff', '<slug>'), EXIT_INPUT, '<slug>');
-      const dest = args[1] ?? process.cwd();
+      const dest = args[1] ?? here?.root ?? process.cwd();
       const diff = await diffGame({ api, slug, dest });
+      const lines = formatDiffReport(diff);
       if (asJson) io.stdout.write(`${JSON.stringify(diff)}\n`);
-      else io.stdout.write(`${formatSyncLines(diff).join('\n')}\n`);
+      else io.stdout.write(`${lines.join('\n')}\n`);
       if (!flags.force && (diff.kind === 'conflict' || diff.kind === 'legacy')) {
-        throw new CliError(formatSyncLines(diff)[0] ?? diff.kind, EXIT_REFUSED, cliUsage('pull'));
+        throw new CliError(lines[0] ?? diff.kind, EXIT_REFUSED, cliUsage('pull'));
       }
       return EXIT_GREEN;
     }
     if (verb === 'submit' || verb === 'push') {
-      const dest = args[0] ?? process.cwd();
-      const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? readCheckoutSlug(dest);
+      const requested = args[0] ?? process.cwd();
+      const here = findCheckout(requested);
+      const dest = here?.root ?? requested;
+      const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? here?.slug ?? readCheckoutSlug(dest);
       if (!slug) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
       const result = await submitGame({
         api,

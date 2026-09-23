@@ -69,7 +69,12 @@ The `gamedevpl` CLI records the platform version at checkout time (`.gamedev-bas
 and classifies later `diff` / `pull` / `submit` against that base: local-only, platform-only,
 both, or a real path conflict. Ordinary local edits are not a conflict. `pull` will not
 overwrite unsaved local files; if the same path changed on both sides it refuses and tells
-you to copy those files aside first. Delivery is `gamedevpl submit`, which stages through
+you to copy those files aside first. `gamedevpl status` inside the checkout prints the same
+picture, and `gamedevpl diff` adds a patch. `.git` is never part of a delivery. `.gitignore` is
+honored, and `.gamedevplignore` adds rules in the same syntax. `push` names the ignored files it
+left out. `pull` refuses when an ignored file on disk would be overwritten, and leaves a
+platform file unwritten when it only matches an ignore rule and is not already in the checkout.
+`checkout` says when a platform file landed on an ignored path. Neither command writes `.git`. Delivery is `gamedevpl submit`, which stages through
 `/api/me/studio/games/:slug/sources/stage` and delivers through
 `/api/me/studio/games/:slug/sources/deliver` — the same Code-surface path Studio uses.
 Accepted sources, a started gate, a gate verdict, and publish are four different events.
