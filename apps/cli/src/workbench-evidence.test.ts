@@ -57,6 +57,8 @@ it('shows the typed prompt and attachment names, never the agent-only evidence b
   const record = JSON.stringify({ name: 'screenshot.png', mime: 'image/png', purpose: 'diagnostic' });
   expect(shownPrompt('add shadows' + EVIDENCE_MARKER + record)).toBe('add shadows · 📎 screenshot.png');
   expect(shownPrompt('no attachments')).toBe('no attachments');
+  const hostile = JSON.stringify({ name: 'a\n\u001b[31mfake\u202eexe.png' });
+  expect(shownPrompt('x' + EVIDENCE_MARKER + hostile)).toBe('x · 📎 a fakeexe.png');
 });
 
 it('passes staged screenshots to codex as image input', async () => {
