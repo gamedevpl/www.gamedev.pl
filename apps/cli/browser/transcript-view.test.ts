@@ -29,3 +29,11 @@ it('lets a gate that never started supersede the delivery acknowledgement', () =
   ]);
   expect(top.style.tone).toBe('red');
 });
+
+it('opens command failures reported through formatError', () => {
+  const top = headline([
+    'Checkout destination is not empty; your files were left untouched.',
+    'next: Choose another directory: gamedevpl checkout racer ./racer-2',
+  ]);
+  expect(top.style.tone).toBe('red');
+});

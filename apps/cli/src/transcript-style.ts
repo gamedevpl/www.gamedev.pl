@@ -15,6 +15,7 @@ const FAILURE = new RegExp(
     '(?:completion|successful edit) is not confirmed',
     'gate did not start',
     '^error:',
+    '^next: ',
     '^Delivery.*blocked',
     '^this game is mid-round',
     '^\\s*- (?:Check \\d+ failed|EDITOR)',
