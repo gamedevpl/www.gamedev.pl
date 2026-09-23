@@ -186,6 +186,15 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
               required: ['path', 'url', 'upload', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
             },
           },
+          rejected: {
+            type: 'array',
+            description: 'Paths in this batch that were refused, with why. The rest were minted.',
+            items: {
+              type: 'object',
+              properties: { path: { type: 'string' }, reason: { type: 'string' } },
+              required: ['path', 'reason'],
+            },
+          },
         },
       },
       // Not READS: each call mints a fresh nonce, so never idempotent.
@@ -237,15 +246,24 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           );
         }
 
+        // One refused path used to cost the whole batch: forty-nine good URLs thrown
+        // away, and the agent re-minting all fifty to learn which one was wrong.
+        // A batch mints what it can and names what it refused; a lone path still
+        // refuses outright, because there is nothing else to hand back.
         const validPaths: string[] = [];
+        const rejected: Array<{ path: string; reason: string }> = [];
         for (const raw of rawPaths) {
           const trimmed = raw.trim();
           try {
             validPaths.push(assertDeliverableSourcePath(trimmed));
           } catch (error) {
-            if (error instanceof InvalidUploadError) return toolErr(error.message);
-            throw error;
+            if (!(error instanceof InvalidUploadError)) throw error;
+            if (!hasPaths) return toolErr(error.message);
+            rejected.push({ path: trimmed, reason: error.message });
           }
+        }
+        if (validPaths.length === 0) {
+          return toolErr(rejected[0]!.reason, { rejected });
         }
 
         const slug =
@@ -312,6 +330,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           uploadScript: uploads.map((u) => u.upload).join(' && '),
           expiresAt,
           expiresInSeconds: ttlSeconds,
+          ...(rejected.length ? { rejected } : {}),
         });
       },
     },

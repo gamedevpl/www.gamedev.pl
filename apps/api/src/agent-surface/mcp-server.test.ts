@@ -2233,6 +2233,26 @@ declare const GameKit: { defineGame(): unknown };
     expect(tooMany.isError).toBe(true);
     expect(JSON.stringify(tooMany.structured)).toMatch(/too many paths in one request \(max 50/);
 
+    // One refused path no longer costs the batch: the rest mint, the refusal is named.
+    const mixed = await callTool(
+      app,
+      'stage_upload_url',
+      { sessionKey, paths: ['game/ok-one.ts', 'tsconfig.json', 'game/ok-two.ts'] },
+      sid,
+    );
+    expect(mixed.isError).toBe(false);
+    const mixedResult = mixed.structured as {
+      uploads: Array<{ path: string }>;
+      rejected?: Array<{ path: string; reason: string }>;
+    };
+    expect(mixedResult.uploads.map((upload) => upload.path)).toEqual(['game/ok-one.ts', 'game/ok-two.ts']);
+    expect(mixedResult.rejected).toEqual([{ path: 'tsconfig.json', reason: expect.stringContaining('tsconfig.json') }]);
+
+    // With nothing mintable there is nothing to hand back, so it still refuses.
+    const allBad = await callTool(app, 'stage_upload_url', { sessionKey, paths: ['tsconfig.json', '../x.ts'] }, sid);
+    expect(allBad.isError).toBe(true);
+    expect((allBad.structured as { rejected?: unknown[] }).rejected).toHaveLength(2);
+
     // Batch path minting with paths: string[] (testing 20 concurrent PUTs)
     const testPaths = Array.from({ length: 20 }, (_, i) => `game/module-${i}.ts`);
     const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
