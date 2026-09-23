@@ -81,7 +81,7 @@ async function deliver() {
     if(pending!==attempt)return;
     if (result.status === 'accepted') {
       if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
-      else { const sent = pending.envelope.command.attachments ?? []; if (sent.length) {attachments = attachments.filter(a => !sent.includes(a.id));} if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task' + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
+      else { const sent = pending.envelope.command.attachments ?? []; for (const a of attachments) if (sent.includes(a.id)) a.sent = true; if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task' + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
     } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
     pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {
@@ -92,7 +92,7 @@ async function deliver() {
 }
 function send(command, clearActionDraft=false) {
   if (!online || !state || pending || sending) return;
-  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&attachments.length?{attachments:attachments.map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:attachments.map(a=>a.id), clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
+  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&staged().length?{attachments:staged().map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:staged().map(a=>a.id), clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
 el('composer').onsubmit = event => {

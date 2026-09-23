@@ -10,7 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Play shows your prompt and attachment names instead of the agent-only evidence block, in the conversation, queue and prompt history (#1465).
-- Sent attachments leave the tray once a request is accepted, so they are not re-attached to the next one (#1465).
+- Attachments are marked Sent after a request is accepted and are no longer re-attached to the next one; Attach again re-sends them (#1465).
 - Codex receives staged screenshots as images rather than only as file paths (#1465).
 - Paths such as `image/png` are no longer highlighted as slash commands (#1465).
 - Starting Play says that the session runs in the background and how to end it (#1465).
