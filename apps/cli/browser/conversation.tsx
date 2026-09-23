@@ -1,13 +1,13 @@
 import { agentTranscriptLine } from '../src/transcript-line.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { headline, RichText, TranscriptLines, useFollowScroll } from './transcript-view.js';
 
 type Snapshot = { lines: string[]; workspace?: { mode: string } };
 
 export function Conversation() {
   const [game, setGame] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
-  const box = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
+  const { box, onScroll } = useFollowScroll(lines, 40);
   useEffect(() => {
     const update = (event: Event) => {
       const data = (event as CustomEvent<Snapshot>).detail;
@@ -18,13 +18,11 @@ export function Conversation() {
     window.addEventListener('play-session', update);
     return () => window.removeEventListener('play-session', update);
   }, []);
-  useEffect(() => {
-    if (follow.current && box.current) box.current.scrollTop = box.current.scrollHeight;
-  }, [lines]);
-  const messages: Array<{ text: string; author?: string; kind: 'user' | 'assistant' | 'output' }> = [];
+  const messages: Array<{ text: string; author?: string; kind: 'user' | 'assistant' | 'output'; lines?: string[] }> =
+    [];
   let output: string[] = [];
   const flush = () => {
-    if (output.length) messages.push({ text: output.join('\n'), kind: 'output' });
+    if (output.length) messages.push({ text: output.join('\n'), kind: 'output', lines: output });
     output = [];
   };
   for (const line of lines) {
@@ -40,26 +38,16 @@ export function Conversation() {
   }
   flush();
   return (
-    <div
-      id="conversation"
-      ref={box}
-      tabIndex={0}
-      aria-label="Conversation"
-      onScroll={() => {
-        const node = box.current!;
-        follow.current = node.scrollTop + node.clientHeight >= node.scrollHeight - 40;
-      }}
-    >
+    <div id="conversation" ref={box} tabIndex={0} aria-label="Conversation" onScroll={onScroll}>
       {messages.map((message, i) =>
         message.kind === 'output' ? (
-          <details key={i} className="message session-output">
-            <summary>{message.text.split('\n')[0]?.slice(0, 140)}</summary>
-            <pre>{message.text}</pre>
-          </details>
+          <OutputBlock key={i} lines={message.lines!} />
         ) : (
           <article key={i} className={'message ' + message.kind}>
             <span className="message-author">{message.kind === 'user' ? 'You' : (message.author ?? 'gamedev.pl')}</span>
-            <p>{message.text}</p>
+            <p>
+              <RichText text={message.text} />
+            </p>
           </article>
         ),
       )}
@@ -74,5 +62,20 @@ export function Conversation() {
         </div>
       )}
     </div>
+  );
+}
+
+function OutputBlock({ lines }: { lines: string[] }) {
+  const top = headline(lines);
+  const failed = top.style.tone === 'red';
+  return (
+    <details className={'message session-output' + (top.style.tone ? ' tone-' + top.style.tone : '')} open={failed}>
+      <summary>
+        <span className="tl-label">{top.style.label.trim() || '·'}</span>
+        <span className="summary-text">{top.line.slice(0, 140)}</span>
+        {lines.length > 1 && <span className="summary-count">{lines.length}</span>}
+      </summary>
+      <TranscriptLines lines={lines} />
+    </details>
   );
 }
