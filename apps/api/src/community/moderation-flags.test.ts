@@ -12,7 +12,7 @@ import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js
 const secret = 'submission-secret';
 const sessionSecret = 'dev-session-secret-change-me';
 
-function githubStub(published: string[], catalogDown = false): GitHubClient {
+function githubStub(published: string[], catalogDown = false, catalogHangs = false): GitHubClient {
   const catalog: CatalogGameEntry[] = published.map(
     (slug) => ({ slug, title: slug, status: 'published' }) as unknown as CatalogGameEntry,
   );
@@ -25,6 +25,7 @@ function githubStub(published: string[], catalogDown = false): GitHubClient {
     getGameSources: async () => null,
     getGameMedia: async () => null,
     getCatalog: async () => {
+      if (catalogHangs) return new Promise<CatalogGameEntry[]>(() => {});
       if (catalogDown) throw new Error('github unavailable');
       return catalog;
     },
@@ -55,7 +56,7 @@ describe('moderation flags', () => {
   }
 
   async function makeApp(
-    opts: { published?: string[]; contentChecker?: ContentChecker; catalogDown?: boolean } = {},
+    opts: { published?: string[]; contentChecker?: ContentChecker; catalogDown?: boolean; catalogHangs?: boolean } = {},
   ) {
     const store = new InMemoryStore();
     const app = await buildApp({
@@ -65,7 +66,7 @@ describe('moderation flags', () => {
       adminUids: 'dev:boss',
       submissionRoutes: {
         githubToken: 'token',
-        githubClient: githubStub(opts.published ?? [], opts.catalogDown),
+        githubClient: githubStub(opts.published ?? [], opts.catalogDown, opts.catalogHangs),
         submissionTokenSecret: secret,
         gamesRepo: 'gamedevpl/www.gamedev.pl-games',
       },
@@ -450,6 +451,18 @@ describe('moderation flags', () => {
       await settle(2);
       expect(await alerts()).toHaveLength(2);
     });
+
+    it('reports a store-published game without waiting on a stalled repo catalog', async () => {
+      const { app, store } = await makeApp({ published: [], catalogHangs: true });
+      await store.setPublication({
+        slug: 'neon-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      });
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(200);
+    }, 2_000);
 
     it('rate-limits repeated reports from the same account', async () => {
       const { app } = await makeApp({ published: ['sky-dodge', 'neon-courier'] });
