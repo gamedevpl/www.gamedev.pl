@@ -1,18 +1,21 @@
 import { cliUsage } from './bin-name.js';
 import { formatSyncLines, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
+import { stripTerminalControls } from './ansi.js';
 import { unifiedDiff } from './text-diff.js';
 
 const LIST_LIMIT = 12;
 
 export function formatPathList(paths: string[]): string {
-  const shown = paths.slice(0, LIST_LIMIT);
-  const more = paths.length > LIST_LIMIT ? `, and ${paths.length - LIST_LIMIT} more` : '';
+  const clean = paths.map(stripTerminalControls);
+  const shown = clean.slice(0, LIST_LIMIT);
+  const more = clean.length > LIST_LIMIT ? `, and ${clean.length - LIST_LIMIT} more` : '';
   return `${shown.join(', ')}${more}`;
 }
 
 function ignoredLabel(hit: IgnoredHit): string {
-  return hit.directory ? `${hit.path}/` : hit.path;
+  const clean = stripTerminalControls(hit.path);
+  return hit.directory ? `${clean}/` : clean;
 }
 
 export function formatIgnoredNotice(ignored: IgnoredHit[]): string[] {

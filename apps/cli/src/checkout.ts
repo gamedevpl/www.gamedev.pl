@@ -160,6 +160,25 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
       blocked.push(file.path);
       continue;
     }
+    const parts = file.path.split('/');
+    let parentBlocked = false;
+    let acc = '';
+    for (let p = 0; p < parts.length - 1; p += 1) {
+      acc = acc ? `${acc}/${parts[p]}` : parts[p]!;
+      const parentAbs = pathInside(root, acc);
+      if (existsSync(parentAbs)) {
+        const parentStat = lstatSync(parentAbs);
+        if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) {
+          if (ignoredUntracked(dest, slug, acc, tracked, matcher, false)) {
+            blocked.push(file.path);
+            parentBlocked = true;
+            break;
+          }
+        }
+      }
+    }
+    if (parentBlocked) continue;
+
     const stat = existsSync(abs) ? lstatSync(abs) : null;
     const directory = stat !== null && !stat.isSymbolicLink() && stat.isDirectory();
     if (!ignoredUntracked(dest, slug, file.path, tracked, matcher, directory)) continue;
@@ -203,8 +222,21 @@ export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): v
   for (const file of files) {
     if (file.path.split('/').includes('.git')) continue;
     const abs = pathInside(root, file.path);
+    let ancestor = root;
+    for (const segment of file.path.split('/').slice(0, -1)) {
+      ancestor = join(ancestor, segment);
+      if (existsSync(ancestor)) {
+        const stat = lstatSync(ancestor);
+        if (stat.isSymbolicLink() || !stat.isDirectory()) {
+          rmSync(ancestor, { force: true });
+        }
+      }
+    }
     mkdirSync(dirname(abs), { recursive: true });
-    if (existsSync(abs) && lstatSync(abs).isSymbolicLink()) rmSync(abs);
+    if (existsSync(abs)) {
+      const stat = lstatSync(abs);
+      if (stat.isSymbolicLink() || stat.isDirectory()) rmSync(abs, { recursive: true, force: true });
+    }
     writeFileSync(abs, file.content);
   }
 }

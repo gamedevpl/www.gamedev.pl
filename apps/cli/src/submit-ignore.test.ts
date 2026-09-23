@@ -182,4 +182,29 @@ describe('push ignore notice', () => {
     expect(deleted).toEqual([]);
     expect(staged).toEqual(['game.ts']);
   });
+
+  it('strips terminal controls from ignored filenames in output notices', () => {
+    const lines = formatSubmitLines(
+      {
+        kind: 'delivered',
+        sync: { kind: 'clean', version: 'v1', local: [], platform: [], conflict: [] },
+        version: 'v2',
+        mode: 'preview',
+        gateStarted: true,
+        staged: ['game.ts'],
+        files: [{ path: 'game.ts', content: 'A' }],
+        ignored: [
+          {
+            path: 'secret\x1b[31m.log\x1b[0m',
+            source: 'gitignore',
+            pattern: '*.log',
+            directory: false,
+          },
+        ],
+      },
+      SLUG,
+    );
+    expect(lines.join('\n')).toContain('secret.log');
+    expect(lines.join('\n')).not.toContain('\x1b[');
+  });
 });
