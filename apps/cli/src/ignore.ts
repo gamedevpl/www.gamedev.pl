@@ -100,7 +100,11 @@ function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null
     i += 1;
   }
   const prefix = anchored ? '^' : '(?:^|.*/)';
-  return { dirOnly, regex: new RegExp(`${prefix}${body}$`) };
+  try {
+    return { dirOnly, regex: new RegExp(`${prefix}${body}$`) };
+  } catch {
+    return null;
+  }
 }
 
 function parseIgnore(text: string, source: Rule['source']): Rule[] {

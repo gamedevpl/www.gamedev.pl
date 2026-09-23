@@ -33,6 +33,14 @@ describe('unifiedDiff', () => {
     expect(formatPatches(sync, [{ path: 'empty.ts', content: '' }], []).join('\n')).toContain('+++ local/empty.ts');
   });
 
+  it('strips terminal controls from patch lines', () => {
+    const esc = '\u001b';
+    const patch = unifiedDiff('game.ts', 'ok\n', `ok${esc}[2J${esc}]0;title\u0007\n`).join('\n');
+    expect(patch).toContain('+ok');
+    expect(patch).not.toContain(esc);
+    expect(patch).not.toContain('\u0007');
+  });
+
   it('does not dump a binary or a huge file', () => {
     expect(unifiedDiff('blob.bin', 'a', 'a\0b')).toContain('binary blob.bin differs');
     const big = `${'x\n'.repeat(1501)}`;

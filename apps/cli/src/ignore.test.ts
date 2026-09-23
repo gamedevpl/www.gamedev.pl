@@ -78,6 +78,14 @@ describe('ignore matcher', () => {
     expect(match.ignored('foo', false)).toBeNull();
   });
 
+  it('keeps earlier rules when one character class is not a JavaScript regexp', () => {
+    const dir = root();
+    writeFileSync(join(dir, '.gitignore'), '*.secret\n[z-a]\n');
+    const match = createIgnoreMatcher(dir);
+    expect(match.ignored('token.secret', false)?.pattern).toBe('*.secret');
+    expect(match.ignored('a', false)).toBeNull();
+  });
+
   it('honors a pattern longer than 240 characters', () => {
     const dir = root();
     const name = `${'a'.repeat(241)}.secret`;

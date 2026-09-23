@@ -11,6 +11,15 @@ const C0_OTHER_THAN_TAB = new RegExp(
 
 export const MAX_EVENT_LINE = 240;
 
+const C0_HIDDEN = new RegExp(
+  `[${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}-${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
+  'g',
+);
+
+export function stripTerminalControls(raw: string): string {
+  return raw.replace(CSI_OR_OSC, '').replace(C0_HIDDEN, '');
+}
+
 export function sanitizeEventPayload(raw: string, maxLength = MAX_EVENT_LINE): string {
   const stripped = raw.replace(CSI_OR_OSC, '').replace(C0_OTHER_THAN_TAB, ' ');
   const oneLine = stripped.replace(/\s+/g, ' ').trim();

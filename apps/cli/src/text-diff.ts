@@ -1,3 +1,5 @@
+import { stripTerminalControls } from './ansi.js';
+
 type Edit = { op: 'eq' | 'del' | 'ins'; line: string };
 
 const MAX_DIFF_LINES = 1500;
@@ -81,7 +83,8 @@ export function unifiedDiff(path: string, platformText: string | null, localText
   const beforeMissing = platformText === null ? '/dev/null' : `platform/${path}`;
   const afterMissing = localText === null ? '/dev/null' : `local/${path}`;
   const header = [`--- ${beforeMissing}`, `+++ ${afterMissing}`];
-  if (beforeText.includes('\0') || afterText.includes('\0')) return [...header, `binary ${path} differs`];
+  const show = (lines: string[]): string[] => lines.map(stripTerminalControls);
+  if (beforeText.includes('\0') || afterText.includes('\0')) return show([...header, `binary ${path} differs`]);
   const before = linesOf(beforeText);
   const after = linesOf(afterText);
   if (
@@ -90,10 +93,13 @@ export function unifiedDiff(path: string, platformText: string | null, localText
     before.lines.join('\n') === after.lines.join('\n') &&
     before.newline !== after.newline
   ) {
-    return [...header, 'newline at end of file differs'];
+    return show([...header, 'newline at end of file differs']);
   }
   if (before.lines.length > MAX_DIFF_LINES || after.lines.length > MAX_DIFF_LINES) {
-    return [...header, `${path} differs (${before.lines.length} platform lines, ${after.lines.length} local lines)`];
+    return show([
+      ...header,
+      `${path} differs (${before.lines.length} platform lines, ${after.lines.length} local lines)`,
+    ]);
   }
-  return [...header, ...formatHunks(lineDiff(before.lines, after.lines))];
+  return show([...header, ...formatHunks(lineDiff(before.lines, after.lines))]);
 }
