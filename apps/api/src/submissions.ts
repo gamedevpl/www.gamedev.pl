@@ -1283,7 +1283,8 @@ export async function registerSubmissionRoutes(
     reviewerUids: options.reviewerUids,
     now,
     invalidatePublishedGameCaches,
-    isSlugPublished: catalogRoutes.isSlugPublished,
+    // Both lanes: a store-published game must be reportable too, not just repo ones.
+    isSlugPublished: catalogRoutes.isSlugPublishedAnyLane,
   });
   await registerSelfBuildConnectRoutes(app, {
     managedAvailabilityGate,

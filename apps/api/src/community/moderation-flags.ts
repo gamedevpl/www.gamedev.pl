@@ -5,6 +5,7 @@ import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
 import type { Store } from '../platform/store.js';
+import type { ModerationFlag } from '../store/records/moderation-flag.js';
 import { isReviewerSession } from './review.js';
 
 export interface ModerationFlagRoutesOptions {
@@ -20,16 +21,26 @@ export interface ModerationFlagRoutesOptions {
 }
 
 const MAX_NOTE = 2000;
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 const RaiseSchema = z.object({
-  slug: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9-]*$/),
+  slug: z.string().trim().regex(SLUG_PATTERN),
   reason: z.enum(MODERATION_FLAG_REASONS),
   note: z.string().trim().min(1).max(MAX_NOTE),
   source: z.enum(['catalog', 'creator']).default('creator'),
   gameVersion: z.string().trim().max(64).nullish(),
+});
+
+const ReportParamsSchema = z.object({
+  slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
+});
+
+// A short operator pointer, not the DSA-precision notice (see ReportGameButton).
+const MAX_PLAYER_NOTE = 500;
+
+const ReportBodySchema = z.object({
+  reason: z.enum(MODERATION_FLAG_REASONS),
+  note: z.string().trim().min(1).max(MAX_PLAYER_NOTE),
 });
 
 const ResolveSchema = z.object({
@@ -79,6 +90,11 @@ export async function takeDownSlug(input: {
   return { blocked, unshared, unpublished, stillPublic };
 }
 
+// Reopened flags page again; still-open ones must not page twice.
+function alertFlagId(reopened: boolean, flag: ModerationFlag): string {
+  return reopened ? `${flag.id}@${flag.createdAt}` : flag.id;
+}
+
 export async function registerModerationFlagRoutes(
   app: FastifyInstance,
   options: ModerationFlagRoutesOptions,
@@ -107,7 +123,7 @@ export async function registerModerationFlagRoutes(
       const note = sanitizeCreatorText(parsed.data.note, { singleLine: false }).slice(0, MAX_NOTE);
       if (!note) return reply.status(400).send({ error: 'note is required' });
 
-      const flag = await store.raiseModerationFlag({
+      const { flag, reopened } = await store.raiseModerationFlag({
         slug: parsed.data.slug,
         source: parsed.data.source,
         reason: parsed.data.reason,
@@ -121,10 +137,53 @@ export async function registerModerationFlagRoutes(
         'moderation flag raised on a game',
       );
       // Detached: mail and push must not hold the reviewer's request open.
-      void notifyFlagRaised?.({ flagId: flag.id, slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
         request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
       });
       return reply.send({ flag });
+    },
+  );
+
+  // Player-facing report, into the same queue as a reviewer's flag.
+  app.post(
+    '/api/games/:slug/report',
+    { config: { rateLimit: { max: 8, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+      if (!request.user) return reply.status(401).send({ error: 'authentication required' });
+      if (request.user.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
+
+      const params = ReportParamsSchema.safeParse(request.params ?? {});
+      if (!params.success) {
+        return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
+      }
+      const body = ReportBodySchema.safeParse(request.body ?? {});
+      if (!body.success) {
+        return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const published = (await isSlugPublished?.(params.data.slug)) ?? false;
+      if (!published) return reply.status(404).send({ error: 'game not found' });
+
+      const sanitized = sanitizeCreatorText(body.data.note, { singleLine: false }).slice(0, MAX_PLAYER_NOTE);
+      if (!sanitized) return reply.status(400).send({ error: 'note is required' });
+
+      // Not content-moderated: quoting the abuse is the evidence operators need.
+      const { flag, reopened } = await store.raiseModerationFlag({
+        slug: params.data.slug,
+        source: 'player',
+        reason: body.data.reason,
+        note: sanitized,
+        raisedByUid: request.user.uid,
+        gameVersion: null,
+        createdAt: new Date(now()).toISOString(),
+      });
+      request.log.warn({ slug: flag.slug, reason: flag.reason }, 'player reported a game');
+      // Detached, same as the reviewer path above.
+      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+        request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a player game report');
+      });
+      return reply.send({ ok: true });
     },
   );
 

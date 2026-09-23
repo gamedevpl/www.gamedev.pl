@@ -102,6 +102,7 @@ import { InMemoryModerationFlagStore } from './slices/moderation-flags.js';
 import type { ModerationFlag } from './records/moderation-flag.js';
 import type {
   RaiseModerationFlagInput,
+  RaisedModerationFlag,
   ResolveModerationFlagInput,
   ResolveModerationFlagResult,
 } from './slices/moderation-flags.js';
@@ -1319,7 +1320,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.socialStore.countPlayerFeedback(slug);
   }
 
-  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<RaisedModerationFlag> {
     return this.moderationFlagStore.raiseModerationFlag(input);
   }
 

@@ -12,7 +12,7 @@ import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js
 const secret = 'submission-secret';
 const sessionSecret = 'dev-session-secret-change-me';
 
-function githubStub(published: string[]): GitHubClient {
+function githubStub(published: string[], catalogDown = false, catalogHangs = false): GitHubClient {
   const catalog: CatalogGameEntry[] = published.map(
     (slug) => ({ slug, title: slug, status: 'published' }) as unknown as CatalogGameEntry,
   );
@@ -24,7 +24,11 @@ function githubStub(published: string[]): GitHubClient {
     closeIssue: async () => {},
     getGameSources: async () => null,
     getGameMedia: async () => null,
-    getCatalog: async () => catalog,
+    getCatalog: async () => {
+      if (catalogHangs) return new Promise<CatalogGameEntry[]>(() => {});
+      if (catalogDown) throw new Error('github unavailable');
+      return catalog;
+    },
     getProgressNotes: async () => null,
     getRefSha: async () => null,
   } as unknown as GitHubClient;
@@ -51,16 +55,18 @@ describe('moderation flags', () => {
     return `${SESSION_COOKIE_NAME}=${res.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
   }
 
-  async function makeApp(opts: { published?: string[] } = {}) {
+  async function makeApp(
+    opts: { published?: string[]; contentChecker?: ContentChecker; catalogDown?: boolean; catalogHangs?: boolean } = {},
+  ) {
     const store = new InMemoryStore();
     const app = await buildApp({
       store,
-      contentChecker: allowAll,
+      contentChecker: opts.contentChecker ?? allowAll,
       reviewerUids: 'dev:reviewer',
       adminUids: 'dev:boss',
       submissionRoutes: {
         githubToken: 'token',
-        githubClient: githubStub(opts.published ?? []),
+        githubClient: githubStub(opts.published ?? [], opts.catalogDown, opts.catalogHangs),
         submissionTokenSecret: secret,
         gamesRepo: 'gamedevpl/www.gamedev.pl-games',
       },
@@ -298,5 +304,175 @@ describe('moderation flags', () => {
       headers: { cookie: await cookie(app, 'boss') },
     });
     expect(open.json().flags).toHaveLength(0);
+  });
+
+  function report(app: Awaited<ReturnType<typeof buildApp>>, cookieHeader: string, slug = 'sky-dodge') {
+    return app.inject({
+      method: 'POST',
+      url: `/api/games/${slug}/report`,
+      headers: { cookie: cookieHeader },
+      payload: { reason: 'hate', note: 'a slur is painted on the title screen' },
+    });
+  }
+
+  describe('player report action', () => {
+    it('rejects an unauthenticated report with 401', async () => {
+      const { app } = await makeApp({ published: ['sky-dodge'] });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/games/sky-dodge/report',
+        payload: { reason: 'hate', note: 'a slur is painted on the title screen' },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('rejects a slug outside the published catalog with 404', async () => {
+      const { app } = await makeApp({ published: [] });
+      const res = await report(app, await cookie(app, 'alice'));
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('blocks a blocked-tier account with 403', async () => {
+      const { app, store } = await makeApp({ published: ['sky-dodge'] });
+      await store.upsertUser({ uid: 'g:blocked', tier: 'blocked' });
+      const res = await report(app, `${SESSION_COOKIE_NAME}=${mintSessionToken('g:blocked', sessionSecret)}`);
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('raises a flag into the same queue a reviewer uses, and it reaches the operator console', async () => {
+      const { app } = await makeApp({ published: ['sky-dodge'] });
+      const res = await report(app, await cookie(app, 'alice'));
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      const queue = await app.inject({
+        method: 'GET',
+        url: '/api/admin/moderation-flags',
+        headers: { cookie: await cookie(app, 'boss') },
+      });
+      expect(queue.json().flags).toMatchObject([
+        { slug: 'sky-dodge', reason: 'hate', source: 'player', raisedByUid: 'dev:alice' },
+      ]);
+    });
+
+    it('accepts a note quoting the abuse, even when the content checker would reject it', async () => {
+      const denyAll: ContentChecker = {
+        async check() {
+          return { allowed: false, category: 'hate' };
+        },
+        async checkFields() {
+          return { allowed: false, category: 'hate' };
+        },
+      };
+      const { app, store } = await makeApp({ published: ['sky-dodge'], contentChecker: denyAll });
+      const res = await report(app, await cookie(app, 'alice'));
+      expect(res.statusCode).toBe(200);
+      const [flag] = await store.listModerationFlags();
+      expect(flag).toMatchObject({ slug: 'sky-dodge', note: 'a slur is painted on the title screen' });
+    });
+
+    it('reports a store-published game absent from the repo catalog', async () => {
+      // Self-build games publish via store.setPublication, never catalog.json.
+      const { app, store } = await makeApp({ published: [] });
+      await store.setPublication({
+        slug: 'neon-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      });
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      const queue = await app.inject({
+        method: 'GET',
+        url: '/api/admin/moderation-flags',
+        headers: { cookie: await cookie(app, 'boss') },
+      });
+      expect(queue.json().flags).toMatchObject([{ slug: 'neon-courier', source: 'player' }]);
+    });
+
+    it('fails closed (404, not 500) when the store lane read throws', async () => {
+      // The shared gate must eat a transient Firestore error, like /play.
+      const { app, store } = await makeApp({ published: [] });
+      store.getPublication = async () => {
+        throw new Error('firestore unavailable');
+      };
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('still reports a store-published game while the repo catalog is down', async () => {
+      const { app, store } = await makeApp({ published: [], catalogDown: true });
+      await store.setPublication({
+        slug: 'neon-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      });
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('pages again when a dismissed report is reopened, but not while it is open', async () => {
+      const { app, store } = await makeApp({ published: ['sky-dodge'] });
+      await store.upsertUser({ uid: 'dev:boss' });
+      const alerts = async () =>
+        (await store.listNotifications('dev:boss')).filter((row) => row.type === 'operator.moderation_flag');
+      const settle = async (count: number) => {
+        for (let attempt = 0; attempt < 50 && (await alerts()).length < count; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+      };
+      const alice = await cookie(app, 'alice');
+
+      expect((await report(app, alice)).statusCode).toBe(200);
+      expect((await report(app, alice)).statusCode).toBe(200);
+      await settle(1);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(await alerts()).toHaveLength(1);
+
+      const [flag] = (
+        await app.inject({
+          method: 'GET',
+          url: '/api/admin/moderation-flags',
+          headers: { cookie: await cookie(app, 'boss') },
+        })
+      ).json().flags as Array<{ id: string }>;
+      const dismissed = await app.inject({
+        method: 'POST',
+        url: `/api/admin/moderation-flags/${encodeURIComponent(flag!.id)}/resolve`,
+        headers: { cookie: await cookie(app, 'boss') },
+        payload: { action: 'dismissed', note: 'looked, it is fine' },
+      });
+      expect(dismissed.statusCode).toBe(200);
+
+      expect((await report(app, alice)).statusCode).toBe(200);
+      await settle(2);
+      expect(await alerts()).toHaveLength(2);
+    });
+
+    it('reports a store-published game without waiting on a stalled repo catalog', async () => {
+      const { app, store } = await makeApp({ published: [], catalogHangs: true });
+      await store.setPublication({
+        slug: 'neon-courier',
+        state: 'published',
+        currentVersion: 'v1',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      });
+      const res = await report(app, await cookie(app, 'alice'), 'neon-courier');
+      expect(res.statusCode).toBe(200);
+    }, 2_000);
+
+    it('rate-limits repeated reports from the same account', async () => {
+      const { app } = await makeApp({ published: ['sky-dodge', 'neon-courier'] });
+      const alice = await cookie(app, 'alice');
+      const slugs = ['sky-dodge', 'neon-courier'];
+      let last: Awaited<ReturnType<typeof report>> | null = null;
+      for (let i = 0; i < 9; i += 1) {
+        last = await report(app, alice, slugs[i % slugs.length]);
+      }
+      expect(last?.statusCode).toBe(429);
+    });
   });
 });

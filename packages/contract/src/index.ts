@@ -99,10 +99,12 @@ export {
 export {
   MODERATION_FLAG_ACTIONS,
   MODERATION_FLAG_REASONS,
+  MODERATION_FLAG_SOURCES,
   MODERATION_FLAG_STATUSES,
   isModerationFlagReason,
   type ModerationFlagAction,
   type ModerationFlagReason,
+  type ModerationFlagSource,
   type ModerationFlagStatus,
 } from './moderation-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';

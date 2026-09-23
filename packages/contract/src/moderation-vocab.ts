@@ -12,3 +12,7 @@ export type ModerationFlagAction = (typeof MODERATION_FLAG_ACTIONS)[number];
 export function isModerationFlagReason(value: unknown): value is ModerationFlagReason {
   return typeof value === 'string' && (MODERATION_FLAG_REASONS as readonly string[]).includes(value);
 }
+
+// Who raised the flag; distinct from AssessmentSource, a review-sweep concept.
+export const MODERATION_FLAG_SOURCES = ['catalog', 'creator', 'player'] as const;
+export type ModerationFlagSource = (typeof MODERATION_FLAG_SOURCES)[number];

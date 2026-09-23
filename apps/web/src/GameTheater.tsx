@@ -10,6 +10,7 @@ import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { resolveControlRows } from './howToPlay.js';
+import { InAppGameReport } from './InAppGameReport.js';
 import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -747,6 +748,7 @@ export function GameTheater({
                       {/* Shares the play permalink: someone handed a game link expects
                           to land in the game. The game page shares itself instead. */}
                       <ShareGameButton slug={reportSlug} title={displayTitle} />
+                      <InAppGameReport slug={reportSlug} />
                       <ReportGameButton slug={reportSlug} title={displayTitle} />
                     </>
                   )}

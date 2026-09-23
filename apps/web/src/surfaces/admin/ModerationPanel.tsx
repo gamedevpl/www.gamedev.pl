@@ -97,6 +97,7 @@ export function ModerationPanel() {
               <div className="admin-moderation-head">
                 <a href={`/play/${flag.slug}`}>{flag.slug}</a>
                 <span className="admin-moderation-reason">{REASON_LABELS[flag.reason] ?? flag.reason}</span>
+                <span className="admin-moderation-source">{flag.source === 'player' ? 'player report' : flag.source}</span>
                 <span className="admin-moderation-when">{new Date(flag.createdAt).toLocaleString()}</span>
               </div>
               <p className="admin-moderation-note">{flag.note}</p>
