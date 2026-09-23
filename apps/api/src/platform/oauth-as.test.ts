@@ -9,6 +9,7 @@ import { pkceChallengeS256 } from './oauth-pkce.js';
 import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from '../agent-surface/self-build-connect.js';
 import { InMemoryStore } from './store.js';
+import type { CimdFetcher } from './cimd-fetch.js';
 
 const SESSION_SECRET = 'dev-session-secret-change-me';
 const MCP_SECRET = 'oauth-as-mcp-secret';
@@ -17,10 +18,11 @@ function sessionCookie(uid: string): string {
   return `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, SESSION_SECRET)}`;
 }
 
-async function buildOAuthApp(store: InMemoryStore) {
+async function buildOAuthApp(store: InMemoryStore, cimdFetcher?: CimdFetcher) {
   return buildApp({
     store,
     sessionSecret: SESSION_SECRET,
+    cimdFetcher,
     submissionRoutes: {
       githubClient: {
         getIssueState: async () => ({ state: 'open' as const }),
@@ -407,78 +409,60 @@ describe('OAuth authorization server (BY-18b)', () => {
   it('accepts ChatGPT-shaped CIMD that prefers private_key_jwt but also supports none', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:creator' });
-    app = await buildOAuthApp(store);
-
     const clientIdUrl = 'https://chatgpt.com/oauth/test-client/client.json';
     const redirectUri = 'https://chatgpt.com/connector/oauth/test-client';
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(String(input)).toBe(clientIdUrl);
-      return new Response(
-        JSON.stringify({
+    const fetchMock = vi.fn(async (input: string) => {
+      expect(input).toBe(clientIdUrl);
+      return {
+        ok: true as const,
+        body: {
           client_id: clientIdUrl,
           client_name: 'ChatGPT',
           redirect_uris: [redirectUri],
           token_endpoint_auth_method: 'private_key_jwt',
           token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
           jwks_uri: 'https://chatgpt.com/oauth/jwks.json',
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
+        },
+      };
     });
-    vi.stubGlobal('fetch', fetchMock);
+    app = await buildOAuthApp(store, fetchMock);
 
-    try {
-      const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
-      const tokens = await authorizeAndExchange(app, clientIdUrl, redirectUri, verifier);
-      expect(tokens.access_token).toMatch(/^gdpl_oat_/);
-      expect(fetchMock).toHaveBeenCalled();
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const tokens = await authorizeAndExchange(app, clientIdUrl, redirectUri, verifier);
+    expect(tokens.access_token).toMatch(/^gdpl_oat_/);
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it('still rejects CIMD clients that cannot use none', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:creator' });
-    app = await buildOAuthApp(store);
-
     const clientIdUrl = 'https://example.com/oauth/secret-only/client.json';
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              client_id: clientIdUrl,
-              redirect_uris: ['https://example.com/callback'],
-              token_endpoint_auth_method: 'private_key_jwt',
-              token_endpoint_auth_methods_supported: ['private_key_jwt'],
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-          ),
-      ),
-    );
+    app = await buildOAuthApp(store, async () => ({
+      ok: true,
+      body: {
+        client_id: clientIdUrl,
+        redirect_uris: ['https://example.com/callback'],
+        token_endpoint_auth_method: 'private_key_jwt',
+        token_endpoint_auth_methods_supported: ['private_key_jwt'],
+      },
+    }));
 
-    try {
-      const challenge = pkceChallengeS256('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
-      const res = await app.inject({
-        method: 'GET',
-        url: '/oauth/authorize',
-        headers: { cookie: sessionCookie('g:creator') },
-        query: {
-          response_type: 'code',
-          client_id: clientIdUrl,
-          redirect_uri: 'https://example.com/callback',
-          scope: 'mcp',
-          code_challenge: challenge,
-          code_challenge_method: 'S256',
-        },
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.json()).toEqual({ error: 'invalid_client' });
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const challenge = pkceChallengeS256('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:creator') },
+      query: {
+        response_type: 'code',
+        client_id: clientIdUrl,
+        redirect_uri: 'https://example.com/callback',
+        scope: 'mcp',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'invalid_client' });
   });
 });
 

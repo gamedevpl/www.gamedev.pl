@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { Locale } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { rememberBounded } from './bounded-map.js';
+import { createCimdFetcher, type CimdFetcher, validateCimdUrl } from './cimd-fetch.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
 import { InvalidSessionError, readSessionCookie, readSessionToken } from './auth.js';
@@ -51,6 +53,11 @@ const DCR_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
 const cimdCache = new Map<string, { client: OAuthClientRecord; expiresAt: number }>();
 const CIMD_CACHE_TTL_MS = 5 * 60 * 1000;
+const cimdFailures = new Map<string, number>();
+const cimdInFlight = new Map<string, Promise<OAuthClientRecord | null>>();
+const cimdHitsByUid = new Map<string, { urls: Map<string, number>; expiresAt: number }>();
+const CIMD_FAILURE_TTL_MS = 60 * 1000;
+const CIMD_USER_WINDOW_MS = 10 * 60 * 1000;
 
 const dcrHitsByIp = new Map<string, number[]>();
 const tokenHitsByIp = new Map<string, number[]>();
@@ -62,6 +69,7 @@ export interface OAuthAuthorizationServerOptions {
   sessionSecret: string;
   sessionSecretPrev?: string;
   now?: () => number;
+  cimdFetcher?: CimdFetcher;
 }
 
 function issuerUrl(): string {
@@ -86,6 +94,19 @@ function pruneCimdCache(nowMs: number): void {
   for (const [key, entry] of cimdCache) {
     if (entry.expiresAt <= nowMs) cimdCache.delete(key);
   }
+  for (const [key, expiresAt] of cimdFailures) {
+    if (expiresAt <= nowMs) cimdFailures.delete(key);
+  }
+}
+
+function allowCimdUrl(uid: string, url: string, nowMs: number): boolean {
+  const entry = cimdHitsByUid.get(uid);
+  const urls = entry?.urls ?? new Map<string, number>();
+  for (const [key, at] of urls) if (nowMs - at >= CIMD_USER_WINDOW_MS) urls.delete(key);
+  if (!urls.has(url) && urls.size >= 10) return false;
+  urls.set(url, nowMs);
+  rememberBounded(cimdHitsByUid, uid, { urls, expiresAt: nowMs + CIMD_USER_WINDOW_MS }, 256);
+  return true;
 }
 
 function isDcrRateLimited(ip: string, nowMs: number): boolean {
@@ -122,13 +143,18 @@ function pickLang(request: FastifyRequest): Locale {
   return 'en';
 }
 
-interface CimdDocument {
-  client_id: string;
-  client_name?: string;
-  redirect_uris: string[];
-  token_endpoint_auth_method?: string;
-  // RP Metadata Choices: methods ChatGPT can actually use.
-  token_endpoint_auth_methods_supported?: string[];
+const CimdDocumentSchema = z.object({
+  client_id: z.string(),
+  client_name: z.string().max(100).optional(),
+  redirect_uris: z.array(z.string().url()).min(1).max(10),
+  token_endpoint_auth_method: z.string().optional(),
+  token_endpoint_auth_methods_supported: z.array(z.string()).optional(),
+});
+
+function validCimdRedirect(uri: string): boolean {
+  const url = new URL(uri);
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase());
+  return (url.protocol === 'https:' || (url.protocol === 'http:' && loopback)) && redirectUriAllowed(uri, [uri]);
 }
 
 // Prefer Choices list; ChatGPT prefers private_key_jwt but also supports none.
@@ -144,49 +170,74 @@ export function cimdSupportsPublicClientAuth(body: {
   return method === undefined || method === 'none';
 }
 
-async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAuthClientRecord | null> {
+async function fetchCimdClient(
+  clientIdUrl: string,
+  nowMs: number,
+  fetcher: CimdFetcher,
+): Promise<OAuthClientRecord | null> {
   pruneCimdCache(nowMs);
   const cached = cimdCache.get(clientIdUrl);
   if (cached && cached.expiresAt > nowMs) return cached.client;
+  if ((cimdFailures.get(clientIdUrl) ?? 0) > nowMs) return null;
+  const pending = cimdInFlight.get(clientIdUrl);
+  if (pending) return pending;
+  const work = (async () => {
+    let result;
+    try {
+      result = await fetcher(clientIdUrl);
+    } catch {
+      rememberBounded(cimdFailures, clientIdUrl, nowMs + CIMD_FAILURE_TTL_MS, 256);
+      return null;
+    }
+    const parsed = result.ok ? CimdDocumentSchema.safeParse(result.body) : null;
+    const body = parsed?.success ? parsed.data : null;
+    if (
+      !result.ok ||
+      !body ||
+      body.client_id !== clientIdUrl ||
+      !body.redirect_uris.every(validCimdRedirect) ||
+      !cimdSupportsPublicClientAuth(body)
+    ) {
+      rememberBounded(cimdFailures, clientIdUrl, nowMs + CIMD_FAILURE_TTL_MS, 256);
+      return null;
+    }
 
-  let response: Response;
+    const client: OAuthClientRecord = {
+      clientId: clientIdUrl,
+      registrationType: 'cimd',
+      redirectUris: body.redirect_uris,
+      clientName: body.client_name,
+      tokenEndpointAuthMethod: 'none',
+      createdAt: new Date(nowMs).toISOString(),
+    };
+    rememberBounded(cimdCache, clientIdUrl, { client, expiresAt: nowMs + CIMD_CACHE_TTL_MS }, 256);
+    return client;
+  })();
+  cimdInFlight.set(clientIdUrl, work);
   try {
-    response = await fetch(clientIdUrl, {
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {
-    return null;
+    return await work;
+  } finally {
+    cimdInFlight.delete(clientIdUrl);
   }
-  if (!response.ok) return null;
-
-  let body: CimdDocument;
-  try {
-    body = (await response.json()) as CimdDocument;
-  } catch {
-    return null;
-  }
-
-  if (body.client_id !== clientIdUrl) return null;
-  if (!Array.isArray(body.redirect_uris) || body.redirect_uris.length === 0) return null;
-  if (!cimdSupportsPublicClientAuth(body)) return null;
-
-  const client: OAuthClientRecord = {
-    clientId: clientIdUrl,
-    registrationType: 'cimd',
-    redirectUris: body.redirect_uris,
-    clientName: body.client_name,
-    tokenEndpointAuthMethod: 'none',
-    createdAt: new Date(nowMs).toISOString(),
-  };
-  cimdCache.set(clientIdUrl, { client, expiresAt: nowMs + CIMD_CACHE_TTL_MS });
-  return client;
 }
 
-async function resolveOAuthClient(store: Store, clientId: string, nowMs: number): Promise<OAuthClientRecord | null> {
+async function resolveOAuthClient(
+  store: Store,
+  clientId: string,
+  nowMs: number,
+  fetcher: CimdFetcher,
+  options: { uid?: string; network?: boolean } = {},
+): Promise<OAuthClientRecord | null> {
   if (isGamedevCliClient(clientId)) return gamedevCliClient();
   if (clientId.startsWith('https://')) {
-    return fetchCimdClient(clientId, nowMs);
+    if (!validateCimdUrl(clientId)) return null;
+    pruneCimdCache(nowMs);
+    const cached = cimdCache.get(clientId);
+    if (cached && cached.expiresAt > nowMs) return cached.client;
+    if (options.network === false) return null;
+    if ((cimdFailures.get(clientId) ?? 0) > nowMs) return null;
+    if (options.uid && !allowCimdUrl(options.uid, clientId, nowMs)) return null;
+    return fetchCimdClient(clientId, nowMs, fetcher);
   }
   return store.getOAuthClient(clientId);
 }
@@ -253,6 +304,13 @@ export function registerOAuthAuthorizationServerRoutes(
   const sessionSecret = options.sessionSecret;
   const sessionSecretPrev = options.sessionSecretPrev;
   const now = options.now ?? Date.now;
+  const rawCimdFetcher = options.cimdFetcher ?? createCimdFetcher();
+  const cimdFetcher: CimdFetcher = async (url) => {
+    const result = await rawCimdFetcher(url);
+    if (!result.ok)
+      app.log.warn({ host: new URL(url).host, reason: result.reason }, 'OAuth client metadata fetch failed');
+    return result;
+  };
 
   if (!app.hasContentTypeParser('application/x-www-form-urlencoded')) {
     app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => {
@@ -330,6 +388,7 @@ export function registerOAuthAuthorizationServerRoutes(
 
   async function validateAuthorizeParams(
     request: FastifyRequest,
+    uid: string,
   ): Promise<
     | { ok: true; params: z.infer<typeof AuthorizeQuerySchema>; client: OAuthClientRecord; scope: string }
     | { ok: false; status: number; error: string }
@@ -345,7 +404,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return { ok: false, status: 400, error: 'invalid_scope' };
     }
 
-    const client = await resolveOAuthClient(store, params.client_id, now());
+    const client = await resolveOAuthClient(store, params.client_id, now(), cimdFetcher, { uid });
     if (!client) return { ok: false, status: 400, error: 'invalid_client' };
     if (!redirectUriAllowed(params.redirect_uri, client.redirectUris)) {
       return { ok: false, status: 400, error: 'invalid_redirect_uri' };
@@ -361,7 +420,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.redirect(`${issuerUrl()}/studio?oauth_return=${encodeURIComponent(returnTo)}`);
     }
 
-    const validated = await validateAuthorizeParams(request);
+    const validated = await validateAuthorizeParams(request, uid);
     if (!validated.ok) {
       return reply.status(validated.status).send({ error: validated.error });
     }
@@ -405,7 +464,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.status(401).send({ error: 'login_required' });
     }
 
-    const validated = await validateAuthorizeParams(request);
+    const validated = await validateAuthorizeParams(request, uid);
     if (!validated.ok) {
       return reply.status(validated.status).send({ error: validated.error });
     }
@@ -694,12 +753,16 @@ export function registerOAuthAuthorizationServerRoutes(
     const grants = await store.listOAuthGrantsByOwner(uid);
     const payload = await Promise.all(
       grants.map(async (grant) => {
-        const client = await resolveOAuthClient(store, grant.clientId, now());
+        const client = await resolveOAuthClient(store, grant.clientId, now(), cimdFetcher, { network: false });
         const redirectHost = client?.redirectUris[0];
         return {
           grantId: grant.grantId,
           clientId: grant.clientId,
-          clientLabel: client ? clientLabel(client, grant, redirectHost) : grant.clientId,
+          clientLabel: client
+            ? clientLabel(client, grant, redirectHost)
+            : grant.clientId.startsWith('https://') && validateCimdUrl(grant.clientId)
+              ? new URL(grant.clientId).host
+              : grant.clientId,
           createdAt: grant.createdAt,
           lastUsedAt: grant.lastUsedAt ?? null,
         };

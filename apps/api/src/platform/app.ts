@@ -128,16 +128,17 @@ import { registerOAuthProtectedResourceRoutes } from '../agent-surface/mcp-oauth
 import { registerMcpServerDiscoveryRoutes } from '../agent-surface/mcp-server-discovery.js';
 import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
+import type { CimdFetcher } from './cimd-fetch.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from '../agent-surface/creator-agent-key-routes.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
-
 export interface BuildAppOptions {
   /** `false` in tests by default; pass a Pino destination to assert on log lines. */
   logger?: FastifyServerOptions['logger'];
   store?: Store;
   sessionSecret?: string;
   sessionSecretPrev?: string;
+  cimdFetcher?: CimdFetcher;
   googleClientId?: string;
   googleAuthVerifier?: GoogleAuthVerifier;
   /** Seam for Sign in with Apple; defaults to JWKS-or-deny-all from APPLE_CLIENT_IDS. */
@@ -1097,7 +1098,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Domain proof for the ChatGPT/Codex plugin submission. 404s until the portal issues a
   // token and it is configured — see openai-apps-challenge.ts.
   registerOpenAiAppsChallengeRoute(app);
-
   const configuredSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET;
   // A forgeable session is an account takeover; refuse to serve rather than fall back.
   if (!configuredSessionSecret && process.env.NODE_ENV === 'production') {
@@ -1110,12 +1110,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     sessionSecret: oauthSessionSecret,
     sessionSecretPrev: oauthSessionSecretPrev,
     now: options.submissionRoutes?.now,
+    cimdFetcher: options.cimdFetcher,
   });
   // Browser sign-in for accounts that hold a personal access token instead of a Google
   // or Apple identity. Registered right after the AS because the only reason it exists
   // is to get such an account to the consent screen above.
   registerTokenLoginRoutes(app, { store, sessionSecret: oauthSessionSecret });
-
   // Creator-wide MCP opener (BY-27a). Needs the same HMAC secret as per-game keys.
   if (submissionTokenSecret) {
     registerCreatorAgentKeyRoutes(app, {
