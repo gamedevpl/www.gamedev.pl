@@ -238,8 +238,8 @@ async function submitGameUnlocked(input: {
   try {
     const tree = await fetchLatestTree(input.api, input.slug);
     mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
-    writeBase(input.dest, tree.version, trackedTree(input.dest, input.slug, tree.files));
-    files = tree.files;
+    files = trackedTree(input.dest, input.slug, tree.files);
+    writeBase(input.dest, tree.version, files);
   } catch {
     writeBase(input.dest, version, uploaded);
   }

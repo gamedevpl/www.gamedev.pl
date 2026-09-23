@@ -260,6 +260,53 @@ rl.on('close', () => process.exit(0));
     expect(isolatedBase?.files['game.ts']).toBe(hashContent('COMMITTED-B'));
   });
 
+  it('does not record an ignored platform file in the checkout base after push', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-ign-'));
+    const git = (args: string[]) => {
+      const result = spawnSync('git', args, { cwd: dest, encoding: 'utf8' });
+      if (result.status !== 0) throw new Error(result.stderr || args.join(' '));
+    };
+    git(['init']);
+    git(['config', 'user.email', 'cli@test']);
+    git(['config', 'user.name', 'cli']);
+    git(['config', 'commit.gpgsign', 'false']);
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'COMMITTED-B' }]);
+    writeFileSync(join(dest, '.gamedev-slug'), 'ghost-roads');
+    writeFileSync(join(dest, '.gitignore'), '*.log\n');
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    git(['add', '-A']);
+    git(['commit', '-m', 'b']);
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response('{}', { status: 404 }),
+    });
+    const result = await reconcilePush({
+      api,
+      slug: 'ghost-roads',
+      cwd: dest,
+      srcRef: 'HEAD',
+      submit: async () => ({
+        kind: 'delivered',
+        sync: { kind: 'local_only', version: 'v1', local: ['game.ts'], platform: [], conflict: [] },
+        version: 'v2',
+        mode: 'preview',
+        gateStarted: true,
+        staged: ['game.ts'],
+        files: [
+          { path: 'game.ts', content: 'COMMITTED-B' },
+          { path: 'extra.log', content: 'platform\n' },
+        ],
+        ignored: [],
+      }),
+    });
+    expect(result).toEqual({ ok: true });
+    const base = readBase(dest);
+    expect(base?.version).toBe('v2');
+    expect(base?.files['game.ts']).toBe(hashContent('COMMITTED-B'));
+    expect(base?.files['extra.log']).toBeUndefined();
+  });
+
   it('resolves no slug when the remote URL and checkout file are missing', () => {
     expect(remoteSlugFromArgv(['node', 'git-remote-gamedevpl'], null)).toBe('');
     expect(remoteSlugFromArgv(['node', 'git-remote-gamedevpl'], 'ghost-roads')).toBe('ghost-roads');

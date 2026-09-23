@@ -70,6 +70,14 @@ describe('ignore matcher', () => {
     expect(match.ignored('foo/x/baz', false)).toBeNull();
   });
 
+  it('keeps a leading space in a pattern', () => {
+    const dir = root();
+    writeFileSync(join(dir, '.gitignore'), ' foo\n');
+    const match = createIgnoreMatcher(dir);
+    expect(match.ignored(' foo', false)?.pattern).toBe(' foo');
+    expect(match.ignored('foo', false)).toBeNull();
+  });
+
   it('does not follow a symlinked ignore file', () => {
     const dir = root();
     const outside = root();

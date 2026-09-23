@@ -36,7 +36,11 @@ export function formatPatches(sync: SyncResult, local: TreeFile[], remote: TreeF
   const here = new Map(local.map((file) => [file.path, file.content]));
   const lines: string[] = [];
   for (const path of names) {
-    const patch = unifiedDiff(path, platform.get(path) ?? '', here.get(path) ?? '');
+    const patch = unifiedDiff(
+      path,
+      platform.has(path) ? platform.get(path)! : null,
+      here.has(path) ? here.get(path)! : null,
+    );
     if (!patch.length) continue;
     if (lines.length) lines.push('');
     lines.push(...patch);

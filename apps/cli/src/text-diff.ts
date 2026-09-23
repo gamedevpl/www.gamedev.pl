@@ -74,15 +74,22 @@ function formatHunks(edits: Edit[]): string[] {
   return lines;
 }
 
-export function unifiedDiff(path: string, platformText: string, localText: string): string[] {
+export function unifiedDiff(path: string, platformText: string | null, localText: string | null): string[] {
   if (platformText === localText) return [];
-  const beforeMissing = platformText === '' ? '/dev/null' : `platform/${path}`;
-  const afterMissing = localText === '' ? '/dev/null' : `local/${path}`;
+  const beforeText = platformText ?? '';
+  const afterText = localText ?? '';
+  const beforeMissing = platformText === null ? '/dev/null' : `platform/${path}`;
+  const afterMissing = localText === null ? '/dev/null' : `local/${path}`;
   const header = [`--- ${beforeMissing}`, `+++ ${afterMissing}`];
-  if (platformText.includes('\0') || localText.includes('\0')) return [...header, `binary ${path} differs`];
-  const before = linesOf(platformText);
-  const after = linesOf(localText);
-  if (before.lines.join('\n') === after.lines.join('\n') && before.newline !== after.newline) {
+  if (beforeText.includes('\0') || afterText.includes('\0')) return [...header, `binary ${path} differs`];
+  const before = linesOf(beforeText);
+  const after = linesOf(afterText);
+  if (
+    platformText !== null &&
+    localText !== null &&
+    before.lines.join('\n') === after.lines.join('\n') &&
+    before.newline !== after.newline
+  ) {
     return [...header, 'newline at end of file differs'];
   }
   if (before.lines.length > MAX_DIFF_LINES || after.lines.length > MAX_DIFF_LINES) {

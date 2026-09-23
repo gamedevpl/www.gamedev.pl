@@ -12,7 +12,7 @@ import { submitGame, type SubmitResult } from './submit.js';
 import { runRemoteHelper, type PushResult } from './git-remote.js';
 import { materializePushCheckout } from './git-ref.js';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
-import { localGameFiles, writeBase } from './checkout.js';
+import { localGameFiles, trackedTree, writeBase } from './checkout.js';
 import { formatIgnoredNotice } from './working-copy.js';
 
 function slugFromUrl(url: string): string {
@@ -38,7 +38,7 @@ function readSlugFile(cwd: string): string | null {
 }
 
 function adoptCheckoutBase(cwd: string, slug: string, dest: string, result: SubmitResult): void {
-  if (result.kind === 'delivered') writeBase(cwd, result.version, result.files);
+  if (result.kind === 'delivered') writeBase(cwd, result.version, trackedTree(cwd, slug, result.files));
   else writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
 }
 

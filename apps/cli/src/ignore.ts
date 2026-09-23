@@ -108,7 +108,7 @@ function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null
 function parseIgnore(text: string, source: Rule['source']): Rule[] {
   const rules: Rule[] = [];
   for (const rawLine of text.split(/\r?\n/u)) {
-    const trimmed = trimTrailingSpaces(rawLine).trimStart();
+    const trimmed = trimTrailingSpaces(rawLine);
     if (!trimmed || trimmed.startsWith('#')) continue;
     let line = trimmed;
     let negation = false;
