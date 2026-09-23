@@ -41,6 +41,61 @@ function trimTrailingSpaces(line: string): string {
   return line.slice(0, end);
 }
 
+const POSIX_CLASSES: Record<string, string> = {
+  '[:alnum:]': '0-9A-Za-z',
+  '[:alpha:]': 'A-Za-z',
+  '[:blank:]': ' \\t',
+  '[:cntrl:]': '\\x00-\\x1f\\x7f',
+  '[:digit:]': '0-9',
+  '[:graph:]': '\\x21-\\x7e',
+  '[:lower:]': 'a-z',
+  '[:print:]': '\\x20-\\x7e',
+  '[:punct:]': '\\x21-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\x7e',
+  '[:space:]': '\\s',
+  '[:upper:]': 'A-Z',
+  '[:xdigit:]': '0-9A-Fa-f',
+};
+
+function findClassEnd(pattern: string, start: number): number {
+  let p = start + 1;
+  if (p < pattern.length && (pattern[p] === '!' || pattern[p] === '^')) p += 1;
+  if (p < pattern.length && pattern[p] === ']') p += 1;
+  while (p < pattern.length) {
+    if (pattern.startsWith('[:', p)) {
+      const classEnd = pattern.indexOf(':]', p + 2);
+      if (classEnd !== -1) {
+        p = classEnd + 2;
+        continue;
+      }
+    }
+    if (pattern[p] === '\\' && p + 1 < pattern.length) {
+      p += 2;
+      continue;
+    }
+    if (pattern[p] === ']') return p;
+    p += 1;
+  }
+  return -1;
+}
+
+function compileClass(cls: string): string | null {
+  if (!cls) return null;
+  const isNeg = cls.startsWith('!') || cls.startsWith('^');
+  let rest = isNeg ? cls.slice(1) : cls;
+  if (!rest || rest.includes('/')) return null;
+  let hasUnknownClass = false;
+  rest = rest.replace(/\[:[a-z]+:\]/gu, (token) => {
+    const mapped = POSIX_CLASSES[token];
+    if (!mapped) hasUnknownClass = true;
+    return mapped ?? token;
+  });
+  if (hasUnknownClass) return null;
+  if (rest.startsWith(']')) rest = `\\]${rest.slice(1)}`;
+  if (rest.startsWith('-')) rest = `\\-${rest.slice(1)}`;
+  const prefix = isNeg ? '^/' : '';
+  return `[${prefix}${rest}]`;
+}
+
 function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null {
   let pattern = raw;
   let dirOnly = false;
@@ -87,15 +142,14 @@ function compilePattern(raw: string): { dirOnly: boolean; regex: RegExp } | null
       continue;
     }
     if (char === '[') {
-      const end = pattern.indexOf(']', i + 1);
-      const cls = end > i + 1 ? pattern.slice(i + 1, end) : '';
-      if (cls && /^[!^]?[\w.-]+$/u.test(cls)) {
-        const isNeg = cls.startsWith('!') || cls.startsWith('^');
-        const neg = isNeg ? '^' : '';
-        const rest = isNeg ? cls.slice(1) : cls;
-        body += `[${neg}${rest}]`;
-        i = end + 1;
-        continue;
+      const end = findClassEnd(pattern, i);
+      if (end !== -1) {
+        const cls = compileClass(pattern.slice(i + 1, end));
+        if (cls) {
+          body += cls;
+          i = end + 1;
+          continue;
+        }
       }
     }
     body += escapeRegex(char);

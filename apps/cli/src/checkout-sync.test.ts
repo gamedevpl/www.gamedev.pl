@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   classify,
+  formatSyncLines,
   hashesOf,
   pathInside,
   readBase,
@@ -188,5 +189,39 @@ describe('what a refused sync tells you to do next', () => {
   it('still explains the fallback case instead of naming a state', () => {
     const refused = syncRefuse(refusal('clean'), 'pull');
     expect(refused.message).toContain('gamedevpl diff');
+  });
+
+  it('strips terminal controls from paths in sync lines', () => {
+    const esc = '\u001b';
+    const lines = formatSyncLines({
+      kind: 'conflict',
+      version: 'v1',
+      local: [`${esc}[2Jlocal.ts`],
+      platform: [`${esc}]0;evil\u0007plat.ts`],
+      conflict: [`${esc}[31mconf.ts`],
+    });
+    const joined = lines.join('\n');
+    expect(joined).toContain('local-only: local.ts');
+    expect(joined).toContain('platform-only: plat.ts');
+    expect(joined).toContain('conflict: conf.ts');
+    expect(joined).not.toContain(esc);
+    expect(joined).not.toContain('\u0007');
+  });
+
+  it('strips terminal controls from paths in refusal messages', () => {
+    const esc = '\u001b';
+    const refused = syncRefuse(
+      {
+        kind: 'conflict',
+        version: 'v1',
+        local: [`${esc}[2Jlocal.ts`],
+        platform: [],
+        conflict: [`${esc}[31mconf.ts`],
+      },
+      'pull',
+    );
+    expect(refused.message).toContain('conflict on conf.ts');
+    expect(refused.message).toContain('discards local.ts as well');
+    expect(refused.message).not.toContain(esc);
   });
 });

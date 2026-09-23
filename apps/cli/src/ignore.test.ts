@@ -90,6 +90,18 @@ describe('ignore matcher', () => {
     expect(match.ignored('1.txt', false)).toBeNull();
   });
 
+  it('honors POSIX character classes in ignore rules', () => {
+    const dir = root();
+    writeFileSync(join(dir, '.gitignore'), '[[:digit:]]*.ts\n[^[:digit:]]*.js\n[[:upper:]]*.txt\n');
+    const match = createIgnoreMatcher(dir);
+    expect(match.ignored('1-secret.ts', false)?.pattern).toBe('[[:digit:]]*.ts');
+    expect(match.ignored('game.ts', false)).toBeNull();
+    expect(match.ignored('game.js', false)?.pattern).toBe('[^[:digit:]]*.js');
+    expect(match.ignored('2-game.js', false)).toBeNull();
+    expect(match.ignored('README.txt', false)?.pattern).toBe('[[:upper:]]*.txt');
+    expect(match.ignored('readme.txt', false)).toBeNull();
+  });
+
   it('keeps earlier rules when one character class is not a JavaScript regexp', () => {
     const dir = root();
     writeFileSync(join(dir, '.gitignore'), '*.secret\n[z-a]\n');
