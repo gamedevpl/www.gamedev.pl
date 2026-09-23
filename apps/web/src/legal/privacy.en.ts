@@ -196,6 +196,10 @@ export const privacyEn: LegalDocument = {
             'Your game description goes through automated moderation (a Google Gemini model, or an OpenAI model when ' +
               'Gemini is unavailable), which may reject it.',
             'It is then refined by an AI model, which may ask you clarifying questions.',
+            'When a clarifying question is about how your game should look, an OpenAI image model may draw an ' +
+              'illustration for each answer, from your description and the answer options. A Google Gemini model ' +
+              'checks each illustration before you see it. We do not store the illustrations; they are not part ' +
+              'of your submission and never reach the coding agent.',
             'An accepted description is handed as a task to a coding agent (GitHub Copilot), which writes the game’s ' +
               'code in our private repository. The games repository is not public — submitting a description does ' +
               'not by itself make it publicly visible.',
@@ -289,7 +293,8 @@ export const privacyEn: LegalDocument = {
             ['Google (Sign in with Google)', 'Authentication', 'USA — Data Privacy Framework'],
             [
               'Google Cloud Vertex AI (Gemini)',
-              'Moderating and refining your game description; suggesting code completions in the Code editor',
+              'Moderating and refining your game description; checking illustrations of clarifying-question ' +
+                'answers for safety; suggesting code completions in the Code editor',
               'USA / global — Standard Contractual Clauses',
             ],
             [
@@ -304,8 +309,9 @@ export const privacyEn: LegalDocument = {
             ],
             [
               'OpenAI',
-              'Generating a starting draft of your game; writing your game as the coding agent when that model is ' +
-                'selected; standing in for the Gemini classifier when it is unavailable, so moderation never ' +
+              'Generating a starting draft of your game; drawing illustrations for the answers to a clarifying ' +
+                'question about how your game should look; writing your game as the coding agent when that model ' +
+                'is selected; standing in for the Gemini classifier when it is unavailable, so moderation never ' +
                 'simply stops',
               'USA — Standard Contractual Clauses',
             ],

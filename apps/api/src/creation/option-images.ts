@@ -26,9 +26,9 @@ export interface OptionImageGenerator {
   generate(params: OptionImageParams): Promise<OptionImage[]>;
 }
 
-export const DEFAULT_OPTION_IMAGE_BASE_URL = 'https://api.meta.ai/v1';
+export const DEFAULT_OPTION_IMAGE_BASE_URL = 'https://api.openai.com/v1';
 
-// Median 12.3s, worst measured call 24.8s.
+// OpenAI flare measured 16-19s per tile.
 export const DEFAULT_OPTION_IMAGE_TIMEOUT_MS = 30_000;
 
 // 480px measured at 68-83KB for three tiles.
@@ -37,7 +37,7 @@ export const OPTION_IMAGE_WIDTH = 480;
 // A survey with more tiles stops being scannable.
 export const MAX_OPTION_IMAGES = 4;
 
-export interface MuseOptionImageGeneratorOptions {
+export interface ImagesApiOptionImageGeneratorOptions {
   apiKey: string;
   model: string;
   // Required, not optional: an unchecked tile must be unconstructable.
@@ -72,10 +72,10 @@ ${IP_RULE}
 
 Composition: fill the entire frame edge to edge. No border, no frame, no matting, no drop shadow around the image, no letterboxing bars — this is the screen itself, not a picture hanging on a wall.
 
-On-screen text: a game HUD belongs here. Score, timer, lives, combo counters and short labels are part of what the creator is judging, so draw them where the game would. Write every one of them in the same language as this text: "${option.label}". Keep them short and correctly spelled. Never print the option name as a caption, and never draw any part of these instructions as an interface element.`;
+On-screen text: a game HUD belongs here. Score, timer, lives, combo counters and short labels are part of what the creator is judging, so draw them where the game would. Write every one of them in the same language as this question: "${params.question}". Keep them short and correctly spelled. Never print the option name as a caption, and never draw any part of these instructions as an interface element.`;
 }
 
-interface MuseImageResponse {
+interface ImagesApiResponse {
   data?: Array<{ b64_json?: string }>;
 }
 
@@ -87,12 +87,12 @@ async function toScaledWebp(bytes: Buffer): Promise<Buffer | null> {
   return encodeWebp(scaled ?? decoded);
 }
 
-export class MuseOptionImageGenerator implements OptionImageGenerator {
+export class ImagesApiOptionImageGenerator implements OptionImageGenerator {
   private readonly timeoutMs: number;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(private readonly options: MuseOptionImageGeneratorOptions) {
+  constructor(private readonly options: ImagesApiOptionImageGeneratorOptions) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_OPTION_IMAGE_TIMEOUT_MS;
     this.baseUrl = options.baseUrl ?? DEFAULT_OPTION_IMAGE_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -109,6 +109,12 @@ export class MuseOptionImageGenerator implements OptionImageGenerator {
         model: this.options.model,
         prompt: buildPrompt(params, option),
         n: 1,
+        // Low is indistinguishable at 480px and half the price of medium.
+        quality: 'low',
+        // The wizard crops to 4:3; a square loses the HUD.
+        size: '1024x768',
+        // The downscaler decodes WebP only; PNG would silently drop every tile.
+        output_format: 'webp',
       }),
       signal: AbortSignal.timeout(this.timeoutMs),
     });
@@ -117,7 +123,7 @@ export class MuseOptionImageGenerator implements OptionImageGenerator {
       throw new Error(`option image request failed: ${response.status}`);
     }
 
-    const body = (await response.json()) as MuseImageResponse;
+    const body = (await response.json()) as ImagesApiResponse;
     const b64 = body.data?.[0]?.b64_json;
     if (!b64) return null;
 
@@ -165,7 +171,7 @@ export function createOptionImageGeneratorFromEnv(env: OptionImageEnv = process.
 
   const baseUrl = env.OPTION_IMAGE_BASE_URL?.trim();
   const timeout = Number(env.OPTION_IMAGE_TIMEOUT_MS);
-  return new MuseOptionImageGenerator({
+  return new ImagesApiOptionImageGenerator({
     apiKey,
     model,
     safetyChecker: new VertexOptionImageSafetyChecker(),

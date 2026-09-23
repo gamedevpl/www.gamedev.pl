@@ -129,7 +129,7 @@
     "GITHUB_TOKEN": "github-token",
     "MANAGED_AGENT_API_KEY": "anthropic-api-key",
     "OPENAI_API_KEY": "openai-api-key",
-    "OPTION_IMAGE_API_KEY": "option-image-api-key",
+    "OPTION_IMAGE_API_KEY": "openai-api-key",
     "RESEND_API_KEY": "resend-api-key",
     "SEED_ANTHROPIC_API_KEY": "anthropic-api-key",
     "SEED_META_API_KEY": "meta-api-key",

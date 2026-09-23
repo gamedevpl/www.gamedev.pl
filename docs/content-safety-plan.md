@@ -271,7 +271,7 @@ prompt reaching a metered vendor — and every pillar the audio decision rested 
   is no reviewed-bytes guarantee to fall back on.
 
 So an output verdict is required, and it is enforced structurally rather than by convention:
-`MuseOptionImageGenerator` takes an `OptionImageSafetyChecker` as a **required** constructor
+`ImagesApiOptionImageGenerator` takes an `OptionImageSafetyChecker` as a **required** constructor
 argument, so a generator that skips the check cannot be built. The check runs on the
 downscaled bytes the creator would actually see, and it **fails closed** — a refusal, a
 timeout, a malformed verdict or an outage all drop the tile. Because the wizard illustrates a

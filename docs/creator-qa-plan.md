@@ -105,7 +105,8 @@ outage. It never answers with an error, because the wizard's fallback for "no ti
 plain text options it already renders.
 
 Three bounds, because it is the most expensive thing CreatorQA can do — one request is up to
-four Muse generations plus four Vertex safety verdicts:
+four OpenAI generations (`gpt-image-2.5-flare`, low quality, 1024×768, about $0.006 each)
+plus four Vertex safety verdicts:
 
 - 30 requests/hour/IP, in-memory, as a first-order flood stop;
 - `optionImageGate` on the `creation-limits.ts` rail, which spends two counters in order —
