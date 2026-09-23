@@ -14,6 +14,8 @@ it('marks failures and reported agent blockers red', () => {
     'Sending failed.',
     'Agent rejected the request.',
     'codex ▸ Tool failed: shell — exit 2',
+    'Interactive Antigravity stopped without success. Edits remain local; /diff to inspect.',
+    'Muse stopped — files remain at /tmp/work',
     'sources accepted but the gate did not start — a preview is not assembling',
     'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
     'codex could not obtain tool permissions in headless mode. No successful edit is confirmed; review and retry.',
@@ -24,8 +26,10 @@ it('marks failures and reported agent blockers red', () => {
 it('flags uncertain outcomes as warnings, not failures', () => {
   expect(lineStyle('Delivery outcome unknown: agent acknowledgement timed out.').tone).toBe('yellow');
   expect(lineStyle('Kit update check timed out. Retry with /kit.').tone).toBe('yellow');
+  expect(lineStyle('Returned from Codex (0). This does not confirm delivery; check Studio.').tone).toBe('yellow');
   expect(lineStyle('codex ▸ the request timed out once').tone).toBe('magenta');
   expect(lineStyle('codex ▸ The test failed, so I tuned grip.').tone).toBe('magenta');
+  expect(lineStyle('Agent stopped.').tone).toBeUndefined();
   expect(lineStyle('Some tools were denied; this alone does not mean the task failed.').tone).not.toBe('red');
 });
 
