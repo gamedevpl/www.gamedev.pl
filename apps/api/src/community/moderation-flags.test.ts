@@ -354,7 +354,7 @@ describe('moderation flags', () => {
       ]);
     });
 
-    it('rejects moderated content without ever raising a flag', async () => {
+    it('accepts a note quoting the abuse, even when the content checker would reject it', async () => {
       const denyAll: ContentChecker = {
         async check() {
           return { allowed: false, category: 'hate' };
@@ -365,9 +365,9 @@ describe('moderation flags', () => {
       };
       const { app, store } = await makeApp({ published: ['sky-dodge'], contentChecker: denyAll });
       const res = await report(app, await cookie(app, 'alice'));
-      expect(res.statusCode).toBe(422);
-      expect(res.json()).toMatchObject({ error: 'content_rejected', category: 'hate' });
-      expect(await store.listModerationFlags()).toEqual([]);
+      expect(res.statusCode).toBe(200);
+      const [flag] = await store.listModerationFlags();
+      expect(flag).toMatchObject({ slug: 'sky-dodge', note: 'a slur is painted on the title screen' });
     });
 
     it('reports a store-published game absent from the repo catalog', async () => {

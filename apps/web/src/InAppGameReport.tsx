@@ -39,8 +39,6 @@ export function InAppGameReport({ slug }: { slug: string }) {
       const reportError = err as ReportGameError;
       if (reportError.status === 429) {
         setError(t('report.inApp.rateLimited'));
-      } else if (reportError.message === 'content_rejected') {
-        setError(t('errors.contentRejected.other'));
       } else {
         setError(t('report.inApp.error'));
       }

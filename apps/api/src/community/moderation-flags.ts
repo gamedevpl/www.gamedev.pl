@@ -2,8 +2,6 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { MODERATION_FLAG_ACTIONS, MODERATION_FLAG_REASONS, type ModerationFlagAction } from '@gamedevpl/contract';
 import { isAdminSession } from '../platform/admin-session.js';
-import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
-import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
 import type { Store } from '../platform/store.js';
@@ -12,7 +10,6 @@ import { isReviewerSession } from './review.js';
 
 export interface ModerationFlagRoutesOptions {
   store?: Store;
-  contentChecker: ContentChecker;
   // A queue nobody is told about waits to be found.
   notifyFlagRaised?: (event: { flagId: string; slug: string; reason: string }) => Promise<void>;
   reviewerUids?: Set<string>;
@@ -102,7 +99,7 @@ export async function registerModerationFlagRoutes(
   app: FastifyInstance,
   options: ModerationFlagRoutesOptions,
 ): Promise<void> {
-  const { store, contentChecker, now, invalidatePublishedGameCaches, isSlugPublished, notifyFlagRaised } = options;
+  const { store, now, invalidatePublishedGameCaches, isSlugPublished, notifyFlagRaised } = options;
   const reviewerUids = options.reviewerUids ?? new Set<string>();
   const adminUids = options.adminUids ?? new Set<string>();
 
@@ -172,20 +169,7 @@ export async function registerModerationFlagRoutes(
       const sanitized = sanitizeCreatorText(body.data.note, { singleLine: false }).slice(0, MAX_PLAYER_NOTE);
       if (!sanitized) return reply.status(400).send({ error: 'note is required' });
 
-      const fieldsToModerate =
-        sanitized === body.data.note ? [body.data.note] : [body.data.note, sanitized];
-      const moderation = await contentChecker.checkFields(fieldsToModerate);
-      if (!moderation.allowed) {
-        logModerationRejection(request.log, {
-          surface: 'game_report',
-          uid: request.user.uid,
-          category: moderation.category,
-          unavailable: moderation.unavailable,
-        });
-        const rejection = rejectionFor(moderation);
-        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
-      }
-
+      // Not content-moderated: quoting the abuse is the evidence operators need.
       const prior = await store.getModerationFlag(moderationFlagId(params.data.slug, request.user.uid));
       const flag = await store.raiseModerationFlag({
         slug: params.data.slug,
