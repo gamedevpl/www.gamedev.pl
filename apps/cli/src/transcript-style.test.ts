@@ -14,6 +14,7 @@ it('marks failures and reported agent blockers red', () => {
     'Sending failed.',
     'Agent rejected the request.',
     'codex ▸ Tool failed: shell — exit 2',
+    'sources accepted but the gate did not start — a preview is not assembling',
     'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
     'codex could not obtain tool permissions in headless mode. No successful edit is confirmed; review and retry.',
   ])

@@ -1,8 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { lineStyle, type LineStyle } from '../src/transcript-style.js';
 import { isMascotLine } from '../src/tui/mascot.js';
 
 const TOKEN = /(`[^`\n]+`|https?:\/\/[^\s<>"'`]+|\/[a-z][\w-]*\b)/g;
+
+// Drop sentence punctuation and unbalanced closing brackets from a prose URL.
+export function trimUrl(url: string): string {
+  for (;;) {
+    const last = url.at(-1)!;
+    const pair = { ')': '(', ']': '[' }[last];
+    const unbalanced = pair && url.split(pair).length <= url.split(last).length - 1;
+    if (!/[.,;:!?'"]/.test(last) && !unbalanced) return url;
+    url = url.slice(0, -1);
+  }
+}
 
 export function RichText({ text }: { text: string }) {
   return (
@@ -10,12 +21,17 @@ export function RichText({ text }: { text: string }) {
       {text.split(TOKEN).map((part, index) => {
         if (index % 2 === 0) return part;
         if (part.startsWith('`')) return <code key={index}>{part.slice(1, -1)}</code>;
-        if (/^https?:\/\//.test(part))
+        if (/^https?:\/\//.test(part)) {
+          const url = trimUrl(part);
           return (
-            <a key={index} href={part} target="_blank" rel="noopener noreferrer">
-              {part}
-            </a>
+            <Fragment key={index}>
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                {url}
+              </a>
+              {part.slice(url.length)}
+            </Fragment>
           );
+        }
         return (
           <span key={index} className="tl-command">
             {part}

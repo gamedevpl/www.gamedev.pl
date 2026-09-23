@@ -12,6 +12,7 @@ const FAILURE = new RegExp(
     '^Agent (?:blocked|rejected)',
     '(?:completion|successful edit) is not confirmed',
     'could not obtain tool permissions',
+    'gate did not start',
     '^error:',
     '^Delivery.*blocked',
     '^this game is mid-round',
