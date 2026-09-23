@@ -37,3 +37,17 @@ it('opens command failures reported through formatError', () => {
   ]);
   expect(top.style.tone).toBe('red');
 });
+
+it('ships no regex lookbehind to the browser (Safari 16.0–16.3 cannot parse it)', async () => {
+  const { PLAY_CLIENT } = await import('../src/generated/play-ui.js');
+  const { SESSION_BROWSER_SCRIPT } = await import('../src/session-browser-script.js');
+  expect(PLAY_CLIENT + SESSION_BROWSER_SCRIPT).not.toMatch(/\(\?<[!=]/);
+});
+
+it('does not highlight path segments as slash commands', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { createElement } = await import('react');
+  const { RichText } = await import('./transcript-view.js');
+  const html = renderToStaticMarkup(createElement(RichText, { text: 'mime image/png, run /diff' }));
+  expect(html).toBe('mime image/png, run <span class="tl-command">/diff</span>');
+});

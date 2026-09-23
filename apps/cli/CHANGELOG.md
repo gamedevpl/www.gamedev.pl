@@ -14,6 +14,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Codex receives staged screenshots as images rather than only as file paths (#1465).
 - Paths such as `image/png` are no longer highlighted as slash commands (#1465).
 - Starting Play says that the session runs in the background and how to end it (#1465).
+- Play loads again in Safari 16.0–16.3, which could not parse the 0.20.0 transcript colouring (#1465).
 
 ## 0.20.0 — 2026-09-23
 

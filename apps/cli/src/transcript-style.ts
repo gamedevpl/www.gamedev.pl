@@ -7,7 +7,7 @@ export type LineStyle = { label: string; tone?: LineTone; quiet?: boolean; space
 const FIRST_CLAUSE = '^[^.;:—]{0,80}?';
 const FAILURE = new RegExp(
   [
-    FIRST_CLAUSE + "\\b(?:cannot|can't|could not|couldn't|unable to|(?<!\\b0 )failed|refused|rejected)\\b",
+    FIRST_CLAUSE + "\\b(?:cannot|can't|could not|couldn't|unable to|failed|refused|rejected)\\b",
     '^Validation needs changes',
     '^Verification (?:failed|stopped)',
     '^(?:[\\w-]+ ){1,3}stopped(?: \\(exit|:| before| without success| —)',
@@ -44,7 +44,9 @@ export function lineStyle(line: string): LineStyle {
   if (/^(?:✓|✔|\* static)|^static ladder green|^delivery accepted/.test(line))
     return { label: 'PASS', tone: 'green', space: true };
   const agent = agentTranscriptLine(line);
-  if (agent ? /^Tool failed\b/.test(agent.text) : FAILURE.test(line)) return { label: '!', tone: 'red' };
+  // `0 failed` is a pass; lookbehind breaks Safari 16.0–16.3.
+  const failure = agent ? /^Tool failed\b/.test(agent.text) : FAILURE.test(line.replace(/\b0 failed\b/gi, '0 ok'));
+  if (failure) return { label: '!', tone: 'red' };
   if (NOTICE.test(line)) return { label: '!', tone: 'yellow' };
   if (/^verifying|^preparing|^Preparing|^installing/.test(line)) return { label: 'CHECK', tone: 'yellow', space: true };
   if (/^[\w-]+ · (?:Running|Tool:|\+\d+ more)/.test(line) || agent?.tool)
