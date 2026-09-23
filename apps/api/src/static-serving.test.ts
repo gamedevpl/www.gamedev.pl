@@ -19,14 +19,23 @@ describe('static web serving', () => {
   const indexHtml = '<!doctype html><html><body>gamedev.pl shell</body></html>';
   const assetJs = 'console.log("hashed bundle");'.repeat(10);
 
+  const aasa = JSON.stringify({ applinks: { apps: [], details: [{ appID: 'TEAMID.pl.gamedev.app', paths: ['/join/*'] }] } });
+  const assetlinks = JSON.stringify([
+    { relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app' } },
+  ]);
+
   beforeAll(async () => {
     distDir = mkdtempSync(path.join(tmpdir(), 'webdist-'));
     mkdirSync(path.join(distDir, 'assets'));
+    mkdirSync(path.join(distDir, '.well-known'));
     writeFileSync(path.join(distDir, 'index.html'), indexHtml);
     writeFileSync(path.join(distDir, 'assets', 'index-AbCd1234.js'), assetJs);
     // Precompressed siblings, as apps/web/scripts/precompress.mjs produces.
     writeFileSync(path.join(distDir, 'assets', 'index-AbCd1234.js.br'), brotliCompressSync(assetJs));
     writeFileSync(path.join(distDir, 'assets', 'index-AbCd1234.js.gz'), gzipSync(assetJs));
+    // As apps/web/scripts/generate-app-links.mjs produces.
+    writeFileSync(path.join(distDir, '.well-known', 'apple-app-site-association'), aasa);
+    writeFileSync(path.join(distDir, '.well-known', 'assetlinks.json'), assetlinks);
 
     process.env.WEB_DIST_DIR = distDir;
     app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
@@ -91,5 +100,19 @@ describe('static web serving', () => {
     const res = await app.inject({ method: 'GET', url: '/assets/missing-AbCd.js' });
     expect(res.statusCode).toBe(404);
     expect(res.body).not.toContain('gamedev.pl shell');
+  });
+
+  it('serves the iOS universal-link file with no extension as application/json', async () => {
+    const res = await app.inject({ method: 'GET', url: '/.well-known/apple-app-site-association' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('application/json');
+    expect(res.json()).toMatchObject({ applinks: { details: [{ appID: 'TEAMID.pl.gamedev.app' }] } });
+  });
+
+  it('serves the Android app-links file as JSON', async () => {
+    const res = await app.inject({ method: 'GET', url: '/.well-known/assetlinks.json' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.json()).toMatchObject([{ target: { namespace: 'android_app' } }]);
   });
 });

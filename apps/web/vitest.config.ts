@@ -7,7 +7,7 @@ export default defineConfig({
     // every JSX-authored test in the tree — CreatorQA and HeroPromptSection had test
     // files that never once ran. Files needing a DOM opt in per file with
     // `// @vitest-environment jsdom`.
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.mjs'],
     // Headroom for CPU contention; these assert behaviour, never latency.
     testTimeout: 20_000,
     hookTimeout: 20_000,

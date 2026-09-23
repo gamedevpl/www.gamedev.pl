@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "PLACEHOLDERTEAMID.pl.gamedev.app.placeholder",
+        "paths": [
+          "/join/*",
+          "/status/*",
+          "/studio/*"
+        ]
+      }
+    ]
+  }
+}

@@ -9,6 +9,14 @@ substitutions:
   # Must match the MP_RELAY_URL passed to the *service* env. The bundle needs it too: the
   # socket URL is inlined at build time, not read from the server.
   _MP_RELAY_URL: ''
+  # Native app identity for the universal-link / app-link association files. Empty
+  # until the app ships; see apps/web/scripts/generate-app-links.mjs.
+  # _ANDROID_SHA256_CERT_FINGERPRINTS is comma-joined, so infra/deploy-api.sh passes
+  # substitutions with an alternate delimiter to keep that value intact.
+  _IOS_TEAM_ID: ''
+  _IOS_BUNDLE_ID: ''
+  _ANDROID_PACKAGE_NAME: ''
+  _ANDROID_SHA256_CERT_FINGERPRINTS: ''
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
@@ -21,6 +29,14 @@ steps:
       - 'VITE_APPLE_SERVICES_ID=${_APPLE_SERVICES_ID}'
       - '--build-arg'
       - 'VITE_MP_RELAY_URL=${_MP_RELAY_URL}'
+      - '--build-arg'
+      - 'IOS_TEAM_ID=${_IOS_TEAM_ID}'
+      - '--build-arg'
+      - 'IOS_BUNDLE_ID=${_IOS_BUNDLE_ID}'
+      - '--build-arg'
+      - 'ANDROID_PACKAGE_NAME=${_ANDROID_PACKAGE_NAME}'
+      - '--build-arg'
+      - 'ANDROID_SHA256_CERT_FINGERPRINTS=${_ANDROID_SHA256_CERT_FINGERPRINTS}'
       - '-t'
       - '${_IMAGE}'
       - '.'

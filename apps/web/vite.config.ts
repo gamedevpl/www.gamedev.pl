@@ -50,6 +50,14 @@ function spaProper404(): Plugin {
   };
 }
 
+/** The web package owns these two files; other well-known paths are the API's. */
+const PUBLIC_APP_LINKS = new Set(['/.well-known/apple-app-site-association', '/.well-known/assetlinks.json']);
+
+function servePublicAppLinks(req: IncomingMessage): string | undefined {
+  const pathname = pathnameOf(req);
+  return PUBLIC_APP_LINKS.has(pathname) ? pathname : undefined;
+}
+
 function pathnameOf(req: IncomingMessage): string {
   return (req.url ?? '/').split('?')[0] ?? '/';
 }
@@ -128,7 +136,7 @@ export default defineConfig({
       ['/api', '/oauth', '/device', '/cli', '/install.sh', '/install.ps1', '/.well-known'].map((p) => [
         p,
         // Preserve the browser's target origin for the API's session CSRF check.
-        { target: apiTarget, changeOrigin: false },
+        { target: apiTarget, changeOrigin: false, bypass: servePublicAppLinks },
       ]),
     ),
   },
