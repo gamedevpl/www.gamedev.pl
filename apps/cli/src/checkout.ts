@@ -128,9 +128,10 @@ function ignoredUntracked(
   rel: string,
   tracked: Set<string>,
   matcher = createIgnoreMatcher(dest),
+  isDirectory = false,
 ): boolean {
   if (rel.split('/').includes('.git')) return true;
-  const match = matcher.ignored(`games/${slug}/${rel}`, false);
+  const match = matcher.ignored(`games/${slug}/${rel}`, isDirectory);
   return match !== null && !coversTracked(rel, tracked);
 }
 
@@ -152,7 +153,6 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
       git.push(file.path);
       continue;
     }
-    if (!ignoredUntracked(dest, slug, file.path, tracked, matcher)) continue;
     let abs: string;
     try {
       abs = pathInside(root, file.path);
@@ -160,11 +160,13 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
       blocked.push(file.path);
       continue;
     }
-    if (!existsSync(abs)) {
+    const stat = existsSync(abs) ? lstatSync(abs) : null;
+    const directory = stat !== null && !stat.isSymbolicLink() && stat.isDirectory();
+    if (!ignoredUntracked(dest, slug, file.path, tracked, matcher, directory)) continue;
+    if (!stat) {
       absent.push(file.path);
       continue;
     }
-    const stat = lstatSync(abs);
     if (stat.isSymbolicLink() || !stat.isFile() || readFileSync(abs, 'utf8') !== file.content) blocked.push(file.path);
   }
   return {

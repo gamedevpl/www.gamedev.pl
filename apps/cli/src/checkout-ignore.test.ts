@@ -1,9 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { createApi } from './api.js';
 import { pullGame, readBase, writeBase, writeGameFiles } from './checkout.js';
+import { CliError } from './exit-codes.js';
 import { memoryStore } from './keychain.js';
 
 describe('pull and ignored platform files', () => {
@@ -34,5 +35,38 @@ describe('pull and ignored platform files', () => {
     expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('B');
     expect(existsSync(join(dest, 'games', 'ghost-roads', 'extra.log'))).toBe(false);
     expect(readBase(dest)?.files['extra.log']).toBeUndefined();
+  });
+
+  it('refuses to replace an ignored directory with a platform file', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-dir-'));
+    writeFileSync(join(dest, '.gitignore'), 'cache/\n');
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    mkdirSync(join(dest, 'games', 'ghost-roads', 'cache'));
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'cache', 'local.txt'), 'keep\n');
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).endsWith('/versions')
+              ? { versions: [{ version: 'v2', createdAt: '2026-09-13', sourceFiles: ['game.ts', 'cache'] }] }
+              : {
+                  version: 'v2',
+                  files: [
+                    { path: 'game.ts', content: 'B' },
+                    { path: 'cache', content: 'platform\n' },
+                  ],
+                },
+          ),
+          { status: 200 },
+        ),
+    });
+    const caught = await pullGame({ api, slug: 'ghost-roads', dest }).catch((error: unknown) => error);
+    expect(caught).toBeInstanceOf(CliError);
+    expect((caught as CliError).message).toContain('cache');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('A');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'cache', 'local.txt'), 'utf8')).toBe('keep\n');
   });
 });

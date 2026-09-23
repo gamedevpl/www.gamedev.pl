@@ -58,6 +58,30 @@ describe('materializePushCheckout', () => {
     expect(existsSync(join(dest, '.git'))).toBe(false);
   });
 
+  it('takes root ignore files from the pushed ref', () => {
+    const repo = dirtyRepo();
+    writeFileSync(join(repo, '.gitignore'), '*.committed\n');
+    writeFileSync(join(repo, '.gamedevplignore'), '*.also\n');
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'ignore']);
+    writeFileSync(join(repo, '.gitignore'), '*.working\n');
+    writeFileSync(join(repo, '.gamedevplignore'), '*.dirty\n');
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(readFileSync(join(dest, '.gitignore'), 'utf8')).toBe('*.committed\n');
+    expect(readFileSync(join(dest, '.gamedevplignore'), 'utf8')).toBe('*.also\n');
+    expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('*.working\n');
+  });
+
+  it('drops a working-tree ignore file the pushed ref does not have', () => {
+    const repo = dirtyRepo();
+    writeFileSync(join(repo, '.gitignore'), '*.working\n');
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(existsSync(join(dest, '.gitignore'))).toBe(false);
+    expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('*.working\n');
+  });
+
   it('refuses a missing games tree on the source ref', () => {
     const repo = mkdtempSync(join(tmpdir(), 'gdpl-empty-'));
     git(repo, ['init']);

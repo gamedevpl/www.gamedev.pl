@@ -95,6 +95,12 @@ describe('ignore matcher', () => {
     expect(match.ignored('short.secret', false)).toBeNull();
   });
 
+  it('refuses an ignore file larger than 256 KiB', () => {
+    const dir = root();
+    writeFileSync(join(dir, '.gitignore'), Buffer.alloc(256 * 1024 + 1, 35));
+    expect(() => createIgnoreMatcher(dir).ignored('token.secret', false)).toThrow(/\.gitignore is larger than 256 KiB/);
+  });
+
   it('does not follow a symlinked ignore file', () => {
     const dir = root();
     const outside = root();

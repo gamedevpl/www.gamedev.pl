@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
+import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
 export type IgnoreSource = 'git' | 'gitignore' | 'gamedevplignore';
 
@@ -132,9 +133,16 @@ function readIgnoreFile(path: string, source: Rule['source']): Rule[] {
   if (!existsSync(path)) return [];
   try {
     const stat = lstatSync(path);
-    if (!stat.isFile() || stat.size > MAX_IGNORE_BYTES) return [];
+    if (stat.isSymbolicLink() || !stat.isFile()) return [];
+    if (stat.size > MAX_IGNORE_BYTES) {
+      throw new CliError(
+        `${basename(path)} is larger than 256 KiB. Shrink it before status, diff, pull, or push.`,
+        EXIT_REFUSED,
+      );
+    }
     return parseIgnore(readFileSync(path, 'utf8'), source);
-  } catch {
+  } catch (error) {
+    if (error instanceof CliError) throw error;
     return [];
   }
 }
