@@ -36,8 +36,11 @@ describe('isBlockedAddress', () => {
     ['169.254.169.254', 4],
     ['172.16.0.1', 4],
     ['192.0.0.1', 4],
+    ['192.0.2.1', 4],
     ['192.168.0.1', 4],
     ['198.18.0.1', 4],
+    ['198.51.100.1', 4],
+    ['203.0.113.1', 4],
     ['224.0.0.1', 4],
     ['240.0.0.1', 4],
     ['::', 6],
@@ -46,6 +49,10 @@ describe('isBlockedAddress', () => {
     ['fe80::1', 6],
     ['ff00::1', 6],
     ['64:ff9b::1', 6],
+    ['64:ff9b:1::1', 6],
+    ['2001::1', 6],
+    ['2001:db8::1', 6],
+    ['2002::1', 6],
     ['::ffff:127.0.0.1', 6],
     ['::ffff:169.254.169.254', 6],
     ['::ffff:7f00:1', 6],
@@ -164,5 +171,41 @@ describe('CIMD response limits', () => {
 
   it('parses a small JSON document', async () => {
     expect(await localFetcher()('https://example.com/ok')).toEqual({ ok: true, body: { client_id: 'ok' } });
+  });
+
+  it('parses JSON through Node’s all-address lookup', async () => {
+    let sawAll = false;
+    const fetcher = createCimdFetcher({
+      lookup: (_host, _options, callback) => callback(null, [{ address: '8.8.8.8', family: 4 }]),
+      requestFn: ((url: URL, options: Parameters<typeof httpsRequest>[1], callback: Parameters<typeof httpsRequest>[2]) =>
+        httpsRequest(
+          new URL(`https://client.example:${port}${url.pathname}`),
+          {
+            ...options,
+            autoSelectFamily: true,
+            servername: 'localhost',
+            lookup(host, lookupOptions, nodeCallback) {
+              sawAll = lookupOptions.all === true;
+              const securedLookup = options.lookup;
+              if (!securedLookup) throw new Error('Missing CIMD lookup');
+              securedLookup(host, lookupOptions, (error, addresses, family) => {
+                if (error || !Array.isArray(addresses)) {
+                  nodeCallback(error, addresses, family);
+                  return;
+                }
+                nodeCallback(
+                  null,
+                  addresses.map(() => ({ address: '127.0.0.1', family: 4 })),
+                );
+              });
+            },
+            ca: readFileSync(certPath),
+          },
+          callback,
+        )) as typeof httpsRequest,
+    });
+
+    expect(await fetcher('https://example.com/ok')).toEqual({ ok: true, body: { client_id: 'ok' } });
+    expect(sawAll).toBe(true);
   });
 });

@@ -32,8 +32,11 @@ for (const [address, prefix] of [
   ['169.254.0.0', 16],
   ['172.16.0.0', 12],
   ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
   ['192.168.0.0', 16],
   ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
   ['224.0.0.0', 4],
   ['240.0.0.0', 4],
 ] as const)
@@ -45,6 +48,10 @@ for (const [address, prefix] of [
   ['fe80::', 10],
   ['ff00::', 8],
   ['64:ff9b::', 96],
+  ['64:ff9b:1::', 48],
+  ['2001::', 32],
+  ['2001:db8::', 32],
+  ['2002::', 16],
 ] as const)
   blocked.addSubnet(address, prefix, 'ipv6');
 
@@ -114,7 +121,7 @@ export function createCimdFetcher(
         {
           headers: { accept: 'application/json', 'user-agent': 'gamedev.pl-oauth/1' },
           ca: options.ca,
-          lookup(host, _lookupOptions, callback) {
+          lookup(host, lookupOptions, callback) {
             lookup(host, { all: true }, (error, addresses) => {
               if (error || !addresses?.length) {
                 failure = 'dns_failed';
@@ -127,7 +134,8 @@ export function createCimdFetcher(
                 return;
               }
               const first = addresses[0]!;
-              callback(null, first.address, first.family);
+              if (lookupOptions.all) callback(null, addresses);
+              else callback(null, first.address, first.family);
             });
           },
         },
