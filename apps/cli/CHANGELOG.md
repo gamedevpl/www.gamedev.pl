@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.20.0 — 2026-09-23
+
 ### Added
 
 - Play's conversation and session output use the terminal's colours and labels (YOU, AGENT, CHECK, PASS, !), link URLs, and open failing output blocks automatically (#1455).
