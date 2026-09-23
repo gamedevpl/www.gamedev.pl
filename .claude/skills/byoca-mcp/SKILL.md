@@ -1115,6 +1115,11 @@ returns, verbatim. It carries `-H 'Content-Type: …'`. A PUT that declares no t
 one curl guessed from the extension) is now read as bytes rather than refused with a
 415 that left staging silently empty — but the one-liner remains the supported form.
 
+A batch `stage_upload_url({ paths })` mints every path it can and lists the rest in
+`rejected: [{ path, reason }]`. It used to refuse the whole batch over one bad path,
+so an agent re-minted all fifty to find it. A lone `path` still refuses outright, and
+a batch with nothing mintable refuses with the full `rejected` list.
+
 ## Refusals (`isError`) carry a code
 
 A refused call answers on the same tool with `structuredContent` `{ error, code?, retryAfterSeconds? }`
