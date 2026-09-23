@@ -1,5 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { BASE_FILE } from './checkout-sync.js';
@@ -67,13 +77,21 @@ function refHasBlob(repo: string, srcRef: string, path: string): boolean {
   return spawnSync('git', ['-C', repo, 'cat-file', '-e', `${srcRef}:${path}`]).status === 0;
 }
 
+function unlinkCopied(target: string): void {
+  try {
+    const stat = lstatSync(target);
+    if (stat.isSymbolicLink() || stat.isFile()) rmSync(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+}
+
 function materializeRootIgnore(repo: string, srcRef: string, dest: string): void {
   for (const name of ROOT_IGNORE) {
     const target = join(dest, name);
-    if (!refHasBlob(repo, srcRef, name)) {
-      if (existsSync(target)) rmSync(target);
-      continue;
-    }
+    unlinkCopied(target);
+    if (!refHasBlob(repo, srcRef, name)) continue;
     writeFileSync(target, spawnOrThrow('git', ['-C', repo, 'show', `${srcRef}:${name}`]));
   }
 }

@@ -143,7 +143,10 @@ function readIgnoreFile(path: string, source: Rule['source']): Rule[] {
     return parseIgnore(readFileSync(path, 'utf8'), source);
   } catch (error) {
     if (error instanceof CliError) throw error;
-    return [];
+    throw new CliError(
+      `could not read ${basename(path)}. Fix the file before status, diff, pull, or push.`,
+      EXIT_REFUSED,
+    );
   }
 }
 

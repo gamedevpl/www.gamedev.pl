@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -99,6 +99,18 @@ describe('ignore matcher', () => {
     const dir = root();
     writeFileSync(join(dir, '.gitignore'), Buffer.alloc(256 * 1024 + 1, 35));
     expect(() => createIgnoreMatcher(dir).ignored('token.secret', false)).toThrow(/\.gitignore is larger than 256 KiB/);
+  });
+
+  it('refuses when an ignore file cannot be read', () => {
+    const dir = root();
+    const file = join(dir, '.gitignore');
+    writeFileSync(file, '*.secret\n');
+    chmodSync(file, 0);
+    try {
+      expect(() => createIgnoreMatcher(dir).ignored('token.secret', false)).toThrow(/could not read \.gitignore/);
+    } finally {
+      chmodSync(file, 0o644);
+    }
   });
 
   it('does not follow a symlinked ignore file', () => {
