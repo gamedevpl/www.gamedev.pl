@@ -15,7 +15,8 @@ import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
-import { diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { diffGame, pullGame, readCheckoutSlug } from './checkout.js';
+import { formatDiffReport } from './working-copy.js';
 import { connectSession, checkoutSession } from './connect-flow.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { dispatchReadVerb } from './verbs.js';
@@ -196,9 +197,11 @@ export async function handleReplLine(input: {
         const dest = parsed.args[1] ?? cwd;
         if (cmd === 'pull') {
           const pulled = await pullGame({ api: input.api, slug, dest, force: parsed.flags.force === true });
-          input.write(`pulled ${slug} @ ${pulled.version}`);
+          const notices = pulled.notices.length ? `\n${pulled.notices.join('\n')}` : '';
+          input.write(`pulled ${slug} @ ${pulled.version}${notices}`);
         } else {
-          input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
+          const report = await diffGame({ api: input.api, slug, dest });
+          input.write(formatDiffReport(report).join('\n'));
         }
       } catch (error) {
         input.write(formatError(error));

@@ -10,7 +10,7 @@ export const BLURB: Record<SlashVerb, string> = {
   model: 'view or choose delegated model and effort — model [agent]',
   agents: 'detect local agents and show supported modes',
   games: 'list your games',
-  status: 'round status — status <token>',
+  status: 'round status — status <token>; in a checkout, the working copy',
   share: 'play URL — share <slug>',
   profile: 'signed-in profile',
   handle: 'get or set handle',
@@ -27,7 +27,7 @@ export const BLURB: Record<SlashVerb, string> = {
   submit: 'alias for push — deliver a preview from local files',
   push: 'send local changes as a preview after checks — push [dir] [--publish]',
   pull: 'update a checkout from the platform',
-  diff: 'three-way sync against the checkout base',
+  diff: 'patch local changes against the platform, skipping ignored files',
   update: 'install a newer CLI',
 };
 

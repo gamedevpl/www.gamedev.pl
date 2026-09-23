@@ -4,9 +4,12 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   checkoutGame,
+  classifyIncoming,
+  diffGame,
   fetchLatestTree,
   changedPaths,
   findCheckout,
+  ignoredGameFiles,
   inspectGame,
   localGameFiles,
   pullGame,
@@ -296,6 +299,164 @@ it('uses an empty synchronization base for a game without deliveries', async () 
     fetch: async () => Response.json({ versions: [] }),
   });
   await expect(fetchLatestTree(api, 'fresh')).resolves.toEqual({ version: 'undelivered', files: [] });
+});
+
+function versionsApi(files: Array<{ path: string; content: string }>, version = 'v2') {
+  return createApi({
+    origin: 'https://www.gamedev.pl',
+    store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+    fetch: async (url) =>
+      String(url).endsWith('/versions')
+        ? new Response(
+            JSON.stringify({
+              versions: [{ version, createdAt: '2026-09-13', sourceFiles: files.map((file) => file.path) }],
+            }),
+            {
+              status: 200,
+            },
+          )
+        : new Response(JSON.stringify({ version, files }), { status: 200 }),
+  });
+}
+
+describe('ignored working copy', () => {
+  it('skips gitignored and .git paths, and keeps a tracked file inside an ignored directory', () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-'));
+    writeFileSync(join(dest, '.gitignore'), 'node_modules/\n*.log\n');
+    writeFileSync(join(dest, '.gamedevplignore'), '*.draft\n');
+    mkdirSync(join(dest, 'games', 'ghost-roads', 'node_modules', 'pkg'), { recursive: true });
+    mkdirSync(join(dest, 'games', 'ghost-roads', '.git'));
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'keep\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'noise\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'notes.draft'), 'wip\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'node_modules', 'pkg', 'index.js'), 'skip\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'node_modules', 'keep.js'), 'tracked\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', '.git', 'config'), 'nope\n');
+    writeBase(dest, 'v1', [
+      { path: 'game.ts', content: 'keep\n' },
+      { path: 'node_modules/keep.js', content: 'tracked\n' },
+    ]);
+    expect(
+      localGameFiles(dest, 'ghost-roads')
+        .map((file) => file.path)
+        .sort(),
+    ).toEqual(['game.ts', 'node_modules/keep.js']);
+    expect(
+      ignoredGameFiles(dest, 'ghost-roads')
+        .map((hit) => `${hit.source}:${hit.path}`)
+        .sort(),
+    ).toEqual(['gamedevplignore:notes.draft', 'git:.git', 'gitignore:node_modules/pkg', 'gitignore:scratch.log']);
+  });
+
+  it('leaves an ignored scratch file in place and refuses to overwrite one that disagrees', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-pull-'));
+    writeFileSync(join(dest, '.gitignore'), '*.log\n');
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'mine\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'shared.log'), 'local\n');
+    const api = versionsApi([
+      { path: 'game.ts', content: 'A2' },
+      { path: 'shared.log', content: 'platform\n' },
+    ]);
+    const caught = await pullGame({ api, slug: 'ghost-roads', dest }).catch((error: unknown) => error);
+    expect(caught).toBeInstanceOf(CliError);
+    expect((caught as CliError).message).toContain('shared.log');
+    expect((caught as CliError).next).toContain('pull --force');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'utf8')).toBe('mine\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'shared.log'), 'utf8')).toBe('local\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('A');
+    const forced = await pullGame({ api, slug: 'ghost-roads', dest, force: true });
+    expect(forced.notices.join('\n')).toContain('shared.log');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'shared.log'), 'utf8')).toBe('platform\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'utf8')).toBe('mine\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('A2');
+  });
+
+  it('does not write a platform .git path and still updates the game', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-git-'));
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    mkdirSync(join(dest, 'games', 'ghost-roads', '.git'));
+    writeFileSync(join(dest, 'games', 'ghost-roads', '.git', 'config'), 'local\n');
+    const api = versionsApi([
+      { path: 'game.ts', content: 'B' },
+      { path: '.git/config', content: 'remote\n' },
+    ]);
+    const pulled = await pullGame({ api, slug: 'ghost-roads', dest });
+    expect(pulled.notices.join('\n')).toContain('.git is never written');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', '.git', 'config'), 'utf8')).toBe('local\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('B');
+    expect(readBase(dest)?.files['.git/config']).toBeUndefined();
+  });
+
+  it('says when checkout replaces an ignored file and never writes .git', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-co-'));
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).endsWith('/versions')) {
+          return new Response(
+            JSON.stringify({
+              versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts', 'scratch.log'] }],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            version: 'v1',
+            files: [
+              { path: 'game.ts', content: 'game\n' },
+              { path: 'scratch.log', content: 'platform\n' },
+              { path: '.git/config', content: 'remote\n' },
+            ],
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    const result = await checkoutGame({
+      api,
+      slug: 'ghost-roads',
+      dest,
+      fetchBuffer: async () => Buffer.from('archive'),
+      run: (cmd) => {
+        if (cmd !== 'tar') return;
+        mkdirSync(join(dest, 'games', 'ghost-roads'), { recursive: true });
+        writeFileSync(join(dest, '.gitignore'), '*.log\n');
+        writeFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'archive\n');
+        writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'old\n');
+      },
+    });
+    expect(result.notices.join('\n')).toContain('scratch.log');
+    expect(result.notices.join('\n')).toContain('.git is never written');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'utf8')).toBe('platform\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('game\n');
+    expect(existsSync(join(dest, 'games', 'ghost-roads', '.git', 'config'))).toBe(false);
+    expect(readBase(dest)?.files['.git/config']).toBeUndefined();
+  });
+
+  it('shows a patch from diff and names ignored files', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-diff-'));
+    writeFileSync(join(dest, '.gamedevplignore'), '*.draft\n');
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A\n' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A\n' }]);
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'B\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'notes.draft'), 'wip\n');
+    const report = await diffGame({
+      api: versionsApi([{ path: 'game.ts', content: 'A\n' }], 'v1'),
+      slug: 'ghost-roads',
+      dest,
+    });
+    expect(report.kind).toBe('local_only');
+    expect(report.patches.join('\n')).toContain('+B');
+    expect(report.ignored.map((hit) => hit.path)).toEqual(['notes.draft']);
+    expect(classifyIncoming(dest, 'ghost-roads', [{ path: 'notes.draft', content: 'other\n' }]).blocked).toEqual([
+      'notes.draft',
+    ]);
+  });
 });
 
 it('refuses a conflicting pull with advice that matches the refusal', async () => {

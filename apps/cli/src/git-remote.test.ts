@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   fastImportScript,
   formatPushStatus,
@@ -170,6 +170,7 @@ rl.on('close', () => process.exit(0));
       store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
       fetch: async () => new Response('{}', { status: 404 }),
     });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const result = await reconcilePush({
       api,
       slug: 'ghost-roads',
@@ -181,9 +182,12 @@ rl.on('close', () => process.exit(0));
         return {
           kind: 'nothing',
           sync: { kind: 'clean', version: 'v1', local: [], platform: [], conflict: [] },
+          ignored: [{ path: 'scratch.log', source: 'gitignore', pattern: '*.log', directory: false }],
         };
       },
     });
+    expect(String(stderr.mock.calls[0]?.[0])).toContain('scratch.log');
+    stderr.mockRestore();
     expect(result).toEqual({ ok: true });
     expect(seen).toEqual(['COMMITTED-B']);
     expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('UNCOMMITTED-C');
@@ -223,6 +227,7 @@ rl.on('close', () => process.exit(0));
         gateStarted: true,
         staged: ['game.ts'],
         files: [{ path: 'game.ts', content: readFileSync(join(isolated, 'games', 'ghost-roads', 'game.ts'), 'utf8') }],
+        ignored: [],
       }),
     });
     expect(result).toEqual({ ok: true });
@@ -245,6 +250,7 @@ rl.on('close', () => process.exit(0));
         return {
           kind: 'nothing',
           sync: { kind: 'local_only', version: 'v2', local: ['game.ts'], platform: [], conflict: [] },
+          ignored: [],
         };
       },
     });

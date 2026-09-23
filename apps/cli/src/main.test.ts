@@ -1,4 +1,5 @@
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { writeBase, writeGameFiles } from './checkout.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -100,6 +101,42 @@ describe('runCli verbs', () => {
     expect(isLaunchedEntry(dest, pathToFileURL(dest).href)).toBe(true);
     expect(isLaunchedEntry(dest, pathToFileURL('/tmp/vitest').href)).toBe(false);
     expect(isLaunchedEntry(undefined)).toBe(false);
+  });
+
+  it('prints working-copy status and a diff patch from inside a checkout', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-wc-'));
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A\n' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A\n' }]);
+    writeFileSync(join(dest, '.gamedev-slug'), 'ghost-roads');
+    writeFileSync(join(dest, '.gitignore'), '*.log\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'B\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'nope\n');
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(dest);
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.endsWith('/versions')) {
+        return new Response(
+          JSON.stringify({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ version: 'v1', files: [{ path: 'game.ts', content: 'A\n' }] }), {
+        status: 200,
+      });
+    });
+    try {
+      const status = io();
+      expect(await runCli(['node', 'gamedevpl', 'status'], { GAMEDEV_TOKEN: 'gdpl_pat_x' }, status)).toBe(EXIT_GREEN);
+      expect(status.read().out).toContain('local-only: game.ts');
+      expect(status.read().out).toContain('scratch.log');
+      expect(status.read().out).not.toContain('+B');
+      const diff = io();
+      expect(await runCli(['node', 'gamedevpl', 'diff'], { GAMEDEV_TOKEN: 'gdpl_pat_x' }, diff)).toBe(EXIT_GREEN);
+      expect(diff.read().out).toContain('+B');
+      expect(diff.read().out).toContain('not delivered: scratch.log');
+    } finally {
+      cwd.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('stops status --watch after a terminal published read', async () => {

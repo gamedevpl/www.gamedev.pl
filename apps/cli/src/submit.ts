@@ -12,15 +12,17 @@ import { prepareDeliverySession, type DeliverySession } from './submit-session.j
 import type { ApiClient } from './api.js';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { inspectGame, localGameFiles, writeBase, fetchLatestTree } from './checkout.js';
+import { inspectGame, ignoredGameFiles, localGameFiles, trackedTree, writeBase, fetchLatestTree } from './checkout.js';
 import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
+import type { IgnoredHit } from './ignore.js';
+import { formatIgnoredNotice } from './working-copy.js';
 import { CliError, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { assertLadderGreen, runLadder } from './verify.js';
 
 export type DeliverMode = 'preview' | 'publish';
 
 export type SubmitResult =
-  | { kind: 'nothing'; sync: SyncResult }
+  | { kind: 'nothing'; sync: SyncResult; ignored: IgnoredHit[] }
   | {
       kind: 'delivered';
       sync: SyncResult;
@@ -30,6 +32,7 @@ export type SubmitResult =
       buildId?: string;
       staged: string[];
       files: TreeFile[];
+      ignored: IgnoredHit[];
     };
 
 type StageReply = { accepted?: boolean; error?: string; message?: string };
@@ -117,14 +120,14 @@ async function submitGameUnlocked(input: {
   let recovered = isRecoveryReady(input.dest, input.slug);
   let first = await inspectGame(input);
   if (recovered && (await reconcileRecoveryDelivery(input.api, input.dest, input.slug, first.tree))) {
-    writeBase(input.dest, first.tree.version, first.tree.files);
+    writeBase(input.dest, first.tree.version, trackedTree(input.dest, input.slug, first.tree.files));
     clearRecoveryReady(input.dest);
     recovered = false;
     first = await inspectGame(input);
   }
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, first.tree.version);
   if (first.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
-    return { kind: 'nothing', sync: first.sync };
+    return { kind: 'nothing', sync: first.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
   }
   if (
     !input.force &&
@@ -145,7 +148,7 @@ async function submitGameUnlocked(input: {
     throw new CliError(`platform changed during verify — ${refused.message}`, EXIT_REFUSED, refused.next);
   }
   if (latest.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
-    return { kind: 'nothing', sync: latest.sync };
+    return { kind: 'nothing', sync: latest.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
     const refused = syncRefuse(latest.sync, 'submit');
@@ -235,7 +238,7 @@ async function submitGameUnlocked(input: {
   try {
     const tree = await fetchLatestTree(input.api, input.slug);
     mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
-    writeBase(input.dest, tree.version, tree.files);
+    writeBase(input.dest, tree.version, trackedTree(input.dest, input.slug, tree.files));
     files = tree.files;
   } catch {
     writeBase(input.dest, version, uploaded);
@@ -249,12 +252,15 @@ async function submitGameUnlocked(input: {
     ...(delivered.buildId ? { buildId: delivered.buildId } : {}),
     staged,
     files,
+    ignored: ignoredGameFiles(input.dest, input.slug),
   };
 }
 
 function mergeDeliveredFiles(dest: string, slug: string, snapshot: Record<string, string>, fetched: TreeFile[]): void {
   const root = join(dest, 'games', slug);
+  const keep = new Set(trackedTree(dest, slug, fetched).map((file) => file.path));
   for (const file of fetched) {
+    if (!keep.has(file.path) && !(file.path in snapshot)) continue;
     const abs = pathInside(root, file.path);
     const now = existsSync(abs) ? hashContent(readFileSync(abs, 'utf8')) : undefined;
     if (now !== snapshot[file.path]) continue;
@@ -286,8 +292,9 @@ function changedPathsForced(local: TreeFile[], remote: TreeFile[]): string[] {
 }
 
 export function formatSubmitLines(result: SubmitResult, slug: string): string[] {
+  const ignored = formatIgnoredNotice(result.ignored);
   if (result.kind === 'nothing') {
-    return [`nothing to deliver — working copy matches ${result.sync.version}`];
+    return [`nothing to deliver — working copy matches ${result.sync.version}`, ...ignored];
   }
   const lines = [
     `static ladder green`,
@@ -303,7 +310,7 @@ export function formatSubmitLines(result: SubmitResult, slug: string): string[] 
   } else {
     lines.push('sources accepted but the gate did not start — a preview is not assembling');
   }
-  return lines;
+  return [...lines, ...ignored];
 }
 
 export function submitGame(input: Parameters<typeof submitGameUnlocked>[0]): ReturnType<typeof submitGameUnlocked> {

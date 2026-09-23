@@ -57,7 +57,8 @@ export function readBase(dest: string): BaseRecord | null {
 }
 
 export function writeBase(dest: string, version: string, files: TreeFile[]): void {
-  const record: BaseRecord = { version, files: hashesOf(files) };
+  const tracked = files.filter((file) => !file.path.split('/').includes('.git'));
+  const record: BaseRecord = { version, files: hashesOf(tracked) };
   writeFileSync(join(dest, BASE_FILE), `${JSON.stringify(record, null, 2)}\n`);
 }
 

@@ -15,9 +15,17 @@ import {
   type SyncResult,
   type TreeFile,
 } from './checkout-sync.js';
+import { createIgnoreMatcher, type IgnoredHit } from './ignore.js';
+import { formatCheckoutIncoming, formatPatches, formatPullNotices, ignoredClashMessage } from './working-copy.js';
 
 export type { TreeFile, SyncResult } from './checkout-sync.js';
+export type { IgnoredHit } from './ignore.js';
 export { unreconciledMessage, formatSyncLines, syncRefuse, writeBase, readBase } from './checkout-sync.js';
+export { formatWorkingCopy } from './working-copy.js';
+
+export type DiffReport = SyncResult & { ignored: IgnoredHit[]; patches: string[]; incoming: IncomingIgnore };
+
+export type IncomingIgnore = { blocked: string[]; absent: string[]; git: string[] };
 
 export type VersionRow = {
   version: string;
@@ -48,29 +56,122 @@ function defaultRun(cmd: string, args: string[], cwd: string): void {
   if (result.status !== 0) throw new CliError(result.stderr || `${cmd} failed`, EXIT_REFUSED);
 }
 
-function walkFiles(root: string, rel = ''): TreeFile[] {
-  const dir = rel ? join(root, rel) : root;
-  if (!existsSync(dir)) return [];
-  const dirStat = lstatSync(dir);
-  if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) return [];
-  const out: TreeFile[] = [];
-  for (const entry of readdirSync(dir)) {
-    const nextRel = rel ? `${rel}/${entry}` : entry;
-    const abs = join(dir, entry);
-    const st = lstatSync(abs);
-    // Do not follow links — rmSync would escape.
-    if (st.isSymbolicLink()) {
-      out.push({ path: nextRel, content: '' });
-      continue;
-    }
-    if (st.isDirectory()) out.push(...walkFiles(root, nextRel));
-    else if (st.isFile()) out.push({ path: nextRel, content: readFileSync(abs, 'utf8') });
+function trackedPaths(dest: string): Set<string> {
+  const tracked = new Set<string>();
+  for (const path of Object.keys(readBase(dest)?.files ?? {})) {
+    if (!path.split('/').includes('.git')) tracked.add(path);
   }
-  return out;
+  return tracked;
+}
+
+function coversTracked(path: string, tracked: Set<string>): boolean {
+  if (tracked.has(path)) return true;
+  const prefix = `${path}/`;
+  for (const name of tracked) {
+    if (name.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: IgnoredHit[] } {
+  const root = join(dest, 'games', slug);
+  const files: TreeFile[] = [];
+  const ignored: IgnoredHit[] = [];
+  if (!existsSync(root)) return { files, ignored };
+  const rootStat = lstatSync(root);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return { files, ignored };
+  const matcher = createIgnoreMatcher(dest);
+  const tracked = trackedPaths(dest);
+  const prefix = `games/${slug}`;
+  const visit = (rel: string): void => {
+    const dir = rel ? join(root, rel) : root;
+    const dirStat = lstatSync(dir);
+    if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) return;
+    for (const entry of readdirSync(dir)) {
+      const nextRel = rel ? `${rel}/${entry}` : entry;
+      const abs = join(dir, entry);
+      const stat = lstatSync(abs);
+      const directory = !stat.isSymbolicLink() && stat.isDirectory();
+      // A link is recorded, never followed, so a later delete cannot escape.
+      if (nextRel.split('/').includes('.git')) {
+        ignored.push({ path: nextRel, source: 'git', pattern: '.git', directory: directory || entry === '.git' });
+        continue;
+      }
+      const match = matcher.ignored(`${prefix}/${nextRel}`, directory);
+      if (match && !coversTracked(nextRel, tracked)) {
+        ignored.push({ path: nextRel, source: match.source, pattern: match.pattern, directory });
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        files.push({ path: nextRel, content: '' });
+        continue;
+      }
+      if (directory) visit(nextRel);
+      else if (stat.isFile()) files.push({ path: nextRel, content: readFileSync(abs, 'utf8') });
+    }
+  };
+  visit('');
+  return { files, ignored };
 }
 
 export function localGameFiles(dest: string, slug: string): TreeFile[] {
-  return walkFiles(join(dest, 'games', slug));
+  return scanGame(dest, slug).files;
+}
+
+export function ignoredGameFiles(dest: string, slug: string): IgnoredHit[] {
+  return scanGame(dest, slug).ignored;
+}
+
+function ignoredUntracked(
+  dest: string,
+  slug: string,
+  rel: string,
+  tracked: Set<string>,
+  matcher = createIgnoreMatcher(dest),
+): boolean {
+  if (rel.split('/').includes('.git')) return true;
+  const match = matcher.ignored(`games/${slug}/${rel}`, false);
+  return match !== null && !coversTracked(rel, tracked);
+}
+
+export function trackedTree(dest: string, slug: string, files: TreeFile[]): TreeFile[] {
+  const tracked = trackedPaths(dest);
+  const matcher = createIgnoreMatcher(dest);
+  return files.filter((file) => !ignoredUntracked(dest, slug, file.path, tracked, matcher));
+}
+
+export function classifyIncoming(dest: string, slug: string, files: TreeFile[]): IncomingIgnore {
+  const tracked = trackedPaths(dest);
+  const matcher = createIgnoreMatcher(dest);
+  const blocked: string[] = [];
+  const absent: string[] = [];
+  const git: string[] = [];
+  const root = join(dest, 'games', slug);
+  for (const file of files) {
+    if (file.path.split('/').includes('.git')) {
+      git.push(file.path);
+      continue;
+    }
+    if (!ignoredUntracked(dest, slug, file.path, tracked, matcher)) continue;
+    let abs: string;
+    try {
+      abs = pathInside(root, file.path);
+    } catch {
+      blocked.push(file.path);
+      continue;
+    }
+    if (!existsSync(abs)) {
+      absent.push(file.path);
+      continue;
+    }
+    const stat = lstatSync(abs);
+    if (stat.isSymbolicLink() || !stat.isFile() || readFileSync(abs, 'utf8') !== file.content) blocked.push(file.path);
+  }
+  return {
+    blocked: [...new Set(blocked)].sort(),
+    absent: [...new Set(absent)].sort(),
+    git: [...new Set(git)].sort(),
+  };
 }
 
 export function changedPaths(local: TreeFile[], remote: TreeFile[]): string[] {
@@ -94,10 +195,11 @@ export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ v
 export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): void {
   const keep = new Set(files.map((file) => file.path));
   const root = join(dest, 'games', slug);
-  for (const stale of walkFiles(root)) {
+  for (const stale of localGameFiles(dest, slug)) {
     if (!keep.has(stale.path)) rmSync(pathInside(root, stale.path));
   }
   for (const file of files) {
+    if (file.path.split('/').includes('.git')) continue;
     const abs = pathInside(root, file.path);
     mkdirSync(dirname(abs), { recursive: true });
     if (existsSync(abs) && lstatSync(abs).isSymbolicLink()) rmSync(abs);
@@ -117,7 +219,7 @@ export async function checkoutGame(input: {
   fetchBuffer?: (url: string) => Promise<Buffer>;
   run?: (cmd: string, args: string[], cwd: string) => void;
   allowUndelivered?: boolean;
-}): Promise<{ dest: string; remote: string }> {
+}): Promise<{ dest: string; remote: string; notices: string[] }> {
   const run = input.run ?? defaultRun;
   if (
     existsSync(input.dest) &&
@@ -146,10 +248,15 @@ export async function checkoutGame(input: {
   } finally {
     rmSync(tgz, { force: true });
   }
+  const notices: string[] = [];
   try {
     const tree = await fetchLatestTree(input.api, input.slug);
-    if (tree.version !== 'undelivered') writeGameFiles(input.dest, input.slug, tree.files);
-    writeBase(input.dest, tree.version, tree.files);
+    if (tree.version !== 'undelivered') {
+      const incoming = classifyIncoming(input.dest, input.slug, tree.files);
+      writeGameFiles(input.dest, input.slug, tree.files);
+      notices.push(...formatCheckoutIncoming(incoming));
+    }
+    writeBase(input.dest, tree.version, trackedTree(input.dest, input.slug, tree.files));
   } catch {
     const local = localGameFiles(input.dest, input.slug);
     if (local.length) writeBase(input.dest, 'archive', local);
@@ -159,21 +266,29 @@ export async function checkoutGame(input: {
     '\n## Playing this game\n\nWhen the creator asks to play, run `gamedevpl play` from this checkout. It opens a sandboxed local preview with automatic reload after successful builds. Repeating it reuses the server. `--no-open` prints the URL; `--stop` stops it. Errors preserve the last playable build. Playing never submits or publishes.\n';
   const previous = existsSync(instructions) ? readFileSync(instructions, 'utf8') : '';
   if (!previous.includes('## Playing this game')) writeFileSync(instructions, previous + note);
-  return { dest: input.dest, remote: gitRemoteUrl(input.slug) };
+  return { dest: input.dest, remote: gitRemoteUrl(input.slug), notices };
 }
 
 export async function inspectGame(input: { api: ApiClient; slug: string; dest: string }): Promise<{
   sync: SyncResult;
   tree: { version: string; files: TreeFile[] };
+  ignored: IgnoredHit[];
 }> {
   const tree = await fetchLatestTree(input.api, input.slug);
   const base = readBase(input.dest);
+  const ignored = ignoredGameFiles(input.dest, input.slug);
   const local = localGameFiles(input.dest, input.slug);
-  const sync = classify({ local, remote: tree.files, remoteVersion: tree.version, base });
-  if (sync.kind === 'clean') {
-    writeBase(input.dest, tree.version, tree.files);
+  const remote = trackedTree(input.dest, input.slug, tree.files);
+  const sync = classify({ local, remote, remoteVersion: tree.version, base });
+  const incoming = classifyIncoming(input.dest, input.slug, tree.files);
+  if (sync.kind === 'clean' && !incoming.blocked.length) {
+    writeBase(input.dest, tree.version, remote);
   }
-  return { sync, tree };
+  const seen = new Set(ignored.map((hit) => hit.path));
+  const remoteGit = tree.files
+    .filter((file) => file.path.split('/').includes('.git') && !seen.has(file.path))
+    .map((file) => ({ path: file.path, source: 'git' as const, pattern: '.git', directory: false }));
+  return { sync, tree, ignored: [...ignored, ...remoteGit] };
 }
 
 async function pullGameUnlocked(input: {
@@ -181,22 +296,28 @@ async function pullGameUnlocked(input: {
   slug: string;
   dest: string;
   force?: boolean;
-}): Promise<{ version: string; sync: SyncResult; kept: string[] }> {
+}): Promise<{ version: string; sync: SyncResult; kept: string[]; notices: string[] }> {
   const { sync, tree } = await inspectGame(input);
+  const incoming = classifyIncoming(input.dest, input.slug, tree.files);
+  if (incoming.blocked.length && !input.force) {
+    throw new CliError(ignoredClashMessage(incoming.blocked), EXIT_REFUSED, cliUsage('pull', '--force'));
+  }
+  const notices = formatPullNotices(incoming, input.force === true);
   const kept: string[] = [];
+  const tracked = trackedTree(input.dest, input.slug, tree.files);
   if (input.force) {
     writeGameFiles(input.dest, input.slug, tree.files);
     writeBase(input.dest, tree.version, tree.files);
-    return { version: tree.version, sync, kept: [] };
+    return { version: tree.version, sync, kept: [], notices };
   }
   if (sync.kind === 'clean' || sync.kind === 'platform_only') {
-    writeGameFiles(input.dest, input.slug, tree.files);
-    writeBase(input.dest, tree.version, tree.files);
-    return { version: tree.version, sync, kept };
+    writeGameFiles(input.dest, input.slug, tracked);
+    writeBase(input.dest, tree.version, tracked);
+    return { version: tree.version, sync, kept, notices };
   }
   if (sync.kind === 'both') {
     const localMap = new Map(localGameFiles(input.dest, input.slug).map((file) => [file.path, file]));
-    const remoteMap = new Map(tree.files.map((file) => [file.path, file]));
+    const remoteMap = new Map(tracked.map((file) => [file.path, file]));
     const merged: TreeFile[] = [];
     const names = new Set([...localMap.keys(), ...remoteMap.keys()]);
     for (const path of names) {
@@ -209,15 +330,18 @@ async function pullGameUnlocked(input: {
       }
     }
     writeGameFiles(input.dest, input.slug, merged);
-    writeBase(input.dest, tree.version, tree.files);
-    return { version: tree.version, sync, kept };
+    writeBase(input.dest, tree.version, tracked);
+    return { version: tree.version, sync, kept, notices };
   }
   const refused = syncRefuse(sync, 'pull');
   throw new CliError(refused.message, EXIT_REFUSED, refused.next);
 }
 
-export async function diffGame(input: { api: ApiClient; slug: string; dest: string }): Promise<SyncResult> {
-  return (await inspectGame(input)).sync;
+export async function diffGame(input: { api: ApiClient; slug: string; dest: string }): Promise<DiffReport> {
+  const { sync, tree, ignored } = await inspectGame(input);
+  const patches = formatPatches(sync, localGameFiles(input.dest, input.slug), tree.files);
+  const incoming = classifyIncoming(input.dest, input.slug, tree.files);
+  return { ...sync, ignored, patches, incoming };
 }
 
 export function pullGame(input: Parameters<typeof pullGameUnlocked>[0]): ReturnType<typeof pullGameUnlocked> {

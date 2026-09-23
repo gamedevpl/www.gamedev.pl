@@ -128,6 +128,16 @@ model:
 - **conflict** — the same path changed on both sides. Copy those files aside, then `pull`.
   `--force` is the explicit overwrite.
 
+`status` with no token, inside a checkout, prints that same picture. `diff` adds a patch.
+Both skip files the checkout is not supposed to deliver. `.git` is never uploaded. `.gitignore`
+is honored, and `.gamedevplignore` adds rules in the same syntax after `.gitignore` in each
+directory. A path already recorded in `.gamedev-base.json` stays tracked when a pattern matches
+it. `push` names anything it left out, so a scratch file does not vanish quietly. `pull` refuses
+when an ignored file on disk would be overwritten (`pull --force` replaces those files and still
+will not write `.git`). A platform file that only matches an ignore rule, and is not already
+in the checkout, stays unwritten and is named. `checkout` says when a platform file landed on
+an ignored path. Paths already in `.gamedev-base.json` stay tracked.
+
 A checkout without `.gamedev-base.json` is **legacy**: matching trees are adopted; anything
 else is refused so pull cannot guess.
 
