@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Internal
 
-- Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#PR).
+- Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#1468).
 
 ### Fixed
 
