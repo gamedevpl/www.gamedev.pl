@@ -91,7 +91,7 @@ describe('status watch', () => {
     expect(waits).toHaveLength(89);
     // The server floor holds from the first wait.
     expect(Math.min(...waits)).toBe(10_000);
-    // An idle job settles at the cap instead of polling every few seconds for hours.
+    // An idle job settles at the cap.
     expect(waits.at(-1)).toBe(30_000);
   });
 

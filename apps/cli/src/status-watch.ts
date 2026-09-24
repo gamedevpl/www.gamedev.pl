@@ -9,7 +9,7 @@ import type { CliTelemetry } from './telemetry.js';
 const ACTIVE_BACKOFF_AFTER_POLLS = 20;
 const ACTIVE_BACKOFF_CAP_MS = 30_000;
 
-// A server floor above this is a bug, not a cadence to honour.
+// A floor above this is a server bug, not a cadence.
 const SERVER_FLOOR_CAP_MS = 5 * 60_000;
 
 export function statusWatchDelayMs(
@@ -161,7 +161,7 @@ export async function runStatusVerb(input: {
   let status = await getStatus(input.api, input.token);
   let watched = '';
   let lastKey = '';
-  // A watch left open on an idle job must slow down, like the TUI's.
+  // An idle watch backs off like the TUI's.
   let unchangedPolls = 0;
   for (let i = 1; i <= input.maxPolls; i += 1) {
     if (isPublishTransition(watched, status.status)) input.telemetry?.record('published');
