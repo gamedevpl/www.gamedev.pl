@@ -1,11 +1,18 @@
-import { parseEventLine } from './delegate.js';
+import type { AgentEvent } from 'genaicode/agents';
 import { CliError, EXIT_RED } from './exit-codes.js';
+
+function eventText(event: AgentEvent): string | undefined {
+  if (event.type === 'error') return event.message;
+  if (event.type === 'stderr' || event.type === 'message') return event.text;
+  if (event.type === 'raw') return event.line;
+  return undefined;
+}
 
 export function trackAgentFailure(adapter: string) {
   let capacity = false;
   return {
-    observe(line: string) {
-      const text = parseEventLine(line, adapter);
+    observe(event: AgentEvent) {
+      const text = eventText(event);
       if (text && /^selected model is at capacity\b/i.test(text.trim())) capacity = true;
     },
     error(code: number | null, retry: string): CliError {

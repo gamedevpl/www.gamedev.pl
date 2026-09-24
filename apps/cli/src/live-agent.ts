@@ -4,26 +4,16 @@ import {
   museNotification,
   RpcError,
   uuidv7,
-  type AgentEvent,
   type AgentOutcome,
   type AgentRun,
   type LiveSession,
 } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
+import type { AdapterRunInput } from './headless-agent.js';
 import { evidenceImages } from './workbench-evidence.js';
 
 type RpcValue = Record<string, unknown>;
 export type Steer = (text: string) => Promise<void>;
-export type LiveRunInput = {
-  spec: AdapterSpec;
-  prompt: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  abort?: AbortSignal;
-  onLine?: (line: string) => void;
-  onDiagnostic?: (line: string) => void;
-  onSteering?: (send: Steer | undefined) => void;
-};
 
 const ACK_TIMEOUT_MS = 30_000;
 const TASK_TIMEOUT_MS = 30 * 60_000;
@@ -61,27 +51,8 @@ export function turnInput(name: string, text: string): RpcValue[] {
   return [{ type: 'text', text }, ...images.map((path) => ({ type: 'localImage', path }))];
 }
 
-function eventLine(event: AgentEvent): string | undefined {
-  switch (event.type) {
-    case 'message':
-      return event.text;
-    case 'tool-start':
-      return `⚙ ${event.name}`;
-    case 'file-change':
-      return `Edited: ${event.paths.join(', ')}`;
-    case 'error':
-      return event.message;
-    case 'stderr':
-      return event.text.slice(0, 8000);
-    case 'raw':
-      return event.line;
-    default:
-      return undefined;
-  }
-}
-
 // Transport and events come from genaicode/agents; protocol choices stay here.
-export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number; permissionSession?: string }> {
+export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: number; permissionSession?: string }> {
   const args = liveArgs(input.spec);
   if (!args) throw new Error('This adapter supports queued follow-ups only.');
   let permissionSession: string | undefined;
@@ -123,12 +94,10 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
     effort: input.spec.selection?.effort,
   });
   try {
-    for await (const event of run) {
-      const line = eventLine(event);
-      if (line) input.onLine?.(line);
-    }
+    for await (const event of run) input.onEvent?.(event);
     const result = await run.result;
-    if (!result.ok && !decided && result.status !== 'aborted' && result.error) input.onLine?.(result.error);
+    if (!result.ok && !decided && result.status !== 'aborted' && result.error)
+      input.onEvent?.({ type: 'error', message: result.error });
     return { code: result.ok ? 0 : 1, permissionSession };
   } finally {
     accepting = false;
@@ -138,7 +107,7 @@ export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number;
 
 async function drive(
   session: LiveSession,
-  input: LiveRunInput,
+  input: AdapterRunInput,
   hooks: { steering: (open: boolean) => void; decided: () => void; handoff: (id: string) => void },
 ): Promise<AgentOutcome> {
   const { rpc, task } = session;

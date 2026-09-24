@@ -4,13 +4,13 @@ import { expect, it } from 'vitest';
 import { trackAgentFailure } from './agent-failure.js';
 
 it.each([
-  'Selected model is at capacity. Please try a different model.',
-  JSON.stringify({ type: 'error', message: 'Selected model is at capacity. Please try a different model.' }),
-  JSON.stringify({ type: 'turn.failed', error: { message: 'Selected model is at capacity.' } }),
-])('explains capacity errors from text and structured events', (line) => {
+  { type: 'stderr', text: 'Selected model is at capacity. Please try a different model.' },
+  { type: 'error', message: 'Selected model is at capacity. Please try a different model.' },
+  { type: 'raw', line: 'Selected model is at capacity.' },
+] as const)('explains capacity errors from text and structured events', (event) => {
   const failure = trackAgentFailure('codex');
-  failure.observe(line);
-  failure.observe('{"type":"item.completed"}');
+  failure.observe(event);
+  failure.observe({ type: 'message', text: 'Working on it' });
   expect(failure.error(1, '/connect sky --agent codex')).toMatchObject({
     message: expect.stringContaining('selected model is at capacity'),
     next: expect.stringContaining('/connect sky --agent codex'),
@@ -19,7 +19,7 @@ it.each([
 
 it('does not infer capacity from arbitrary failures or another run', () => {
   const failure = trackAgentFailure('codex');
-  failure.observe('Something went wrong');
+  failure.observe({ type: 'error', message: 'Something went wrong' });
   expect(failure.error(null, 'retry')).toMatchObject({
     message: 'codex stopped (exit unknown). Task completion is not confirmed.',
     next: 'retry',
@@ -39,8 +39,8 @@ it('explains local model capacity without verifying or offering delivery', async
     builder: 'self',
     pick: async () => '/quit',
     abort: { current: null },
-    runAdapter: async ({ onLine }) => {
-      onLine?.('Selected model is at capacity. Please try a different model.');
+    runAdapter: async ({ onEvent }) => {
+      onEvent?.({ type: 'stderr', text: 'Selected model is at capacity. Please try a different model.' });
       return { code: 1 };
     },
     run: () => {

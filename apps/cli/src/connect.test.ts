@@ -170,7 +170,7 @@ describe('connectGame', () => {
         expect(mcpPath).toBeTruthy();
         expect(readFileSync(mcpPath, 'utf8')).toContain('gdpl_cak_secret');
         expect(existsSync(join(dest, '.mcp.json'))).toBe(false);
-        return { code: 0, lines: ['{"text":"edited"}'] };
+        return { code: 0 };
       },
       write: () => undefined,
     });
@@ -218,7 +218,7 @@ describe('connectGame', () => {
         expect(existsSync(cwd)).toBe(true);
         expect(cwd).not.toBe(dest);
         expect(spec.headless).toContain('--skip-git-repo-check');
-        return { code: 0, lines: [] };
+        return { code: 0 };
       },
       write: () => undefined,
     });
@@ -257,7 +257,7 @@ describe('connectGame', () => {
         which: (cmd) => (cmd === 'gemini' ? '/usr/bin/gemini' : null),
         runAdapter: async () => {
           spawned = true;
-          return { code: 0, lines: [] };
+          return { code: 0 };
         },
         write: () => undefined,
       }),
@@ -293,7 +293,7 @@ describe('connectGame', () => {
       dest,
       agent: 'claude',
       which: (cmd) => (cmd === 'claude' ? '/usr/bin/claude' : null),
-      runAdapter: async () => ({ code: 0, lines: [] }),
+      runAdapter: async () => ({ code: 0 }),
       write: () => undefined,
     });
     expect(readFileSync(join(dest, '.mcp.json'), 'utf8')).toContain('example.invalid');
@@ -328,7 +328,7 @@ describe('connectGame', () => {
         which: (cmd) => (cmd === 'claude' ? '/usr/bin/claude' : null),
         runAdapter: async () => {
           spawned = true;
-          return { code: 0, lines: [] };
+          return { code: 0 };
         },
         write: () => undefined,
       }),
@@ -431,7 +431,7 @@ it('uses a private temporary Copilot MCP config and removes it on failure', asyn
   expect(existsSync(configPath)).toBe(false);
 });
 
-it.each(['streamed', 'buffered', 'unknown'] as const)(
+it.each(['error', 'stderr', 'unknown'] as const)(
   'offers reconnection instead of submit after %s failure',
   async (mode) => {
     const calls: string[] = [];
@@ -445,10 +445,7 @@ it.each(['streamed', 'buffered', 'unknown'] as const)(
         return json({ mcpUrl: 'https://example.test/api/mcp', authorizationHeader: 'Bearer gdpl_cak_test' });
       },
     });
-    const message = JSON.stringify({
-      type: 'turn.failed',
-      error: { message: 'Selected model is at capacity. Please try a different model.' },
-    });
+    const message = 'Selected model is at capacity. Please try a different model.';
     const attempt = () =>
       connectGame({
         api,
@@ -457,9 +454,10 @@ it.each(['streamed', 'buffered', 'unknown'] as const)(
         env: { PATH: '/usr/bin' },
         agent: 'codex',
         which: () => '/usr/bin/codex',
-        runAdapter: async ({ onLine }) => {
-          if (mode === 'streamed') onLine?.(message);
-          return { code: 1, lines: mode === 'buffered' ? [message] : [] };
+        runAdapter: async ({ onEvent }) => {
+          if (mode === 'error') onEvent?.({ type: 'error', message });
+          if (mode === 'stderr') onEvent?.({ type: 'stderr', text: message });
+          return { code: 1 };
         },
         write: (line) => output.push(line),
       });

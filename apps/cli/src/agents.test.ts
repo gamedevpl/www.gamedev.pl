@@ -121,7 +121,7 @@ const args = process.argv.slice(2);
 const config = args[args.indexOf('--mcp-config') + 1];
 if (!fs.readFileSync(config, 'utf8').includes('gdpl_cak_test')) process.exit(2);
 fs.writeFileSync('scratch.txt', 'kept');
-console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }) }));
+console.log(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: JSON.stringify({ cwd: process.cwd(), config }) }] } }));
 `,
       { mode: 0o700 },
     );
@@ -163,7 +163,7 @@ console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }
         return path.includes('/api/me/studio') ? { games: [{ slug: 'sky-dodge', token: 'tok' }] } : { pending: true };
       },
     } as unknown as ApiClient;
-    const runAdapter = vi.fn(async () => ({ code: 0, lines: [] }));
+    const runAdapter = vi.fn(async () => ({ code: 0 }));
     await expect(
       connectGame({
         api,
@@ -188,7 +188,7 @@ console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }
 if (process.argv.includes('auth')) { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
 process.on('SIGTERM', () => {});
-console.log(JSON.stringify({ text: 'working' }));
+console.log(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'working' }] } }));
 setInterval(() => {}, 1000);
 `,
       { mode: 0o700 },
