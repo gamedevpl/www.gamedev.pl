@@ -4,6 +4,8 @@ import { CatalogRail } from './surfaces/catalog/CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { CreateStepsList } from './CreateStepsList.js';
+import { CreateAgentCallout } from './CreateAgentCallout.js';
+import { CreateBuilderLanes } from './CreateBuilderLanes.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PlatformBuilderAvailability } from './submissionApi.js';
 import type { PlayVia } from './visitTelemetry.js';
@@ -18,6 +20,7 @@ type CreatePageProps = {
   submissionError: string | null;
   onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
   onPlatformBuilderAvailability: (availability: PlatformBuilderAvailability | undefined) => void;
+  onNavigate?: (path: string) => void;
 };
 
 // Real catalog cards for the showcase, no new data — just a slice.
@@ -33,6 +36,7 @@ export function CreatePage({
   submissionError,
   onSubmitSpec,
   onPlatformBuilderAvailability,
+  onNavigate,
 }: CreatePageProps) {
   const { t } = useTranslation();
 
@@ -57,6 +61,8 @@ export function CreatePage({
         />
       </div>
 
+      <CreateAgentCallout onNavigate={onNavigate} />
+
       <section className="create-steps" aria-labelledby="create-steps-heading">
         <h2 id="create-steps-heading" className="create-section-heading">
           {t('create.stepsHeading')}
@@ -67,53 +73,7 @@ export function CreatePage({
         </p>
       </section>
 
-      <section className="create-builders" aria-labelledby="create-builders-heading">
-        <div className="create-builders-head">
-          <h2 id="create-builders-heading" className="create-section-heading">
-            {t('create.buildersHeading')}
-          </h2>
-          <span className="create-builders-sub">{t('create.buildersSub')}</span>
-        </div>
-        <div className="create-builder-lanes">
-          <div className="create-builder-lane is-picked">
-            <div className="create-builder-mark" aria-hidden="true">
-              <PixelIcon name="sparkle" size={22} />
-            </div>
-            <div className="create-builder-lane-head">
-              <span className="create-builder-lane-title">{t('builder.platform.title')}</span>
-              <span className="create-builder-lane-badge is-turq">{t('create.defaultBadge')}</span>
-            </div>
-            <div className="create-builder-progress" aria-hidden="true">
-              <span />
-            </div>
-            <p className="create-builder-lane-detail">{t('builder.platform.detail')}</p>
-            <ul className="create-builder-lane-list">
-              <li>{t('create.platformPoint1')}</li>
-              <li>{t('create.platformPoint2')}</li>
-            </ul>
-          </div>
-          <div className="create-builder-lane">
-            <div className="create-builder-mark" aria-hidden="true">
-              <PixelIcon name="code" size={22} />
-            </div>
-            <div className="create-builder-lane-head">
-              <span className="create-builder-lane-title">{t('builder.self.title')}</span>
-              <span className="create-builder-lane-badge">{t('create.freeBadge')}</span>
-            </div>
-            <div className="create-agent-chips">
-              <span className="create-agent-chip">{t('connect.clients.claudeCode')}</span>
-              <span className="create-agent-chip">{t('connect.clients.codex')}</span>
-              <span className="create-agent-chip">{t('connect.clients.cursor')}</span>
-              <span className="create-agent-chip">{t('create.anyMcpClient')}</span>
-            </div>
-            <p className="create-builder-lane-detail">{t('builder.self.detail')}</p>
-            <ul className="create-builder-lane-list">
-              <li>{t('create.selfPoint1')}</li>
-              <li>{t('create.selfPoint2')}</li>
-            </ul>
-          </div>
-        </div>
-      </section>
+      <CreateBuilderLanes onNavigate={onNavigate} />
 
       <CatalogRail
         heading={t('create.showcaseHeading')}

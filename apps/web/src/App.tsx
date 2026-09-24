@@ -541,10 +541,9 @@ export function App() {
                     onPlayGame={handlePlayGame}
                     submissionStatus={submissionStatus}
                     submissionError={submissionError}
-                    onSubmitSpec={(concept, referenceImages) =>
-                      void handleSubmitSpec(concept, undefined, referenceImages)
-                    }
+                    onSubmitSpec={(concept, refImgs) => void handleSubmitSpec(concept, undefined, refImgs)}
                     onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+                    onNavigate={navigate}
                   />
                 ) : route.view === 'party' ? (
                   <PartyPage
