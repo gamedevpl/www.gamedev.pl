@@ -56,6 +56,7 @@ import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
+import { createGateRepairHandler } from './creation/gate-repair.js';
 import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
 import { createAgentProposalsEnabledFromEnv, createDreamJobFromEnv } from './creation/dream-job-env.js';
 import type { DreamAvailabilityGate } from './creation/dream-availability.js';
@@ -1337,14 +1338,12 @@ export async function registerSubmissionRoutes(
     isLiveAgentRound,
     selfBuildDeliveryCap,
   });
-
   /**
    * Quiet long enough that asking the backend is cheaper than guessing. Well under the
    * 15-minute stall banner: this is the check that can tell "quiet" apart from "dead",
    * so it has to run before the page starts hedging.
    */
   const observeQuietMs = 2 * 60 * 1000;
-
   /**
    * How many times a job may be sent back for finishing without delivering.
    *
@@ -1373,6 +1372,7 @@ export async function registerSubmissionRoutes(
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
     onGateScreenshotPosted: (jobId: number) => buildStatus.invalidateMedia(jobId),
+    onGateRed: createGateRepairHandler({ store, builderOf, resumeBuild, now, log: app.log }),
   });
 
   /**

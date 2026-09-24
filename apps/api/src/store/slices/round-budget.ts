@@ -7,6 +7,22 @@ export type DreamClaimRefusedBy = 'round' | 'claim' | 'version';
 
 export type DreamClaimResult = { claimed: true } | { claimed: false; refusedBy: DreamClaimRefusedBy };
 
+export function gateRepairEligible(
+  record: SubmissionRecord | undefined,
+  version: string,
+  roundGeneration: number,
+): boolean {
+  return Boolean(
+    record &&
+    record.builder !== 'self' &&
+    !record.builderHandoff &&
+    record.state === 'needs_changes' &&
+    (record.roundGeneration ?? 1) === roundGeneration &&
+    (record.previewVersion ?? record.deliveredVersion) === version &&
+    record.gateRepair?.roundGeneration !== roundGeneration,
+  );
+}
+
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
   incrementSeedRegenerations(jobId: number): Promise<number>;
@@ -28,6 +44,8 @@ export interface RoundBudgetStore {
 
   // Records that a gate metric was logged for this version/status key.
   setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
+
+  claimGateRepair(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean>;
 
   // First caller per version and round wins; a stale caller takes nothing.
   claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult>;
@@ -135,6 +153,13 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     this.submissions.set(jobId, { ...sub, roundLastGateMetricKey: key });
   }
 
+  async claimGateRepair(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+    const sub = this.submissions.get(jobId);
+    if (!gateRepairEligible(sub, version, roundGeneration)) return false;
+    this.submissions.set(jobId, { ...sub!, gateRepair: { version, roundGeneration, claimedAt: at } });
+    return true;
+  }
+
   async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     const sub = this.submissions.get(jobId);
     if (!sub || (sub.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
@@ -237,6 +262,16 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     await this.ref(jobId).set({ roundLastGateMetricKey: key }, { merge: true });
+  }
+
+  async claimGateRepair(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+    const ref = this.ref(jobId);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || !gateRepairEligible(snap.data() as SubmissionRecord, version, roundGeneration)) return false;
+      tx.set(ref, { gateRepair: { version, roundGeneration, claimedAt: at } }, { merge: true });
+      return true;
+    });
   }
 
   async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
