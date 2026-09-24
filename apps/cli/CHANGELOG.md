@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#1468).
+
 ### Fixed
 
 - Play shows your prompt and attachment names instead of the agent-only evidence block, in the conversation, queue and prompt history (#1465).
