@@ -1,4 +1,4 @@
-import type { BuilderKind } from '@gamedevpl/contract';
+import type { BuilderKind, LocalActivity } from '@gamedevpl/contract';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
@@ -16,6 +16,7 @@ import { readStorageItem, writeStorageItem } from '../../core/persistence.js';
 import type { ConnectCardMode } from '../../selfBuildCopy.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
 import { GamedevCliConnectTab } from './GamedevCliConnectTab.js';
+import { LocalActivitySummary } from './LocalActivityStatus.js';
 import './studio-connect.css';
 import './studio-connect-wizard.css';
 
@@ -50,11 +51,6 @@ function saveAuthMode(mode: ConnectAuthMode): void {
 
 type StudioConnectCardProps = {
   token: string;
-  /**
-   * When true, the round already has an agent signal — the parent should unmount this
-   * and show normal progress. Kept as a prop so tests can drive the flip without a
-   * status poll.
-   */
   agentConnected?: boolean;
   /**
    * `setup` (default): full MCP install + kickoff for the first connect.
@@ -95,6 +91,8 @@ type StudioConnectCardProps = {
   builderHandoffPending?: boolean;
   // Why switching to platform is unavailable, if it is.
   platformUnavailable?: BuilderUnavailableReason;
+  localActivity?: LocalActivity | null;
+  localPhase?: LocalActivity['phase'] | 'offline' | null;
 };
 
 type SwitchResult = { pending?: boolean };
@@ -318,6 +316,8 @@ export function StudioConnectCard({
   builderHandoffPending = false,
   waitingCaptionElsewhere = false,
   platformUnavailable,
+  localActivity = null,
+  localPhase = null,
 }: StudioConnectCardProps) {
   const isPanel = density === 'panel';
   const { t, i18n } = useTranslation();
@@ -336,6 +336,7 @@ export function StudioConnectCard({
   const [collapsed, setCollapsed] = useState(() => (collapsible ? isConnectCollapsed(token) : false));
 
   const isResume = mode === 'resume';
+  const localTaskActive = Boolean(localPhase && !['ready', 'failed', 'stopped', 'offline'].includes(localPhase));
 
   useEffect(() => {
     setCollapsed(collapsible ? isConnectCollapsed(token) : false);
@@ -405,7 +406,8 @@ export function StudioConnectCard({
         data-connect-mode={mode}
         data-testid="connect-collapsed"
       >
-        {waitingCaptionElsewhere ? null : (
+        {localActivity && localPhase ? <LocalActivitySummary activity={localActivity} phase={localPhase} /> : null}
+        {waitingCaptionElsewhere || localActivity ? null : (
           <p className="studio-connect-waiting" aria-live="polite">
             <span className="studio-connect-pulse" aria-hidden="true" />
             {isResume ? t('connect.resume.waiting') : t('connect.waiting')}
@@ -692,7 +694,11 @@ export function StudioConnectCard({
       {!isPanel ? (
         <div className="studio-connect-title-row">
           <h3 id={`${baseId}-title`} className="studio-connect-title">
-            {isResume ? t('connect.resume.title') : t('connect.title')}
+            {localTaskActive
+              ? t('localActivity.title', { agent: localActivity?.agent })
+              : isResume
+                ? t('connect.resume.title')
+                : t('connect.title')}
           </h3>
           {collapsible && !error ? (
             <button
@@ -707,12 +713,11 @@ export function StudioConnectCard({
           ) : null}
         </div>
       ) : null}
-      {/* Lead is setup guidance — drop it once we only have an error, so a phone foot/thread
-          is not mostly paragraph + red line. Panel density skips it: the rail section heading
-          already names the job. */}
-      {!error && !isPanel ? (
+      {!error && !isPanel && !localTaskActive ? (
         <p className="studio-connect-lead">{isResume ? t('connect.resume.lead') : t('connect.lead')}</p>
       ) : null}
+
+      {localActivity && localPhase ? <LocalActivitySummary activity={localActivity} phase={localPhase} /> : null}
 
       {loading ? <p className="studio-connect-state">{t('connect.loading')}</p> : null}
       {error ? <p className="error">{error}</p> : null}
@@ -745,7 +750,7 @@ export function StudioConnectCard({
               </button>
             ) : (
               <>
-                {waitingCaptionElsewhere ? null : (
+                {waitingCaptionElsewhere || localActivity ? null : (
                   <p className="studio-connect-waiting" aria-live="polite">
                     <span className="studio-connect-pulse" aria-hidden="true" />
                     {t('connect.resume.waiting')}
@@ -774,7 +779,7 @@ export function StudioConnectCard({
           <>
             {installPanel}
             {kickoffPanel}
-            {waitingCaptionElsewhere ? null : (
+            {waitingCaptionElsewhere || localActivity ? null : (
               <p className="studio-connect-waiting" aria-live="polite">
                 <span className="studio-connect-pulse" aria-hidden="true" />
                 {t('connect.waiting')}

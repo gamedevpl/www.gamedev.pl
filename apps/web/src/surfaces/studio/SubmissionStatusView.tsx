@@ -19,6 +19,7 @@ import {
 import { NAVIGATE_EVENT, statusPath, studioPath } from '../../core/router.js';
 import { connectCardMode, selfStatusCopy, shouldShowConnectCard } from '../../selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
+import { useLocalActivity } from './useLocalActivity.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { pokeStudioStatus, subscribeStudioStatus } from './studioStatusStore.js';
 import { recordStudioStep, type StudioStepDetail } from '../../visitTelemetry.js';
@@ -427,6 +428,10 @@ export function SubmissionStatusView({
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
   const heartbeatAt = latestAgentActivityAt(status);
   const selfCopy = selfStatusCopy(copyInputFromStatus(status));
+  const { activity: localActivity, phase: localPhase } = useLocalActivity(
+    token,
+    embedded && isAwaitingOwnAgent(status),
+  );
 
   /**
    * What is happening, in the creator's words.
@@ -809,6 +814,8 @@ export function SubmissionStatusView({
                       mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
                       {...(onOpenConnect ? { onOpenInstall: onOpenConnect } : {})}
                       waitingCaptionElsewhere={footBarShowing}
+                      localActivity={localActivity}
+                      localPhase={localPhase}
                       onSwitchToPlatform={handoffToPlatformFromUi}
                       builderHandoffPending={status.builderHandoff?.target === 'platform'}
                       platformUnavailable={
@@ -877,9 +884,11 @@ export function SubmissionStatusView({
                   <ThreadContextBar
                     phase={
                       isAwaitingOwnAgent(status)
-                        ? selfCopy === 'no_agent_yet'
-                          ? t('connect.waiting')
-                          : t('connect.resume.waiting')
+                        ? localPhase
+                          ? t(`localActivity.${localPhase}`)
+                          : selfCopy === 'no_agent_yet'
+                            ? t('connect.waiting')
+                            : t('connect.resume.waiting')
                         : isRemixDraft && (status.status === 'in_review' || status.phase === 'ready_for_review')
                           ? t('statusView.remix.label')
                           : status.phase === 'dispatched'
