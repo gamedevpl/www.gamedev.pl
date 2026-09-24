@@ -285,6 +285,31 @@ Two concrete instances of that (observed 2026-07-23):
   deserves the same scrutiny as the source change. For agent-facing surfaces
   specifically, check that any replacement error still tells the agent what to do next;
   a status code is not an instruction.
+- **A filter inserted in front of a symlink or delete check is untested if the old test is renamed onto an input that still reaches the old branch.** Observed
+  (#1469 review, 2026-09-24): `scanGame` started `continue`ing undeliverable paths before the
+  "record a symlink, never follow it" arm. The existing test renamed `leak` to `leak.ts` so
+  the symlink stayed deliverable and the assertion still passed. That stays green if the new
+  branch follows or deletes a `NOTATKI.md` symlink, or writes `images/hero.png` through a
+  directory symlink on pull. Probe the skipped input itself: a not-game file symlink, a
+  directory symlink that is the parent of a deliverable platform path, ordinary pull and
+  `--force`. On that commit both were safe (force unlinks the directory symlink and writes
+  inside the checkout; a not-game file symlink is not read and survives pull). The renamed
+  test does not lock that in.
+- **Hand-editing a prose or module-size baseline grandfathers a new file.** The checker
+  treats a missing key as baseline 0 ("new files may not ship prose debt"). Adding the key,
+  with `--write --force` or a manual JSON edit, is how the debt gets in. Moving `/** */`
+  blocks into a new module and sealing `comment-prose-baseline.json` at that word count
+  means the gate agreed to the move. Rewrite to `//` one-liners; do not copy the old file's
+  debt onto a new path. Shrinking the old files' baselines is the part that should land.
+- **An allowlist moved into `@gamedevpl/contract` is not the only copy.** CI lockstep diffs
+  `DELIVERY_FIXED_FILES` against games-repo `delivery-contract.json`. Studio's
+  `apps/web/src/surfaces/studio/codeSurfacePaths.ts` (`deliverablePathReason`) is a hand twin
+  that check does not compile. As of #1469 the fixed-file lists matched and the accept-sets
+  did not: rasters (`images/`, `cast/`, `scenes/` PNG/WebP) are deliverable on the API and
+  refused in Studio; `/abs.ts` is an illegal path on the API and accepted in Studio because
+  `normalizeSourcePath` strips the leading slash before the illegal-path check. When the
+  shared function is the new source of truth, grep `deliverablePathReason` /
+  `FIXED_SOURCE_FILES` and call the shared refusal from there.
 - **A green games-repo `check:game` does not prove a puzzle's obstacles obstruct.** Observed
   (echo-loop / www.gamedev.pl-games#699, 2026-08-12): TRACE, ACCEPTANCE, agency `--strict`,
   and a scripted capture were green while hold-right + one jump cleared plate/door rooms
