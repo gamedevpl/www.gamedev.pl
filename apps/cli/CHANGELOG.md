@@ -11,6 +11,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#1468).
 - Local headless agents run through `genaicode/agents` 2.5.0: its drivers decode each agent's events, the per-vendor event readers are gone, and the verify-and-repair loop uses `runWithVerify` (#1472).
+- `genaicode` is bumped to 2.5.2 in the CLI and API (#1480).
 
 ### Fixed
 
