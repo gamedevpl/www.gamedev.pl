@@ -1,4 +1,4 @@
-// Signed email-unsubscribe tokens work without a session.
+// The unsub: prefix separates shared-key token types.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 

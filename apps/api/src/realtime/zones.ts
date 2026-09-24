@@ -61,7 +61,7 @@ export async function registerZoneRoutes(app: FastifyInstance, options: ZoneRout
   const ticketSecret = options.ticketSecret ?? process.env.ZONE_TICKET_SECRET ?? process.env.SESSION_SECRET;
   const playerTagSecret = options.playerTagSecret ?? process.env.ZONE_PLAYER_SECRET ?? process.env.SESSION_SECRET;
   if ((!ticketSecret || !playerTagSecret) && process.env.NODE_ENV === 'production') {
-    throw new Error('ZONE_TICKET_SECRET and ZONE_PLAYER_SECRET are required in production');
+    throw new Error('Zone ticket and player signing secrets are required in production');
   }
   const signingSecret = ticketSecret ?? 'dev-session-secret-change-me';
   const playerSecret = playerTagSecret ?? 'dev-session-secret-change-me';
