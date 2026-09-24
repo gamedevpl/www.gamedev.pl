@@ -594,11 +594,27 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     const ages = new Map<number, string>();
     await Promise.all(
       records.map(async (record) => {
+        // Set true with the message atomically; false means empty.
+        if (record.pendingCreatorMessage === false) return;
         const [oldest] = await store.listPendingCreatorMessages(record.jobId, { limit: 1 });
         if (oldest) ages.set(record.jobId, oldest.createdAt);
       }),
     );
     return ages;
+  }
+
+  // The header shows three fields; the limits panel reads ten.
+  async function readSummaryLimits(): Promise<AdminSummaryResponse['limits']> {
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    const [stored, submissions] = await Promise.all([
+      store.getCreationLimits(),
+      store.getGlobalSubmissionCount(dateStr),
+    ]);
+    return {
+      paused: stored?.paused === true,
+      globalDailySubmissionCap: stored?.globalDailySubmissionCap ?? defaultGlobalCap,
+      todaySubmissions: submissions,
+    };
   }
 
   /**
@@ -617,7 +633,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     const at = now();
     const [records, limits, pendingWaitlist, seedOutcomes] = await Promise.all([
       store.listActiveSubmissions(),
-      readCreationLimits(),
+      readSummaryLimits(),
       store.countWaitlistEntries('pending'),
       // Same read the sweep does. The badge and the inbox have to agree about what is
       // wrong, or the number on the badge stops meaning anything — so the seeding alert
@@ -629,11 +645,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     const body: AdminSummaryResponse = {
       alerts: [...detectOperatorAlerts(records, at, await pendingFeedbackAges(records)), ...(seeding ? [seeding] : [])],
       queue: { active: queue.jobs.length, stalled: queue.stalled, byState: queue.byState },
-      limits: {
-        paused: limits.effective.paused,
-        globalDailySubmissionCap: limits.effective.globalDailySubmissionCap,
-        todaySubmissions: limits.today.submissions,
-      },
+      limits,
       waitlist: { pending: pendingWaitlist },
     };
     return reply.status(200).send(body);

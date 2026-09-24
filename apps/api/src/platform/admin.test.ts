@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } from './store.js';
@@ -1005,6 +1005,23 @@ describe('GET /api/admin/summary', () => {
     const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
 
     expect((res.json() as AdminSummaryResponse).limits.paused).toBe(true);
+  });
+
+  // The flag is set with the message atomically, so false holds.
+  it('asks only inboxes that may hold a change request', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_011, 'g:boss', 'Waiting On Feedback');
+    await store.createSubmission(1_000_012, 'g:boss', 'Nothing Pending');
+    await store.appendCreatorMessage(1_000_011, 'Make the ship faster.');
+    await store.listPendingCreatorMessages(1_000_012, { stampEmpty: true });
+    const asked = vi.spyOn(store, 'listPendingCreatorMessages');
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
+
+    expect(res.statusCode).toBe(200);
+    expect(asked.mock.calls.map(([jobId]) => jobId)).toEqual([1_000_011]);
   });
 });
 

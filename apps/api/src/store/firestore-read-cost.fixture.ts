@@ -16,6 +16,7 @@ export const DERIVED_OWNER_UID = 'g:derived-owner';
 export const REVIEWER_UID = 'g:reviewer';
 export const DECOY_UID = 'g:decoy';
 export const DECOY_REVIEWER_UID = 'g:decoy-reviewer';
+export const ADMIN_UID = 'g:operator';
 export const POLLED_JOB_ID = 1001;
 
 // A second round on the same slug: its poll pays for history.
@@ -36,6 +37,7 @@ export const POLLED_ROUTES = [
   'GET /api/submissions/mine (document, steady state)',
   'GET /api/review/status',
   'GET /api/notifications',
+  'GET /api/admin/summary (steady state)',
 ] as const;
 
 export type PolledRoute = (typeof POLLED_ROUTES)[number];
@@ -242,12 +244,19 @@ export async function seedReadCostFixture(store: Store): Promise<void> {
   await seedUser(store, CREATOR_UID);
   await seedUser(store, DERIVED_OWNER_UID);
   await seedUser(store, REVIEWER_UID);
+  await seedUser(store, ADMIN_UID);
   await seedUser(store, DECOY_UID);
   await seedUser(store, DECOY_REVIEWER_UID);
 
   for (const round of CREATOR_ROUNDS) await seedRound(store, CREATOR_UID, round);
   for (const round of DERIVED_OWNER_ROUNDS) await seedDerivedOnlyRound(store, DERIVED_OWNER_UID, round);
   for (const round of DECOY_ROUNDS) await seedRound(store, DECOY_UID, round);
+
+  // Most open rounds carry the sweep's empty stamp; two do not.
+  const unstamped = new Set(DECOY_ROUNDS.slice(-2).map((round) => round.jobId));
+  for (const round of [...CREATOR_ROUNDS, ...DERIVED_OWNER_ROUNDS, ...DECOY_ROUNDS]) {
+    if (!unstamped.has(round.jobId)) await store.listPendingCreatorMessages(round.jobId, { stampEmpty: true });
+  }
 
   await store.recordJobTransition(POLLED_JOB_ID, { to: 'building', at: AT, by: 'agent', reason: 'started' });
   await store.setSubmissionNotifiedStatus(POLLED_JOB_ID, 'building');
@@ -327,6 +336,7 @@ export async function createReadCostApp(store: Store, now?: () => number): Promi
   return buildApp({
     store,
     sessionSecret: SESSION_SECRET,
+    adminUids: ADMIN_UID,
     reviewerUids: REVIEWER_UID,
     submissionRoutes: {
       githubClient: stubGitHub(),
@@ -369,6 +379,9 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       url: `/api/submissions/${token}`,
       headers: { cookie: sessionCookie(CREATOR_UID) },
     });
+  }
+  if (route === 'GET /api/admin/summary (steady state)') {
+    return app.inject({ method: 'GET', url: '/api/admin/summary', headers: { cookie: sessionCookie(ADMIN_UID) } });
   }
   if (route === 'GET /api/submissions/:token (stale dispatch, steady state)') {
     const token = mintToken(STALE_DISPATCH_JOB_ID, SUBMISSION_SECRET);
@@ -442,6 +455,10 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
       await injectRoute(app, route);
       // The production cadence: past a 2s cache, well inside a 60s one.
       clock += 4_000;
+    }
+    // The first call pays the backfill; a 30s poll does not.
+    if (route === 'GET /api/admin/summary (steady state)') {
+      await injectRoute(app, route);
     }
     // A later round polls its history; the first has none.
     if (route === 'GET /api/submissions/:token (prior rounds, steady state)') {
