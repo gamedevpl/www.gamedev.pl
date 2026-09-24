@@ -17,16 +17,15 @@ import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
-import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
-import { describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
-export { describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
+import { preflightAdapter, type AdapterSpec } from './adapters.js';
+import { chooseAdapter, describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
+export { chooseAdapter, describeAdapters, detectLocalAdapters, pickAdapter } from './workshop-adapters.js';
 import { syncWarning } from './workshop-sync.js';
 export { syncWarning } from './workshop-sync.js';
-import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles } from './checkout.js';
+import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles, type TreeFile } from './checkout.js';
 import { childEnv } from './delegate.js';
 import { createEventRenderer } from './agent-render.js';
 import { formatError } from './errors.js';
-import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { getStatus, isTerminalStatus } from './turn.js';
@@ -47,7 +46,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
-  failedTask?: { request: string; ack?: string; agent: string };
+  failedTask?: { request: string; ack?: string; agent: string; before: TreeFile[] };
   onActivity?: (activity: string) => void;
   lastLog?: string;
   activityApi?: ApiClient;
@@ -164,47 +163,11 @@ export async function settleBuilder(input: {
   }
 }
 
-export function pickAdapter(ws: Pick<Workshop, 'adapters' | 'env'>, name?: string): AdapterSpec {
-  if (name) {
-    const spec =
-      ws.adapters.find((row) => row.name === name) ??
-      detectAdapter(name, (cmd) => whichOnPath(cmd, ws.env), loadAdapters(ws.env));
-    if (!spec) throw new CliError(`adapter ${name} is not on PATH`, EXIT_INPUT, `install ${name}, or omit --agent`);
-    return spec;
-  }
-  const spec = ws.adapters[0];
-  if (!spec) {
-    throw new CliError(
-      'no local agent on PATH — run gamedevpl agents to see supported tools',
-      EXIT_REFUSED,
-      '/builder platform lets the platform build instead',
-    );
-  }
-  return spec;
-}
-
-export async function chooseAdapter(
-  ws: Pick<Workshop, 'adapters' | 'env' | 'pick' | 'unattended' | 'selectedAgent'>,
-  name?: string,
-): Promise<AdapterSpec> {
-  const selected = ws.selectedAgent;
-  delete ws.selectedAgent;
-  if (!name && selected) return pickAdapter(ws, selected);
-  if (name || ws.adapters.length < 2 || ws.unattended) return pickAdapter(ws, name);
-  const chosen = await ws.pick(
-    ws.adapters.map((spec) => spec.name),
-    'Which agent?',
-  );
-  if (!ws.adapters.some((spec) => spec.name === chosen)) {
-    throw new CliError('agent selection cancelled', EXIT_REFUSED, '/delegate when ready');
-  }
-  return pickAdapter(ws, chosen);
-}
-
 export async function runLocalBuild(input: {
   ws: Workshop;
   spec: AdapterSpec;
   brief: string;
+  baseline?: TreeFile[];
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws } = input;
@@ -354,7 +317,7 @@ export async function runLocalBuild(input: {
           );
           return false;
         }
-        if (changedPaths(before, localGameFiles(ws.root, ws.slug)).length === 0) {
+        if (changedPaths(input.baseline ?? before, localGameFiles(ws.root, ws.slug)).length === 0) {
           input.write(
             'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
           );
@@ -459,17 +422,25 @@ async function workshopTurnUnlocked(input: {
   request: string;
   ack?: string;
   agent?: string;
+  retry?: boolean;
   write: (line: string) => void;
 }): Promise<boolean> {
   if (!(await readyToEdit(input))) return false;
   const spec = await chooseAdapter(input.ws, input.agent);
-  const task = { request: input.request, ack: input.ack, agent: spec.name };
+  const before = input.retry ? input.ws.failedTask?.before : undefined;
+  const task = {
+    request: input.request,
+    ack: input.ack,
+    agent: spec.name,
+    before: before ?? localGameFiles(input.ws.root, input.ws.slug),
+  };
   let ok: boolean;
   try {
     ok = await runLocalBuild({
       ws: input.ws,
       spec,
       brief: workshopBrief(input.ws.slug, input.request, input.ack),
+      baseline: before,
       write: input.write,
     });
   } catch (error) {

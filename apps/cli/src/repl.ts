@@ -78,6 +78,7 @@ export async function handleReplLine(input: {
           request: task.request,
           ack: task.ack,
           agent: task.agent,
+          retry: true,
           write: input.write,
         });
       } catch (error) {
