@@ -7,6 +7,7 @@ import { createApi } from './api.js';
 import { diffGame, pullGame, writeBase, writeGameFiles } from './checkout.js';
 import { memoryStore } from './keychain.js';
 import { formatSubmitLines, submitGame } from './submit.js';
+import { CliError } from './exit-codes.js';
 
 const SLUG = 'ghost-roads';
 
@@ -135,5 +136,19 @@ describe('non-game files in the game directory', () => {
     await pullGame({ api: platform(next, []), slug: SLUG, dest, force: true });
     expect(existsSync(join(dest, 'games', SLUG, NOTES))).toBe(true);
     expect(existsSync(join(dest, 'games', SLUG, 'media', 'cover.png'))).toBe(true);
+  });
+  it('refuses a pull whose incoming file lands on a local directory of notes', async () => {
+    const dest = checkoutWithNotes();
+    const withoutSim = GAME.filter((file) => file.path !== 'sim.ts');
+    writeGameFiles(dest, SLUG, withoutSim);
+    writeBase(dest, 'v1', withoutSim);
+    mkdirSync(join(dest, 'games', SLUG, 'sim.ts'));
+    writeFileSync(join(dest, 'games', SLUG, 'sim.ts', 'notes.txt'), 'mine\n');
+    const caught = await pullGame({ api: platform(GAME, []), slug: SLUG, dest }).catch((error: unknown) => error);
+    expect(caught).toBeInstanceOf(CliError);
+    expect((caught as CliError).message).toContain('pull would overwrite ignored local files (sim.ts)');
+    expect(readFileSync(join(dest, 'games', SLUG, 'sim.ts', 'notes.txt'), 'utf8')).toBe('mine\n');
+    await pullGame({ api: platform(GAME, []), slug: SLUG, dest, force: true });
+    expect(readFileSync(join(dest, 'games', SLUG, 'sim.ts'), 'utf8')).toBe('S');
   });
 });

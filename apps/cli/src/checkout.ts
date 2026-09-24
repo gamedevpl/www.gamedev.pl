@@ -189,7 +189,8 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
 
     const stat = existsSync(abs) ? lstatSync(abs) : null;
     const directory = stat !== null && !stat.isSymbolicLink() && stat.isDirectory();
-    if (!ignoredUntracked(dest, slug, file.path, tracked, matcher, directory)) continue;
+    // Directories at file paths hold only not-game files; scanGame hid them.
+    if (!directory && !ignoredUntracked(dest, slug, file.path, tracked, matcher, directory)) continue;
     if (!stat) {
       absent.push(file.path);
       continue;
