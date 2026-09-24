@@ -938,8 +938,16 @@ export function SubmissionStatusView({
                       status.platformBuilder?.available === false ? status.platformBuilder.reason : undefined
                     }
                     suppressRouteNote={isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'}
-                    onSent={(text) => {
+                    onSending={(text) => {
                       setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
+                    }}
+                    onSendFailed={(text) => {
+                      setPendingRevisions((current) => current.filter((r) => r.text !== text));
+                    }}
+                    onSent={(text) => {
+                      setPendingRevisions((current) =>
+                        current.some((r) => r.text === text) ? current : [...current, { text, at: Date.now() }],
+                      );
                       // Feedback may have switched builder or landed on `dispatched` —
                       // pull status now so we do not keep painting the previous stall.
                       pokeStudioStatus(token, i18n.language);
@@ -1164,8 +1172,16 @@ export function SubmissionStatusView({
                 platformUnavailable={
                   status.platformBuilder?.available === false ? status.platformBuilder.reason : undefined
                 }
-                onSent={(text) => {
+                onSending={(text) => {
                   setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
+                }}
+                onSendFailed={(text) => {
+                  setPendingRevisions((current) => current.filter((r) => r.text !== text));
+                }}
+                onSent={(text) => {
+                  setPendingRevisions((current) =>
+                    current.some((r) => r.text === text) ? current : [...current, { text, at: Date.now() }],
+                  );
                   pokeStudioStatus(token, i18n.language);
                 }}
                 onPublishedImprove={handleImproved}
