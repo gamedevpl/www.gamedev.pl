@@ -1,8 +1,18 @@
-import { randomBytes } from 'node:crypto';
+import {
+  codexNotification,
+  liveAgent,
+  museNotification,
+  RpcError,
+  uuidv7,
+  type AgentEvent,
+  type AgentOutcome,
+  type AgentRun,
+  type LiveSession,
+} from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
-import { agentRpc, type RpcValue } from './agent-rpc.js';
 import { evidenceImages } from './workbench-evidence.js';
 
+type RpcValue = Record<string, unknown>;
 export type Steer = (text: string) => Promise<void>;
 export type LiveRunInput = {
   spec: AdapterSpec;
@@ -14,14 +24,11 @@ export type LiveRunInput = {
   onDiagnostic?: (line: string) => void;
   onSteering?: (send: Steer | undefined) => void;
 };
-function uuid7() {
-  const bytes = randomBytes(16);
-  bytes.writeUIntBE(Date.now(), 0, 6);
-  bytes[6] = (bytes[6]! & 15) | 112;
-  bytes[8] = (bytes[8]! & 63) | 128;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
+
+const ACK_TIMEOUT_MS = 30_000;
+const TASK_TIMEOUT_MS = 30 * 60_000;
+export const MUSE_APPROVAL_LINE = 'Muse needs your approval — returning to permission handoff.';
+
 export function liveArgs(spec: AdapterSpec): string[] | undefined {
   if (!['codex', 'muse'].includes(spec.name)) return undefined;
   const args: string[] = [];
@@ -53,145 +60,184 @@ export function turnInput(name: string, text: string): RpcValue[] {
   const images = name === 'codex' ? evidenceImages(text) : [];
   return [{ type: 'text', text }, ...images.map((path) => ({ type: 'localImage', path }))];
 }
+
+function eventLine(event: AgentEvent): string | undefined {
+  switch (event.type) {
+    case 'message':
+      return event.text;
+    case 'tool-start':
+      return `⚙ ${event.name}`;
+    case 'file-change':
+      return `Edited: ${event.paths.join(', ')}`;
+    case 'error':
+      return event.message;
+    case 'stderr':
+      return event.text.slice(0, 8000);
+    case 'raw':
+      return event.line;
+    default:
+      return undefined;
+  }
+}
+
+// Transport and events come from genaicode/agents; protocol choices stay here.
 export async function runLiveAgent(input: LiveRunInput): Promise<{ code: number; permissionSession?: string }> {
   const args = liveArgs(input.spec);
   if (!args) throw new Error('This adapter supports queued follow-ups only.');
-  const name = input.spec.name;
-  let session = '',
-    turn = '',
-    active = false,
-    finished = false;
-  let inFlight = 0;
-  let completionCode = 1;
   let permissionSession: string | undefined;
-  let complete: (code: number) => void;
-  const done = new Promise<number>((resolve) => {
-    complete = resolve;
+  let accepting = false;
+  let decided = false;
+  const steering = (open: boolean) => {
+    accepting = open;
+    input.onSteering?.(
+      open
+        ? async (text) => {
+            if (!accepting || input.abort?.aborted) throw new Error('This task has ended; your message was not sent.');
+            await run.steer!(text);
+          }
+        : undefined,
+    );
+  };
+  const agent = liveAgent({
+    name: input.spec.name,
+    command: input.spec.command,
+    args: () => args,
+    drive: (session) =>
+      drive(session, input, {
+        steering,
+        decided: () => {
+          decided = true;
+        },
+        handoff: (id) => {
+          permissionSession = id;
+        },
+      }),
   });
-  const finish = (code: number) => {
-    if (finished) {
-      if (code !== 0) {
-        completionCode = code;
-        complete(code);
-      }
+  const run: AgentRun = agent.run({
+    prompt: input.prompt,
+    cwd: input.cwd,
+    env: input.env,
+    signal: input.abort,
+    timeoutMs: TASK_TIMEOUT_MS,
+    model: input.spec.selection?.model,
+    effort: input.spec.selection?.effort,
+  });
+  try {
+    for await (const event of run) {
+      const line = eventLine(event);
+      if (line) input.onLine?.(line);
+    }
+    const result = await run.result;
+    if (!result.ok && !decided && result.status !== 'aborted' && result.error) input.onLine?.(result.error);
+    return { code: result.ok ? 0 : 1, permissionSession };
+  } finally {
+    accepting = false;
+    input.onSteering?.(undefined);
+  }
+}
+
+async function drive(
+  session: LiveSession,
+  input: LiveRunInput,
+  hooks: { steering: (open: boolean) => void; decided: () => void; handoff: (id: string) => void },
+): Promise<AgentOutcome> {
+  const { rpc, task } = session;
+  const name = input.spec.name;
+  const muse = name === 'muse';
+  const key = muse ? 'sessionId' : 'threadId';
+  let id = '';
+  let turn = '';
+  let inFlight = 0;
+  let verdict: AgentOutcome | undefined;
+  let settle: (outcome: AgentOutcome) => void = () => {};
+  const settled = new Promise<AgentOutcome>((resolve) => {
+    settle = resolve;
+  });
+  // A steer sent just before the turn ended still gets its acknowledgement.
+  const finish = (outcome: AgentOutcome) => {
+    if (verdict) return;
+    verdict = outcome;
+    hooks.decided();
+    hooks.steering(false);
+    if (!outcome.ok || inFlight === 0) settle(outcome);
+  };
+  const diagnostic = (method: string, params: unknown) => input.onDiagnostic?.(JSON.stringify({ method, params }));
+
+  session.onNotification((method, params) => {
+    diagnostic(method, params);
+    const value = (params ?? {}) as RpcValue;
+    if (!id || value[key] !== id) return;
+    if (method === 'turn/completed') {
+      const ended = value.turn as RpcValue | undefined;
+      if (turn && (muse ? value.turnId : ended?.id) !== turn) return;
+      const status = muse ? value.terminal : ended?.status;
+      const error = (value.error ?? ended?.error) as RpcValue | undefined;
+      if (typeof error?.message === 'string' && error.message) session.emit({ type: 'error', message: error.message });
+      finish(
+        status === 'completed' ? { ok: true } : { ok: false, error: `${name} turn ${String(status ?? 'ended')}.` },
+      );
       return;
     }
-    completionCode = code;
-    finished = true;
-    active = false;
-    input.onSteering?.(undefined);
-    if (code !== 0 || inFlight === 0) complete(code);
-  };
-  const line = (text: unknown) => {
-    if (typeof text === 'string' && text) input.onLine?.(text);
-  };
-  const rpc = agentRpc({
-    ...input,
-    command: input.spec.command,
-    args,
-    stderr: line,
-    event(method, params, id) {
-      input.onDiagnostic?.(JSON.stringify({ method, params }));
-      if (method === 'transport/closed') {
-        line(params.message);
-        finish(1);
-        return;
-      }
-      if (id !== undefined) {
-        if (name === 'muse' && method === 'approval/request') {
-          permissionSession = session;
-          line('Muse needs your approval — returning to permission handoff.');
-          finish(1);
-        }
-        rpc.reject(id);
-        return;
-      }
-      if (method === 'turn/completed') {
-        const value = params.turn as RpcValue | undefined;
-        if (name === 'codex' && params.threadId !== session) return;
-        if (name === 'muse' && params.sessionId !== session) return;
-        const completedTurn = name === 'muse' ? params.turnId : value?.id;
-        if (turn && completedTurn !== turn) return;
-        const status = name === 'muse' ? params.terminal : value?.status;
-        const error = (params.error ?? value?.error) as RpcValue | undefined;
-        line(error?.message);
-        finish(status === 'completed' ? 0 : 1);
-      }
-      if (method === 'item/completed' || method === 'item/started') {
-        if ((name === 'codex' ? params.threadId : params.sessionId) !== session) return;
-        const item = params.item as RpcValue | undefined;
-        const kind = item?.type ?? item?.kind;
-        if (kind === 'agentMessage' && method === 'item/completed') line(item?.text);
-        else if (
-          method === 'item/started' &&
-          ['commandExecution', 'toolCall', 'mcpToolCall', 'fileChange'].includes(String(kind))
-        )
-          line(`⚙ ${item?.toolName ?? kind}`);
-      }
-    },
+    for (const event of (muse ? museNotification : codexNotification)(method, params)) session.emit(event);
   });
-  const stop = () => finish(1);
-  input.abort?.addEventListener('abort', stop, { once: true });
-  const deadline = setTimeout(stop, 30 * 60_000);
-  try {
-    if (input.abort?.aborted) throw new Error('Agent stopped.');
-    await rpc.request('initialize', {
-      clientInfo: { name: 'gamedevpl', version: '1' },
-      ...(name === 'muse' ? { capabilities: { userInputDialogs: false } } : {}),
-    });
-    rpc.notify('initialized');
-    const created = await rpc.request(
-      name === 'muse' ? 'session/start' : 'thread/start',
-      name === 'muse'
-        ? {
-            commandId: uuid7(),
-            workspaceRoot: input.cwd,
-            modelId: input.spec.selection?.model,
-            approvalMode: 'onRequest',
-          }
-        : { cwd: input.cwd, model: input.spec.selection?.model, sandbox: 'workspace-write', approvalPolicy: 'never' },
-    );
-    session = String(
-      ((created.session ?? created.thread) as RpcValue | undefined)?.[name === 'muse' ? 'sessionId' : 'id'] ?? '',
-    );
-    if (!session) throw new Error('Agent did not return a session ID.');
-    const started = await rpc.request('turn/start', {
-      [name === 'muse' ? 'sessionId' : 'threadId']: session,
-      input: turnInput(name, input.prompt),
-      ...(name === 'muse'
-        ? { commandId: uuid7(), reasoningEffort: input.spec.selection?.effort }
-        : { effort: input.spec.selection?.effort }),
-    });
-    turn = String(name === 'muse' ? started.turnId : ((started.turn as RpcValue | undefined)?.id ?? ''));
-    if (!turn) throw new Error('Agent did not return a turn ID.');
-    active = !finished;
-    if (active)
-      input.onSteering?.(async (text) => {
-        if (!active || finished || input.abort?.aborted)
-          throw new Error('This task has ended; your message was not sent.');
-        inFlight++;
-        try {
-          const result = await rpc.request('turn/steer', {
-            [name === 'muse' ? 'sessionId' : 'threadId']: session,
-            expectedTurnId: turn,
-            input: turnInput(name, text),
-            ...(name === 'muse' ? { commandId: uuid7() } : {}),
-          });
-          if (result.turnId !== turn)
-            throw new Error(
-              'Unexpected acknowledgement; delivery outcome unknown. Check the transcript before resending.',
-            );
-        } finally {
-          inFlight--;
-          if (finished && inFlight === 0) complete(completionCode);
-        }
-      });
-    const code = await done;
-    return { code, permissionSession };
-  } finally {
-    finish(1);
-    clearTimeout(deadline);
-    input.abort?.removeEventListener('abort', stop);
-    await rpc.close();
-  }
+  session.onRequest((method, params) => {
+    diagnostic(method, params);
+    if (muse && method === 'approval/request') {
+      hooks.handoff(id);
+      session.emit({ type: 'error', message: MUSE_APPROVAL_LINE });
+      finish({ ok: false, error: MUSE_APPROVAL_LINE });
+    }
+    throw new RpcError('This client cannot grant this request.', -32601);
+  });
+
+  await rpc.request(
+    'initialize',
+    { clientInfo: { name: 'gamedevpl', version: '1' }, ...(muse ? { capabilities: { userInputDialogs: false } } : {}) },
+    ACK_TIMEOUT_MS,
+  );
+  rpc.notify('initialized');
+  const created = (await rpc.request(
+    muse ? 'session/start' : 'thread/start',
+    muse
+      ? { commandId: uuidv7(), workspaceRoot: task.cwd, modelId: task.model, approvalMode: 'onRequest' }
+      : { cwd: task.cwd, model: task.model, sandbox: 'workspace-write', approvalPolicy: 'never' },
+    ACK_TIMEOUT_MS,
+  )) as RpcValue;
+  id = String(((created.session ?? created.thread) as RpcValue | undefined)?.[muse ? 'sessionId' : 'id'] ?? '');
+  if (!id) throw new Error('Agent did not return a session ID.');
+  session.emit({ type: 'session', sessionId: id });
+  const started = (await rpc.request(
+    'turn/start',
+    {
+      [key]: id,
+      input: turnInput(name, task.prompt),
+      ...(muse ? { commandId: uuidv7(), reasoningEffort: task.effort } : { effort: task.effort }),
+    },
+    ACK_TIMEOUT_MS,
+  )) as RpcValue;
+  turn = String(muse ? started.turnId : ((started.turn as RpcValue | undefined)?.id ?? ''));
+  if (!turn) throw new Error('Agent did not return a turn ID.');
+  if (verdict) return settled;
+  session.setSteer(async (text) => {
+    inFlight++;
+    try {
+      const ack = (await rpc.request(
+        'turn/steer',
+        {
+          [key]: id,
+          expectedTurnId: turn,
+          input: turnInput(name, text),
+          ...(muse ? { commandId: uuidv7() } : {}),
+        },
+        ACK_TIMEOUT_MS,
+      )) as RpcValue;
+      if (ack.turnId !== turn)
+        throw new Error('Unexpected acknowledgement; delivery outcome unknown. Check the transcript before resending.');
+    } finally {
+      inFlight--;
+      if (verdict && inFlight === 0) settle(verdict);
+    }
+  });
+  hooks.steering(true);
+  return settled;
 }

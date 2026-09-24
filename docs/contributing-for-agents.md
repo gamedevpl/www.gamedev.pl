@@ -166,6 +166,8 @@ coding agent** (`npx genaicode@1`). **GenAIcode 2.x is a backend LLM toolkit**, 
 and is a runtime dependency of `@gamedevpl/api`: every Vertex AI call goes through
 [`apps/api/src/platform/genai.ts`](../apps/api/src/platform/genai.ts). Add LLM call sites there rather than
 hand-rolling `GoogleAuth` + REST against `*-aiplatform.googleapis.com`.
+The CLI uses its `genaicode/agents` subpath for live codex and muse sessions
+([`apps/cli/src/live-agent.ts`](../apps/cli/src/live-agent.ts)) and for scrubbing the agent environment.
 
 ## Removed approaches
 

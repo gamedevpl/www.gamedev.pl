@@ -5,6 +5,7 @@ import { createMuseStream, museEventText } from './muse-events.js';
 import { antigravityText } from './agent-events.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { scrubEnv } from 'genaicode/agents';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
 import { evidenceImages } from './workbench-evidence.js';
@@ -15,14 +16,10 @@ export const CREATOR_TOKEN_PATTERN = /gdpl_(oat|pat)_/;
 export type ChildMcp = { url: string; authorization: string };
 
 export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string, mcp?: ChildMcp): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(parent)) {
-    if (value === undefined) continue;
-    if (CREATOR_TOKEN_PATTERN.test(value)) continue;
-    if (/GAMEDEV_TOKEN|GAMEDEV_ACCESS_TOKEN|GDPL_OAT|GDPL_PAT|OAUTH_ACCESS/i.test(key)) continue;
-    env[key] = value;
-  }
-  delete env.GAMEDEV_ROUND_TOKEN;
+  const env = scrubEnv(parent, {
+    names: [/GAMEDEV_TOKEN|GAMEDEV_ACCESS_TOKEN|GDPL_OAT|GDPL_PAT|OAUTH_ACCESS/i, 'GAMEDEV_ROUND_TOKEN'],
+    values: [CREATOR_TOKEN_PATTERN],
+  });
   if (roundToken && !CREATOR_TOKEN_PATTERN.test(roundToken)) env.GAMEDEV_ROUND_TOKEN = roundToken;
   if (mcp) {
     env.GAMEDEVPL_MCP_URL = mcp.url;

@@ -120,3 +120,58 @@ it('preserves local MCP configuration and keeps unverified transports queued', (
   for (const name of ['copilot', 'agy', 'vibe', 'claude'])
     expect(liveArgs(loadAdapters().adapters.find((s) => s.name === name)!)).toBeUndefined();
 });
+
+it('renders codex app-server items as lines and sends staged screenshots as images', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gd-live-lines-'));
+  roots.push(root);
+  const command = join(root, 'agent');
+  writeFileSync(
+    command,
+    `#!${process.execPath}
+const send=x=>process.stdout.write(JSON.stringify(x)+'\\n');
+const note=(method,item)=>send({method,params:{threadId:'t',item}});
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
+ const m=JSON.parse(line); if(m.id===undefined)return;
+ if(m.method==='initialize')send({id:m.id,result:{}});
+ if(m.method==='thread/start')send({id:m.id,result:{thread:{id:'t'}}});
+ if(m.method==='turn/start'){
+  send({id:m.id,result:{turn:{id:'u'}}});
+  note('item/completed',{type:'agentMessage',text:'inputs '+m.params.input.map(i=>i.type).join(',')});
+  note('item/started',{type:'commandExecution',id:'c',command:'npm test'});
+  note('item/completed',{type:'fileChange',changes:[{path:'game.ts'}]});
+  send({method:'turn/completed',params:{threadId:'t',turn:{id:'u',status:'completed'}}});
+ }
+});`,
+    { mode: 0o700 },
+  );
+  const spec = { ...loadAdapters().adapters.find((s) => s.name === 'codex')!, command };
+  const image = join(root, 'shot.png');
+  writeFileSync(image, '');
+  const { EVIDENCE_MARKER } = await import('./workbench-evidence.js');
+  const evidence = JSON.stringify({ name: 'shot.png', mime: 'image/png', path: image });
+  const lines: string[] = [];
+  const result = await runLiveAgent({
+    spec,
+    cwd: root,
+    env: process.env,
+    prompt: 'fix it' + EVIDENCE_MARKER + evidence,
+    onLine: (line) => lines.push(line),
+    onSteering: () => {},
+  });
+  expect(result.code).toBe(0);
+  expect(lines).toEqual(['inputs text,localImage', '⚙ shell', 'Edited: game.ts']);
+});
+
+it('reports a live agent that cannot start instead of throwing', async () => {
+  const spec = { ...loadAdapters().adapters.find((s) => s.name === 'muse')!, command: '/nonexistent/muse' };
+  const lines: string[] = [];
+  const result = await runLiveAgent({
+    spec,
+    cwd: tmpdir(),
+    env: process.env,
+    prompt: 'hi',
+    onLine: (l) => lines.push(l),
+  });
+  expect(result.code).toBe(1);
+  expect(lines.join('\n')).toMatch(/muse/);
+});
