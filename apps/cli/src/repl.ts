@@ -69,6 +69,22 @@ export async function handleReplLine(input: {
   }
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
+    const task = input.workshop?.failedTask;
+    if (task && input.workshop) {
+      try {
+        await workshopTurn({
+          api: input.api,
+          ws: input.workshop,
+          request: task.request,
+          ack: task.ack,
+          agent: task.agent,
+          write: input.write,
+        });
+      } catch (error) {
+        input.write(formatError(error));
+      }
+      return { next: 'continue', conversationId: input.conversationId };
+    }
     input.write('no pending task to retry');
     return { next: 'continue', conversationId: input.conversationId };
   }

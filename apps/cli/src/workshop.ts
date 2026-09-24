@@ -18,8 +18,11 @@ import { permissionBlocked } from './agent-events.js';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
-import { cliUsage } from './bin-name.js';
-import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles, type SyncResult } from './checkout.js';
+import { describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
+export { describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
+import { syncWarning } from './workshop-sync.js';
+export { syncWarning } from './workshop-sync.js';
+import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles } from './checkout.js';
 import { childEnv } from './delegate.js';
 import { createEventRenderer } from './agent-render.js';
 import { formatError } from './errors.js';
@@ -44,6 +47,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
+  failedTask?: { request: string; ack?: string; agent: string };
   onActivity?: (activity: string) => void;
   lastLog?: string;
   activityApi?: ApiClient;
@@ -65,29 +69,6 @@ export type Workshop = {
 export type HandoffOutcome = { builder: string; pending: boolean };
 
 export const ADAPTER_TIMEOUT_MS = 30 * 60_000;
-
-export function detectLocalAdapters(
-  env: NodeJS.ProcessEnv,
-  which: (cmd: string) => string | null = (cmd) => whichOnPath(cmd, env),
-): AdapterSpec[] {
-  const file = loadAdapters(env);
-  return file.adapters.flatMap((row) => {
-    const spec = detectAdapter(row.name, which, file);
-    return spec ? [spec] : [];
-  });
-}
-
-export function describeAdapters(adapters: AdapterSpec[], all = loadAdapters().adapters): string {
-  if (adapters.length) return `local agents: ${adapters.map((spec) => spec.name).join(', ')}`;
-  return `no local agent on PATH (${all.map((spec) => spec.name).join(', ')}) — the platform builds; /pull afterwards`;
-}
-
-export function syncWarning(sync: SyncResult): string | null {
-  if (sync.kind === 'platform_only') return `the platform is ahead (${sync.platform.join(', ')}) — /pull first`;
-  if (sync.kind === 'conflict') return `conflict on ${sync.conflict.join(', ')} — /diff before editing`;
-  if (sync.kind === 'legacy') return `no base version here — ${cliUsage('checkout', '<slug>')} again for a clean copy`;
-  return null;
-}
 
 export async function openWorkshop(input: {
   api: ApiClient;
@@ -363,7 +344,12 @@ export async function runLocalBuild(input: {
         if (!handedOff && (result.code ?? 1) !== 0) {
           input.write(
             formatError(
-              failure.error(result.code, '/diff to review partial edits, then repeat your request when ready'),
+              failure.error(
+                result.code,
+                ws.unattended
+                  ? '/diff to review partial edits, then rerun the delegate command'
+                  : '/diff to review partial edits, then /retry to resume this task',
+              ),
             ),
           );
           return false;
@@ -467,7 +453,6 @@ export async function readyToEdit(input: {
   }
 }
 
-// One creator request, end to end: agent, ladder, offer.
 async function workshopTurnUnlocked(input: {
   api: ApiClient;
   ws: Workshop;
@@ -478,12 +463,28 @@ async function workshopTurnUnlocked(input: {
 }): Promise<boolean> {
   if (!(await readyToEdit(input))) return false;
   const spec = await chooseAdapter(input.ws, input.agent);
-  const ok = await runLocalBuild({
-    ws: input.ws,
-    spec,
-    brief: workshopBrief(input.ws.slug, input.request, input.ack),
-    write: input.write,
-  });
+  const task = { request: input.request, ack: input.ack, agent: spec.name };
+  let ok: boolean;
+  try {
+    ok = await runLocalBuild({
+      ws: input.ws,
+      spec,
+      brief: workshopBrief(input.ws.slug, input.request, input.ack),
+      write: input.write,
+    });
+  } catch (error) {
+    input.ws.failedTask = task;
+    if (!input.ws.unattended)
+      input.write(`Task saved locally — /retry resumes it with ${spec.name}; /diff shows partial edits.`);
+    throw error;
+  }
+  if (!ok) {
+    input.ws.failedTask = task;
+    if (!input.ws.unattended)
+      input.write(`Task saved locally — /retry resumes it with ${spec.name}; /diff shows partial edits.`);
+    return false;
+  }
+  delete input.ws.failedTask;
   if (ok) await offerSubmit(input);
   return ok;
 }
