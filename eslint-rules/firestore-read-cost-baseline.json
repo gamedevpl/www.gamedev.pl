@@ -1,6 +1,7 @@
 {
   "version": 1,
   "routes": {
+    "GET /api/admin/summary (steady state)": 39,
     "GET /api/notifications": 8,
     "GET /api/review/status": 12,
     "GET /api/submissions/:token": 19,
