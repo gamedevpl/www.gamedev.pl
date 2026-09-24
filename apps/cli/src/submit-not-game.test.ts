@@ -88,6 +88,22 @@ describe('non-game files in the game directory', () => {
     expect(readFileSync(join(dest, 'games', SLUG, NOTES), 'utf8')).toBe('# pomysły\n');
   });
 
+  it('keeps a whitespace-padded twin of a game file local', async () => {
+    const dest = checkoutWithNotes();
+    writeFileSync(join(dest, 'games', SLUG, 'game.ts '), 'shadow');
+    const staged: string[] = [];
+    const result = await submitGame({
+      api: platform(GAME, staged, [], true),
+      slug: SLUG,
+      dest,
+      takeover: true,
+      run: () => ({ status: 0, stderr: '' }),
+    });
+    expect(staged).not.toContain('game.ts ');
+    expect(staged).toContain('game.ts');
+    expect(result.ignored.map((hit) => `${hit.source}:${hit.path}`)).toContain('not-game:game.ts ');
+  });
+
   it('does not stage a new notes file as a local change', async () => {
     const dest = checkoutWithNotes();
     writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');

@@ -169,7 +169,7 @@ export function deliveryPathRefusal(rawPath: string): string | null {
   return null;
 }
 
-// True when a delivery may carry this games/<slug>/-relative path.
+// True for games/<slug>/-relative paths; untrimmed, since the API trims.
 export function isDeliverablePath(path: string): boolean {
-  return deliveryPathRefusal(path) === null;
+  return path === path.trim() && deliveryPathRefusal(path) === null;
 }

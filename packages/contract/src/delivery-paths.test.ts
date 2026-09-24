@@ -23,6 +23,8 @@ describe('isDeliverablePath', () => {
       '../x.ts',
       'Game.ts',
       'game//x.ts',
+      'game.ts ',
+      ' SPEC.md',
     ]) {
       expect(isDeliverablePath(path), path).toBe(false);
     }
