@@ -1072,7 +1072,7 @@
     "packages/contract/src/gate-progress.ts": 30,
     "packages/contract/src/gate-status.test.ts": 49,
     "packages/contract/src/gate-status.ts": 25,
-    "packages/contract/src/index.ts": 167,
+    "packages/contract/src/index.ts": 168,
     "packages/contract/src/job-state.test.ts": 36,
     "packages/contract/src/job-state.ts": 49,
     "packages/contract/src/managed-agent-vendor.test.ts": 8,

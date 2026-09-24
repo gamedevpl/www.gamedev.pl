@@ -18,23 +18,20 @@ import { retryStorageWrite } from './storage-write-retry.js';
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
-import type { DeliveryMode } from '@gamedevpl/contract';
+import { deliveryPathRefusal, type DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { isPublishableMode } from '../platform/publication-state.js';
 import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
 import { GoogleAuth } from 'google-auth-library';
 import {
-  DELIVERY_EXTRA_MODULE_PATTERN,
   DELIVERY_FIXED_FILES,
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
-  DELIVERY_RESERVED_SEGMENTS,
 } from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
-import { isRasterSourcePath } from '../platform/raster-source.js';
-import { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
+import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 import {
   canonicalizeUploadedSource,
   measureUploadedSourceBytes,
@@ -76,26 +73,7 @@ export type { GateProgress } from './gate-progress.js';
  */
 export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 
-/** A game's own `.ts` modules, the one thing it may add beyond the fixed set. */
-const EXTRA_SOURCE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
-
-/** Config/exec path refusals live in delivery-path-guard.ts. */
-
-/**
- * First path segments a game may not use.
- *
- * Note these are *not* what confines an upload — that is structural and comes from two
- * other facts: every stored path is prefixed with the version's own `source/`, so no
- * upload can name an object outside the game it belongs to, and `..` is rejected by shape
- * below. A file called `shared/x.ts` would therefore land harmlessly inside the game's
- * own tree.
- *
- * They are rejected anyway because a game directory containing `shared/` or `tools/`
- * reads as though it were editing the harness, and a boundary is only useful if a human
- * reviewing a diff can see it holding. Costing an agent one clear error message is a
- * better trade than a directory listing nobody can interpret at a glance.
- */
-const RESERVED_SEGMENTS = new Set<string>(DELIVERY_RESERVED_SEGMENTS);
+/** Path refusals (config/exec shapes, reserved segments, the allowlist) live in `@gamedevpl/contract`. */
 
 /** Mirrors the games repo's own slug rule, so a name valid here is valid there. */
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -161,35 +139,11 @@ export const MAX_STAGING_MANIFEST_RETRIES = 64;
  * file-by-file staging — required-set checks (SPEC.md, TRACE, …) stay on finalize.
  */
 export function assertDeliverableSourcePath(rawPath: string): string {
-  const path = rawPath.trim();
-  // Traversal is checked before anything else and rejected by shape, not by
-  // normalization: `..` never appears in a legitimate game file, so there is no reason
-  // to be clever about resolving it.
-  if (path.includes('..') || path.startsWith('/') || path.includes('\\') || path.includes('\0')) {
-    throw new InvalidUploadError(`illegal path: ${rawPath}`);
-  }
-
-  const forbidden = forbiddenDeliveryPathReason(path);
-  if (forbidden) throw new InvalidUploadError(forbidden);
-
-  if (RESERVED_SEGMENTS.has(path.split('/')[0])) {
-    throw new InvalidUploadError(
-      `path not deliverable: ${path}. \`${path.split('/')[0]}\` belongs to the harness — ` +
-        'GameKit, the tooling and other games are read-only context.',
-    );
-  }
-
-  const allowed =
-    (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
-    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//')) ||
-    isRasterSourcePath(path);
-  if (!allowed) {
-    throw new InvalidUploadError(
-      `path not deliverable: ${path}. Deliver only your own game's files ` +
-        `(${ALLOWED_SOURCE_FILES.join(', ')}, your own .ts modules, or scenes/cast/images PNG/WebP).`,
-    );
-  }
-  return path;
+  // The rules (and their refusal text) are shared with the CLI via `@gamedevpl/contract`,
+  // so it can keep undeliverable files local rather than fail a whole delivery on them.
+  const refusal = deliveryPathRefusal(rawPath);
+  if (refusal) throw new InvalidUploadError(refusal);
+  return rawPath.trim();
 }
 
 export function validateSourceUpload(
