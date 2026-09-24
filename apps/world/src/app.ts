@@ -53,6 +53,7 @@ const ClientFrameSchema = z.discriminatedUnion('t', [
 
 export interface WorldAppOptions extends Omit<ZoneHostOptions, 'secret' | 'prevSecret'> {
   secret?: string;
+  prevSecret?: string;
   logger?: boolean;
   maxSocketsPerIp?: number;
 }
@@ -77,7 +78,7 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
   const host = new ZoneHost({
     ...options,
     secret,
-    prevSecret: process.env.ZONE_TICKET_SECRET_PREV,
+    prevSecret: options.prevSecret ?? process.env.ZONE_TICKET_SECRET_PREV,
     onWarn:
       options.onWarn ??
       ((event) => {

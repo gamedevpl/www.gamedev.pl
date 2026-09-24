@@ -14,6 +14,7 @@ describe('relay-only app', () => {
 
     const app = await buildApp({
       multiplayerRoutes: {
+        relayOnly: false,
         registry: new RoomRegistry({ secret: 'room-key' }),
         internalAuth: { verify: async () => true },
       },
@@ -47,6 +48,30 @@ describe('relay-only app', () => {
       });
       expect(created.statusCode).toBe(200);
       expect((await app.inject({ method: 'GET', url: '/api/auth/me' })).statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('honors the relay-only option without an environment flag', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('MP_RELAY_ONLY', undefined);
+    vi.stubEnv('SESSION_SECRET', undefined);
+    vi.stubEnv('MP_ROOM_SECRET', 'room-key');
+
+    const app = await buildApp({
+      multiplayerRoutes: {
+        relayOnly: true,
+        registry: new RoomRegistry({ secret: 'room-key' }),
+        internalAuth: { verify: async () => true },
+      },
+    });
+    try {
+      await app.ready();
+      expect(app.hasRequestDecorator('user')).toBe(false);
+      expect(app.hasRoute({ method: 'POST', url: '/api/internal/mp/sessions' })).toBe(true);
+      expect(app.hasRoute({ method: 'GET', url: '/api/auth/me' })).toBe(false);
+      expect(app.hasRoute({ method: 'POST', url: '/api/mp/sessions' })).toBe(false);
     } finally {
       await app.close();
     }

@@ -224,7 +224,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
 
-  const relayOnly = isRelayOnly();
+  const relayOnly = isRelayOnly() || options.multiplayerRoutes?.relayOnly === true;
   registerClientAddress(app, !relayOnly);
   registerReadMeterLog(app);
   registerApiCompression(app);
