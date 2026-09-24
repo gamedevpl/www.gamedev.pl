@@ -5,8 +5,7 @@
 # lifecycle, and its own origin.
 #
 # Prerequisites (both already exist for the app service):
-#   - the `session-secret` secret: zone tickets are HMAC'd from it under a distinct
-#     scope string, exactly as party room tokens are. No new secret.
+#   - the `zone-ticket-secret` secret for zone tickets.
 #   - the `github-token` secret: the host reads each game's sim.ts and shared/sim-math.ts
 #     from the games repo at the published ref.
 #
@@ -20,7 +19,8 @@
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-world.sh
 #
-# Override via env: REGION, SERVICE, REPO, GAMES_REPO, RUNTIME_SA.
+# Override via env: REGION, SERVICE, REPO, GAMES_REPO, RUNTIME_SA,
+# ZONE_TICKET_PREV_SECRET (only while accepting tickets from an earlier key).
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID to your GCP project id}"
@@ -42,13 +42,17 @@ gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild-world.ya
   --substitutions "_IMAGE=${IMAGE}" --project "$PROJECT_ID"
 
 SECRET_MAPPINGS=()
-for secret in session-secret github-token; do
+for secret in zone-ticket-secret github-token; do
   if ! gcloud secrets describe "$secret" --project "$PROJECT_ID" >/dev/null 2>&1; then
     echo "!! secret '${secret}' not found. The host cannot verify tickets or read sims without both." >&2
     exit 1
   fi
 done
-SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest" "GITHUB_TOKEN=github-token:latest")
+SECRET_MAPPINGS+=("ZONE_TICKET_SECRET=zone-ticket-secret:latest" "GITHUB_TOKEN=github-token:latest")
+if [ -n "${ZONE_TICKET_PREV_SECRET:-}" ]; then
+  gcloud secrets describe "$ZONE_TICKET_PREV_SECRET" --project "$PROJECT_ID" >/dev/null
+  SECRET_MAPPINGS+=("ZONE_TICKET_SECRET_PREV=${ZONE_TICKET_PREV_SECRET}:latest")
+fi
 joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"

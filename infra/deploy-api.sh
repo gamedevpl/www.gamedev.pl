@@ -304,6 +304,13 @@ if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
 fi
+for mapping in "MP_ROOM_SECRET=mp-room-secret:latest" "UNSUBSCRIBE_SECRET=unsubscribe-secret:latest" "ZONE_PLAYER_SECRET=zone-player-secret:latest" "ZONE_TICKET_SECRET=zone-ticket-secret:latest"; do
+  secret="${mapping#*=}"
+  secret="${secret%:latest}"
+  if gcloud secrets describe "$secret" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    SECRET_MAPPINGS+=("$mapping")
+  fi
+done
 
 # Resend API key for outbound email (beta invites now; notifications later). The
 # mailer degrades to a no-op console logger when absent, so email is simply off
