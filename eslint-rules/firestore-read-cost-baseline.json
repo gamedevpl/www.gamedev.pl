@@ -12,6 +12,7 @@
     "GET /api/submissions/:token (steady state)": 2,
     "GET /api/submissions/mine": 23,
     "GET /api/submissions/mine (derived-only owner)": 10,
-    "GET /api/submissions/mine (document, steady state)": 2
+    "GET /api/submissions/mine (document, steady state)": 2,
+    "POST /api/internal/notify-sweep (steady state)": 83
   }
 }

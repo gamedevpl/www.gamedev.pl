@@ -65,6 +65,8 @@ export async function stampEmptyInbox(
     if ((await relist()).length > 0) await writePendingInboxFlag(db, jobId, true);
     return;
   }
+  // Already stamped: a transaction would re-read it only to write nothing.
+  if (current === false) return;
   await writePendingInboxFlag(db, jobId, false);
 }
 

@@ -1822,7 +1822,7 @@ export async function registerSubmissionRoutes(
     recordDerivedJobState,
     reconcileNativeJob,
     reconcileGateVerdict,
-    nativeJobStatus,
+    nativeJobStatus: (record) => nativeJobStatus(record, { detail: false }),
     buildNotifyDeps,
   });
 
