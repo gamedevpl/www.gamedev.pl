@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Notes and other non-game files in the game folder (for example `NOTATKI-I-POMYSLY.md`) stay local instead of failing the whole push: push prints `Kept local (not game files): …`, and diff and pull leave them alone.
+- Notes and other non-game files in the game folder (for example `NOTATKI-I-POMYSLY.md`) stay local instead of failing the whole push: push prints `Kept local (not game files): …`, and diff and pull leave them alone (#1469).
 
 ## 0.20.0 — 2026-09-23
 
