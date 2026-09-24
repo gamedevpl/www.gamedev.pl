@@ -78,6 +78,7 @@ export interface JobReconcilerDeps {
   }) => Promise<void> | void;
   // Fired after a gate screenshot lands, to bust the media cache.
   onGateScreenshotPosted?: (jobId: number) => void;
+  onGateRed?: (input: { record: SubmissionRecord; version: string; report: string }) => Promise<boolean>;
 }
 
 export interface JobReconciler {
@@ -105,6 +106,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     postGateScreenshot,
     onPreviewGateGreen,
     onGateScreenshotPosted,
+    onGateRed,
   } = deps;
 
   // Asks the backend what happened to a job whose agent went quiet.
@@ -288,7 +290,9 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
   async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
     if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
-    if (state !== 'building' && state !== 'submitted') return null;
+    const redPendingRepair =
+      state === 'needs_changes' && ['gate_red', 'kit_outdated'].includes(record.transitions?.at(-1)?.reason ?? '');
+    if (state !== 'building' && state !== 'submitted' && !redPendingRepair) return null;
     try {
       const roundGeneration = record.roundGeneration ?? 1;
       // Retained versions may belong to an older round.
@@ -331,6 +335,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
 
       const verdict = manifest?.gate;
       if (verdict && record.deliveredVersion) {
+        if (redPendingRepair && verdict.green) return null;
         const status: DeliveryGateStatus = deriveGateStatusString(verdict);
         await emitGateMetric({
           mode: 'publish',
@@ -342,14 +347,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
 
         // The human review it waits for is the moderation boundary.
         const to = verdict.green ? 'ready_for_review' : 'needs_changes';
-        if (!canTransition(state, to)) return null;
+        if (!redPendingRepair && !canTransition(state, to)) return null;
         const transition: JobTransition = {
           to,
           at: verdict.ranAt,
           by: 'gate',
           reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
         };
-        const recorded = await store.recordJobTransition(record.jobId, transition);
+        const recorded = redPendingRepair || (await store.recordJobTransition(record.jobId, transition));
         if (!recorded) return null;
         // The outgoing token just died; resume any pending handoff now.
         if (to === 'ready_for_review' && record.builderHandoff?.awaitsAgentAck) {
@@ -364,7 +369,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         // First time acting on this verdict: post the capture frame.
 
         // The creator sees what the platform check saw, on the usual path.
-        if (verdict.screenshot) {
+        if (verdict.screenshot && !redPendingRepair) {
           try {
             await postGateScreenshot({
               store,
@@ -379,11 +384,21 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
             log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
           }
         }
-        return transition;
+        if (!verdict.green) {
+          const repairing = await onGateRed?.({
+            record,
+            version,
+            report: verdict.report ?? 'The publish gate rejected this delivery.',
+          });
+          if (repairing)
+            return { to: 'dispatched', at: new Date(now()).toISOString(), by: 'reconciler', reason: 'gate_repair' };
+        }
+        return redPendingRepair ? null : transition;
       }
       // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
       if (!preview) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
+      if (redPendingRepair && preview.green) return null;
       await emitGateMetric({
         mode: 'preview',
         outcome: preview.green ? 'passed' : 'failed',
@@ -399,16 +414,16 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         return null;
       }
       const to = 'needs_changes' as const;
-      if (!canTransition(state, to)) return null;
+      if (!redPendingRepair && !canTransition(state, to)) return null;
       const transition: JobTransition = {
         to,
         at: preview.ranAt,
         by: 'gate',
         reason: preview.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
       };
-      const recorded = await store.recordJobTransition(record.jobId, transition);
+      const recorded = redPendingRepair || (await store.recordJobTransition(record.jobId, transition));
       if (!recorded) return null;
-      if (preview.screenshot) {
+      if (preview.screenshot && !redPendingRepair) {
         try {
           await postGateScreenshot({
             store,
@@ -423,7 +438,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
         }
       }
-      return transition;
+      const repairing = await onGateRed?.({
+        record,
+        version,
+        report: preview.report ?? 'The preview gate rejected this delivery.',
+      });
+      if (repairing)
+        return { to: 'dispatched', at: new Date(now()).toISOString(), by: 'reconciler', reason: 'gate_repair' };
+      return redPendingRepair ? null : transition;
     } catch (error) {
       log.error({ err: error, jobId: record.jobId }, 'could not read the gate verdict');
       return null;

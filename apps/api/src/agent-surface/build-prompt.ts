@@ -1,21 +1,14 @@
 // The brief every backend gives its agent. Rationale: docs/build-brief.md.
 
 import type { BuildBrief } from './agent-backend.js';
+import { buildPromptOpening, gateRepairPrompt } from './build-prompt-opening.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
 export function buildPrompt(brief: BuildBrief): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const creating = Boolean(brief.createGame);
   const lines = [
-    creating
-      ? 'Create a new browser game through gamedev.pl; the game slug does not exist yet.'
-      : brief.seed
-        ? `Build a new browser game in \`games/${slug}/\`. **A first draft of it is already in your checkout** — see below.`
-        : brief.undelivered
-          ? `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round.`
-          : brief.feedback
-            ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
-            : `Build a new browser game in \`games/${slug}/\`.`,
+    buildPromptOpening(brief, slug, creating),
     '',
     // Disposable on purpose: a defended bad draft is the failure.
     ...(brief.seed
@@ -34,7 +27,7 @@ export function buildPrompt(brief: BuildBrief): string {
           '',
         ]
       : []),
-    ...(brief.feedback && !brief.undelivered
+    ...((brief.feedback && !brief.undelivered) || brief.gateRepair
       ? [
           '## Before you change anything',
           '',
@@ -58,6 +51,7 @@ export function buildPrompt(brief: BuildBrief): string {
     '- There is no repository checkout here. The kit you unpack is the only copy of any of it.',
     '',
     ...channelDelivery(brief, creating),
+    ...gateRepairPrompt(brief),
   ];
 
   if (brief.locale && brief.locale !== 'en') {
