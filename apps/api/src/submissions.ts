@@ -602,9 +602,8 @@ export async function registerSubmissionRoutes(
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
     return record?.builder ?? record?.defaultBuilder ?? 'platform';
   }
-  // Shared deps for notification emission (in-app + best-effort email). The mailer
-  // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
-  // unless an unsubscribe secret is available — so this is safe when unconfigured.
+  // In-app notices and best-effort email share these dependencies.
+  // Email needs a signing key; missing Resend disables the mailer.
   const notifyMailer = options.notifyMailer ?? createMailerFromEnv();
   const notifyAppBaseUrl = options.notifyAppBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
   const unsubscribeSecret = options.unsubscribeSecret ?? unsubscribeSecretFromEnv();
