@@ -459,6 +459,8 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
     // The first call pays the backfill; a 30s poll does not.
     if (route === 'GET /api/admin/summary (steady state)') {
       await injectRoute(app, route);
+      // Past the first hour, when an empty stamp is trusted.
+      clock += 61 * 60_000;
     }
     // A later round polls its history; the first has none.
     if (route === 'GET /api/submissions/:token (prior rounds, steady state)') {

@@ -4,6 +4,7 @@ import {
   type BetaInviteStatus,
   type ManagedBuilderMode,
 } from '@gamedevpl/contract';
+import { RECHECK_HOURLY_MS } from './sweep-cadence.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
@@ -592,16 +593,24 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
    */
   async function pendingFeedbackAges(records: SubmissionRecord[]): Promise<Map<number, string>> {
     const ages = new Map<number, string>();
+    // The sweep's rule: an old revision can append unflagged.
+    if (trustEmptyInboxAt === 0) trustEmptyInboxAt = now() + RECHECK_HOURLY_MS;
+    const trusting = now() >= trustEmptyInboxAt;
     await Promise.all(
       records.map(async (record) => {
-        // Set true with the message atomically; false means empty.
-        if (record.pendingCreatorMessage === false) return;
+        const empty = record.pendingCreatorMessage === false && probedInboxes.has(record.jobId);
+        if (trusting && empty) return;
         const [oldest] = await store.listPendingCreatorMessages(record.jobId, { limit: 1 });
+        probedInboxes.add(record.jobId);
         if (oldest) ages.set(record.jobId, oldest.createdAt);
       }),
     );
     return ages;
   }
+
+  // Process-local, like the sweep: each job is asked once first.
+  let trustEmptyInboxAt = 0;
+  const probedInboxes = new Set<number>();
 
   // The header shows three fields; the limits panel reads ten.
   async function readSummaryLimits(): Promise<AdminSummaryResponse['limits']> {

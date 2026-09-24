@@ -680,6 +680,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
+    now: options.submissionRoutes?.now,
     publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
     publicPlayTtlMs,
     hasPlatformBackend: submissionSeams.hasPlatformBackend,
