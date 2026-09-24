@@ -171,6 +171,8 @@ the agent, not the session. `/builder` shows the current builder and a choice me
 platform owns the round; `gamedevpl delegate "<task>"
 [--agent codex] [--handoff] [--submit]` is the non-interactive form (exit `1` when the agent or the
 ladder fails).
+If a local agent fails, the CLI keeps the request and its partial edits. Use `/diff` to inspect
+them, then `/retry` to run the same request with the same agent; no new Studio turn is sent.
 
 `gamedevpl connect <slug>` opens a work-mode picker in an interactive terminal.
 It detects a matching checkout in the current directory or its `<slug>` child.

@@ -21,6 +21,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - `gamedevpl status --watch` slows down on a job that has stopped changing, up to one check every 30 seconds, and never
   polls faster than the server asks; a watch left open for hours no longer hits the server every few seconds (#1485).
+- A failed local delegate keeps its request for `/retry`, so you can resume the same task with the same agent and partial edits (#1481).
 - Play shows your prompt and attachment names instead of the agent-only evidence block, in the conversation, queue and prompt history (#1465).
 - Attachments are marked Sent after a request is accepted and are no longer re-attached to the next one; Attach again re-sends them (#1465).
 - Codex receives staged screenshots as images rather than only as file paths (#1465).

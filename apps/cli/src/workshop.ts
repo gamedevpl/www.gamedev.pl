@@ -17,13 +17,15 @@ import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
-import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
-import { cliUsage } from './bin-name.js';
-import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles, type SyncResult } from './checkout.js';
+import { preflightAdapter, type AdapterSpec } from './adapters.js';
+import { chooseAdapter, describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
+export { chooseAdapter, describeAdapters, detectLocalAdapters, pickAdapter } from './workshop-adapters.js';
+import { syncWarning } from './workshop-sync.js';
+export { syncWarning } from './workshop-sync.js';
+import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles, type TreeFile } from './checkout.js';
 import { childEnv } from './delegate.js';
 import { createEventRenderer } from './agent-render.js';
 import { formatError } from './errors.js';
-import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { getStatus, isTerminalStatus } from './turn.js';
@@ -44,6 +46,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
+  failedTask?: { request: string; ack?: string; agent: string; before: TreeFile[] };
   onActivity?: (activity: string) => void;
   lastLog?: string;
   activityApi?: ApiClient;
@@ -65,29 +68,6 @@ export type Workshop = {
 export type HandoffOutcome = { builder: string; pending: boolean };
 
 export const ADAPTER_TIMEOUT_MS = 30 * 60_000;
-
-export function detectLocalAdapters(
-  env: NodeJS.ProcessEnv,
-  which: (cmd: string) => string | null = (cmd) => whichOnPath(cmd, env),
-): AdapterSpec[] {
-  const file = loadAdapters(env);
-  return file.adapters.flatMap((row) => {
-    const spec = detectAdapter(row.name, which, file);
-    return spec ? [spec] : [];
-  });
-}
-
-export function describeAdapters(adapters: AdapterSpec[], all = loadAdapters().adapters): string {
-  if (adapters.length) return `local agents: ${adapters.map((spec) => spec.name).join(', ')}`;
-  return `no local agent on PATH (${all.map((spec) => spec.name).join(', ')}) — the platform builds; /pull afterwards`;
-}
-
-export function syncWarning(sync: SyncResult): string | null {
-  if (sync.kind === 'platform_only') return `the platform is ahead (${sync.platform.join(', ')}) — /pull first`;
-  if (sync.kind === 'conflict') return `conflict on ${sync.conflict.join(', ')} — /diff before editing`;
-  if (sync.kind === 'legacy') return `no base version here — ${cliUsage('checkout', '<slug>')} again for a clean copy`;
-  return null;
-}
 
 export async function openWorkshop(input: {
   api: ApiClient;
@@ -183,47 +163,11 @@ export async function settleBuilder(input: {
   }
 }
 
-export function pickAdapter(ws: Pick<Workshop, 'adapters' | 'env'>, name?: string): AdapterSpec {
-  if (name) {
-    const spec =
-      ws.adapters.find((row) => row.name === name) ??
-      detectAdapter(name, (cmd) => whichOnPath(cmd, ws.env), loadAdapters(ws.env));
-    if (!spec) throw new CliError(`adapter ${name} is not on PATH`, EXIT_INPUT, `install ${name}, or omit --agent`);
-    return spec;
-  }
-  const spec = ws.adapters[0];
-  if (!spec) {
-    throw new CliError(
-      'no local agent on PATH — run gamedevpl agents to see supported tools',
-      EXIT_REFUSED,
-      '/builder platform lets the platform build instead',
-    );
-  }
-  return spec;
-}
-
-export async function chooseAdapter(
-  ws: Pick<Workshop, 'adapters' | 'env' | 'pick' | 'unattended' | 'selectedAgent'>,
-  name?: string,
-): Promise<AdapterSpec> {
-  const selected = ws.selectedAgent;
-  delete ws.selectedAgent;
-  if (!name && selected) return pickAdapter(ws, selected);
-  if (name || ws.adapters.length < 2 || ws.unattended) return pickAdapter(ws, name);
-  const chosen = await ws.pick(
-    ws.adapters.map((spec) => spec.name),
-    'Which agent?',
-  );
-  if (!ws.adapters.some((spec) => spec.name === chosen)) {
-    throw new CliError('agent selection cancelled', EXIT_REFUSED, '/delegate when ready');
-  }
-  return pickAdapter(ws, chosen);
-}
-
 export async function runLocalBuild(input: {
   ws: Workshop;
   spec: AdapterSpec;
   brief: string;
+  baseline?: TreeFile[];
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws } = input;
@@ -363,12 +307,17 @@ export async function runLocalBuild(input: {
         if (!handedOff && (result.code ?? 1) !== 0) {
           input.write(
             formatError(
-              failure.error(result.code, '/diff to review partial edits, then repeat your request when ready'),
+              failure.error(
+                result.code,
+                ws.unattended
+                  ? '/diff to review partial edits, then rerun the delegate command'
+                  : '/diff to review partial edits, then /retry to resume this task',
+              ),
             ),
           );
           return false;
         }
-        if (changedPaths(before, localGameFiles(ws.root, ws.slug)).length === 0) {
+        if (changedPaths(input.baseline ?? before, localGameFiles(ws.root, ws.slug)).length === 0) {
           input.write(
             'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
           );
@@ -467,23 +416,46 @@ export async function readyToEdit(input: {
   }
 }
 
-// One creator request, end to end: agent, ladder, offer.
 async function workshopTurnUnlocked(input: {
   api: ApiClient;
   ws: Workshop;
   request: string;
   ack?: string;
   agent?: string;
+  retry?: boolean;
   write: (line: string) => void;
 }): Promise<boolean> {
   if (!(await readyToEdit(input))) return false;
   const spec = await chooseAdapter(input.ws, input.agent);
-  const ok = await runLocalBuild({
-    ws: input.ws,
-    spec,
-    brief: workshopBrief(input.ws.slug, input.request, input.ack),
-    write: input.write,
-  });
+  const before = input.retry ? input.ws.failedTask?.before : undefined;
+  const task = {
+    request: input.request,
+    ack: input.ack,
+    agent: spec.name,
+    before: before ?? localGameFiles(input.ws.root, input.ws.slug),
+  };
+  let ok: boolean;
+  try {
+    ok = await runLocalBuild({
+      ws: input.ws,
+      spec,
+      brief: workshopBrief(input.ws.slug, input.request, input.ack),
+      baseline: before,
+      write: input.write,
+    });
+  } catch (error) {
+    input.ws.failedTask = task;
+    if (!input.ws.unattended)
+      input.write(`Task saved locally — /retry resumes it with ${spec.name}; /diff shows partial edits.`);
+    throw error;
+  }
+  if (!ok) {
+    input.ws.failedTask = task;
+    if (!input.ws.unattended)
+      input.write(`Task saved locally — /retry resumes it with ${spec.name}; /diff shows partial edits.`);
+    return false;
+  }
+  delete input.ws.failedTask;
   if (ok) await offerSubmit(input);
   return ok;
 }
