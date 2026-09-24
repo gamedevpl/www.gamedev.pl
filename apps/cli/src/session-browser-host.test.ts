@@ -49,3 +49,15 @@ it('closes a listener that finishes starting after the terminal closes', async (
   expect(server.close).toHaveBeenCalledOnce();
   session.close();
 });
+
+it('keeps the agent-only evidence block out of the transcript but passes it to the agent', async () => {
+  const { EVIDENCE_MARKER } = await import('./workbench-evidence.js');
+  const session = createSessionController('');
+  const line = session.prompt();
+  const full = 'add shadows' + EVIDENCE_MARKER + JSON.stringify({ name: 'shot.png' });
+  expect(session.acceptInput(full, session.get().promptId)).toBe(true);
+  await expect(line).resolves.toBe(full);
+  expect(session.get().lines.at(-1)).toBe('› add shadows · 📎 shot.png');
+  expect(session.savedHistory().prompts.at(-1)).toBe('add shadows');
+  session.close();
+});

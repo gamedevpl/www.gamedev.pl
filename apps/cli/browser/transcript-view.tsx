@@ -18,8 +18,10 @@ export function trimUrl(url: string): string {
 export function RichText({ text }: { text: string }) {
   return (
     <>
-      {text.split(TOKEN).map((part, index) => {
+      {text.split(TOKEN).map((part, index, parts) => {
         if (index % 2 === 0) return part;
+        // `/png` inside `image/png` is a path, not a command.
+        if (part.startsWith('/') && /[\w./:-]$/.test(parts[index - 1]!)) return part;
         if (part.startsWith('`')) return <code key={index}>{part.slice(1, -1)}</code>;
         if (/^https?:\/\//.test(part)) {
           const url = trimUrl(part);
