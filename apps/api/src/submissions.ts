@@ -9,6 +9,7 @@ import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
 import type { McpServerOptions } from './agent-surface/mcp-server.js';
 import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
+import { unsubscribeSecretFromEnv } from './notifications/unsubscribe-token.js';
 import {
   createCreationGate,
   createChatGate,
@@ -206,7 +207,7 @@ export interface SubmissionRoutesOptions {
   notifyMailer?: Mailer;
   /** Absolute origin for email links; defaults to APP_BASE_URL or https://www.gamedev.pl. */
   notifyAppBaseUrl?: string;
-  /** Secret for signing unsubscribe tokens; defaults to SESSION_SECRET. */
+  /** Secret for signing unsubscribe tokens; defaults to the configured environment secret. */
   unsubscribeSecret?: string;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
   /**
@@ -601,12 +602,11 @@ export async function registerSubmissionRoutes(
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
     return record?.builder ?? record?.defaultBuilder ?? 'platform';
   }
-  // Shared deps for notification emission (in-app + best-effort email). The mailer
-  // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
-  // unless an unsubscribe secret is available — so this is safe when unconfigured.
+  // In-app notices and best-effort email share these dependencies.
+  // Email needs a signing key; missing Resend disables the mailer.
   const notifyMailer = options.notifyMailer ?? createMailerFromEnv();
   const notifyAppBaseUrl = options.notifyAppBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
-  const unsubscribeSecret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  const unsubscribeSecret = options.unsubscribeSecret ?? unsubscribeSecretFromEnv();
   /**
    * Feeds a derived status into the job state machine.
    *

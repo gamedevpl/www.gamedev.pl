@@ -64,9 +64,7 @@ describe('zone tickets', () => {
   });
 
   it('is not interchangeable with a party room token', () => {
-    // Both are keyed off SESSION_SECRET. A ticket that could be replayed as a room
-    // token would make one secret's blast radius the whole platform, so the scope
-    // string is what keeps them apart — a room-shaped payload must not verify here.
+    // A room-shaped payload must not verify as a zone ticket.
     const roomShaped = Buffer.from(`ABC123.${NOW + 60_000}.${'0'.repeat(64)}`, 'utf8').toString('base64url');
     expect(() => verifyZoneTicket(roomShaped, SECRET, NOW)).toThrow(InvalidZoneTicketError);
   });

@@ -1,10 +1,10 @@
-// Signed one-click email-unsubscribe tokens (docs/notifications-plan.md). A token
-// embeds a uid and is HMAC-signed so the unsubscribe link works from a mail client
-// on a device that has never signed in — no session required. The `unsub:` domain
-// prefix keeps these structurally distinct from session tokens even when they share
-// a secret, so one can never be replayed as the other.
+// The unsub: prefix separates shared-key token types.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
+
+export function unsubscribeSecretFromEnv(): string | undefined {
+  return process.env.UNSUBSCRIBE_SECRET ?? process.env.SESSION_SECRET;
+}
 
 export class InvalidUnsubscribeTokenError extends Error {
   constructor(message = 'invalid unsubscribe token') {
