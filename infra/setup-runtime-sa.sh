@@ -21,8 +21,8 @@
 #                     actAs gate-runner only, signBlob on itself (V4 signed URLs), the
 #                     games-store and games-snapshot buckets, every secret in
 #                     infra/env-manifest.json.
-#   gamedev-world     Firestore (zone snapshots), session-secret, github-token.
-#   gamedev-mp-relay  session-secret. Nothing else — it reads no games, files no
+#   gamedev-world     Firestore (zone snapshots), zone-ticket-secret, github-token.
+#   gamedev-mp-relay  mp-room-secret. Nothing else — it reads no games, files no
 #                     submissions and holds no sessions.
 #
 # The role set was inventoried from the code, not guessed: grep the API for
@@ -93,8 +93,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 APP_SECRETS="$(node -p "Object.values(require('${SCRIPT_DIR}/env-manifest.json').secrets).sort().filter((s,i,a)=>a.indexOf(s)===i).join(' ')")"
-WORLD_SECRETS="session-secret github-token"
-RELAY_SECRETS="session-secret"
+WORLD_SECRETS="zone-ticket-secret github-token"
+RELAY_SECRETS="mp-room-secret"
 
 CHANGED=0
 note() { echo "    $*"; }

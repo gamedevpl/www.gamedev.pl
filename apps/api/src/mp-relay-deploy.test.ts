@@ -201,10 +201,10 @@ describe('infra/deploy-relay.sh', () => {
   });
 
   it('mounts only the secret it needs', () => {
-    // Room tokens are HMAC'd from SESSION_SECRET. The relay reads no games, files no
-    // submissions and terminates no sessions, so anything else mounted here is blast radius
-    // bought for nothing.
-    expect(deployRelay).toContain('SESSION_SECRET=session-secret:latest');
+    // The relay signs room tokens with MP_ROOM_SECRET and holds no sessions.
+    // No game or submission credentials belong on this service.
+    expect(deployRelay).toContain('MP_ROOM_SECRET=mp-room-secret:latest');
+    expect(deployRelay).not.toContain('SESSION_SECRET=');
     expect(deployRelay).not.toContain('GITHUB_TOKEN=');
     expect(deployRelay).not.toContain('SUBMISSION_TOKEN_SECRET=');
   });

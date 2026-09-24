@@ -73,17 +73,17 @@ if [ -z "$CALLER_SA" ] || [[ "$CALLER_SA" == *-compute@developer.gserviceaccount
 fi
 echo "    Caller: ${CALLER_SA}"
 
-# This service's own identity. session-secret is the only thing it may read, and
+# This service's own identity. mp-room-secret is the only thing it may read, and
 # infra/setup-runtime-sa.sh grants exactly that. Same derivation as deploy.yml.
 RUNTIME_SA="${RUNTIME_SA:-${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com}"
 echo "    Runs as: ${RUNTIME_SA}"
 
 echo "==> 2/6 Checking the room-signing secret"
-# Room tokens are HMAC'd from SESSION_SECRET (apps/api/src/mp.ts). The relay both mints and
+# Room tokens are HMAC'd from MP_ROOM_SECRET (apps/api/src/realtime/mp.ts). The relay both mints and
 # verifies them, so this is the one secret it needs — and the only one it gets. It reads no
 # games, files no submissions and holds no session cookies.
-if ! gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
-  echo "Error: secret 'session-secret' not found; the relay cannot sign room tokens." >&2
+if ! gcloud secrets describe mp-room-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
+  echo "Error: secret 'mp-room-secret' not found; the relay cannot sign room tokens." >&2
   exit 1
 fi
 echo "    Found."
@@ -136,7 +136,7 @@ gcloud run deploy "$SERVICE" \
   --port 8080 \
   --service-account "$RUNTIME_SA" \
   --set-env-vars "^|^MP_RELAY_ONLY=1|PRIVATE_BETA=true|MP_RELAY_CALLER_SA=${CALLER_SA}" \
-  --set-secrets "SESSION_SECRET=session-secret:latest"
+  --set-secrets "MP_ROOM_SECRET=mp-room-secret:latest"
 
 echo "==> 4/6 Reading the service URL"
 RELAY_URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \

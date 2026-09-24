@@ -301,6 +301,13 @@ jobs:
           if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
           fi
+          for mapping in "MP_ROOM_SECRET=mp-room-secret:latest" "UNSUBSCRIBE_SECRET=unsubscribe-secret:latest" "ZONE_PLAYER_SECRET=zone-player-secret:latest" "ZONE_TICKET_SECRET=zone-ticket-secret:latest"; do
+            secret="${mapping#*=}"
+            secret="${secret%:latest}"
+            if gcloud secrets describe "$secret" --project "$PROJECT_ID" >/dev/null 2>&1; then
+              SECRET_MAPPINGS+=("$mapping")
+            fi
+          done
 
           # Dispatch credential for GitHub's agent tasks API. Its own secret rather than a
           # reuse of github-token: the tasks API needs a user-to-server token, and keeping
