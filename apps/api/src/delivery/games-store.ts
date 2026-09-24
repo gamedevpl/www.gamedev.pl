@@ -64,16 +64,12 @@ export type { GateProgress } from './gate-progress.js';
  * reaches `shared/`, `tools/`, or another game's directory, so a prompt-injected or
  * simply confused agent cannot widen its own scope.
  *
- * The list itself lives in `games-repo-contract.ts`, beside the other halves of the
- * cross-repo lockstep, because it is shared with the games repo's own submit tool — and
- * because keeping two literals in step by hand is what drifted three times. Change it
- * there (and read the ordering rule in that file's header before you do); enforcement
- * stays here. Media bytes are produced by our gate, never uploaded — `media/` paths are
- * refused below rather than listed.
+ * The list itself lives in `packages/contract/src/delivery-paths.ts` (re-exported by
+ * `games-repo-contract.ts`, whose header holds the cross-repo ordering rule), so the CLI
+ * and Studio read the same rules this file enforces. Change it there. Media bytes are
+ * produced by our gate, never uploaded — `media/` paths are refused, not listed.
  */
 export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
-
-/** Path refusals (config/exec shapes, reserved segments, the allowlist) live in `@gamedevpl/contract`. */
 
 /** Mirrors the games repo's own slug rule, so a name valid here is valid there. */
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;

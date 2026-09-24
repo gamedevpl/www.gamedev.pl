@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -150,5 +159,39 @@ describe('non-game files in the game directory', () => {
     expect(readFileSync(join(dest, 'games', SLUG, 'sim.ts', 'notes.txt'), 'utf8')).toBe('mine\n');
     await pullGame({ api: platform(GAME, []), slug: SLUG, dest, force: true });
     expect(readFileSync(join(dest, 'games', SLUG, 'sim.ts'), 'utf8')).toBe('S');
+  });
+  it('never reads, deletes or writes through a non-game file symlink', async () => {
+    const dest = checkoutWithNotes();
+    const outside = mkdtempSync(join(tmpdir(), 'gdpl-out-'));
+    const secret = join(outside, 'secret.md');
+    writeFileSync(secret, 'keep\n');
+    symlinkSync(secret, join(dest, 'games', SLUG, 'NOTATKI.md'));
+    const report = await diffGame({ api: platform(GAME, []), slug: SLUG, dest });
+    expect(report.kind).toBe('clean');
+    expect(report.ignored.map((hit) => `${hit.source}:${hit.path}`)).toContain('not-game:NOTATKI.md');
+    const next = GAME.map((file) => (file.path === 'game.ts' ? { ...file, content: 'A2' } : file));
+    await pullGame({ api: platform(next, []), slug: SLUG, dest });
+    await pullGame({ api: platform(next, []), slug: SLUG, dest, force: true });
+    expect(lstatSync(join(dest, 'games', SLUG, 'NOTATKI.md')).isSymbolicLink()).toBe(true);
+    expect(readFileSync(secret, 'utf8')).toBe('keep\n');
+  });
+
+  it('refuses a platform file under a directory symlink, and --force stays inside', async () => {
+    const dest = checkoutWithNotes();
+    const withoutImages = GAME.filter((file) => !file.path.startsWith('images/'));
+    writeGameFiles(dest, SLUG, withoutImages);
+    writeBase(dest, 'v1', withoutImages);
+    rmSync(join(dest, 'games', SLUG, 'images'), { recursive: true, force: true });
+    const outside = mkdtempSync(join(tmpdir(), 'gdpl-out-'));
+    writeFileSync(join(outside, 'hero.png'), 'outside\n');
+    symlinkSync(outside, join(dest, 'games', SLUG, 'images'));
+    const caught = await pullGame({ api: platform(GAME, []), slug: SLUG, dest }).catch((error: unknown) => error);
+    expect(caught).toBeInstanceOf(CliError);
+    expect((caught as CliError).message).toContain('images/hero.png');
+    expect(readFileSync(join(outside, 'hero.png'), 'utf8')).toBe('outside\n');
+    await pullGame({ api: platform(GAME, []), slug: SLUG, dest, force: true });
+    expect(readFileSync(join(outside, 'hero.png'), 'utf8')).toBe('outside\n');
+    expect(lstatSync(join(dest, 'games', SLUG, 'images')).isDirectory()).toBe(true);
+    expect(readFileSync(join(dest, 'games', SLUG, 'images', 'hero.png'), 'utf8')).toBe('iVBORw0KGgo=');
   });
 });
