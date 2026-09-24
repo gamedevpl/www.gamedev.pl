@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- In a checkout, `/builder` offers a choice menu, and `/delegate` offers to switch to a local builder before editing (#1483).
+
 ### Internal
 
 - Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#1468).
