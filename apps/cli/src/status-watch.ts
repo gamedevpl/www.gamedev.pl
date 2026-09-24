@@ -9,10 +9,17 @@ import type { CliTelemetry } from './telemetry.js';
 const ACTIVE_BACKOFF_AFTER_POLLS = 20;
 const ACTIVE_BACKOFF_CAP_MS = 30_000;
 
+// A server floor above this is a bug, not a cadence to honour.
+const SERVER_FLOOR_CAP_MS = 5 * 60_000;
+
 export function statusWatchDelayMs(
-  status: Pick<RoundStatus, 'status' | 'phase' | 'stall'>,
+  status: Pick<RoundStatus, 'status' | 'phase' | 'stall' | 'pollAfterMs'>,
   unchangedPolls = 0,
 ): number {
+  return Math.max(clientDelayMs(status, unchangedPolls), serverFloorMs(status.pollAfterMs));
+}
+
+function clientDelayMs(status: Pick<RoundStatus, 'status' | 'phase' | 'stall'>, unchangedPolls: number): number {
   const active =
     status.status === 'building' ||
     status.phase === 'dispatched' ||
@@ -23,6 +30,12 @@ export function statusWatchDelayMs(
   if (unchangedPolls < ACTIVE_BACKOFF_AFTER_POLLS) return 3000;
   const doublings = Math.floor((unchangedPolls - ACTIVE_BACKOFF_AFTER_POLLS) / ACTIVE_BACKOFF_AFTER_POLLS) + 1;
   return Math.min(3000 * 2 ** doublings, ACTIVE_BACKOFF_CAP_MS);
+}
+
+// The server knows when an answer could change; never poll under it.
+function serverFloorMs(pollAfterMs: number | undefined): number {
+  if (typeof pollAfterMs !== 'number' || !Number.isFinite(pollAfterMs) || pollAfterMs <= 0) return 0;
+  return Math.min(pollAfterMs, SERVER_FLOOR_CAP_MS);
 }
 
 // Agent-authored text reaching a terminal; strip it like any payload.
@@ -147,6 +160,9 @@ export async function runStatusVerb(input: {
   const screen = input.live ? createLiveScreen(input.stdout) : null;
   let status = await getStatus(input.api, input.token);
   let watched = '';
+  let lastKey = '';
+  // A watch left open on an idle job must slow down, like the TUI's.
+  let unchangedPolls = 0;
   for (let i = 1; i <= input.maxPolls; i += 1) {
     if (isPublishTransition(watched, status.status)) input.telemetry?.record('published');
     watched = status.status;
@@ -156,7 +172,10 @@ export async function runStatusVerb(input: {
       for (const line of formatStatusLines(status, input.api.origin)) input.stdout.write(`${line}\n`);
     }
     if (i === input.maxPolls || isTerminalStatus(status.status)) break;
-    await sleep(statusWatchDelayMs(status));
+    const key = statusFingerprint(status);
+    unchangedPolls = key === lastKey ? unchangedPolls + 1 : 0;
+    lastKey = key;
+    await sleep(statusWatchDelayMs(status, unchangedPolls));
     status = await getStatus(input.api, input.token);
   }
   if (status.failure?.reason === 'gate_red' || status.previewGate?.green === false) return EXIT_RED;
