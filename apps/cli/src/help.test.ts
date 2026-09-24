@@ -10,6 +10,7 @@ describe('formatHelp', () => {
     expect(out).toContain('open your browser workspace');
     expect(out).toContain('--terminal');
     expect(out).toContain('--preview');
+    expect(out).toContain('builder <slug> globally');
     expect(out).toMatch(/push\s+send local changes as a preview/);
     for (const verb of SLASH_VERBS) {
       expect(out).toMatch(new RegExp(`^  ${verb}\\s+\\S`, 'm'));
@@ -21,5 +22,6 @@ describe('formatHelp', () => {
     expect(out).toContain('/login');
     expect(out).toContain('a game starts when you ask');
     expect(out).toContain('/quit');
+    expect(out).toContain('choose [self|platform] in a checkout');
   });
 });

@@ -45,8 +45,10 @@ export async function handleWorkshopVerb(input: {
       input.write(`say what to do: /delegate make the jump feel floatier`);
       return;
     }
+    await refreshBuilder(input.api, ws);
     if (ws.builder !== 'self' && ws.adapters.length) {
       const local = 'Build here with a local agent';
+      for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', { adapter: spec.name });
       const chosen = await ws.pick([local, 'Keep the platform builder'], `Who should handle this task for ${ws.slug}?`);
       if (chosen !== local) return;
       const outcome = await handoffBuilder(input.api, ws.token, 'self', ws.builder);

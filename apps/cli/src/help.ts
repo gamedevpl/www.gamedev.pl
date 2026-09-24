@@ -14,7 +14,7 @@ export const BLURB: Record<SlashVerb, string> = {
   share: 'play URL — share <slug>',
   profile: 'signed-in profile',
   handle: 'get or set handle',
-  builder: 'choose who builds here — builder [self|platform]',
+  builder: 'who builds — builder <slug> globally; choose [self|platform] in a checkout',
   connect: 'open a game session — connect <slug>; --manual for MCP setup',
   delegate: 'local agent edits the checkout — delegate <task>; offers handoff if needed',
   checkout: 'download and open local files — checkout [slug]',

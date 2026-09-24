@@ -11,6 +11,7 @@ import type { Workshop } from './workshop.js';
 
 const slug = 'airtime';
 const claude = loadAdapters().adapters.find((spec) => spec.name === 'claude')!;
+const codex = loadAdapters().adapters.find((spec) => spec.name === 'codex')!;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -25,7 +26,7 @@ function checkout(): string {
   return root;
 }
 
-function platform(seen: string[], extra?: (path: string) => Response | null) {
+function platform(seen: string[], extra?: (path: string) => Response | null, builder = 'self') {
   return createApi({
     origin: 'https://www.gamedev.pl',
     store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
@@ -36,7 +37,7 @@ function platform(seen: string[], extra?: (path: string) => Response | null) {
       if (handled) return handled;
       if (path.endsWith('/versions')) return json({ versions: [{ version: 'v1', sourceFiles: ['game.ts'] }] });
       if (path.includes('/tree')) return json({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] });
-      if (path.endsWith('/api/submissions/tok')) return json({ status: 'needs_changes', builder: 'self' });
+      if (path.endsWith('/api/submissions/tok')) return json({ status: 'needs_changes', builder });
       if (path.endsWith('/sources')) return json({ files: [] });
       if (path.endsWith('/sources/stage')) return json({ accepted: true });
       if (path.endsWith('/sources/deliver')) return json({ accepted: true, version: 'v2', gateStarted: true });
@@ -75,7 +76,7 @@ describe('builder choice in a checkout', () => {
     });
     await handleReplLine({
       line: '/delegate tweak',
-      api: platform(seen),
+      api: platform(seen, undefined, 'platform'),
       token: 'tok',
       workshop: ws,
       write: (s) => lines.push(s),
@@ -89,9 +90,15 @@ describe('builder choice in a checkout', () => {
     const root = checkout();
     const seen: string[] = [];
     const lines: string[] = [];
+    const events: string[] = [];
     let spawned = 0;
     const ws = workshop(root, {
       builder: 'platform',
+      adapters: [claude, codex],
+      telemetry: {
+        record: (step, dims) => events.push(`${step}:${dims?.adapter ?? ''}`),
+        flush: async () => undefined,
+      },
       runAdapter: async (input) => {
         spawned += 1;
         writeFileSync(join(input.cwd, 'game.ts'), 'B');
@@ -100,13 +107,15 @@ describe('builder choice in a checkout', () => {
     });
     await handleReplLine({
       line: '/delegate tweak',
-      api: platform(seen),
+      api: platform(seen, undefined, 'platform'),
       token: 'tok',
       workshop: ws,
       write: (s) => lines.push(s),
     });
     expect(ws.builder).toBe('self');
     expect(spawned).toBe(1);
+    expect(events).toContain('delegate_offered:claude');
+    expect(events).toContain('delegate_offered:codex');
     expect(seen.some((row) => row.includes('/handoff') && row.includes('"builder":"self"'))).toBe(true);
   });
 
@@ -115,13 +124,43 @@ describe('builder choice in a checkout', () => {
     const lines: string[] = [];
     let spawned = 0;
     const ws = workshop(root, { builder: 'platform', runAdapter: async () => ((spawned += 1), { code: 0 }) });
-    const api = platform([], (path) =>
-      path.endsWith('/handoff') ? json({ pending: true, builder: 'platform' }, 202) : null,
+    const api = platform(
+      [],
+      (path) => (path.endsWith('/handoff') ? json({ pending: true, builder: 'platform' }, 202) : null),
+      'platform',
     );
     await handleReplLine({ line: '/delegate tweak', api, token: 'tok', workshop: ws, write: (s) => lines.push(s) });
     expect(ws.builder).toBe('platform');
     expect(spawned).toBe(0);
     expect(lines.join('\n')).toContain('Handoff pending');
+  });
+
+  it('/delegate retries after handoff acknowledgement without a second handoff', async () => {
+    const root = checkout();
+    const seen: string[] = [];
+    const lines: string[] = [];
+    let builder = 'platform';
+    let spawned = 0;
+    const ws = workshop(root, {
+      builder,
+      runAdapter: async (input) => {
+        spawned += 1;
+        writeFileSync(join(input.cwd, 'game.ts'), 'B');
+        return { code: 0 };
+      },
+    });
+    const api = platform(seen, (path) => {
+      if (path.endsWith('/api/submissions/tok')) return json({ status: 'needs_changes', builder });
+      if (path.endsWith('/handoff')) return json({ pending: true, builder: 'platform' }, 202);
+      return null;
+    });
+    const input = { line: '/delegate tweak', api, token: 'tok', workshop: ws, write: (s: string) => lines.push(s) };
+    await handleReplLine(input);
+    expect(spawned).toBe(0);
+    builder = 'self';
+    await handleReplLine(input);
+    expect(spawned).toBe(1);
+    expect(seen.filter((row) => row.includes('/handoff'))).toHaveLength(1);
   });
 
   it('/builder alone re-reads ownership and offers a menu', async () => {
