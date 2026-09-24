@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
 import { runLiveAgent, liveArgs, type Steer } from './live-agent.js';
 import { loadAdapters } from './adapters.js';
+import { renderEvents } from './agent-render.js';
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -155,11 +156,11 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     cwd: root,
     env: process.env,
     prompt: 'fix it' + EVIDENCE_MARKER + evidence,
-    onLine: (line) => lines.push(line),
+    onEvent: (event) => lines.push(...renderEvents('codex', [event]).map((line) => line.slice('codex ▸ '.length))),
     onSteering: () => {},
   });
   expect(result.code).toBe(0);
-  expect(lines).toEqual(['inputs text,localImage', '⚙ shell', 'Edited: game.ts']);
+  expect(lines).toEqual(['inputs text,localImage', '⚙ npm test', 'Edited: game.ts']);
 });
 
 it('reports a live agent that cannot start instead of throwing', async () => {
@@ -170,7 +171,7 @@ it('reports a live agent that cannot start instead of throwing', async () => {
     cwd: tmpdir(),
     env: process.env,
     prompt: 'hi',
-    onLine: (l) => lines.push(l),
+    onEvent: (event) => lines.push(JSON.stringify(event)),
   });
   expect(result.code).toBe(1);
   expect(lines.join('\n')).toMatch(/muse/);

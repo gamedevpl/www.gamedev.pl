@@ -57,9 +57,9 @@ it('skips oversized records ending in the chunk that crosses the limit', async (
 it('stops a silent headless run on journal approval without aborting the parent task', async () => {
   const { env, path } = await fixture();
   const controller = new AbortController();
-  const onLine = vi.fn();
+  const onEvent = vi.fn();
   const result = await runMuseWithApprovals(
-    { spec, prompt: 'edit', cwd: '/', env, abort: controller.signal, onLine },
+    { spec, prompt: 'edit', cwd: '/', env, abort: controller.signal, onEvent },
     async (input) => {
       input.onLine?.(started);
       await writeFile(path, started + '\n' + approval + '\n');
@@ -70,7 +70,7 @@ it('stops a silent headless run on journal approval without aborting the parent 
   );
   expect(result.permissionSession).toBe(id);
   expect(controller.signal.aborted).toBe(false);
-  expect(onLine).toHaveBeenCalledWith(expect.stringContaining('Muse needs your approval'));
+  expect(onEvent).toHaveBeenCalledWith({ type: 'error', message: expect.stringContaining('Muse needs your approval') });
 });
 it('propagates user cancellation without presenting approval recovery', async () => {
   const { env } = await fixture();

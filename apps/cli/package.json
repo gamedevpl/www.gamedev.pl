@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@gamedevpl/contract": "*",
-    "genaicode": "^2.4.0",
+    "genaicode": "^2.5.0",
     "ink": "^5.2.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

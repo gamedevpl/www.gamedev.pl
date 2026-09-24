@@ -20,7 +20,8 @@ import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { changedPaths, formatWorkingCopy, inspectGame, localGameFiles, type SyncResult } from './checkout.js';
-import { childEnv, createDelegateStream } from './delegate.js';
+import { childEnv } from './delegate.js';
+import { createEventRenderer } from './agent-render.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { deliverySession } from './submit-session.js';
@@ -31,17 +32,8 @@ import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 export type PickChoice = (choices: string[], question: string) => Promise<string>;
-export type AdapterRun = (input: {
-  spec: AdapterSpec;
-  prompt: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  abort?: AbortSignal;
-  onLine?: (line: string) => void;
-  onDiagnostic?: (line: string) => void;
-  authCheck?: Promise<void>;
-  onSteering?: (send: Steer | undefined) => void;
-}) => Promise<{ code: number | null; permissionSession?: string }>;
+import type { AdapterRun } from './headless-agent.js';
+export type { AdapterRun } from './headless-agent.js';
 
 type VerifyRun = NonNullable<Parameters<typeof runLadder>[0]['run']>;
 
@@ -320,7 +312,7 @@ export async function runLocalBuild(input: {
       run: async (prompt) => {
         presence?.phase('editing');
         const before = localGameFiles(ws.root, ws.slug);
-        const stream = createDelegateStream(spec.name);
+        const render = createEventRenderer(spec.name);
         const failure = trackAgentFailure(spec.name);
         let blocked = false;
         let conversation: string | undefined;
@@ -335,15 +327,18 @@ export async function runLocalBuild(input: {
           onDiagnostic: output.raw,
           onLine: (line) => {
             output.raw(line);
-            failure.observe(line);
-            if (line.startsWith('Muse needs your approval')) ws.onActivity?.('Muse needs your approval');
             conversation = agyConversation(line) ?? conversation;
             if (permissionBlocked(line)) blocked = true;
-            for (const shown of stream(line)) {
-              input.write(shown);
-            }
+            for (const shown of render.line(line)) input.write(shown);
+          },
+          onEvent: (event) => {
+            failure.observe(event);
+            if (event.type === 'error' && event.message.startsWith('Muse needs your approval'))
+              ws.onActivity?.('Muse needs your approval');
+            for (const shown of render.event(event)) input.write(shown);
           },
         });
+        for (const shown of render.flush()) input.write(shown);
         if (controller.signal.aborted) return false;
         let handedOff = false;
         if (result.permissionSession || (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended)) {

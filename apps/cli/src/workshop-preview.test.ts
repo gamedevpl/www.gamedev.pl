@@ -6,21 +6,18 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { runLocalBuild, workshopBrief, type Workshop } from './workshop.js';
 import { startLocalPlay } from './play.js';
 import { preflightAdapter } from './adapters.js';
-import { EventEmitter } from 'node:events';
 vi.mock('./play.js', () => ({ startLocalPlay: vi.fn(async () => ({ url: 'http://127.0.0.1:1/' })) }));
 vi.mock('./prepare-workspace.js', () => ({ prepareWorkspace: vi.fn(async () => undefined) }));
 vi.mock('./adapters.js', async (original) => ({
   ...(await original<typeof import('./adapters.js')>()),
   preflightAdapter: vi.fn(),
 }));
-vi.mock('./delegate.js', async (original) => ({
-  ...(await original<typeof import('./delegate.js')>()),
-  spawnAdapter: vi.fn((input: { cwd: string }) => {
+vi.mock('./headless-agent.js', async (original) => ({
+  ...(await original<typeof import('./headless-agent.js')>()),
+  runHeadlessAgent: vi.fn(async (input: { cwd: string }) => {
     mkdirSync(input.cwd, { recursive: true });
     writeFileSync(join(input.cwd, 'game.ts'), 'edited');
-    const child = new EventEmitter();
-    setTimeout(() => child.emit('close', 0), 0);
-    return child;
+    return { code: 0 };
   }),
 }));
 vi.mock('./claude-auth.js', async (original) => ({
@@ -74,24 +71,24 @@ it.each([true, false])('starts a preview only in interactive delegation: unatten
   ).resolves.toBe(true);
   expect(preflightAdapter).toHaveBeenCalled();
   expect(requireClaudeSubscription).toHaveBeenCalledTimes(1);
-  const { spawnAdapter } = await import('./delegate.js');
-  expect(spawnAdapter).toHaveBeenCalledWith(expect.objectContaining({ authCheck: expect.any(Promise) }));
+  const { runHeadlessAgent } = await import('./headless-agent.js');
+  expect(runHeadlessAgent).toHaveBeenCalledWith(expect.objectContaining({ authCheck: expect.any(Promise) }));
   expect(startLocalPlay).toHaveBeenCalledTimes(unattended ? 0 : 1);
   expect(localToolsClose).toHaveBeenCalledTimes(unattended ? 0 : 1);
   if (!unattended) {
-    expect(spawnAdapter).toHaveBeenCalledWith(
+    expect(runHeadlessAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         spec: expect.objectContaining({ headless: expect.arrayContaining(['--local-mcp']) }),
         prompt: expect.stringContaining('Use gamedevpl_local MCP tools'),
       }),
     );
   }
-  expect(spawnAdapter).toHaveBeenCalledWith(
+  expect(runHeadlessAgent).toHaveBeenCalledWith(
     expect.objectContaining({
       prompt: expect.stringContaining(unattended ? 'No live preview was supplied' : 'http://127.0.0.1:1/'),
     }),
   );
-  expect(spawnAdapter).toHaveBeenCalledWith(
+  expect(runHeadlessAgent).toHaveBeenCalledWith(
     expect.objectContaining({
       prompt: expect.stringContaining('Missing browser access blocks visual verification, not implementation'),
     }),
@@ -150,7 +147,7 @@ it.each([true, false])('distinguishes empty Antigravity runs from partial Claude
 
 it('checks subscription before preparation, preview, telemetry or agent launch', async () => {
   const { prepareWorkspace } = await import('./prepare-workspace.js');
-  const { spawnAdapter } = await import('./delegate.js');
+  const { runHeadlessAgent } = await import('./headless-agent.js');
   vi.mocked(requireClaudeSubscription).mockRejectedValueOnce(new Error('subscription refused'));
   const record = vi.fn();
   const spec = {
@@ -181,7 +178,7 @@ it('checks subscription before preparation, preview, telemetry or agent launch',
   await expect(runLocalBuild({ ws, spec, brief: 'Fix hair', write: vi.fn() })).rejects.toThrow('subscription refused');
   expect(prepareWorkspace).not.toHaveBeenCalled();
   expect(startLocalPlay).not.toHaveBeenCalled();
-  expect(spawnAdapter).not.toHaveBeenCalled();
+  expect(runHeadlessAgent).not.toHaveBeenCalled();
   expect(record).not.toHaveBeenCalled();
   expect(ws.abort.current).toBeNull();
 });
@@ -189,7 +186,7 @@ it('checks subscription before preparation, preview, telemetry or agent launch',
 it.each([true, false])('configures agy before preparation and launch: confirm=%s', async (confirm) => {
   const { readFileSync } = await import('node:fs');
   const { loadAdapters } = await import('./adapters.js');
-  const { spawnAdapter } = await import('./delegate.js');
+  const { runHeadlessAgent } = await import('./headless-agent.js');
   const { prepareWorkspace } = await import('./prepare-workspace.js');
   const root = mkdtempSync(join(tmpdir(), 'gdpl-agy-setup-'));
   roots.push(root);
@@ -203,19 +200,19 @@ it.each([true, false])('configures agy before preparation and launch: confirm=%s
     builder: 'self',
     pick: async (choices) => {
       expect(prepareWorkspace).not.toHaveBeenCalled();
-      expect(spawnAdapter).not.toHaveBeenCalled();
+      expect(runHeadlessAgent).not.toHaveBeenCalled();
       return choices[confirm ? 0 : 2]!;
     },
     abort: { current: null },
     run: () => ({ status: 0, stderr: '' }),
   };
   expect(await runLocalBuild({ ws, spec, brief: 'edit game', write: () => {} })).toBe(confirm);
-  expect(spawnAdapter).toHaveBeenCalledTimes(confirm ? 1 : 0);
+  expect(runHeadlessAgent).toHaveBeenCalledTimes(confirm ? 1 : 0);
   if (confirm) {
     expect(JSON.parse(readFileSync(join(root, '.gemini/antigravity-cli/settings.json'), 'utf8')).toolPermission).toBe(
       'proceed-in-sandbox',
     );
-    expect(spawnAdapter).toHaveBeenCalledWith(
+    expect(runHeadlessAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         spec: expect.objectContaining({ headless: expect.arrayContaining(['--sandbox', '--print']) }),
       }),

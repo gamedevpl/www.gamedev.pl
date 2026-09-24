@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { createApi } from './api.js';
 import { loadAdapters } from './adapters.js';
 import { writeBase, writeGameFiles } from './checkout.js';
-import { parseEventLine } from './delegate.js';
 import { memoryStore } from './keychain.js';
 import { handleReplLine } from './repl.js';
 import {
@@ -93,7 +92,7 @@ describe('workshopTurn', () => {
     const runAdapter: AdapterRun = async (input) => {
       calls.push(input);
       writeFileSync(join(input.cwd, 'game.ts'), 'B');
-      input.onLine?.('{"type":"assistant","message":{"content":[{"type":"text","text":"Made the jump floatier."}]}}');
+      input.onEvent?.({ type: 'message', text: 'Made the jump floatier.' });
       return { code: 0 };
     };
     const ok = await workshopTurn({
@@ -468,29 +467,5 @@ describe('opening a checkout', () => {
       write: () => undefined,
     });
     expect(published).toBe('platform');
-  });
-});
-
-describe('parseEventLine', () => {
-  it('shows the words from claude, codex and plain text events', () => {
-    expect(
-      parseEventLine(
-        '{"type":"assistant","message":{"content":[{"type":"text","text":"hi"},{"type":"tool_use","name":"Edit"}]}}',
-      ),
-    ).toBe('hi ⚙ Edit');
-    expect(parseEventLine('{"type":"item.completed","item":{"type":"agent_message","text":"done"}}')).toBe('done');
-    expect(parseEventLine('{"type":"item.completed","item":{"type":"command_execution","command":"npm test"}}')).toBe(
-      '⚙ npm test',
-    );
-    expect(parseEventLine('{"type":"result","result":"all good"}')).toBe('all good');
-    expect(parseEventLine('{"text":"plain"}')).toBe('plain');
-  });
-
-  it('hides bookkeeping events and non-JSON noise', () => {
-    expect(parseEventLine('{"type":"system","subtype":"init"}')).toBeNull();
-    expect(parseEventLine('{"type":"thread.started","thread_id":"t"}')).toBeNull();
-    expect(parseEventLine('{"type":"user","message":{"content":[{"type":"tool_result"}]}}')).toBeNull();
-    expect(parseEventLine('not json')).toBe('not json');
-    expect(parseEventLine('')).toBeNull();
   });
 });
