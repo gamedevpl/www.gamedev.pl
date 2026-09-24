@@ -85,6 +85,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      # The delivery allowlist lives in @gamedevpl/contract; tsx resolves it via dist.
+      - run: npm run build:packages
       - name: Check games-repo assemble / Check 4 / music contract
         env:
           GAMES_REPO: gamedevpl/www.gamedev.pl-games

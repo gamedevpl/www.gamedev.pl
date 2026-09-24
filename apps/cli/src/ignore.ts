@@ -2,7 +2,8 @@ import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
-export type IgnoreSource = 'git' | 'gitignore' | 'gamedevplignore';
+// not-game: an undeliverable path (notes, media), kept local.
+export type IgnoreSource = 'git' | 'gitignore' | 'gamedevplignore' | 'not-game';
 
 export type IgnoreMatch = {
   source: IgnoreSource;
@@ -17,7 +18,7 @@ export type IgnoredHit = {
 };
 
 type Rule = {
-  source: Exclude<IgnoreSource, 'git'>;
+  source: Exclude<IgnoreSource, 'git' | 'not-game'>;
   pattern: string;
   negation: boolean;
   dirOnly: boolean;

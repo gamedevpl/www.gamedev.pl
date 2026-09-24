@@ -1,34 +1,16 @@
-// Client twin of games-store assertDeliverableSourcePath.
+import {
+  DELIVERY_EXTRA_MODULE_PATTERN,
+  DELIVERY_FIXED_FILES,
+  DELIVERY_RESERVED_SEGMENTS,
+  deliveryPathRefusal,
+} from '@gamedevpl/contract';
 
-export const FIXED_SOURCE_FILES = [
-  'SPEC.md',
-  'GAME.json',
-  'music.json',
-  'CAPTURE.json',
-  'ACCEPTANCE.json',
-  'TRACE.json',
-  'PLAYTEST.json',
-  'AGENT.json',
-  'EDITOR.json',
-  'EDITOR.ts',
-  'EDITOR.content.json',
-  'index.html',
-  'game.ts',
-  'style.css',
-  'sim.ts',
-] as const;
+// Client twin of the upload allowlist; text-only, so no raster paths.
+export const FIXED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 
-export const RESERVED_SOURCE_SEGMENTS = new Set([
-  'shared',
-  'tools',
-  'games',
-  'node_modules',
-  'dist',
-  'references',
-  'templates',
-]);
+export const RESERVED_SOURCE_SEGMENTS = new Set<string>(DELIVERY_RESERVED_SEGMENTS);
 
-const EXTRA_MODULE_PATTERN = /^[a-z0-9][a-z0-9/-]{0,60}\.ts$/;
+const EXTRA_MODULE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
 const FOLDER_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const MAX_PATH_LENGTH = 120;
 export const MAX_FILE_BYTES = 1_000_000;
@@ -98,6 +80,8 @@ export function deliverablePathReason(rawPath: string): string | null {
     (FIXED_SOURCE_FILES as readonly string[]).includes(path) ||
     (EXTRA_MODULE_PATTERN.test(path) && !path.includes('//'));
   if (!allowed) return 'not a deliverable game source';
+  // Never looser than the API, whatever the shared rules gain later.
+  if (deliveryPathRefusal(path)) return 'not a deliverable game source';
   return null;
 }
 

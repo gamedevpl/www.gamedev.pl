@@ -71,15 +71,15 @@ describe('checkout', () => {
     writeFileSync(secret, 'keep\n');
     mkdirSync(join(dest, 'games', 'ghost-roads'), { recursive: true });
     writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'keep\n');
-    symlinkSync(outside, join(dest, 'games', 'ghost-roads', 'leak'));
+    symlinkSync(outside, join(dest, 'games', 'ghost-roads', 'leak.ts'));
     expect(
       localGameFiles(dest, 'ghost-roads')
         .map((file) => file.path)
         .sort(),
-    ).toEqual(['game.ts', 'leak']);
+    ).toEqual(['game.ts', 'leak.ts']);
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'next\n' }]);
     expect(existsSync(secret)).toBe(true);
-    expect(existsSync(join(dest, 'games', 'ghost-roads', 'leak'))).toBe(false);
+    expect(existsSync(join(dest, 'games', 'ghost-roads', 'leak.ts'))).toBe(false);
   });
 
   it('unlinks a matching symlink before writing the pulled file', () => {
@@ -322,30 +322,30 @@ function versionsApi(files: Array<{ path: string; content: string }>, version = 
 describe('ignored working copy', () => {
   it('skips gitignored and .git paths, and keeps a tracked file inside an ignored directory', () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-ign-'));
-    writeFileSync(join(dest, '.gitignore'), 'node_modules/\n*.log\n');
+    writeFileSync(join(dest, '.gitignore'), 'vendor/\n*.log\n');
     writeFileSync(join(dest, '.gamedevplignore'), '*.draft\n');
-    mkdirSync(join(dest, 'games', 'ghost-roads', 'node_modules', 'pkg'), { recursive: true });
+    mkdirSync(join(dest, 'games', 'ghost-roads', 'vendor', 'pkg'), { recursive: true });
     mkdirSync(join(dest, 'games', 'ghost-roads', '.git'));
     writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'keep\n');
     writeFileSync(join(dest, 'games', 'ghost-roads', 'scratch.log'), 'noise\n');
     writeFileSync(join(dest, 'games', 'ghost-roads', 'notes.draft'), 'wip\n');
-    writeFileSync(join(dest, 'games', 'ghost-roads', 'node_modules', 'pkg', 'index.js'), 'skip\n');
-    writeFileSync(join(dest, 'games', 'ghost-roads', 'node_modules', 'keep.js'), 'tracked\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'vendor', 'pkg', 'index.ts'), 'skip\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'vendor', 'keep.ts'), 'tracked\n');
     writeFileSync(join(dest, 'games', 'ghost-roads', '.git', 'config'), 'nope\n');
     writeBase(dest, 'v1', [
       { path: 'game.ts', content: 'keep\n' },
-      { path: 'node_modules/keep.js', content: 'tracked\n' },
+      { path: 'vendor/keep.ts', content: 'tracked\n' },
     ]);
     expect(
       localGameFiles(dest, 'ghost-roads')
         .map((file) => file.path)
         .sort(),
-    ).toEqual(['game.ts', 'node_modules/keep.js']);
+    ).toEqual(['game.ts', 'vendor/keep.ts']);
     expect(
       ignoredGameFiles(dest, 'ghost-roads')
         .map((hit) => `${hit.source}:${hit.path}`)
         .sort(),
-    ).toEqual(['gamedevplignore:notes.draft', 'git:.git', 'gitignore:node_modules/pkg', 'gitignore:scratch.log']);
+    ).toEqual(['gamedevplignore:notes.draft', 'git:.git', 'gitignore:scratch.log', 'gitignore:vendor/pkg']);
   });
 
   it('leaves an ignored scratch file in place and refuses to overwrite one that disagrees', async () => {

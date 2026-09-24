@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ALLOWED_SOURCE_FILES,
   createGcsGamesStore,
   defaultVersionId,
   forbiddenDeliveryPathReason,
@@ -554,6 +555,27 @@ describe('validateSourceUpload — the delivery contract', () => {
         expect(() => validateSourceUpload([...MINIMAL, { path, content: 'x' }])).toThrow(/path not deliverable/);
       }
     }
+  });
+});
+
+describe('assertDeliverableSourcePath refusal text', () => {
+  // Direct uploads keep the exact refusal the CLI now avoids.
+  it('refuses a notes file with the allowlist message, byte for byte', () => {
+    expect(() => validateSourceUpload([...MINIMAL, { path: 'NOTATKI-I-POMYSLY.md', content: 'x' }])).toThrow(
+      new InvalidUploadError(
+        "path not deliverable: NOTATKI-I-POMYSLY.md. Deliver only your own game's files " +
+          `(${ALLOWED_SOURCE_FILES.join(', ')}, your own .ts modules, or scenes/cast/images PNG/WebP).`,
+      ),
+    );
+  });
+
+  it('keeps the traversal and reserved-segment refusals', () => {
+    expect(() => validateSourceUpload([...MINIMAL, { path: '../x.ts', content: 'x' }])).toThrow(
+      'illegal path: ../x.ts',
+    );
+    expect(() => validateSourceUpload([...MINIMAL, { path: 'shared/x.ts', content: 'x' }])).toThrow(
+      'path not deliverable: shared/x.ts. `shared` belongs to the harness',
+    );
   });
 });
 

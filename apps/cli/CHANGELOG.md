@@ -19,6 +19,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Paths such as `image/png` are no longer highlighted as slash commands (#1465).
 - Starting Play says that the session runs in the background and how to end it (#1465).
 - Play loads again in Safari 16.0–16.3, which could not parse the 0.20.0 transcript colouring (#1465).
+- Notes and other non-game files in the game folder (for example `NOTATKI-I-POMYSLY.md`) stay local instead of failing the whole push: push prints `Kept local (not game files): …`, and diff and pull leave them alone (#1469).
 
 ## 0.20.0 — 2026-09-23
 

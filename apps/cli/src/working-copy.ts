@@ -30,6 +30,10 @@ export function formatIgnoredNotice(ignored: IgnoredHit[]): string[] {
     if (!hits.length) continue;
     lines.push(`ignored by ${name}, not delivered: ${formatPathList(hits.map(ignoredLabel))}`);
   }
+  const kept = ignored.filter((hit) => hit.source === 'not-game');
+  if (kept.length) {
+    lines.push(`Kept local (not game files): ${formatPathList(kept.map(ignoredLabel))} — add to .gitignore to silence`);
+  }
   return lines;
 }
 

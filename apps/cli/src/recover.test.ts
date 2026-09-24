@@ -130,7 +130,7 @@ it.each([
 });
 it('removes staged files deleted locally before retrying', async () => {
   const f = fixture();
-  writeFileSync(join(f.cwd, 'games/sky/A.ts'), 'partial upload');
+  writeFileSync(join(f.cwd, 'games/sky/extra.ts'), 'partial upload');
   const original = f.fetch.getMockImplementation()!;
   let fail = true;
   f.fetch.mockImplementation(async (url) => {
@@ -138,7 +138,7 @@ it('removes staged files deleted locally before retrying', async () => {
     return original(url);
   });
   await expect(recoverCheckout(f)).rejects.toThrow();
-  rmSync(join(f.cwd, 'games/sky/A.ts'));
+  rmSync(join(f.cwd, 'games/sky/extra.ts'));
   fail = false;
   await recoverCheckout(f);
   expect(f.fetch.mock.calls.some(([url]) => url.endsWith('/sources/stage/delete'))).toBe(true);
