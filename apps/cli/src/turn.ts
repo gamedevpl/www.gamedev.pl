@@ -32,6 +32,8 @@ export type RoundStatus = {
   failure?: { reason: string };
   // The studio thread, only as far as a concept card.
   progress?: { headSha?: string; revisions?: Array<{ origin?: string; proposal?: CreatorProposal }> };
+  // Soonest the server says this answer could differ.
+  pollAfterMs?: number;
 };
 
 export async function getStatus(api: ApiClient, token: string): Promise<RoundStatus> {
