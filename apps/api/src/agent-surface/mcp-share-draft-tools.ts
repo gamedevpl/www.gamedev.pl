@@ -1,8 +1,10 @@
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import { playUrlFor } from './mcp-round-card-tools.js';
 import {
   toolOk,
   toolErr,
+  toolRefusal,
   SESSION_KEY_PROP,
   type ToolContext,
   type ToolHandler,
@@ -19,6 +21,7 @@ const WRITES = {
 interface AuthedRoundJob {
   jobId: number;
   record: SubmissionRecord;
+  actorUid: string;
 }
 
 export interface ShareDraftToolsDeps {
@@ -82,6 +85,9 @@ export function createShareDraftTools(deps: ShareDraftToolsDeps): Record<string,
         if (!store || !refuseShare) return toolErr('the MCP build endpoint is not configured');
 
         const record = auth.record;
+        if (!(await canActOnSubmissionOrSlug(store, record, auth.actorUid, 'publish'))) {
+          return toolRefusal('only the creator can share this game', 'not_owner');
+        }
         const shared = args.shared !== false;
 
         if (shared) {
