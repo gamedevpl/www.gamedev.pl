@@ -1214,6 +1214,12 @@
   width: 14px;
   height: 14px;
   flex: none;
+  /* The shared ring is a faint track plus one dark edge. On this turquoise
+     pill that edge is the only thing the eye picks up, so it reads as a caret
+     in the label. Two dark edges make the mark a ring. */
+  border-color: rgba(8, 36, 29, 0.22);
+  border-top-color: #08241d;
+  border-right-color: #08241d;
 }
 
 .match-build-link.is-busy .build-btn-spinner {
