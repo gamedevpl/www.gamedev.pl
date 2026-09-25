@@ -2,8 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { resolveRefineFallbackModel } from './vertex-fallback-models.js';
 
 describe('what may stand in for the refiner', () => {
-  it('stands nothing in until an operator asks for it', () => {
+  it('stands nothing in without an OpenAI key', () => {
     expect(resolveRefineFallbackModel({})).toBeUndefined();
+  });
+
+  it('uses Luna on a second vendor when an OpenAI key is available', () => {
+    expect(resolveRefineFallbackModel({ OPENAI_API_KEY: 'test-key' })).toBe('gpt-6-luna');
+    expect(resolveRefineFallbackModel({ REFINE_FALLBACK_MODEL: 'gpt-6-luna' })).toBeUndefined();
+    expect(resolveRefineFallbackModel({ REFINE_FALLBACK_MODEL: 'gpt-6-luna', OPENAI_API_KEY: 'test-key' })).toBe(
+      'gpt-6-luna',
+    );
   });
 
   it('accepts a peer Vertex serves when one is configured', () => {

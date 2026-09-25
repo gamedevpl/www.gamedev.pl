@@ -5,10 +5,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
 import { callWithVertexResilience } from '../platform/vertex-resilience.js';
-import { resolveRefineFallbackModel } from '../platform/vertex-fallback-models.js';
-import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
+import { OPENAI_REFINE_FALLBACK_MODEL, resolveRefineFallbackModel } from '../platform/vertex-fallback-models.js';
+import { createOpenAiClient, createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
-import { sanitizeCreatorText } from '../platform/submission-status.js';
+import { cleanSuggestedTitle } from './refine-title.js';
 import { BOT_UID_PREFIX, type Store } from '../platform/store.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { normalizeLocale } from '../platform/translate.js';
@@ -74,6 +74,8 @@ export interface VertexSpecRefinerOptions {
   // Lower-level seam than `refinerFetcher` — see VertexCheckerOptions.client.
   client?: GenAIClient;
   groundingClient?: GenAIClient;
+  fallbackClient?: GenAIClient;
+  fallbackApiKey?: string;
 }
 
 // Refinement authors questions with options in creator's language; env-tunable.
@@ -88,32 +90,6 @@ export const DEFAULT_GROUNDING_TIMEOUT_MS = 8_000;
  */
 const REFINE_CACHE_TTL_MS = 10 * 60_000;
 const REFINE_CACHE_MAX_ENTRIES = 200;
-
-/**
- * The submission route's own title bounds. A suggestion that could not be submitted
- * unedited is worse than no suggestion: the creator would meet the validation error on
- * a name they never wrote.
- */
-const MIN_TITLE_LENGTH = 3;
-
-/**
- * A model-proposed title, or undefined when there is nothing usable.
- *
- * The model is asked for a bare name and mostly gives one, but it also sometimes wraps
- * it in quotes or ends it with a full stop, and a title is about to be shown in a text
- * input and then carried by the game forever. Single-lined here rather than at the
- * route because every caller of a refiner wants the same thing, stubs included.
- */
-function cleanSuggestedTitle(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  const cleaned = sanitizeCreatorText(raw, { singleLine: true })
-    .replace(/^["'“”„«»]+|["'“”„«»]+$/g, '')
-    .replace(/[.!?,;:]+$/, '')
-    .trim()
-    .slice(0, MAX_TITLE_LENGTH)
-    .trim();
-  return cleaned.length >= MIN_TITLE_LENGTH ? cleaned : undefined;
-}
 
 const RefineResultSchema = z.object({
   suggestedTitle: z.string().optional(),
@@ -140,6 +116,8 @@ export class VertexSpecRefiner implements SpecRefiner {
   private client?: GenAIClient;
   private groundingClient?: GenAIClient;
   private spareClients = new Map<string, GenAIClient>();
+  private fallbackModel?: string;
+  private fallbackApiKey?: string;
 
   constructor(options: VertexSpecRefinerOptions = {}) {
     this.options = options;
@@ -147,10 +125,19 @@ export class VertexSpecRefiner implements SpecRefiner {
     this.groundingTimeoutMs =
       options.groundingTimeoutMs ?? Number(process.env.REFINE_GROUNDING_TIMEOUT_MS ?? DEFAULT_GROUNDING_TIMEOUT_MS);
     this.refinerFetcher = options.refinerFetcher;
+    this.fallbackApiKey = options.fallbackApiKey ?? process.env.OPENAI_API_KEY;
+    this.fallbackModel = resolveRefineFallbackModel({ ...process.env, OPENAI_API_KEY: this.fallbackApiKey });
   }
 
   private getClient(model?: string): GenAIClient {
     if (model) {
+      if (model === OPENAI_REFINE_FALLBACK_MODEL) {
+        const cached = this.spareClients.get(model);
+        if (cached) return cached;
+        const client = this.options.fallbackClient ?? createOpenAiClient({ model, apiKey: this.fallbackApiKey });
+        this.spareClients.set(model, client);
+        return client;
+      }
       // Cached per model.
       const spare =
         this.spareClients.get(model) ??
@@ -283,13 +270,20 @@ ${params.concept}
       const parsed = await callWithVertexResilience({
         timeoutMs: this.timeoutMs,
         // Peer-or-better only: refinement shapes what gets built.
-        fallbackModel: resolveRefineFallbackModel(),
-        attempt: (model, timeoutMs) =>
-          this.getClient(model)(promptText)
-            .temperature(0.2)
+        fallbackModel: this.fallbackModel,
+        onAttempt: (model) => {
+          if (model === OPENAI_REFINE_FALLBACK_MODEL && process.env.NODE_ENV !== 'test') {
+            console.warn('Vertex AI spec refinement falling back to OpenAI gpt-6-luna');
+          }
+        },
+        attempt: (model, timeoutMs) => {
+          const base = this.getClient(model)(promptText);
+          const request = model === OPENAI_REFINE_FALLBACK_MODEL ? base : base.temperature(0.2);
+          return request
             .thinking({ level: 'low' })
             .signal(AbortSignal.timeout(timeoutMs))
-            .json((value) => RefineResultSchema.parse(value)),
+            .json((value) => RefineResultSchema.parse(value));
+        },
       });
 
       const suggestedTitle = cleanSuggestedTitle(parsed.suggestedTitle);

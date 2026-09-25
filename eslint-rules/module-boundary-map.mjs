@@ -259,6 +259,8 @@ const FILE_BUCKET = {
   'job-admin-publish': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',
+  'refine-title': 'creation',
+  'refine-fallback.test': 'creation',
   'option-image-routes': 'creation',
   'option-images': 'creation',
   'option-image-safety': 'creation',
