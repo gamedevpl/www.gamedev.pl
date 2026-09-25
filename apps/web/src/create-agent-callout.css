@@ -1,63 +1,59 @@
 .create-agent-callout {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin: 1.5rem 0 0;
-  padding: 1rem 1.25rem;
-  border-radius: 12px;
-  border: 1px solid rgba(56, 189, 248, 0.24);
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(20, 27, 33, 0.85) 100%), var(--panel-card);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  gap: 0.85rem;
+  margin: 1.25rem 0 0;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.07) 0%, rgba(20, 27, 33, 0.8) 100%), var(--panel-card);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
 }
 
 .create-agent-callout-icon {
   flex: none;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: rgba(56, 189, 248, 0.14);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.12);
   color: var(--accent-blue);
 }
 
 .create-agent-callout-body {
   flex: 1;
   min-width: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .create-agent-callout-title {
   font-weight: 600;
-  font-size: 0.95rem;
-  margin: 0 0 0.2rem;
   color: var(--text);
+  margin-right: 0.35rem;
 }
 
 .create-agent-callout-detail {
-  font-size: 0.82rem;
   color: var(--muted);
-  line-height: 1.4;
 }
 
 .create-agent-callout-actions {
   flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.45rem;
 }
 
 .create-agent-callout-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  border-radius: 8px;
-  border: 1px solid var(--turquoise);
-  background: rgba(0, 228, 172, 0.12);
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.1);
   color: var(--turquoise);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   text-decoration: none;
   transition:
@@ -68,54 +64,24 @@
 }
 
 .create-agent-callout-btn:hover {
-  background: rgba(0, 228, 172, 0.22);
+  background: rgba(0, 228, 172, 0.2);
   border-color: var(--turquoise);
   transform: translateY(-1px);
 }
 
-.create-agent-callout-pills {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.create-agent-callout-pill {
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  background: rgba(56, 189, 248, 0.06);
-  color: var(--muted);
-  font-size: 0.72rem;
-  text-decoration: none;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.create-agent-callout-pill:hover {
-  color: var(--text);
-  border-color: rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.14);
-}
-
-@media (max-width: 680px) {
+@media (max-width: 768px) {
   .create-agent-callout {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 0.9rem;
+    gap: 0.6rem;
   }
 
   .create-agent-callout-actions {
     width: 100%;
-    align-items: stretch;
   }
 
   .create-agent-callout-btn {
-    justify-content: center;
-  }
-
-  .create-agent-callout-pills {
+    width: 100%;
     justify-content: center;
   }
 }

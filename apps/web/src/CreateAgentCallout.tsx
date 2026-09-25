@@ -31,33 +31,17 @@ export function CreateAgentCallout({ onNavigate }: CreateAgentCalloutProps) {
   return (
     <aside className="create-agent-callout" aria-label={t('create.agentCalloutAria')}>
       <div className="create-agent-callout-icon" aria-hidden="true">
-        <PixelIcon name="code" size={18} />
+        <PixelIcon name="code" size={16} />
       </div>
       <div className="create-agent-callout-body">
-        <div className="create-agent-callout-title">{t('create.agentCalloutTitle')}</div>
-        <div className="create-agent-callout-detail">{t('create.agentCalloutDetail')}</div>
+        <strong className="create-agent-callout-title">{t('create.agentCalloutTitle')}</strong>
+        <span className="create-agent-callout-detail">{t('create.agentCalloutDetail')}</span>
       </div>
       <div className="create-agent-callout-actions">
         <a href={connectPath()} className="create-agent-callout-btn" onClick={handleNavClick(connectPath())}>
           <span>{t('create.agentCalloutLink')}</span>
           <PixelIcon name="arrowRight" size={12} />
         </a>
-        <div className="create-agent-callout-pills">
-          <a
-            href={connectPath('mcp')}
-            className="create-agent-callout-pill"
-            onClick={handleNavClick(connectPath('mcp'))}
-          >
-            MCP
-          </a>
-          <a
-            href={connectPath('cli')}
-            className="create-agent-callout-pill"
-            onClick={handleNavClick(connectPath('cli'))}
-          >
-            gamedevpl CLI
-          </a>
-        </div>
       </div>
     </aside>
   );

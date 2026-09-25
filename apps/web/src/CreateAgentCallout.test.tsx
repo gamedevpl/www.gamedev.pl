@@ -41,29 +41,11 @@ describe('CreateAgentCallout', () => {
     const mainLink = callout?.querySelector('a.create-agent-callout-btn');
     expect(mainLink?.getAttribute('href')).toBe('/connect');
 
-    const mcpPill = callout?.querySelector('a[href="/connect#mcp"]');
-    expect(mcpPill).not.toBeNull();
-
-    const cliPill = callout?.querySelector('a[href="/connect#cli"]');
-    expect(cliPill).not.toBeNull();
-
     await act(async () => {
       mainLink?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
       await flushEffects();
     });
     expect(onNavigate).toHaveBeenCalledWith('/connect');
-
-    await act(async () => {
-      mcpPill?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
-      await flushEffects();
-    });
-    expect(onNavigate).toHaveBeenCalledWith('/connect#mcp');
-
-    await act(async () => {
-      cliPill?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
-      await flushEffects();
-    });
-    expect(onNavigate).toHaveBeenCalledWith('/connect#cli');
 
     await act(async () => root.unmount());
   });
