@@ -807,6 +807,7 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.creation-card')?.textContent).toContain('Zrobimy z tego grę');
     expect(container.querySelector('.creation-card button')).toBeNull();
     expect(container.querySelector('.prompt-composer-bar .build-btn-label')?.textContent).toContain('Stwórz taką grę');
+    expect(container.querySelector('.prompt-composer-bar .build-btn.has-text-cta')).not.toBeNull();
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());

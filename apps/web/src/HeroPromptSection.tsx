@@ -554,7 +554,7 @@ export function HeroPromptSection({
 
             <button
               type="submit"
-              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
+              className={`primary-btn build-btn${isCreationIntentEligible && !matchedGame && !isSearching && !isBusy ? ' has-text-cta' : ''}${isBusy ? ' is-busy' : ''}`}
               disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
               aria-label={t('hero.smartBuildBtn')}
             >
