@@ -18,6 +18,7 @@ describe('remixClientPayload', () => {
       contentDefaults: {},
       canAssist: true,
       canCode: false,
+      canSave: false,
       expiresInMs: 60_000,
     });
     expect(body).toMatchObject({
@@ -25,6 +26,7 @@ describe('remixClientPayload', () => {
       values: { speed: 1 },
       canAssist: true,
       canCode: false,
+      canSave: false,
       expiresInMs: 60_000,
     });
     expect(body).not.toHaveProperty('html');
@@ -40,6 +42,7 @@ describe('remixClientPayload', () => {
       contentDefaults: {},
       canAssist: false,
       canCode: true,
+      canSave: true,
       expiresInMs: 10,
       html: '<html></html>',
       undoable: true,

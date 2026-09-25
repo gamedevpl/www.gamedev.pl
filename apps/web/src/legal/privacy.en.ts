@@ -310,9 +310,9 @@ export const privacyEn: LegalDocument = {
             [
               'OpenAI',
               'Generating a starting draft of your game; drawing illustrations for the answers to a clarifying ' +
-                'question about how your game should look; writing your game as the coding agent when that model ' +
-                'is selected; standing in for the Gemini classifier when it is unavailable, so moderation never ' +
-                'simply stops',
+                'question about how your game should look; refining your description into a title and clarifying ' +
+                'questions if Gemini is unavailable; writing your game as the coding agent when selected; ' +
+                'standing in for the Gemini classifier when unavailable, so moderation never simply stops',
               'USA — Standard Contractual Clauses',
             ],
             ['GitHub (Microsoft)', 'Games repository and coding agent', 'USA — Data Privacy Framework'],

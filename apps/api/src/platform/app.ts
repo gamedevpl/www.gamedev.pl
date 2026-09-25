@@ -931,10 +931,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   /**
-   * Remix — the player-facing half of live editing. Signed-in for now (model
-   * spend), ephemeral by default, with two durable exits that never publish:
-   * share (param links) and save-as-yours (private Studio draft). Gated by
-   * EDITOR_ASSIST / CODE_LANE for the edit lanes; save spends a creation slot.
+   * Remix: signed-in, ephemeral live editing. Two exits never publish:
+   * share (param links) and save-as-yours (private Studio draft). Edit
+   * lanes gate on EDITOR_ASSIST / CODE_LANE; save spends a creation slot.
    */
   const creationGate = createCreationGate({
     store,
@@ -949,6 +948,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationGate,
     submissionTokenSecret,
     githubClient: submissionSeams.githubClient ?? undefined,
+    getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),

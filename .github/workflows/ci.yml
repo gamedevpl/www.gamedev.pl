@@ -76,7 +76,8 @@ jobs:
   # GAMES_CONTRACT_REQUIRE_REMOTE=1 below to demand the live comparison instead.
   games_repo_contract:
     name: Games-repo contract
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    # This job exposes a private-repo PAT, so only trusted code on master may run it.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -90,7 +91,7 @@ jobs:
       - name: Check games-repo assemble / Check 4 / music contract
         env:
           GAMES_REPO: gamedevpl/www.gamedev.pl-games
-          GAMES_PUBLISHED_REF: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+          GAMES_PUBLISHED_REF: main
           GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
         run: npm run contract:games-repo
 

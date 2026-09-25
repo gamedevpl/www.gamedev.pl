@@ -2063,6 +2063,7 @@
     "saveFailed": "Nie udało się teraz zapisać.",
     "saveQuota": "Dziś już sporo utworzyłeś — spróbuj jutro.",
     "saveNoSources": "Tej gry nie da się jeszcze zapisać w Studio.",
+    "saveNotYours": "Tylko twórcy tej gry mogą zapisać jej kopię w Studio.",
     "saveNoChanges": "Najpierw coś zmień — potem możesz to zachować.",
     "conceptSeed": "Gra jak {{slug}}, ale moja własna wersja",
     "button": "Remiks",

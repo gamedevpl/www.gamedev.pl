@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runLadder } from './verify.js';
 
 describe('verification ladder', () => {
@@ -23,6 +26,24 @@ describe('verification ladder', () => {
         args.includes('check:static') ? { status: 1, stderr: 'static failed' } : { status: 0, stderr: '' },
     });
     expect(result).toEqual({ ok: false, stage: 'check_static', detail: 'static failed' });
+  });
+
+  it('uses the Creator Kit verification contract when present', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'gamedevpl-verify-contract-'));
+    try {
+      writeFileSync(join(cwd, 'kit.json'), JSON.stringify({
+        cliVerification: { typecheck: 'check:types', checkStatic: 'check:assets', checkGame: 'check:publish' },
+      }));
+      const ran: string[] = [];
+      const result = runLadder({ cwd, publish: true, run: (_cmd, args) => {
+        ran.push(args[1]!);
+        return { status: 0, stderr: '' };
+      } });
+      expect(result.ok).toBe(true);
+      expect(ran).toEqual(['check:types', 'check:assets', 'check:publish']);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });
 

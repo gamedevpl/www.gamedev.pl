@@ -14,7 +14,8 @@ import { isPublishableMode } from '../platform/publication-state.js';
 import { resolveGameAccess, sameOwner } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
-import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
+import { previewMatchesDelivery, resolveEditorialPublish, supersedeOtherRounds } from './job-admin-publish.js';
+import type { EditorialPublishCounts } from './job-admin-publish.js';
 
 /**
  * The operator's view of the build queue.
@@ -184,6 +185,10 @@ export async function registerJobAdminRoutes(
       if (!record.slug || !record.deliveredVersion) {
         return reply.code(409).send({ error: 'nothing_delivered' });
       }
+      // Never publish different bytes from the operator's preview.
+      if (!previewMatchesDelivery(record, record.deliveredVersion)) {
+        return reply.code(409).send({ error: 'preview_superseded_delivery' });
+      }
 
       // Creator-owned games need a publishable profile: the canonical owner's.
       const initialAccess = await resolveGameAccess(store, record.slug);
@@ -221,6 +226,12 @@ export async function registerJobAdminRoutes(
         latest.accessRevision !== initialAccess.accessRevision || !sameOwner(latest.owner, initialAccess.owner);
       if (stale) return reply.code(409).send({ error: 'owner_changed' });
 
+      // Re-checked after every await above: a delivery may have landed meanwhile.
+      const fresh = await store.getSubmission(jobId);
+      if (!fresh || !previewMatchesDelivery(fresh, record.deliveredVersion)) {
+        return reply.code(409).send({ error: 'preview_superseded_delivery' });
+      }
+
       const at = new Date(now()).toISOString();
       // Through `publishing` rather than straight to `published`: the intermediate state is
       // what a job is in while this is happening, and skipping it would leave no record
@@ -241,20 +252,7 @@ export async function registerJobAdminRoutes(
       // is left alone so the next sweep can still emit the published notification.
       await store.setSubmissionLastStatus(jobId, 'published');
 
-      // Supersede earlier rounds for this slug on publish.
-      const activeRecords = await store.listActiveSubmissions();
-      for (const other of activeRecords) {
-        if (other.slug === record.slug && other.jobId !== jobId) {
-          await store.recordJobTransition(other.jobId, {
-            to: 'abandoned',
-            at,
-            by: 'system',
-            reason: 'superseded_by_publish',
-          });
-          await store.setSubmissionAbandoned(other.jobId, at);
-          await store.setSubmissionLastStatus(other.jobId, 'abandoned');
-        }
-      }
+      await supersedeOtherRounds(store, record.slug, jobId, at);
 
       // Tell the people who follow this game that it moved. Best-effort and after the
       // publish has already happened: a notification that fails must never leave a game

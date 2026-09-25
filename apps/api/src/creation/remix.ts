@@ -40,6 +40,7 @@ import {
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { canSaveRemix, isRepoPublished } from './remix-access.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -288,6 +289,8 @@ export interface RemixRoutesOptions {
   dailyRemixQuota?: number;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
+  // The live catalog's repo-lane entry, or null; the same read /api/catalog serves.
+  getRepoPublishedCatalogEntry?: (slug: string) => Promise<object | null>;
   /** Ref the repo-published games are served from — the rebuild pins to it. */
   publishedRef?: string;
   assistant?: EditorAssistant;
@@ -417,6 +420,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // Someone else's remix is indistinguishable from an expired one, which is
       // the honest answer as well as the safe one.
       if (session.ownerUid !== uid) return null;
+      // Every route reads repo sources after this, so membership is rechecked here.
+      if (!session.fromStore && !(await isRepoPublished(options.getRepoPublishedCatalogEntry, session.slug)))
+        return null;
       return { session, rehydrated: false };
     }
     const rebuilt = await rehydrate(id, uid);
@@ -517,9 +523,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     }
 
     if (!options.githubClient || !options.publishedRef) return null;
+    if (!(await isRepoPublished(options.getRepoPublishedCatalogEntry, slug))) return null;
     const ref = options.publishedRef;
-    // GAME.json is the proof of existence — every game has one, and a missing
-    // file is a real "no such game" rather than a swallowed error.
+    // Catalog membership is established before repository existence is probed.
     const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');
     if (manifest === null) return null;
     const [editorJson, editorContentJson] = await Promise.all([
@@ -620,6 +626,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
           canAssist,
           canCode,
+          canSave: await canSaveRemix(options.store, params.data.slug, request.user!.uid),
           expiresInMs: REMIX_TTL_MS,
         }),
       );
@@ -644,6 +651,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         contentDefaults: defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
         canAssist,
         canCode,
+        canSave: await canSaveRemix(options.store, session.slug, request.user!.uid),
         expiresInMs: Math.max(0, session.expiresAt - now()),
         html,
         undoable: !rehydrated && session.history.length > 0,
@@ -1232,6 +1240,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = SaveSchema.safeParse(request.body ?? {});
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+      if (!(await canSaveRemix(options.store, session.slug, request.user!.uid))) {
+        return reply.status(403).send({
+          error: "only this game's members can save a copy of its sources",
+          reason: 'source_access_required',
+        });
+      }
 
       if (
         !remixHasSavableChange({

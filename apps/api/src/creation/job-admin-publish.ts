@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
-import { BOT_UID_PREFIX } from '../platform/store.js';
+import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from '../platform/store.js';
 
 export type EditorialPublishDecision = 'blocked' | 'pending' | 'clear';
 
@@ -81,4 +81,25 @@ export async function resolveEditorialPublish(opts: {
     return { reason: `override:${which}:${parsed.reason}` };
   }
   return { reason: 'approved' };
+}
+
+// Preview-only rounds advance previewVersion alone; a delivery syncs both.
+export function previewMatchesDelivery(record: SubmissionRecord, version: string): boolean {
+  if (record.deliveredVersion !== version) return false;
+  return !record.previewVersion || record.previewVersion === version;
+}
+
+// Supersede earlier rounds for this slug on publish.
+export async function supersedeOtherRounds(store: Store, slug: string, jobId: number, at: string): Promise<void> {
+  for (const other of await store.listActiveSubmissions()) {
+    if (other.slug !== slug || other.jobId === jobId) continue;
+    await store.recordJobTransition(other.jobId, {
+      to: 'abandoned',
+      at,
+      by: 'system',
+      reason: 'superseded_by_publish',
+    });
+    await store.setSubmissionAbandoned(other.jobId, at);
+    await store.setSubmissionLastStatus(other.jobId, 'abandoned');
+  }
 }

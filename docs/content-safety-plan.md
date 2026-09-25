@@ -180,9 +180,11 @@ this is the half of its mitigation that reads the artifact.
 > The same loop now lives in `apps/api/src/platform/vertex-resilience.ts`, because the
 > 429 that stopped a deploy on 2026-09-12 hit `refine`, not the classifier: hardening one
 > call site left six others with a single attempt each. Refine, the CLI intake agent and
-> the Studio chat agent use it; the classifier is the only one that also carries a
-> stand-in model, since a conversation cannot change models mid-sentence and generated
-> content is a quality decision, not a reliability one. `tab-complete`,
+> the Studio chat agent use it. The classifier carries a second-vendor stand-in for
+> safety; refinement can use OpenAI `gpt-6-luna` after Vertex capacity failures when
+> `REFINE_FALLBACK_MODEL=gpt-6-luna` and `OPENAI_API_KEY` are configured. A configured
+> `REFINE_FALLBACK_MODEL=gemini-3.8-flash` still selects the Vertex stand-in.
+> A conversation cannot change models mid-sentence. `tab-complete`,
 > `seed-provider-vertex` and `catalog-enricher` are deliberately untouched — a late
 > completion is worthless, and the other two produce content.
 >

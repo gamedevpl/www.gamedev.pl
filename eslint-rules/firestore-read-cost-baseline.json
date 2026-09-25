@@ -10,7 +10,7 @@
     "GET /api/submissions/:token (share link, steady state)": 1,
     "GET /api/submissions/:token (stale dispatch, steady state)": 2,
     "GET /api/submissions/:token (steady state)": 2,
-    "GET /api/submissions/mine": 23,
+    "GET /api/submissions/mine": 47,
     "GET /api/submissions/mine (derived-only owner)": 10,
     "GET /api/submissions/mine (document, steady state)": 2,
     "POST /api/internal/notify-sweep (steady state)": 83

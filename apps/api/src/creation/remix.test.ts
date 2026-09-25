@@ -8,13 +8,6 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
 import { openProposal } from '../community/proposals.js';
 
-/*
- * The remix surface's promises, tested at the route: it is signed-in only for
- * now, a remix belongs to whoever started it, nothing a browser sends is ever
- * compiled, a code edit is only visible once it builds, and a share link carries
- * declared values and never generated code.
- */
-
 const EDITOR_JSON = JSON.stringify({
   version: 1,
   params: {
@@ -171,6 +164,7 @@ async function buildTestApp(
     openProposal,
     gamesStore: overrides.gamesStore ?? stubGamesStore(),
     githubClient: stubGitHubClient(seen),
+    getRepoPublishedCatalogEntry: async (slug) => (slug === 'catalog-dash' ? {} : null),
     publishedRef: 'main',
     submissionTokenSecret: overrides.submissionTokenSecret ?? 'test-submission-secret',
     ...(overrides.assistant ? { assistant: overrides.assistant } : {}),
@@ -708,13 +702,6 @@ describe('remix routes', () => {
   });
 });
 
-/*
- * The two eras. Production answered "game not found" for every slug because the
- * start route proved existence by assembling the whole game and swallowed any
- * failure as an absence; these pin the replacement — a manifest read decides
- * existence, a declaration read decides which lanes exist, and a repo-era game
- * gets the params lane instead of nothing.
- */
 describe('remix across the two catalog eras', () => {
   let app: FastifyInstance | null = null;
 
@@ -758,6 +745,8 @@ describe('remix across the two catalog eras', () => {
       openProposal,
       gamesStore: overrides.gamesStore ?? stubGamesStore(),
       githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
+      getRepoPublishedCatalogEntry: async (slug) =>
+        ['dog-dash', 'repo-game', 'catalog-dash'].includes(slug) ? {} : null,
       publishedRef: 'main',
       submissionTokenSecret: 'test-submission-secret',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
@@ -774,7 +763,6 @@ describe('remix across the two catalog eras', () => {
     const response = await app!.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    // The declaration came from a file read, not from an assembly.
     expect(body.params.dogScale.max).toBe(3);
     // The painter's half too: the content lane is the one editing lane that
     // works catalog-wide, precisely because it needs only this file.
@@ -843,6 +831,7 @@ describe('remix across the two catalog eras', () => {
       openProposal,
       gamesStore: stubGamesStore(),
       githubClient: client,
+      getRepoPublishedCatalogEntry: async () => ({}),
       publishedRef: 'main',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
       codeLane: { run: async () => ({ ok: true }) } as never,
@@ -915,6 +904,28 @@ describe('remix across the two catalog eras', () => {
     });
     expect(derived).toEqual([{ slug: body.slug, version: 'v-saved', name: 'preview.html' }]);
     expect(await built.store.getPublication(body.slug)).toBeNull();
+  });
+
+  it('lets any player save an ownerless repo-lane game', async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const built = await repoEraApp({ gamesStore: stubGamesStore({ puts }) });
+    app = built.app;
+    await built.store.upsertUser({ uid: 'g:bob' });
+    const bob = { 'x-test-uid': 'g:bob' };
+
+    const started = (
+      await app.inject({ method: 'POST', url: '/api/games/catalog-dash/remix', headers: bob })
+    ).json() as { remixId: string; canSave: boolean };
+    expect(started.canSave).toBe(true);
+    const saved = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${started.remixId}/save`,
+      headers: bob,
+      payload: { params: { dogScale: 2.5, tagline: 'go!' } },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(puts).toHaveLength(1);
   });
 });
 
@@ -1111,6 +1122,58 @@ describe('remix save as yours', () => {
     });
     expect(response.statusCode).toBe(409);
     expect(response.json().reason).toBe('no_changes');
+  });
+
+  it("does not copy another creator's sources into a stranger's draft", async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const built = await buildTestApp({ gamesStore: stubGamesStore({ puts }) });
+    app = built.app;
+    await built.store.upsertUser({ uid: 'g:victim' });
+    await built.store.createSubmission(9_001, 'g:victim', 'Dog Dash');
+    await built.store.setSubmissionSlug(9_001, 'dog-dash');
+    await built.store.upsertUser({ uid: 'g:mallory' });
+    const mallory = { 'x-test-uid': 'g:mallory' };
+    const started = (
+      await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: mallory })
+    ).json() as { remixId: string; canSave: boolean };
+    expect(started.canSave).toBe(false);
+    const resumed = await app.inject({ method: 'GET', url: `/api/remixes/${started.remixId}`, headers: mallory });
+    expect(resumed.json().canSave).toBe(false);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${started.remixId}/save`,
+      headers: mallory,
+      payload: { params: { dogScale: 2, tagline: 'go!' } },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().reason).toBe('source_access_required');
+    expect(puts).toHaveLength(0);
+    expect(await built.store.listSubmissionsByOwner('g:mallory')).toHaveLength(0);
+  });
+
+  it('lets a creator save a remix of their own game', async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const built = await buildTestApp({ gamesStore: stubGamesStore({ puts }) });
+    app = built.app;
+    await built.store.createSubmission(9_001, 'g:alice', 'Dog Dash');
+    await built.store.setSubmissionSlug(9_001, 'dog-dash');
+    const started = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json() as {
+      remixId: string;
+      canSave: boolean;
+    };
+    expect(started.canSave).toBe(true);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${started.remixId}/save`,
+      headers: alice,
+      payload: { params: { dogScale: 2, tagline: 'go!' } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(puts).toHaveLength(1);
   });
 });
 

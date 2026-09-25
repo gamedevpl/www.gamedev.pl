@@ -17,7 +17,9 @@ curl -fsSL https://www.gamedev.pl/install.sh | bash
 ```
 
 The installer is 404 until the `CLI_SURFACE` deploy flag is on. Checksums come from GitHub
-Releases tagged `cli-v*` (one `gamedevpl` asset). `gamedevpl update` uses the same channel.
+Releases tagged `cli-v*` carry the standalone `gamedevpl` script and an npm-installable
+`gamedevpl-npm.tgz` archive. Both contain the same bundled CLI. `gamedevpl update`
+uses the standalone script; Creator Kit checkouts can pin the archive by release URL.
 
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
@@ -59,6 +61,12 @@ node apps/cli/dist/gamedevpl.mjs help
 ```
 
 `ink` is a workspace dependency. Skipping `npm install` makes esbuild fail with `Could not resolve "ink"`. The bundled script inlines Ink. Interactive `gamedevpl` opens the browser workspace. Use `gamedevpl --terminal` for the TUI.
+
+The GitHub Release also carries `gamedevpl-npm.tgz`, a self-contained npm package
+with `gamedevpl` and `git-remote-gamedevpl` bins. A Creator Kit can pin its
+versioned release URL in `devDependencies` and lock it with `npm ci`; users then
+run `npm exec -- gamedevpl ...` inside that checkout. No npm Registry publication
+is involved.
 
 ## Verbs
 

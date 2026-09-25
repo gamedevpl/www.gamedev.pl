@@ -282,7 +282,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
   // 'NONE' is what an absent (not failing) grounder replies with.
   const noGroundingClient = stubClient('NONE');
   function makeRefiner(options: ConstructorParameters<typeof VertexSpecRefiner>[0]) {
-    return new VertexSpecRefiner({ groundingClient: noGroundingClient, ...options });
+    return new VertexSpecRefiner({ groundingClient: noGroundingClient, fallbackApiKey: '', ...options });
   }
 
   it('normalizes questions and caps them at four', async () => {
