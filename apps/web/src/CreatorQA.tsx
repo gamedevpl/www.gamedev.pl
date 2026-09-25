@@ -6,6 +6,8 @@ import { isBuilderKind, type BuilderKind } from './builderKind.js';
 import { CreatorQADiscardModal } from './CreatorQADiscardModal.js';
 import { hasCreatorQaProgress } from './creatorQaProgress.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
+import { CreatorQAReviewList } from './CreatorQAReviewList.js';
+import { CreatorQASubmittingCard } from './CreatorQASubmittingCard.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
 import { pickQuestionArt, useOptionImages } from './useOptionImages.js';
@@ -173,6 +175,16 @@ export function CreatorQA({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (submitting && scrollerRef.current) {
+      if (typeof scrollerRef.current.scrollTo === 'function') {
+        scrollerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        scrollerRef.current.scrollTop = 0;
+      }
+    }
+  }, [submitting]);
 
   // The page behind the overlay must not scroll with it; same approach as the studio's
   // sheet so there is one way this is done in the app.
@@ -550,60 +562,17 @@ export function CreatorQA({
               </h2>
               <p className="qa-stage-lede">{t('qa.reviewSubtitle')}</p>
 
-              <dl className="qa-review">
-                <div className="qa-review-row">
-                  <dt className="qa-review-label">{t('qa.nameLabel')}</dt>
-                  <dd className="qa-review-value">
-                    <span>{title.trim()}</span>
-                    <button
-                      type="button"
-                      className="qa-review-edit"
-                      disabled={submitting}
-                      onClick={() => goTo(0)}
-                      aria-label={`${t('qa.edit')}: ${t('qa.nameLabel')}`}
-                    >
-                      {t('qa.edit')}
-                    </button>
-                  </dd>
-                </div>
+              <CreatorQASubmittingCard submitting={submitting} />
 
-                {questions.map((q, index) => {
-                  const answer = answerFor(q.id);
-                  return (
-                    <div className="qa-review-row" key={q.id}>
-                      <dt className="qa-review-label">{q.question}</dt>
-                      <dd className="qa-review-value">
-                        <span className={answer ? undefined : 'qa-review-unset'}>{answer || t('qa.aiDecides')}</span>
-                        <button
-                          type="button"
-                          className="qa-review-edit"
-                          disabled={submitting}
-                          onClick={() => goTo(index + 1)}
-                          aria-label={`${t('qa.edit')}: ${q.question}`}
-                        >
-                          {t('qa.edit')}
-                        </button>
-                      </dd>
-                    </div>
-                  );
-                })}
-
-                <div className="qa-review-row">
-                  <dt className="qa-review-label">{t('builder.legend')}</dt>
-                  <dd className="qa-review-value">
-                    <span>{t(builder === 'self' ? 'builder.self.title' : 'builder.platform.title')}</span>
-                    <button
-                      type="button"
-                      className="qa-review-edit"
-                      disabled={submitting}
-                      onClick={() => goTo(reviewIndex - 1)}
-                      aria-label={`${t('qa.edit')}: ${t('builder.legend')}`}
-                    >
-                      {t('qa.edit')}
-                    </button>
-                  </dd>
-                </div>
-              </dl>
+              <CreatorQAReviewList
+                title={title}
+                submitting={submitting}
+                questions={questions}
+                builder={builder}
+                reviewIndex={reviewIndex}
+                answerFor={answerFor}
+                goTo={goTo}
+              />
 
               {error && <p className="error qa-error">{error}</p>}
             </>
@@ -644,7 +613,15 @@ export function CreatorQA({
             onClick={handleSubmit}
             disabled={submitting || !titleReady || builderBlocked}
           >
-            <PixelIcon name="send" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
+            {submitting ? (
+              <>
+                <span className="build-btn-spinner" aria-hidden="true" /> {t('submit.submitting')}
+              </>
+            ) : (
+              <>
+                <PixelIcon name="send" size={14} /> {t('qa.createNow')}
+              </>
+            )}
           </button>
         ) : (
           <button
