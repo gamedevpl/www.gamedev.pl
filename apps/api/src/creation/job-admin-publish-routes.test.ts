@@ -133,6 +133,66 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     await app.close();
   });
 
+  it('refuses an older delivery after a newer preview was reviewed', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    await store.setSubmissionPreviewVersion(1_000_001, 'v2');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'preview_superseded_delivery' });
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
+  });
+
+  it('publishes when a preview round was later sealed into a delivery', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    await store.setSubmissionPreviewVersion(1_000_001, 'v2');
+    // A publish delivery advances both pointers together.
+    await store.setSubmissionDeliveredVersion(1_000_001, 'v3');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await store.getPublication('comet-courier')).toMatchObject({ currentVersion: 'v3' });
+    await app.close();
+  });
+
+  it('refuses when a newer preview lands while the publish is in flight', async () => {
+    const base = gamesStoreWith({ green: true });
+    const seam: { store?: InMemoryStore } = {};
+    const racing = {
+      ...base,
+      getManifest: async (...args: Parameters<GamesStore['getManifest']>) => {
+        // Interleaves a preview delivery between the first read and the write.
+        await seam.store?.setSubmissionPreviewVersion(1_000_001, 'v2');
+        return base.getManifest(...args);
+      },
+    } as GamesStore;
+    const built = await appWithJob(racing);
+    const store = (seam.store = built.store);
+    const response = await built.app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'preview_superseded_delivery' });
+    expect(await store.getPublication('comet-courier')).toBeNull();
+    expect((await store.getSubmission(1_000_001))?.state).not.toBe('publishing');
+    await built.app.close();
+  });
+
   it('supersedes older active submissions for the same slug when publishing', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
     // Create an older submission for the same slug
