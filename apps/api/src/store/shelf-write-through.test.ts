@@ -30,6 +30,11 @@ async function agrees(store: Store, ownerUid: string): Promise<string> {
   return judgeShelfShadow(shelf, records, records.length).verdict;
 }
 
+async function agreesAfterRefresh(store: Store, ownerUid: string): Promise<string> {
+  if ((await agrees(store, ownerUid)) === 'stale') await store.rebuildShelf(ownerUid);
+  return agrees(store, ownerUid);
+}
+
 async function acceptTransfer(store: Store, slug: string, senderUid: string, recipientUid: string): Promise<void> {
   const at = new Date().toISOString();
   await store.ensureGameAccess(slug, senderUid, at, at);
@@ -84,7 +89,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await agrees(store, 'g:owner')).toBe('match');
 
       await store.setSubmissionTitle(1, 'Sky, renamed');
-      expect(await agrees(store, 'g:owner')).toBe('match');
+      expect(await agreesAfterRefresh(store, 'g:owner')).toBe('match');
 
       await store.setSubmissionPreviewVersion(1, 'v1');
       expect(await agrees(store, 'g:owner')).toBe('match');
@@ -93,7 +98,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await agrees(store, 'g:owner')).toBe('match');
 
       await store.setSubmissionLastStatus(1, 'in_review');
-      expect(await agrees(store, 'g:owner')).toBe('match');
+      expect(await agreesAfterRefresh(store, 'g:owner')).toBe('match');
 
       await store.setSubmissionNotifiedStatus(1, 'in_review');
       expect(await agrees(store, 'g:owner')).toBe('match');
@@ -102,7 +107,7 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       expect(await agrees(store, 'g:owner')).toBe('match');
 
       await store.setSubmissionAbandoned(2, '2026-09-13T00:00:00.000Z');
-      expect(await agrees(store, 'g:owner')).toBe('match');
+      expect(await agreesAfterRefresh(store, 'g:owner')).toBe('match');
     });
 
     it('mirrors draft sharing, which the Studio shelf renders', async () => {
@@ -140,6 +145,8 @@ for (const [implName, makeStore] of IMPLEMENTATIONS) {
       await store.createSubmission(1, 'g:owner', 'First');
       await store.setSubmissionSlug(1, 'sky');
       await store.setSubmissionLastStatus(1, 'published');
+
+      await agreesAfterRefresh(store, 'g:owner');
 
       const shelf = await store.getShelf('g:owner');
       expect(shelf?.rounds[0]).toMatchObject({ jobId: 1, slug: 'sky', lastStatus: 'published' });

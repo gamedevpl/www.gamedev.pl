@@ -65,10 +65,18 @@ ruleTester.run('shelf-invalidation', shelfInvalidation, {
     // Listed in INVALIDATED_BY_CALLER, which names where the invalidation lives.
     {
       filename: listedSlice,
-      code: withRef('submissions', `async setSubmissionTitle(jobId: number) { await this.ref(jobId).set({ title: 'x' }); }`),
+      code: withRef(
+        'submissions',
+        `async setSubmissionPreviewVersion(jobId: number) { await this.ref(jobId).set({ previewVersion: 'v1' }); }`,
+      ),
     },
   ],
   invalid: [
+    {
+      filename: listedSlice,
+      code: withRef('submissions', `async setSubmissionTitle(jobId: number) { await this.ref(jobId).set({ title: 'x' }); }`),
+      errors: [{ messageId: 'unguarded' }],
+    },
     // The case the rule is for: a mirrored field, written outside any transaction.
     {
       filename: slice,

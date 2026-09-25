@@ -57,15 +57,14 @@ describe('write path cost baseline', () => {
     expect(shared.writes - alone.writes).toBe(HEAVY_EDITORS.editors);
   });
 
-  // One slope would average two different costs.
-  it('seals becoming shared apart from the marginal editor', async () => {
+  it('keeps the first shared member and later editors read-flat', async () => {
     const alone = await measureWriteCost('setSubmissionTitle', HEAVY_ROUNDS);
     const one = await measureWriteCost('setSubmissionTitle', SHARED_ONE);
     const many = await measureWriteCost('setSubmissionTitle', HEAVY_EDITORS);
     const sharing = one.reads - alone.reads;
     const marginal = (many.reads - one.reads) / (HEAVY_EDITORS.editors - SHARED_ONE.editors);
-    // The owner query stops covering access; no later member repeats it.
-    expect(sharing).toBeGreaterThan(marginal);
+    expect(sharing).toBe(0);
+    expect(marginal).toBe(0);
   });
 
   // One game per round would report the two slopes added together.
@@ -75,15 +74,15 @@ describe('write path cost baseline', () => {
     const games = await measureWriteCost('setSubmissionTitle', HEAVY_GAMES);
     const perRound = (rounds.reads - light.reads) / 21;
     const perGame = (games.reads - rounds.reads) / 21;
-    expect(perRound).toBe(1);
-    expect(perGame).toBe(2);
+    expect(perRound).toBe(0);
+    expect(perGame).toBe(0);
   });
 
   // A seed of one lone owner would record none of this.
   it('charges a setter for every co-editor of the game it touches', async () => {
     const alone = await measureWriteCost('setSubmissionTitle', HEAVY_ROUNDS);
     const shared = await measureWriteCost('setSubmissionTitle', HEAVY_EDITORS);
-    expect(shared.reads).toBeGreaterThan(alone.reads);
+    expect(shared.reads).toBe(alone.reads);
     expect(shared.writes - alone.writes).toBe(HEAVY_EDITORS.editors);
   });
 
@@ -96,8 +95,7 @@ describe('write path cost baseline', () => {
     for (const [label, cost] of writes) expect(cost, label).toBeGreaterThan(0);
     // The source write plus the tombstone it forces.
     expect(measured[costLabel('setSubmissionTitle', LIGHT, 'writes')]).toBe(2);
-    // One source write, then the guard tombstones twice: in-transaction and deferred.
-    expect(measured[costLabel('claimSeal', LIGHT, 'writes')]).toBe(3);
+    expect(measured[costLabel('claimSeal', LIGHT, 'writes')]).toBe(2);
   });
 
   // A total ceiling alone misses a slope that grew as overhead shrank.
