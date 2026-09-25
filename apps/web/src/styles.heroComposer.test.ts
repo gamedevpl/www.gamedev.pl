@@ -61,8 +61,7 @@ describe('desktop hero composer pill', () => {
     expect(busy).toMatch(/cursor:\s*progress/);
 
     const spinner = firstRuleBody('.build-btn-spinner');
-    expect(spinner).toMatch(/animation:\s*status-spin/);
-    expect(spinner).toMatch(/display:\s*inline-block/);
+    expect(spinner).toMatch(/display:\s*inline-block[\s\S]*animation:\s*status-spin/);
   });
 });
 
