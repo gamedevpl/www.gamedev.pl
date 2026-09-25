@@ -133,6 +133,23 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     await app.close();
   });
 
+  it('refuses an older delivery after a newer preview was reviewed', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    await store.setSubmissionPreviewVersion(1_000_001, 'v2');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'preview_superseded_delivery' });
+    expect(await store.getPublication('comet-courier')).toBeNull();
+
+    await app.close();
+  });
+
   it('supersedes older active submissions for the same slug when publishing', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
     // Create an older submission for the same slug

@@ -184,6 +184,10 @@ export async function registerJobAdminRoutes(
       if (!record.slug || !record.deliveredVersion) {
         return reply.code(409).send({ error: 'nothing_delivered' });
       }
+      // Never publish different bytes from the operator's preview.
+      if (record.previewVersion && record.previewVersion !== record.deliveredVersion) {
+        return reply.code(409).send({ error: 'preview_superseded_delivery' });
+      }
 
       // Creator-owned games need a publishable profile: the canonical owner's.
       const initialAccess = await resolveGameAccess(store, record.slug);
@@ -198,12 +202,8 @@ export async function registerJobAdminRoutes(
       const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
       if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
       if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
-      // A proposal is somebody else's change to this game, and a green gate on one says
-      // only that it runs. It becomes publishable when the game's owner accepts it, which
-      // rewrites the mode — so a version still in proposal mode has not been accepted, and
-      // publishing it here would route around the one consent this feature depends on.
-      // Read off the manifest rather than from the proposal registry deliberately: this
-      // refusal must hold even for a caller who never heard of proposals.
+      // Manifest mode preserves proposal consent even without registry context.
+      // Preview mode likewise cannot cross the publication boundary.
       if (!isPublishableMode(manifest.deliveryMode)) {
         return reply.code(409).send({ error: 'not_publishable' });
       }
