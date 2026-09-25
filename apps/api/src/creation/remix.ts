@@ -22,7 +22,6 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {
   bakeRemixEditorDefaults,
@@ -289,7 +288,8 @@ export interface RemixRoutesOptions {
   dailyRemixQuota?: number;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
-  repoPublishedSlugs?: PublishedSlugGate;
+  // The live catalog's repo-lane entry, or null; the same read /api/catalog serves.
+  getRepoPublishedCatalogEntry?: (slug: string) => Promise<object | null>;
   /** Ref the repo-published games are served from — the rebuild pins to it. */
   publishedRef?: string;
   assistant?: EditorAssistant;
@@ -419,10 +419,18 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // Someone else's remix is indistinguishable from an expired one, which is
       // the honest answer as well as the safe one.
       if (session.ownerUid !== uid) return null;
+      // Every route reads repo sources after this, so membership is rechecked here.
+      if (!session.fromStore && !(await isRepoPublished(session.slug))) return null;
       return { session, rehydrated: false };
     }
     const rebuilt = await rehydrate(id, uid);
     return rebuilt ? { session: rebuilt, rehydrated: true } : null;
+  }
+
+  // Fails closed: no lookup, or one that cannot answer, means absent.
+  async function isRepoPublished(slug: string): Promise<boolean> {
+    const lookup = options.getRepoPublishedCatalogEntry;
+    return lookup ? (await lookup(slug).catch(() => null)) !== null : false;
   }
 
   async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
@@ -519,11 +527,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     }
 
     if (!options.githubClient || !options.publishedRef) return null;
-    try {
-      if (!options.repoPublishedSlugs || !(await options.repoPublishedSlugs.isPublished(slug))) return null;
-    } catch {
-      return null;
-    }
+    if (!(await isRepoPublished(slug))) return null;
     const ref = options.publishedRef;
     // Catalog membership is established before repository existence is probed.
     const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');

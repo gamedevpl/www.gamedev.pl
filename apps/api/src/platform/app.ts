@@ -553,9 +553,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   //
   // One env-derived gate is shared by telemetry, votes, and written feedback: all
   // three ask the same question ("is this a published slug?") and must not drift.
-  const repoPublishedSlugs = await createPublishedSlugGateFromEnv();
+  // The combined gate OR's the games-repo catalog with store publications so
+  // self-build games (never in catalog.json) are visible to the same callers the
+  // /play route already serves. Call-site overrides still win via the spreads below.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
-    repoGate: repoPublishedSlugs,
+    repoGate: await createPublishedSlugGateFromEnv(),
     store,
   });
   await registerTelemetryRoutes(app, {
@@ -910,10 +912,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   /**
-   * Remix — the player-facing half of live editing. Signed-in for now (model
-   * spend), ephemeral by default, with two durable exits that never publish:
-   * share (param links) and save-as-yours (private Studio draft). Gated by
-   * EDITOR_ASSIST / CODE_LANE for the edit lanes; save spends a creation slot.
+   * Remix: signed-in, ephemeral live editing. Two exits never publish:
+   * share (param links) and save-as-yours (private Studio draft). Edit
+   * lanes gate on EDITOR_ASSIST / CODE_LANE; save spends a creation slot.
    */
   const creationGate = createCreationGate({
     store,
@@ -928,7 +929,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationGate,
     submissionTokenSecret,
     githubClient: submissionSeams.githubClient ?? undefined,
-    repoPublishedSlugs: repoPublishedSlugs ?? undefined,
+    getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),

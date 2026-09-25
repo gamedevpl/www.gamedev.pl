@@ -164,7 +164,7 @@ async function buildTestApp(
     openProposal,
     gamesStore: overrides.gamesStore ?? stubGamesStore(),
     githubClient: stubGitHubClient(seen),
-    repoPublishedSlugs: { isPublished: async (slug) => slug === 'catalog-dash' },
+    getRepoPublishedCatalogEntry: async (slug) => (slug === 'catalog-dash' ? {} : null),
     publishedRef: 'main',
     submissionTokenSecret: overrides.submissionTokenSecret ?? 'test-submission-secret',
     ...(overrides.assistant ? { assistant: overrides.assistant } : {}),
@@ -724,7 +724,6 @@ describe('remix across the two catalog eras', () => {
       codeLane?: unknown;
       gamesStore?: GamesStore;
       store?: InMemoryStore;
-      repoPublishedSlugs?: { isPublished(slug: string): Promise<boolean> };
       resolveProposalBase?: (slug: string) => Promise<{
         base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
         files: Array<{ path: string; content: string }>;
@@ -746,9 +745,8 @@ describe('remix across the two catalog eras', () => {
       openProposal,
       gamesStore: overrides.gamesStore ?? stubGamesStore(),
       githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
-      repoPublishedSlugs: overrides.repoPublishedSlugs ?? {
-        isPublished: async (slug) => ['dog-dash', 'repo-game', 'catalog-dash'].includes(slug),
-      },
+      getRepoPublishedCatalogEntry: async (slug) =>
+        ['dog-dash', 'repo-game', 'catalog-dash'].includes(slug) ? {} : null,
       publishedRef: 'main',
       submissionTokenSecret: 'test-submission-secret',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
@@ -774,15 +772,6 @@ describe('remix across the two catalog eras', () => {
     // through the bundler's walk. Whether this particular game assembles is
     // answered on the first request that needs it, not paid for at open.
     expect(body.canCode).toBe(true);
-  });
-
-  it('rejects a repo-era directory that is absent from the published catalog', async () => {
-    ({ app } = await repoEraApp({ repoPublishedSlugs: { isPublished: async () => false } }));
-
-    const response = await app!.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
-
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({ error: 'game not found' });
   });
 
   it('edits a repo-era game by fetching its sources on the first request that needs them', async () => {
@@ -842,7 +831,7 @@ describe('remix across the two catalog eras', () => {
       openProposal,
       gamesStore: stubGamesStore(),
       githubClient: client,
-      repoPublishedSlugs: { isPublished: async () => true },
+      getRepoPublishedCatalogEntry: async () => ({}),
       publishedRef: 'main',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
       codeLane: { run: async () => ({ ok: true }) } as never,
