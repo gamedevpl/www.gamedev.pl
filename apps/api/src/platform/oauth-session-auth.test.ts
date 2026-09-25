@@ -63,4 +63,16 @@ describe('OAuth consent session authentication', () => {
     expect(approve.statusCode).toBe(401);
     expect(approve.json()).toEqual({ error: 'login_required' });
   });
+
+  it.each([
+    ['PAT-derived', 'token' as const, true],
+    ['human', undefined, undefined],
+  ])('tells the client whether a %s cookie can approve', async (_label, source, flag) => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: UID, tier: 'standard' });
+    app = await buildApp({ store, sessionSecret: SESSION_SECRET });
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: sessionCookie(source) } });
+    expect(me.statusCode).toBe(200);
+    expect((me.json() as { user: { tokenSession?: boolean } }).user.tokenSession).toBe(flag);
+  });
 });

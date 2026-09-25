@@ -134,7 +134,9 @@ function tokenLoginHtml(input: { oauthReturn: string | null; formToken: string; 
 
     <p class="bail">
       This page is for accounts that sign in with a token rather than Google or Apple.
-      If you have a gamedev.pl account, use the sign-in button on the site instead.
+      A token sign-in cannot approve apps, connectors or devices; that needs Google or
+      Apple sign-in. If you have a gamedev.pl account, use the sign-in button on the site
+      instead.
     </p>
   </main>
 </body>
@@ -148,10 +150,8 @@ function tokenLoginHtml(input: { oauthReturn: string | null; formToken: string; 
  * mechanism here — this page adds no authority, and is emphatically not the bypass route
  * AGENTS.md promises does not exist. What it adds is a way to *perform* that exchange
  * without a shell: the API route wants an `Authorization` header, and a human sitting in
- * front of a browser cannot produce one. That gap matters because sign-in on this site
- * is Google or Apple and nothing else, so anyone who must reach the consent screen
- * without a Google account — a marketplace reviewer testing the MCP connector, most
- * immediately — has no door at all.
+ * front of a browser cannot produce one. The cookie cannot approve OAuth or device
+ * consent; those need a Google or Apple session.
  *
  * Deliberately not linked from anywhere. It is not a second front door for creators;
  * it is the door for whoever was handed a token, and a token can only exist because an

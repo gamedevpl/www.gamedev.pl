@@ -210,14 +210,13 @@ Traps, in the order an agent will hit them:
 
 **Signing in as a human, in a browser** — `/oauth/token-login` is the same exchange
 with a form instead of a header. Paste the token, get the session cookie, land in the
-studio (or back at `/oauth/authorize`, if that is where you came from).
+studio.
 
-It exists because sign-in on this site is Google or Apple and nothing else. That is fine
-for creators and useless for anyone who has to reach the OAuth consent screen without a
-Google account — a marketplace reviewer testing the MCP connector, most immediately, and
-OpenAI's plugin review explicitly forbids 2FA and account creation on a test credential.
-Handing over a shared Google login would mean disabling 2FA on an account Google will
-challenge anyway the moment it is used from an unfamiliar IP.
+It was built so a marketplace reviewer without a Google account could reach the OAuth
+consent screen. It no longer does: `/oauth/authorize` and `/device` accept only a
+Google/Apple session, because a PAT-derived cookie approving a durable grant would let
+a leaked token mint credentials that outlive it. A token cookie arriving there is sent
+to the studio, which says that approving needs Google or Apple sign-in.
 
 The page adds no authority: it is `POST /api/auth/session` with a form on the front, the
 cookie carries the same `src: 'token'` stamp, and the operator surfaces refuse it

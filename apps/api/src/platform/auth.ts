@@ -955,6 +955,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     return sessionPayload(request.user, {
       admin: isAdminSession(request, adminUids),
       reviewer: isReviewerSession(request, reviewerUids, adminUids),
+      tokenSession: request.authMethod !== 'session',
     });
   });
 }
@@ -962,15 +963,16 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 /**
  * The session as the client is told it. Adds derived flags to the stored user.
  *
- * `admin` and `reviewer` appear only when true.
+ * Each flag appears only when true.
  */
 function sessionPayload(
   user: User,
-  flags: { admin?: boolean; reviewer?: boolean; betaWelcome?: boolean },
-): { user: User & { admin?: true; reviewer?: true }; betaWelcome?: true } {
-  const next: User & { admin?: true; reviewer?: true } = { ...user };
+  flags: { admin?: boolean; reviewer?: boolean; tokenSession?: boolean; betaWelcome?: boolean },
+): { user: User & { admin?: true; reviewer?: true; tokenSession?: true }; betaWelcome?: true } {
+  const next: User & { admin?: true; reviewer?: true; tokenSession?: true } = { ...user };
   if (flags.admin) next.admin = true;
   if (flags.reviewer) next.reviewer = true;
+  if (flags.tokenSession) next.tokenSession = true;
   return { user: next, ...(flags.betaWelcome ? { betaWelcome: true as const } : {}) };
 }
 
