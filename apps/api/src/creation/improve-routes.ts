@@ -173,17 +173,6 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
       const requestedBuilder = parsed.data.builder;
 
-      const chatOutcomePromise = runChatAgent({
-        jobId,
-        message: sanitizedFeedback,
-        scope: 'improve',
-        record,
-        locale: record.locale ?? 'en',
-        ip: request.clientIp,
-        uid: request.user!.uid,
-        images: referenceImages,
-      });
-
       const moderation = await moderationPromise;
       if (!moderation.allowed) {
         logModerationRejection(request.log, {
@@ -200,7 +189,16 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       let studioAckText: string | undefined;
       // A pending copy left here by a failed reply attempt.
       let orphanedChatMessageId: string | undefined;
-      const chatOutcome = await chatOutcomePromise;
+      const chatOutcome = await runChatAgent({
+        jobId,
+        message: sanitizedFeedback,
+        scope: 'improve',
+        record,
+        locale: record.locale ?? 'en',
+        ip: request.clientIp,
+        uid: request.user!.uid,
+        images: referenceImages,
+      });
       if (chatOutcome?.kind === 'replied') {
         try {
           // Avoids an orphaned "delivered" copy if the reply write below fails.

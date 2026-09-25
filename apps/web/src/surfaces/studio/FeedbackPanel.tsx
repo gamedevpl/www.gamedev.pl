@@ -90,7 +90,7 @@ export function FeedbackPanel({
   // The pick that seeded the box, so a newer one survives.
   const seededSeq = useRef<number | undefined>(undefined);
   const attachmentsApi = useComposerAttachments(sending);
-  const { attachments, pendingAttachmentReads, dropAttachments, resetAttachments } = attachmentsApi;
+  const { attachments, pendingAttachmentReads, dropAttachments, resetAttachments, restoreAttachments } = attachmentsApi;
 
   useEffect(() => {
     setBuilder(initialBuilder);
@@ -244,6 +244,7 @@ export function FeedbackPanel({
       onSendFailed?.(message);
       if (seededSeq.current === seqAtSend) {
         setText(message);
+        restoreAttachments(currentAttachments);
         autoGrow();
       }
       const errText = err instanceof Error ? err.message : '';

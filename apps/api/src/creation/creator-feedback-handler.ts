@@ -19,7 +19,7 @@ import {
   type BuilderKind,
 } from './builder.js';
 import type { ChatAgentImage } from './chat-agent.js';
-import type { ChatOrchestration, ChatOrchestrationOutcome } from './chat-orchestration.js';
+import type { ChatOrchestration } from './chat-orchestration.js';
 import { loadRecentChatTurns } from './chat-turns-history.js';
 import { FeedbackRequestSchema, TurnRequestSchema } from './feedback-request.js';
 import { detectStall, type JobTransition } from './job-state.js';
@@ -228,20 +228,6 @@ export async function handleCreatorFeedback(
     }
   }
 
-  let chatOutcomePromise: Promise<ChatOrchestrationOutcome | null> | null = null;
-  if (record && !builderChanging) {
-    chatOutcomePromise = runChatAgent({
-      jobId,
-      message: sanitizedFeedback,
-      scope: 'draft',
-      record,
-      locale: creatorLocale,
-      ip: request.ip,
-      uid: request.user!.uid,
-      images: referenceImages,
-    });
-  }
-
   const moderation = await moderationPromise;
   if (!moderation.allowed) {
     logModerationRejection(request.log, {
@@ -257,7 +243,16 @@ export async function handleCreatorFeedback(
   let studioAckText: string | undefined;
   let creatorMessageQueued = false;
   if (record && !builderChanging) {
-    const chatOutcome = chatOutcomePromise ? await chatOutcomePromise : null;
+    const chatOutcome = await runChatAgent({
+      jobId,
+      message: sanitizedFeedback,
+      scope: 'draft',
+      record,
+      locale: creatorLocale,
+      ip: request.ip,
+      uid: request.user!.uid,
+      images: referenceImages,
+    });
     if (chatOutcome?.kind === 'replied' && store) {
       try {
         const creatorMessage = await store.appendCreatorMessage(jobId, inboxText);

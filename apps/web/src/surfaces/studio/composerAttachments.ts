@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useClampToViewport } from '../../useClampToViewport.js';
+import { fetchImageAsDataUrl } from './fetchImageAsDataUrl.js';
+
+export { fetchImageAsDataUrl };
 
 // `replacedBy` groups attachments a later pick supersedes.
 export type ComposerAttachment = { id: string; name: string; dataUrl: string; replacedBy?: string };
@@ -9,10 +12,12 @@ export const MAX_COMPOSER_ATTACHMENTS = 4;
 // A frame a pick could not attach; bytes mean it awaits room.
 export type BlockedAttachment = { name: string; dataUrl: string | null; options?: { replaces?: string } };
 
+const keptAttachments = (prev: ComposerAttachment[], replaces?: string) =>
+  replaces ? prev.filter((item) => item.replacedBy !== replaces) : prev;
+
 // True when one more attachment fits, once the superseded ones drop out.
 export function fitsAttachment(prev: ComposerAttachment[], options?: { replaces?: string }): boolean {
-  const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
-  return kept.length < MAX_COMPOSER_ATTACHMENTS;
+  return keptAttachments(prev, options?.replaces).length < MAX_COMPOSER_ATTACHMENTS;
 }
 
 // Adds one attachment, replacing whatever it supersedes.
@@ -21,7 +26,7 @@ export function withAttachment(
   entry: ComposerAttachment,
   options?: { replaces?: string },
 ): ComposerAttachment[] {
-  const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
+  const kept = keptAttachments(prev, options?.replaces);
   if (kept.length >= MAX_COMPOSER_ATTACHMENTS) return kept;
   return [...kept, options?.replaces ? { ...entry, replacedBy: options.replaces } : entry];
 }
@@ -45,13 +50,11 @@ export function useComposerAttachments(sending: boolean) {
 
   useEffect(() => {
     if (!attachMenuOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
-        setAttachMenuOpen(false);
-      }
+    const onPointerDown = (e: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) setAttachMenuOpen(false);
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setAttachMenuOpen(false);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAttachMenuOpen(false);
     };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -159,6 +162,14 @@ export function useComposerAttachments(sending: boolean) {
     setAttachments([]);
   };
 
+  const restoreAttachments = (items: readonly ComposerAttachment[]) => {
+    if (!items.length) return;
+    setAttachments((prev) => {
+      const existing = new Set(prev.map((item) => item.id));
+      return [...items.filter((item) => !existing.has(item.id)), ...prev].slice(0, MAX_COMPOSER_ATTACHMENTS);
+    });
+  };
+
   return {
     attachments,
     pendingAttachmentReads,
@@ -176,24 +187,8 @@ export function useComposerAttachments(sending: boolean) {
     removeAttachment,
     dropAttachments,
     resetAttachments,
+    restoreAttachments,
   };
 }
 
 export type ComposerAttachmentsApi = ReturnType<typeof useComposerAttachments>;
-
-// Pulls a same-origin image into a data URL for the composer.
-export async function fetchImageAsDataUrl(url: string, signal?: AbortSignal): Promise<string | null> {
-  try {
-    const response = await fetch(url, { credentials: 'include', ...(signal ? { signal } : {}) });
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    return await new Promise<string | null>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
