@@ -552,7 +552,19 @@ export function HeroPromptSection({
               </button>
             </div>
 
-            <button type="submit" style={{ display: 'none' }} aria-hidden="true" disabled={isBusy} />
+            <button
+              type="submit"
+              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
+              disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+              aria-label={t('hero.smartBuildBtn')}
+            >
+              {isBusy ? (
+                <span className="build-btn-spinner" aria-hidden="true" />
+              ) : (
+                <PixelIcon name="sparkle" size={16} />
+              )}
+              <span className="build-btn-label">{t('hero.smartBuildBtn')}</span>
+            </button>
           </div>
 
           {busyLabel ? (
@@ -683,18 +695,6 @@ export function HeroPromptSection({
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
-              {isBusy ? null : (
-                <div className="creation-actions">
-                  <button
-                    type="submit"
-                    className="primary-btn build-match-btn"
-                    disabled={pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-                  >
-                    <PixelIcon name="sparkle" size={14} />
-                    {t('hero.smartBuildBtn')}
-                  </button>
-                </div>
-              )}
             </div>
           ) : null}
         </form>

@@ -410,7 +410,7 @@
    height:auto so border-box can't clip 36px cells. */
 .prompt-composer-bar {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -619,8 +619,13 @@
   clip: auto;
 }
 
-/* Busy: keep teal; spinner replaces the icon during generation. */
+/* While the status line is up, the send control is not a second thing to press. */
+.prompt-composer-bar.is-busy {
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+}
+
 .prompt-composer-bar .build-btn.is-busy {
+  display: none;
   opacity: 1;
   cursor: progress;
 }
