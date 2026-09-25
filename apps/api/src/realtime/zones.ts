@@ -70,13 +70,13 @@ export async function registerZoneRoutes(app: FastifyInstance, options: ZoneRout
   // claim, so the rate is set where a player reconnecting through a bad ten minutes of
   // wifi never notices and a script trying to hold every seat in a zone does.
   const ticketRateLimit = { max: 40, timeWindow: 60_000 };
+
   app.post('/api/games/:slug/zone/ticket', { config: { rateLimit: ticketRateLimit } }, async (request, reply) => {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
     }
-    // A6: Biplane's shared/sim imports currently fail in the world host.
-    if (!hostUrl || params.data.slug === 'biplane-skirmish') return reply.status(404).send({ error: 'zones not available' });
+    if (!hostUrl) return reply.status(404).send({ error: 'zones not available' });
 
     const schema = await zones?.getSchema(params.data.slug);
     // No declaration means no zone: an unpublished game, one that declares none, or
