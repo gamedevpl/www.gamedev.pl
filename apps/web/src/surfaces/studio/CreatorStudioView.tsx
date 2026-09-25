@@ -1003,6 +1003,7 @@ export function CreatorStudioView({
                           onFixIt={(message) => {
                             setChatDraft({ text: t('studioPanel.stage.fixItPrompt', { message }), seq: Date.now() });
                             setRailManualOpen(true);
+                            if (tab !== 'thread') openTab('thread');
                           }}
                           onNewerStageWaiting={setNewerStageWaiting}
                           onImproved={(newToken) => setHandoffToken(newToken)}
