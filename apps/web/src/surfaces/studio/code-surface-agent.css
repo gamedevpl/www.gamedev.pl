@@ -115,6 +115,12 @@
   border-radius: 4px;
 }
 
+.code-surface-agent-console-input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
+}
+
 .code-surface-agent-console-run {
   margin-top: 8px;
   padding: 6px 14px;

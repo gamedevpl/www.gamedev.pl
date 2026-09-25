@@ -159,7 +159,12 @@ export function StudioTransferProposalConfirm({
             data-testid="studio-transfer-propose-code"
           />
           <p className="studio-transfer-expiry">{t('studioPanel.transfer.codeHint')}</p>
-          <button type="submit" disabled={busy || !code.trim()} data-testid="studio-transfer-propose-send">
+          <button
+            type="submit"
+            className="primary-btn"
+            disabled={busy || !code.trim()}
+            data-testid="studio-transfer-propose-send"
+          >
             {busy ? t('studioPanel.transfer.sending') : t('studioPanel.transferPropose.confirm')}
           </button>
         </form>

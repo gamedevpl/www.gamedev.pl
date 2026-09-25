@@ -411,6 +411,12 @@
   padding: 0.55rem 0.75rem;
 }
 
+.review-note-input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
+}
+
 .review-mic {
   min-width: 4.5rem;
   border: 1px solid var(--panel-border);
