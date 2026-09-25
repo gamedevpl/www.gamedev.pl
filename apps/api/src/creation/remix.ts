@@ -40,8 +40,7 @@ import {
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
-import { canActOnGame } from '../platform/game-access-permissions.js';
-import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import { canSaveRemix, isRepoPublished } from './remix-access.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -422,17 +421,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // the honest answer as well as the safe one.
       if (session.ownerUid !== uid) return null;
       // Every route reads repo sources after this, so membership is rechecked here.
-      if (!session.fromStore && !(await isRepoPublished(session.slug))) return null;
+      if (!session.fromStore && !(await isRepoPublished(options.getRepoPublishedCatalogEntry, session.slug)))
+        return null;
       return { session, rehydrated: false };
     }
     const rebuilt = await rehydrate(id, uid);
     return rebuilt ? { session: rebuilt, rehydrated: true } : null;
-  }
-
-  // Fails closed: no lookup, or one that cannot answer, means absent.
-  async function isRepoPublished(slug: string): Promise<boolean> {
-    const lookup = options.getRepoPublishedCatalogEntry;
-    return lookup ? (await lookup(slug).catch(() => null)) !== null : false;
   }
 
   async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
@@ -529,7 +523,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     }
 
     if (!options.githubClient || !options.publishedRef) return null;
-    if (!(await isRepoPublished(slug))) return null;
+    if (!(await isRepoPublished(options.getRepoPublishedCatalogEntry, slug))) return null;
     const ref = options.publishedRef;
     // Catalog membership is established before repository existence is probed.
     const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');
@@ -569,13 +563,6 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     } catch {
       return [];
     }
-  }
-
-  // Creator sources stay with members; platform games fork freely.
-  async function canSaveRemix(slug: string, uid: string): Promise<boolean> {
-    if (!options.store) return false;
-    const access = await resolveGameAccess(options.store, slug);
-    return access.owner.kind !== 'creator' || canActOnGame(access, uid, 'read');
   }
 
   /** Rebuild the whole document with the session's edits applied. */
@@ -639,7 +626,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
           canAssist,
           canCode,
-          canSave: await canSaveRemix(params.data.slug, request.user!.uid),
+          canSave: await canSaveRemix(options.store, params.data.slug, request.user!.uid),
           expiresInMs: REMIX_TTL_MS,
         }),
       );
@@ -664,7 +651,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         contentDefaults: defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
         canAssist,
         canCode,
-        canSave: await canSaveRemix(session.slug, request.user!.uid),
+        canSave: await canSaveRemix(options.store, session.slug, request.user!.uid),
         expiresInMs: Math.max(0, session.expiresAt - now()),
         html,
         undoable: !rehydrated && session.history.length > 0,
@@ -1253,7 +1240,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = SaveSchema.safeParse(request.body ?? {});
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
-      if (!(await canSaveRemix(session.slug, request.user!.uid))) {
+      if (!(await canSaveRemix(options.store, session.slug, request.user!.uid))) {
         return reply.status(403).send({
           error: "only this game's members can save a copy of its sources",
           reason: 'source_access_required',

@@ -280,6 +280,7 @@ const FILE_BUCKET = {
   'editor-draft-shape': 'creation',
   'editor-drafts': 'creation',
   remix: 'creation',
+  'remix-access': 'creation',
   'remix-save': 'creation',
   'remix-view': 'creation',
   'remix-suggestions': 'creation',
