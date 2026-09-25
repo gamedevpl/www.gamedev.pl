@@ -40,6 +40,7 @@ import {
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { canActOnSlug } from '../platform/game-access-permissions.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -1232,6 +1233,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = SaveSchema.safeParse(request.body ?? {});
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+      if (!(await canActOnSlug(options.store, session.slug, request.user!.uid, 'read'))) {
+        return reply.status(403).send({
+          error: 'only game members can save a source-based remix',
+          reason: 'source_access_required',
+        });
+      }
 
       if (
         !remixHasSavableChange({
