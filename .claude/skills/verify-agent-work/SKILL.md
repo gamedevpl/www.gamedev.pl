@@ -285,6 +285,37 @@ Two concrete instances of that (observed 2026-07-23):
   deserves the same scrutiny as the source change. For agent-facing surfaces
   specifically, check that any replacement error still tells the agent what to do next;
   a status code is not an instruction.
+- **A filter inserted in front of a symlink or delete check is untested if the old test is renamed onto an input that still reaches the old branch.** Observed
+  (#1469 review, 2026-09-24): `scanGame` started `continue`ing undeliverable paths before the
+  "record a symlink, never follow it" arm. The existing test renamed `leak` to `leak.ts` so
+  the symlink stayed deliverable and the assertion still passed. That stays green if the new
+  branch follows or deletes a `NOTATKI.md` symlink, or writes `images/hero.png` through a
+  directory symlink on pull. Probe the skipped input itself: a not-game file symlink, a
+  directory symlink that is the parent of a deliverable platform path, ordinary pull and
+  `--force`. On that commit both were safe (force unlinks the directory symlink and writes
+  inside the checkout; a not-game file symlink is not read and survives pull). The renamed
+  test does not lock that in. The follow-up commit added those probes; the lesson is the
+  renamed test.
+- **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
+  treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
+  is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new
+  module and sealing `comment-prose-baseline.json` at that word count made the gate agree
+  to the move. The follow-up commit dropped that entry. Rewrite to `//` one-liners; do not
+  copy the old file's debt onto a new path. Shrinking the old files' baselines is the part
+  that should land. Module size is a different rule: `baselineLinesFor` gives a missing key
+  the 500-line hard cap, and a new entry above 500 is the bypass. An entry at or under 500
+  does not grandfather a new file.
+- **An allowlist moved into `@gamedevpl/contract` is not the only copy, and a backstop on the normalized path is not the raw check.** CI lockstep diffs
+  `DELIVERY_FIXED_FILES` against games-repo `delivery-contract.json`. It does not compile
+  Studio's `apps/web/src/surfaces/studio/codeSurfacePaths.ts`. The first #1469 revision left
+  that file as a hand twin. The merge commit imported the shared list and calls
+  `deliveryPathRefusal` after its own allowlist. That did not unify the predicates. Rasters
+  stay refused in Studio on purpose (the surface is text-only). `/abs.ts` is still accepted
+  there: `normalizeSourcePath` strips the leading slash, the local `startsWith('/')` check
+  is then dead, and the shared refusal sees `abs.ts`, a legal module.
+  `codeSurfacePaths.contract.test.ts` samples omit a leading slash, so "never accepts a
+  path the API would refuse" stays green. Call the shared refusal on the raw path, or put
+  `/abs.ts` in that sample list.
 - **A green games-repo `check:game` does not prove a puzzle's obstacles obstruct.** Observed
   (echo-loop / www.gamedev.pl-games#699, 2026-08-12): TRACE, ACCEPTANCE, agency `--strict`,
   and a scripted capture were green while hold-right + one jump cleared plate/door rooms
