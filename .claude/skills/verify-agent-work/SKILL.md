@@ -294,22 +294,28 @@ Two concrete instances of that (observed 2026-07-23):
   directory symlink that is the parent of a deliverable platform path, ordinary pull and
   `--force`. On that commit both were safe (force unlinks the directory symlink and writes
   inside the checkout; a not-game file symlink is not read and survives pull). The renamed
-  test does not lock that in.
-- **Hand-editing a prose or module-size baseline grandfathers a new file.** The checker
-  treats a missing key as baseline 0 ("new files may not ship prose debt"). Adding the key,
-  with `--write --force` or a manual JSON edit, is how the debt gets in. Moving `/** */`
-  blocks into a new module and sealing `comment-prose-baseline.json` at that word count
-  means the gate agreed to the move. Rewrite to `//` one-liners; do not copy the old file's
-  debt onto a new path. Shrinking the old files' baselines is the part that should land.
-- **An allowlist moved into `@gamedevpl/contract` is not the only copy.** CI lockstep diffs
-  `DELIVERY_FIXED_FILES` against games-repo `delivery-contract.json`. Studio's
-  `apps/web/src/surfaces/studio/codeSurfacePaths.ts` (`deliverablePathReason`) is a hand twin
-  that check does not compile. As of #1469 the fixed-file lists matched and the accept-sets
-  did not: rasters (`images/`, `cast/`, `scenes/` PNG/WebP) are deliverable on the API and
-  refused in Studio; `/abs.ts` is an illegal path on the API and accepted in Studio because
-  `normalizeSourcePath` strips the leading slash before the illegal-path check. When the
-  shared function is the new source of truth, grep `deliverablePathReason` /
-  `FIXED_SOURCE_FILES` and call the shared refusal from there.
+  test does not lock that in. The follow-up commit added those probes; the lesson is the
+  renamed test.
+- **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
+  treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
+  is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new
+  module and sealing `comment-prose-baseline.json` at that word count made the gate agree
+  to the move. The follow-up commit dropped that entry. Rewrite to `//` one-liners; do not
+  copy the old file's debt onto a new path. Shrinking the old files' baselines is the part
+  that should land. Module size is a different rule: `baselineLinesFor` gives a missing key
+  the 500-line hard cap, and a new entry above 500 is the bypass. An entry at or under 500
+  does not grandfather a new file.
+- **An allowlist moved into `@gamedevpl/contract` is not the only copy, and a backstop on the normalized path is not the raw check.** CI lockstep diffs
+  `DELIVERY_FIXED_FILES` against games-repo `delivery-contract.json`. It does not compile
+  Studio's `apps/web/src/surfaces/studio/codeSurfacePaths.ts`. The first #1469 revision left
+  that file as a hand twin. The merge commit imported the shared list and calls
+  `deliveryPathRefusal` after its own allowlist. That did not unify the predicates. Rasters
+  stay refused in Studio on purpose (the surface is text-only). `/abs.ts` is still accepted
+  there: `normalizeSourcePath` strips the leading slash, the local `startsWith('/')` check
+  is then dead, and the shared refusal sees `abs.ts`, a legal module.
+  `codeSurfacePaths.contract.test.ts` samples omit a leading slash, so "never accepts a
+  path the API would refuse" stays green. Call the shared refusal on the raw path, or put
+  `/abs.ts` in that sample list.
 - **A green games-repo `check:game` does not prove a puzzle's obstacles obstruct.** Observed
   (echo-loop / www.gamedev.pl-games#699, 2026-08-12): TRACE, ACCEPTANCE, agency `--strict`,
   and a scripted capture were green while hold-right + one jump cleared plate/door rooms
