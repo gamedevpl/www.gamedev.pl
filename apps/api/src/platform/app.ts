@@ -553,11 +553,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   //
   // One env-derived gate is shared by telemetry, votes, and written feedback: all
   // three ask the same question ("is this a published slug?") and must not drift.
-  // The combined gate OR's the games-repo catalog with store publications so
-  // self-build games (never in catalog.json) are visible to the same callers the
-  // /play route already serves. Call-site overrides still win via the spreads below.
+  const repoPublishedSlugs = await createPublishedSlugGateFromEnv();
   const envPublishedSlugs = createCombinedPublishedSlugGate({
-    repoGate: await createPublishedSlugGateFromEnv(),
+    repoGate: repoPublishedSlugs,
     store,
   });
   await registerTelemetryRoutes(app, {
@@ -930,6 +928,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationGate,
     submissionTokenSecret,
     githubClient: submissionSeams.githubClient ?? undefined,
+    repoPublishedSlugs: repoPublishedSlugs ?? undefined,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),

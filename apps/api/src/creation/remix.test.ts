@@ -8,13 +8,6 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
 import { openProposal } from '../community/proposals.js';
 
-/*
- * The remix surface's promises, tested at the route: it is signed-in only for
- * now, a remix belongs to whoever started it, nothing a browser sends is ever
- * compiled, a code edit is only visible once it builds, and a share link carries
- * declared values and never generated code.
- */
-
 const EDITOR_JSON = JSON.stringify({
   version: 1,
   params: {
@@ -171,6 +164,7 @@ async function buildTestApp(
     openProposal,
     gamesStore: overrides.gamesStore ?? stubGamesStore(),
     githubClient: stubGitHubClient(seen),
+    repoPublishedSlugs: { isPublished: async (slug) => slug === 'catalog-dash' },
     publishedRef: 'main',
     submissionTokenSecret: overrides.submissionTokenSecret ?? 'test-submission-secret',
     ...(overrides.assistant ? { assistant: overrides.assistant } : {}),
@@ -708,13 +702,6 @@ describe('remix routes', () => {
   });
 });
 
-/*
- * The two eras. Production answered "game not found" for every slug because the
- * start route proved existence by assembling the whole game and swallowed any
- * failure as an absence; these pin the replacement — a manifest read decides
- * existence, a declaration read decides which lanes exist, and a repo-era game
- * gets the params lane instead of nothing.
- */
 describe('remix across the two catalog eras', () => {
   let app: FastifyInstance | null = null;
 
@@ -737,6 +724,7 @@ describe('remix across the two catalog eras', () => {
       codeLane?: unknown;
       gamesStore?: GamesStore;
       store?: InMemoryStore;
+      repoPublishedSlugs?: { isPublished(slug: string): Promise<boolean> };
       resolveProposalBase?: (slug: string) => Promise<{
         base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
         files: Array<{ path: string; content: string }>;
@@ -758,6 +746,9 @@ describe('remix across the two catalog eras', () => {
       openProposal,
       gamesStore: overrides.gamesStore ?? stubGamesStore(),
       githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
+      repoPublishedSlugs: overrides.repoPublishedSlugs ?? {
+        isPublished: async (slug) => ['dog-dash', 'repo-game', 'catalog-dash'].includes(slug),
+      },
       publishedRef: 'main',
       submissionTokenSecret: 'test-submission-secret',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
@@ -774,7 +765,6 @@ describe('remix across the two catalog eras', () => {
     const response = await app!.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    // The declaration came from a file read, not from an assembly.
     expect(body.params.dogScale.max).toBe(3);
     // The painter's half too: the content lane is the one editing lane that
     // works catalog-wide, precisely because it needs only this file.
@@ -784,6 +774,15 @@ describe('remix across the two catalog eras', () => {
     // through the bundler's walk. Whether this particular game assembles is
     // answered on the first request that needs it, not paid for at open.
     expect(body.canCode).toBe(true);
+  });
+
+  it('rejects a repo-era directory that is absent from the published catalog', async () => {
+    ({ app } = await repoEraApp({ repoPublishedSlugs: { isPublished: async () => false } }));
+
+    const response = await app!.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'game not found' });
   });
 
   it('edits a repo-era game by fetching its sources on the first request that needs them', async () => {
@@ -843,6 +842,7 @@ describe('remix across the two catalog eras', () => {
       openProposal,
       gamesStore: stubGamesStore(),
       githubClient: client,
+      repoPublishedSlugs: { isPublished: async () => true },
       publishedRef: 'main',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
       codeLane: { run: async () => ({ ok: true }) } as never,

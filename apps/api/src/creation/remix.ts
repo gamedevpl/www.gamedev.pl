@@ -22,6 +22,7 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import type { GitHubClient } from '../catalog/github-client.js';
+import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {
   bakeRemixEditorDefaults,
@@ -288,6 +289,7 @@ export interface RemixRoutesOptions {
   dailyRemixQuota?: number;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
+  repoPublishedSlugs?: PublishedSlugGate;
   /** Ref the repo-published games are served from — the rebuild pins to it. */
   publishedRef?: string;
   assistant?: EditorAssistant;
@@ -517,9 +519,13 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     }
 
     if (!options.githubClient || !options.publishedRef) return null;
+    try {
+      if (!options.repoPublishedSlugs || !(await options.repoPublishedSlugs.isPublished(slug))) return null;
+    } catch {
+      return null;
+    }
     const ref = options.publishedRef;
-    // GAME.json is the proof of existence — every game has one, and a missing
-    // file is a real "no such game" rather than a swallowed error.
+    // Catalog membership is established before repository existence is probed.
     const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');
     if (manifest === null) return null;
     const [editorJson, editorContentJson] = await Promise.all([
