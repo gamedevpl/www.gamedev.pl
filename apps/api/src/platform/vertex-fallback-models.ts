@@ -6,7 +6,7 @@ export const OPENAI_REFINE_FALLBACK_MODEL = 'gpt-6-luna';
 
 export function resolveRefineFallbackModel(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const configured = env.REFINE_FALLBACK_MODEL?.trim();
-  if (!configured) return env.OPENAI_API_KEY?.trim() ? OPENAI_REFINE_FALLBACK_MODEL : undefined;
+  if (!configured) return undefined;
   if (configured === OPENAI_REFINE_FALLBACK_MODEL) {
     return env.OPENAI_API_KEY?.trim() ? configured : undefined;
   }

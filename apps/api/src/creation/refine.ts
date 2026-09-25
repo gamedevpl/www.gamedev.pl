@@ -221,6 +221,7 @@ ${concept}
       return this.refinerFetcher(params);
     }
 
+    let lastProvider = 'vertex';
     try {
       // Resolve to a language *name*: models routinely echo English when the concept
       // is English and the instruction only says `(pl)`. The UI language wins even
@@ -272,6 +273,7 @@ ${params.concept}
         // Peer-or-better only: refinement shapes what gets built.
         fallbackModel: this.fallbackModel,
         onAttempt: (model) => {
+          lastProvider = model === OPENAI_REFINE_FALLBACK_MODEL ? 'openai' : 'vertex';
           if (model === OPENAI_REFINE_FALLBACK_MODEL && process.env.NODE_ENV !== 'test') {
             console.warn('Vertex AI spec refinement falling back to OpenAI gpt-6-luna');
           }
@@ -307,7 +309,7 @@ ${params.concept}
       if (process.env.NODE_ENV !== 'test') {
         // The budget is printed because an AbortError alone doesn't say what it
         // was measured against, and that budget is now env-tunable.
-        console.warn(`Vertex AI spec refinement failed/timed out (budget ${this.timeoutMs}ms):`, err);
+        console.warn(`Spec refinement failed/timed out (provider ${lastProvider}, budget ${this.timeoutMs}ms):`, err);
       }
       throw err;
     }

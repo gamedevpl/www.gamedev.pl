@@ -1,5 +1,5 @@
 import { genaicode, type GenerationRequest } from 'genaicode';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VertexSpecRefiner } from './refine.js';
 
 const noGrounding = genaicode({
@@ -20,6 +20,9 @@ function exhausted(onCall?: () => void) {
 }
 
 describe('spec refinement provider fallback', () => {
+  beforeEach(() => vi.stubEnv('REFINE_FALLBACK_MODEL', 'gpt-6-luna'));
+  afterEach(() => vi.unstubAllEnvs());
+
   it('uses OpenAI Luna after Vertex capacity failures and validates the same response', async () => {
     let vertexCalls = 0;
     let fallbackRequest: GenerationRequest | undefined;
@@ -55,6 +58,8 @@ describe('spec refinement provider fallback', () => {
   });
 
   it('fails closed when OpenAI Luna also fails', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const failing = exhausted();
     const refiner = new VertexSpecRefiner({
       client: failing,
@@ -64,6 +69,11 @@ describe('spec refinement provider fallback', () => {
       timeoutMs: 1000,
     });
 
-    await expect(refiner.refine({ concept: 'A game concept for an unavailable model' })).rejects.toThrow();
+    try {
+      await expect(refiner.refine({ concept: 'A game concept for an unavailable model' })).rejects.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('provider openai'), expect.any(Error));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
