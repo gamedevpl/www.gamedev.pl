@@ -40,7 +40,8 @@ import {
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
-import { canActOnSlug } from '../platform/game-access-permissions.js';
+import { canActOnGame } from '../platform/game-access-permissions.js';
+import { resolveGameAccess } from '../platform/game-access-resolve.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -560,6 +561,13 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     }
   }
 
+  // Creator sources stay with members; platform games fork freely.
+  async function canSaveRemix(slug: string, uid: string): Promise<boolean> {
+    if (!options.store) return false;
+    const access = await resolveGameAccess(options.store, slug);
+    return access.owner.kind !== 'creator' || canActOnGame(access, uid, 'read');
+  }
+
   /** Rebuild the whole document with the session's edits applied. */
   async function rebuild(session: RemixSession, extra: Record<string, string> = {}): Promise<string | null> {
     if (!options.githubClient) return null;
@@ -621,6 +629,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
           canAssist,
           canCode,
+          canSave: await canSaveRemix(params.data.slug, request.user!.uid),
           expiresInMs: REMIX_TTL_MS,
         }),
       );
@@ -645,6 +654,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         contentDefaults: defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
         canAssist,
         canCode,
+        canSave: await canSaveRemix(session.slug, request.user!.uid),
         expiresInMs: Math.max(0, session.expiresAt - now()),
         html,
         undoable: !rehydrated && session.history.length > 0,
@@ -1233,9 +1243,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
       const body = SaveSchema.safeParse(request.body ?? {});
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
-      if (!(await canActOnSlug(options.store, session.slug, request.user!.uid, 'read'))) {
+      if (!(await canSaveRemix(session.slug, request.user!.uid))) {
         return reply.status(403).send({
-          error: 'only game members can save a source-based remix',
+          error: "only this game's members can save a copy of its sources",
           reason: 'source_access_required',
         });
       }

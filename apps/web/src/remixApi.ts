@@ -37,6 +37,8 @@ export type RemixSession = {
   contentDefaults?: EditorContentDoc;
   canAssist: boolean;
   canCode: boolean;
+  // False when the game's sources belong to another creator.
+  canSave?: boolean;
   /** Absent from an older server; an empty list is the same as none. */
   suggestions?: RemixSuggestion[];
   expiresInMs: number;

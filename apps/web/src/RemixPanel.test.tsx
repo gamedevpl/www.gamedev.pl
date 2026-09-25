@@ -1023,6 +1023,54 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
   });
 
+  it('never offers Keep when the server says the sources are not ours', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      canSave: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+    await draw();
+    await send('bigger');
+    await send('bigger');
+    await send('bigger');
+
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
+  });
+
+  it('explains a source-access refusal instead of a generic failure', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+    remixApi.remixSave.mockRejectedValue(
+      Object.assign(new Error('forbidden'), { status: 403, reason: 'source_access_required' }),
+    );
+    await draw();
+    await send('bigger');
+    await send('bigger');
+    await send('bigger');
+    await act(async () => {
+      buttonNamed(container, 'Keep in Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.remix-note.is-error')?.textContent).toBe(
+      "Only this game's creators can save a copy of it to Studio.",
+    );
+  });
+
   it('docks instead of closing when the grip is used before chat mode', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
