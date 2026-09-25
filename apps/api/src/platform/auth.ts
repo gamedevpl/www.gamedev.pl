@@ -163,8 +163,7 @@ export function mintSessionToken(
     uid,
     iat: nowSeconds,
     exp: nowSeconds + durationSeconds,
-    ...(source === 'token' ? { src: source } : {}),
-    ...(source === 'token' && tokenId ? { tid: tokenId } : {}),
+    ...(source === 'token' ? { src: source, ...(tokenId ? { tid: tokenId } : {}) } : {}),
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = createHmac('sha256', secret).update(encodedPayload).digest('base64url');
