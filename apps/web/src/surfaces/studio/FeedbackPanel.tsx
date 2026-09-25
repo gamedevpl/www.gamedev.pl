@@ -44,38 +44,32 @@ export function FeedbackPanel({
   onSwitchToSelf,
   handoffPending,
   platformUnavailable,
+  onSending,
+  onSendFailed,
   onSent,
   onPublishedImprove,
   draft,
   onDraftConsumed,
 }: {
   token: string;
-  // Live-game improvement, or an in-progress build change.
   published: boolean;
   building: boolean;
   agentWorking?: boolean;
-  // Thread reply box, not a page section: field and send, nothing else.
   compact?: boolean;
-  // Show builder choice — the next send opens a new round.
   chooseBuilder?: boolean;
   initialBuilder?: BuilderKind;
-  // Builder of the *current* round — drives self-build routing copy.
   roundBuilder?: BuilderKind;
   stall?: SubmissionStatus['stall'];
   failureReason?: string;
-  // Internal job phase — gate-green drafts need honest "start your agent" routing.
   phase?: SubmissionStatus['phase'];
   onSwitchToPlatform?: BuilderHandoffHandler;
   onSwitchToSelf?: BuilderHandoffHandler;
   handoffPending?: BuilderKind;
-  // Why platform is unavailable, if it is. See BuilderChoice.
   platformUnavailable?: BuilderUnavailableReason;
-  // Hides "saved until you start your agent" — connect card already said it.
   suppressRouteNote?: boolean;
+  onSending?: (text: string) => void;
+  onSendFailed?: (text: string) => void;
   onSent: (text: string) => void;
-  // A published improvement opens a new job and moves the view.
-
-  // Only fires when published; a draft revision stays on this thread.
   onPublishedImprove?: (token: string) => void;
   draft?: ComposerDraft | null;
   onDraftConsumed?: () => void;
@@ -96,7 +90,7 @@ export function FeedbackPanel({
   // The pick that seeded the box, so a newer one survives.
   const seededSeq = useRef<number | undefined>(undefined);
   const attachmentsApi = useComposerAttachments(sending);
-  const { attachments, pendingAttachmentReads, dropAttachments, resetAttachments } = attachmentsApi;
+  const { attachments, pendingAttachmentReads, dropAttachments, resetAttachments, restoreAttachments } = attachmentsApi;
 
   useEffect(() => {
     setBuilder(initialBuilder);
@@ -183,9 +177,19 @@ export function FeedbackPanel({
     setState('sending');
     const seqAtSend = seededSeq.current;
     // What this send carries; a pick mid-flight must not resend them.
-    const sentIds = attachments.map((item) => item.id);
+    const currentAttachments = [...attachments];
+    const sentIds = currentAttachments.map((item) => item.id);
     setError(null);
     setNotice(null);
+    onSending?.(message);
+
+    // Optimistically clear the composer so creator gets instant feedback.
+    if (seededSeq.current === seqAtSend) {
+      setText('');
+      resetAttachments();
+      if (inputRef.current) inputRef.current.style.height = '';
+    }
+
     // Shows Sending for the whole round trip — never abort the fetch.
 
     // Aborting doesn't cancel the Fastify handler — risks a duplicate dispatch.
@@ -195,8 +199,8 @@ export function FeedbackPanel({
       const roundBuilder = chooseBuilder ? builder : undefined;
       // Normalized to PNG for the backend's signature check.
       let context: { referenceImages: string[] } | undefined;
-      if (attachments.length > 0) {
-        const referenceImages = await toBase64PngList(attachments.map((a) => a.dataUrl));
+      if (currentAttachments.length > 0) {
+        const referenceImages = await toBase64PngList(currentAttachments.map((a) => a.dataUrl));
         if (referenceImages.length > 0) context = { referenceImages };
       }
       // New job from an improvement hands the thread over once ready.
@@ -210,9 +214,7 @@ export function FeedbackPanel({
           : context
             ? await submitImprovement(token, message, context)
             : await submitImprovement(token, message);
-        // Publishing is terminal — the improvement is a new job, new token.
-
-        // Builder memory is keyed by token — persist it under the new one.
+        // Improvement is a new job with a new token.
         handoffToken = improved.token;
       } else {
         const result = roundBuilder
@@ -232,31 +234,24 @@ export function FeedbackPanel({
         recordStudioStep('builder_chosen', roundBuilder);
       }
       setState('sent');
-      // A pick landed mid-send; clearing would eat that draft.
-      if (seededSeq.current === seqAtSend) {
-        setText('');
-        resetAttachments();
-        // Reset to CSS height — not the sent message's grown size.
-        if (inputRef.current) inputRef.current.style.height = '';
-      } else {
-        // The pick's frame stays; what this send carried does not.
-        dropAttachments(sentIds);
-      }
+      // A pick landed mid-send; drop what this send carried.
+      if (seededSeq.current !== seqAtSend) dropAttachments(sentIds);
       // Echoes locally now; the next status poll picks up the real state.
       onSent(message);
       // Moves onto the new thread last, after the receipt and echo commit.
       if (handoffToken) onPublishedImprove?.(handoffToken);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      if (message === 'content_rejected') {
-        setError(t('errors.contentRejected.other'));
-      } else if (message.includes('quota')) {
-        setError(t('statusView.feedback.quota'));
-      } else if (message.includes('published')) {
-        setError(t('statusView.feedback.published'));
-      } else {
-        setError(t('statusView.feedback.error'));
+      onSendFailed?.(message);
+      if (seededSeq.current === seqAtSend) {
+        setText(message);
+        restoreAttachments(currentAttachments);
+        autoGrow();
       }
+      const errText = err instanceof Error ? err.message : '';
+      if (errText === 'content_rejected') setError(t('errors.contentRejected.other'));
+      else if (errText.includes('quota')) setError(t('statusView.feedback.quota'));
+      else if (errText.includes('published')) setError(t('statusView.feedback.published'));
+      else setError(t('statusView.feedback.error'));
       setState('idle');
     }
   };

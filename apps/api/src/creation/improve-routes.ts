@@ -137,34 +137,15 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       // Free read first: a spent quota should refuse for nothing.
-      const improveHeadroom = await peekQuota(
-        store,
-        request.user!.uid,
-        new Date(now()).toISOString().slice(0, 10),
-        dailyImprovementQuota,
-        'improvements',
-      );
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      const improveHeadroom = await peekQuota(store, request.user!.uid, dateStr, dailyImprovementQuota, 'improvements');
       if (!improveHeadroom.allowed) {
-        if (improveHeadroom.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily improvement quota exceeded' });
-      }
-
-      const moderation = await contentChecker.checkFields([parsed.data.feedback]);
-      if (!moderation.allowed) {
-        logModerationRejection(request.log, {
-          surface: 'creator_feedback',
-          uid: request.user?.uid,
-          category: moderation.category,
-          unavailable: moderation.unavailable,
+        return reply.status(improveHeadroom.tier === 'blocked' ? 403 : 429).send({
+          error: improveHeadroom.tier === 'blocked' ? 'account is blocked' : 'daily improvement quota exceeded',
         });
-        const rejection = rejectionFor(moderation);
-        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
-      const currentTime = now();
-      const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+      const moderationPromise = contentChecker.checkFields([parsed.data.feedback]);
       const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
       const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
       let shotId: string | undefined;
@@ -191,6 +172,18 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
       const requestedBuilder = parsed.data.builder;
+
+      const moderation = await moderationPromise;
+      if (!moderation.allowed) {
+        logModerationRejection(request.log, {
+          surface: 'creator_feedback',
+          uid: request.user?.uid,
+          category: moderation.category,
+          unavailable: moderation.unavailable,
+        });
+        const rejection = rejectionFor(moderation);
+        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
+      }
 
       // Classify before spending any build-only quota or availability check.
       let studioAckText: string | undefined;
@@ -223,11 +216,8 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
       if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
 
-      const requestedBuilderForCheck = parsed.data.builder;
       const effectiveBuilder =
-        requestedBuilderForCheck && isBuilderKind(requestedBuilderForCheck)
-          ? requestedBuilderForCheck
-          : builderOf(record);
+        parsed.data.builder && isBuilderKind(parsed.data.builder) ? parsed.data.builder : builderOf(record);
       // Ahead of quota spend — a refused request must not cost a slot.
       if (effectiveBuilder === 'platform' && managedAvailabilityGate) {
         const availability = await managedAvailabilityGate.peek(request.user!.uid, dateStr);
