@@ -30,8 +30,7 @@ export interface SubmissionRecord {
    * reconciliation still wait for a sealed publish delivery.
    */
   previewVersion?: string;
-  // Dropped when the round closes; replaced on kit_outdated or lost retention.
-  roundKitEngineRef?: string;
+  roundKitEngineRef?: string; // Dropped when the round closes or the kit changes.
   /**
    * How many times this job has been sent back for finishing without delivering.
    *
@@ -41,6 +40,7 @@ export interface SubmissionRecord {
    * request, so the ceiling has to hold for the life of the job.
    */
   deliveryNudges?: number;
+  gateRepair?: { version: string; roundGeneration: number; claimedAt: string };
   /**
    * When we first observed the game published. Together with createdAt it is the
    * only record of how long a build actually took, which is what lets the status

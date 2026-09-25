@@ -9,6 +9,7 @@ import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
 import type { McpServerOptions } from './agent-surface/mcp-server.js';
 import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
+import { unsubscribeSecretFromEnv } from './notifications/unsubscribe-token.js';
 import {
   createCreationGate,
   createChatGate,
@@ -55,6 +56,7 @@ import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
+import { createGateRepairHandler } from './creation/gate-repair.js';
 import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
 import { createAgentProposalsEnabledFromEnv, createDreamJobFromEnv } from './creation/dream-job-env.js';
 import type { DreamAvailabilityGate } from './creation/dream-availability.js';
@@ -206,7 +208,7 @@ export interface SubmissionRoutesOptions {
   notifyMailer?: Mailer;
   /** Absolute origin for email links; defaults to APP_BASE_URL or https://www.gamedev.pl. */
   notifyAppBaseUrl?: string;
-  /** Secret for signing unsubscribe tokens; defaults to SESSION_SECRET. */
+  /** Secret for signing unsubscribe tokens; defaults to the configured environment secret. */
   unsubscribeSecret?: string;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
   /**
@@ -601,12 +603,11 @@ export async function registerSubmissionRoutes(
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
     return record?.builder ?? record?.defaultBuilder ?? 'platform';
   }
-  // Shared deps for notification emission (in-app + best-effort email). The mailer
-  // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
-  // unless an unsubscribe secret is available — so this is safe when unconfigured.
+  // In-app notices and best-effort email share these dependencies.
+  // Email needs a signing key; missing Resend disables the mailer.
   const notifyMailer = options.notifyMailer ?? createMailerFromEnv();
   const notifyAppBaseUrl = options.notifyAppBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
-  const unsubscribeSecret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  const unsubscribeSecret = options.unsubscribeSecret ?? unsubscribeSecretFromEnv();
   /**
    * Feeds a derived status into the job state machine.
    *
@@ -1283,7 +1284,8 @@ export async function registerSubmissionRoutes(
     reviewerUids: options.reviewerUids,
     now,
     invalidatePublishedGameCaches,
-    isSlugPublished: catalogRoutes.isSlugPublished,
+    // Both lanes: a store-published game must be reportable too, not just repo ones.
+    isSlugPublished: catalogRoutes.isSlugPublishedAnyLane,
   });
   await registerSelfBuildConnectRoutes(app, {
     managedAvailabilityGate,
@@ -1336,14 +1338,12 @@ export async function registerSubmissionRoutes(
     isLiveAgentRound,
     selfBuildDeliveryCap,
   });
-
   /**
    * Quiet long enough that asking the backend is cheaper than guessing. Well under the
    * 15-minute stall banner: this is the check that can tell "quiet" apart from "dead",
    * so it has to run before the page starts hedging.
    */
   const observeQuietMs = 2 * 60 * 1000;
-
   /**
    * How many times a job may be sent back for finishing without delivering.
    *
@@ -1372,6 +1372,7 @@ export async function registerSubmissionRoutes(
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
     onGateScreenshotPosted: (jobId: number) => buildStatus.invalidateMedia(jobId),
+    onGateRed: createGateRepairHandler({ store, builderOf, resumeBuild, now, log: app.log }),
   });
 
   /**
@@ -1821,7 +1822,7 @@ export async function registerSubmissionRoutes(
     recordDerivedJobState,
     reconcileNativeJob,
     reconcileGateVerdict,
-    nativeJobStatus,
+    nativeJobStatus: (record) => nativeJobStatus(record, { detail: false }),
     buildNotifyDeps,
   });
 

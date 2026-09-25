@@ -1,3 +1,4 @@
+import { shownPrompt, splitEvidence } from './workbench-evidence.js';
 import type { Steer } from './live-agent.js';
 export type SessionHistory = { lines: string[]; prompts: string[]; conversationId?: string };
 export type SessionMode = 'prompt' | 'pick' | 'busy';
@@ -109,10 +110,11 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     if (!pending) return false;
     const resolve = pending;
     pending = null;
-    const spoken = line.trim() ? [...state.lines, `› ${line}`] : state.lines;
-    if (line.trim()) savedLines = [...savedLines, `› ${line}`].slice(-200);
-    if (line.trim() && history[history.length - 1] !== line.trim()) {
-      history.push(line.trim());
+    const typed = splitEvidence(line).text.trim();
+    const spoken = line.trim() ? [...state.lines, `› ${shownPrompt(line)}`] : state.lines;
+    if (line.trim()) savedLines = [...savedLines, `› ${shownPrompt(line)}`].slice(-200);
+    if (typed && history[history.length - 1] !== typed) {
+      history.push(typed);
       if (history.length > 50) history.shift();
     }
     histIndex = history.length;
@@ -354,10 +356,10 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       if (nextTurn && state.queued.length) {
         const [line, ...queued] = state.queued;
         state = { ...state, queued };
-        savedLines = [...savedLines, `› ${line}`].slice(-200);
-        history.push(line!);
+        savedLines = [...savedLines, `› ${shownPrompt(line!)}`].slice(-200);
+        history.push(splitEvidence(line!).text);
         if (history.length > 50) history.shift();
-        state = { ...state, lines: [...state.lines, `› ${line}`] };
+        state = { ...state, lines: [...state.lines, `› ${shownPrompt(line!)}`] };
         emit();
         return Promise.resolve(line!);
       }

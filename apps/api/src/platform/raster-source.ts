@@ -1,12 +1,10 @@
 import { decodeCanonicalBase64, InvalidBase64Error } from './canonical-base64.js';
-import { DELIVERY_EXTRA_ASSET_PATTERN, RASTER_ASSET_MAX_FILE_BYTES } from './raster-contract.js';
+import { RASTER_ASSET_MAX_FILE_BYTES } from './raster-contract.js';
+
+export { isRasterSourcePath } from '@gamedevpl/contract';
 
 export function mimeForImagePath(relPath: string): string {
   return relPath.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
-}
-
-export function isRasterSourcePath(path: string): boolean {
-  return DELIVERY_EXTRA_ASSET_PATTERN.test(path) && !path.includes('//');
 }
 
 // Decode staged raster; content is canonical base64.

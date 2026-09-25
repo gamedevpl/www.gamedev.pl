@@ -4,11 +4,11 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { Store } from '../platform/store.js';
-import { InvalidUnsubscribeTokenError, verifyUnsubscribeToken } from './unsubscribe-token.js';
+import { InvalidUnsubscribeTokenError, unsubscribeSecretFromEnv, verifyUnsubscribeToken } from './unsubscribe-token.js';
 
 export interface EmailRoutesOptions {
   store: Store;
-  /** Secret for unsubscribe tokens; defaults to SESSION_SECRET (always set in prod). */
+  /** Secret for unsubscribe tokens; defaults to the configured environment secret. */
   unsubscribeSecret?: string;
 }
 
@@ -22,7 +22,7 @@ a{color:#0a7d76}</style></head>
 }
 
 export async function registerEmailRoutes(app: FastifyInstance, options: EmailRoutesOptions): Promise<void> {
-  const secret = options.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  const secret = options.unsubscribeSecret ?? unsubscribeSecretFromEnv();
 
   app.get(
     '/api/email/unsubscribe',

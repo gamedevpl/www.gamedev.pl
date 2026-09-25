@@ -103,14 +103,14 @@ describe('pull and ignored platform files', () => {
     expect(readFileSync(join(dest, 'games', 'ghost-roads', 'cache', 'state.json'), 'utf8')).toBe('{"ok":true}\n');
   });
 
-  it('refuses an unignored local file colliding with a platform directory on ordinary pull', async () => {
+  it('refuses a local non-game file colliding with a platform directory on ordinary pull', async () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-struct-block-'));
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
     writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
-    writeFileSync(join(dest, 'games', 'ghost-roads', 'cache'), 'user unsubmitted file\n');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game'), 'user unsubmitted file\n');
     const files = [
       { path: 'game.ts', content: 'A' },
-      { path: 'cache/state.json', content: '{"ok":true}\n' },
+      { path: 'game/state.ts', content: '{"ok":true}\n' },
     ];
     const api = createApi({
       origin: 'https://www.gamedev.pl',
@@ -119,7 +119,7 @@ describe('pull and ignored platform files', () => {
         new Response(
           JSON.stringify(
             String(url).endsWith('/versions')
-              ? { versions: [{ version: 'v2', createdAt: '2026-09-13', sourceFiles: ['game.ts', 'cache/state.json'] }] }
+              ? { versions: [{ version: 'v2', createdAt: '2026-09-13', sourceFiles: ['game.ts', 'game/state.ts'] }] }
               : { version: 'v2', files },
           ),
           { status: 200 },
@@ -127,11 +127,10 @@ describe('pull and ignored platform files', () => {
     });
     const caught = await pullGame({ api, slug: 'ghost-roads', dest }).catch((error: unknown) => error);
     expect(caught).toBeInstanceOf(CliError);
-    expect((caught as CliError).message).toContain('conflict');
-    expect((caught as CliError).message).toContain('cache');
-    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'cache'), 'utf8')).toBe('user unsubmitted file\n');
+    expect((caught as CliError).message).toContain('game/state.ts');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game'), 'utf8')).toBe('user unsubmitted file\n');
     const forced = await pullGame({ api, slug: 'ghost-roads', dest, force: true });
     expect(forced.version).toBe('v2');
-    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'cache', 'state.json'), 'utf8')).toBe('{"ok":true}\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game', 'state.ts'), 'utf8')).toBe('{"ok":true}\n');
   });
 });

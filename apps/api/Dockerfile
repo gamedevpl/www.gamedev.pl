@@ -28,6 +28,17 @@ ENV VITE_APPLE_SERVICES_ID=$VITE_APPLE_SERVICES_ID
 # the socket is still served in-process. See apps/web/src/mp/protocol.ts.
 ARG VITE_MP_RELAY_URL=
 ENV VITE_MP_RELAY_URL=$VITE_MP_RELAY_URL
+# Native app identity for the universal-link / app-link association files (App Store
+# guideline 4.7.4). Unset until the app ships; generate-app-links.mjs then writes
+# obviously-non-matching placeholders instead of failing the build. See that script.
+ARG IOS_TEAM_ID=
+ENV IOS_TEAM_ID=$IOS_TEAM_ID
+ARG IOS_BUNDLE_ID=
+ENV IOS_BUNDLE_ID=$IOS_BUNDLE_ID
+ARG ANDROID_PACKAGE_NAME=
+ENV ANDROID_PACKAGE_NAME=$ANDROID_PACKAGE_NAME
+ARG ANDROID_SHA256_CERT_FINGERPRINTS=
+ENV ANDROID_SHA256_CERT_FINGERPRINTS=$ANDROID_SHA256_CERT_FINGERPRINTS
 
 COPY . .
 # --ignore-scripts: skip the repo's `prepare`/husky hook (dev-only) during image builds.

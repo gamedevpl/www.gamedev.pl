@@ -157,35 +157,21 @@ export async function handleCreatorFeedback(
     }
   }
 
-  const moderation = await contentChecker.checkFields([parsed.data.feedback]);
-  if (!moderation.allowed) {
-    logModerationRejection(request.log, {
-      surface: 'creator_feedback',
-      uid: request.user?.uid,
-      category: moderation.category,
-      unavailable: moderation.unavailable,
-    });
-    const rejection = rejectionFor(moderation);
-    return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
-  }
-
-  const record = store ? await store.getSubmission(jobId) : null;
+  const recordPromise = store ? store.getSubmission(jobId) : Promise.resolve(null);
+  const moderationPromise = contentChecker.checkFields([parsed.data.feedback]);
+  const record = await recordPromise;
   // A token outlives its round; missing is not a pass.
-  if (store && !record) {
-    return reply.status(404).send({ error: 'submission not found' });
-  }
+  if (store && !record) return reply.status(404).send({ error: 'submission not found' });
   // Before any write: that job may have changed hands.
   if (store && record && !(await canActOnSubmissionOrSlug(store, record, request.user!.uid, 'build'))) {
     return reply
       .status(409)
       .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
   }
-  if (record?.publishedAt) {
+  if (record?.publishedAt)
     return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });
-  }
-  if (record?.state === 'publishing') {
+  if (record?.state === 'publishing')
     return reply.status(409).send({ error: 'this game is currently publishing; try again in a moment' });
-  }
 
   const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
   const creatorLocale = record?.locale ?? 'en';
@@ -229,22 +215,29 @@ export async function handleCreatorFeedback(
     : null;
   if (record && requestedBuilder && isActiveBuildRound(record)) {
     const current = builderOf(record);
-    if (requestedBuilder !== current) {
-      if (
-        !allowsSelfToPlatformHandoff({
-          currentBuilder: current,
-          requestedBuilder,
-          stall: currentStall,
-          agentEndedAt: record.agentEndedAt,
-        })
-      ) {
-        return reply.status(409).send({
-          error: 'builder_locked',
-          reason: 'active_round',
-          builder: current,
-        });
-      }
+    if (
+      requestedBuilder !== current &&
+      !allowsSelfToPlatformHandoff({
+        currentBuilder: current,
+        requestedBuilder,
+        stall: currentStall,
+        agentEndedAt: record.agentEndedAt,
+      })
+    ) {
+      return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: current });
     }
+  }
+
+  const moderation = await moderationPromise;
+  if (!moderation.allowed) {
+    logModerationRejection(request.log, {
+      surface: 'creator_feedback',
+      uid: request.user?.uid,
+      category: moderation.category,
+      unavailable: moderation.unavailable,
+    });
+    const rejection = rejectionFor(moderation);
+    return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
   }
 
   let studioAckText: string | undefined;

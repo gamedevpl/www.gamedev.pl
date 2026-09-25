@@ -160,7 +160,7 @@ describe('MCP editor session actor', () => {
     });
   });
 
-  it('binds the editor uid into start() sessionKey and refuses publish', async () => {
+  it('binds the editor uid into start() sessionKey and refuses owner-only actions', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
     await seedSharedRound(store);
@@ -202,6 +202,20 @@ describe('MCP editor session actor', () => {
     expect((published.structured as { error: string }).error).toMatch(/only the owner can publish/i);
     // This reads as a permission problem, not a schema one.
     expect((published.structured as { code?: string }).code).toBe('not_owner');
+
+    const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(shared.isError).toBe(true);
+    expect(shared.structured).toMatchObject({
+      error: 'only the creator can share this game',
+      code: 'not_owner',
+    });
+    expect((await store.getSubmission(55))?.draftSharedAt).toBeFalsy();
+
+    await store.setDraftShared(55, AT);
+    const unshared = await callTool(app, 'share_draft', { sessionKey, shared: false }, { 'mcp-session-id': sessionId });
+    expect(unshared.isError).toBe(true);
+    expect(unshared.structured).toMatchObject({ code: 'not_owner' });
+    expect((await store.getSubmission(55))?.draftSharedAt).toBe(AT);
   });
 
   it('refuses leftover editor sessionKey after the owner removes them', async () => {

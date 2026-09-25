@@ -7,12 +7,12 @@ import rateLimit from 'fastify-rate-limit';
 import type { FastifyInstance } from 'fastify';
 
 /** Opt-in only — annotate handlers with `{ config: { rateLimit: … } }`. */
-export async function registerRateLimit(app: FastifyInstance): Promise<void> {
+export async function registerRateLimit(app: FastifyInstance, sessionAware = true): Promise<void> {
   await app.register(rateLimit, {
     global: false,
     max: 100,
     timeWindow: '1 minute',
     // Keyed by uid when signed in; clientIp is the edge.
-    keyGenerator: (request) => request.user?.uid ?? request.clientIp,
+    keyGenerator: sessionAware ? (request) => request.user?.uid ?? request.clientIp : (request) => request.clientIp,
   });
 }

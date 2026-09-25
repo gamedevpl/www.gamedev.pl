@@ -131,6 +131,7 @@ export interface CombinedPublishedSlugGateOptions {
  * same cost `/play` already pays. The repo gate keeps its own TTL cache untouched.
  */
 export function createCombinedPublishedSlugGate(options: CombinedPublishedSlugGateOptions): PublishedSlugGate {
+  // Mirrored by isSlugPublishedAnyLane in catalog-routes.ts; change both together.
   const { repoGate, store } = options;
 
   return {

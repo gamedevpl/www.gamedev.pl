@@ -3,6 +3,7 @@ import type { EmitDeps } from './notify.js';
 import { maybeSendEmail } from './notify.js';
 import { retryShareNotificationEmail } from './notify-share.js';
 import { TRANSFER_INVITE_TTL_MS } from '../store/records/game-transfer.js';
+import { unsubscribeSecretFromEnv } from './unsubscribe-token.js';
 
 const EMAIL_RETRY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const EMAIL_RETRY_BATCH_LIMIT = 200;
@@ -27,7 +28,7 @@ function isDirectRetryType(type: string): boolean {
 
 export function notificationEmailConfigured(deps: EmitDeps): boolean {
   const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
-  const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  const unsubscribeSecret = deps.unsubscribeSecret ?? unsubscribeSecretFromEnv();
   return Boolean(mailer && mailer.name !== 'console' && unsubscribeSecret);
 }
 
@@ -64,11 +65,7 @@ export async function retryPendingNotificationEmails(
       continue;
     }
     const user = await deps.store.getUser(uid);
-    if (
-      !user?.email ||
-      user.emailUnsubscribedAt ||
-      (notification.type === 'creator.digest' && user.digestOptOutAt)
-    ) {
+    if (!user?.email || user.emailUnsubscribedAt || (notification.type === 'creator.digest' && user.digestOptOutAt)) {
       await deps.store.markNotificationEmailed(uid, notification.id);
       skipped += 1;
       continue;

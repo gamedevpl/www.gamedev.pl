@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
@@ -223,7 +224,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
 
-  registerClientAddress(app);
+  const relayOnly = isRelayOnly() || options.multiplayerRoutes?.relayOnly === true;
+  registerClientAddress(app, !relayOnly);
   registerReadMeterLog(app);
   registerApiCompression(app);
 
@@ -245,7 +247,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // IP rate limiting (opt-in per route via `{ config: { rateLimit } }`). Registered
   // before route plugins so annotated handlers are covered. Imported as
   // `fastify-rate-limit` so CodeQL's js/missing-rate-limiting model recognizes it.
-  await registerRateLimit(app);
+  await registerRateLimit(app, !relayOnly);
   // After the rate limiter: its report sink is annotated for it.
   registerSecurityHeaders(app, { cspReportOnly: resolveCspReportOnly(process.env) });
 
@@ -321,12 +323,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     });
 
-  // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator.
+  // App mode auth installs cookies, /api/auth/* routes, and the user decorator.
   // The private-beta allowlist is enforced inside the plugin on /api/auth/google.
   await registerAuthPlugin(app, {
     store,
-    sessionSecret: options.sessionSecret,
+    sessionSecret: relayOnly ? randomBytes(32).toString('hex') : options.sessionSecret,
     sessionSecretPrev: options.sessionSecretPrev,
+    enabled: !relayOnly,
     googleClientId: options.googleClientId,
     googleAuthVerifier: options.googleAuthVerifier,
     appleAuthVerifier: options.appleAuthVerifier,
@@ -341,6 +344,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // A floored day count, so token-info reads the minting clock.
     now: options.accessTokenRoutes?.now,
   });
+
+  /**
+   * `appleSignIn` tells the web app whether this server can verify an Apple token.
+   * The button also needs a Services ID baked in at build time.
+   */
+  app.get('/api/health', async () => ({
+    status: 'ok',
+    provider: 'mock',
+    privateBeta: !(await openToVisitors()),
+    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
+    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
+  }));
+
+  if (relayOnly) {
+    await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
+    await registerMultiplayerRoutes(app, {
+      internalAuth: createInternalAuthVerifierFromEnv(process.env, 'mpRelay'),
+      ...options.multiplayerRoutes,
+      relayOnly: true,
+    });
+    return app;
+  }
 
   // Where a delivered game is stored, and what verifies it. Resolved once and shared by
   // every registration that needs them: three copies of these expressions is three ways
@@ -507,18 +532,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     assertDeliverableSourcePath,
   });
 
-  // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
-  // plugin so /api/mp/sessions sees request.user, and before the beta wall hook
-  // so the wall's /api/mp/ws exemption applies to a route that actually exists.
-  // One image runs both roles: with MP_RELAY_URL set this process forwards room
-  // creation and stops serving the socket; with MP_RELAY_ONLY set it IS the relay.
-  // Neither set is the single-process default, so options here always win over env.
   await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
   await registerMultiplayerRoutes(app, {
     refusesNewRooms: () => loadShed.refusesNewRooms(),
     relayClient: createRelayClientFromEnv(),
-    relayOnly: isRelayOnly(),
-    internalAuth: isRelayOnly() ? createInternalAuthVerifierFromEnv(process.env, 'mpRelay') : undefined,
+    relayOnly: false,
     ...options.multiplayerRoutes,
   });
 
@@ -538,7 +556,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await registerPushRoutes(app, { store, vapidPublicKey: process.env.VAPID_PUBLIC_KEY?.trim() });
 
-  await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
+  await registerEmailRoutes(app, { store, unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET ?? options.sessionSecret });
 
   // Public contact form → admin@gamedev.pl. Exempted from the private-beta wall
   // below: a published contact point that only signed-in beta users can reach is
@@ -662,6 +680,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
+    now: options.submissionRoutes?.now,
     publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
     publicPlayTtlMs,
     hasPlatformBackend: submissionSeams.hasPlatformBackend,
@@ -1069,24 +1088,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       options.spendBrakeRoutes?.internalAuthVerifier ?? createInternalAuthVerifierFromEnv(process.env, 'spendBrake'),
   });
 
-  /**
-   * `appleSignIn` tells the web app whether this server can actually verify an Apple
-   * token. The button also needs a Services ID baked in at build time, so it renders only
-   * when both halves agree — otherwise a web build carrying the ID would show a working
-   * button in front of a server that answers 503, and the failure would land on the user
-   * instead of on whoever forgot the env var.
-   */
-  app.get('/api/health', async () => ({
-    status: 'ok',
-    // Retained for shape stability after the mock generator was retired.
-    provider: 'mock',
-    // Effective, not the boot flag: the client renders the waitlist splash off
-    // this, and a rung that closes the site has to reach it.
-    privateBeta: !(await openToVisitors()),
-    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
-    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
-  }));
-
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
   // RFC 9728 protected-resource metadata for the MCP endpoint (BY-18a). Public,
   // cacheable, no auth — advertises where an authorization server will live.
@@ -1190,6 +1191,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await app.register(fastifyStatic, {
       root: webDistDir,
       wildcard: false,
+      // `wildcard: false` globs the dist tree at boot, and glob skips dotfiles
+      // unless told otherwise — without this, /.well-known/* 404s silently.
+      serveDotFiles: true,
       // Serve build-time .br/.gz siblings (apps/web/scripts/precompress.mjs) —
       // never compress per-request: Cloud Run bills CPU.
       preCompressed: true,
@@ -1202,6 +1206,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           reply.header('cache-control', 'public, max-age=31536000, immutable');
         } else {
           reply.header('cache-control', 'no-cache');
+        }
+        // No extension, so mime lookup misses it; iOS requires this exact type.
+        if (filePath.endsWith(`${path.sep}apple-app-site-association`)) {
+          reply.header('content-type', 'application/json');
         }
       },
     });

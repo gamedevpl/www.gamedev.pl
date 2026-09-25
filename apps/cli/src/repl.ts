@@ -27,7 +27,8 @@ import { formatHelp } from './help.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
 import { discoverAgents } from './agents.js';
 import type { PickChoice } from './workshop.js';
-import { handoffBuilder, handoffLine, refreshBuilder, workshopTurn, type Workshop } from './workshop.js';
+import { handoffBuilder, handoffLine, workshopTurn, type Workshop } from './workshop.js';
+import { handleWorkshopVerb } from './workshop-verbs.js';
 import { chooseExecution, executeChoice, type PendingExecution } from './execution.js';
 import type { CliTelemetry } from './telemetry.js';
 
@@ -68,6 +69,23 @@ export async function handleReplLine(input: {
   }
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
+    const task = input.workshop?.failedTask;
+    if (task && input.workshop) {
+      try {
+        await workshopTurn({
+          api: input.api,
+          ws: input.workshop,
+          request: task.request,
+          ack: task.ack,
+          agent: task.agent,
+          retry: true,
+          write: input.write,
+        });
+      } catch (error) {
+        input.write(formatError(error));
+      }
+      return { next: 'continue', conversationId: input.conversationId };
+    }
     input.write('no pending task to retry');
     return { next: 'continue', conversationId: input.conversationId };
   }
@@ -446,50 +464,6 @@ export async function handleReplLine(input: {
   } catch (error) {
     input.write(formatError(error));
     return { next: 'continue', conversationId: input.conversationId };
-  }
-}
-
-async function handleWorkshopVerb(input: {
-  cmd: string;
-  rest: string[];
-  api: ApiClient;
-  ws: Workshop;
-  write: (s: string) => void;
-}): Promise<void> {
-  const { ws } = input;
-  try {
-    if (input.cmd === 'builder') {
-      const wanted = input.rest[0];
-      if (wanted !== 'self' && wanted !== 'platform') {
-        await refreshBuilder(input.api, ws);
-        input.write(`builder ${ws.builder} — /builder self or /builder platform to switch`);
-        return;
-      }
-      if (wanted === ws.builder) {
-        input.write(`builder is already ${wanted}`);
-        return;
-      }
-      const outcome = await handoffBuilder(input.api, ws.token, wanted, ws.builder);
-      if (wanted === 'platform') delete ws.selectedAgent;
-      ws.builder = outcome.builder;
-      input.write(handoffLine(outcome, ws.slug));
-      return;
-    }
-    const parsed = parseArgv(['node', 'cli', 'delegate', ...input.rest]);
-    const request = parsed.args.join(' ');
-    if (!request) {
-      input.write(`say what to do: /delegate make the jump feel floatier`);
-      return;
-    }
-    await workshopTurn({
-      api: input.api,
-      ws,
-      request,
-      agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
-      write: input.write,
-    });
-  } catch (error) {
-    input.write(formatError(error));
   }
 }
 

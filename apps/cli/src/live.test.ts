@@ -61,6 +61,68 @@ describe('status watch', () => {
     expect(statusWatchDelayMs({ status: 'needs_changes' }, 1000)).toBe(10_000);
   });
 
+  it('never polls under the server floor, but ignores a floor that makes no sense', () => {
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 10_000 })).toBe(10_000);
+    // A floor under the client cadence changes nothing.
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 2000 })).toBe(3000);
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 10_000 }, 1000)).toBe(30_000);
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 86_400_000 })).toBe(300_000);
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: -1 })).toBe(3000);
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: Number.NaN })).toBe(3000);
+  });
+
+  it('backs a long `status --watch` off on an unchanged job and honours pollAfterMs', async () => {
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response(JSON.stringify({ status: 'building', pollAfterMs: 10_000 }), { status: 200 }),
+    });
+    const waits: number[] = [];
+    const stdout = { write: () => true } as unknown as NodeJS.WriteStream;
+    await runStatusVerb({
+      api,
+      token: 'tok',
+      maxPolls: 90,
+      asJson: true,
+      live: false,
+      stdout,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    expect(waits).toHaveLength(89);
+    // The server floor holds from the first wait.
+    expect(Math.min(...waits)).toBe(10_000);
+    // An idle job settles at the cap.
+    expect(waits.at(-1)).toBe(30_000);
+  });
+
+  it('resets the backoff when the job visibly moves', async () => {
+    let calls = 0;
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => {
+        calls += 1;
+        const index = calls <= 40 ? 1 : 2;
+        return new Response(JSON.stringify({ status: 'building', gateProgress: { stage: 'smoke', index, total: 4 } }), {
+          status: 200,
+        });
+      },
+    });
+    const waits: number[] = [];
+    const stdout = { write: () => true } as unknown as NodeJS.WriteStream;
+    await runStatusVerb({
+      api,
+      token: 'tok',
+      maxPolls: 42,
+      asJson: true,
+      live: false,
+      stdout,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    expect(waits[38]).toBeGreaterThan(3000);
+    expect(waits.at(-1)).toBe(3000);
+  });
+
   it('formats gate progress onto the live block', () => {
     expect(
       formatStatusLines(

@@ -57,7 +57,7 @@ declare module 'fastify' {
   }
 }
 
-export function registerClientAddress(app: FastifyInstance): void {
+export function registerClientAddress(app: FastifyInstance, sessionAware = true): void {
   app.decorateRequest('clientIp', '');
   app.addHook('onRequest', async (request) => {
     request.clientIp = resolveClientIp(request);
@@ -81,7 +81,7 @@ export function registerClientAddress(app: FastifyInstance): void {
       route: request.routeOptions?.url ?? 'unrouted',
       method: request.method,
       statusCode: reply.statusCode,
-      authenticated: Boolean(request.user),
+      authenticated: sessionAware ? Boolean(request.user) : false,
       forwardedFor: typeof forwardedFor === 'string' ? forwardedFor : null,
     });
     if (refusedByPlugin(reply)) logIpBucketRefusal(request.log, { clientIp: request.clientIp });

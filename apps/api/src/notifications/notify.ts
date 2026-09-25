@@ -41,7 +41,7 @@ import type {
   SubmissionStatus,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
-import { mintUnsubscribeToken } from './unsubscribe-token.js';
+import { mintUnsubscribeToken, unsubscribeSecretFromEnv } from './unsubscribe-token.js';
 
 const SHORT_TYPE: Record<SubmissionNotificationType, string> = {
   'submission.building': 'building',
@@ -136,9 +136,9 @@ export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: 
   // Explicit deps win (tests inject them). Otherwise fall back to env config so
   // the default call sites send email in prod with no extra wiring: a real mailer
   // only when RESEND_API_KEY is set (no false "sent" via the console fake), and
-  // the unsubscribe secret from SESSION_SECRET.
+  // the configured unsubscribe secret.
   const mailer = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
-  const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  const unsubscribeSecret = deps.unsubscribeSecret ?? unsubscribeSecretFromEnv();
   if (!mailer || !unsubscribeSecret) return false;
   try {
     const user = await deps.store.getUser(uid);

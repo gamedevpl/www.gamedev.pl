@@ -1,25 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id?: string;
-            auto_select?: boolean;
-            callback: (res: { credential: string }) => void;
-          }) => void;
-          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-          prompt: () => void;
-          disableAutoSelect: () => void;
-        };
-      };
-    };
-  }
-}
+import { platform } from './platform/index.js';
 
 interface GoogleSignInButtonProps {
   onSuccess?: () => void;
@@ -81,22 +63,18 @@ export function GoogleSignInButton({ onSuccess, onError, inviteCode }: GoogleSig
   inviteCodeRef.current = inviteCode;
 
   useEffect(() => {
-    if (window.google?.accounts?.id) {
+    if (platform.auth.google.isSdkLoaded()) {
       setScriptLoaded(true);
       return;
     }
-
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setScriptLoaded(true);
-    script.onerror = () => onErrorRef.current?.('Failed to load Google Identity Services');
-    document.body.appendChild(script);
+    platform.auth.google.loadSdk(
+      () => setScriptLoaded(true),
+      () => onErrorRef.current?.('Failed to load Google Identity Services'),
+    );
   }, []);
 
   useEffect(() => {
-    if (!scriptLoaded || !buttonRef.current || !window.google?.accounts?.id || rendered.current) {
+    if (!scriptLoaded || !buttonRef.current || !platform.auth.google.isSdkLoaded() || rendered.current) {
       return;
     }
     rendered.current = true;
@@ -105,17 +83,17 @@ export function GoogleSignInButton({ onSuccess, onError, inviteCode }: GoogleSig
     // GIS accepts short language codes here (`en`, `pl`); keep them aligned with i18n.
     const locale = i18n.language?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
 
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      auto_select: true,
-      callback: async (response) => {
+    platform.auth.google.init({
+      clientId,
+      autoSelect: true,
+      onCredential: async (idToken) => {
         try {
-          await signInRef.current(response.credential, inviteCodeRef.current);
+          await signInRef.current(idToken, inviteCodeRef.current);
           onSuccessRef.current?.();
         } catch (err) {
-          window.google?.accounts?.id?.disableAutoSelect?.();
+          platform.auth.google.disableAutoSelect();
           const message = err instanceof Error ? err.message : 'Sign in failed';
-          onErrorRef.current?.(message, response.credential);
+          onErrorRef.current?.(message, idToken);
         }
       },
     });
@@ -124,7 +102,7 @@ export function GoogleSignInButton({ onSuccess, onError, inviteCode }: GoogleSig
     // iframe (required for FedCM / ITP), but the dark-scheme white "envelope" that GIS
     // paints around filled_black never shows — that was the flash shoving Apple down.
     buttonRef.current.innerHTML = '';
-    window.google.accounts.id.renderButton(buttonRef.current, {
+    platform.auth.google.renderButton(buttonRef.current, {
       theme: 'filled_black',
       size: 'large',
       text: 'signin_with',
@@ -132,7 +110,7 @@ export function GoogleSignInButton({ onSuccess, onError, inviteCode }: GoogleSig
       locale,
       width: 240,
     });
-    window.google.accounts.id.prompt();
+    platform.auth.google.promptOneTap();
   }, [scriptLoaded, i18n.language]);
 
   return (

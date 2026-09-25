@@ -124,6 +124,8 @@ Two concrete instances of that (observed 2026-07-23):
   attempt raced too: a second run had snapshotted a since-deleted variable and re-deployed
   it. After any config-affecting deploy, verify the SERVED revision's actual env
   (`gcloud run services describe … | jq .spec.template…env`), never just the run's color.
+- **An image-only service update does not pick up a new required env var, and the health gate stops blocking once that image is current.** Observed (#1464 review, 2026-09-24): world stopped falling back to `SESSION_SECRET` and exits unless `ZONE_TICKET_SECRET` is set. `deploy.yml` rebuilds the zone host when `WORLD_INPUTS` change (`apps/world`, `packages/zone-core`, `packages/contract`, `package.json`, `package-lock.json`) and runs `gcloud run services update --image` only. At review time `infra/deploy-world.sh` still mapped `SESSION_SECRET`, so the roll kept that map and the container never listens. The health check `exit 1`s, before app promotion, only while `NEEDS_BUILD` is true. The update already happened, so a re-run of that SHA sees the image match, treats the dead host as pre-existing, and only warns. Later app promotions proceed with the zone host down. #1473 rewrote the script to `ZONE_TICKET_SECRET`; `--image` still does not apply it. `deploy-world.sh` `--set-secrets` replaces the whole set, so a hand run drops a secret someone added with `--update-secrets`. When a PR removes a secret fallback, grep the workflow path list and the deploy script for an image-only update, and require the new variable on the live service before merge. A PR note that says "do not deploy this service yet" is not a gate.
+- **A new HMAC key with a fallback and no previous-key verify is a no-op until set, and a break the moment it is a fresh value.** Observed (#1464): zone tickets accept `prevTicketSecret`; `zonePlayerTag` and unsubscribe tokens do not. Seats and mailed links were signed with `SESSION_SECRET`. Setting `ZONE_PLAYER_SECRET` or `UNSUBSCRIBE_SECRET` to a newly generated key orphans seats after the ticket TTL and rejects every existing unsubscribe link. The first value has to be a copy of the key those tokens were signed with. Scope prefixes still separate token types for as long as the fallback shares one secret.
 - **An agent will put literal placeholder values into live config.** Observed:
   `BETA_ALLOWED_EMAILS=your.email@gmail.com` set as a real repo variable — a registrable
   Gmail address, i.e. a live allowlist hole. Grep agent-set config for placeholder shapes
@@ -285,6 +287,37 @@ Two concrete instances of that (observed 2026-07-23):
   deserves the same scrutiny as the source change. For agent-facing surfaces
   specifically, check that any replacement error still tells the agent what to do next;
   a status code is not an instruction.
+- **A filter inserted in front of a symlink or delete check is untested if the old test is renamed onto an input that still reaches the old branch.** Observed
+  (#1469 review, 2026-09-24): `scanGame` started `continue`ing undeliverable paths before the
+  "record a symlink, never follow it" arm. The existing test renamed `leak` to `leak.ts` so
+  the symlink stayed deliverable and the assertion still passed. That stays green if the new
+  branch follows or deletes a `NOTATKI.md` symlink, or writes `images/hero.png` through a
+  directory symlink on pull. Probe the skipped input itself: a not-game file symlink, a
+  directory symlink that is the parent of a deliverable platform path, ordinary pull and
+  `--force`. On that commit both were safe (force unlinks the directory symlink and writes
+  inside the checkout; a not-game file symlink is not read and survives pull). The renamed
+  test does not lock that in. The follow-up commit added those probes; the lesson is the
+  renamed test.
+- **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
+  treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
+  is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new
+  module and sealing `comment-prose-baseline.json` at that word count made the gate agree
+  to the move. The follow-up commit dropped that entry. Rewrite to `//` one-liners; do not
+  copy the old file's debt onto a new path. Shrinking the old files' baselines is the part
+  that should land. Module size is a different rule: `baselineLinesFor` gives a missing key
+  the 500-line hard cap, and a new entry above 500 is the bypass. An entry at or under 500
+  does not grandfather a new file.
+- **An allowlist moved into `@gamedevpl/contract` is not the only copy, and a backstop on the normalized path is not the raw check.** CI lockstep diffs
+  `DELIVERY_FIXED_FILES` against games-repo `delivery-contract.json`. It does not compile
+  Studio's `apps/web/src/surfaces/studio/codeSurfacePaths.ts`. The first #1469 revision left
+  that file as a hand twin. The merge commit imported the shared list and calls
+  `deliveryPathRefusal` after its own allowlist. That did not unify the predicates. Rasters
+  stay refused in Studio on purpose (the surface is text-only). `/abs.ts` is still accepted
+  there: `normalizeSourcePath` strips the leading slash, the local `startsWith('/')` check
+  is then dead, and the shared refusal sees `abs.ts`, a legal module.
+  `codeSurfacePaths.contract.test.ts` samples omit a leading slash, so "never accepts a
+  path the API would refuse" stays green. Call the shared refusal on the raw path, or put
+  `/abs.ts` in that sample list.
 - **A green games-repo `check:game` does not prove a puzzle's obstacles obstruct.** Observed
   (echo-loop / www.gamedev.pl-games#699, 2026-08-12): TRACE, ACCEPTANCE, agency `--strict`,
   and a scripted capture were green while hold-right + one jump cleared plate/door rooms

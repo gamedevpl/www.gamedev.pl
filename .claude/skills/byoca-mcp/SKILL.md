@@ -81,6 +81,10 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    - Each stage may also publish a **live preview** of the buffer — see below
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
+   - Platform-managed rounds may start one automatic repair session after a red preview
+     or publish gate. It receives the failed version and gate report, reads the delivered
+     sources, and submits again. The durable claim is tied to the latest version and round
+     generation. Self-build rounds are never dispatched this way.
    - **`preview_failed` / `red`:** do **not** stop at `stage_source_file` / `show_round`.
      Honour `warnings.code=must_fix_gate`, fix, then `submit_sources` again on the same
      key. Staging alone leaves the creator card on the refused delivery.

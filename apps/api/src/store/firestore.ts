@@ -95,6 +95,7 @@ import { FirestoreModerationFlagStore } from './slices/moderation-flags.js';
 import type { ModerationFlag } from './records/moderation-flag.js';
 import type {
   RaiseModerationFlagInput,
+  RaisedModerationFlag,
   ResolveModerationFlagInput,
   ResolveModerationFlagResult,
 } from './slices/moderation-flags.js';
@@ -468,6 +469,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   async getSubmission(jobId: number): Promise<SubmissionRecord | null> {
     return this.submissionStore.getSubmission(jobId);
   }
+  override async setSubmissionTitle(jobId: number, title: string): Promise<void> {
+    await this.submissionStore.setSubmissionTitle(jobId, title);
+  }
 
   async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
     await this.submissionStore.setSubmissionNotifiedStatus(jobId, status);
@@ -476,12 +480,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
     await this.submissionStore.setSubmissionLastStatus(jobId, status);
-    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     const moved = await this.dispatchStore.recordJobTransition(jobId, transition, guard);
-    if (moved) await this.shelfMirror.afterJobWrite(jobId);
     return moved;
   }
 
@@ -569,15 +571,15 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
   }
-
+  async claimGateRepair(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+    return this.roundBudgetStore.claimGateRepair(jobId, version, at, roundGeneration);
+  }
   async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at, roundGeneration);
   }
-
   async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
     return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
   }
-
   async allocateJobId(): Promise<number> {
     return this.dispatchStore.allocateJobId();
   }
@@ -668,7 +670,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
     await this.submissionStore.setSubmissionAbandoned(jobId, at);
-    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
@@ -1336,7 +1337,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.socialStore.countPlayerFeedback(slug);
   }
 
-  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<RaisedModerationFlag> {
     return this.moderationFlagStore.raiseModerationFlag(input);
   }
 

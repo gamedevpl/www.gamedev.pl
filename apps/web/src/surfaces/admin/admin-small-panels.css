@@ -41,7 +41,17 @@
   min-width: min(100%, 24rem);
   flex: 1;
   font: inherit;
-  padding: 0.3rem 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  color: inherit;
+}
+
+.admin-beta-invite-created input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
 }
 
 .admin-waitlist-actions {
@@ -94,6 +104,7 @@
 }
 
 .admin-limits-cap input,
+.admin-limits-cap select,
 .admin-tokens-form input {
   font: inherit;
   font-size: 0.85rem;
@@ -103,6 +114,23 @@
   border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
   background: transparent;
   color: inherit;
+}
+
+.admin-limits-cap select {
+  background-color: var(--color-bg, #0d1117);
+}
+
+.admin-limits-cap input:focus,
+.admin-limits-cap select:focus,
+.admin-tokens-form input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
+}
+
+.admin-limits-cap input[type='text'],
+.admin-tokens-form input[type='email'] {
+  width: min(22rem, 100%);
 }
 
 .admin-limits-message {
@@ -234,6 +262,11 @@
   font-weight: 700;
 }
 
+.admin-moderation-source {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .admin-moderation-when {
   color: var(--muted);
   font-size: 0.8rem;
@@ -260,6 +293,12 @@
   border-radius: 10px;
   padding: 0.45rem 0.6rem;
   min-height: 40px;
+}
+
+.admin-moderation-resolution:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
 }
 
 .admin-moderation-dismiss,

@@ -40,6 +40,7 @@ export {
 export { CONNECT_CLIENTS, type ConnectClient, type InstallSnippets } from './connect-client.js';
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
+export * from './delivery-paths.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
 export type { GameHealth } from './game-health.js';
 export type { GameProject } from './game-project.js';
@@ -99,10 +100,12 @@ export {
 export {
   MODERATION_FLAG_ACTIONS,
   MODERATION_FLAG_REASONS,
+  MODERATION_FLAG_SOURCES,
   MODERATION_FLAG_STATUSES,
   isModerationFlagReason,
   type ModerationFlagAction,
   type ModerationFlagReason,
+  type ModerationFlagSource,
   type ModerationFlagStatus,
 } from './moderation-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';

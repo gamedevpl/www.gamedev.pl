@@ -2046,6 +2046,14 @@ body.player-open {
   min-width: 240px;
   padding: 8px;
   border-radius: 12px;
+  /* The report/feedback forms open inline below their row and can run taller than
+     the panel itself. Scroll rather than let the submit button fall off-screen —
+     the page behind stays locked while the player is open, so it has no other way
+     back into view. Bar height below matches theater-camera-indicator's offset. */
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 58px - 8px - 12px);
+  overflow-y: auto;
+  /* Padding and border count against max-height; the extra 8px is `top`'s gap. */
+  box-sizing: border-box;
   /* Near-opaque so menu rows stay readable over bright game pixels underneath. */
   background: rgba(16, 22, 28, 0.98);
   -webkit-backdrop-filter: blur(16px);
@@ -2166,7 +2174,8 @@ body.player-open {
   padding-inline: 10px;
 }
 
-.feedback-popover {
+.feedback-popover,
+.report-popover {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -2205,6 +2214,41 @@ body.player-open {
   gap: 6px;
   color: var(--accent-blue);
   margin: 0;
+}
+
+/* The in-app report control shares the feedback popover's layout and inputs. */
+.report-widget {
+  position: relative;
+}
+
+/* Inside the scrolling More panel the forms join the flow instead of floating:
+   an absolute 320px popover in a 240px scroller overflows on the start side,
+   which can never be scrolled to, so its left edge was simply clipped. */
+.theater-more-panel .feedback-popover,
+.theater-more-panel .report-popover {
+  position: static;
+  width: auto;
+  margin-top: 8px;
+}
+
+.theater-more-panel .report-widget,
+.theater-more-panel .report-btn {
+  width: 100%;
+}
+
+.report-reason-label {
+  font-size: 0.85rem;
+  color: var(--text-muted, inherit);
+}
+
+.report-reason-select {
+  width: 100%;
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
 }
 
 /* Immersive fullscreen: the bar is gone; one floating control exits it. */
@@ -2479,6 +2523,7 @@ body.player-open {
     right: calc(-1 * (44px + 6px));
     min-width: 240px;
     max-width: min(300px, calc(100vw - 24px));
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 57px - 8px - 12px);
   }
 
   /* Labels stay visible inside the open menu — icon-only there is opaque. */
@@ -2508,6 +2553,12 @@ body.player-open {
   .game-theater-actions > .report-btn {
     min-height: 36px;
     padding: 7px 9px;
+  }
+
+  /* Shortest viewport of the three: the report/feedback form is likelier here to
+     run past the bottom, especially with an on-screen keyboard shrinking it further. */
+  .theater-more-panel {
+    max-height: calc(100dvh - max(4px, env(safe-area-inset-top)) - 45px - 8px - 8px);
   }
 }
 
@@ -4983,6 +5034,66 @@ button.builder-mode-selector:disabled {
 
 .qa-review-edit:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+/* Submitting state feedback: while the submission is in flight (10+ seconds for
+   name reservation, brief assembly and agent environment setup), keep the creator
+   informed with clear progress phases and an active progress bar. */
+.qa-submitting-card {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  background: var(--panel, #171c20);
+  border: 1px solid var(--turquoise, #00e4ac);
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 228, 172, 0.12);
+  animation: fadeIn 0.25s ease-out;
+}
+
+.qa-submitting-card__top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.qa-submitting-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.qa-submitting-card__title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+  transition: opacity 0.2s ease;
+}
+
+.qa-submitting-card__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+}
+
+.qa-submitting-card__progress-bar {
+  margin-top: 14px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.qa-submitting-card__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00e4ac 0%, #00b887 100%);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(0, 228, 172, 0.4);
+}
+
+.qa-review.is-submitting {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
 }
 
 /* Kept beside the rule it overrides rather than with the other mobile input
@@ -8556,6 +8667,12 @@ body.remix-entry-open {
   background: rgba(0, 0, 0, 0.25);
   color: inherit;
   font: inherit;
+}
+
+.creator-profile-input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
 }
 
 .creator-profile-bio-input {

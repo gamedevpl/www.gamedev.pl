@@ -94,9 +94,7 @@ export class InvalidRoomTokenError extends Error {
 }
 
 /**
- * Room tokens are HMACs over the room code + expiry, scoped so a room token can
- * never be mistaken for (or forged from) a session cookie even though both are
- * keyed off SESSION_SECRET.
+ * Room tokens are HMACs over the room code and expiry, using a room key.
  */
 function signRoom(code: string, expiresAt: number, secret: string, role: 'host' | 'guest'): string {
   return createHmac('sha256', secret).update(`mp-room-v1:${role}:${code}:${expiresAt}`).digest('hex');
@@ -224,7 +222,7 @@ const ClientFrameSchema = z.discriminatedUnion('t', [
 ]);
 
 export interface RoomRegistryOptions {
-  /** Secret used to sign room tokens. Defaults to SESSION_SECRET (dev fallback in non-prod). */
+  /** Secret used to sign room tokens; defaults to the configured environment key. */
   secret?: string;
   now?: () => number;
 }
@@ -248,9 +246,9 @@ export class RoomRegistry {
   private now: () => number;
 
   constructor(options: RoomRegistryOptions = {}) {
-    const secret = options.secret ?? process.env.SESSION_SECRET;
+    const secret = options.secret ?? process.env.MP_ROOM_SECRET ?? process.env.SESSION_SECRET;
     if (!secret && process.env.NODE_ENV === 'production') {
-      throw new Error('SESSION_SECRET is required to sign room tokens in production');
+      throw new Error('MP_ROOM_SECRET or SESSION_SECRET is required to sign room tokens in production');
     }
     this.secret = secret ?? 'dev-session-secret-change-me';
     this.now = options.now ?? (() => Date.now());

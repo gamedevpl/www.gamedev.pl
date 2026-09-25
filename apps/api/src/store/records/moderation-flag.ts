@@ -1,15 +1,15 @@
 import type {
-  AssessmentSource,
   ModerationFlagAction,
   ModerationFlagReason,
+  ModerationFlagSource,
   ModerationFlagStatus,
 } from '@gamedevpl/contract';
 
-// A reviewer reporting content, kept apart from the quality verdict.
+// A reviewer or player report, kept apart from the quality verdict.
 export interface ModerationFlag {
   id: string;
   slug: string;
-  source: AssessmentSource;
+  source: ModerationFlagSource;
   reason: ModerationFlagReason;
   note: string;
   raisedByUid: string;

@@ -5,8 +5,8 @@ import { SIM_GLOBAL_NAME, type SimSource } from '@gamedevpl/zone-core';
  * Where the host gets a game's simulation.
  *
  * It bundles `games/<slug>/sim.ts` out of the games repo at the published ref, together
- * with `shared/sim-math.ts` from that same ref. Both from one ref on purpose: the shim
- * and the sim have to be the pair CI proved, and reading them from different commits is
+ * with pure `shared/sim/` modules and `shared/sim-math.ts` at one ref. The shim
+ * and sim must be the pair CI proved; reading them from different commits is
  * the one way to get a portable-`Math` bug back after it was fixed.
  *
  * **Server-runnability stays derived.** The host does not read a manifest field that
@@ -16,8 +16,8 @@ import { SIM_GLOBAL_NAME, type SimSource } from '@gamedevpl/zone-core';
  * of games in it.
  *
  * The module graph is checked rather than trusted, and the check falls out of the
- * resolver rather than being a separate pass: nothing outside `games/<slug>/` resolves at
- * all. A sim that imported its own render code would drag a canvas into a realm that has
+ * resolver rather than being a separate pass: only `games/<slug>/` and `shared/sim/`
+ * resolve. A sim that imported its own render code would drag a canvas into a realm that has
  * no DOM, and would fail on load rather than three ticks into somebody's evening.
  */
 
@@ -90,8 +90,8 @@ export function createGithubSimSource(options: GithubSimSourceOptions): SimSourc
           setup(builder) {
             builder.onResolve({ filter: /^\./ }, (args) => {
               const resolved = resolveSimPath(args.resolveDir, args.path);
-              if (!resolved || !resolved.startsWith(`/${gameRoot}/`)) {
-                return { errors: [{ text: `${gameRoot}/sim.ts may only import from inside ${gameRoot}` }] };
+              if (!resolved || (!resolved.startsWith(`/${gameRoot}/`) && !resolved.startsWith('/shared/sim/'))) {
+                return { errors: [{ text: `${gameRoot}/sim.ts may only import from ${gameRoot} or shared/sim` }] };
               }
               return { path: resolved, namespace: 'games-repo-sim' };
             });

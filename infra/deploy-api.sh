@@ -103,6 +103,13 @@
 #                              (override the Discovery Engine resource path; each has a
 #                               working default in knowledge-search.ts and is normally
 #                               left unset)
+#   IOS_TEAM_ID / IOS_BUNDLE_ID / ANDROID_PACKAGE_NAME /
+#   ANDROID_SHA256_CERT_FINGERPRINTS=...
+#                              (native app identity baked into the universal-link /
+#                               app-link association files at build time — see
+#                               apps/web/scripts/generate-app-links.mjs. Unset means the
+#                               files ship with obviously-non-matching placeholders, the
+#                               correct default before the native app exists.)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -184,6 +191,12 @@ ZONE_HOST_URL="${ZONE_HOST_URL:-}"
 # Party relay split (apps/api/src/mp-relay.ts). Empty = the relay runs in this process,
 # which is what local dev, the tests and today's production all do.
 MP_RELAY_URL="${MP_RELAY_URL:-}"
+# Native app identity for the universal-link / app-link association files. Build-time
+# only — the API never reads these at runtime. Empty is correct until the app ships.
+IOS_TEAM_ID="${IOS_TEAM_ID:-}"
+IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-}"
+ANDROID_PACKAGE_NAME="${ANDROID_PACKAGE_NAME:-}"
+ANDROID_SHA256_CERT_FINGERPRINTS="${ANDROID_SHA256_CERT_FINGERPRINTS:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -206,8 +219,10 @@ echo "==> Building image via Cloud Build: ${IMAGE}"
 # inlined into the bundle at build time, so a service that knows about the relay while its
 # bundle does not is the worst of both: room creation forwards correctly and every client
 # then dials an origin that no longer serves /api/mp/ws.
+# ANDROID_SHA256_CERT_FINGERPRINTS may itself contain commas (it is a comma-joined
+# list), so it uses "^;^" to pick a substitutions delimiter that value cannot contain.
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID},_APPLE_SERVICES_ID=${APPLE_SERVICES_ID},_MP_RELAY_URL=${MP_RELAY_URL}" \
+  --substitutions "^;^_IMAGE=${IMAGE};_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID};_APPLE_SERVICES_ID=${APPLE_SERVICES_ID};_MP_RELAY_URL=${MP_RELAY_URL};_IOS_TEAM_ID=${IOS_TEAM_ID};_IOS_BUNDLE_ID=${IOS_BUNDLE_ID};_ANDROID_PACKAGE_NAME=${ANDROID_PACKAGE_NAME};_ANDROID_SHA256_CERT_FINGERPRINTS=${ANDROID_SHA256_CERT_FINGERPRINTS}" \
   --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets
@@ -289,6 +304,13 @@ if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
 fi
+for mapping in "MP_ROOM_SECRET=mp-room-secret:latest" "UNSUBSCRIBE_SECRET=unsubscribe-secret:latest" "ZONE_PLAYER_SECRET=zone-player-secret:latest" "ZONE_TICKET_SECRET=zone-ticket-secret:latest"; do
+  secret="${mapping#*=}"
+  secret="${secret%:latest}"
+  if gcloud secrets describe "$secret" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    SECRET_MAPPINGS+=("$mapping")
+  fi
+done
 
 # Resend API key for outbound email (beta invites now; notifications later). The
 # mailer degrades to a no-op console logger when absent, so email is simply off

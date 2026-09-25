@@ -1,18 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import {
-  clearInstallPrompt,
-  dismissInstall,
-  installDismissedAt,
-  isIosInstallCandidate,
-  isStandalone,
-  pendingInstallPrompt,
-  shouldOfferInstall,
-  subscribeInstallPrompt,
-  visitCount,
-  type BeforeInstallPromptEvent,
-} from './pwa.js';
+import { platform } from './platform/index.js';
+import type { BeforeInstallPromptEvent } from './platform/types.js';
 
 /**
  * The offer to install the app (mobile-app-plan.md M1 (private www.gamedev.pl-ops repo)).
@@ -34,23 +24,23 @@ export function InstallPrompt() {
   const [closed, setClosed] = useState(false);
 
   useEffect(() => {
-    const eligible = shouldOfferInstall({
-      visits: visitCount(),
-      dismissedAt: installDismissedAt(),
+    const eligible = platform.install.shouldOffer({
+      visits: platform.install.visitCount(),
+      dismissedAt: platform.install.installDismissedAt(),
       now: Date.now(),
-      standalone: isStandalone(),
+      standalone: platform.install.isStandalone(),
     });
     if (!eligible) return;
 
-    if (isIosInstallCandidate(navigator.userAgent, navigator.maxTouchPoints)) {
+    if (platform.install.isIosInstallCandidate()) {
       setShowIosHint(true);
       return;
     }
 
     // Whatever `main.tsx` already caught, plus anything Chrome offers later — it can
     // withhold the event on this load and produce it on the next one.
-    setPrompt(pendingInstallPrompt());
-    return subscribeInstallPrompt(setPrompt);
+    setPrompt(platform.install.pending());
+    return platform.install.subscribe(setPrompt);
   }, []);
 
   if (closed) return null;
@@ -58,7 +48,7 @@ export function InstallPrompt() {
 
   function close() {
     setClosed(true);
-    dismissInstall();
+    platform.install.dismiss();
   }
 
   async function install() {
@@ -67,11 +57,11 @@ export function InstallPrompt() {
     // and the banner goes regardless of what they choose.
     await prompt.prompt();
     const { outcome } = await prompt.userChoice;
-    clearInstallPrompt();
+    platform.install.clear();
     setClosed(true);
     // Saying no here is a dismissal and should hold for the same month. Saying yes needs
     // no record: the app is installed, and `isStandalone()` will answer for it forever.
-    if (outcome === 'dismissed') dismissInstall();
+    if (outcome === 'dismissed') platform.install.dismiss();
   }
 
   return (

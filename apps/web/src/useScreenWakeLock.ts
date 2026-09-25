@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
-
-type WakeLockSentinel = { release: () => Promise<void> };
-type WakeLockNavigator = Navigator & { wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinel> } };
+import { platform } from './platform/index.js';
+import type { WakeLockHandle } from './platform/types.js';
 
 /**
  * Holds a screen wake lock while `active`, so a phone doesn't dim and sleep mid-game.
@@ -13,24 +12,20 @@ type WakeLockNavigator = Navigator & { wakeLock?: { request: (type: 'screen') =>
  */
 export function useScreenWakeLock(active: boolean) {
   useEffect(() => {
-    if (!active) return;
-    const wakeLock = (navigator as WakeLockNavigator).wakeLock;
-    if (!wakeLock) return;
+    if (!active || !platform.wakeLock.supported()) return;
 
-    let sentinel: WakeLockSentinel | null = null;
+    let sentinel: WakeLockHandle | null = null;
     let released = false;
 
     const acquire = () => {
       // Requesting while hidden always rejects; visibilitychange brings us back.
       if (released || sentinel || document.visibilityState !== 'visible') return;
-      void wakeLock
-        .request('screen')
-        .then((lock) => {
-          // The effect may have been torn down while the request was in flight.
-          if (released) return void lock.release().catch(() => undefined);
-          sentinel = lock;
-        })
-        .catch(() => undefined);
+      void platform.wakeLock.request().then((lock) => {
+        if (!lock) return;
+        // The effect may have been torn down while the request was in flight.
+        if (released) return void lock.release().catch(() => undefined);
+        sentinel = lock;
+      });
     };
 
     const onVisibility = () => {

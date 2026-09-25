@@ -6,11 +6,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { createInterface } from 'node:readline';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
-import { CREATOR_TOKEN_PATTERN, childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
+import { CREATOR_TOKEN_PATTERN, childEnv } from './delegate.js';
+import { runHeadlessAgent, type AdapterRun } from './headless-agent.js';
+import { createEventRenderer } from './agent-render.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { studioToken } from './studio.js';
 import { adapterMcpSupported } from './agents.js';
@@ -26,32 +27,9 @@ export type ConnectPayload = {
   slug?: string;
 };
 
-export type AdapterRun = (input: {
-  spec: AdapterSpec;
-  prompt: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  abort?: AbortSignal;
-  onLine?: (line: string) => void;
-  authCheck?: Promise<void>;
-}) => Promise<{ code: number | null; lines: string[] }>;
+export type { AdapterRun } from './headless-agent.js';
 
-async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null; lines: string[] }> {
-  const child = await spawnAdapter({ ...input, timeoutMs: 10 * 60_000 });
-  const lines: string[] = [];
-  for (const stream of [child.stdout, child.stderr]) {
-    if (stream)
-      createInterface({ input: stream }).on('line', (line: string) => {
-        if (input.onLine) input.onLine(line);
-        else lines.push(line);
-      });
-  }
-  const code = await new Promise<number | null>((resolve, reject) => {
-    child.once('error', reject);
-    child.once('close', (value) => resolve(value));
-  });
-  return { code, lines };
-}
+const defaultAdapterRun: AdapterRun = (input) => runHeadlessAgent({ ...input, timeoutMs: 10 * 60_000 });
 
 function authorizationValue(header: string): string {
   return header.replace(/^Authorization:\s*/i, '');
@@ -303,7 +281,7 @@ export async function connectGame(input: {
     await authCheck;
     input.telemetry?.record('delegate_used', { adapter: spec.name });
     const failure = trackAgentFailure(spec.name);
-    const render = createDelegateStream(spec.name);
+    const render = createEventRenderer(spec.name);
     const prompt =
       payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`;
     if (spec.name === 'codex' && input.interactiveRun) {
@@ -333,12 +311,14 @@ export async function connectGame(input: {
       authCheck,
       abort: input.abort,
       onLine: (line) => {
-        failure.observe(line);
-        for (const shown of render(line)) input.write(shown);
+        for (const shown of render.line(line)) input.write(shown);
+      },
+      onEvent: (event) => {
+        failure.observe(event);
+        for (const shown of render.event(event)) input.write(shown);
       },
     });
-    for (const line of result.lines) failure.observe(line);
-    for (const raw of result.lines) for (const line of render(raw)) input.write(line);
+    for (const shown of render.flush()) input.write(shown);
     if (input.abort?.aborted) {
       throw new CliError(
         `${spec.name} stopped — files remain at ${cwd}`,

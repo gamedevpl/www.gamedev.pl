@@ -40,6 +40,12 @@
   font: inherit;
 }
 
+.editor-collection-selector select:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
+}
+
 .editor-count {
   font-family: ui-monospace, monospace;
   font-size: 0.68rem;
@@ -193,6 +199,13 @@
   padding: 7px 10px;
   font-size: 0.85rem;
   color: var(--text);
+}
+
+.editor-prop input:focus,
+.editor-prop select:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
 }
 
 .editor-prop.is-invalid input,

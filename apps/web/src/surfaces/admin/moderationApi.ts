@@ -4,7 +4,7 @@ const API_BASE = '';
 export interface ModerationFlagRow {
   id: string;
   slug: string;
-  source: 'catalog' | 'creator';
+  source: 'catalog' | 'creator' | 'player';
   reason: string;
   note: string;
   raisedByUid: string;

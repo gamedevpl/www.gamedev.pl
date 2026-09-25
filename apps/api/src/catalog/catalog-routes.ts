@@ -49,6 +49,8 @@ export interface CatalogRoutesHandle {
   // Fails rather than serving a stale snapshot: migration coverage cannot guess.
   readCatalogFresh(): Promise<CatalogGameEntry[]>;
   isSlugPublished(slug: string): Promise<boolean>;
+  // Repo catalog OR store publication — the answer /play itself acts on.
+  isSlugPublishedAnyLane(slug: string): Promise<boolean>;
   getPublishedCatalogEntry(slug: string): Promise<CatalogGameEntry | null>;
   readSnapshotGame(slug: string): Promise<PublishedGame | null>;
   storePublishedGame(slug: string): Promise<PublishedGame | null>;
@@ -195,6 +197,24 @@ export async function registerCatalogRoutes(
     if (!githubClient) return null;
     const entries = await getCatalogEntries();
     return entries.find((entry) => entry.slug === slug && isPublishedEntry(entry)) ?? null;
+  }
+
+  // Mirrors createCombinedPublishedSlugGate, which is env-built; see published-slugs.ts.
+  async function isSlugPublishedAnyLane(slug: string): Promise<boolean> {
+    // Store first, as /play does, so repo stalls cannot delay it.
+    if (store) {
+      try {
+        if (isPublished(await store.getPublication(slug))) return true;
+      } catch {
+        // A transient store failure must not turn a report into a 500.
+      }
+    }
+    try {
+      return await isSlugPublished(slug);
+    } catch {
+      // A repo-lane outage fails closed rather than into a 500.
+      return false;
+    }
   }
 
   async function storePublishedGame(slug: string): Promise<PublishedGame | null> {
@@ -503,6 +523,7 @@ export async function registerCatalogRoutes(
     getCatalogEntries,
     readCatalogFresh,
     isSlugPublished,
+    isSlugPublishedAnyLane,
     getPublishedCatalogEntry,
     readSnapshotGame,
     storePublishedGame,

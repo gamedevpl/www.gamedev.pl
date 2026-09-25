@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { createApi } from './api.js';
 import { loadAdapters } from './adapters.js';
 import { writeBase, writeGameFiles } from './checkout.js';
-import { parseEventLine } from './delegate.js';
 import { memoryStore } from './keychain.js';
 import { handleReplLine } from './repl.js';
 import {
@@ -93,7 +92,7 @@ describe('workshopTurn', () => {
     const runAdapter: AdapterRun = async (input) => {
       calls.push(input);
       writeFileSync(join(input.cwd, 'game.ts'), 'B');
-      input.onLine?.('{"type":"assistant","message":{"content":[{"type":"text","text":"Made the jump floatier."}]}}');
+      input.onEvent?.({ type: 'message', text: 'Made the jump floatier.' });
       return { code: 0 };
     };
     const ok = await workshopTurn({
@@ -234,22 +233,6 @@ describe('the REPL inside a checkout', () => {
     expect(lines.join('\n')).toContain('▸ build 7 — Floatier jump.');
   });
 
-  it('/delegate refuses while the platform owns the round', async () => {
-    const root = checkout();
-    const lines: string[] = [];
-    let spawned = 0;
-    const ws = workshop(root, { builder: 'platform', runAdapter: async () => ((spawned += 1), { code: 0 }) });
-    await handleReplLine({
-      line: '/delegate tweak',
-      api: platform([]),
-      token: 'tok',
-      workshop: ws,
-      write: (s) => lines.push(s),
-    });
-    expect(spawned).toBe(0);
-    expect(lines.join('\n')).toContain('/builder self');
-  });
-
   it('does not spawn on a checkout the platform has moved past', async () => {
     const root = checkout();
     const lines: string[] = [];
@@ -273,18 +256,6 @@ describe('the REPL inside a checkout', () => {
     await handleReplLine({ line: '/builder self', api, token: 'tok', workshop: ws, write: (s) => lines.push(s) });
     expect(ws.builder).toBe('platform');
     expect(lines.join('\n')).toContain('handoff pending');
-  });
-
-  it('/builder alone re-reads who owns the round', async () => {
-    const root = checkout();
-    const lines: string[] = [];
-    const api = platform([], (path) =>
-      path.endsWith('/api/submissions/tok') ? json({ status: 'needs_changes', builder: 'platform' }) : null,
-    );
-    const ws = workshop(root);
-    await handleReplLine({ line: '/builder', api, token: 'tok', workshop: ws, write: (s) => lines.push(s) });
-    expect(ws.builder).toBe('platform');
-    expect(lines.join('\n')).toContain('builder platform');
   });
 
   it('unattended, several agents mean the first one whatever --submit says', async () => {
@@ -358,7 +329,7 @@ describe('the REPL inside a checkout', () => {
       workshop: ws,
       write: (s) => lines.push(s),
     });
-    expect(lines.join('\n')).toContain('builder self');
+    expect(lines.join('\n')).toContain('builder is already self');
     await handleReplLine({
       line: '/builder platform',
       api: platform(seen),
@@ -468,29 +439,5 @@ describe('opening a checkout', () => {
       write: () => undefined,
     });
     expect(published).toBe('platform');
-  });
-});
-
-describe('parseEventLine', () => {
-  it('shows the words from claude, codex and plain text events', () => {
-    expect(
-      parseEventLine(
-        '{"type":"assistant","message":{"content":[{"type":"text","text":"hi"},{"type":"tool_use","name":"Edit"}]}}',
-      ),
-    ).toBe('hi ⚙ Edit');
-    expect(parseEventLine('{"type":"item.completed","item":{"type":"agent_message","text":"done"}}')).toBe('done');
-    expect(parseEventLine('{"type":"item.completed","item":{"type":"command_execution","command":"npm test"}}')).toBe(
-      '⚙ npm test',
-    );
-    expect(parseEventLine('{"type":"result","result":"all good"}')).toBe('all good');
-    expect(parseEventLine('{"text":"plain"}')).toBe('plain');
-  });
-
-  it('hides bookkeeping events and non-JSON noise', () => {
-    expect(parseEventLine('{"type":"system","subtype":"init"}')).toBeNull();
-    expect(parseEventLine('{"type":"thread.started","thread_id":"t"}')).toBeNull();
-    expect(parseEventLine('{"type":"user","message":{"content":[{"type":"tool_result"}]}}')).toBeNull();
-    expect(parseEventLine('not json')).toBe('not json');
-    expect(parseEventLine('')).toBeNull();
   });
 });

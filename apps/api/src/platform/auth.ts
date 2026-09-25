@@ -232,6 +232,7 @@ export interface AuthPluginOptions {
   store: Store;
   sessionSecret?: string;
   sessionSecretPrev?: string;
+  enabled?: boolean;
   googleClientId?: string;
   googleAuthVerifier?: GoogleAuthVerifier;
   /**
@@ -337,6 +338,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   if (!sessionSecret && isProd) {
     throw new Error('SESSION_SECRET is required to sign sessions in production');
   }
+  if (options.enabled === false) return;
   const effectiveSessionSecret = sessionSecret ?? 'dev-session-secret-change-me';
   const adminUids = options.adminUids;
   const reviewerUids = options.reviewerUids;

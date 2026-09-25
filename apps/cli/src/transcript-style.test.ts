@@ -18,6 +18,8 @@ it('marks failures and reported agent blockers red', () => {
     'Browser could not open. Copy the Play session URL above.',
     'sign-in failed — run `gamedevpl login` again',
     'delivery refused: moderation',
+    "path not deliverable: NOTATKI.md. Deliver only your own game's files (SPEC.md, GAME.json).",
+    'illegal path: ../x',
     'Interactive Antigravity stopped without success. Edits remain local; /diff to inspect.',
     'Muse stopped — files remain at /tmp/work',
     'sources accepted but the gate did not start — a preview is not assembling',

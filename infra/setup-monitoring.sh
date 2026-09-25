@@ -834,9 +834,16 @@ EOF
 # burst, so this takes a floor of 10/s instead: ~15x the observed max, ~22x p95, and still
 # far enough below a runaway to catch one within ten minutes.
 #
-# The window was mostly a weekend (Sep 5 was a Saturday) and covers only two days.
-# Recheck after a full working week -- if weekday peaks land materially above 0.662/s,
-# the floor of 10 is what absorbs it, but the p95 line should be re-read.
+# RECHECKED 2026-09-24 against a full working week, same shape:
+#   Sep 15 00:00 - Sep 20 00:00 UTC (Tue-Sat), 720 windows:
+#     max 0.29/s (Sep 16 20:40 UTC, CREATE 0.08 + UPDATE 0.21), p95 0.07/s, median 0.01/s
+#   Sep 20 00:00 - Sep 24 00:00 UTC (after #1416), 576 windows:
+#     max 0.45/s, p95 0.05/s, median 0.01/s
+# Weekday writes came in *below* the first window, not above it: 3x the max is ~1.4/s, so
+# the 10/s floor still governs and the threshold is unchanged. A29 has never fired. The
+# floor is now ~20x the busiest window in any of the three measurements, which is the
+# margin it was chosen for; if it ever needs revisiting it is downward, and only with a
+# window that includes a real creation burst.
 cat > "${POLICY_DIR}/a29.json" <<EOF
 {
   "displayName": "A29 Firestore write rate",
@@ -892,27 +899,44 @@ EOF
 # rather than the intended steady state.
 #
 # Two conditions, because reads fail in two shapes and one threshold cannot see both:
-#   spike -- 20/s over ten minutes, ~3.3x the measured max, a pace of ~1.7M/day. This is
-#   the crawler or the runaway loop, and it is what a ten-minute window is good at.
-#   drift -- 8/s over three hours, a pace of ~690K/day. The 2026-09 incident averaged
-#   ~9.3/s across whole days and would never have tripped any ten-minute spike threshold
-#   set high enough not to false-alarm; it needs a lower bar held for longer. Steady state
-#   has ~2x headroom under it, and the pre-fix mornings that would have tripped it were
-#   the bug it is meant to catch.
+# a spike over ten minutes (the crawler or the runaway loop) and drift held for three
+# hours (the 2026-09 incident averaged ~9.3/s across whole days and would never have
+# tripped a ten-minute threshold set high enough not to false-alarm).
 #
-# The window is one weekday afternoon and it does not include a morning peak. Re-read both
-# thresholds against a full working week -- the same 2026-09-15 checkpoint as A29.
+# RECALIBRATED 2026-09-24 -- the numbers above are the Sep 8 derivation, kept as history.
+# The badge-polling fix did take the flat floor out: hourly minimums fell from ~12.5K
+# reads/h to ~3.2K/h at ~10:00 UTC on Sep 13. What it did not do was bring the week down
+# to the floor, and the recipe's own rule applies to that -- when a week comes back near
+# the old numbers, find the fan-out instead of fitting a threshold to it.
 #
-# THAT BADGE-POLLING FLOOR IS NOW FIXED (see ops repo docs/firestore-read-cost.md): /api/review/status
-# and /api/notifications read once per window instead of once per poll, which by the read
-# counts each route was issuing should take the QUERY component down by roughly an order of
-# magnitude and the total well under 1/s. Both thresholds here are therefore calibrated
-# against a floor that no longer exists, and both are now much too high to catch a
-# regression the size of the one they were written for. Do not lower them on that estimate:
-# the last time this policy was set from a prediction rather than a measurement it was wrong
-# by four times and fired on normal traffic. At the 2026-09-15 recheck, measure a full
-# working week of post-fix reads first, then re-derive spike and drift from that floor the
-# same way -- roughly 3x the measured max for the spike, ~2x the steady state for the drift.
+#   Sep 15 00:00 - Sep 20 00:00 UTC (Tue-Sat), 720 windows, ALIGN_RATE/600s, REDUCE_SUM:
+#     median 2.37/s, p95 15.18/s, max 37.09/s
+#   Sep 20 00:00 - Sep 24 00:00 UTC (Sun-Wed, after #1416), 576 windows:
+#     median 1.53/s, p95 7.33/s, max 9.33/s
+#
+# The week's peaks were two request-path fan-outs, both attributed from the per-request
+# `firestore reads` log line (route + fsReads), not inferred:
+#   1. GET /api/submissions/mine at 430-555 metered reads per call, polled by open Studio
+#      tabs. #1416 (shelf document, deployed Sep 19) took it to ~4 per call, which is why
+#      the second window's max is a quarter of the first's.
+#   2. GET /api/submissions/:token polled every ~3.7s by one CLI client (user agent
+#      `node`, same client refreshing /oauth/token) against a single job for 13h on
+#      Sep 15-16 and 25h on Sep 21-22 -- ~1,000 polls/h at 10-30 reads each, ~250K
+#      reads/day on its own. Still open: the `status` watch has no unchanged-poll backoff
+#      and ignores the server's pollAfterMs.
+#
+# spike -- stays at 20/s. 3x the post-#1416 max would be 28/s, and 3x the week's max
+#   111/s; both are raises, and the week's max is fan-out 1 above, which is fixed. 20/s is
+#   ~2.1x the post-fix max and did not fire once after Sep 19 09:18 UTC. Re-derive only
+#   from a clean working week, and only downward.
+# drift -- lowered from 8/s to 5/s, ~2x the working week's median (2.37/s). Replayed
+#   against both windows, every 3h spell above 5/s is fan-out 2 (Sep 15 21:00 for 9h,
+#   Sep 16 06:20 and 18:20, Sep 21 22:20, Sep 22 07:40 and 16:20) and nothing else is.
+#   At 8/s only one of those six would have fired. That is the drift condition doing its
+#   job: an orphaned poller is exactly the all-day leak it exists for.
+#
+# Next recheck: a full clean working week after the CLI status watch backs off. If its
+# median lands near 1.5/s, drift belongs at ~4/s.
 cat > "${POLICY_DIR}/a30.json" <<EOF
 {
   "displayName": "A30 Firestore read rate",
@@ -941,7 +965,7 @@ cat > "${POLICY_DIR}/a30.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 8,
+      "thresholdValue": 5,
       "duration": "10800s",
       "trigger": { "count": 1 }
     }
@@ -949,7 +973,7 @@ cat > "${POLICY_DIR}/a30.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Firestore is taking far more document reads than the closed beta's steady state. Two conditions fire this policy and they mean different things: the ten-minute one at 20/s is a spike -- a crawler or a loop -- while the three-hour one at 8/s is drift, the shape of the 2026-09 incident, which averaged ~9.3/s for whole days and would never trip a spike threshold. Reads bill per operation like writes, at a third of the price, and a public route that fans out one read per catalog entry is what produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; group it by metric.label.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep, or a list running on every request). Then Logs Explorer on the app service, requests grouped by route, to find which one scales with it; check the per-minute counts first, because a scheduler job shows a cadence and request-driven reads do not. Measured steady state as of 2026-09-08 is ~4.2/s median and ~5.7/s p95, most of it a flat QUERY floor from authenticated badge polling on /api/review/status and /api/notifications -- so a reading a little above 5/s is normal and neither condition should see it. The per-request caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
+    "content": "Firestore is taking far more document reads than the closed beta's steady state. Two conditions fire this policy and they mean different things: the ten-minute one at 20/s is a spike -- a crawler or a loop -- while the three-hour one at 5/s is drift, the shape of the 2026-09 incident, which averaged ~9.3/s for whole days and would never trip a spike threshold. Reads bill per operation like writes, at a third of the price, and a public route that fans out one read per catalog entry is what produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; group it by metric.label.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep, or a list running on every request). Then Logs Explorer on the app service: the app logs one 'firestore reads' line per request with route and fsReads, so sum fsReads by route for the hour and the writer names itself; check the per-minute counts first, because a scheduler job shows a cadence and request-driven reads do not. Measured steady state as of 2026-09-24 is ~1.5-2.4/s median. Every drift spell measured Sep 15-24 was one client polling GET /api/submissions/:token every few seconds for hours (user agent 'node', the gamedevpl CLI) -- look for that first: group requests by user agent and submission token. The per-window caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
     "mimeType": "text/markdown"
   }
 }
@@ -958,9 +982,9 @@ EOF
 # A31 -- Firestore reads, daily total. A30 watches the rate in two windows: ten minutes for
 # a spike and three hours for drift. Both are still rate thresholds, and a rate threshold is
 # blind to the one shape that has actually cost money here -- a leak small enough never to
-# hold any window above its bar, running all day, every day. A regression that adds a steady
-# 5/s on top of the floor never trips A30's 8/s drift condition for three unbroken hours if
-# nights and quiet hours pull the average down, yet it bills ~430K extra reads a day and
+# hold any window above its bar, running all day, every day. A regression that adds a few
+# reads a second during the day never trips A30's drift condition for three unbroken hours if
+# nights and quiet hours pull the average down, yet it bills ~200K extra reads a day and
 # nobody sees it until the invoice. The free tier is 50K reads/day; the 2026-09 incident was
 # ~800K/day and ran for weeks before anyone read the graph.
 #
@@ -968,7 +992,7 @@ EOF
 # the actual count of document reads in the trailing day, evaluated on a sliding window, and
 # it crosses only if the day as a whole was expensive -- however the reads were spread.
 #
-# THRESHOLD 600000/day. Derivation, from the same measurement A30 is calibrated on: Sep 8
+# ORIGINAL THRESHOLD (2026-09-08) 600000/day. Derivation, from the measurement A30 had: Sep 8
 # daytime ran ~4.2/s median, ~5.7/s p95, which is a pace of ~364K/day if it held around the
 # clock, and it does not -- nights are quieter, so the real day is lower. 600K is ~1.6x that
 # pace ceiling, comfortably above any ordinary day including a busy one, and well under the
@@ -977,11 +1001,37 @@ EOF
 # policy fires, which is the point -- this is the detector for what the fast ones miss, not
 # a second copy of them.
 #
-# Like A30, this number is calibrated against a floor that the badge-polling fix removes
-# (see ops repo docs/firestore-read-cost.md). At the 2026-09-15 recheck, take the post-fix daily
-# totals for a full working week and re-derive: roughly 2x the busiest measured day, floored
-# at something that still leaves the 50K/day free tier visible as a target rather than a
-# rounding error. Do not lower it from an estimate -- measure first, the way A30 had to be.
+# RECALIBRATED 2026-09-24 to 350000/day -- the 600K derivation above is kept as history.
+# Daily totals (ALIGN_DELTA/86400s, REDUCE_SUM, the condition's own shape), by UTC day:
+#   Sep 15 Tue 273,693  Sep 16 Wed 568,789  Sep 17 Thu 387,370  Sep 18 Fri 466,525
+#   Sep 19 Sat 355,071  -- then #1416 --  Sep 20 Sun 121,461  Sep 21 Mon 148,252
+#   Sep 22 Tue 473,875  Sep 23 Wed 156,604
+# The working week (median 387K) came back at the pre-fix ~364K/day pace, so by the rule
+# above it was not a floor to calibrate on: every day over 200K carried one of the two
+# request-path fan-outs attributed in A30's comment (the /api/submissions/mine shelf
+# read before #1416, and a CLI polling one job's status every ~3.7s for 13-25 hours at a
+# time, ~250K reads/day by itself). 2x the busiest day would be ~1.1M -- a raise to fit
+# a leak, which is the one thing this file does not do.
+#
+# The clean days are the ones with neither: Sep 20, Sep 23, and Sep 21 less the poller's
+# last two hours, ~121-157K. 2x the busiest of them is ~314K; 350K is ~2.2x, which leaves a
+# busier weekday room and still fires on one orphaned poller over an ordinary day
+# (~157K + ~250K). Replayed hourly over Sep 15-24, it would have opened three times --
+# Sep 16-18 and Sep 18-20 (both fan-outs) and Sep 22-23 (the poller) -- and on nothing
+# else. It is still 7x the 50K/day free tier; that gap is the fan-outs, not headroom.
+#
+# The clean sample is three days, one of them a Sunday. Recheck against a full clean
+# working week once the CLI status watch backs off, and if the busiest clean weekday is
+# well under 175K, lower this again -- toward 2x that day, never up to fit one.
+
+# A31 incidents since creation (recovered from the monitoring ViolationOpen/AutoResolve
+# log entries, which is where the incident history lives -- there is no incidents API):
+#   Sep 8 22:49 - Sep 9 22:27 UTC, opened at 855,003: the pre-fix tail, expected.
+#   Sep 12 09:07 - Sep 13 17:46 UTC, one episode under three incident ids (two were
+#   cancelled and immediately re-opened at a higher value), 600,089 -> 732,019 -> 942,518:
+#   real. Hourly minimums held at ~12.5K/h and plateaus reached 30-85K/h until the badge
+#   fix landed ~10:00 Sep 13, after which the floor fell to ~3.2K/h and the trailing day
+#   drained out. Nothing opened after that at 600K.
 cat > "${POLICY_DIR}/a31.json" <<EOF
 {
   "displayName": "A31 Firestore reads daily total",
@@ -996,7 +1046,7 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 600000,
+      "thresholdValue": 350000,
       "duration": "0s",
       "trigger": { "count": 1 }
     }
@@ -1004,7 +1054,7 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Firestore served more than 600K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. Reference steady state as of 2026-09-08 is a pace of ~364K/day and falling as the per-window caches land, so a sustained 600K day means something regressed, not that traffic grew. The fix is always the same shape: read a collection once per window, never per request (catalog-routes.ts, catalog-enricher.ts, notify-sweep-routes.ts, and the badge routes in ops repo docs/firestore-read-cost.md).",
+    "content": "Firestore served more than 350K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. The app logs one 'firestore reads' line per request with route and fsReads -- sum fsReads by route over the worst hour and the writer names itself. A clean day as of 2026-09-24 is ~120-160K, so 350K means roughly one extra client-sized leak on top of it. The one seen most often is a client polling GET /api/submissions/:token every few seconds for hours (user agent 'node', the gamedevpl CLI). The fix is always the same shape: read a collection once per window, never per request, and never poll faster than the server's pollAfterMs.",
     "mimeType": "text/markdown"
   }
 }

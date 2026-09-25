@@ -262,6 +262,13 @@ The prompt matches that contract for every vendor: `buildPrompt` always renders 
 no-checkout, MCP-tool-only instructions (`docs/build-brief.md`), because there is no other
 delivery shape left for it to disagree with.
 
+After a red preview or publish gate, reconciliation may dispatch one repair session for
+the current platform round. It claims the latest failed version transactionally before
+dispatch, then gives the replacement session that version and the gate report. The agent
+reads the delivered sources and submits a new candidate through MCP. The claim limits paid
+repair to one session per round; a later red verdict remains visible for creator or operator
+action. Self-build rounds do not receive an automatic platform dispatch.
+
 ### An idle session is not necessarily a stalled one
 
 The backend nudges a session that has gone idle without delivering, because a model that
