@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { parseAccessToken } from './access-token.js';
 import { resolveAccessTokenUser } from './access-token-service.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { mintSessionToken, SESSION_COOKIE_NAME, TOKEN_SESSION_DURATION_SECONDS } from './auth.js';
@@ -134,9 +135,7 @@ function tokenLoginHtml(input: { oauthReturn: string | null; formToken: string; 
 
     <p class="bail">
       This page is for accounts that sign in with a token rather than Google or Apple.
-      A token sign-in cannot approve apps, connectors or devices; that needs Google or
-      Apple sign-in. If you have a gamedev.pl account, use the sign-in button on the site
-      instead.
+      If you have a gamedev.pl account, use the sign-in button on the site instead.
     </p>
   </main>
 </body>
@@ -150,8 +149,8 @@ function tokenLoginHtml(input: { oauthReturn: string | null; formToken: string; 
  * mechanism here — this page adds no authority, and is emphatically not the bypass route
  * AGENTS.md promises does not exist. What it adds is a way to *perform* that exchange
  * without a shell: the API route wants an `Authorization` header, and a human sitting in
- * front of a browser cannot produce one. The cookie cannot approve OAuth or device
- * consent; those need a Google or Apple session.
+ * front of a browser cannot produce one. A marketplace reviewer without Google can then
+ * approve the MCP connector; the grant is bound to the token and dies with it.
  *
  * Deliberately not linked from anywhere. It is not a second front door for creators;
  * it is the door for whoever was handed a token, and a token can only exist because an
@@ -248,9 +247,10 @@ export function registerTokenLoginRoutes(app: FastifyInstance, options: TokenLog
       // Stamped `src: 'token'` exactly as POST /api/auth/session stamps it, so the
       // session-only operator surfaces keep refusing this cookie. A cookie minted here
       // must carry the token's authority and not a grain more.
+      const tokenId = parseAccessToken(token).tokenId;
       reply.setCookie(
         SESSION_COOKIE_NAME,
-        mintSessionToken(user.uid, sessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token'),
+        mintSessionToken(user.uid, sessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token', tokenId),
         {
           path: '/',
           httpOnly: true,

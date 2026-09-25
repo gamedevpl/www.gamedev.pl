@@ -1304,8 +1304,7 @@
     "authWallSubtitle": "Creating game specifications and instant mock previews requires a signed-in Google account.",
     "quotaExceeded": "You've reached your daily quota limit (5 submissions/day). Try again tomorrow!",
     "accountBlocked": "Your account is currently restricted.",
-    "signedInAs": "Signed in as {{name}}",
-    "oauthNeedsHumanSignIn": "Approving an app or device needs Google or Apple sign-in. You are signed in with an access token: sign out, then sign in with Google or Apple and try again."
+    "signedInAs": "Signed in as {{name}}"
   },
   "betaSplash": {
     "headline": "Create games with AI. Play what others made.",

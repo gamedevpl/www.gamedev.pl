@@ -8,6 +8,7 @@ import {
   type MintFailureReason,
 } from './access-token-service.js';
 import { isAdminSession } from './admin-session.js';
+import { revokeAccessTokenAndGrants } from './pat-grant-binding.js';
 import type { Store } from './store.js';
 
 /**
@@ -122,9 +123,8 @@ export async function registerAccessTokenRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid token id' });
     }
 
-    // Revocation is a delete, not a flag: the record *is* the token's existence, so there
-    // is no revoked-but-still-verifiable state to get wrong.
-    const deleted = await store.deleteAccessToken(parsed.data.tokenId);
+    // Revocation deletes the record and revokes OAuth grants bound to it.
+    const deleted = await revokeAccessTokenAndGrants(store, parsed.data.tokenId);
     if (!deleted) {
       return reply.status(404).send({ error: 'not found' });
     }

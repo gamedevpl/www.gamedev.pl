@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { generateAccessToken } from './access-token.js';
+import { generateAccessToken, parseAccessToken } from './access-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { newCsrfNonce, originAllowed, sanitizeOAuthReturnPath, TOKEN_LOGIN_PATH } from './oauth-token-login.js';
@@ -232,7 +232,9 @@ describe('POST /oauth/token-login', () => {
     expect(res.headers.location).toBe('/studio');
   });
 
-  it('cannot use the cookie it minted to approve an OAuth client', async () => {
+  it('reaches the consent screen with the cookie it minted', async () => {
+    // The end the page exists for: an account with no Google identity, in private beta,
+    // getting far enough to approve an MCP client.
     const app = await appWith(store, { betaAllowedUids: 'g:boss' });
     const token = await mintToken(app, 'bot:reviewer');
     const cookie = sessionFrom(await visitAndPost(app, { token }))!;
@@ -243,8 +245,11 @@ describe('POST /oauth/token-login', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
 
-    expect(authorize.statusCode).toBe(302);
-    expect(authorize.headers.location).toContain('/studio?oauth_return=');
+    // Past the sign-in redirect: a missing session bounces to /studio?oauth_return=…,
+    // and this account never bounces. The 400 is the *next* check complaining about
+    // absent client_id/redirect_uri, which is exactly how far this test means to get.
+    expect(authorize.statusCode).toBe(400);
+    expect(readSessionToken(cookie, sessionSecret).tid).toBe(parseAccessToken(token).tokenId);
   });
 
   it('rejects a POST with no form token', async () => {

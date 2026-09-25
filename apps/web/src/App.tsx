@@ -44,7 +44,7 @@ import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './surfaces/party/ControllerView.js';
-import { useOAuthResume } from './useOAuthResume.js';
+import { navigateToOAuthReturn, parseOAuthReturnParam } from './oauthRedirect.js';
 
 // Deferred: an anonymous player playing a published game never has to pay for the
 // weight of the admin console, the studio (and everything it drags in — the code
@@ -246,7 +246,16 @@ export function App() {
 
   // MCP OAuth: `/oauth/authorize` redirects here when the browser has no session.
   // After sign-in, resume the authorize URL so the agent gets its PKCE code.
-  const oauthRefused = useOAuthResume(authLoading, user, setIsAuthModalOpen);
+  useEffect(() => {
+    if (authLoading) return;
+    const oauthReturn = parseOAuthReturnParam(window.location.search);
+    if (!oauthReturn) return;
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    navigateToOAuthReturn(oauthReturn, window.location);
+  }, [authLoading, user]);
 
   // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
   // so hide Up the same way — Close / the error home link own escape there.
@@ -591,11 +600,6 @@ export function App() {
                 {stageOverlay}
 
                 {partyError && route.view !== 'party' && <p className="error party-error">{partyError}</p>}
-                {oauthRefused && (
-                  <p className="error" role="alert">
-                    {t('auth.oauthNeedsHumanSignIn')}
-                  </p>
-                )}
 
                 {/* The gallery is home content; game pages have their own compact surface. */}
                 {route.view === 'home' && (

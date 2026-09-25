@@ -156,7 +156,7 @@ export async function verifyAsAccessToken(
   }
 
   const grant = await store.getOAuthGrant(record.grantId);
-  if (!grant || grant.revokedAt) {
+  if (!grant || grant.revokedAt || !(Date.parse(grant.viaTokenExpiresAt ?? '9999-12-31') > nowMs)) {
     await store.deleteOAuthAccessToken(parsed.tokenId);
     return null;
   }

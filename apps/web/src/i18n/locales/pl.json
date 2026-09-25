@@ -1314,8 +1314,7 @@
     "authWallSubtitle": "Tworzenie specyfikacji gier i podglądu wymaga zalogowanego konta Google.",
     "quotaExceeded": "Osiągnięto dzienny limit zgłoszeń (5 zgłoszeń/dzień). Spróbuj ponownie jutro!",
     "accountBlocked": "Twoje konto jest obecnie zablokowane.",
-    "signedInAs": "Zalogowano jako {{name}}",
-    "oauthNeedsHumanSignIn": "Zatwierdzenie aplikacji lub urządzenia wymaga logowania przez Google lub Apple. Jesteś zalogowany tokenem dostępu: wyloguj się, zaloguj przez Google lub Apple i spróbuj ponownie."
+    "signedInAs": "Zalogowano jako {{name}}"
   },
   "betaSplash": {
     "headline": "Twórz gry z AI. Graj w to, co stworzyli inni.",

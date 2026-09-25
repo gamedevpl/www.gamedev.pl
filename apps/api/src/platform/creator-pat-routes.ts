@@ -7,6 +7,7 @@ import {
   toPublicAccessToken,
   type MintFailureReason,
 } from './access-token-service.js';
+import { revokeAccessTokenAndGrants } from './pat-grant-binding.js';
 import type { Store } from './store.js';
 
 const MintSchema = z.object({
@@ -83,7 +84,7 @@ export async function registerCreatorPatRoutes(app: FastifyInstance, options: Cr
     if (!held.some((record) => record.tokenId === parsed.data.tokenId)) {
       return reply.status(404).send({ error: 'not found' });
     }
-    const deleted = await store.deleteAccessToken(parsed.data.tokenId);
+    const deleted = await revokeAccessTokenAndGrants(store, parsed.data.tokenId);
     if (!deleted) return reply.status(404).send({ error: 'not found' });
     return reply.status(200).send({ status: 'ok' });
   });

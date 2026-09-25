@@ -74,6 +74,7 @@ const FILE_BUCKET = {
   'oauth-first-party': 'platform',
   'oauth-request-auth': 'platform',
   'oauth-consent': 'platform',
+  'pat-grant-binding': 'platform',
   'oauth-device': 'platform',
   'oauth-token-login': 'platform',
   'oauth-tokens': 'platform',

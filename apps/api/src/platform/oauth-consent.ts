@@ -1,16 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Locale } from '@gamedevpl/contract';
-import type { FastifyRequest } from 'fastify';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import { CREATOR_SCOPE, MCP_SCOPE, OWNERSHIP_SCOPE, scopeIncludes } from './oauth-scopes.js';
 import { AS_REFRESH_TOKEN_TTL_MS } from './oauth-tokens.js';
 
 const INACTIVITY_DAYS = Math.round(AS_REFRESH_TOKEN_TTL_MS / (24 * 60 * 60 * 1000));
-
-export function activeSessionUid(request: FastifyRequest): string | null {
-  if (request.authMethod !== 'session' || !request.user || request.user.tier === 'blocked') return null;
-  return request.user.uid;
-}
 
 export function consentToken(input: { uid: string; clientId: string; codeChallenge: string; secret: string }): string {
   return createHmac('sha256', input.secret)

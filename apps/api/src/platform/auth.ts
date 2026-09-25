@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
+import { parseAccessToken } from './access-token.js';
 import { resolveAccessTokenRecord, resolveAccessTokenUser } from './access-token-service.js';
 import { resolveBearerIdentity } from './oauth-request-auth.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
@@ -85,6 +86,7 @@ export interface SessionPayload {
    * an admin account was ever exchanged.
    */
   src?: 'token';
+  tid?: string;
 }
 
 export class InvalidSessionError extends Error {
@@ -155,12 +157,14 @@ export function mintSessionToken(
   durationSeconds = DEFAULT_SESSION_DURATION_SECONDS,
   nowSeconds = Math.floor(Date.now() / 1000),
   source?: 'token',
+  tokenId?: string,
 ): string {
   const payload: SessionPayload = {
     uid,
     iat: nowSeconds,
     exp: nowSeconds + durationSeconds,
     ...(source === 'token' ? { src: source } : {}),
+    ...(source === 'token' && tokenId ? { tid: tokenId } : {}),
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = createHmac('sha256', secret).update(encodedPayload).digest('base64url');
@@ -206,7 +210,8 @@ export function readSessionToken(
     // Normalized to the one meaningful value rather than passed through: `src` feeds
     // an authorization decision, so anything that is not exactly 'token' must read as
     // "no claim made" instead of reaching a caller as an unexpected shape.
-    return { ...payload, ...(payload.src === 'token' ? { src: 'token' as const } : { src: undefined }) };
+    if (payload.src !== 'token') return { ...payload, src: undefined, tid: undefined };
+    return { ...payload, src: 'token', tid: typeof payload.tid === 'string' ? payload.tid : undefined };
   } catch (err) {
     if (err instanceof InvalidSessionError) throw err;
     throw new InvalidSessionError('failed to parse session payload');
@@ -225,6 +230,7 @@ declare module 'fastify' {
      * `user`, so a leaked token can never widen its own privileges.
      */
     authMethod: 'session' | 'token' | 'oauth' | null;
+    sessionTokenId: string | null;
   }
 }
 
@@ -362,12 +368,12 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
   const getSessionUser = async (
     request: FastifyRequest,
-  ): Promise<{ user: User | null; needsRenewal: boolean; fromToken: boolean }> => {
+  ): Promise<{ user: User | null; needsRenewal: boolean; fromToken: boolean; tokenId?: string }> => {
     const cookieToken = readSessionCookie(request.cookies);
     if (!cookieToken) return { user: null, needsRenewal: false, fromToken: false };
 
     try {
-      const { uid, exp, src } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
+      const { uid, exp, src, tid } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
       const user = await store.getUser(uid);
       if (!user || user.deletionScheduledFor) {
         return { user: null, needsRenewal: false, fromToken: false };
@@ -375,7 +381,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
       const nowSeconds = Math.floor(Date.now() / 1000);
       const needsRenewal = exp - nowSeconds < sessionRenewalThresholdSeconds(src);
-      return { user, needsRenewal, fromToken: src === 'token' };
+      return { user, needsRenewal, fromToken: src === 'token', tokenId: tid };
     } catch {
       return { user: null, needsRenewal: false, fromToken: false };
     }
@@ -390,10 +396,11 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   app.decorateRequest('user', null);
   app.decorateRequest('needsSessionRenewal', false);
   app.decorateRequest('authMethod', null);
+  app.decorateRequest('sessionTokenId', null);
 
   app.addHook('onRequest', async (request, reply) => {
     if (!isAuthConfigured) return;
-    const { user, needsRenewal, fromToken } = await getSessionUser(request);
+    const { user, needsRenewal, fromToken, tokenId } = await getSessionUser(request);
     if (!user) {
       // Cookie first; PAT and creator-scoped OAuth are the programmatic doors.
       const identity = await resolveBearerIdentity(store, request.headers.authorization);
@@ -411,6 +418,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     // request is the token, and every session-only check must see that rather than
     // the cookie it was traded for.
     request.authMethod = fromToken ? 'token' : 'session';
+    request.sessionTokenId = fromToken ? (tokenId ?? null) : null;
 
     // Sessions last weeks; record activity separately from sign-in, once per day.
     const today = new Date().toISOString().slice(0, 10);
@@ -443,6 +451,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         durationSeconds,
         undefined,
         source,
+        request.sessionTokenId ?? undefined,
       );
       reply.setCookie(SESSION_COOKIE_NAME, renewedToken, {
         path: '/',
@@ -828,7 +837,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       // cannot mint a cookie" hole this route is documented to close. The exchange has
       // to be driven by the credential itself, every time.
       const tokenUser = await getAccessTokenUser(request);
-      if (!tokenUser) {
+      const bearer = readBearerToken(request.headers.authorization);
+      if (!tokenUser || !bearer) {
         return reply.status(401).send({ error: 'a personal access token is required' });
       }
 
@@ -842,7 +852,14 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       // for — which is the whole point of this route — works unchanged.
       reply.setCookie(
         SESSION_COOKIE_NAME,
-        mintSessionToken(tokenUser.uid, effectiveSessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token'),
+        mintSessionToken(
+          tokenUser.uid,
+          effectiveSessionSecret,
+          TOKEN_SESSION_DURATION_SECONDS,
+          undefined,
+          'token',
+          parseAccessToken(bearer).tokenId,
+        ),
         {
           path: '/',
           httpOnly: true,
@@ -955,7 +972,6 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     return sessionPayload(request.user, {
       admin: isAdminSession(request, adminUids),
       reviewer: isReviewerSession(request, reviewerUids, adminUids),
-      tokenSession: request.authMethod !== 'session',
     });
   });
 }
@@ -963,16 +979,15 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 /**
  * The session as the client is told it. Adds derived flags to the stored user.
  *
- * Each flag appears only when true.
+ * `admin` and `reviewer` appear only when true.
  */
 function sessionPayload(
   user: User,
-  flags: { admin?: boolean; reviewer?: boolean; tokenSession?: boolean; betaWelcome?: boolean },
-): { user: User & { admin?: true; reviewer?: true; tokenSession?: true }; betaWelcome?: true } {
-  const next: User & { admin?: true; reviewer?: true; tokenSession?: true } = { ...user };
+  flags: { admin?: boolean; reviewer?: boolean; betaWelcome?: boolean },
+): { user: User & { admin?: true; reviewer?: true }; betaWelcome?: true } {
+  const next: User & { admin?: true; reviewer?: true } = { ...user };
   if (flags.admin) next.admin = true;
   if (flags.reviewer) next.reviewer = true;
-  if (flags.tokenSession) next.tokenSession = true;
   return { user: next, ...(flags.betaWelcome ? { betaWelcome: true as const } : {}) };
 }
 
