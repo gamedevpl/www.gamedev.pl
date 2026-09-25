@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.22.0 — 2026-09-25
+
 ### Added
 
 - Creator Kit checkouts can install the CLI from a pinned GitHub Release archive (#1496).
