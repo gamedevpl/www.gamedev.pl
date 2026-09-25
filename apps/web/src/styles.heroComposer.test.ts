@@ -62,6 +62,8 @@ describe('desktop hero composer pill', () => {
 
     const spinner = firstRuleBody('.build-btn-spinner');
     expect(spinner).toMatch(/animation:\s*status-spin/);
+    // Width is ignored on an inline box, which turned this ring into a caret.
+    expect(spinner).toMatch(/display:\s*inline-block/);
   });
 });
 

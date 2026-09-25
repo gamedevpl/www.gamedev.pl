@@ -665,7 +665,7 @@ export function HeroPromptSection({
                   ) : (
                     <PixelIcon name="sparkle" size={12} />
                   )}
-                  {isBusy && busyLabel ? busyLabel : t('hero.orBuildOwnGame')}
+                  {t('hero.orBuildOwnGame')}
                 </button>
               </div>
             </div>
@@ -696,7 +696,7 @@ export function HeroPromptSection({
                   ) : (
                     <PixelIcon name="sparkle" size={14} />
                   )}
-                  {isBusy && busyLabel ? busyLabel : t('hero.smartBuildBtn')}
+                  {t('hero.smartBuildBtn')}
                 </button>
               </div>
             </div>

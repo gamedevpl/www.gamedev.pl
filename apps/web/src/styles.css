@@ -626,9 +626,15 @@
 }
 
 .build-btn-spinner {
+  /* An empty inline box ignores width and height, so the ring collapses into a
+     caret-like stroke beside the label. inline-block keeps the circle even when
+     the parent is not a flex row. */
+  display: inline-block;
+  box-sizing: border-box;
   width: 14px;
   height: 14px;
   flex: none;
+  vertical-align: middle;
   border-radius: 50%;
   border: 2px solid rgba(8, 36, 29, 0.35);
   border-top-color: #08241d;
@@ -1188,6 +1194,10 @@
 
 .play-match-btn,
 .build-match-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: var(--turquoise);
   color: #0b221d;
   font-weight: 700;

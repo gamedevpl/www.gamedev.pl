@@ -46,12 +46,16 @@ describe('HeroPromptSection busy states and loading indicators', () => {
     expect(container.querySelector('.prompt-busy-progress-bar')).not.toBeNull();
     expect(container.querySelector('.build-match-btn.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-match-btn .build-btn-spinner')).not.toBeNull();
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Analyzing your idea/i);
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Analyzing your idea/i);
 
     await renderWithStatus('loading');
     expect(container.querySelector('.prompt-busy-progress-bar')).not.toBeNull();
     expect(container.querySelector('.build-match-btn.is-busy')).not.toBeNull();
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Submitting/i);
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Submitting/i);
 
     await renderWithStatus('idle');
     expect(container.querySelector('.prompt-busy-progress-bar')).toBeNull();
@@ -83,7 +87,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
     });
 
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Analyzing your idea/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Analyzing/i);
 
     // Advance 2.8s: step 2
     await act(async () => {
@@ -91,7 +96,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
       await flushEffects();
     });
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Exploring gameplay mechanics/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Exploring gameplay mechanics/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Exploring gameplay mechanics/i);
 
     // Advance another 2.8s: step 3
     await act(async () => {
@@ -99,7 +105,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
       await flushEffects();
     });
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Formulating design questions/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Formulating design questions/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Formulating design questions/i);
 
     // Advance another 2.8s: step 4 (final step, interval is cleared)
     await act(async () => {
@@ -107,7 +114,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
       await flushEffects();
     });
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Almost ready/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Almost ready/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Almost ready/i);
 
     // Advancing further stays on final step
     await act(async () => {
@@ -142,7 +150,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
     });
 
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting game specification/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Submitting game specification/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Submitting game specification/i);
 
     // Advance 2.8s: step 2
     await act(async () => {
@@ -150,7 +159,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
       await flushEffects();
     });
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Reserving game name and address/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Reserving game name and address/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Reserving game name and address/i);
 
     // Advance another 2.8s: step 3
     await act(async () => {
@@ -160,7 +170,10 @@ describe('HeroPromptSection busy states and loading indicators', () => {
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(
       /Preparing workspace for coding agent/i,
     );
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Preparing workspace for coding agent/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(
+      /Preparing workspace for coding agent/i,
+    );
 
     // Advance another 2.8s: step 4
     await act(async () => {
@@ -168,7 +181,8 @@ describe('HeroPromptSection busy states and loading indicators', () => {
       await flushEffects();
     });
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Finalizing and opening Studio/i);
-    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Finalizing and opening Studio/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Build this game/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).not.toMatch(/Finalizing and opening Studio/i);
 
     await act(async () => root.unmount());
   });
