@@ -469,6 +469,9 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   async getSubmission(jobId: number): Promise<SubmissionRecord | null> {
     return this.submissionStore.getSubmission(jobId);
   }
+  override async setSubmissionTitle(jobId: number, title: string): Promise<void> {
+    await this.submissionStore.setSubmissionTitle(jobId, title);
+  }
 
   async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
     await this.submissionStore.setSubmissionNotifiedStatus(jobId, status);
@@ -477,12 +480,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
     await this.submissionStore.setSubmissionLastStatus(jobId, status);
-    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     const moved = await this.dispatchStore.recordJobTransition(jobId, transition, guard);
-    if (moved) await this.shelfMirror.afterJobWrite(jobId);
     return moved;
   }
 
@@ -669,7 +670,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
     await this.submissionStore.setSubmissionAbandoned(jobId, at);
-    await this.shelfMirror.afterJobWrite(jobId);
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {

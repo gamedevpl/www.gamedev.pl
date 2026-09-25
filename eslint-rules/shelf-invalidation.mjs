@@ -55,11 +55,9 @@ const MIRRORED_FIELDS = new Set([
 const INVALIDATED_BY_CALLER = {
   'store/slices/submission.ts': {
     createSubmission: 'shelfMirror.rebuild, in firestore.ts',
-    setSubmissionTitle: 'shelfMirror.afterJobWrite, in submission-facade.ts',
     setSubmissionDeliveredVersion: 'shelfMirror.afterJobWrite, in submission-facade.ts',
     setSubmissionPreviewVersion: 'shelfMirror.afterJobWrite, in submission-facade.ts',
     setSubmissionPublishedAt: 'shelfMirror.afterJobWrite, in firestore.ts',
-    setSubmissionAbandoned: 'shelfMirror.afterJobWrite, in firestore.ts',
     setDraftShared: 'shelfMirror.afterJobWrite, in firestore.ts',
     // The spread adds specIsSystemGenerated; spec and qa are not mirrored.
     setSubmissionBrief: 'nothing: no mirrored field is written',
