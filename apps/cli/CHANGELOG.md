@@ -7,20 +7,15 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.21.0 — 2026-09-24
+
 ### Added
 
 - In a checkout, `/builder` offers a choice menu, and `/delegate` offers to switch to a local builder before editing (#1483).
 
-### Internal
-
-- Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#1468).
-- Local headless agents run through `genaicode/agents` 2.5.0: its drivers decode each agent's events, the per-vendor event readers are gone, and the verify-and-repair loop uses `runWithVerify` (#1472).
-- `genaicode` is bumped to 2.5.2 in the CLI and API (#1480).
-
 ### Fixed
 
-- `gamedevpl status --watch` slows down on a job that has stopped changing, up to one check every 30 seconds, and never
-  polls faster than the server asks; a watch left open for hours no longer hits the server every few seconds (#1485).
+- `gamedevpl status --watch` slows down on a job that has stopped changing, up to one check every 30 seconds, and never polls faster than the server asks; a watch left open for hours no longer hits the server every few seconds (#1485).
 - A failed local delegate keeps its request for `/retry`, so you can resume the same task with the same agent and partial edits (#1481).
 - Play shows your prompt and attachment names instead of the agent-only evidence block, in the conversation, queue and prompt history (#1465).
 - Attachments are marked Sent after a request is accepted and are no longer re-attached to the next one; Attach again re-sends them (#1465).
@@ -29,6 +24,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Starting Play says that the session runs in the background and how to end it (#1465).
 - Play loads again in Safari 16.0–16.3, which could not parse the 0.20.0 transcript colouring (#1465).
 - Notes and other non-game files in the game folder (for example `NOTATKI-I-POMYSLY.md`) stay local instead of failing the whole push: push prints `Kept local (not game files): …`, and diff and pull leave them alone (#1469).
+
+### Internal
+
+- Live codex and muse sessions and the agent environment scrub run on `genaicode/agents` 2.4.0 (#1468).
+- Local headless agents run through `genaicode/agents` 2.5.0: its drivers decode each agent's events, the per-vendor event readers are gone, and the verify-and-repair loop uses `runWithVerify` (#1472).
+- `genaicode` is bumped to 2.5.2 in the CLI and API (#1480).
 
 ## 0.20.0 — 2026-09-23
 
