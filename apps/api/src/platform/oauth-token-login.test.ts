@@ -232,9 +232,7 @@ describe('POST /oauth/token-login', () => {
     expect(res.headers.location).toBe('/studio');
   });
 
-  it('reaches the consent screen with the cookie it minted', async () => {
-    // The end the page exists for: an account with no Google identity, in private beta,
-    // getting far enough to approve an MCP client.
+  it('cannot use the cookie it minted to approve an OAuth client', async () => {
     const app = await appWith(store, { betaAllowedUids: 'g:boss' });
     const token = await mintToken(app, 'bot:reviewer');
     const cookie = sessionFrom(await visitAndPost(app, { token }))!;
@@ -245,11 +243,8 @@ describe('POST /oauth/token-login', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
 
-    // Past the sign-in redirect: a missing session bounces to /studio?oauth_return=…,
-    // and this account never bounces. The 400 is the *next* check complaining about
-    // absent client_id/redirect_uri, which is exactly how far this test means to get.
-    expect(authorize.statusCode).not.toBe(302);
-    expect(authorize.statusCode).toBe(400);
+    expect(authorize.statusCode).toBe(302);
+    expect(authorize.headers.location).toContain('/studio?oauth_return=');
   });
 
   it('rejects a POST with no form token', async () => {

@@ -6,7 +6,6 @@ import { rememberBounded } from './bounded-map.js';
 import { createCimdFetcher, type CimdFetcher, validateCimdUrl } from './cimd-fetch.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
-import { InvalidSessionError, readSessionCookie, readSessionToken } from './auth.js';
 import { isRateLimited } from './ip-rate-limit.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { DEVICE_GRANT_TYPE, exchangeDeviceCode, registerOAuthDeviceRoutes } from './oauth-device.js';
@@ -119,16 +118,9 @@ function noteDcrHit(ip: string, nowMs: number): void {
   dcrHitsByIp.set(ip, hits);
 }
 
-function readUidFromSession(request: FastifyRequest, sessionSecret: string, sessionSecretPrev?: string): string | null {
-  const cookie = readSessionCookie(request.cookies);
-  if (!cookie) return null;
-  try {
-    const payload = readSessionToken(cookie, sessionSecret, sessionSecretPrev);
-    return payload.uid;
-  } catch (error) {
-    if (error instanceof InvalidSessionError) return null;
-    throw error;
-  }
+function activeSessionUid(request: FastifyRequest): string | null {
+  if (request.authMethod !== 'session' || !request.user || request.user.tier === 'blocked') return null;
+  return request.user.uid;
 }
 
 function pickLang(request: FastifyRequest): Locale {
@@ -414,7 +406,7 @@ export function registerOAuthAuthorizationServerRoutes(
   }
 
   app.get('/oauth/authorize', async (request, reply) => {
-    const uid = readUidFromSession(request, sessionSecret, sessionSecretPrev);
+    const uid = activeSessionUid(request);
     if (!uid) {
       const returnTo = `${request.url}`;
       return reply.redirect(`${issuerUrl()}/studio?oauth_return=${encodeURIComponent(returnTo)}`);
@@ -459,7 +451,7 @@ export function registerOAuthAuthorizationServerRoutes(
   });
 
   app.post('/oauth/authorize', async (request, reply) => {
-    const uid = readUidFromSession(request, sessionSecret, sessionSecretPrev);
+    const uid = activeSessionUid(request);
     if (!uid) {
       return reply.status(401).send({ error: 'login_required' });
     }
