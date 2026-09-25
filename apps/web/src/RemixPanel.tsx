@@ -609,13 +609,16 @@ export function RemixPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on arrival
   }, [props.undoable]);
 
+  // An older server omits canSave; only an explicit false hides Keep.
+  const canKeep = session?.canSave !== false;
+
   // Engagement threshold: after a few landings, ask once whether to keep it.
   // Dismissed stays dismissed for the session; the header "Keep…" is the escape.
   useEffect(() => {
-    if (successCount < KEEP_OFFER_AFTER || keepOfferDismissed || keepSaved || keepOfferOpen) return;
+    if (!canKeep || successCount < KEEP_OFFER_AFTER || keepOfferDismissed || keepSaved || keepOfferOpen) return;
     setKeepTitle((current) => current.trim() || suggestedKeepTitle(props.slug, user?.handle));
     setKeepOfferOpen(true);
-  }, [successCount, keepOfferDismissed, keepSaved, keepOfferOpen, props.slug, user?.handle]);
+  }, [canKeep, successCount, keepOfferDismissed, keepSaved, keepOfferOpen, props.slug, user?.handle]);
 
   const chatMode = successCount >= CHAT_MODE_AFTER;
   const transcriptRef = useRef<HTMLOListElement | null>(null);
@@ -1122,11 +1125,13 @@ export function RemixPanel(props: {
       const text =
         err.status === 429
           ? t('remix.saveQuota')
-          : err.reason === 'no_sources'
-            ? t('remix.saveNoSources')
-            : err.reason === 'no_changes'
-              ? t('remix.saveNoChanges')
-              : t('remix.saveFailed');
+          : err.reason === 'source_access_required'
+            ? t('remix.saveNotYours')
+            : err.reason === 'no_sources'
+              ? t('remix.saveNoSources')
+              : err.reason === 'no_changes'
+                ? t('remix.saveNoChanges')
+                : t('remix.saveFailed');
       setNote({ kind: 'error', text });
     } finally {
       setSaving(false);
@@ -1367,7 +1372,7 @@ export function RemixPanel(props: {
            * shouldn't wait for the third nudge. Hidden until then so the head
            * stays a title bar, not a toolbar.
            */}
-          {successCount >= 1 && !keepSaved && !keepOfferOpen && !changed?.broke ? (
+          {canKeep && successCount >= 1 && !keepSaved && !keepOfferOpen && !changed?.broke ? (
             <button type="button" className="remix-keep-link" onClick={openKeepOffer}>
               {t('remix.keepOfferMenu')}
             </button>
