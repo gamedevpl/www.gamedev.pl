@@ -1,8 +1,30 @@
 import { spawnCommand } from './delegate.js';
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CliError, EXIT_RED } from './exit-codes.js';
 
 export type VerifyStage = 'typecheck' | 'check_static' | 'check_game';
+
+type VerificationScripts = { typecheck: string; checkStatic: string; checkGame: string };
+const LEGACY_SCRIPTS: VerificationScripts = {
+  typecheck: 'typecheck',
+  checkStatic: 'check:static',
+  checkGame: 'check:game',
+};
+
+function verificationScripts(cwd: string): VerificationScripts {
+  const marker = join(cwd, 'kit.json');
+  if (!existsSync(marker)) return LEGACY_SCRIPTS;
+  const kit = JSON.parse(readFileSync(marker, 'utf8')) as { cliVerification?: Partial<VerificationScripts> };
+  if (!kit.cliVerification) return LEGACY_SCRIPTS;
+  const scripts = kit.cliVerification;
+  for (const value of [scripts.typecheck, scripts.checkStatic, scripts.checkGame]) {
+    if (typeof value !== 'string' || !/^[a-z][a-z0-9:-]*$/.test(value))
+      throw new CliError('Invalid Creator Kit verification scripts.', EXIT_RED);
+  }
+  return scripts as VerificationScripts;
+}
 
 type VerifyRun = (
   cmd: string,
@@ -16,11 +38,12 @@ export function runLadder(input: {
   run?: VerifyRun;
 }): { ok: true } | { ok: false; stage: VerifyStage; detail: string } {
   const run: VerifyRun = input.run ?? ((cmd, args, cwd) => spawnSync(cmd, args, { cwd, encoding: 'utf8' }));
+  const scripts = verificationScripts(input.cwd);
   const steps: Array<{ stage: VerifyStage; args: string[] }> = [
-    { stage: 'typecheck', args: ['run', 'typecheck'] },
-    { stage: 'check_static', args: ['run', 'check:static'] },
+    { stage: 'typecheck', args: ['run', scripts.typecheck] },
+    { stage: 'check_static', args: ['run', scripts.checkStatic] },
   ];
-  if (input.publish) steps.push({ stage: 'check_game', args: ['run', 'check:game'] });
+  if (input.publish) steps.push({ stage: 'check_game', args: ['run', scripts.checkGame] });
   for (const step of steps) {
     const result = run('npm', step.args, input.cwd);
     if ((result.status ?? 1) !== 0) {
@@ -46,9 +69,10 @@ export async function runLadderAsync(input: {
   run?: VerifyRun;
 }): Promise<ReturnType<typeof runLadder>> {
   if (input.run) return runLadder({ ...input, publish: false });
+  const scripts = verificationScripts(input.cwd);
   for (const [stage, script] of [
-    ['typecheck', 'typecheck'],
-    ['check_static', 'check:static'],
+    ['typecheck', scripts.typecheck],
+    ['check_static', scripts.checkStatic],
   ] as const) {
     if (input.abort.aborted) return { ok: false, stage, detail: 'Verification stopped' };
     const child = spawnCommand({

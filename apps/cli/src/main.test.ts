@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { writeBase, writeGameFiles } from './checkout.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -101,6 +101,19 @@ describe('runCli verbs', () => {
     expect(isLaunchedEntry(dest, pathToFileURL(dest).href)).toBe(true);
     expect(isLaunchedEntry(dest, pathToFileURL('/tmp/vitest').href)).toBe(false);
     expect(isLaunchedEntry(undefined)).toBe(false);
+  });
+
+  it('launches through an npm bin symlink', () => {
+    const root = mkdtempSync(join(tmpdir(), 'gamedevpl-bin-'));
+    try {
+      const script = join(root, 'gamedevpl.mjs');
+      const bin = join(root, 'gamedevpl');
+      writeFileSync(script, '');
+      symlinkSync(script, bin);
+      expect(isLaunchedEntry(bin, pathToFileURL(script).href)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('prints working-copy status and a diff patch from inside a checkout', async () => {

@@ -6,8 +6,9 @@ import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
+import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
 import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
@@ -453,7 +454,8 @@ export async function runCli(
 export function isLaunchedEntry(entry: string | undefined, moduleUrl: string = import.meta.url): boolean {
   if (!entry) return false;
   try {
-    return moduleUrl === pathToFileURL(resolvePath(entry)).href;
+    if (moduleUrl === pathToFileURL(resolvePath(entry)).href) return true;
+    return realpathSync(resolvePath(entry)) === realpathSync(fileURLToPath(moduleUrl));
   } catch {
     return false;
   }

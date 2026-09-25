@@ -81,6 +81,16 @@ jobs:
           chmod +x apps/cli/scripts/compile-release.sh
           apps/cli/scripts/compile-release.sh "${{ steps.version.outputs.version }}"
 
+      - name: Verify npm archive
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          test_dir="$(mktemp -d)"
+          trap 'rm -rf "$test_dir"' EXIT
+          npm install --prefix "$test_dir" --offline --ignore-scripts --no-audit \
+            "$GITHUB_WORKSPACE/apps/cli/dist/release/gamedevpl-npm.tgz"
+          "$test_dir/node_modules/.bin/gamedevpl" help | grep -q 'gamedevpl '
+
       - name: Attest provenance
         if: steps.version.outputs.skip != 'true'
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
