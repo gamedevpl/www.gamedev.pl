@@ -64,7 +64,7 @@ describe('CreatorQA submitting state', () => {
     });
 
     expect(find('.qa-submitting-card')).not.toBeNull();
-    expect(find('.qa-submitting-card__step-text')?.textContent).toMatch(/Submitting game specification/i);
+    expect(find('.qa-submitting-card__title')?.textContent).toMatch(/Submitting game specification/i);
     expect(find('.btn-create-now')?.textContent).toContain('Submitting');
 
     // Advance 2.8s: step 2
@@ -72,21 +72,21 @@ describe('CreatorQA submitting state', () => {
       vi.advanceTimersByTime(2800);
       await flushEffects();
     });
-    expect(find('.qa-submitting-card__step-text')?.textContent).toMatch(/Reserving game name and address/i);
+    expect(find('.qa-submitting-card__title')?.textContent).toMatch(/Reserving game name and address/i);
 
     // Advance 2.8s: step 3
     await act(async () => {
       vi.advanceTimersByTime(2800);
       await flushEffects();
     });
-    expect(find('.qa-submitting-card__step-text')?.textContent).toMatch(/Preparing workspace for coding agent/i);
+    expect(find('.qa-submitting-card__title')?.textContent).toMatch(/Preparing workspace for coding agent/i);
 
     // Advance 2.8s: step 4
     await act(async () => {
       vi.advanceTimersByTime(2800);
       await flushEffects();
     });
-    expect(find('.qa-submitting-card__step-text')?.textContent).toMatch(/Finalizing and opening Studio/i);
+    expect(find('.qa-submitting-card__title')?.textContent).toMatch(/Finalizing and opening Studio/i);
 
     await act(async () => root.unmount());
   });

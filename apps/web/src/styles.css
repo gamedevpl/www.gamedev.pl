@@ -5014,16 +5014,7 @@ button.builder-mode-selector:disabled {
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-heading, #fff);
-}
-
-.qa-submitting-card__step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 4px;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--turquoise, #00e4ac);
+  transition: opacity 0.2s ease;
 }
 
 .qa-submitting-card__hint {

@@ -34,11 +34,7 @@ export function CreatorQASubmittingCard({ submitting }: { submitting: boolean })
       <div className="qa-submitting-card__top">
         <Mascot emotion="busy" size={56} cooking title={t('mascot.busyAlt')} />
         <div className="qa-submitting-card__content">
-          <p className="qa-submitting-card__title">{t('qa.submittingTitle')}</p>
-          <p className="qa-submitting-card__step">
-            <span className="build-btn-spinner" aria-hidden="true" />
-            <span className="qa-submitting-card__step-text">{t(SUBMITTING_STEPS[submittingStepIndex])}</span>
-          </p>
+          <p className="qa-submitting-card__title">{t(SUBMITTING_STEPS[submittingStepIndex])}</p>
           <p className="qa-submitting-card__hint">{t('qa.submittingHint')}</p>
         </div>
       </div>
