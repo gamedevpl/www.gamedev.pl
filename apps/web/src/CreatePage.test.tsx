@@ -117,6 +117,9 @@ describe('CreatePage', () => {
     // A wide median build time reads as "give up" — never state one.
     expect(container.textContent).not.toMatch(/\b(median|ETA)\b/i);
 
+    expect(container.querySelector('.create-agent-callout')).not.toBeNull();
+    expect(container.querySelector('.create-builder-lane-cta')).not.toBeNull();
+
     await act(async () => root.unmount());
   });
 
