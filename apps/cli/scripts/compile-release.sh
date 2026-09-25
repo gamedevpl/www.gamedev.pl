@@ -10,6 +10,24 @@ mkdir -p "$out"
 npm run build --workspace @gamedevpl/contract --prefix "$root/../.."
 node "$root/scripts/build-binary.mjs"
 install -m 0755 "$root/dist/gamedevpl.mjs" "$out/gamedevpl"
-(cd "$out" && sha256sum gamedevpl > SHA256SUMS)
+package_dir="$root/dist/npm-package"
+mkdir -p "$package_dir/bin"
+install -m 0755 "$root/dist/gamedevpl.mjs" "$package_dir/bin/gamedevpl.mjs"
+cat > "$package_dir/package.json" <<EOF
+{
+  "name": "@gamedevpl/cli",
+  "version": "$version",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gamedevpl": "./bin/gamedevpl.mjs",
+    "git-remote-gamedevpl": "./bin/gamedevpl.mjs"
+  },
+  "engines": { "node": ">=20.19" }
+}
+EOF
+package_name=$(npm pack "$package_dir" --pack-destination "$out" --ignore-scripts --silent)
+mv "$out/$package_name" "$out/gamedevpl-npm.tgz"
+(cd "$out" && sha256sum gamedevpl gamedevpl-npm.tgz > SHA256SUMS)
 echo "cli-v$version artifact in $out"
 cat "$out/SHA256SUMS"
