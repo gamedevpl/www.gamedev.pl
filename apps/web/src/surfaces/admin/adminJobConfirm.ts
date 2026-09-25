@@ -54,6 +54,8 @@ export function publishRefusalCopy(code: PublishRefusal, counts?: EditorialCount
     not_gated: 'the gate has not run against this version yet',
     nothing_delivered: 'this build has never delivered a version',
     profile_required: 'the creator has not claimed a public profile — ask them to open Studio and use Claim handle',
+    preview_superseded_delivery:
+      'a newer preview replaced the delivered version — wait for it to be sealed, then preview again',
     store_unavailable: 'the games store is not configured on this deployment',
     editorial_cut: `reviewers cut this game (${formatEditorialCounts(counts)})`,
     editorial_pending: `no reviewer has cleared this game yet (${formatEditorialCounts(counts)})`,

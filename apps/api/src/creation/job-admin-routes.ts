@@ -14,7 +14,8 @@ import { isPublishableMode } from '../platform/publication-state.js';
 import { resolveGameAccess, sameOwner } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
-import { resolveEditorialPublish, type EditorialPublishCounts } from './job-admin-publish.js';
+import { previewMatchesDelivery, resolveEditorialPublish, supersedeOtherRounds } from './job-admin-publish.js';
+import type { EditorialPublishCounts } from './job-admin-publish.js';
 
 /**
  * The operator's view of the build queue.
@@ -185,7 +186,7 @@ export async function registerJobAdminRoutes(
         return reply.code(409).send({ error: 'nothing_delivered' });
       }
       // Never publish different bytes from the operator's preview.
-      if (record.previewVersion && record.previewVersion !== record.deliveredVersion) {
+      if (!previewMatchesDelivery(record, record.deliveredVersion)) {
         return reply.code(409).send({ error: 'preview_superseded_delivery' });
       }
 
@@ -202,8 +203,12 @@ export async function registerJobAdminRoutes(
       const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
       if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
       if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
-      // Manifest mode preserves proposal consent even without registry context.
-      // Preview mode likewise cannot cross the publication boundary.
+      // A proposal is somebody else's change to this game, and a green gate on one says
+      // only that it runs. It becomes publishable when the game's owner accepts it, which
+      // rewrites the mode — so a version still in proposal mode has not been accepted, and
+      // publishing it here would route around the one consent this feature depends on.
+      // Read off the manifest rather than from the proposal registry deliberately: this
+      // refusal must hold even for a caller who never heard of proposals.
       if (!isPublishableMode(manifest.deliveryMode)) {
         return reply.code(409).send({ error: 'not_publishable' });
       }
@@ -220,6 +225,12 @@ export async function registerJobAdminRoutes(
       const stale =
         latest.accessRevision !== initialAccess.accessRevision || !sameOwner(latest.owner, initialAccess.owner);
       if (stale) return reply.code(409).send({ error: 'owner_changed' });
+
+      // Re-checked after every await above: a delivery may have landed meanwhile.
+      const fresh = await store.getSubmission(jobId);
+      if (!fresh || !previewMatchesDelivery(fresh, record.deliveredVersion)) {
+        return reply.code(409).send({ error: 'preview_superseded_delivery' });
+      }
 
       const at = new Date(now()).toISOString();
       // Through `publishing` rather than straight to `published`: the intermediate state is
@@ -241,20 +252,7 @@ export async function registerJobAdminRoutes(
       // is left alone so the next sweep can still emit the published notification.
       await store.setSubmissionLastStatus(jobId, 'published');
 
-      // Supersede earlier rounds for this slug on publish.
-      const activeRecords = await store.listActiveSubmissions();
-      for (const other of activeRecords) {
-        if (other.slug === record.slug && other.jobId !== jobId) {
-          await store.recordJobTransition(other.jobId, {
-            to: 'abandoned',
-            at,
-            by: 'system',
-            reason: 'superseded_by_publish',
-          });
-          await store.setSubmissionAbandoned(other.jobId, at);
-          await store.setSubmissionLastStatus(other.jobId, 'abandoned');
-        }
-      }
+      await supersedeOtherRounds(store, record.slug, jobId, at);
 
       // Tell the people who follow this game that it moved. Best-effort and after the
       // publish has already happened: a notification that fails must never leave a game

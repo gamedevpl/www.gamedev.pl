@@ -10,6 +10,7 @@ export type PublishRefusal =
   | 'not_gated'
   | 'nothing_delivered'
   | 'profile_required'
+  | 'preview_superseded_delivery'
   | 'store_unavailable'
   | 'editorial_cut'
   | 'editorial_pending'
@@ -43,6 +44,7 @@ export async function publishJob(
     'not_gated',
     'nothing_delivered',
     'profile_required',
+    'preview_superseded_delivery',
     'store_unavailable',
     'editorial_cut',
     'editorial_pending',
