@@ -163,18 +163,14 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
-      /A coding agent writes it/i,
-    );
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).not.toMatch(
-      /Analyzing your idea/i,
-    );
+    expect(container.querySelector('.creation-card')).toBeNull();
     expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
     expect(container.querySelector('.prompt-box-form')?.getAttribute('aria-busy')).toBe('true');
 
     await renderWithStatus('loading');
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting/i);
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
 
     await renderWithStatus('idle');
     expect(container.querySelector('.prompt-composer-bar.is-busy')).toBeNull();
@@ -809,7 +805,9 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.matched-card')).toBeNull();
     expect(container.querySelector('.creation-card')).not.toBeNull();
     expect(container.querySelector('.creation-card')?.textContent).toContain('Zrobimy z tego grę');
-    expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
+    expect(container.querySelector('.creation-card button')).toBeNull();
+    expect(container.querySelector('.prompt-composer-bar .build-btn-label')?.textContent).toContain('Stwórz taką grę');
+    expect(container.querySelector('.prompt-composer-bar .build-btn.has-text-cta')).not.toBeNull();
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());

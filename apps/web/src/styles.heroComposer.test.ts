@@ -33,7 +33,7 @@ describe('desktop hero composer pill', () => {
     expect(bar).toMatch(/align-items:\s*center/);
     expect(bar).toMatch(/height:\s*auto/);
     expect(bar).toMatch(/padding:\s*4px 8px/);
-    expect(bar).toMatch(/grid-template-columns:\s*36px minmax\(0,\s*1fr\) 36px/);
+    expect(bar).toMatch(/grid-template-columns:\s*36px minmax\(0,\s*1fr\) 36px auto/);
 
     const input = firstRuleBody('.big-prompt-input');
     expect(input).toMatch(/height:\s*36px/);
@@ -61,7 +61,7 @@ describe('desktop hero composer pill', () => {
     expect(busy).toMatch(/cursor:\s*progress/);
 
     const spinner = firstRuleBody('.build-btn-spinner');
-    expect(spinner).toMatch(/animation:\s*status-spin/);
+    expect(spinner).toMatch(/display:\s*inline-block[\s\S]*animation:\s*status-spin/);
   });
 });
 

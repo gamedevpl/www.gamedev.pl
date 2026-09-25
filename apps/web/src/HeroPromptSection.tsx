@@ -552,7 +552,19 @@ export function HeroPromptSection({
               </button>
             </div>
 
-            <button type="submit" style={{ display: 'none' }} aria-hidden="true" disabled={isBusy} />
+            <button
+              type="submit"
+              className={`primary-btn build-btn${isCreationIntentEligible && !matchedGame && !isSearching && !isBusy ? ' has-text-cta' : ''}${isBusy ? ' is-busy' : ''}`}
+              disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+              aria-label={t('hero.smartBuildBtn')}
+            >
+              {isBusy ? (
+                <span className="build-btn-spinner" aria-hidden="true" />
+              ) : (
+                <PixelIcon name="sparkle" size={16} />
+              )}
+              <span className="build-btn-label">{t('hero.smartBuildBtn')}</span>
+            </button>
           </div>
 
           {busyLabel ? (
@@ -655,18 +667,16 @@ export function HeroPromptSection({
                 >
                   <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn')}
                 </button>
-                <button
-                  type="submit"
-                  className={`match-build-link${isBusy ? ' is-busy' : ''}`}
-                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-                >
-                  {isBusy ? (
-                    <span className="build-btn-spinner" aria-hidden="true" />
-                  ) : (
+                {isBusy ? null : (
+                  <button
+                    type="submit"
+                    className="match-build-link"
+                    disabled={pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                  >
                     <PixelIcon name="sparkle" size={12} />
-                  )}
-                  {isBusy && busyLabel ? busyLabel : t('hero.orBuildOwnGame')}
-                </button>
+                    {t('hero.orBuildOwnGame')}
+                  </button>
+                )}
               </div>
             </div>
           ) : isSearching ? (
@@ -677,27 +687,13 @@ export function HeroPromptSection({
                 <p className="searching-sub">"{promptText.trim()}"</p>
               </div>
             </div>
-          ) : isCreationIntentEligible ? (
-            <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
+          ) : isCreationIntentEligible && !isBusy ? (
+            <div className="smart-intent-card creation-card">
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
                   <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle')}
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
-              </div>
-              <div className="creation-actions">
-                <button
-                  type="submit"
-                  className={`primary-btn build-match-btn${isBusy ? ' is-busy' : ''}`}
-                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-                >
-                  {isBusy ? (
-                    <span className="build-btn-spinner" aria-hidden="true" />
-                  ) : (
-                    <PixelIcon name="sparkle" size={14} />
-                  )}
-                  {isBusy && busyLabel ? busyLabel : t('hero.smartBuildBtn')}
-                </button>
               </div>
             </div>
           ) : null}
