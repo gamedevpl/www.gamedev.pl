@@ -1204,32 +1204,6 @@
   white-space: nowrap;
 }
 
-.build-match-btn.is-busy,
-.match-build-link.is-busy {
-  opacity: 1;
-  cursor: progress;
-}
-
-.build-match-btn .build-btn-spinner {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  /* The shared ring is a faint track plus one dark edge. On this turquoise
-     pill that edge is the only thing the eye picks up, so it reads as a caret
-     in the label. Two dark edges make the mark a ring. */
-  border-color: rgba(8, 36, 29, 0.22);
-  border-top-color: #08241d;
-  border-right-color: #08241d;
-}
-
-.match-build-link.is-busy .build-btn-spinner {
-  width: 12px;
-  height: 12px;
-  flex: none;
-  border-color: rgba(0, 228, 172, 0.25);
-  border-top-color: var(--turquoise);
-}
-
 .creation-card {
   background: rgba(56, 189, 248, 0.08);
   border: 1px solid rgba(56, 189, 248, 0.25);

@@ -655,18 +655,16 @@ export function HeroPromptSection({
                 >
                   <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn')}
                 </button>
-                <button
-                  type="submit"
-                  className={`match-build-link${isBusy ? ' is-busy' : ''}`}
-                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-                >
-                  {isBusy ? (
-                    <span className="build-btn-spinner" aria-hidden="true" />
-                  ) : (
+                {isBusy ? null : (
+                  <button
+                    type="submit"
+                    className="match-build-link"
+                    disabled={pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                  >
                     <PixelIcon name="sparkle" size={12} />
-                  )}
-                  {t('hero.orBuildOwnGame')}
-                </button>
+                    {t('hero.orBuildOwnGame')}
+                  </button>
+                )}
               </div>
             </div>
           ) : isSearching ? (
@@ -685,20 +683,18 @@ export function HeroPromptSection({
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
-              <div className="creation-actions">
-                <button
-                  type="submit"
-                  className={`primary-btn build-match-btn${isBusy ? ' is-busy' : ''}`}
-                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-                >
-                  {isBusy ? (
-                    <span className="build-btn-spinner" aria-hidden="true" />
-                  ) : (
+              {isBusy ? null : (
+                <div className="creation-actions">
+                  <button
+                    type="submit"
+                    className="primary-btn build-match-btn"
+                    disabled={pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                  >
                     <PixelIcon name="sparkle" size={14} />
-                  )}
-                  {t('hero.smartBuildBtn')}
-                </button>
-              </div>
+                    {t('hero.smartBuildBtn')}
+                  </button>
+                </div>
+              )}
             </div>
           ) : null}
         </form>
