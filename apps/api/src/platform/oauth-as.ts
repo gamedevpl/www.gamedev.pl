@@ -9,7 +9,7 @@ import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.
 import { isRateLimited } from './ip-rate-limit.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { DEVICE_GRANT_TYPE, exchangeDeviceCode, registerOAuthDeviceRoutes } from './oauth-device.js';
-import { consentHtml, consentToken, consentTokenValid } from './oauth-consent.js';
+import { activeSessionUid, consentHtml, consentToken, consentTokenValid } from './oauth-consent.js';
 import {
   gamedevCliClient,
   gamedevCliGrantLabel,
@@ -116,11 +116,6 @@ function noteDcrHit(ip: string, nowMs: number): void {
   const hits = pruneDcrHits(ip, nowMs);
   hits.push(nowMs);
   dcrHitsByIp.set(ip, hits);
-}
-
-function activeSessionUid(request: FastifyRequest): string | null {
-  if (request.authMethod !== 'session' || !request.user || request.user.tier === 'blocked') return null;
-  return request.user.uid;
 }
 
 function pickLang(request: FastifyRequest): Locale {
@@ -313,7 +308,7 @@ export function registerOAuthAuthorizationServerRoutes(
     });
   }
 
-  registerOAuthDeviceRoutes(app, { sessionSecret, sessionSecretPrev, now });
+  registerOAuthDeviceRoutes(app, { sessionSecret, now });
 
   app.get(OAUTH_AS_METADATA_PATH, async (_request, reply) => {
     return reply

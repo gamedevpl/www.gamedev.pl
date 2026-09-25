@@ -1,10 +1,9 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
-import { consentToken, consentTokenValid, copyForScope } from './oauth-consent.js';
+import { activeSessionUid, consentToken, consentTokenValid, copyForScope } from './oauth-consent.js';
 import { isGamedevCliClient, sanitizeDeviceName, GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import {
   CREATOR_SCOPE,
@@ -68,17 +67,6 @@ function prune(nowMs: number): void {
   }
 }
 
-function readUid(request: FastifyRequest, sessionSecret: string, sessionSecretPrev?: string): string | null {
-  const cookie = request.cookies[SESSION_COOKIE_NAME];
-  if (!cookie || typeof cookie !== 'string') return null;
-  try {
-    return readSessionToken(cookie, sessionSecret, sessionSecretPrev).uid;
-  } catch (error) {
-    if (error instanceof InvalidSessionError) return null;
-    throw error;
-  }
-}
-
 function deviceConsent(uid: string, secret: string): string {
   return consentToken({ uid, clientId: GAMEDEV_CLI_CLIENT_ID, codeChallenge: 'device', secret });
 }
@@ -132,11 +120,10 @@ function devicePage(input: { userCode: string; consentToken: string; error?: str
 
 export function registerOAuthDeviceRoutes(
   app: FastifyInstance,
-  options: { sessionSecret: string; sessionSecretPrev?: string; now?: () => number },
+  options: { sessionSecret: string; now?: () => number },
 ): void {
   const now = options.now ?? Date.now;
   const sessionSecret = options.sessionSecret;
-  const sessionSecretPrev = options.sessionSecretPrev;
 
   app.post(
     '/oauth/device',
@@ -187,7 +174,7 @@ export function registerOAuthDeviceRoutes(
 
   app.get('/device', async (request, reply) => {
     if (!cliSurfaceEnabled()) return reply.status(404).send({ error: 'not found' });
-    const uid = readUid(request, sessionSecret, sessionSecretPrev);
+    const uid = activeSessionUid(request);
     if (!uid) {
       return reply.redirect(`${canonicalAppBaseUrl()}/studio?oauth_return=${encodeURIComponent(request.url)}`);
     }
@@ -206,7 +193,7 @@ export function registerOAuthDeviceRoutes(
 
   app.post('/device', async (request, reply) => {
     if (!cliSurfaceEnabled()) return reply.status(404).send({ error: 'not found' });
-    const uid = readUid(request, sessionSecret, sessionSecretPrev);
+    const uid = activeSessionUid(request);
     if (!uid) {
       return reply.redirect(`${canonicalAppBaseUrl()}/studio?oauth_return=/device`);
     }
