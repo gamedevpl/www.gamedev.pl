@@ -6,11 +6,11 @@ import { rememberBounded } from './bounded-map.js';
 import { createCimdFetcher, type CimdFetcher, validateCimdUrl } from './cimd-fetch.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
-import { InvalidSessionError, readSessionCookie, readSessionToken } from './auth.js';
 import { isRateLimited } from './ip-rate-limit.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { DEVICE_GRANT_TYPE, exchangeDeviceCode, registerOAuthDeviceRoutes } from './oauth-device.js';
 import { consentHtml, consentToken, consentTokenValid } from './oauth-consent.js';
+import { bindingFields, consentIdentity, tokenBindingLive } from './pat-grant-binding.js';
 import {
   gamedevCliClient,
   gamedevCliGrantLabel,
@@ -117,18 +117,6 @@ function noteDcrHit(ip: string, nowMs: number): void {
   const hits = pruneDcrHits(ip, nowMs);
   hits.push(nowMs);
   dcrHitsByIp.set(ip, hits);
-}
-
-function readUidFromSession(request: FastifyRequest, sessionSecret: string, sessionSecretPrev?: string): string | null {
-  const cookie = readSessionCookie(request.cookies);
-  if (!cookie) return null;
-  try {
-    const payload = readSessionToken(cookie, sessionSecret, sessionSecretPrev);
-    return payload.uid;
-  } catch (error) {
-    if (error instanceof InvalidSessionError) return null;
-    throw error;
-  }
 }
 
 function pickLang(request: FastifyRequest): Locale {
@@ -321,7 +309,7 @@ export function registerOAuthAuthorizationServerRoutes(
     });
   }
 
-  registerOAuthDeviceRoutes(app, { sessionSecret, sessionSecretPrev, now });
+  registerOAuthDeviceRoutes(app, { store, sessionSecret, now });
 
   app.get(OAUTH_AS_METADATA_PATH, async (_request, reply) => {
     return reply
@@ -414,7 +402,7 @@ export function registerOAuthAuthorizationServerRoutes(
   }
 
   app.get('/oauth/authorize', async (request, reply) => {
-    const uid = readUidFromSession(request, sessionSecret, sessionSecretPrev);
+    const uid = (await consentIdentity(request, store, now()))?.uid;
     if (!uid) {
       const returnTo = `${request.url}`;
       return reply.redirect(`${issuerUrl()}/studio?oauth_return=${encodeURIComponent(returnTo)}`);
@@ -459,10 +447,11 @@ export function registerOAuthAuthorizationServerRoutes(
   });
 
   app.post('/oauth/authorize', async (request, reply) => {
-    const uid = readUidFromSession(request, sessionSecret, sessionSecretPrev);
-    if (!uid) {
+    const identity = await consentIdentity(request, store, now());
+    if (!identity) {
       return reply.status(401).send({ error: 'login_required' });
     }
+    const uid = identity.uid;
 
     const validated = await validateAuthorizeParams(request, uid);
     if (!validated.ok) {
@@ -504,7 +493,9 @@ export function registerOAuthAuthorizationServerRoutes(
 
     const nowMs = now();
     const held = await store.listOAuthGrantsByOwner(uid);
-    const reused = held.find((grant) => sameCliDeviceGrant(grant, params.client_id, params.device));
+    const reused = held.find(
+      (grant) => sameCliDeviceGrant(grant, params.client_id, params.device) && grant.viaTokenId === identity.viaTokenId,
+    );
     if (!reused && held.length >= MAX_OAUTH_GRANTS_PER_UID) {
       return reply.redirect(
         oauthErrorRedirect(params.redirect_uri, 'access_denied', params.state, OAUTH_GRANT_CAP_DESCRIPTION),
@@ -523,6 +514,7 @@ export function registerOAuthAuthorizationServerRoutes(
       scope,
       expiresAt: new Date(nowMs + AS_AUTH_CODE_TTL_MS).toISOString(),
       grantId: reused?.grantId ?? randomUUID(),
+      ...bindingFields(identity),
       ...(isGamedevCliClient(params.client_id) ? { deviceName: sanitizeDeviceName(params.device) } : {}),
     });
 
@@ -582,6 +574,7 @@ export function registerOAuthAuthorizationServerRoutes(
       if (!verifyPkceS256(verifier, consumed.codeChallenge)) {
         return reply.status(400).send({ error: 'invalid_grant' });
       }
+      if (!(await tokenBindingLive(store, consumed, nowMs))) return reply.status(400).send({ error: 'invalid_grant' });
 
       const grantId = consumed.grantId ?? randomUUID();
       let grant = consumed.grantId ? await store.getOAuthGrant(consumed.grantId) : null;
@@ -598,6 +591,7 @@ export function registerOAuthAuthorizationServerRoutes(
             currentRefreshHash: '',
             refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
             ...(consumed.deviceName ? { deviceName: consumed.deviceName } : {}),
+            ...bindingFields(consumed),
           },
           { maxPerOwner: MAX_OAUTH_GRANTS_PER_UID },
         );
@@ -645,6 +639,10 @@ export function registerOAuthAuthorizationServerRoutes(
 
       const grant = await store.getOAuthGrantByRefreshTokenId(parsed.tokenId);
       if (!grant) return reply.status(400).send({ error: 'invalid_grant' });
+      if (!(await tokenBindingLive(store, grant, nowMs))) {
+        await store.revokeOAuthGrant(grant.grantId, grant.ownerUid);
+        return reply.status(400).send({ error: 'invalid_grant' });
+      }
 
       const access = generateAsAccessToken();
       const accessRecord = buildAsAccessTokenRecord(access, grant, nowMs);

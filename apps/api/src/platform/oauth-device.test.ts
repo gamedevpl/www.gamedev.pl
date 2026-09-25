@@ -4,6 +4,9 @@ import { DEVICE_CODE_TTL_MS, DEVICE_GRANT_TYPE } from './oauth-device.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import { buildOAuthApp, enableCliSurface, sessionCookie, SESSION_SECRET } from './oauth-cli-test-app.js';
 import { consentToken } from './oauth-consent.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { mintAccessTokenFor } from './access-token-service.js';
+import { revokeAccessTokenAndGrants } from './pat-grant-binding.js';
 import { InMemoryStore } from './store.js';
 
 describe('OAuth device authorization (CL-08)', () => {
@@ -309,5 +312,114 @@ describe('OAuth device authorization (CL-08)', () => {
     });
     expect(poll.statusCode).toBe(400);
     expect(poll.json()).toEqual({ error: 'expired_token' });
+  });
+
+  it.each([
+    ['tokenless PAT-derived', undefined, 'token' as const],
+    ['blocked', 'blocked' as const, undefined],
+  ])('refuses device consent from a %s session', async (_label, tier, source) => {
+    const store = await setup();
+    if (tier) await store.upsertUser({ uid: 'g:boss', tier });
+    const cookie = `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', SESSION_SECRET, undefined, undefined, source)}`;
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    const body = issued.json() as { device_code: string; user_code: string };
+
+    const page = await app!.inject({ method: 'GET', url: `/device?user_code=${body.user_code}`, headers: { cookie } });
+    expect(page.statusCode).toBe(302);
+    expect(page.headers.location).toMatch(/\/studio\?oauth_return=/);
+
+    const approve = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        user_code: body.user_code,
+        action: 'approve',
+        consent_token: deviceConsent(),
+      }).toString(),
+    });
+    expect(approve.statusCode).toBe(302);
+    expect(approve.body).not.toMatch(/Approved/i);
+
+    const poll = await app!.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: DEVICE_GRANT_TYPE,
+        device_code: body.device_code,
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+      }).toString(),
+    });
+    expect(poll.json()).toEqual({ error: 'authorization_pending' });
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toEqual([]);
+  });
+
+  async function approveWithPat(store: InMemoryStore) {
+    const { record } = await mintAccessTokenFor(store, { uid: 'g:boss', name: 'reviewer', createdByUid: 'g:boss' });
+    const cookie = `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', SESSION_SECRET, undefined, undefined, 'token', record.tokenId)}`;
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    const body = issued.json() as { device_code: string; user_code: string };
+    const approve = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        user_code: body.user_code,
+        action: 'approve',
+        consent_token: deviceConsent(),
+      }).toString(),
+    });
+    expect(approve.body).toMatch(/Approved/i);
+    const poll = () =>
+      app!.inject({
+        method: 'POST',
+        url: '/oauth/token',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({
+          grant_type: DEVICE_GRANT_TYPE,
+          device_code: body.device_code,
+          client_id: GAMEDEV_CLI_CLIENT_ID,
+        }).toString(),
+      });
+    return { tokenId: record.tokenId, poll };
+  }
+
+  it('binds a device grant approved from a PAT session and kills it with the PAT', async () => {
+    const store = await setup();
+    const { tokenId, poll } = await approveWithPat(store);
+    const tokens = await poll();
+    expect(tokens.statusCode).toBe(200);
+    const accessToken = (tokens.json() as { access_token: string }).access_token;
+    const [grant] = await store.listOAuthGrantsByOwner('g:boss');
+    expect(grant?.viaTokenId).toBe(tokenId);
+
+    await revokeAccessTokenAndGrants(store, tokenId);
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toEqual([]);
+    const profile = await app!.inject({
+      method: 'GET',
+      url: '/api/me/profile',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(profile.statusCode).toBe(401);
+  });
+
+  it('issues nothing when the approving PAT is revoked before the poll', async () => {
+    const store = await setup();
+    const { tokenId, poll } = await approveWithPat(store);
+    await store.deleteAccessToken(tokenId);
+    const tokens = await poll();
+    expect(tokens.json()).toEqual({ error: 'access_denied' });
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toEqual([]);
   });
 });

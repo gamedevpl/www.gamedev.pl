@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { parseAccessToken } from './access-token.js';
 import { resolveAccessTokenUser } from './access-token-service.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { mintSessionToken, SESSION_COOKIE_NAME, TOKEN_SESSION_DURATION_SECONDS } from './auth.js';
@@ -148,10 +149,8 @@ function tokenLoginHtml(input: { oauthReturn: string | null; formToken: string; 
  * mechanism here — this page adds no authority, and is emphatically not the bypass route
  * AGENTS.md promises does not exist. What it adds is a way to *perform* that exchange
  * without a shell: the API route wants an `Authorization` header, and a human sitting in
- * front of a browser cannot produce one. That gap matters because sign-in on this site
- * is Google or Apple and nothing else, so anyone who must reach the consent screen
- * without a Google account — a marketplace reviewer testing the MCP connector, most
- * immediately — has no door at all.
+ * front of a browser cannot produce one. A marketplace reviewer without Google can then
+ * approve the MCP connector; the grant is bound to the token and dies with it.
  *
  * Deliberately not linked from anywhere. It is not a second front door for creators;
  * it is the door for whoever was handed a token, and a token can only exist because an
@@ -248,9 +247,10 @@ export function registerTokenLoginRoutes(app: FastifyInstance, options: TokenLog
       // Stamped `src: 'token'` exactly as POST /api/auth/session stamps it, so the
       // session-only operator surfaces keep refusing this cookie. A cookie minted here
       // must carry the token's authority and not a grain more.
+      const tokenId = parseAccessToken(token).tokenId;
       reply.setCookie(
         SESSION_COOKIE_NAME,
-        mintSessionToken(user.uid, sessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token'),
+        mintSessionToken(user.uid, sessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token', tokenId),
         {
           path: '/',
           httpOnly: true,

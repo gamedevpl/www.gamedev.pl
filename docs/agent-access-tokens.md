@@ -219,6 +219,15 @@ OpenAI's plugin review explicitly forbids 2FA and account creation on a test cre
 Handing over a shared Google login would mean disabling 2FA on an account Google will
 challenge anyway the moment it is used from an unfamiliar IP.
 
+A grant approved this way (at `/oauth/authorize` or `/device`) is **bound to the PAT**:
+the cookie carries the token's id, the grant stores it as `viaTokenId` together with the
+token's expiry, and the grant dies with the token. Revoking the PAT (admin route, the
+creator's own tokens page, or `token:revoke`) revokes its bound grants in the same call,
+which kills their access tokens on the next use. Access tokens stop at the PAT's expiry
+without an extra read, and every refresh re-reads the PAT and revokes the grant if it
+is gone. Consent requires the PAT to be live at approval time, and a token cookie minted
+before this binding existed (no token id) cannot approve at all.
+
 The page adds no authority: it is `POST /api/auth/session` with a form on the front, the
 cookie carries the same `src: 'token'` stamp, and the operator surfaces refuse it
 identically. It is **not** the bypass route `AGENTS.md` says does not exist — there is

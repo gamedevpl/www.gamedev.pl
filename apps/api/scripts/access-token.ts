@@ -13,7 +13,6 @@
 //
 // Writes to whatever project your credentials point at. There is no dev/prod switch here,
 // so check `gcloud config get-value project` before minting against the live site.
-
 import {
   DEFAULT_EXPIRY_DAYS,
   MAX_EXPIRY_DAYS,
@@ -21,6 +20,7 @@ import {
   MintAccessTokenError,
   toPublicAccessToken,
 } from '../src/platform/access-token-service.js';
+import { revokeAccessTokenAndGrants } from '../src/platform/pat-grant-binding.js';
 import { FirestoreStore } from '../src/platform/store.js';
 
 function usage(): never {
@@ -110,7 +110,7 @@ async function revoke(store: FirestoreStore, args: string[]): Promise<void> {
   const tokenId = args.find((arg) => !arg.startsWith('--'));
   if (!tokenId) usage();
 
-  const deleted = await store.deleteAccessToken(tokenId);
+  const deleted = await revokeAccessTokenAndGrants(store, tokenId);
   console.log(deleted ? `Revoked ${tokenId}.` : `No token with id ${tokenId}.`);
   if (!deleted) process.exit(1);
 }

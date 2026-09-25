@@ -7,14 +7,18 @@ import { pkceChallengeS256 } from './oauth-pkce.js';
 import { InMemoryStore } from './store.js';
 
 const SESSION_SECRET = 'dev-session-secret-change-me';
+const stores = new WeakMap<FastifyInstance, InMemoryStore>();
 function sessionCookie(uid: string): string {
   return `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, SESSION_SECRET)}`;
 }
 async function buildOAuthApp(store: InMemoryStore, cimdFetcher: CimdFetcher) {
-  return buildApp({ store, sessionSecret: SESSION_SECRET, cimdFetcher });
+  const app = await buildApp({ store, sessionSecret: SESSION_SECRET, cimdFetcher });
+  stores.set(app, store);
+  return app;
 }
 
 async function authorizeCimd(app: FastifyInstance, clientId: string, uid = 'g:creator') {
+  await stores.get(app)!.upsertUser({ uid });
   return app.inject({
     method: 'GET',
     url: '/oauth/authorize',

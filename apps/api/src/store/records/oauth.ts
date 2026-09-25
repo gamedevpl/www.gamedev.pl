@@ -23,6 +23,8 @@ export interface OAuthGrantRecord {
   currentRefreshHash: string;
   refreshExpiresAt: string;
   deviceName?: string;
+  viaTokenId?: string;
+  viaTokenExpiresAt?: string;
 }
 
 export interface OAuthAccessTokenRecord {
@@ -47,6 +49,8 @@ export interface OAuthAuthCodeRecord {
   usedAt?: string;
   grantId?: string;
   deviceName?: string;
+  viaTokenId?: string;
+  viaTokenExpiresAt?: string;
 }
 
 export type RotateRefreshTokenResult =

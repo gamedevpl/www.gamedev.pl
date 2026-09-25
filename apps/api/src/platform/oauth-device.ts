@@ -1,10 +1,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import { consentToken, consentTokenValid, copyForScope } from './oauth-consent.js';
+import { bindingFields, consentIdentity, tokenBindingLive, type ConsentIdentity } from './pat-grant-binding.js';
 import { isGamedevCliClient, sanitizeDeviceName, GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import {
   CREATOR_SCOPE,
@@ -39,6 +39,7 @@ type DeviceAuth = {
   intervalSec: number;
   lastPollAt: number;
   uid?: string;
+  approvedBy?: ConsentIdentity;
   denied?: boolean;
 };
 
@@ -65,17 +66,6 @@ function mintUserCode(): string {
 function prune(nowMs: number): void {
   for (const [key, row] of pending) {
     if (row.expiresAt <= nowMs) pending.delete(key);
-  }
-}
-
-function readUid(request: FastifyRequest, sessionSecret: string, sessionSecretPrev?: string): string | null {
-  const cookie = request.cookies[SESSION_COOKIE_NAME];
-  if (!cookie || typeof cookie !== 'string') return null;
-  try {
-    return readSessionToken(cookie, sessionSecret, sessionSecretPrev).uid;
-  } catch (error) {
-    if (error instanceof InvalidSessionError) return null;
-    throw error;
   }
 }
 
@@ -132,11 +122,11 @@ function devicePage(input: { userCode: string; consentToken: string; error?: str
 
 export function registerOAuthDeviceRoutes(
   app: FastifyInstance,
-  options: { sessionSecret: string; sessionSecretPrev?: string; now?: () => number },
+  options: { store: Store; sessionSecret: string; now?: () => number },
 ): void {
+  const store = options.store;
   const now = options.now ?? Date.now;
   const sessionSecret = options.sessionSecret;
-  const sessionSecretPrev = options.sessionSecretPrev;
 
   app.post(
     '/oauth/device',
@@ -187,7 +177,7 @@ export function registerOAuthDeviceRoutes(
 
   app.get('/device', async (request, reply) => {
     if (!cliSurfaceEnabled()) return reply.status(404).send({ error: 'not found' });
-    const uid = readUid(request, sessionSecret, sessionSecretPrev);
+    const uid = (await consentIdentity(request, store, now()))?.uid;
     if (!uid) {
       return reply.redirect(`${canonicalAppBaseUrl()}/studio?oauth_return=${encodeURIComponent(request.url)}`);
     }
@@ -206,10 +196,11 @@ export function registerOAuthDeviceRoutes(
 
   app.post('/device', async (request, reply) => {
     if (!cliSurfaceEnabled()) return reply.status(404).send({ error: 'not found' });
-    const uid = readUid(request, sessionSecret, sessionSecretPrev);
-    if (!uid) {
+    const identity = await consentIdentity(request, store, now());
+    if (!identity) {
       return reply.redirect(`${canonicalAppBaseUrl()}/studio?oauth_return=/device`);
     }
+    const uid = identity.uid;
     const expected = deviceConsent(uid, sessionSecret);
     const body = (request.body ?? {}) as {
       user_code?: string;
@@ -238,6 +229,7 @@ export function registerOAuthDeviceRoutes(
       return page('Review the permissions below, then approve.', userCode, row.scope);
     }
     row.uid = uid;
+    row.approvedBy = identity;
     return page('Approved. Return to your terminal.', '', row.scope);
   });
 }
@@ -269,6 +261,11 @@ export async function exchangeDeviceCode(
     return { ok: false, error: 'access_denied', status: 400 };
   }
   if (!row.uid) return { ok: false, error: 'authorization_pending', status: 400 };
+  const binding = { ownerUid: row.uid, ...bindingFields(row.approvedBy ?? {}) };
+  if (!(await tokenBindingLive(store, binding, input.nowMs))) {
+    pending.delete(row.userCode);
+    return { ok: false, error: 'access_denied', status: 400 };
+  }
 
   const grantId = randomUUID();
   const grant: OAuthGrantRecord = {
@@ -282,6 +279,7 @@ export async function exchangeDeviceCode(
     currentRefreshHash: '',
     refreshExpiresAt: new Date(input.nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
     deviceName: row.deviceName,
+    ...bindingFields(row.approvedBy ?? {}),
   };
   const created = await store.createOAuthGrant(grant, { maxPerOwner: MAX_OAUTH_GRANTS_PER_UID });
   if (!created) {

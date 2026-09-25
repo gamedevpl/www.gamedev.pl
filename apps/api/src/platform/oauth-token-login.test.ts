@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { generateAccessToken } from './access-token.js';
+import { generateAccessToken, parseAccessToken } from './access-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { newCsrfNonce, originAllowed, sanitizeOAuthReturnPath, TOKEN_LOGIN_PATH } from './oauth-token-login.js';
@@ -248,8 +248,8 @@ describe('POST /oauth/token-login', () => {
     // Past the sign-in redirect: a missing session bounces to /studio?oauth_return=…,
     // and this account never bounces. The 400 is the *next* check complaining about
     // absent client_id/redirect_uri, which is exactly how far this test means to get.
-    expect(authorize.statusCode).not.toBe(302);
     expect(authorize.statusCode).toBe(400);
+    expect(readSessionToken(cookie, sessionSecret).tid).toBe(parseAccessToken(token).tokenId);
   });
 
   it('rejects a POST with no form token', async () => {
