@@ -306,6 +306,25 @@
   gap: 8px;
 }
 
+.studio-connect-actions input {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border, #232c35);
+  background: rgba(15, 20, 24, 0.65);
+  color: var(--text, #f0f4f8);
+  font: inherit;
+  font-size: 0.85rem;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.studio-connect-actions input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.18);
+}
+
 .studio-connect-skip {
   appearance: none;
   border: 0;

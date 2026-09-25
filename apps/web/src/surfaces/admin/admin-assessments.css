@@ -129,9 +129,34 @@
   margin: 0.5rem 0 0;
 }
 
+.admin-resolution-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .admin-resolution-form textarea,
-.admin-resolution-form input[type='text'] {
+.admin-resolution-form input[type='text'],
+.admin-resolution-form select {
   width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.65rem;
+  transition: border-color 0.15s ease;
+}
+
+.admin-resolution-form textarea:focus,
+.admin-resolution-form input[type='text']:focus,
+.admin-resolution-form select:focus {
+  outline: none;
+  border-color: var(--turquoise);
 }
 
 .admin-resolution-actions {
@@ -140,6 +165,22 @@
   gap: 0.5rem;
   align-items: center;
   margin-top: 0.35rem;
+}
+
+.admin-resolution-actions button {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.admin-resolution-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .admin-resolution-filter {

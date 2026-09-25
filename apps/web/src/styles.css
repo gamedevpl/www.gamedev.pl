@@ -5036,6 +5036,66 @@ button.builder-mode-selector:disabled {
   text-decoration: underline;
 }
 
+/* Submitting state feedback: while the submission is in flight (10+ seconds for
+   name reservation, brief assembly and agent environment setup), keep the creator
+   informed with clear progress phases and an active progress bar. */
+.qa-submitting-card {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  background: var(--panel, #171c20);
+  border: 1px solid var(--turquoise, #00e4ac);
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 228, 172, 0.12);
+  animation: fadeIn 0.25s ease-out;
+}
+
+.qa-submitting-card__top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.qa-submitting-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.qa-submitting-card__title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+  transition: opacity 0.2s ease;
+}
+
+.qa-submitting-card__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+}
+
+.qa-submitting-card__progress-bar {
+  margin-top: 14px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.qa-submitting-card__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00e4ac 0%, #00b887 100%);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(0, 228, 172, 0.4);
+}
+
+.qa-review.is-submitting {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
 /* Kept beside the rule it overrides rather than with the other mobile input
    sizes — that block sits earlier in the file and loses on source order.
    16px is the floor below which iOS Safari zooms the page on focus. */
@@ -8607,6 +8667,12 @@ body.remix-entry-open {
   background: rgba(0, 0, 0, 0.25);
   color: inherit;
   font: inherit;
+}
+
+.creator-profile-input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
 }
 
 .creator-profile-bio-input {

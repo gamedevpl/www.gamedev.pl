@@ -555,15 +555,15 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
   }
-
+  async claimGateRepair(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+    return this.roundBudgetStore.claimGateRepair(jobId, version, at, roundGeneration);
+  }
   async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at, roundGeneration);
   }
-
   async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
     return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
   }
-
   async allocateJobId(): Promise<number> {
     return this.dispatchStore.allocateJobId();
   }

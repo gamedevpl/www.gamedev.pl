@@ -21,8 +21,13 @@ export interface NativeJobStatusOptions {
   selfBuildDeliveryCap: () => number;
 }
 
+export interface NativeJobStatusOptionsPerCall {
+  // False: only what the record decides; the sweep needs no more.
+  detail?: boolean;
+}
+
 export interface NativeJobStatusAssembler {
-  nativeJobStatus(record: SubmissionRecord): Promise<SubmissionStatusResponse>;
+  nativeJobStatus(record: SubmissionRecord, opts?: NativeJobStatusOptionsPerCall): Promise<SubmissionStatusResponse>;
 }
 
 // Single status derivation, shared by the status route and the notify sweep.
@@ -39,7 +44,10 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
   } = options;
 
   // Projects the job's own record — no issue or PR here.
-  async function nativeJobStatus(record: SubmissionRecord): Promise<SubmissionStatusResponse> {
+  async function nativeJobStatus(
+    record: SubmissionRecord,
+    opts?: NativeJobStatusOptionsPerCall,
+  ): Promise<SubmissionStatusResponse> {
     const state = record.state ?? 'queued';
     const status: SubmissionStatusResponse = {
       status: record.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
@@ -50,6 +58,8 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
         ? { draftOrigin: 'remix' as const }
         : {}),
     };
+    // Everything below decorates; the status itself is already decided.
+    if (opts?.detail === false) return status;
     const playableVersion = record.previewVersion ?? record.deliveredVersion;
     if (record.slug && playableVersion) {
       if (gamesStore?.getDerivedArtifact) {

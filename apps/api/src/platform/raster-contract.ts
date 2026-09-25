@@ -9,7 +9,4 @@ export const IMAGES_CONTRACT = {
   windowProgressName: '__GAME_IMAGE_PROGRESS__',
 } as const;
 
-export const DELIVERY_EXTRA_ASSET_PATTERN = new RegExp(
-  '^(?:scenes|cast|images)/[a-z0-9][a-z0-9/_-]{0,80}\\.(?:png|webp)$',
-  'i',
-);
+export { DELIVERY_EXTRA_ASSET_PATTERN } from '@gamedevpl/contract';

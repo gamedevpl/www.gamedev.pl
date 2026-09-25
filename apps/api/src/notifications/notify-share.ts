@@ -4,7 +4,7 @@ import { absoluteAppUrl, type EmitDeps } from './notify.js';
 import { shareNotificationMessage, sharePushContent } from './email-templates-share.js';
 import { normalizeLocale } from './email-templates.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
-import { mintUnsubscribeToken } from './unsubscribe-token.js';
+import { mintUnsubscribeToken, unsubscribeSecretFromEnv } from './unsubscribe-token.js';
 import type { ShareNotificationType, Store, StoredNotification } from '../platform/store.js';
 
 export interface ShareNotice {
@@ -38,7 +38,7 @@ async function sendEmail(
 ): Promise<boolean> {
   if (notification.emailedAt) return false;
   const mailer: Mailer | undefined = deps.mailer ?? (process.env.RESEND_API_KEY ? createMailerFromEnv() : undefined);
-  const unsubscribeSecret = deps.unsubscribeSecret ?? process.env.SESSION_SECRET;
+  const unsubscribeSecret = deps.unsubscribeSecret ?? unsubscribeSecretFromEnv();
   if (!mailer || !unsubscribeSecret) return false;
   try {
     const user = await deps.store.getUser(uid);

@@ -95,6 +95,7 @@ const FILE_BUCKET = {
   'sweep-cadence': 'platform',
   'shelf-rebuild-pass': 'platform',
   'sweep-scope': 'platform',
+  'gate-repair-sweep': 'platform',
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
   'spa-paths': 'platform',
@@ -246,6 +247,7 @@ const FILE_BUCKET = {
   'improvement-admission': 'creation',
   'create-game': 'creation',
   'job-reconciler': 'creation',
+  'gate-repair': 'creation',
   'dispatch-build': 'creation',
   'resume-build': 'creation',
   'seed-pipeline': 'creation',
@@ -258,6 +260,8 @@ const FILE_BUCKET = {
   'job-admin-publish': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',
+  'refine-title': 'creation',
+  'refine-fallback.test': 'creation',
   'option-image-routes': 'creation',
   'option-images': 'creation',
   'option-image-safety': 'creation',
@@ -410,6 +414,7 @@ const FILE_BUCKET = {
   'example-files': 'agent-surface',
   'agent-tasks': 'agent-surface',
   'build-prompt': 'agent-surface',
+  'build-prompt-opening': 'agent-surface',
   'gate-verdict': 'agent-surface',
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.

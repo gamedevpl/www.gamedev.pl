@@ -32,7 +32,8 @@
 }
 
 .propose-field input,
-.propose-field textarea {
+.propose-field textarea,
+.propose-field select {
   width: 100%;
   padding: 9px 11px;
   border: 1px solid var(--panel-border);
@@ -45,7 +46,8 @@
 }
 
 .propose-field input:focus-visible,
-.propose-field textarea:focus-visible {
+.propose-field textarea:focus-visible,
+.propose-field select:focus-visible {
   outline: 2px solid var(--turquoise);
   outline-offset: 1px;
 }

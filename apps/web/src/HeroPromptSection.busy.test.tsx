@@ -118,4 +118,58 @@ describe('HeroPromptSection busy states and loading indicators', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('rotates submitting status steps over time while loading', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'Lets create a remake of Beasts and Pumpkins game',
+          catalogEntries: [],
+          submissionStatus: 'loading',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting game specification/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Submitting game specification/i);
+
+    // Advance 2.8s: step 2
+    await act(async () => {
+      vi.advanceTimersByTime(2800);
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Reserving game name and address/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Reserving game name and address/i);
+
+    // Advance another 2.8s: step 3
+    await act(async () => {
+      vi.advanceTimersByTime(2800);
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(
+      /Preparing workspace for coding agent/i,
+    );
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Preparing workspace for coding agent/i);
+
+    // Advance another 2.8s: step 4
+    await act(async () => {
+      vi.advanceTimersByTime(2800);
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Finalizing and opening Studio/i);
+    expect(container.querySelector('.build-match-btn')?.textContent).toMatch(/Finalizing and opening Studio/i);
+
+    await act(async () => root.unmount());
+  });
 });

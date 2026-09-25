@@ -90,6 +90,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     log: { error: (context: object, message: string) => void };
     // Set when this round exists only because the last never uploaded.
     undelivered?: boolean;
+    gateRepair?: { version: string; report: string };
     // The appendCreatorMessage write for `feedback` failed; buildPrompt must inline it.
     feedbackQueueFailed?: boolean;
     // Who asked for this round, when it was not the creator.
@@ -176,6 +177,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.undelivered ? { undelivered: true } : {}),
+        ...(input.gateRepair ? { gateRepair: input.gateRepair } : {}),
         ...(input.feedbackQueueFailed ? { feedbackQueueFailed: true } : {}),
         ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
         ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),

@@ -1,3 +1,4 @@
+import { isDeliverablePath } from '@gamedevpl/contract';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -102,6 +103,11 @@ function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: Ign
         ignored.push({ path: nextRel, source: match.source, pattern: match.pattern, directory });
         continue;
       }
+      // Undeliverable paths stay local: never staged, diffed or deleted.
+      if (!directory && !isDeliverablePath(nextRel)) {
+        ignored.push({ path: nextRel, source: 'not-game', pattern: '', directory: false });
+        continue;
+      }
       if (stat.isSymbolicLink()) {
         files.push({ path: nextRel, content: '' });
         continue;
@@ -131,6 +137,8 @@ function ignoredUntracked(
   isDirectory = false,
 ): boolean {
   if (rel.split('/').includes('.git')) return true;
+  // Mirrors scanGame's not-game skip on the platform side.
+  if (!isDirectory && !isDeliverablePath(rel)) return true;
   const match = matcher.ignored(`games/${slug}/${rel}`, isDirectory);
   return match !== null && !coversTracked(rel, tracked);
 }
@@ -181,7 +189,8 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
 
     const stat = existsSync(abs) ? lstatSync(abs) : null;
     const directory = stat !== null && !stat.isSymbolicLink() && stat.isDirectory();
-    if (!ignoredUntracked(dest, slug, file.path, tracked, matcher, directory)) continue;
+    // Directories at file paths hold only not-game files; scanGame hid them.
+    if (!directory && !ignoredUntracked(dest, slug, file.path, tracked, matcher, directory)) continue;
     if (!stat) {
       absent.push(file.path);
       continue;

@@ -139,6 +139,9 @@ export async function launchWorkbench(input: {
       const state = journalAt(path);
       if (state?.url && (await health(state))) {
         input.write(`Play session: ${state.url}`);
+        input.write(
+          'Runs in the background; Ctrl+C does not stop it. Stop it from the browser: Commands → End session.',
+        );
         if (!input.noOpen && !(await openUrl(state.url)))
           input.write('Browser could not open. Copy the Play session URL above.');
         return state.url;

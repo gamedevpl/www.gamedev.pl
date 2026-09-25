@@ -94,6 +94,7 @@ interface Session {
   tx: Transaction;
   flush(): void;
   deferred: DeferredInvalidation;
+  flushedOwners: string[];
 }
 
 // Everything the transaction read, so resolving owners costs no read.
@@ -182,6 +183,9 @@ function createSession(real: Transaction, db: Firestore, at: string): Session {
     get deferred() {
       return { jobIds: [...unread], claimantSlugs: [...claimantSlugs], memberSlugs: [...memberSlugs] };
     },
+    get flushedOwners() {
+      return [...owners];
+    },
   };
 }
 
@@ -205,26 +209,32 @@ export function createGuardedFirestore(db: Firestore, log: ShelfGuardLog = defau
     }
   };
 
-  const resolveDeferred = async (pending: DeferredInvalidation, at: string): Promise<void> => {
+  const resolveDeferred = async (pending: DeferredInvalidation, at: string, flushedOwners: string[]): Promise<void> => {
+    const tombstoned = new Set(flushedOwners);
+    const tombstoneOnce = async (uid: string): Promise<void> => {
+      if (tombstoned.has(uid)) return;
+      await tombstone(uid, at);
+      tombstoned.add(uid);
+    };
     const slugs = new Set(pending.memberSlugs);
     for (const jobId of pending.jobIds) {
       await attempt({ jobId }, async () => {
         const record = (await db.collection('submissions').doc(jobId).get()).data() as Data | undefined;
-        if (typeof record?.ownerUid === 'string') await tombstone(record.ownerUid, at);
+        if (typeof record?.ownerUid === 'string') await tombstoneOnce(record.ownerUid);
         if (typeof record?.slug === 'string') slugs.add(record.slug);
       });
     }
     for (const slug of slugs) {
       await attempt({ slug }, async () => {
         const access = (await db.collection('gameAccess').doc(slug).get()).data() as Data | undefined;
-        for (const uid of membersOf(access ?? null)) await tombstone(uid, at);
+        for (const uid of membersOf(access ?? null)) await tombstoneOnce(uid);
       });
     }
     for (const slug of pending.claimantSlugs) {
       await attempt({ slug }, async () => {
         const snap = await db.collection('submissions').where('slug', '==', slug).select('ownerUid').get();
         const claimants = new Set(snap.docs.map((doc) => (doc.data() as Data).ownerUid));
-        for (const uid of claimants) if (typeof uid === 'string') await tombstone(uid, at);
+        for (const uid of claimants) if (typeof uid === 'string') await tombstoneOnce(uid);
       });
     }
   };
@@ -232,6 +242,7 @@ export function createGuardedFirestore(db: Firestore, log: ShelfGuardLog = defau
   const runTransaction = async <T>(updateFunction: (tx: Transaction) => Promise<T>, options?: unknown): Promise<T> => {
     const at = new Date().toISOString();
     let pending: DeferredInvalidation = { jobIds: [], claimantSlugs: [], memberSlugs: [] };
+    let flushedOwners: string[] = [];
     const result = await (db.runTransaction as (fn: (tx: Transaction) => Promise<T>, o?: unknown) => Promise<T>)(
       async (real) => {
         const session = createSession(real, db, at);
@@ -239,12 +250,13 @@ export function createGuardedFirestore(db: Firestore, log: ShelfGuardLog = defau
         // After the callback, so every write is known; no read follows.
         session.flush();
         pending = session.deferred;
+        flushedOwners = session.flushedOwners;
         return value;
       },
       options,
     );
     const deferred = pending.jobIds.length + pending.claimantSlugs.length + pending.memberSlugs.length;
-    if (deferred > 0) await resolveDeferred(pending, at);
+    if (deferred > 0) await resolveDeferred(pending, at, flushedOwners);
     return result;
   };
 

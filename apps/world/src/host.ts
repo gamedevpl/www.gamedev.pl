@@ -62,6 +62,7 @@ export interface ZoneHostOptions {
   /** Resolves a slug's declaration, or null when it declares no zone. */
   schemas: { getSchema(slug: string): Promise<ZoneSchema | null> };
   secret: string;
+  prevSecret?: string;
   now?: () => number;
   maxZones?: number;
   // Injected so a test need not wait. Defaults to IDLE_SEAT_MS.
@@ -184,14 +185,13 @@ export class ZoneHost {
 
   /**
    * Admits one connection against a ticket.
-   *
    * The ticket is the only thing consulted. There is no session here and there could not
    * be — the host is a separate origin and the cookie never reaches it — which is
    * exactly the property that keeps a place running untrusted code away from anything
    * that identifies a person.
    */
   async admit(ticket: string, connection: ZoneConnection): Promise<{ zoneId: string; slot: number; zone: Zone }> {
-    const claims = verifyZoneTicket(ticket, this.options.secret, this.now());
+    const claims = verifyZoneTicket(ticket, this.options.secret, this.now(), this.options.prevSecret);
 
     // Named on every refusal past this point, and nowhere near `claims.player`: which game
     // and which world is the whole question when a join fails, and neither says who.

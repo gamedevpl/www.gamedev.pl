@@ -128,6 +128,7 @@
     "GEMINI_API_KEY": "gemini-api-key",
     "GITHUB_TOKEN": "github-token",
     "MANAGED_AGENT_API_KEY": "anthropic-api-key",
+    "MP_ROOM_SECRET": "mp-room-secret",
     "OPENAI_API_KEY": "openai-api-key",
     "OPTION_IMAGE_API_KEY": "openai-api-key",
     "RESEND_API_KEY": "resend-api-key",
@@ -137,7 +138,10 @@
     "SEED_OPENROUTER_API_KEY": "openrouter-api-key",
     "SESSION_SECRET": "session-secret",
     "SUBMISSION_TOKEN_SECRET": "submission-token-secret",
-    "VAPID_PRIVATE_KEY": "vapid-private-key"
+    "UNSUBSCRIBE_SECRET": "unsubscribe-secret",
+    "VAPID_PRIVATE_KEY": "vapid-private-key",
+    "ZONE_PLAYER_SECRET": "zone-player-secret",
+    "ZONE_TICKET_SECRET": "zone-ticket-secret"
   },
   "notServiceVars": {
     "$comment": [

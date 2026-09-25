@@ -1,10 +1,12 @@
 export const WORKBENCH_TOOLS_SCRIPT = String.raw`
 let attachments=[];try{const saved=sessionStorage.getItem('play-attachments');if(saved&&saved.length<16000)attachments=JSON.parse(saved).slice(0,8);}catch{}
 const device=crypto.randomUUID();
-function tray(){sessionStorage.setItem('play-attachments',JSON.stringify(attachments.map(({thumbnail,...meta})=>meta)));el('attachments').replaceChildren();for(const item of attachments){const row=document.createElement('div');if(item.thumbnail){const img=document.createElement('img');img.src=item.thumbnail;img.alt=item.name;img.style.cssText='width:80px;height:50px;object-fit:contain';row.append(img);}const label=document.createElement('span');label.textContent=item.name+' · '+item.purpose+' · '+Math.round(item.bytes/1024)+' KB ';row.append(label);const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>{attachments=attachments.filter(a=>a.id!==item.id);tray();};row.append(remove);el('attachments').append(row);}}
+const staged=()=>attachments.filter(a=>!a.sent);
+function tray(){sessionStorage.setItem('play-attachments',JSON.stringify(attachments.map(({thumbnail,...meta})=>meta)));el('attachments').replaceChildren();for(const item of attachments){const row=document.createElement('div');if(item.thumbnail){const img=document.createElement('img');img.src=item.thumbnail;img.alt=item.name;img.style.cssText='width:80px;height:50px;object-fit:contain';row.append(img);}const label=document.createElement('span');label.textContent=item.name+' · '+item.purpose+' · '+Math.round(item.bytes/1024)+' KB ';row.append(label);if(item.sent){row.className='attachment-sent';label.textContent='Sent ✓ · '+label.textContent;const again=document.createElement('button');again.type='button';again.textContent='Attach again';again.onclick=()=>{item.sent=false;tray();};row.append(again);}const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>{attachments=attachments.filter(a=>a.id!==item.id);tray();};row.append(remove);el('attachments').append(row);}}
 async function attach(name,mime,data,purpose='diagnostic',shown=revision) {
-  if(attachments.length>=8)throw Error('Up to 8 attachments per request');
+  if(staged().length>=8)throw Error('Up to 8 attachments per request');
   const item=await api('/artifacts',{name,mime,data,purpose,revision:shown,device,capturedAt:new Date().toISOString()},30000);
+  if(attachments.length>=8)attachments.splice(attachments.findIndex(a=>a.sent),1);
   if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;attachments.push(item);tray();
 }
 function base64(bytes){let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out);}

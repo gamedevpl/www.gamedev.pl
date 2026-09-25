@@ -136,3 +136,6 @@
 #task[data-tone='red'] {
   color: var(--tone-red);
 }
+#attachments > .attachment-sent {
+  opacity: 0.6;
+}

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RECHECK_HOURLY_MS } from './sweep-cadence.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } from './store.js';
@@ -1005,6 +1006,29 @@ describe('GET /api/admin/summary', () => {
     const res = await app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
 
     expect((res.json() as AdminSummaryResponse).limits.paused).toBe(true);
+  });
+
+  // Every inbox is asked first; an empty stamp is trusted after.
+  it('asks every inbox first, then only those that may hold a request', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_011, 'g:boss', 'Waiting On Feedback');
+    await store.createSubmission(1_000_012, 'g:boss', 'Nothing Pending');
+    await store.appendCreatorMessage(1_000_011, 'Make the ship faster.');
+    await store.listPendingCreatorMessages(1_000_012, { stampEmpty: true });
+    const asked = vi.spyOn(store, 'listPendingCreatorMessages');
+    let clock = Date.now();
+    const app = await buildApp({ store, sessionSecret, adminUids: 'g:boss', submissionRoutes: { now: () => clock } });
+    const summary = () => app.inject({ method: 'GET', url: '/api/admin/summary', headers: authHeaders('g:boss') });
+
+    // A rollout can hide a message behind an empty stamp.
+    await summary();
+    expect(asked.mock.calls.map(([jobId]) => jobId).sort()).toEqual([1_000_011, 1_000_012]);
+
+    asked.mockClear();
+    clock += RECHECK_HOURLY_MS;
+    await summary();
+    expect(asked.mock.calls.map(([jobId]) => jobId)).toEqual([1_000_011]);
   });
 });
 

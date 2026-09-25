@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { AdapterRun } from './workshop.js';
+import type { AdapterRun } from './headless-agent.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
 export function museApproval(line: string): boolean {
@@ -93,7 +93,7 @@ export async function runMuseWithApprovals(input: Parameters<AdapterRun>[0], run
   const blocked = () => {
     if (!session || permissionSession || input.abort?.aborted) return;
     permissionSession = session.id;
-    input.onLine?.('Muse needs your approval; pausing headless execution.');
+    input.onEvent?.({ type: 'error', message: 'Muse needs your approval; pausing headless execution.' });
     stop();
   };
   const check = async () => {
@@ -105,7 +105,10 @@ export async function runMuseWithApprovals(input: Parameters<AdapterRun>[0], run
         if (await read(path)) blocked();
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          input.onLine?.('Cannot read Muse approval status; pausing for interactive recovery.');
+          input.onEvent?.({
+            type: 'error',
+            message: 'Cannot read Muse approval status; pausing for interactive recovery.',
+          });
           blocked();
         }
       }

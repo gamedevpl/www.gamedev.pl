@@ -18,6 +18,10 @@ describe('publishRefusalCopy', () => {
     );
     expect(publishRefusalCopy('reason_too_long')).toContain('too long');
   });
+
+  it('names a superseded delivery instead of falling back to unknown', () => {
+    expect(publishRefusalCopy('preview_superseded_delivery')).toContain('newer preview');
+  });
 });
 
 describe('editorialOverrideCopy', () => {

@@ -8,6 +8,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
 import { toBase64PngList } from './attachmentImages.js';
 import { useClampToViewport } from './useClampToViewport.js';
+import { SUBMITTING_STEPS } from './submissionSteps.js';
 
 // Mirrors MAX_REFERENCE_IMAGES in submissions.ts.
 const MAX_ATTACHMENTS = 4;
@@ -230,12 +231,32 @@ export function HeroPromptSection({
     return () => clearInterval(interval);
   }, [submissionStatus]);
 
+  const [submittingStepIndex, setSubmittingStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (submissionStatus !== 'loading') {
+      setSubmittingStepIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setSubmittingStepIndex((prev) => {
+        const next = prev + 1;
+        if (next >= SUBMITTING_STEPS.length - 1) {
+          clearInterval(interval);
+          return SUBMITTING_STEPS.length - 1;
+        }
+        return next;
+      });
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [submissionStatus]);
+
   const isBusy = submissionStatus !== 'idle' || isPreparingAttachments;
   const busyLabel =
     submissionStatus === 'refining'
       ? t(REFINING_STEPS[refiningStepIndex])
       : submissionStatus === 'loading'
-        ? t('submit.submitting')
+        ? t(SUBMITTING_STEPS[submittingStepIndex])
         : isPreparingAttachments
           ? t('hero.preparingAttachments')
           : null;

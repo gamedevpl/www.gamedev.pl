@@ -2,7 +2,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { expect, it } from 'vitest';
 import { taskOutput } from './task-output.js';
-import { createDelegateStream } from './delegate.js';
+import { createEventRenderer } from './agent-render.js';
 
 it('keeps full details privately while showing readable tools and setup errors', () => {
   const shown: string[] = [];
@@ -74,21 +74,21 @@ it('keeps Muse chatter out of conversation and preserves milestone status across
   }
 });
 
-it('keeps successful MCP completion in diagnostics and failed MCP calls visible', () => {
+it('keeps successful MCP calls in diagnostics and failed MCP calls visible', () => {
   const shown: string[] = [];
   const output = taskOutput((line) => shown.push(line));
-  const stream = createDelegateStream('codex');
+  const render = createEventRenderer('codex');
   try {
-    for (const status of ['completed', 'failed']) {
-      const raw = JSON.stringify({
-        type: 'item.completed',
-        item: { type: 'mcp_tool_call', server: 'gamedevpl_local', tool: 'report_progress', status },
-      });
-      output.raw(raw);
-      for (const line of stream(raw)) output.write(line);
+    for (const isError of [false, true]) {
+      const name = 'gamedevpl_local/report_progress';
+      for (const event of [
+        { type: 'tool-start', id: String(isError), name },
+        { type: 'tool-end', id: String(isError), name, isError },
+      ] as const)
+        for (const line of render.event(event)) output.write(line);
     }
-    expect(shown).toEqual(['codex ▸ Tool failed: gamedevpl_local / report_progress']);
-    expect(readFileSync(output.path, 'utf8')).toContain('✓ gamedevpl_local / report_progress');
+    expect(shown).toEqual(['codex ▸ Tool failed: gamedevpl_local/report_progress']);
+    expect(readFileSync(output.path, 'utf8')).toContain('gamedevpl_local/report_progress');
   } finally {
     rmSync(dirname(output.path), { recursive: true, force: true });
   }

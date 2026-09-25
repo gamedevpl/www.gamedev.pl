@@ -89,6 +89,13 @@
   resize: vertical;
 }
 
+.review-flag-select:focus,
+.review-flag-note:focus {
+  outline: none;
+  border-color: var(--accent, var(--turquoise, #00e4ac));
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.2);
+}
+
 .review-flag-error {
   margin: 0;
   font-size: 0.85rem;

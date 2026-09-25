@@ -5,6 +5,7 @@ import type { LocalActivity } from '@gamedevpl/contract';
 import { claimManualRoundSlug } from './manual-round-claim.js';
 import { FieldValue } from '@google-cloud/firestore';
 import { isRoundOpen } from '../../platform/sweep-scope.js';
+import { setShelfVisibleFields } from './shelf-visible-write.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
@@ -223,7 +224,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    await this.ref(jobId).set({ title }, { merge: true });
+    await setShelfVisibleFields(this.db, this.ref(jobId), { title });
   }
 
   async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
@@ -254,8 +255,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
-    // Abandonment closes the round, so no read is needed.
-    await this.ref(jobId).set({ abandonedAt: at, openRound: false }, { merge: true });
+    await setShelfVisibleFields(this.db, this.ref(jobId), { abandonedAt: at, openRound: false });
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {

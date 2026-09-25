@@ -6,7 +6,7 @@ import { isMascotLine, MASCOT_COLOR } from './mascot.js';
 export function RichText({ text, color }: { text: string; color: boolean }) {
   return (
     <Text>
-      {text.split(/(`[^`\n]+`|https?:\/\/[^\s<>"']+|\/[a-z][\w-]*\b)/g).map((part, index) => {
+      {text.split(/(`[^`\n]+`|https?:\/\/[^\s<>"']+|(?<![\w./:-])\/[a-z][\w-]*\b)/g).map((part, index) => {
         const code = part.startsWith('`') && part.endsWith('`');
         const linked = /^https?:\/\//.test(part);
         const command = /^\/[a-z]/.test(part);

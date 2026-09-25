@@ -132,9 +132,9 @@ export function parseGameMusicTracks(source: string, label = 'game music.json'):
         (typeof channel.duration !== 'number' ||
           !Number.isFinite(channel.duration) ||
           channel.duration <= 0 ||
-          channel.duration > 0.9)
+          channel.duration > 4)
       ) {
-        throw new Error(`${label}: ${name} channel ${channelIndex}.duration must be between 0 and 0.9`);
+        throw new Error(`${label}: ${name} channel ${channelIndex}.duration must be between 0 and 4`);
       }
       if (channel.wave !== 'kick' && (channel.sweepFrom !== undefined || channel.sweepTo !== undefined)) {
         throw new Error(`${label}: ${name} channel ${channelIndex}.sweepFrom/sweepTo require wave "kick"`);

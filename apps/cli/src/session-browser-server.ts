@@ -1,5 +1,5 @@
 import { isJsonContentType } from './workbench-http.js';
-import { EVIDENCE_MARKER } from './workbench-evidence.js';
+import { EVIDENCE_MARKER, shownPrompt } from './workbench-evidence.js';
 import { lanAddresses, startPhonePreview, type PhoneReport } from './workbench-phone.js';
 import { embedGameHtml } from '@gamedevpl/contract';
 import { WORKBENCH_GAME_BRIDGE } from './workbench-game-bridge.js';
@@ -154,7 +154,7 @@ export async function startSessionBrowser(
           choices: state.choices.slice(0, 50).map((value) => ({ label: clean(value), value })),
           lines: state.lines.slice(-200).map(clean),
           live: state.live.map(clean),
-          queued: state.queued.map(clean),
+          queued: state.queued.map((line) => clean(shownPrompt(line))),
         });
         return;
       }

@@ -44,6 +44,7 @@ export interface BuildBrief {
    * inventing a change request the creator never made.
    */
   undelivered?: boolean;
+  gateRepair?: { version: string; report: string };
   /**
    * A generated first draft of the game the workspace should already contain.
    *
@@ -58,7 +59,6 @@ export interface BuildBrief {
    */
   seed?: SeedFiles;
 }
-
 // How the agent gets the seed: placed, or read over the channel.
 export type SeedDelivery = 'workspace' | 'channel';
 

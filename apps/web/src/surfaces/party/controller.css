@@ -167,6 +167,12 @@
   text-align: center;
 }
 
+.controller-input:focus {
+  outline: none;
+  border-color: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 2px rgba(0, 228, 172, 0.25);
+}
+
 .controller-join-btn {
   width: min(320px, 80vw);
   min-height: 52px;
