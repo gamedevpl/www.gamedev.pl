@@ -46,12 +46,13 @@ describe('HeroPromptSection busy states and loading indicators', () => {
     expect(container.querySelector('.prompt-busy-progress-bar')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
     expect(container.querySelector('.build-match-btn')).toBeNull();
-    expect(container.querySelector('.creation-card button')).toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
 
     await renderWithStatus('loading');
     expect(container.querySelector('.prompt-busy-progress-bar')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting/i);
     expect(container.querySelector('.build-match-btn')).toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
 
     await renderWithStatus('idle');
     expect(container.querySelector('.prompt-busy-progress-bar')).toBeNull();

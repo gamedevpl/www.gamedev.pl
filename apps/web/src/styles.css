@@ -719,16 +719,6 @@
   }
 }
 
-.creation-card.is-busy {
-  border-color: rgba(0, 228, 172, 0.35);
-  background: rgba(0, 228, 172, 0.08);
-}
-
-.creation-card.is-busy .creation-sub {
-  color: var(--turquoise);
-  font-weight: 600;
-}
-
 .mic-btn.listening {
   color: #f43f5e;
   animation: pulseMic 1.2s infinite alternate;

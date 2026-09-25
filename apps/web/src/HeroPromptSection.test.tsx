@@ -163,18 +163,14 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
-      /A coding agent writes it/i,
-    );
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).not.toMatch(
-      /Analyzing your idea/i,
-    );
+    expect(container.querySelector('.creation-card')).toBeNull();
     expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
     expect(container.querySelector('.prompt-box-form')?.getAttribute('aria-busy')).toBe('true');
 
     await renderWithStatus('loading');
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting/i);
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
 
     await renderWithStatus('idle');
     expect(container.querySelector('.prompt-composer-bar.is-busy')).toBeNull();

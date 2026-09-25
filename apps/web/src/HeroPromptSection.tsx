@@ -687,8 +687,8 @@ export function HeroPromptSection({
                 <p className="searching-sub">"{promptText.trim()}"</p>
               </div>
             </div>
-          ) : isCreationIntentEligible ? (
-            <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
+          ) : isCreationIntentEligible && !isBusy ? (
+            <div className="smart-intent-card creation-card">
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
                   <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle')}
