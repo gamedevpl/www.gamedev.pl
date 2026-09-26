@@ -1,6 +1,6 @@
 // beta:invite:backfill — claimed invites → approved rows. See docs/deployment.md.
 
-import { Firestore } from '@google-cloud/firestore';
+import { FieldValue, Firestore } from '@google-cloud/firestore';
 import type { BetaInvite, User, WaitlistEntry } from '../src/platform/store.js';
 
 async function main() {
@@ -40,20 +40,19 @@ async function main() {
       requestedAt: existing?.requestedAt ?? invite.claimedAt ?? invite.createdAt,
       status: 'approved',
     };
-    const email = (user?.email ?? existing?.email)?.toLowerCase();
-    if (email) record.email = email;
     const name = user?.name ?? existing?.name;
     if (name) record.name = name;
     const locale = user?.locale ?? existing?.locale;
     if (locale) record.locale = locale;
 
     approved += 1;
-    const label = `${uid}${email ? ` (${email})` : ''}`;
+    const label = uid;
     if (!apply) {
       console.log(`?  ${label} — would approve (invite ${invite.id})`);
       continue;
     }
-    await waitlistRef.set(record, { merge: true });
+    // An invite verifies its claimant, never their stored email.
+    await waitlistRef.set({ ...record, email: FieldValue.delete() }, { merge: true });
     console.log(`✅ ${label} — approved (invite ${invite.id})`);
   }
 
