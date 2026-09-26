@@ -42,6 +42,17 @@ describe('receiptRound bookkeeping', () => {
     expect(record?.receiptRound).toEqual({ generation, version: 'v-closed' });
   });
 
+  it('owns the preview a preview-only round delivered, not an older publish', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(JOB, 'g:owner', 'Comet Courier');
+    await store.setSubmissionDeliveredVersion(JOB, 'v-published');
+    const generation = (await store.ensureRoundGeneration(JOB)) ?? 1;
+    await store.setSubmissionPreviewVersion(JOB, 'v-preview');
+    await store.incrementRoundDeliveryCount(JOB);
+    await store.recordJobTransition(JOB, { to: 'ready_for_review', at: new Date().toISOString(), by: 'system' });
+    expect((await store.getSubmission(JOB))?.receiptRound).toEqual({ generation, version: 'v-preview' });
+  });
+
   it('is cleared by a revocation bump', async () => {
     const { store } = await closedJob();
     await store.bumpRoundGeneration(JOB);

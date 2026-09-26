@@ -18,10 +18,10 @@ export function clearRoundSignals(next: SubmissionRecord): void {
 // Remembers which round a state transition closed, and its delivery.
 export function stampReceiptRound(next: SubmissionRecord, closed: SubmissionRecord): void {
   if (closed.roundGeneration === undefined) return;
-  next.receiptRound = {
-    generation: closed.roundGeneration,
-    ...(closed.deliveredVersion ? { version: closed.deliveredVersion } : {}),
-  };
+  // A round that delivered owns its newest candidate, preview or publish.
+  const delivered = (closed.roundDeliveryCount ?? 0) > 0;
+  const version = (delivered ? closed.previewVersion : undefined) ?? closed.deliveredVersion;
+  next.receiptRound = { generation: closed.roundGeneration, ...(version ? { version } : {}) };
 }
 
 export function takeoverRecord(
