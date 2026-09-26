@@ -1037,6 +1037,9 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const nextFiles = previous
           ? base.files.map((file) => (file.path === path ? entry : file))
           : [...base.files, entry];
+        if (nextFiles.length > MAX_UPLOAD_FILES) {
+          throw new InvalidUploadError(`too many staged files: ${nextFiles.length} > ${MAX_UPLOAD_FILES}`);
+        }
 
         const manifest: StagingManifest = {
           slug: input.slug,
