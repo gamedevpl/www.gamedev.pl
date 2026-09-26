@@ -22,6 +22,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 `apps/api/src/agent-surface/mcp-server.ts` (returned by `start`, appended to every tool description).
 
 1. `start` → `show_round` (once) → `get_brief` → `get_sources` → `get_kit` as needed
+   - `start` returns a compact, signed `sessionKey` for later calls. Previously issued
+     longer keys remain valid until expiry, so an in-flight agent does not need to restart
+     on deploy. The full key is still required; shortened text with `...` is never valid.
    - `get_sources` is the first read of **every** round. A new game arrives with a
      generated round-0 draft (`origin: seed`), a later round with what it delivered
      (`origin: delivery`); `seedStatus: pending` means call again rather than scaffold

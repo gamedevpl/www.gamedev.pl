@@ -377,6 +377,7 @@ const FILE_BUCKET = {
   'mcp-ui': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',
   'mcp-session-key': 'agent-surface',
+  'mcp-session-compact': 'agent-surface',
   'mcp-session-nudges': 'agent-surface',
   'mcp-debug-log': 'agent-surface',
   'mcp-install-links': 'agent-surface',

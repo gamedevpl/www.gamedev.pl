@@ -98,8 +98,7 @@ describe('durable per-game agent key (BY-23)', () => {
       roundGeneration: 1,
       now,
     });
-    const decoded = Buffer.from(sessionKey, 'base64url').toString('utf8');
-    expect(decoded.startsWith('g1.')).toBe(true);
+    expect(sessionKey.startsWith('mcp2_')).toBe(true);
     expect(looksLikeGameAgentKey(sessionKey)).toBe(false);
   });
 

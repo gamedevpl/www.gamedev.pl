@@ -101,14 +101,14 @@ describe('durable creator agent key (BY-27a)', () => {
       keyGeneration: 1,
       now,
     });
-    // Session ids are free-form; `c1` would collide if creator keys were also 5 fields.
+    // Legacy session ids were free-form; compact keys still must stay distinct.
     const sessionKey = mintMcpSessionKey(secret, {
       sessionId: 'c1',
       jobId: 42,
       roundGeneration: 1,
       now,
     });
-    expect(Buffer.from(sessionKey, 'base64url').toString('utf8').startsWith('c1.')).toBe(true);
+    expect(sessionKey.startsWith('mcp2_')).toBe(true);
     expect(looksLikeCreatorAgentKey(gameKey)).toBe(false);
     expect(looksLikeCreatorAgentKey(sessionKey)).toBe(false);
   });
