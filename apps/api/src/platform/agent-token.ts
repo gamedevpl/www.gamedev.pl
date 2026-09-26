@@ -288,7 +288,7 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
  */
 export function assertAgentTokenActive(
   claims: AgentTokenClaims,
-  record: { roundGeneration?: number },
+  record: { roundGeneration?: number; receiptRound?: { generation: number } },
   nowMs: number = Date.now(),
 ): void {
   const access = classifyAgentTokenAccess(claims, record, nowMs);
@@ -314,7 +314,7 @@ export type AgentTokenAccess = 'active' | 'terminal_receipt';
 
 export function classifyAgentTokenAccess(
   claims: AgentTokenClaims,
-  record: { roundGeneration?: number },
+  record: { roundGeneration?: number; receiptRound?: { generation: number } },
   nowMs: number = Date.now(),
 ): AgentTokenAccess {
   const active = record.roundGeneration;
@@ -326,8 +326,12 @@ export function classifyAgentTokenAccess(
     if (active !== undefined && claims.roundGeneration === active) {
       return 'active';
     }
-    // Exactly one behind: the closed round that owns the job's current delivery.
-    if (active !== undefined && claims.roundGeneration === active - 1) {
+    // One behind, and closed by a transition; revocation clears receiptRound.
+    if (
+      active !== undefined &&
+      claims.roundGeneration === active - 1 &&
+      record.receiptRound?.generation === claims.roundGeneration
+    ) {
       return 'terminal_receipt';
     }
     throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
