@@ -1,3 +1,4 @@
+import { retryClosedPreviewDream } from './closed-preview-dream-retry.js';
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
@@ -292,22 +293,16 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     return onGateRed({ record, version, report });
   }
 
-  // Reads our own gate's verdict off the delivered version.
-
-  // The gate runs in Cloud Build, writes to the manifest, and exits.
-
-  // Nothing told the job, so a delivered game sat in submitted forever.
-
-  // Read rather than pushed back: the verdict is already durable here.
-
-  // A callback would duplicate a fact the manifest already holds.
   async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
     if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
     const redPendingRepair =
       state === 'needs_changes' && ['gate_red', 'kit_outdated'].includes(record.transitions?.at(-1)?.reason ?? '');
-    if (state !== 'building' && state !== 'submitted' && !redPendingRepair) return null;
     try {
+      if (state !== 'building' && state !== 'submitted' && !redPendingRepair) {
+        if (state === 'ready_for_review') await retryClosedPreviewDream(record, gamesStore, onPreviewGateGreen, now);
+        return null;
+      }
       const roundGeneration = record.roundGeneration ?? 1;
       // Retained versions may belong to an older round.
 

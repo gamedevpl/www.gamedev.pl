@@ -91,6 +91,7 @@ const FILE_BUCKET = {
   'capture-profile-setup': 'platform',
   'capture-network-isolation': 'platform',
   'preview-registration-trust': 'platform',
+  'closed-preview-dream-retry': 'creation',
   'oauth-page-chrome': 'platform',
   'oauth-pkce': 'platform',
   'oauth-redirect': 'platform',
