@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalPath,
   canonicalPlayPath,
-  betaInvitePath,
   creatorPath,
   gamePath,
   joinPath,
@@ -68,7 +67,7 @@ describe('parsePathRoute', () => {
 
   it('parses one-time beta invite links and rejects malformed codes', () => {
     const code = 'Abc123_-'.repeat(4);
-    expect(parsePathRoute(betaInvitePath(code))).toEqual({ view: 'invite', code });
+    expect(parsePathRoute('/invite', `#${code}`)).toEqual({ view: 'invite', code });
     expect(parsePathRoute('/invite/too-short')).toEqual({ view: 'notFound' });
     expect(parsePathRoute(`/invite/${'a'.repeat(33)}`)).toEqual({ view: 'notFound' });
   });

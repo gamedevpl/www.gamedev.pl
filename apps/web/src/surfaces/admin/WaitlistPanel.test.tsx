@@ -136,7 +136,7 @@ describe('WaitlistPanel', () => {
     });
 
     const link = container.querySelector<HTMLInputElement>('input[aria-label="New beta invite link"]');
-    expect(link?.value).toBe(`${window.location.origin}/invite/${'Abc123_-'.repeat(4)}`);
+    expect(link?.value).toBe(`${window.location.origin}/invite#${'Abc123_-'.repeat(4)}`);
     expect(mocked.createBetaInvite).toHaveBeenCalledOnce();
 
     const copy = Array.from(container.querySelectorAll('button')).find(

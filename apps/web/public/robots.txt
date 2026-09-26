@@ -6,6 +6,7 @@ User-agent: *
 # index behind them, and a crawled one is a shared secret sitting in a log.
 Disallow: /status/
 Disallow: /draft/
+Disallow: /invite$
 Disallow: /invite/
 Disallow: /join/
 
