@@ -1,3 +1,4 @@
+import { assertAgentRound } from './agent-round-write.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
@@ -38,7 +39,7 @@ export interface RoundsStore {
     awaitsAgentAck?: boolean,
   ): Promise<boolean>;
 
-  acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null>;
+  acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string, generation?: number): Promise<BuilderHandoff | null>;
 
   clearBuilderHandoff(jobId: number): Promise<void>;
 
@@ -138,8 +139,13 @@ export class InMemoryRoundsStore implements RoundsStore {
     return sub;
   }
 
-  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+  async acknowledgeBuilderHandoff(
+    jobId: number,
+    acknowledgedAt: string,
+    generation?: number,
+  ): Promise<BuilderHandoff | null> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub?.builderHandoff || sub.builderHandoff.acknowledgedAt) return null;
     const handoff: BuilderHandoff = { ...sub.builderHandoff, acknowledgedAt };
     this.submissions.set(jobId, { ...sub, builderHandoff: handoff });
@@ -329,12 +335,17 @@ export class FirestoreRoundsStore implements RoundsStore {
     });
   }
 
-  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+  async acknowledgeBuilderHandoff(
+    jobId: number,
+    acknowledgedAt: string,
+    generation?: number,
+  ): Promise<BuilderHandoff | null> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
+      assertAgentRound(current, generation);
       if (!current.builderHandoff || current.builderHandoff.acknowledgedAt) return null;
       const handoff: BuilderHandoff = { ...current.builderHandoff, acknowledgedAt };
       tx.set(ref, { builderHandoff: handoff }, { merge: true });

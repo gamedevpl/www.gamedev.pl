@@ -1,3 +1,4 @@
+import type { BuilderHandoffAckInput } from '../creation/builder-handoff-ack.js';
 import { stagedBudgetWarning } from './staged-budget.js';
 import { knowledgeCapWarning } from './agent-knowledge-warning.js';
 import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
@@ -466,11 +467,7 @@ export interface AgentChannelOptions {
   onMediaEvent?: (jobId: number) => void;
   // Operator switch for concept proposals; absent means off.
   dreamingEnabled?: () => Promise<boolean>;
-  onBuilderHandoffAcknowledged?: (input: {
-    jobId: number;
-    acknowledgedAt: string;
-    log: FastifyRequest['log'];
-  }) => Promise<{ started: boolean; reason?: string }>;
+  onBuilderHandoffAcknowledged?: (input: BuilderHandoffAckInput) => Promise<{ started: boolean; reason?: string }>;
   /**
    * Localizes a progress report that arrived without one. Runs here, on the write, and
    * never on the status read — a translation on the read path costs one model call per
@@ -2334,15 +2331,17 @@ export async function registerAgentChannelRoutes(
         record.builderHandoff.awaitsAgentAck !== false &&
         options.onBuilderHandoffAcknowledged
       ) {
-        // Finish old-round writes before the handoff opens its replacement.
-        if (!record.builderHandoff.acknowledgedAt && parsed.data.ackInboxIds?.length) {
-          await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds, record.roundGeneration ?? 1);
-        }
-        const summarized = !record.builderHandoff.acknowledgedAt && (await recordSummary());
+        let summarized = false;
         const outcome = await options.onBuilderHandoffAcknowledged({
           jobId,
           acknowledgedAt: new Date(now()).toISOString(),
           log: request.log,
+          roundGeneration: record.roundGeneration ?? 1,
+          finalize: async () => {
+            if (parsed.data.ackInboxIds?.length)
+              await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds, record.roundGeneration ?? 1);
+            summarized = await recordSummary();
+          },
         });
         const fresh = (await store!.getSubmission(jobId)) ?? record;
         if (!outcome.started) {

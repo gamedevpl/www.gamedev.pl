@@ -512,8 +512,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.roundsStore.claimSeal(jobId, at);
   }
 
-  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
-    return this.roundsStore.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
+  async acknowledgeBuilderHandoff(jobId: number, at: string, generation?: number): Promise<BuilderHandoff | null> {
+    return this.roundsStore.acknowledgeBuilderHandoff(jobId, at, generation);
   }
 
   async clearBuilderHandoff(jobId: number): Promise<void> {
