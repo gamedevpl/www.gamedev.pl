@@ -72,7 +72,7 @@ export function GameFrame(props: GameFrameProps) {
     frame.contentWindow?.focus();
   }, [iframeRef, autoFocus]);
 
-  const onLoad = useHostLoadTracking(iframeRef, srcDoc ?? props.src, focusGame);
+  const { onLoad, frameKey } = useHostLoadTracking(iframeRef, srcDoc ?? props.src, focusGame);
 
   useEffect(() => {
     // Backstop for the cases the load event doesn't cover — a document that had
@@ -83,6 +83,7 @@ export function GameFrame(props: GameFrameProps) {
 
   return (
     <iframe
+      key={frameKey}
       ref={iframeRef}
       className="game-frame"
       title={props.title}

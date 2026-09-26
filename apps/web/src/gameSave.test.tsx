@@ -182,12 +182,6 @@ describe('useGameSaveBridge', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(toGame).toHaveLength(0);
-
-    render('<!doctype html><p>two</p>');
-    act(() => iframe.dispatchEvent(new Event('load')));
-    hello();
-    await waitFor(() => expect(toGame).toHaveLength(1));
-    expect(toGame[0]).toMatchObject({ t: 'save:state', available: true });
   });
 
   it('drops a pending save read when the frame loads another document first', async () => {
@@ -201,8 +195,8 @@ describe('useGameSaveBridge', () => {
     vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
       toGame.push(message);
     }) as typeof gameWindow.postMessage);
-    act(() => iframe.dispatchEvent(new Event('load')));
     act(() => root!.render(<FrameHarness html="<!doctype html><p>two</p>" />));
+    expect(container.querySelector('iframe')).toBe(iframe);
     act(() => iframe.dispatchEvent(new Event('load')));
 
     const data = frame({ t: 'save:hello', version: 1 });
@@ -212,6 +206,28 @@ describe('useGameSaveBridge', () => {
     resolveRead(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(toGame).toHaveLength(0);
+  });
+
+  it('answers a pre-load hello from new host content after a flagged navigation', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
+    root = createRoot(container);
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>one</p>" />));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const flagged = container.querySelector('iframe') as HTMLIFrameElement;
+    act(() => flagged.dispatchEvent(new Event('load')));
+    act(() => flagged.dispatchEvent(new Event('load')));
+
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>two</p>" />));
+    const fresh = container.querySelector('iframe') as HTMLIFrameElement;
+    expect(fresh).not.toBe(flagged);
+    const gameWindow = fresh.contentWindow as Window;
+    vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
+      toGame.push(message);
+    }) as typeof gameWindow.postMessage);
+    const data = frame({ t: 'save:hello', version: 1 });
+    window.dispatchEvent(new MessageEvent('message', { data, source: gameWindow, origin: 'null' }));
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    expect(toGame[0]).toMatchObject({ t: 'save:state', available: true });
   });
 
   it('writes a save and acknowledges it', async () => {

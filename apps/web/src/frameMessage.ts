@@ -2,18 +2,15 @@ import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'rea
 
 // Frames whose current document is not one this app loaded.
 const navigatedAway = new WeakSet<Window>();
-// Loads seen per frame, so a deferred reply can spot a navigation.
-const loadCounts = new WeakMap<Window, number>();
 
 function frameWindow(frame: HTMLIFrameElement | Window | null | undefined): Window | null {
   return (frame && 'contentWindow' in frame ? frame.contentWindow : frame) ?? null;
 }
 
-// Identifies the frame's current document; null once navigated away.
-export function gameFrameDocumentStamp(frame: HTMLIFrameElement | Window | null | undefined): number | null {
+// True once the game navigated this frame somewhere itself.
+export function isGameFrameNavigatedAway(frame: HTMLIFrameElement | Window | null | undefined): boolean {
   const win = frameWindow(frame);
-  if (!win || navigatedAway.has(win)) return null;
-  return loadCounts.get(win) ?? 0;
+  return win != null && navigatedAway.has(win);
 }
 
 // A load the host never requested: the game navigated itself.
@@ -26,23 +23,27 @@ export function markGameFrameLoadedByHost(frame: HTMLIFrameElement): void {
   if (frame.contentWindow) navigatedAway.delete(frame.contentWindow);
 }
 
-// The frame's onLoad; `source` is the srcdoc or src set.
+// Returns onLoad and key; `source` is the srcdoc or src.
 export function useHostLoadTracking(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
   source: string | undefined,
   afterLoad: () => void,
-): () => void {
+): { onLoad: () => void; frameKey: number } {
   // True while a document the host asked for has yet to load.
   const hostLoadPending = useRef(true);
+  const lastSource = useRef(source);
+  const frameKey = useRef(0);
+  if (lastSource.current !== source) {
+    lastSource.current = source;
+    // New content in a flagged frame gets a fresh, unflagged browsing context.
+    if (isGameFrameNavigatedAway(frameRef.current)) frameKey.current += 1;
+  }
   useLayoutEffect(() => {
     hostLoadPending.current = true;
   }, [source]);
 
-  return useCallback(() => {
+  const onLoad = useCallback(() => {
     const frame = frameRef.current;
-    if (frame?.contentWindow) {
-      loadCounts.set(frame.contentWindow, (loadCounts.get(frame.contentWindow) ?? 0) + 1);
-    }
     if (frame) {
       if (hostLoadPending.current) markGameFrameLoadedByHost(frame);
       else markGameFrameNavigatedAway(frame);
@@ -50,11 +51,12 @@ export function useHostLoadTracking(
     hostLoadPending.current = false;
     afterLoad();
   }, [frameRef, afterLoad]);
+  return { onLoad, frameKey: frameKey.current };
 }
 
 export function isFromGameFrame(event: MessageEvent, frame: HTMLIFrameElement | Window | null | undefined): boolean {
   if (event.origin !== 'null') return false;
   const win = frameWindow(frame);
   // The WindowProxy survives navigation, so source identity alone is not enough.
-  return win != null && event.source === win && !navigatedAway.has(win);
+  return win != null && event.source === win && !isGameFrameNavigatedAway(win);
 }
