@@ -801,8 +801,10 @@ compositing the default buffer is gone). Do not bake
 `preserveDrawingBuffer:true` into shipped game source — only a disposable
 capture harness. Decode the data URL to
 `shot.png` in-process (`Buffer.from(dataUrl.split(',')[1], 'base64')`; never
-print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` +
-`curl --upload-file shot.png`. `page.screenshot({path:'shot.png'})` writes
+print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` and run
+its returned `upload` one-liner verbatim — it carries the capability in an
+`Authorization: Bearer` header, never in the URL, and the PUT receipt carries
+no channel state. `page.screenshot({path:'shot.png'})` writes
 PNG directly — that is the gate's path.
 Fallback when SwiftShader is unavailable: `GAME_CAPTURE_GFX=canvas2d` /
 `?gfx=canvas2d` (force2d).

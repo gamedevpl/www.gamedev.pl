@@ -140,7 +140,7 @@ const ShotUploadUrlInputSchema = z.object({
     .optional(),
 });
 
-const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then curl --upload-file <png> "$url"`;
+const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then run its \`upload\` one-liner (curl -H "Authorization: Bearer <upload token>" --upload-file <png> "$url")`;
 
 const MAX_PREVIEW_LABEL = 120;
 /**
@@ -1484,8 +1484,9 @@ export async function registerAgentChannelRoutes(
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
+      // An upload-only capability must not read creator-private channel state.
       if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(jobId, record)) });
+        return reply.send({ accepted: false, rejected: 'stopped' });
       }
 
       const path = upload.path?.trim() ?? '';
@@ -1564,7 +1565,6 @@ export async function registerAgentChannelRoutes(
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
           ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
-          ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
         if (error instanceof InvalidUploadError) {

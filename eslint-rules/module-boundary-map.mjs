@@ -383,6 +383,7 @@ const FILE_BUCKET = {
   'mcp-install-links': 'agent-surface',
   'mcp-presence': 'agent-surface',
   'agent-upload-token': 'agent-surface',
+  'agent-upload-private-state': 'agent-surface',
   'agent-session-revocation': 'agent-surface',
   'agent-creator-key': 'agent-surface',
   'agent-creator-key-resolve': 'agent-surface',

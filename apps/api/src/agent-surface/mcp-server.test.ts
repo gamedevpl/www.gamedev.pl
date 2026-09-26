@@ -506,7 +506,7 @@ describe('POST /api/mcp (BY-05)', () => {
     }>;
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
     // The header is what makes the PUT parse; an example without it earned a 415.
-    expect(screenshotUpload?.description).toMatch(/curl -H "Content-Type: [^"]+" --upload-file/i);
+    expect(screenshotUpload?.description).toMatch(/Authorization: [^"]+" -H "Content-Type: [^"]+" --upload-file/i);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
     expect(screenshotUpload?.description).toMatch(/--use-gl=angle/);
     expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
@@ -521,7 +521,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
     expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
     expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(
-      /curl -H "Content-Type: [^"]+" --upload-file/i,
+      /curl -H "Authorization: Bearer <upload token>" -H "Content-Type: [^"]+" --upload-file/i,
     );
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
@@ -1253,7 +1253,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/get_kit_api/);
     // The loop must never send an agent to a web search instead.
     expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
-    expect(joined).toMatch(/screenshot_upload_url/);
+    expect(joined).toMatch(/screenshot_upload_url and the `upload` one-liner.{0,40}Authorization/);
     expect(joined).not.toMatch(/send_screenshot/);
     expect(joined).toMatch(/--use-gl=angle/);
     expect(joined).toMatch(/never --disable-gpu/);
@@ -2206,8 +2206,8 @@ declare const GameKit: { defineGame(): unknown };
       accepted: true,
       path: 'game/extra.ts',
       bytes: Buffer.byteLength(content, 'utf8'),
-      control: { stop: false },
     });
+    expect(put.json()).not.toHaveProperty('control');
 
     const listed = await callTool(app, 'list_staged_sources', { sessionKey }, sid);
     expect(listed.isError).toBe(false);
