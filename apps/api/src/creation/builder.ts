@@ -52,7 +52,7 @@ export function shouldSteerFeedbackViaInbox(
     dispatch?: { refs?: readonly string[] } | null;
     builder?: BuilderKind;
     agentEndedAt?: string | null;
-    agentEndedBy?: 'submit' | 'end';
+    agentEndedBy?: 'submit' | 'end' | 'takeover';
     agentState?: string;
   },
   opts?: { builderChanging?: boolean; stall?: JobStall | null },

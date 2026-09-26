@@ -72,7 +72,7 @@ describe('creator takeover', () => {
       });
       expect(response.statusCode).toBe(200);
       const after = (await store.getSubmission(10))!;
-      expect(after).toMatchObject({ state: before.state, roundGeneration: 2, agentEndedBy: 'end' });
+      expect(after).toMatchObject({ state: before.state, roundGeneration: 2, agentEndedBy: 'takeover' });
       expect(after.roundDeliveryCount).toBe(1);
       expect(after.roundSubmitAttempts).toBe(1);
       expect(after.previewVersion).toBe(before.previewVersion);

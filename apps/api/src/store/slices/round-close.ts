@@ -64,7 +64,7 @@ export function takeoverRecord(
     ...sub,
     roundGeneration: nextRoundGeneration(sub.roundGeneration ?? 1),
     agentEndedAt: at,
-    agentEndedBy: 'end',
+    agentEndedBy: 'takeover',
   };
   // A takeover revokes the agent; its old key must not keep reading.
   delete next.receiptRound;

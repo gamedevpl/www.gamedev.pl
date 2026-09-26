@@ -2,6 +2,7 @@ import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/cont
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
 import { currentSessionFinished } from './preview-round-close.js';
+import { lastRoundActivityAt } from '../platform/quiet-round.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   builderLabelFromRecord,
@@ -432,7 +433,11 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         const at = new Date(now()).toISOString();
         const transition: JobTransition = { to: 'ready_for_review', at, by: 'gate', reason: 'preview_gate_green' };
         // Guarded: a handoff may have opened a newer round since this read.
-        const guard = { roundGeneration: record.roundGeneration ?? 1, dispatchRef: record.dispatch?.refs.at(-1) };
+        const guard = {
+          activityAt: lastRoundActivityAt(record),
+          roundGeneration: record.roundGeneration ?? 1,
+          dispatchRef: record.dispatch?.refs.at(-1),
+        };
         if (!(await store.recordJobTransition(record.jobId, transition, guard))) return null;
         // Same as the publish path: the closed round resumes a pending handoff.
         if (record.builderHandoff?.awaitsAgentAck) {

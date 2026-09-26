@@ -1,6 +1,6 @@
 export interface AgentSessionRecord {
   agentEndedAt?: string | null;
-  agentEndedBy?: 'submit' | 'end';
+  agentEndedBy?: 'submit' | 'end' | 'takeover';
   agentState?: string;
 }
 

@@ -9,11 +9,11 @@ import { createJobReconciler } from './job-reconciler.js';
 const AT = '2026-09-26T12:00:00.000Z';
 type AgentState = 'in_progress' | 'completed' | 'idle';
 
-async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0, ledger = true) {
+async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0, ledger = true, backend = 'managed') {
   const store = new InMemoryStore();
   await store.createSubmission(9, 'g:owner', 'Preview game');
   await store.setSubmissionSlug(9, 'preview-game');
-  await store.recordDispatch(9, { backend: 'managed', ref: 'session-1', workspace: 'ws-1' });
+  await store.recordDispatch(9, { backend, ref: 'session-1', workspace: 'ws-1' });
   if (ledger)
     await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-1', credits: 1 });
   await store.recordJobTransition(9, { to: 'building', at: AT, by: 'agent', reason: 'task_in_progress' });
@@ -158,6 +158,31 @@ describe('a finished session that delivered only a preview', () => {
     await store.markAgentEnded(9, AT, 'end');
     await poll();
     expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('lets a self editor preview plus end() be sealed by the owner', async () => {
+    const { store, agent, poll } = await setup({ green: true }, 0, false, 'self');
+    agent.state = 'in_progress';
+    await store.markAgentEnded(9, AT, 'end');
+    await poll();
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('does not treat a takeover marker as the agent ending', async () => {
+    const { store, agent, poll } = await setup({ green: true }, 0, false, 'self');
+    agent.state = 'in_progress';
+    await store.markAgentEnded(9, AT, 'takeover');
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it('does not close a round the same session resumed after end()', async () => {
+    const { store, reconciler } = await setup({ green: true }, 60 * 60_000, false);
+    await store.markAgentEnded(9, '2099-01-01T00:00:00.000Z', 'end');
+    const evaluated = (await store.getSubmission(9))!;
+    await store.clearAgentEnded(9);
+    expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
   });
 });
 
