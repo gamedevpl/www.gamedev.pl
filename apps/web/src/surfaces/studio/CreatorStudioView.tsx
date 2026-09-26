@@ -129,7 +129,7 @@ export function CreatorStudioView({
   const [games, setGames] = useState<StudioGame[]>([]);
   const [healthRows, setHealthRows] = useState<GameHealth[]>([]);
   const [scorecards, setScorecards] = useState<StudioScorecard[]>([]);
-  const [healthDays, setHealthDays] = useState<string[]>([]);
+  const [healthDays, setHealthDays] = useState<string[] | null>([]);
   const [truncated, setTruncated] = useState(false);
   const [shelfTruncated, setShelfTruncated] = useState(false);
   const [totalGames, setTotalGames] = useState(0);
@@ -209,16 +209,17 @@ export function CreatorStudioView({
     setLoading(true);
     setError(null);
 
-    Promise.all([fetchStudioGames(requestedGameRef.current), fetchStudioHealth(days)])
+    // Health is optional: a refused scan (429) must never hide the shelf.
+    Promise.all([fetchStudioGames(requestedGameRef.current), fetchStudioHealth(days).catch(() => null)])
       .then(([shelfPage, health]) => {
         if (cancelled) return;
         const shelf = shelfPage.games;
         setGames(shelf);
         setShelfTruncated(shelfPage.truncated);
         setTotalGames(shelfPage.totalGames);
-        setHealthRows(health.games);
-        setHealthDays(health.days);
-        setTruncated(health.truncated);
+        setHealthRows(health?.games ?? []);
+        setHealthDays(health?.days ?? null);
+        setTruncated(health?.truncated ?? false);
         setLoading(false);
         const collapsed = collapseStudioGames(shelf);
         setSelected((current) => {

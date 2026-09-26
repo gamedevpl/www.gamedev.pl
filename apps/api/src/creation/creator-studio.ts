@@ -12,7 +12,7 @@ import { shelfReadsFromDocument } from '../platform/shelf-reads-env.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { viewerRoleOnGame } from '../platform/game-access-permissions.js';
 import { readStudioHealthCached, studioHealthKey } from './studio-health-cache.js';
-import { scanOwnedSlugs } from './studio-health-scan.js';
+import { scanOwnedSlugs, spendStudioHealthScan, StudioHealthBudgetError } from './studio-health-scan.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
@@ -237,7 +237,8 @@ export async function registerCreatorStudioRoutes(
    */
   app.get(
     '/api/me/studio/health',
-    { config: { rateLimit: { max: 12, timeWindow: '1 hour' } } },
+    // Abuse backstop only; the scan budget below is the real cost limit.
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!requireUser(request, reply)) return reply;
 
@@ -269,6 +270,7 @@ export async function registerCreatorStudioRoutes(
         store,
         studioHealthKey(request.user!.uid, slugs, requested),
         async () => {
+          spendStudioHealthScan(store, request.user!.uid, now());
           const { events, scanned, truncated } = await scanOwnedSlugs(store, slugs, requested);
           const owned = new Set(slugs);
           return {
@@ -278,7 +280,12 @@ export async function registerCreatorStudioRoutes(
           };
         },
         now,
-      );
+      ).catch((error: unknown) => {
+        if (!(error instanceof StudioHealthBudgetError)) throw error;
+        void reply.header('retry-after', String(error.retryAfterSeconds));
+        return null;
+      });
+      if (!window) return reply.status(429).send({ error: 'health scan budget exhausted, retry later' });
 
       const body: CreatorHealthResponse = {
         days: window.days,
