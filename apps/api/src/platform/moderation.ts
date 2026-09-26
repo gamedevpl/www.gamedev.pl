@@ -357,10 +357,9 @@ ${text}
 
     // A malformed body, a non-boolean `allowed`, or the abort firing all throw
     // out of here — and `check()` turns any throw into a fail-closed verdict.
-    // Luna rejects any temperature but its default, so only Vertex gets one.
-    const base = this.getClient(model)(promptText);
-    const onOpenAi = model !== undefined && model === this.fallbackModel && this.fallbackProvider === 'openai';
-    const verdict = await (onOpenAi ? base : base.temperature(0))
+    // genaicode drops the temperature for Luna, which rejects anything but its default.
+    const verdict = await this.getClient(model)(promptText)
+      .temperature(0)
       .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
       .signal(AbortSignal.timeout(Math.max(1, timeoutMs)))
       .json((value) => VerdictSchema.parse(value));

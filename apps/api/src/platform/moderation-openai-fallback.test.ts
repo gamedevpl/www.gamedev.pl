@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { OPENAI_FALLBACK_MODEL as LUNA, VertexChecker } from './moderation.js';
 
 describe('VertexChecker on the OpenAI stand-in', () => {
-  // Luna 400s on temperature 0; that failed every Vertex capacity miss closed.
-  it('sends no temperature to the OpenAI stand-in', async () => {
+  // Luna 400s on temperature 0; genaicode drops it on the wire, so the request keeps it.
+  it('falls back to the OpenAI stand-in after Vertex capacity misses', async () => {
     const seen: GenerationRequest[] = [];
     const checker = new VertexChecker({
       retryDelayMs: 0,
@@ -22,6 +22,6 @@ describe('VertexChecker on the OpenAI stand-in', () => {
     });
 
     expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
-    expect(seen.map((request) => request.temperature)).toEqual([0, 0, undefined]);
+    expect(seen.map((request) => request.temperature)).toEqual([0, 0, 0]);
   });
 });

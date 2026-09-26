@@ -54,7 +54,6 @@ describe('spec refinement provider fallback', () => {
     expect(result.suggestedTitle).toBe('Kółko 3D');
     expect(result.questions[0]?.question).toBe('Jaki rozmiar planszy?');
     expect(fallbackRequest?.prompt[0]?.text).toContain('entirely in Polish');
-    expect(fallbackRequest?.temperature).toBeUndefined();
   });
 
   it('fails closed when OpenAI Luna also fails', async () => {

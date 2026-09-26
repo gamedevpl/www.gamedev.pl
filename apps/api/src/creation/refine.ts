@@ -279,9 +279,8 @@ ${params.concept}
           }
         },
         attempt: (model, timeoutMs) => {
-          const base = this.getClient(model)(promptText);
-          const request = model === OPENAI_REFINE_FALLBACK_MODEL ? base : base.temperature(0.2);
-          return request
+          return this.getClient(model)(promptText)
+            .temperature(0.2)
             .thinking({ level: 'low' })
             .signal(AbortSignal.timeout(timeoutMs))
             .json((value) => RefineResultSchema.parse(value));
