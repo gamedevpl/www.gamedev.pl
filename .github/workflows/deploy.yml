@@ -17,12 +17,15 @@ concurrency:
   group: cloud-run-deploy
   cancel-in-progress: false
 
+# Least privilege by default. Only the two jobs that talk to GCP mint an OIDC token;
+# the browser gate, which opens hostile generated games, gets neither the permission
+# nor any cloud credential (see the browser-gate job below).
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   deploy:
+    name: Build and deploy candidate
     # Only successful push CI from this repository may cross the deploy boundary.
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -30,6 +33,11 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      candidate_url: ${{ steps.smoke.outputs.candidate_url }}
     env:
       PROJECT_ID: 'gamedevpl'
       # europe-west1 (not europe-central2): Cloud Run native domain mapping for
@@ -666,6 +674,7 @@ jobs:
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision
+        id: smoke
         # Anonymous checks: shell + waitlist reachable; catalog/games/spend routes walled.
         # Play assemble lives in the authenticated smoke (session required under PRIVATE_BETA).
         run: |
@@ -675,8 +684,10 @@ jobs:
 
           [ -n "$CANDIDATE_URL" ] || { echo "Error: CANDIDATE_URL is empty"; exit 1; }
           echo "Candidate URL: ${CANDIDATE_URL}"
-          # Later steps (the authenticated smoke) need the same URL.
+          # Later steps (the authenticated smoke) need the same URL, and so does the
+          # browser-gate job, which receives it as this job's output.
           echo "CANDIDATE_URL=${CANDIDATE_URL}" >> "$GITHUB_ENV"
+          echo "candidate_url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
 
           fetch_status() {
             local code
@@ -897,49 +908,6 @@ jobs:
 
           echo "Authenticated smoke passed as ${UID_VALUE}: bearer auth, cookie exchange, session wall, and play assemble all live."
 
-      # The browser gate. Everything above stops at HTTP, so play can be completely broken
-      # while every check is green: `/api/games/<slug>` returning HTML says nothing about
-      # whether that HTML runs. A CSP header, a sandbox change, a bundle regression or a
-      # broken assembler each return a healthy 200 and a black screen — and a site without
-      # playable games is worth nothing (apps/e2e, docs/deployment.md).
-      #
-      # `deploy` is a fresh runner with no node_modules — everything before this point is
-      # gcloud and curl — so Node is set up here.
-      - name: Set up Node for the browser gate
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install workspace dependencies
-        run: npm ci
-
-      # PLAYWRIGHT_BROWSERS_PATH must be set for BOTH steps and must match: `install`
-      # writes to ~/.cache/ms-playwright by default, while the suite's findChromium()
-      # searches PLAYWRIGHT_BROWSERS_PATH (default /opt/pw-browsers). Unpinned, the
-      # browser lands where the suite never looks, every suite skips, and the job exits 0
-      # having verified nothing — a green deploy behind a gate that never ran.
-      # `npx playwright install` resolves the *latest* playwright CLI — the workspace has
-      # playwright-core, which ships no CLI — so the directory layout it produces is not
-      # something to assume. findChromium()'s `chromium-<build>/chrome-linux/chrome` guess
-      # missed it on the first real run and the gate refused to run at all. Locate the
-      # binary that was actually installed and hand it over explicitly; E2E_CHROMIUM_PATH
-      # takes priority over every heuristic in findChromium().
-      - name: Install Chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
-        run: |
-          npx playwright install --with-deps chromium
-
-          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
-          if [ -z "$BIN" ]; then
-            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH — layout below"
-            find "$PLAYWRIGHT_BROWSERS_PATH" -maxdepth 3 | head -50
-            exit 1
-          fi
-          echo "Chromium: $BIN"
-          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
-
       - name: Move the party relay onto the same image
         # Only when the split is switched on. Both roles run one image, so the relay has to
         # be redeployed whenever the app is — otherwise the socket protocol the freshly
@@ -1015,14 +983,162 @@ jobs:
           fi
           echo "Relay healthy at ${RELAY_URL}"
 
+  # The browser gate, in its own job and on its own runner, with no cloud credential.
+  #
+  # It opens published games, which are generated code nobody reviewed line by line, in a
+  # real Chromium. While it shared a job with the deploy, a renderer exploit in any one of
+  # them would have run on a machine holding the deployer's Workload Identity token (Cloud
+  # Run admin, Secret Manager, service-account impersonation). Here there is nothing to
+  # take: no `id-token: write`, no GCP auth step, no deploy env, and the checkout does not
+  # persist the GITHUB_TOKEN. What remains is GAMEDEV_ACCESS_TOKEN — the bot:ci account's
+  # own short-lived token, which the suite signs in with — and the candidate URL.
+  #
+  # Promotion lives in the `promote` job below, which `needs:` this one and authenticates
+  # to GCP afresh on a clean runner, so a gate that fails or is cancelled still stops the
+  # traffic shift exactly as the in-job step used to.
+  browser-gate:
+    name: Browser gate against the candidate
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ env.DEPLOY_SHA }}
+          # Nothing in this job pushes or fetches again; keep the token off disk.
+          persist-credentials: false
+
+      # Why a browser gate. The deploy job's checks stop at HTTP, so play can be completely broken
+      # while every check is green: `/api/games/<slug>` returning HTML says nothing about
+      # whether that HTML runs. A CSP header, a sandbox change, a bundle regression or a
+      # broken assembler each return a healthy 200 and a black screen — and a site without
+      # playable games is worth nothing (apps/e2e, docs/deployment.md).
+      #
+      # A fresh runner with no node_modules, so Node is set up here. No `cache: 'npm'`:
+      # the cache is saved in a post step, after the games have run, and the promote job
+      # restores it on a runner that does hold GCP credentials.
+      - name: Set up Node for the browser gate
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      # PLAYWRIGHT_BROWSERS_PATH must be set for BOTH steps and must match: `install`
+      # writes to ~/.cache/ms-playwright by default, while the suite's findChromium()
+      # searches PLAYWRIGHT_BROWSERS_PATH (default /opt/pw-browsers). Unpinned, the
+      # browser lands where the suite never looks, every suite skips, and the job exits 0
+      # having verified nothing — a green deploy behind a gate that never ran.
+      # `npx playwright install` resolves the *latest* playwright CLI — the workspace has
+      # playwright-core, which ships no CLI — so the directory layout it produces is not
+      # something to assume. findChromium()'s `chromium-<build>/chrome-linux/chrome` guess
+      # missed it on the first real run and the gate refused to run at all. Locate the
+      # binary that was actually installed and hand it over explicitly; E2E_CHROMIUM_PATH
+      # takes priority over every heuristic in findChromium().
+      - name: Install Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
+        run: |
+          npx playwright install --with-deps chromium
+
+          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
+          if [ -z "$BIN" ]; then
+            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH — layout below"
+            find "$PLAYWRIGHT_BROWSERS_PATH" -maxdepth 3 | head -50
+            exit 1
+          fi
+          echo "Chromium: $BIN"
+          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
+
+      - name: Let Chromium use its sandbox
+        # The Chromium sandbox is the second wall between a hostile game and this runner
+        # (apps/e2e/src/browser.ts launches with it on). It needs unprivileged user
+        # namespaces, which Ubuntu 23.10+ lets AppArmor restrict to binaries that have a
+        # profile — and Playwright's download under runner.temp has none. When the
+        # restriction is on, grant userns to that one binary, the same shape as the
+        # profiles Ubuntu ships for Chrome, rather than lifting it machine-wide.
+        #
+        # Break glass, for a runner image where the sandbox still cannot start: set the
+        # repo variable E2E_CHROMIUM_NO_SANDBOX=1 (docs/deployment.md). The job isolation
+        # above does not depend on it; only this second wall does.
+        if: ${{ vars.E2E_CHROMIUM_NO_SANDBOX != '1' }}
+        run: |
+          RESTRICT=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
+          echo "kernel.apparmor_restrict_unprivileged_userns=${RESTRICT}"
+          if [ "$RESTRICT" != "1" ]; then
+            echo "User namespaces are not restricted; nothing to do."
+            exit 0
+          fi
+          PROFILE=/etc/apparmor.d/e2e-chromium
+          printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile e2e-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' \
+            "$E2E_CHROMIUM_PATH" | sudo tee "$PROFILE"
+          sudo apparmor_parser -r "$PROFILE"
+
       - name: Browser gate against the candidate
         env:
-          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
+          E2E_BASE_URL: ${{ needs.deploy.outputs.candidate_url }}
           GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
           # Turns "cannot run" into a failed deploy instead of a silent skip
           # (apps/e2e/src/gate-prerequisites.test.ts).
           E2E_REQUIRED: '1'
-        run: npm run e2e
+          # Break glass only; empty keeps the sandbox on (see the step above).
+          E2E_CHROMIUM_NO_SANDBOX: ${{ vars.E2E_CHROMIUM_NO_SANDBOX }}
+        run: |
+          # GitHub drops (rather than fails) a job output it believes holds a secret, and
+          # the suite would then read an empty base URL. Refuse instead of testing nothing.
+          case "$E2E_BASE_URL" in
+            https://*.run.app) echo "Gating ${E2E_BASE_URL}" ;;
+            *)
+              echo "::error::candidate URL from the deploy job is '${E2E_BASE_URL}', not a run.app URL"
+              exit 1
+              ;;
+          esac
+          npm run e2e
+
+  # Everything that must wait for the browser gate, on a fresh runner that authenticates to
+  # GCP again. Same order as when these were the tail of one job: the zone host the new
+  # bundle talks to, the identity assertion, the Hosting assets, then the traffic shift.
+  # The party relay is NOT here: the gate opens a lobby, so the relay must already run the
+  # new image before the gate starts (see "Move the party relay onto the same image").
+  promote:
+    name: Promote candidate
+    needs: [deploy, browser-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: 'gamedevpl'
+      REGION: 'europe-west1'
+      SERVICE: 'gamedev-app'
+      WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+      WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+      # Same literals as the deploy job above; keep the two blocks identical.
+      APP_RUNTIME_SA: 'gamedev-app@gamedevpl.iam.gserviceaccount.com'
+      RELAY_RUNTIME_SA: 'gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com'
+      WORLD_RUNTIME_SA: 'gamedev-world@gamedevpl.iam.gserviceaccount.com'
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 0
+
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
       - name: Keep the zone host on the same source revision
         # gamedev-world was the one production service with no CI path at all: its image
@@ -1178,6 +1294,15 @@ jobs:
             check "${{ vars.ZONE_SERVICE || 'gamedev-world' }}" "$WORLD_RUNTIME_SA"
           fi
           exit "$fail"
+
+      - name: Set up Node for the Hosting build
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install workspace dependencies
+        run: npm ci
 
       - name: Upload web assets to Firebase Hosting
         # Before promotion, so the assets are in place when the new index.html goes live.

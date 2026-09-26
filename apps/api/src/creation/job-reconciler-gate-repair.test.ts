@@ -35,8 +35,7 @@ function setup(green: boolean) {
     now: () => Date.parse(AT),
     observeQuietMs: 0,
     maxDeliveryNudges: 1,
-    backendFor: async () => undefined,
-    builderOf: () => 'platform',
+    backendForRecord: async () => undefined,
     releaseWorkspace: async () => {},
     resumeBuild: async () => ({}),
     acknowledgeBuilderHandoff: async () => ({ started: false }),
@@ -97,6 +96,7 @@ describe('gate repair reconciliation', () => {
       setSubmissionAgentState: vi.fn(async () => {}),
     });
     const onGateRed = vi.fn(async () => Boolean(record.costs?.[0]?.finishedAt));
+    const backendForRecord = vi.fn(async () => ({ observe }) as unknown as AgentBackend);
     const reconciler = createJobReconciler({
       store,
       gamesStore: {
@@ -109,8 +109,7 @@ describe('gate repair reconciliation', () => {
       now: () => Date.parse(AT),
       observeQuietMs: 60_000,
       maxDeliveryNudges: 1,
-      backendFor: async () => ({ observe }) as unknown as AgentBackend,
-      builderOf: () => 'platform',
+      backendForRecord,
       releaseWorkspace: async () => {},
       resumeBuild: async () => ({}),
       acknowledgeBuilderHandoff: async () => ({ started: false }),
@@ -120,6 +119,7 @@ describe('gate repair reconciliation', () => {
     });
     const result = await reconciler.reconcileGateVerdict(record);
     expect(observe).toHaveBeenCalledOnce();
+    expect(backendForRecord).toHaveBeenCalledWith(record);
     expect(setJobCostFinished).toHaveBeenCalledOnce();
     expect(onGateRed).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ to: 'dispatched', reason: 'gate_repair' });

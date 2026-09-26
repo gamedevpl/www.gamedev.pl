@@ -1,6 +1,5 @@
-import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { Store, SubmissionRecord, TransitionGuard } from '../platform/store.js';
-import type { BuilderKind } from './builder.js';
+import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { JobState, TransitionActor } from './job-state.js';
 
 type Log = { error: (context: object, message: string) => void };
@@ -8,8 +7,7 @@ type Log = { error: (context: object, message: string) => void };
 export interface CloseJobDeps {
   store: Store;
   now: () => number;
-  backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
-  builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
+  backendForRecord: (record: SubmissionRecord) => Promise<AgentBackend | undefined>;
   releaseWorkspace: (jobId: number, workspace: string, log: Log, backendName?: string) => Promise<void>;
   invalidateStatusCache?: (jobId: number) => void;
 }
@@ -40,7 +38,7 @@ export async function closeJob(
 
   let stopEnforced = false;
   const ref = record.dispatch?.refs.at(-1);
-  const cancelBackend = await deps.backendFor(deps.builderOf(record));
+  const cancelBackend = await deps.backendForRecord(record);
   if (cancelBackend && ref) {
     try {
       stopEnforced = (await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref])).enforced;

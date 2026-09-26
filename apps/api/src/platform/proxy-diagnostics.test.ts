@@ -23,6 +23,23 @@ describe('GET /api/diagnostics/proxy', () => {
     await app.close();
   });
 
+  it('refuses blocked callers with retained sessions', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:blocked', email: 'blocked@example.com', tier: 'blocked' });
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/diagnostics/proxy',
+      headers: { cookie: session('g:blocked') },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'account is blocked' });
+    expect(res.headers['cache-control']).toBe('no-store');
+    await app.close();
+  });
+
   it('reports the resolved IP and the forwarding chain it came from', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:looker', email: 'looker@example.com' });

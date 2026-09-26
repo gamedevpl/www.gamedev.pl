@@ -439,7 +439,7 @@ export function tick(round: Round) {
       const record = await store.getSubmission(ISSUE);
       expect(record?.roundTypecheckPreflightRefusals).toBe(2);
       expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
-      expect(log.warn.mock.calls[0]?.[0]).toMatchObject({ message: record?.roundTypecheckPreflightBypassErrors });
+      expect(JSON.stringify(log.warn.mock.calls)).not.toContain(record?.roundTypecheckPreflightBypassErrors);
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(
         expect.objectContaining({ kind: 'blocked', text: expect.stringContaining('without a passing typecheck') }),

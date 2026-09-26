@@ -47,6 +47,20 @@ describe('POST /api/admin/creation-limits', () => {
     expect(stored?.telemetrySampleRate).toBe(0.25);
   });
 
+  it('lets an operator pause remix trace emission', async () => {
+    const { app, store } = await adminApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: adminHeaders(),
+      payload: { remixTracePaused: true },
+    });
+    const stored = await store.getCreationLimits();
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(stored?.remixTracePaused).toBe(true);
+  });
+
   it('still refuses an empty patch', async () => {
     const { app } = await adminApp();
     const response = await app.inject({
