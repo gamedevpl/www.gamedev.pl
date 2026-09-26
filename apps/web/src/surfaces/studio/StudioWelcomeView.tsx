@@ -148,7 +148,6 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
     };
   }, [game]);
 
-
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
@@ -308,6 +307,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
                   progress={status?.progress ?? null}
                   events={status?.events ?? []}
                   loaded={status != null}
+                  dedupeNoteAgainst={progress}
                 />
               </div>
             ) : null}
