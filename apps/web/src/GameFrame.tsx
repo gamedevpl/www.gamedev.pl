@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import i18n from './i18n/index.js';
+import { useHostLoadTracking } from './frameMessage.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
@@ -71,6 +72,8 @@ export function GameFrame(props: GameFrameProps) {
     frame.contentWindow?.focus();
   }, [iframeRef, autoFocus]);
 
+  const { onLoad, frameKey } = useHostLoadTracking(iframeRef, srcDoc ?? props.src, focusGame);
+
   useEffect(() => {
     // Backstop for the cases the load event doesn't cover — a document that had
     // already loaded before this effect ran, or a re-render that swaps srcDoc.
@@ -80,15 +83,15 @@ export function GameFrame(props: GameFrameProps) {
 
   return (
     <iframe
+      key={frameKey}
       ref={iframeRef}
       className="game-frame"
       title={props.title}
       sandbox="allow-scripts allow-pointer-lock"
       src={props.src}
       srcDoc={srcDoc}
-      // The load event is the reliable moment to focus: the game's document exists
-      // and won't be replaced out from under the focus we just set.
-      onLoad={focusGame}
+      // Focuses the game, and flags a document the game navigated to itself.
+      onLoad={onLoad}
       // Parent-side backstop for the iOS callout when the long-press hits the iframe
       // chrome rather than a node inside the opaque-origin document.
       onContextMenu={(event) => event.preventDefault()}
