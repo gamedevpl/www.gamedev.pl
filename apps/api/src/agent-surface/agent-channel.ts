@@ -25,6 +25,7 @@ import {
   assertUploadTokenUnexpired,
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
   mintUploadToken,
+  UPLOAD_TOKEN_HEADER,
   uploadCurlCommand,
   verifyUploadToken,
   type UploadKind,
@@ -759,7 +760,7 @@ export async function registerAgentChannelRoutes(
     }
   }
 
-  // Auth via ?token= upload capability (no Authorization header).
+  // Keep upload capabilities out of URLs, which request loggers record.
   async function resolveUploadBuild(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -770,10 +771,8 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
-    const raw =
-      typeof (request.query as { token?: unknown })?.token === 'string'
-        ? (request.query as { token: string }).token.trim()
-        : '';
+    const authorization = request.headers[UPLOAD_TOKEN_HEADER];
+    const raw = typeof authorization === 'string' ? authorization.replace(/^Bearer\s+/i, '').trim() : '';
     if (!raw) {
       reply.status(401).send({ error: 'missing upload token' });
       return null;
@@ -1175,13 +1174,13 @@ export async function registerAgentChannelRoutes(
         ttlSeconds,
       });
       const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
-      const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD}?token=${encodeURIComponent(token)}`;
+      const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD}`;
       return reply.send({
         accepted: true,
         url,
         expiresAt,
         expiresInSeconds: ttlSeconds,
-        upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
+        upload: uploadCurlCommand(url, token, 'shot.png', 'image/png'),
         maxBytes: parsed.data.purpose === 'concept' ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES,
         ...(await channelState(jobId, record)),
       });
@@ -1200,8 +1199,7 @@ export async function registerAgentChannelRoutes(
       if (!resolved) return reply;
       const { jobId, record, upload } = resolved;
 
-      const reject = async (reason: RejectionReason) =>
-        reply.send({ accepted: false, rejected: reason, ...(await channelState(jobId, record)) });
+      const reject = (reason: RejectionReason) => reply.send({ accepted: false, rejected: reason });
 
       if (stopReason(record)) {
         return reject('stopped');
@@ -1284,7 +1282,6 @@ export async function registerAgentChannelRoutes(
       return reply.send({
         accepted: true,
         shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
-        ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
       });
     },
   );

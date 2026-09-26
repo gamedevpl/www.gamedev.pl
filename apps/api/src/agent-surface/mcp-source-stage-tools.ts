@@ -292,13 +292,13 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             now: issuedAt,
             ttlSeconds,
           });
-          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}?token=${encodeURIComponent(token)}`;
+          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
           return toolOk({
             url,
             expiresAt,
             expiresInSeconds: ttlSeconds,
             path,
-            upload: uploadCurlCommand(url, path, 'text/plain; charset=utf-8'),
+            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
             maxBytes: 1_000_000,
           });
         }
@@ -314,11 +314,11 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             now: issuedAt,
             ttlSeconds,
           });
-          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}?token=${encodeURIComponent(token)}`;
+          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
           return {
             path,
             url,
-            upload: uploadCurlCommand(url, path, 'text/plain; charset=utf-8'),
+            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
             expiresAt,
             expiresInSeconds: ttlSeconds,
             maxBytes: 1_000_000,

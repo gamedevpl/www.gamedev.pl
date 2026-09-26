@@ -53,37 +53,38 @@ export async function createApp(store: InMemoryStore, gamesStore: GamesStore) {
     },
   });
 }
-
 export async function seed(store: InMemoryStore) {
   await store.createSubmission(ISSUE, 'g:owner', 'Squad game');
   await store.setSubmissionSlug(ISSUE, 'squad-game');
   await store.setSubmissionPreviewVersion(ISSUE, VERSION);
 }
-
-export async function mintConceptUrl(app: FastifyInstance, round = 1): Promise<string> {
+export async function mintConceptUrl(app: FastifyInstance, round = 1): Promise<{ url: string; authorization: string }> {
   const minted = await app.inject({
     method: 'POST',
     url: '/api/agent/build/shot/upload-url',
     headers: agentHeaders(ISSUE, round),
     payload: { purpose: 'concept' },
   });
-  return minted.json().url as string;
+  const body = minted.json();
+  const authorization = String(body.upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
+  if (!authorization) throw new Error('upload command has no authorization header');
+  return { url: body.url as string, authorization };
 }
-
-export async function putConceptFrame(app: FastifyInstance, url: string, png: Buffer) {
-  const token = new URL(url).searchParams.get('token');
+export async function putConceptFrame(
+  app: FastifyInstance,
+  upload: { url: string; authorization: string },
+  png: Buffer,
+) {
   return await app.inject({
     method: 'PUT',
-    url: `/api/agent/build/shot/upload?token=${encodeURIComponent(token ?? '')}`,
-    headers: { 'content-type': 'image/png' },
+    url: upload.url.replace(/^https?:\/\/[^/]+/, ''),
+    headers: { authorization: upload.authorization, 'content-type': 'image/png' },
     payload: png,
   });
 }
-
 export async function uploadConceptFrameRaw(app: FastifyInstance, png: Buffer, round = 1) {
   return await putConceptFrame(app, await mintConceptUrl(app, round), png);
 }
-
 export async function uploadConceptFrame(
   app: FastifyInstance,
   png: Buffer = pngHeader(900, 900),
@@ -91,7 +92,6 @@ export async function uploadConceptFrame(
 ): Promise<string> {
   return (await uploadConceptFrameRaw(app, png, round)).json().shot.id as string;
 }
-
 // Ordinary agent screenshots, to push the build up against its quota.
 export async function fillShots(store: InMemoryStore, count: number): Promise<void> {
   for (let index = 0; index < count; index += 1) {
