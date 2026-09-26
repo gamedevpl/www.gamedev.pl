@@ -1,3 +1,4 @@
+import { createReviewPreviewLoader } from './review-preview-loader.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerLocalActivityRoutes } from '../creation/local-activity-routes.js';
 import cors from '@fastify/cors';
@@ -725,6 +726,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reviewerUids,
     adminUids,
     listCatalog: defaultReviewCatalog,
+    loadCreatorPreview: createReviewPreviewLoader(store, gamesStore),
     emitDeps: submissionSeams.buildNotifyDeps(),
     emitReviewSweep,
     ...options.reviewRoutes,
