@@ -133,7 +133,7 @@ export async function registerJobAdminRoutes(
      */
     notifyFollowers?: (event: { slug: string; version: string; gameTitle: string; ownerUid: string }) => Promise<void>;
     // Policy at composition root, not a route invariant.
-    editorialClearance?: (slug: string) => Promise<EditorialPublishCounts>;
+    editorialClearance?: (slug: string, version: string) => Promise<EditorialPublishCounts>;
   },
 ): Promise<void> {
   const { store, adminUids, gamesStore } = options;
@@ -185,7 +185,6 @@ export async function registerJobAdminRoutes(
       if (!record.slug || !record.deliveredVersion) {
         return reply.code(409).send({ error: 'nothing_delivered' });
       }
-      // Never publish different bytes from the operator's preview.
       if (!previewMatchesDelivery(record, record.deliveredVersion)) {
         return reply.code(409).send({ error: 'preview_superseded_delivery' });
       }
@@ -217,6 +216,7 @@ export async function registerJobAdminRoutes(
         editorialClearance: options.editorialClearance,
         ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,
         slug: record.slug,
+        version: record.deliveredVersion,
         body: request.body,
       });
       if ('status' in clearance) return reply.code(clearance.status).send(clearance.body);
