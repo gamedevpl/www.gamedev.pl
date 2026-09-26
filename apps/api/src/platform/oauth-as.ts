@@ -613,6 +613,10 @@ export function registerOAuthAuthorizationServerRoutes(
         scope: consumed.scope,
       });
       if (!issued) return reply.status(400).send({ error: 'invalid_grant' });
+      // Reusing a grant can drop mcp; session keys never re-read the grant.
+      if (scopeHasMcp(grant.scope) && !scopeHasMcp(issued.scope)) {
+        await endOpenAgentSessions(store, grant.ownerUid);
+      }
 
       return reply.send({
         access_token: access.token,

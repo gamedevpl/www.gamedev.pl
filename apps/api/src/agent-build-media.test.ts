@@ -389,7 +389,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     // post-green is exactly when the agent wants the frames to show the creator.
     const store = new InMemoryStore();
     await seedDeliveredJob(store);
-    await store.bumpRoundGeneration(ISSUE);
+    await store.recordJobTransition(ISSUE, { to: 'ready_for_review', at: new Date().toISOString(), by: 'system' });
     app = await createApp(store, stubGamesStore(), stubObjectStore().objectStore);
 
     const receipt = await app.inject({
@@ -407,6 +407,19 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     });
     expect(otherDelivery.statusCode).toBe(401);
     expect(otherDelivery.json().error).toBe(STALE_AGENT_TOKEN_REASON);
+  });
+
+  // A rotation bump revokes; the old key reads nothing after.
+  it('refuses a key one behind when its round was revoked, not closed', async () => {
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    await store.bumpRoundGeneration(ISSUE);
+    app = await createApp(store, stubGamesStore(), stubObjectStore().objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders(ISSUE, 1) });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
   it('rejects a key more than one generation behind', async () => {

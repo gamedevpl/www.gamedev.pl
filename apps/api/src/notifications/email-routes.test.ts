@@ -47,7 +47,7 @@ describe('GET /api/email/unsubscribe?scope=digest', () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:me', email: 'me@example.com' });
     const app = await buildApp({ store, sessionSecret });
-    const token = mintUnsubscribeToken('g:me', sessionSecret);
+    const token = mintUnsubscribeToken('g:me', sessionSecret, 'digest');
 
     const res = await app.inject({ method: 'GET', url: `/api/email/unsubscribe?token=${token}&scope=digest` });
 

@@ -147,14 +147,13 @@ export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: 
 
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const actionUrl = absoluteAppUrl(appBaseUrl, notification.link);
-    // A digest's unsubscribe narrows to the digest. Clicking "unsubscribe" on a weekly
-    // summary must not also silence "your game is published" — that is the message the
-    // creator actually wants, and losing it is how one unwanted email costs us every
-    // wanted one.
-    const unsubscribePath = `/api/email/unsubscribe?token=${mintUnsubscribeToken(uid, unsubscribeSecret)}`;
+    // Digest capabilities must not silence transactional email.
+    const digestEmail = notification.type === 'creator.digest';
+    const unsubscribeToken = mintUnsubscribeToken(uid, unsubscribeSecret, digestEmail ? 'digest' : 'all');
+    const unsubscribePath = `/api/email/unsubscribe?token=${unsubscribeToken}`;
     const unsubscribeUrl = absoluteAppUrl(
       appBaseUrl,
-      notification.type === 'creator.digest' ? `${unsubscribePath}&scope=digest` : unsubscribePath,
+      digestEmail ? `${unsubscribePath}&scope=digest` : unsubscribePath,
     );
     const locale = normalizeLocale(user.locale);
     // Three families, three sentences. A proposal is not a submission event — the actor

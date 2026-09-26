@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { PAUSEABLE_LANES, lanePatch } from '../platform/spend-brake.js';
+import { fakeFirestore } from './fake-firestore.js';
 
 // setCreationLimits merges field by field, so a new lane can vanish.
 describe('every pauseable lane survives a write', () => {
@@ -50,5 +51,15 @@ describe('every pauseable lane survives the round trip Firestore makes', () => {
       // A dropped lane is stored, then read back false.
       expect(read?.[key], `${lane} reads ${key} back`).toEqual(value);
     }
+  });
+
+  it('preserves the remix trace pause across unrelated changes', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreQuotaStore(db);
+
+    await store.setCreationLimits({ remixTracePaused: true }, 'operator');
+    await store.setCreationLimits({ editingPaused: true }, 'operator');
+
+    expect(await store.getCreationLimits()).toMatchObject({ remixTracePaused: true, editingPaused: true });
   });
 });

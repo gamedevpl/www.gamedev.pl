@@ -139,6 +139,13 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         input.undelivered && !revoked
           ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
           : ((await store.bumpRoundGeneration(input.jobId)) ?? (record?.roundGeneration ?? 0) + 1);
+      if (!input.undelivered && builder !== previousBuilder) {
+        // Switch builder at the bump, so the old one cannot reopen.
+        await store.setRoundBuilder(input.jobId, builder, {
+          resetRoundBudget: !input.preserveRoundBudget,
+        });
+        builderActivated = true;
+      }
       const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
@@ -186,13 +193,6 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
 
       // At a builder change the old ref belongs elsewhere, so start fresh.
       const sameBackend = previous?.backend === selected.name && Boolean(previous?.refs.length);
-      if (!input.undelivered && builder !== previousBuilder) {
-        // Expose target builder before external session can call back through MCP.
-        await store.setRoundBuilder(input.jobId, builder, {
-          resetRoundBudget: !input.preserveRoundBudget,
-        });
-        builderActivated = true;
-      }
       const result = sameBackend
         ? await selected.resume(brief, {
             ref: previous!.refs[previous!.refs.length - 1],

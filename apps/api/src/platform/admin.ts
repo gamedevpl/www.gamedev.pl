@@ -238,8 +238,8 @@ const CreationLimitsPatchShape = z.object({
   paused: z.boolean().optional(),
   // null clears the ceiling, handing the decision to the deployed default.
   globalDailySubmissionCap: z.number().int().min(0).max(100_000).nullable().optional(),
-  // The editing lanes' breaker rides the same document — one place to look.
   editingPaused: z.boolean().optional(),
+  remixTracePaused: z.boolean().optional(),
   globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
   chatPaused: z.boolean().optional(),
   globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),

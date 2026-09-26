@@ -3,7 +3,7 @@ import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
 import type { JobState, JobTransition } from '../../creation/job-state.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
-import type { AgentEndedBy, BuilderHandoff } from './rounds.js';
+import type { AgentEndedBy, BuilderHandoff, ReceiptRound } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 
 export interface SubmissionRecord {
@@ -213,6 +213,9 @@ export interface SubmissionRecord {
    * the field. New jobs start at `1`.
    */
   roundGeneration?: number;
+
+  // Round a transition closed; its keys may still read that gate result.
+  receiptRound?: ReceiptRound;
 
   // The game's accessRevision when this round opened.
 

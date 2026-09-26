@@ -11,6 +11,7 @@ const clean = (text: string): string =>
   stripVTControlCharacters(text)
     .replace(/\p{Cc}/gu, (character) => (character === '\n' || character === '\t' ? character : ''))
     .replace(/gdpl_(?:oat|pat)_[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1[redacted]')
     .slice(0, 2000);
 const strings = (value: unknown, limit: number): string[] =>
   Array.isArray(value)

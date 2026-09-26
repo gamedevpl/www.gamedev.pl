@@ -10,7 +10,6 @@ import {
 } from '../platform/delivery-metrics.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { hasPendingGateRepair } from '../platform/gate-repair-sweep.js';
-import type { BuilderKind } from './builder.js';
 import { canTransition, reconcileAgentObservation, type JobState, type JobTransition } from './job-state.js';
 import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './session-crash.js';
 
@@ -32,8 +31,7 @@ export interface JobReconcilerDeps {
 
   // Sessions that finish without uploading get this many second chances.
   maxDeliveryNudges: number;
-  backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
-  builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
+  backendForRecord: (record: SubmissionRecord) => Promise<AgentBackend | undefined>;
   releaseWorkspace: (
     jobId: number,
     workspace: string,
@@ -98,8 +96,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     now,
     observeQuietMs,
     maxDeliveryNudges,
-    backendFor,
-    builderOf,
+    backendForRecord,
     releaseWorkspace,
     resumeBuild,
     acknowledgeBuilderHandoff,
@@ -119,7 +116,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
   // Throttled by the status cache and by the quiet window above.
   async function reconcileNativeJob(record: SubmissionRecord): Promise<JobTransition | null> {
     if (!store) return null;
-    const selected = await backendFor(builderOf(record));
+    const selected = await backendForRecord(record);
     if (!selected) return null;
     const refs = record.dispatch?.refs;
     if (!refs || refs.length === 0) return null;
