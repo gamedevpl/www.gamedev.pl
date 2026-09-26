@@ -2,59 +2,14 @@ import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
-import {
-  isActiveBuildRound,
-  nextRoundGeneration,
-  resolveJobState,
-  type JobTransition,
-} from '../../creation/job-state.js';
+import { nextRoundGeneration, type JobTransition } from '../../creation/job-state.js';
 import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
 import type { BuilderHandoff } from '../records/rounds.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 import { ownsTakeoverRound, firestoreOwnsTakeoverRound } from '../takeover-authority.js';
 import type { GameAccessRecord } from '../records/game-access.js';
 import { epochForRound } from './round-epoch.js';
-
-// Fields a closed round clears -- signals belong to the round that ended.
-export function clearRoundSignals(next: SubmissionRecord): void {
-  delete next.seed;
-  delete next.seedStatus;
-  delete next.lastAgentSignalAt;
-  delete next.lastAgentPresence;
-  delete next.agentEndedAt;
-  delete next.agentEndedBy;
-  delete next.roundKitEngineRef;
-  delete next.roundTypecheckPreflightBypassErrors;
-  delete next.roundLastGateMetricKey;
-}
-
-export function takeoverRecord(
-  sub: SubmissionRecord,
-  authorized: boolean,
-  generation: number,
-  at: string,
-): SubmissionRecord | null {
-  const state = resolveJobState(sub) ?? 'queued';
-  if (
-    !authorized ||
-    (sub.roundGeneration ?? 1) !== generation ||
-    sub.abandonedAt ||
-    (sub.builder ?? sub.defaultBuilder ?? 'platform') !== 'self' ||
-    !isActiveBuildRound({ state, transitions: sub.transitions }) ||
-    state === 'submitted' ||
-    state === 'publishing' ||
-    sub.builderHandoff ||
-    sub.agentEndedAt ||
-    !sub.dispatch?.refs?.length
-  )
-    return null;
-  return {
-    ...sub,
-    roundGeneration: nextRoundGeneration(sub.roundGeneration ?? 1),
-    agentEndedAt: at,
-    agentEndedBy: 'end',
-  };
-}
+import { clearRoundSignals, takeoverRecord } from './round-close.js';
 
 export interface RoundsStore {
   takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean>;
