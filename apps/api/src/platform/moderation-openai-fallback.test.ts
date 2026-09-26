@@ -1,7 +1,9 @@
 import { genaicode } from 'genaicode';
+import { toOpenAIRequest } from 'genaicode/providers';
 import type { GenerationRequest } from 'genaicode';
 import { describe, expect, it } from 'vitest';
 import { OPENAI_FALLBACK_MODEL as LUNA, VertexChecker } from './moderation.js';
+import { OPENAI_REFINE_FALLBACK_MODEL } from './vertex-fallback-models.js';
 
 describe('VertexChecker on the OpenAI stand-in', () => {
   // Luna rejects temperature 0; genaicode strips it on the wire.
@@ -23,5 +25,14 @@ describe('VertexChecker on the OpenAI stand-in', () => {
 
     expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
     expect(seen.map((request) => request.temperature)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('OpenAI stand-in models on the wire', () => {
+  // A model genaicode does not know would send temperature again.
+  it.each([LUNA, OPENAI_REFINE_FALLBACK_MODEL])('%s is sent without temperature', (model) => {
+    const request = toOpenAIRequest({ prompt: [{ type: 'user', text: 'hi' }], temperature: 0 }, model);
+    expect(request.model).toBe(model);
+    expect(request.temperature).toBeUndefined();
   });
 });
