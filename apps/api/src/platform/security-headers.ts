@@ -9,8 +9,9 @@ export const FRAME_ANCESTORS_NONE = "frame-ancestors 'none'";
 // Play permalinks may be framed; SPA shows the interstitial.
 export const FRAME_ANCESTORS_PLAY = 'frame-ancestors *';
 export const X_FRAME_OPTIONS = 'DENY';
-// Same play-permalink grammar as spa-paths.ts PLAY_PREFIX_PATTERN.
-const PLAY_PERMALINK = /^\/(?:play|ay|ai)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Match route syntax before decoding its slug.
+const PLAY_PERMALINK = /^\/(?:play|ay|ai)\/([^/]+)$/;
+const PLAY_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Never name mic/camera/motion: the game frame delegates them.
 export const PERMISSIONS_POLICY = 'geolocation=(), payment=(), usb=(), display-capture=()';
 
@@ -60,13 +61,15 @@ function isHtmlDocument(reply: FastifyReply): boolean {
 export function isPlayPermalinkPath(url: string): boolean {
   // Trailing slash is not a play route; the SPA 404s it.
   const pathname = url.split('?')[0] ?? url;
-  let decoded: string;
+  const match = PLAY_PERMALINK.exec(pathname);
+  if (!match?.[1]) return false;
+  let slug: string;
   try {
-    decoded = decodeURIComponent(pathname);
+    slug = decodeURIComponent(match[1]);
   } catch {
     return false;
   }
-  return PLAY_PERMALINK.test(decoded);
+  return PLAY_SLUG.test(slug);
 }
 
 function setIfAbsent(reply: FastifyReply, name: string, value: string): void {
