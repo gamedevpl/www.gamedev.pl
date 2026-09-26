@@ -45,7 +45,7 @@ describe('TUI feedback', () => {
     const openPreview = vi.fn();
     const view = screen(width, 16, openPreview);
     view.session.setLocalTask('codex');
-    view.session.writeLine('local live preview: http://127.0.0.1:1234/test/');
+    view.session.setPreview('http://127.0.0.1:1234/test/');
     await wait();
     view.input.write('more ramps');
     await wait();
@@ -87,14 +87,14 @@ describe('TUI feedback', () => {
   it('opens the live preview with o while an agent is working', async () => {
     const openPreview = vi.fn();
     const view = screen(80, 24, openPreview);
-    view.session.writeLine('live preview while claude edits: http://127.0.0.1:64897/preview/');
+    view.session.setPreview('http://127.0.0.1:64897/preview/');
     await wait();
     expect(view.frame()).toContain('o open preview');
     view.input.write('o');
     await wait();
     expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
 
-    view.session.writeLine('local preview stopped');
+    view.session.clearPreview();
     await wait();
     expect(view.frame()).not.toContain('o open preview');
     view.input.write('o');

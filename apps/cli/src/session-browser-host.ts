@@ -34,7 +34,12 @@ export function sessionBrowserHost(
         .catch(() => undefined);
     },
     registerPreview(url: string) {
+      if (!url) {
+        session.clearPreview();
+        return;
+      }
       preview = url;
+      session.setPreview(url);
       void opening
         ?.then((server) => {
           if (!closed && preview === url) server.setPreview(url);
