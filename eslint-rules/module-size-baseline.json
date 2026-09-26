@@ -1029,7 +1029,7 @@
     "apps/world/src/app.test.ts": 360,
     "apps/world/src/app.ts": 279,
     "apps/world/src/host.test.ts": 404,
-    "apps/world/src/host.ts": 344,
+    "apps/world/src/host.ts": 345,
     "apps/world/src/server.ts": 111,
     "apps/world/src/sim-source.ts": 203,
     "apps/world/src/snapshot-store.ts": 92,
@@ -1123,6 +1123,6 @@
     "packages/zone-core/src/ticket.test.ts": 101,
     "packages/zone-core/src/ticket.ts": 111,
     "packages/zone-core/src/zone.test.ts": 711,
-    "packages/zone-core/src/zone.ts": 675
+    "packages/zone-core/src/zone.ts": 680
   }
 }

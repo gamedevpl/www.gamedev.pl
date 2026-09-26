@@ -1,4 +1,5 @@
 import {
+  isGuestTag,
   verifyZoneTicket,
   Zone,
   ZoneFullError,
@@ -81,6 +82,7 @@ interface Seated {
   zone: Zone;
   slot: number;
   connection: ZoneConnection;
+  canInput: boolean;
 }
 
 export class ZoneHost {
@@ -243,9 +245,6 @@ export class ZoneHost {
       else this.admitting.delete(claims.zone);
     }
 
-    // A second connection for one seat replaces the first. A player with two tabs is one
-    // player; letting both drive would make the world act on contradictory intents from
-    // somebody who only meant one of them.
     // Derived state, so a missing set is rebuilt rather than thrown over: the seat this
     // player just earned is the fact, and `members` is only the index of it.
     const seats = this.members.get(claims.zone) ?? new Set<Seated>();
@@ -256,7 +255,7 @@ export class ZoneHost {
         seated.connection.close('replaced');
       }
     }
-    seats.add({ zone, slot, connection });
+    seats.add({ zone, slot, connection, canInput: !isGuestTag(claims.player) });
     // Only now — the frame is aimed at a seat, and the seat has to be reachable before
     // anything is aimed at it.
     zone.snapshotTo(slot);
@@ -265,7 +264,9 @@ export class ZoneHost {
   }
 
   input(zoneId: string, slot: number, kind: string, value: unknown): void {
-    this.zones.get(zoneId)?.enqueue(slot, kind, value);
+    const member = [...(this.members.get(zoneId) ?? [])].some((seated) => seated.slot === slot && seated.canInput);
+    // A guest's declared frame proves it is still there; it never reaches the sim.
+    this.zones.get(zoneId)?.[member ? 'enqueue' : 'touch'](slot, kind, value);
   }
 
   resync(zoneId: string, slot: number): void {
