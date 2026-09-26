@@ -271,19 +271,19 @@ describe('agent concept frame slots', () => {
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
-
     const minted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot/upload-url',
       headers: agentHeaders(),
       payload: { purpose: 'concept' },
     });
-    const token = new URL(minted.json().url).searchParams.get('token');
+    const body = minted.json();
+    const authorization = String(body.upload).match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '';
     await store.setSubmissionPreviewVersion(ISSUE, 'v8');
     const put = await app.inject({
       method: 'PUT',
-      url: `/api/agent/build/shot/upload?token=${encodeURIComponent(token ?? '')}`,
-      headers: { 'content-type': 'image/png' },
+      url: String(body.url).replace(/^https?:\/\/[^/]+/, ''),
+      headers: { authorization, 'content-type': 'image/png' },
       payload: pngHeader(900, 900),
     });
 

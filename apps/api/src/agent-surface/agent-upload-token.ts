@@ -14,6 +14,7 @@ const SCOPE = 'agent-upload-v1';
 
 // Match kit signed-read TTL (15 min).
 export const DEFAULT_UPLOAD_URL_TTL_SECONDS = DEFAULT_SIGNED_URL_TTL_SECONDS;
+export const UPLOAD_TOKEN_HEADER = 'authorization';
 
 export type UploadKind = 'screenshot' | 'stage';
 
@@ -244,7 +245,8 @@ export function assertUploadTokenUnexpired(claims: UploadTokenClaims, nowMs: num
 }
 
 // Explicit Content-Type: no parser claims a missing one.
-export function uploadCurlCommand(url: string, localPath: string, contentType: string): string {
+export function uploadCurlCommand(url: string, token: string, localPath: string, contentType: string): string {
   const escaped = url.replace(/'/g, `'\\''`);
-  return `curl -H 'Content-Type: ${contentType}' --upload-file ${localPath} '${escaped}'`;
+  const escapedToken = token.replace(/'/g, `'\\''`);
+  return `curl -H 'Authorization: Bearer ${escapedToken}' -H 'Content-Type: ${contentType}' --upload-file ${localPath} '${escaped}'`;
 }
