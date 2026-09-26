@@ -443,6 +443,7 @@ const FILE_BUCKET = {
   'build-transcript': 'delivery',
   'source-delivery': 'delivery',
   'define-game-preflight': 'delivery',
+  'define-game-builders': 'delivery',
   'recent-builds': 'delivery',
   'gate-runner': 'delivery',
   'gate-progress': 'delivery',
