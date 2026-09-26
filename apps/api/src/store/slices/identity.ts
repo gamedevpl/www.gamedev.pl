@@ -314,7 +314,7 @@ export class FirestoreIdentityStore implements IdentityStore {
       ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
       ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
     };
-    await this.db.collection('users').doc(uid).set(stripUndefined(updated), { merge: true });
+    await this.db.collection('users').doc(uid).set(stripUndefined(patch), { merge: true });
     this.forgetUser(uid);
     return updated;
   }

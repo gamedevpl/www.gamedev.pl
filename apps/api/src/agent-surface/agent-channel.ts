@@ -11,6 +11,7 @@ import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } fro
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
+import { authedRoundGeneration } from './round-generation-guard.js';
 import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
@@ -1410,9 +1411,8 @@ export async function registerAgentChannelRoutes(
         await store.setSubmissionSlug(jobId, slug);
       }
 
-      const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-        : (record.roundGeneration ?? 1);
+      const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
+      if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
 
       try {
         const staged = await options.gamesStore.putStagedSourceFile({
@@ -1521,9 +1521,8 @@ export async function registerAgentChannelRoutes(
         });
       }
 
-      const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-        : (record.roundGeneration ?? 1);
+      const roundGeneration = await authedRoundGeneration(store, jobId, upload.roundGeneration);
+      if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
 
       try {
         const staged = await options.gamesStore.putStagedSourceFile({
@@ -1615,9 +1614,8 @@ export async function registerAgentChannelRoutes(
         await store.setSubmissionSlug(jobId, slug);
       }
 
-      const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-        : (record.roundGeneration ?? 1);
+      const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
+      if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
 
       const specs: PatchFileSpec[] = parsed.data.files
         ? parsed.data.files
@@ -1807,9 +1805,8 @@ export async function registerAgentChannelRoutes(
         });
       }
 
-      const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-        : (record.roundGeneration ?? 1);
+      const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
+      if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       const staged = await options.gamesStore.listStagedSources({
         slug: record.slug,
         jobId,
@@ -1841,9 +1838,8 @@ export async function registerAgentChannelRoutes(
         ? body.paths.filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
         : undefined;
 
-      const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-        : (record.roundGeneration ?? 1);
+      const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
+      if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
 
       try {
         const { cleared } = await options.gamesStore.clearStagedSources({
@@ -1893,9 +1889,8 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-        : (record.roundGeneration ?? 1);
+      const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
+      if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
 
       try {
         const staged = await options.gamesStore.deleteStagedSourceFile({
@@ -1980,9 +1975,8 @@ export async function registerAgentChannelRoutes(
         // kit_outdated preview recovery does not suddenly demand TRACE/PLAYTEST.
         let mode: DeliveryMode | undefined =
           parsed.data.mode === 'preview' || parsed.data.mode === 'publish' ? parsed.data.mode : undefined;
-        const roundGeneration = store
-          ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-          : (record.roundGeneration ?? 1);
+        const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
+        if (roundGeneration === null) return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
 
         let files = parsed.data.files ?? [];
         if (parsed.data.fromLatestDelivery) {

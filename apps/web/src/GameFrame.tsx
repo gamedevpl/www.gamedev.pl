@@ -33,18 +33,15 @@ type GameFrameProps = GameFrameSource & {
  * `allow-pointer-lock` is additive and does not weaken the opaque-origin
  * boundary: scene3d FPS games may request mouse-look after a user gesture.
  *
- * `allow="accelerometer; gyroscope; magnetometer"` delegates Permissions-Policy
- * so opt-in GameKit `motion` (phone tilt) can receive DeviceOrientation /
- * DeviceMotion inside the opaque-origin frame. Sensors stay optional for every
- * game; keyboard / pad remain enough to finish.
+ * Device sensing stays shell-owned. Games receive only bounded values over the
+ * postMessage bridge, never direct access to raw sensors or media devices.
  *
  * Microphone loudness for shout games is owned by the theater shell
  * (`useVoiceMeterBridge`). Opaque-origin documents cannot call `getUserMedia`
  * without `allow-same-origin`, which we never grant.
  *
- * The `allow` list must never grow `tools`: WebMCP-capable browsers expose agent
- * tool registration to a cross-origin iframe granted `allow="tools"`, and game
- * code is untrusted — it must never present tools to a visitor's browser agent.
+ * The iframe must never gain an `allow` list. Game code is untrusted and must
+ * not receive browser capabilities, including WebMCP tool registration.
  * Asserted in GameFrame.sandbox.test.ts; invariant in docs/security-model.md.
  */
 export function GameFrame(props: GameFrameProps) {
@@ -90,7 +87,6 @@ export function GameFrame(props: GameFrameProps) {
       className="game-frame"
       title={props.title}
       sandbox="allow-scripts allow-pointer-lock"
-      allow="accelerometer; gyroscope; magnetometer"
       src={props.src}
       srcDoc={srcDoc}
       // Focuses the game, and flags a document the game navigated to itself.

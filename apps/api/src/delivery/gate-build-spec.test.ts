@@ -44,7 +44,10 @@ describe('buildSpec', () => {
     const steps = calls[0]!.body.steps as Array<{ id: string; args: string[] }>;
     expect(steps.map((step) => step.id)).toEqual(['checkout-platform', 'run-gate']);
     expect(steps[1]!.args[1]).toContain('apt-get install');
-    expect(steps[1]!.args[1]).toContain('npm ci --no-audit --no-fund && npm run build:packages');
+    const script = steps[1]!.args[1]!;
+    expect(script).toContain('npm ci --no-audit --no-fund\nnpm run build:packages');
+    expect(script.indexOf('npm ci')).toBeLessThan(script.indexOf('gate:run'));
+    expect(script.indexOf('build:packages')).toBeLessThan(script.indexOf('gate:run'));
   });
 
   it('carries the same capability and kill switch into the image step', async () => {

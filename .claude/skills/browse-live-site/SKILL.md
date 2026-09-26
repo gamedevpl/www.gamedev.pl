@@ -19,6 +19,11 @@ exports the launch / session / problem-collection helpers described below. Reach
 scratch script only to explore something the suite doesn't cover — and when you find
 something worth keeping, add it there rather than leaving it in `/tmp`.
 
+`launchSiteBrowser()` keeps Chromium's sandbox **on** unless it runs as root (these
+sessions do) or `E2E_CHROMIUM_NO_SANDBOX=1` is set; the `--no-sandbox` in the scratch
+snippets below is only for a root session. See `docs/deployment.md` for why the deploy gate
+never drops it by accident.
+
 ## Symptom
 
 Without the fix below, every `page.goto()` fails the same way regardless of URL (even
