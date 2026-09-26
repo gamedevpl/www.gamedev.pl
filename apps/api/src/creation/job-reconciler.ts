@@ -1,7 +1,7 @@
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
-import { isAgentSessionEnded } from '../platform/agent-session.js';
+import { currentSessionFinished } from './preview-round-close.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   builderLabelFromRecord,
@@ -426,18 +426,19 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           version,
           ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
         });
-        // Session over (completed, or ended but idle): owner seals green preview.
-        const finished =
-          record.agentState === 'completed' || (record.agentState === 'idle' && isAgentSessionEnded(record));
-        const sealable = state === 'building' && finished && !record.deliveredVersion;
+        // Session over, preview green: the owner seals it from ready_for_review.
+        const sealable = state === 'building' && currentSessionFinished(record) && !record.deliveredVersion;
         if (!sealable || !canTransition(state, 'ready_for_review')) return null;
-        const transition: JobTransition = {
-          to: 'ready_for_review',
-          at: new Date(now()).toISOString(),
-          by: 'gate',
-          reason: 'preview_gate_green',
-        };
-        return (await store.recordJobTransition(record.jobId, transition)) ? transition : null;
+        const at = new Date(now()).toISOString();
+        const transition: JobTransition = { to: 'ready_for_review', at, by: 'gate', reason: 'preview_gate_green' };
+        if (!(await store.recordJobTransition(record.jobId, transition))) return null;
+        // Same as the publish path: the closed round resumes a pending handoff.
+        if (record.builderHandoff?.awaitsAgentAck) {
+          await acknowledgeBuilderHandoff({ jobId: record.jobId, acknowledgedAt: at, log }).catch((error) => {
+            log.error({ err: error, jobId: record.jobId }, 'failed to resume handoff at round close');
+          });
+        }
+        return transition;
       }
       const to = 'needs_changes' as const;
       if (!redPendingRepair && !canTransition(state, to)) return null;

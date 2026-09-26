@@ -8,11 +8,12 @@ import { createJobReconciler } from './job-reconciler.js';
 const AT = '2026-09-26T12:00:00.000Z';
 type AgentState = 'in_progress' | 'completed' | 'idle';
 
-async function setup(previewGate: { green: boolean } | null) {
+async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0) {
   const store = new InMemoryStore();
   await store.createSubmission(9, 'g:owner', 'Preview game');
   await store.setSubmissionSlug(9, 'preview-game');
   await store.recordDispatch(9, { backend: 'managed', ref: 'session-1', workspace: 'ws-1' });
+  await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-1', credits: 1 });
   await store.recordJobTransition(9, { to: 'building', at: AT, by: 'agent', reason: 'task_in_progress' });
   await store.setSubmissionPreviewVersion(9, 'v1');
   await store.incrementRoundDeliveryCount(9);
@@ -29,17 +30,18 @@ async function setup(previewGate: { green: boolean } | null) {
     ),
   } as unknown as GamesStore;
   const resumeBuild = vi.fn(async () => ({}));
+  const acknowledgeBuilderHandoff = vi.fn(async () => ({ started: false }));
   const reconciler = createJobReconciler({
     store,
     gamesStore,
     log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
     now: () => Date.parse(AT) + 5 * 60_000,
-    observeQuietMs: 0,
+    observeQuietMs,
     maxDeliveryNudges: 1,
     backendForRecord: async () => ({ name: 'managed', observe }) as unknown as AgentBackend,
     releaseWorkspace: async () => {},
     resumeBuild,
-    acknowledgeBuilderHandoff: async () => ({ started: false }),
+    acknowledgeBuilderHandoff,
     probeGateCrash: async () => null,
     postGateScreenshot: async () => null,
     onGateRed: async () => false,
@@ -48,7 +50,7 @@ async function setup(previewGate: { green: boolean } | null) {
     const record = (await store.getSubmission(9))!;
     return (await reconciler.reconcileNativeJob(record)) ?? (await reconciler.reconcileGateVerdict(record));
   };
-  return { store, agent, gate, observe, resumeBuild, poll };
+  return { store, agent, gate, observe, resumeBuild, acknowledgeBuilderHandoff, poll };
 }
 
 describe('a finished session that delivered only a preview', () => {
@@ -110,5 +112,23 @@ describe('a finished session that delivered only a preview', () => {
     await poll();
     await poll();
     expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it('ignores a completed state left by the previous round', async () => {
+    const { store, poll } = await setup({ green: true }, 60 * 60_000);
+    await store.setSubmissionAgentState(9, 'completed');
+    await store.recordDispatch(9, { backend: 'managed', ref: 'session-2' });
+    await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-2', credits: 1 });
+    await poll();
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it('resumes a pending builder handoff when the preview round closes', async () => {
+    const { store, acknowledgeBuilderHandoff, poll } = await setup({ green: true });
+    await store.requestBuilderHandoff(9, 'self', AT);
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('ready_for_review');
+    expect(acknowledgeBuilderHandoff).toHaveBeenCalledWith(expect.objectContaining({ jobId: 9 }));
   });
 });
