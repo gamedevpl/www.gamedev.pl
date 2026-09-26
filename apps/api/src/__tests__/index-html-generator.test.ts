@@ -223,4 +223,21 @@ describe('hasPlayableHowToPlay', () => {
   it('refuses empty-string goal or hint text', () => {
     expect(hasPlayableHowToPlay({ goal: { en: '', pl: '' }, hint: { en: 'x', pl: 'x' } })).toBe(false);
   });
+
+  it('refuses a malformed control with the field path, not a TypeError', () => {
+    const manifest = {
+      howToPlay: {
+        controls: [{ keys: 'WASD', action: 'Move' }],
+        goal: { en: 'Win', pl: 'Wygraj' },
+        hint: { en: 'Move', pl: 'Ruszaj się' },
+      },
+    } as unknown as Parameters<typeof generateIndexHtml>[0];
+    expect(() => generateIndexHtml(manifest, { title: 'T' })).toThrow(/howToPlay\.controls\[0\]\.action/);
+  });
+  it('keeps treating falsy optional fields as absent', () => {
+    const manifest = {
+      howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Go', pl: 'Idź' }, scoring: '', touch: null },
+    } as unknown as Parameters<typeof generateIndexHtml>[0];
+    expect(generateIndexHtml(manifest, { title: 'T' })).toContain('Pad ekranowy');
+  });
 });

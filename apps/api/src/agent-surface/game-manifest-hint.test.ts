@@ -83,5 +83,13 @@ describe('gameManifestHint', () => {
     expect(gameManifestHint('GAME.json', content)).toBeNull();
   });
 
+  it('flags a howToPlay field the generated page cannot render', () => {
+    const content = JSON.stringify({
+      engine: { modules: ['input', 'gfx'] },
+      howToPlay: { controls: [{ keys: 'Space', action: { en: 'Boost' } }] },
+    });
+    expect(gameManifestHint('GAME.json', content)).toMatch(/howToPlay\.controls\[0\]\.action/);
+  });
+
   // index.html has its own refusal now — see games-store.test.ts.
 });

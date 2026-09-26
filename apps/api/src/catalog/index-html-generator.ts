@@ -3,7 +3,7 @@
 // Contract and goldens: docs/how-to-play-plan.md
 
 import type { Locale } from '@gamedevpl/contract';
-import { hasPlayableHowToPlay, type HowToPlay } from '../platform/how-to-play.js';
+import { hasPlayableHowToPlay, howToPlayShapeProblem, type HowToPlay } from '../platform/how-to-play.js';
 
 export type { HowToPlay };
 export { hasPlayableHowToPlay };
@@ -170,6 +170,9 @@ function generateLegend(howToPlay: HowToPlay | undefined): string {
 
 // Deterministic and diff-stable: fixed indentation, attribute order, escaping.
 export function generateIndexHtml(manifest: GameManifest, spec: GameSpec): string {
+  // A readable refusal beats a TypeError from escapeHtml.
+  const shapeProblem = howToPlayShapeProblem(manifest.howToPlay);
+  if (shapeProblem) throw new Error(shapeProblem);
   const titleObj = manifest.title;
   const titleEn = (titleObj && typeof titleObj === 'object' ? titleObj.en : titleObj) || spec.title || '';
   const titlePl = (titleObj && typeof titleObj === 'object' ? titleObj.pl : undefined) || titleEn;
