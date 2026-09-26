@@ -172,6 +172,24 @@ describe('usePresenceBridge', () => {
     expect(JSON.parse(calls('POST')[1][1].body as string)).toEqual({ col: 5, row: 6 });
   });
 
+  it('defers, not drops, the hello of a document swapped in within the window', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    fetchMock.mockResolvedValue(jsonResponse(roster));
+    const { fromGame } = mount();
+    fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    fromGame({ t: 'presence:here', col: 2, row: 2 });
+    await waitFor(() => expect(toGame).toHaveLength(2));
+    now += 900;
+    fromGame({ t: 'presence:hello' });
+    fromGame({ t: 'presence:here', col: 4, row: 7 });
+    await waitFor(() => expect(calls('POST')).toHaveLength(2));
+    expect(JSON.parse(calls('POST')[1][1].body as string)).toEqual({ col: 4, row: 7 });
+    await waitFor(() => expect(calls('GET')).toHaveLength(2), 200);
+    expect(toGame.at(-1)).toMatchObject({ t: 'presence:state', available: true });
+  });
+
   it('sends a swapped-in position once the old document beat settles', async () => {
     let now = 1_000_000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);

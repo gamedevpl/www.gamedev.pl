@@ -93,6 +93,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     let joined = false;
     let helloAt = -Infinity;
     let awaitingFirstHere = false;
+    let helloTimer: number | null = null;
 
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
@@ -167,6 +168,18 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       timer = null;
     }
 
+    // The opening answer is a *read*, so nobody joins at the origin tile.
+    async function openingRead() {
+      helloTimer = null;
+      helloAt = Date.now();
+      try {
+        announce(await fetchPresence(slug!));
+      } catch {
+        announce(null);
+      }
+      schedule();
+    }
+
     async function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not appear in or read this roster.
@@ -174,21 +187,13 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       const message = parsePresenceMessage(event.data);
       if (!message) return;
       if (message.t === 'presence:hello') {
-        if (Date.now() - helloAt < HELLO_MIN_INTERVAL_MS) return;
-        helloAt = Date.now();
         engaged = true;
         awaitingFirstHere = true;
         position = null;
-        // The opening answer is a *read*, not a beat. A signed-out visitor gets the count
-        // this way, and a signed-in one does not enter the roster until the game has had
-        // a chance to say where it is — which stops everybody who opens a world game
-        // appearing for one poll at the origin tile.
-        try {
-          announce(await fetchPresence(slug!));
-        } catch {
-          announce(null);
-        }
-        schedule();
+        const wait = helloAt + HELLO_MIN_INTERVAL_MS - Date.now();
+        // A srcDoc swap keeps the window, so defer rather than drop.
+        if (wait > 0) helloTimer ??= window.setTimeout(() => void openingRead(), wait);
+        else await openingRead();
         return;
       }
 
@@ -210,6 +215,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       // now rather than letting the slot expire, so nobody is drawn standing where
       // somebody used to be.
       stop();
+      if (helloTimer !== null) window.clearTimeout(helloTimer);
+      helloTimer = null;
       engaged = false;
       position = null;
       if (joined) {
@@ -236,6 +243,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     return () => {
       cancelled = true;
       stop();
+      if (helloTimer !== null) window.clearTimeout(helloTimer);
       window.removeEventListener('message', onMessage);
       document.removeEventListener('visibilitychange', onVisibility);
       // Exiting the player is the most common way a session ends. Withdrawing here is
