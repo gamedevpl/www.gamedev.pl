@@ -1,3 +1,4 @@
+import { assertAgentRound, writeAgentRoundDocuments } from './agent-round-write.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
@@ -59,6 +60,7 @@ export interface BuildMediaStore {
   appendBuildShot(
     jobId: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
+    generation?: number,
   ): Promise<BuildShot>;
 
   // A build's pushed screenshots, newest first; bytes omitted here.
@@ -86,6 +88,7 @@ export interface BuildMediaStore {
   appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+    generation?: number,
   ): Promise<BuildPreview>;
 
   listBuildPreviews(jobId: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]>;
@@ -107,7 +110,9 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   async appendBuildShot(
     jobId: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
+    generation?: number,
   ): Promise<BuildShot> {
+    assertAgentRound(this.submissions?.get(jobId), generation);
     const record: BuildShot = {
       ...shot,
       id: shot.id ?? randomUUID(),
@@ -165,7 +170,9 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+    generation?: number,
   ): Promise<BuildPreview> {
+    assertAgentRound(this.submissions?.get(jobId), generation);
     const existing = this.buildPreviews.get(jobId) ?? [];
     // Same-millisecond pushes get bumped, so "newest" matches append order.
     const nowIso = new Date().toISOString();
@@ -232,6 +239,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async appendBuildShot(
     jobId: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string; id?: string },
+    generation?: number,
   ): Promise<BuildShot> {
     const record: BuildShot = {
       ...shot,
@@ -239,7 +247,9 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       createdAt: shot.createdAt ?? new Date().toISOString(),
     };
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.shotsCollection(jobId).doc(record.id).set(document);
+    await writeAgentRoundDocuments(this.db, jobId, generation, [
+      { ref: this.shotsCollection(jobId).doc(record.id), data: document },
+    ]);
     return record;
   }
 
@@ -319,6 +329,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+    generation?: number,
   ): Promise<BuildPreview> {
     const record: BuildPreview = {
       ...preview,
@@ -326,7 +337,9 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       createdAt: preview.createdAt ?? new Date().toISOString(),
     };
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.previewsCollection(jobId).doc(record.id).set(document);
+    await writeAgentRoundDocuments(this.db, jobId, generation, [
+      { ref: this.previewsCollection(jobId).doc(record.id), data: document },
+    ]);
     return record;
   }
 

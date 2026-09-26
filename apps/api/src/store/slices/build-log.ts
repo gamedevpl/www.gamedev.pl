@@ -1,4 +1,4 @@
-import { FieldValue } from '@google-cloud/firestore';
+import * as roundWrite from './agent-round-write.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { CreatorProposal } from '@gamedevpl/contract';
@@ -35,7 +35,7 @@ export interface BuildLogStore {
   appendBuildEvent(
     jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
-    options?: { preserveEnded?: boolean },
+    options?: roundWrite.AgentSignalOptions,
   ): Promise<BuildEvent>;
 
   // Refreshes lastAgentSignalAt without a chat event (MCP presence heartbeats).
@@ -43,11 +43,11 @@ export interface BuildLogStore {
     jobId: number,
     at?: string,
     presence?: { key: string },
-    options?: { preserveEnded?: boolean },
+    options?: roundWrite.AgentSignalOptions,
   ): Promise<void>;
 
   // Marks the agent finished iterating this round (MCP `end`). Idempotent.
-  markAgentEnded(jobId: number, at?: string, by?: AgentEndedBy): Promise<void>;
+  markAgentEnded(jobId: number, at?: string, by?: AgentEndedBy, generation?: number): Promise<void>;
 
   // Agent progress events for a build, newest first.
   listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
@@ -91,7 +91,7 @@ export interface BuildLogStore {
   listCreatorMessages(jobId: number, opts?: { limit?: number; excludeProposals?: boolean }): Promise<CreatorMessage[]>;
 
   // Marks messages collected, so the agent isn't handed them twice.
-  markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
+  markCreatorMessagesDelivered(jobId: number, ids: string[], generation?: number): Promise<void>;
 }
 
 // Names the attempt, so another worker's card cannot answer for it.
@@ -124,8 +124,9 @@ export class InMemoryBuildLogStore implements BuildLogStore {
   async appendBuildEvent(
     jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
-    options?: { preserveEnded?: boolean },
+    options?: roundWrite.AgentSignalOptions,
   ): Promise<BuildEvent> {
+    roundWrite.assertAgentRound(this.submissions.get(jobId), options?.roundGeneration);
     const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
     const existing = this.buildEvents.get(jobId) ?? [];
     existing.push(record);
@@ -149,9 +150,10 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     jobId: number,
     at?: string,
     presence?: { key: string },
-    options?: { preserveEnded?: boolean },
+    options?: roundWrite.AgentSignalOptions,
   ): Promise<void> {
     const submission = this.submissions.get(jobId);
+    roundWrite.assertAgentRound(submission, options?.roundGeneration);
     if (!submission) return;
     const stamped = at ?? new Date().toISOString();
     const next: SubmissionRecord = {
@@ -166,8 +168,9 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     this.submissions.set(jobId, next);
   }
 
-  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
+  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end', generation?: number): Promise<void> {
     const submission = this.submissions.get(jobId);
+    roundWrite.assertAgentRound(submission, generation);
     if (!submission) return;
     this.submissions.set(jobId, {
       ...submission,
@@ -263,7 +266,8 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       .map((message) => ({ ...message }));
   }
 
-  async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
+  async markCreatorMessagesDelivered(jobId: number, ids: string[], generation?: number): Promise<void> {
+    roundWrite.assertAgentRound(this.submissions.get(jobId), generation);
     const existing = this.creatorMessages.get(jobId);
     if (!existing || ids.length === 0) return;
     const at = new Date().toISOString();
@@ -294,23 +298,19 @@ export class FirestoreBuildLogStore implements BuildLogStore {
   async appendBuildEvent(
     jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
-    options?: { preserveEnded?: boolean },
+    options?: roundWrite.AgentSignalOptions,
   ): Promise<BuildEvent> {
     const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
     // Firestore rejects undefined values; optional fields are simply absent instead.
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.eventsCollection(jobId).doc(record.id).set(document);
-    // Denormalized onto the parent -- lets the operator queue judge silence cheaply.
-    await this.submissionRef(jobId).set(
+    await roundWrite.writeAgentRoundDocuments(this.db, jobId, options?.roundGeneration, [
+      { ref: this.eventsCollection(jobId).doc(record.id), data: document },
       {
-        lastAgentSignalAt: record.createdAt,
-        // A real chat row supersedes the ambient thought flash.
-        lastAgentPresence: FieldValue.delete(),
-        // Resumed work after MCP `end`.
-        ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
+        ref: this.submissionRef(jobId),
+        merge: true,
+        data: roundWrite.agentSignalFields(record.createdAt, options, undefined, true),
       },
-      { merge: true },
-    );
+    ]);
     return record;
   }
 
@@ -318,24 +318,26 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     jobId: number,
     at?: string,
     presence?: { key: string },
-    options?: { preserveEnded?: boolean },
+    options?: roundWrite.AgentSignalOptions,
   ): Promise<void> {
     const stamped = at ?? new Date().toISOString();
-    await this.submissionRef(jobId).set(
+    await roundWrite.writeAgentRoundDocuments(this.db, jobId, options?.roundGeneration, [
       {
-        lastAgentSignalAt: stamped,
-        ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
-        ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
+        ref: this.submissionRef(jobId),
+        merge: true,
+        data: roundWrite.agentSignalFields(stamped, options, presence),
       },
-      { merge: true },
-    );
+    ]);
   }
 
-  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    await this.submissionRef(jobId).set(
-      { agentEndedAt: at ?? new Date().toISOString(), agentEndedBy: by },
-      { merge: true },
-    );
+  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end', generation?: number): Promise<void> {
+    await roundWrite.writeAgentRoundDocuments(this.db, jobId, generation, [
+      {
+        ref: this.submissionRef(jobId),
+        merge: true,
+        data: { agentEndedAt: at ?? new Date().toISOString(), agentEndedBy: by },
+      },
+    ]);
   }
 
   async listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
@@ -476,21 +478,20 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     return kept.slice(0, limit).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
 
-  async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
+  async markCreatorMessagesDelivered(jobId: number, ids: string[], generation?: number): Promise<void> {
     if (ids.length === 0) return;
     const at = new Date().toISOString();
     const collection = this.messagesCollection(jobId);
     // A merge-set on a missing doc creates a phantom row.
     const refs = ids.map((id) => collection.doc(id));
     const snaps = await this.db.getAll(...refs);
-    const batch = this.db.batch();
-    snaps.forEach((snap, index) => {
-      if (snap.exists) batch.set(refs[index], { deliveredAt: at }, { merge: true });
-    });
-    await batch.commit();
+    const writes = snaps.flatMap((snap, index) =>
+      snap.exists ? [{ ref: refs[index]!, data: { deliveredAt: at }, merge: true as const }] : [],
+    );
+    await roundWrite.writeAgentRoundDocuments(this.db, jobId, generation, writes);
     const remaining = await this.listPendingCreatorMessages(jobId);
     if (remaining.length > 0) return;
-    await clearPendingInboxFlag(this.db, jobId);
+    await clearPendingInboxFlag(this.db, jobId, generation);
     if ((await this.listPendingCreatorMessages(jobId)).length > 0) {
       await writePendingInboxFlag(this.db, jobId, true);
     }

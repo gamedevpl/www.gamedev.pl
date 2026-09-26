@@ -1,4 +1,4 @@
-import { livePresencePulseJob, resolvePresenceClaims } from './mcp-presence-capability.js';
+import { livePresencePulseJob, resolvePresenceClaims, touchStartedRoundPresence } from './mcp-presence-capability.js';
 import { memberCapabilityCurrent } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '@gamedevpl/contract';
@@ -1674,9 +1674,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                 shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at, undefined, presenceKey)
               ) {
                 noteMcpPresencePulse(presencePulseByJob, jobId, at, presenceKey);
-                await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString(), {
-                  key: presenceKey,
-                });
+                await touchStartedRoundPresence(store, jobId, at, presenceKey, started, record);
               }
             } catch (pulseError) {
               request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp start presence pulse failed');
@@ -1697,7 +1695,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                   jobId,
                   new Date(at).toISOString(),
                   { key: presenceKey },
-                  { preserveEnded: presencePreservesEnded(name) },
+                  { preserveEnded: presencePreservesEnded(name), roundGeneration: claims?.roundGeneration ?? 1 },
                 );
               } catch (pulseError) {
                 request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp presence pulse failed');

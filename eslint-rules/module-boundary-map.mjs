@@ -56,6 +56,9 @@ const FILE_BUCKET = {
   'review-version-binding': 'community',
   'review-version-roundtrip': 'community',
   'camera-acquisition-generation': 'platform',
+  'source-delivery-event': 'delivery',
+  'agent-round-write': 'platform',
+  'agent-takeover-write': 'agent-surface',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',

@@ -1,3 +1,5 @@
+import { reportDeliveryEvent } from './source-delivery-event.js';
+import { assertAgentRound } from '../store/slices/agent-round-write.js';
 import { selfBuildDeliveryCap, selfBuildJobDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import {
   asDeliveryLogger,
@@ -14,7 +16,6 @@ import {
   type TransitionActor,
 } from '../creation/job-state.js';
 import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
-import { normalizeAtIntake } from '../platform/localize-intake.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
@@ -44,6 +45,7 @@ export interface SourceDeliveryInput {
   // Channel may bind a legacy slug; managed harvest may not.
   bindSlug?: boolean;
   authority?: SourceDeliveryAuthority;
+  expectedRoundGeneration?: number;
   /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
   authorship?: 'agent' | 'owner' | 'mixed';
   summary?: string;
@@ -161,31 +163,6 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 // When the map passes this, sweep the entries whose window has emptied.
 const MAX_TRACKED_BUILDS = 500;
 
-// Matches agent-channel.ts's MAX_EVENT_TEXT — same field, same reader, same cap.
-const MAX_DELIVERY_EVENT_TEXT = 300;
-
-// Posts a thread event via the same localization pass agent events get.
-async function reportDeliveryEvent(
-  store: Store,
-  translator: Translator,
-  jobId: number,
-  kind: 'blocked' | 'milestone',
-  rawText: string,
-): Promise<void> {
-  const clean = sanitizeCreatorText(rawText, { singleLine: true }).slice(0, MAX_DELIVERY_EVENT_TEXT);
-  const intake = await normalizeAtIntake(translator, clean, { kind: 'log', maxLength: MAX_DELIVERY_EVENT_TEXT });
-  await store.appendBuildEvent(
-    jobId,
-    {
-      kind,
-      text: intake.text,
-      ...(intake.textLocalized && intake.locale ? { textLocalized: intake.textLocalized, locale: intake.locale } : {}),
-    },
-    // A system notice about this delivery, not proof the agent itself resumed.
-    { preserveEnded: true },
-  );
-}
-
 function stopReason(record: SubmissionRecord): 'stopped' | null {
   if (record.abandonedAt || record.publishedAt || resolveJobState(record) === 'canceled') return 'stopped';
   if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) return 'stopped';
@@ -274,12 +251,16 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
   async function markBuilding(jobId: number, record: SubmissionRecord, by: TransitionActor): Promise<JobState> {
     const state = currentState(record);
     if (!canTransition(state, 'building')) return state;
-    await options.store.recordJobTransition(jobId, {
-      to: 'building',
-      at: new Date(now()).toISOString(),
-      by,
-      reason: 'channel_signal',
-    });
+    await options.store.recordJobTransition(
+      jobId,
+      {
+        to: 'building',
+        at: new Date(now()).toISOString(),
+        by,
+        reason: 'channel_signal',
+      },
+      { roundGeneration: record.roundGeneration ?? 1 },
+    );
     return 'building';
   }
 
@@ -293,6 +274,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         throw new InvalidUploadError('unknown build');
       }
 
+      assertAgentRound(record, input.expectedRoundGeneration);
+      const roundGeneration = record.roundGeneration ?? 1;
       if (input.authority) {
         const authorityError = managedAuthorityError(record, input, input.authority);
         if (authorityError) throw authorityError;
@@ -369,14 +352,13 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       });
       if (proseRefusal) return { accepted: false, ...proseRefusal };
 
-      const attempt = await options.store.incrementRoundSubmitAttempts(input.jobId);
+      const attempt = await options.store.incrementRoundSubmitAttempts(input.jobId, roundGeneration);
       const builderLabel = builderLabelFromRecord(record.builder, record.dispatch?.backend ?? input.backend);
-      const roundGeneration = record.roundGeneration ?? 1;
       const deliveryLog = options.log ? asDeliveryLogger(options.log) : null;
 
       const emitRefusal = async (kind: 'audio' | 'symbols' | 'typecheck' | 'any-type') => {
         if (kind === 'audio' || kind === 'symbols') {
-          await options.store.incrementRoundPreflightRefusal(input.jobId, kind);
+          await options.store.incrementRoundPreflightRefusal(input.jobId, kind, roundGeneration);
         }
         if (deliveryLog) {
           logDeliveryPreflightRefused(deliveryLog, {
@@ -409,14 +391,14 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           if (!check.ok) {
             const prior = record.roundTypecheckPreflightRefusals ?? 0;
             if (prior < options.typecheckPreflightMaxRefusals) {
-              await options.store.incrementRoundTypecheckPreflightRefusals(input.jobId);
+              await options.store.incrementRoundTypecheckPreflightRefusals(input.jobId, roundGeneration);
               await emitRefusal('typecheck');
               throw new InvalidUploadError(check.message, 'typecheck');
             }
             // Soft bypass: still count as a refusal for MR-07, then accept.
             await emitRefusal('typecheck');
             typecheckBypass = true;
-            await options.store.setRoundTypecheckPreflightBypassErrors(input.jobId, check.message);
+            await options.store.setRoundTypecheckPreflightBypassErrors(input.jobId, check.message, roundGeneration);
             options.log?.warn?.(
               {
                 jobId: input.jobId,
@@ -434,7 +416,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             // A skipped check is not a pass; leave the bypass state alone.
             if (record.roundTypecheckPreflightBypassErrors && !check.skipped) {
               typecheckBypass = false;
-              await options.store.setRoundTypecheckPreflightBypassErrors(input.jobId, null);
+              await options.store.setRoundTypecheckPreflightBypassErrors(input.jobId, null, roundGeneration);
               pendingThreadEvents.push({
                 kind: 'milestone',
                 text: "Typecheck now passes — this round's earlier bypass warning no longer applies.",
@@ -475,7 +457,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             'managed delivery requires the job to have a bound slug',
           );
         }
-        await options.store.setSubmissionSlug(input.jobId, input.slug);
+        await options.store.setSubmissionSlug(input.jobId, input.slug, undefined, roundGeneration);
         record = (await options.store.getSubmission(input.jobId)) ?? record;
       }
 
@@ -510,7 +492,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
       for (const event of pendingThreadEvents) {
         try {
-          await reportDeliveryEvent(options.store, translator, input.jobId, event.kind, event.text);
+          await reportDeliveryEvent(options.store, translator, input.jobId, event.kind, event.text, roundGeneration);
         } catch (error) {
           // Decorative: a stored version must not roll back over an event write.
           options.log?.warn?.({ err: error, jobId: input.jobId }, 'delivery thread event not stored');
@@ -518,11 +500,11 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       if (input.mode === 'preview') {
-        await options.store.setSubmissionPreviewVersion(input.jobId, version);
+        await options.store.setSubmissionPreviewVersion(input.jobId, version, roundGeneration);
       } else {
-        await options.store.setSubmissionDeliveredVersion(input.jobId, version);
+        await options.store.setSubmissionDeliveredVersion(input.jobId, version, roundGeneration);
       }
-      await options.store.incrementRoundDeliveryCount(input.jobId);
+      await options.store.incrementRoundDeliveryCount(input.jobId, roundGeneration);
 
       if (deliveryLog) {
         const latest = (await options.store.getSubmission(input.jobId)) ?? record;
@@ -548,17 +530,21 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (deliveredTitle) {
         const sanitized = sanitizeCreatorText(deliveredTitle, { singleLine: true }).slice(0, 80);
         if (sanitized.length >= 3 && sanitized !== record.title) {
-          await options.store.setSubmissionTitle(input.jobId, sanitized);
+          await options.store.setSubmissionTitle(input.jobId, sanitized, roundGeneration);
         }
       }
 
       if (input.mode === 'publish' && canTransition(stateAfterSignal, 'submitted')) {
-        await options.store.recordJobTransition(input.jobId, {
-          to: 'submitted',
-          at: new Date(now()).toISOString(),
-          by: transitionActor,
-          reason: 'sources_delivered',
-        });
+        await options.store.recordJobTransition(
+          input.jobId,
+          {
+            to: 'submitted',
+            at: new Date(now()).toISOString(),
+            by: transitionActor,
+            reason: 'sources_delivered',
+          },
+          { roundGeneration },
+        );
       }
 
       // Assemble fast in-process preview via staged preview publisher.
