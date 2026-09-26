@@ -294,6 +294,10 @@
   border-top: 1px solid rgba(148, 163, 184, 0.15);
 }
 
+.studio-welcome-checklist:empty {
+  display: none;
+}
+
 .studio-welcome-primer {
   margin: 0 0 20px;
 }
