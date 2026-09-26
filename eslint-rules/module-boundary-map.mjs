@@ -50,6 +50,7 @@ const FILE_BUCKET = {
   'historical-preview-takedown': 'community',
   'review-preview-loader': 'platform',
   'review-play': 'community',
+  'review-candidate': 'community',
   'review-game-source': 'community',
   'review-version-binding': 'community',
   'review-version-roundtrip': 'community',

@@ -5,6 +5,8 @@ import { rememberBounded } from '../platform/bounded-map.js';
 import type { ReviewSweep, Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_SWEEP_GAMES } from './review-sweep.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { reviewableCreatorDrafts } from './review-candidate.js';
+export { isReviewableCreatorDraft } from './review-candidate.js';
 
 export interface ReviewCatalogMedia {
   screenshots: Array<{ name: string; file: string }>;
@@ -36,12 +38,6 @@ function titleFromSubmission(record: SubmissionRecord): string {
   const titled = record.title.trim();
   if (titled) return titled;
   return record.slug ?? `issue-${record.jobId}`;
-}
-
-export function isReviewableCreatorDraft(record: SubmissionRecord): boolean {
-  return Boolean(
-    record.slug && record.deliveredVersion && record.draftSharedAt && !record.publishedAt && !record.abandonedAt,
-  );
 }
 
 export interface ReviewQueueCacheDeps {
@@ -215,8 +211,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     if ((source === 'creator' || source === 'all') && items.length < MAX_SWEEP_GAMES) {
       const seen = new Set(items.map((item) => item.slug));
       const drafts: SubmissionRecord[] = [];
-      for (const record of pools.delivered) {
-        if (!isReviewableCreatorDraft(record)) continue;
+      for (const record of reviewableCreatorDrafts(pools.delivered)) {
         const slug = record.slug!;
         if (seen.has(slug)) continue;
         seen.add(slug);
@@ -255,7 +250,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
         media: entry.media ?? null,
       };
     }
-    const record = pools.delivered.find((row) => row.slug === slug && isReviewableCreatorDraft(row));
+    const record = reviewableCreatorDrafts(pools.delivered).find((row) => row.slug === slug);
     if (!record) return null;
     return {
       slug,

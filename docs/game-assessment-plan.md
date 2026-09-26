@@ -131,6 +131,9 @@ Creator queues and reviewer playback
 are pinned to `previewVersion ?? deliveredVersion`; the API rejects missing or mismatched
 versions with 409. Publication counts only assessments matching its delivered candidate,
 so older or unversioned verdicts require another review.
+When a slug has several jobs, the queue, playback, and assessment use the same eligible
+shared draft, ordered by creation time and job ID. A newer abandoned or unshared sibling
+cannot replace the queued draft.
 
 ### Resolving an assessment
 

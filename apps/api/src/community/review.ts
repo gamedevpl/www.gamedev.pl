@@ -1,4 +1,5 @@
 import { registerReviewPlay, type CreatorReviewPreviewLoader } from './review-play.js';
+import { loadReviewCandidate } from './review-candidate.js';
 import {
   ASSESSMENT_CHECKLIST_MARKS,
   ASSESSMENT_INPUT_METHODS,
@@ -360,7 +361,7 @@ export async function registerReviewRoutes(
       }
     }
 
-    const candidate = await store.getSubmissionBySlug(body.data.slug);
+    const candidate = await loadReviewCandidate(store, body.data.slug);
     const candidateVersion = candidate?.previewVersion ?? candidate?.deliveredVersion ?? null;
     if (
       (!candidateVersion && source === 'creator') ||
