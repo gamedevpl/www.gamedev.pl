@@ -6,7 +6,7 @@ import { InMemoryStore } from '../platform/store.js';
 import { createJobReconciler } from './job-reconciler.js';
 
 const AT = '2026-09-26T12:00:00.000Z';
-type AgentState = 'in_progress' | 'completed';
+type AgentState = 'in_progress' | 'completed' | 'idle';
 
 async function setup(previewGate: { green: boolean } | null) {
   const store = new InMemoryStore();
@@ -90,6 +90,23 @@ describe('a finished session that delivered only a preview', () => {
   it('keeps a green preview building while the session is still live', async () => {
     const { store, agent, poll } = await setup({ green: true });
     agent.state = 'in_progress';
+    await poll();
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it('seals up a green preview whose session ended but stays idle', async () => {
+    const { store, agent, poll } = await setup({ green: true });
+    agent.state = 'idle';
+    await store.markAgentEnded(9, AT, 'end');
+    await poll();
+    await poll();
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('keeps an idle session without an end marker building', async () => {
+    const { store, agent, poll } = await setup({ green: true });
+    agent.state = 'idle';
     await poll();
     await poll();
     expect((await store.getSubmission(9))?.state).toBe('building');

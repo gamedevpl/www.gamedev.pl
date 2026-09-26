@@ -1,6 +1,7 @@
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
+import { isAgentSessionEnded } from '../platform/agent-session.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   builderLabelFromRecord,
@@ -425,8 +426,10 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           version,
           ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
         });
-        // Session over, preview green: the owner seals it from ready_for_review.
-        const sealable = state === 'building' && record.agentState === 'completed' && !record.deliveredVersion;
+        // Session over (completed, or ended but idle): owner seals green preview.
+        const finished =
+          record.agentState === 'completed' || (record.agentState === 'idle' && isAgentSessionEnded(record));
+        const sealable = state === 'building' && finished && !record.deliveredVersion;
         if (!sealable || !canTransition(state, 'ready_for_review')) return null;
         const transition: JobTransition = {
           to: 'ready_for_review',
