@@ -12,7 +12,6 @@ it('binds a normal creator review to its queued candidate and excludes later del
   await store.upsertUser({ uid: 'g:reviewer' });
   await store.createSubmission(42, 'g:owner', 'Creator game');
   await store.setSubmissionSlug(42, 'creator-game');
-  await store.setSubmissionDeliveredVersion(42, 'v1');
   await store.setDraftShared(42, new Date().toISOString());
   const at = new Date().toISOString();
   await store.createReviewSweep({
@@ -50,6 +49,22 @@ it('binds a normal creator review to its queued candidate and excludes later del
   });
   const headers = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:reviewer', secret)}` };
   try {
+    const unavailable = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers,
+      payload: {
+        slug: 'creator-game',
+        source: 'creator',
+        gameVersion: 'v-future',
+        verdict: 'keep',
+        note: 'Solid game.',
+        checklist: { graphics: 'ok', gameplay: 'ok', fun: 'ok', sound: 'ok', controls: 'ok' },
+      },
+    });
+    expect(unavailable.statusCode).toBe(409);
+    expect(await store.listGameAssessmentsBySlug('creator-game')).toEqual([]);
+    await store.setSubmissionDeliveredVersion(42, 'v1');
     const response = await app.inject({ method: 'GET', url: '/api/review/queue?source=creator', headers });
     expect(response.statusCode).toBe(200);
     const item = response.json().items[0] as { slug: string; source: string; gameVersion?: string };

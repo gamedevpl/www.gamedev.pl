@@ -362,7 +362,10 @@ export async function registerReviewRoutes(
 
     const candidate = await store.getSubmissionBySlug(body.data.slug);
     const candidateVersion = candidate?.previewVersion ?? candidate?.deliveredVersion ?? null;
-    if (candidateVersion && body.data.gameVersion !== candidateVersion) {
+    if (
+      (!candidateVersion && source === 'creator') ||
+      (candidateVersion && body.data.gameVersion !== candidateVersion)
+    ) {
       return reply.status(409).send({ error: 'review_version_changed' });
     }
     if (candidateVersion) source = 'creator';
