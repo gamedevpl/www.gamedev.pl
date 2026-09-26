@@ -9,7 +9,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Verification scripts no longer receive creator credentials from the CLI environment (#1519).
+- Conversation history no longer stores MCP authorization keys printed by `/connect` (#1545).
+- Verification scripts no longer receive creator credentials from the CLI environment (#1544).
 
 ### Internal
 

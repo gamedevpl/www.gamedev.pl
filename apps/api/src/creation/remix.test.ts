@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH, REMIX_TTL_MS } from './remix.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -513,25 +513,28 @@ describe('remix routes', () => {
 
     const undone = await app.inject({ method: 'POST', url: `/api/remixes/${remixId}/undo`, headers: alice });
     expect(undone.statusCode).toBe(200);
-    // The published game, not the edit.
     expect(undone.json().html).toContain('return 0.16;');
     expect(undone.json().undoable).toBe(false);
 
-    // And the session went back with it: the next rebuild starts from the game,
-    // not from the change the player just rejected.
     expect(built.seen.at(-1)?.['game/runtime.ts']).not.toContain('return 0.99;');
 
-    // Nothing left to undo.
     const again = await app.inject({ method: 'POST', url: `/api/remixes/${remixId}/undo`, headers: alice });
     expect(again.statusCode).toBe(409);
     expect(again.json().reason).toBe('nothing_to_undo');
   });
 
-  it('carries the lane trace into the answer only under the debug flag', async () => {
-    // Temporary and deliberately loud: it carries the utterance, so it must be a
-    // deploy-time decision rather than something a request can ask for.
+  it('returns only a trace identifier under the debug flag', async () => {
     const codeLane = {
-      run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+      run: async (request: { utterance: string }, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+        const trace = {
+          regionCount: 3,
+          picked: { decision: 'edit', found: true },
+          rounds: [],
+          slice: 'private source',
+        };
+        if (request.utterance === 'fail') {
+          return { ok: false, reason: 'did_not_compile' as const, tokens: { input: 1, output: 1 }, trace };
+        }
         const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
         await build(good);
         return {
@@ -540,7 +543,7 @@ describe('remix routes', () => {
           region: { file: 'game/runtime.ts', name: 'startGame' },
           rounds: 0,
           tokens: { input: 1, output: 1 },
-          trace: { regionCount: 3, picked: { decision: 'edit', found: true }, rounds: [] },
+          trace,
         };
       },
     };
@@ -553,10 +556,24 @@ describe('remix routes', () => {
     const quiet = await app.inject({ method: 'POST', url, headers: alice, payload });
     expect(quiet.json().debug).toBeUndefined();
 
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    // A disabled logger hands every request the app's own instance.
+    const logged = vi.spyOn(app.log, 'info');
+    const loggedTraceIds = () =>
+      logged.mock.calls
+        .filter(([, msg]) => msg === 'remix code lane trace')
+        .map(([obj]) => (obj as { traceId: string }).traceId);
     process.env.REMIX_DEBUG = 'true';
     try {
       const loud = await app.inject({ method: 'POST', url, headers: alice, payload });
-      expect(loud.json().debug).toMatchObject({ regionCount: 3, picked: { found: true } });
+      expect(loud.json().debug).toEqual({ traceId: expect.stringMatching(uuid) });
+      expect(JSON.stringify(loud.json())).not.toContain('regionCount');
+      expect(JSON.stringify(loud.json())).not.toContain('private source');
+      const failed = await app.inject({ method: 'POST', url, headers: alice, payload: { utterance: 'fail' } });
+      expect(failed.json().debug).toEqual({ traceId: expect.stringMatching(uuid) });
+      expect(JSON.stringify(failed.json())).not.toContain('private source');
+      expect(failed.json().debug.traceId).not.toBe(loud.json().debug.traceId);
+      expect(loggedTraceIds()).toEqual([loud.json().debug.traceId, failed.json().debug.traceId]);
     } finally {
       delete process.env.REMIX_DEBUG;
     }

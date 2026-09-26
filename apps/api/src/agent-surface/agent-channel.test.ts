@@ -1000,7 +1000,6 @@ describe('agent build channel', () => {
       });
       expect(ok.json().accepted).toBe(true);
     }
-
     const limited = await app.inject({
       method: 'POST',
       url: '/api/agent/build/progress',
@@ -1014,29 +1013,29 @@ describe('agent build channel', () => {
   });
   // A 1x1 PNG — the smallest payload that still carries a real PNG signature.
   const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-
+  function uploadAuthorization(upload: unknown): string {
+    const authorization = String(upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
+    if (!authorization) throw new Error('upload command has no authorization header');
+    return authorization;
+  }
   it('refuses a reserved proposal caption on an agent upload', async () => {
     // Those captions are excluded from the shot count and the media strip, so an agent
     // that could set one would have an unbounded, invisible store.
     const store = new InMemoryStore();
     await seedSubmission(store);
     app = await createApp(store);
-
     const minted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot/upload-url',
       headers: agentHeaders(),
       payload: { label: DREAM_FRAME_SHOT_LABEL },
     });
-
     expect(minted.statusCode).toBe(400);
   });
-
   it('stores a screenshot via signed PUT, lists it on status, and serves the bytes', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     app = await createApp(store);
-
     const minted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot/upload-url',
@@ -1045,18 +1044,19 @@ describe('agent build channel', () => {
     });
     expect(minted.statusCode).toBe(200);
     expect(minted.json().accepted).toBe(true);
-    const url = String(minted.json().url).replace(/^https?:\/\/[^/]+/, '');
-
+    const body = minted.json();
+    const url = String(body.url).replace(/^https?:\/\/[^/]+/, '');
     const pushed = await app.inject({
       method: 'PUT',
       url,
-      headers: { 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(body.upload), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
     expect(pushed.statusCode).toBe(200);
     expect(pushed.json().accepted).toBe(true);
+    expect(pushed.json()).not.toHaveProperty('pending');
+    expect(pushed.json()).not.toHaveProperty('gate');
     const shotId = pushed.json().shot.id as string;
-
     // No pull request exists in this fixture, so this is exactly the empty-page
     // stretch the channel is for: a picture with nothing committed anywhere.
     const token = mintToken(ISSUE, secret);
@@ -1064,7 +1064,6 @@ describe('agent build channel', () => {
     expect(status.json().media).toEqual([
       expect.objectContaining({ source: 'channel', ref: shotId, label: 'First bridge' }),
     ]);
-
     const image = await app.inject({
       method: 'GET',
       url: `/api/submissions/${token}/shot/${shotId}`,
@@ -1074,12 +1073,10 @@ describe('agent build channel', () => {
     expect(image.headers['content-type']).toContain('image/png');
     expect(image.rawPayload.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   });
-
   it('mints a curl one-liner that sets Content-Type, and still takes an upload that declares none', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     app = await createApp(store);
-
     const minted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot/upload-url',
@@ -1088,24 +1085,31 @@ describe('agent build channel', () => {
     });
     expect(minted.statusCode).toBe(200);
     const { url, upload, expiresAt, expiresInSeconds, maxBytes } = minted.json();
+    expect(url).not.toContain('?');
+    expect(upload).toContain("-H 'Authorization: Bearer ");
     expect(upload).toContain("-H 'Content-Type: image/png'");
     expect(typeof expiresAt).toBe('string');
     expect(typeof expiresInSeconds).toBe('number');
     expect(maxBytes).toBe(700 * 1024);
     // expiresAt must match the signed exp, not a second clock read.
-    const token = new URL(String(url)).searchParams.get('token');
+    const token = uploadAuthorization(upload).replace(/^Bearer\s+/i, '');
     const claims = verifyUploadToken(String(token), secret);
     expect(Math.floor(Date.parse(expiresAt) / 1000)).toBe(claims.exp);
     expect(expiresInSeconds).toBeGreaterThan(0);
-
+    const queryCredential = await app.inject({
+      method: 'PUT',
+      url: `${String(url).replace(/^https?:\/\/[^/]+/, '')}?token=${encodeURIComponent(token)}`,
+      payload: Buffer.from(TINY_PNG, 'base64'),
+    });
+    expect(queryCredential.statusCode).toBe(401);
     // curl sends no type of its own, and a 415 here left the upload silently undone.
     const untyped = await app.inject({
       method: 'PUT',
       url: String(url).replace(/^https?:\/\/[^/]+/, ''),
+      headers: { authorization: uploadAuthorization(upload) },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
     expect(untyped.statusCode).toBe(200);
-
     // Scoped to the raw upload routes: a '' parser would hit everything.
     const untypedElsewhere = await app.inject({
       method: 'POST',
@@ -1115,12 +1119,10 @@ describe('agent build channel', () => {
     });
     expect(untypedElsewhere.statusCode).not.toBe(200);
   });
-
   it('retires base64 POST /shot and refuses a non-PNG PUT body', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     app = await createApp(store);
-
     const retired = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot',
@@ -1129,43 +1131,41 @@ describe('agent build channel', () => {
     });
     expect(retired.statusCode).toBe(410);
     expect(retired.json().error).toMatch(/retired|upload-url/i);
-
     const minted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot/upload-url',
       headers: agentHeaders(),
       payload: {},
     });
-    const url = String(minted.json().url).replace(/^https?:\/\/[^/]+/, '');
+    const body = minted.json();
+    const url = String(body.url).replace(/^https?:\/\/[^/]+/, '');
     const response = await app.inject({
       method: 'PUT',
       url,
-      headers: { 'content-type': 'application/octet-stream' },
+      headers: { authorization: uploadAuthorization(body.upload), 'content-type': 'application/octet-stream' },
       payload: Buffer.from('<svg onload=alert(1)>'),
     });
-
     expect(response.statusCode).toBe(400);
     expect(response.json().error).toBe('not a PNG');
     expect(await store.countBuildShots(ISSUE)).toBe(0);
   });
-
   it('will not serve one build\u2019s screenshot to another build\u2019s token', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     await seedSubmission(store, 99);
     app = await createApp(store);
-
     const minted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/shot/upload-url',
       headers: agentHeaders(),
       payload: {},
     });
-    const url = String(minted.json().url).replace(/^https?:\/\/[^/]+/, '');
+    const body = minted.json();
+    const url = String(body.url).replace(/^https?:\/\/[^/]+/, '');
     const pushed = await app.inject({
       method: 'PUT',
       url,
-      headers: { 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(body.upload), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
     const shotId = pushed.json().shot.id as string;

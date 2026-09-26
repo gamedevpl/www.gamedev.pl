@@ -43,6 +43,12 @@ const TINY_PNG = Buffer.from(
   'base64',
 ).toString('base64');
 
+function uploadAuthorization(upload: unknown): string {
+  const authorization = String(upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
+  if (!authorization) throw new Error('upload command has no authorization header');
+  return authorization;
+}
+
 const MINIMAL_FILES = [
   { path: 'SPEC.md', content: '---\ntitle: Comet Courier\n---\n' },
   { path: 'game.ts', content: 'export {};' },
@@ -479,7 +485,7 @@ describe('POST /api/mcp (BY-05)', () => {
     }>;
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
     // The header is what makes the PUT parse; an example without it earned a 415.
-    expect(screenshotUpload?.description).toMatch(/curl -H "Content-Type: [^"]+" --upload-file/i);
+    expect(screenshotUpload?.description).toMatch(/Authorization: [^"]+" -H "Content-Type: [^"]+" --upload-file/i);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
     expect(screenshotUpload?.description).toMatch(/--use-gl=angle/);
     expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
@@ -494,7 +500,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
     expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
     expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(
-      /curl -H "Content-Type: [^"]+" --upload-file/i,
+      /curl -H "Authorization: Bearer <upload token>" -H "Content-Type: [^"]+" --upload-file/i,
     );
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
@@ -1226,7 +1232,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/get_kit_api/);
     // The loop must never send an agent to a web search instead.
     expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
-    expect(joined).toMatch(/screenshot_upload_url/);
+    expect(joined).toMatch(/screenshot_upload_url and the `upload` one-liner.{0,40}Authorization/);
     expect(joined).not.toMatch(/send_screenshot/);
     expect(joined).toMatch(/--use-gl=angle/);
     expect(joined).toMatch(/never --disable-gpu/);
@@ -1731,7 +1737,6 @@ declare const GameKit: { defineGame(): unknown };
     expect(mustDeliverMessage).not.toMatch(/npm run submit/);
     expect(mustDeliverMessage).toMatch(/submit_sources/);
   });
-
   it('refuses the retired send_screenshot base64 tool', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -1739,7 +1744,6 @@ declare const GameKit: { defineGame(): unknown };
     const sessionId = await initialize(app);
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
-
     const res = await mcpCall(
       app,
       'tools/call',
@@ -1749,7 +1753,6 @@ declare const GameKit: { defineGame(): unknown };
     expect(res.statusCode).toBe(200);
     expect(res.json().error?.message).toMatch(/unknown tool: send_screenshot/);
   });
-
   it('screenshot_upload_url + raw PUT delivers without base64 in a tool argument', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -1757,7 +1760,6 @@ declare const GameKit: { defineGame(): unknown };
     const sessionId = await initialize(app);
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
-
     const minted = await callTool(
       app,
       'screenshot_upload_url',
@@ -1772,9 +1774,8 @@ declare const GameKit: { defineGame(): unknown };
       expiresAt: string;
     };
     expect(maxBytes).toBe(700 * 1024);
-    expect(upload).toMatch(/^curl -H 'Content-Type: image\/png' --upload-file shot\.png '/);
-    expect(url).toMatch(/\/api\/agent\/build\/shot\/upload\?token=/);
-
+    expect(upload).toMatch(/^curl -H 'Authorization: Bearer [^']+' -H 'Content-Type: image\/png'/);
+    expect(url).toMatch(/\/api\/agent\/build\/shot\/upload$/);
     const pngBytes = Buffer.from(TINY_PNG, 'base64');
     // ~500 KB of valid PNG prefix + padding would blow the signature check; use a
     // real-sized buffer that still starts with the PNG magic for the size path, and
@@ -1782,40 +1783,39 @@ declare const GameKit: { defineGame(): unknown };
     const put = await app.inject({
       method: 'PUT',
       url: url.replace(/^https?:\/\/[^/]+/, ''),
-      headers: { 'content-type': 'application/octet-stream' },
+      headers: {
+        authorization: upload.match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '',
+        'content-type': 'application/octet-stream',
+      },
       payload: pngBytes,
     });
     expect(put.statusCode).toBe(200);
     expect(put.json()).toMatchObject({
       accepted: true,
       shot: { label: 'via curl' },
-      control: { stop: false },
     });
-
     const shots = await store.listBuildShots(ISSUE);
     expect(shots).toHaveLength(1);
     expect(shots[0]?.label).toBe('via curl');
-
     // Oversized raw body still refused at the same 700 KB ceiling.
     const huge = Buffer.alloc(800 * 1024, 0x41);
     huge.set(pngBytes.subarray(0, 8), 0);
     const minted2 = await callTool(app, 'screenshot_upload_url', { sessionKey }, { 'mcp-session-id': sessionId });
-    const url2 = (minted2.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+    const secondUpload = minted2.structured as { url: string; upload: string };
+    const url2 = secondUpload.url.replace(/^https?:\/\/[^/]+/, '');
     const tooBig = await app.inject({
       method: 'PUT',
       url: url2,
-      headers: { 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(secondUpload.upload), 'content-type': 'image/png' },
       payload: huge,
     });
     expect(tooBig.statusCode).toBe(413);
   });
-
   it('rate-limits unauthenticated / invalid start attempts', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
     const sessionId = await initialize(app);
-
     let last: { isError: boolean; structured: unknown } | null = null;
     for (let i = 0; i < 25; i++) {
       last = await callTool(app, 'start', { key: 'not-a-real-key' }, { 'mcp-session-id': sessionId });
@@ -1823,7 +1823,6 @@ declare const GameKit: { defineGame(): unknown };
     expect(last?.isError).toBe(true);
     expect(JSON.stringify(last?.structured)).toMatch(/too many invalid start/i);
   });
-
   it('scripted client: start → brief → seed → submit → verdict', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -1834,20 +1833,16 @@ declare const GameKit: { defineGame(): unknown };
     app = await createApp(store, gamesStore);
     const sessionId = await initialize(app);
     const key = roundKey();
-
     const started = await callTool(app, 'start', { key }, { 'mcp-session-id': sessionId });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
-
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(brief.structured).toMatchObject({
       seedAvailable: true,
       seedStatus: 'available',
       slug: 'comet-courier',
     });
-
     const seed = await callTool(app, 'get_seed', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(seed.structured).toMatchObject({ available: true, status: 'available' });
-
     const submitted = await callTool(
       app,
       'submit_sources',
@@ -1873,7 +1868,6 @@ declare const GameKit: { defineGame(): unknown };
     // Successful MCP submit unlocks handoff even before explicit end.
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
     expect((await store.getSubmission(ISSUE))?.agentEndedBy).toBe('submit');
-
     const ended = await callTool(
       app,
       'end',
@@ -1894,7 +1888,6 @@ declare const GameKit: { defineGame(): unknown };
     });
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
     expect((await store.getSubmission(ISSUE))?.agentEndedBy).toBe('end');
-
     // Gate red keeps the round open — verdict readable on the active key.
     await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
     const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
@@ -2104,11 +2097,11 @@ declare const GameKit: { defineGame(): unknown };
     let body: { staged?: { totalBytes: number; maxBytes: number }; budgetHint?: string } = {};
     for (const path of ['game/big-one.ts', 'game/big-two.ts']) {
       const minted = await callTool(app, 'stage_upload_url', { sessionKey, path }, sid);
-      const { url } = minted.structured as Record<string, string>;
+      const { url, upload } = minted.structured as Record<string, string>;
       const put = await app.inject({
         method: 'PUT',
         url: url.replace(/^https?:\/\/[^/]+/, ''),
-        headers: { 'content-type': 'text/plain; charset=utf-8' },
+        headers: { authorization: uploadAuthorization(upload), 'content-type': 'text/plain; charset=utf-8' },
         payload: Buffer.from(`export const big = '${'x'.repeat(740_000)}';\n`, 'utf8'),
       });
       expect(put.statusCode).toBe(200);
@@ -2141,10 +2134,13 @@ declare const GameKit: { defineGame(): unknown };
     const sessionKey = (started.structured as Record<string, string>).sessionKey;
 
     const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/typeless.ts' }, sid);
-    const { url } = minted.structured as Record<string, string>;
+    const { url, upload } = minted.structured as Record<string, string>;
     const content = 'export const typeless = true;\n';
 
-    for (const headers of [{}, { 'content-type': 'video/mp2t' }]) {
+    for (const headers of [
+      { authorization: uploadAuthorization(upload) },
+      { authorization: uploadAuthorization(upload), 'content-type': 'video/mp2t' },
+    ]) {
       const put = await app.inject({
         method: 'PUT',
         url: url.replace(/^https?:\/\/[^/]+/, ''),
@@ -2175,13 +2171,13 @@ declare const GameKit: { defineGame(): unknown };
     const { url, path, maxBytes, upload } = minted.structured as Record<string, string | number>;
     expect(path).toBe('game/extra.ts');
     expect(maxBytes).toBe(1_000_000);
-    expect(upload).toMatch(/^curl -H 'Content-Type: text\/plain; charset=utf-8' --upload-file game\/extra\.ts '/);
+    expect(upload).toMatch(/^curl -H 'Authorization: Bearer [^']+' -H 'Content-Type: text\/plain; charset=utf-8'/);
 
     const content = 'export const stagedViaCurl = true;\n';
     const put = await app.inject({
       method: 'PUT',
       url: (url as string).replace(/^https?:\/\/[^/]+/, ''),
-      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      headers: { authorization: uploadAuthorization(upload), 'content-type': 'text/plain; charset=utf-8' },
       payload: Buffer.from(content, 'utf8'),
     });
     expect(put.statusCode).toBe(200);
@@ -2189,8 +2185,8 @@ declare const GameKit: { defineGame(): unknown };
       accepted: true,
       path: 'game/extra.ts',
       bytes: Buffer.byteLength(content, 'utf8'),
-      control: { stop: false },
     });
+    expect(put.json()).not.toHaveProperty('control');
 
     const listed = await callTool(app, 'list_staged_sources', { sessionKey }, sid);
     expect(listed.isError).toBe(false);
@@ -2237,7 +2233,7 @@ declare const GameKit: { defineGame(): unknown };
     const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
     expect(batchMinted.isError).toBe(false);
     const batchStructured = batchMinted.structured as {
-      uploads: Array<{ path: string; url: string }>;
+      uploads: Array<{ path: string; url: string; upload: string }>;
       uploadScript?: string;
     };
     expect(batchStructured.uploads).toHaveLength(20);
@@ -2250,7 +2246,10 @@ declare const GameKit: { defineGame(): unknown };
         app.inject({
           method: 'PUT',
           url: item.url.replace(/^https?:\/\/[^/]+/, ''),
-          headers: { 'content-type': 'text/plain; charset=utf-8' },
+          headers: {
+            authorization: uploadAuthorization(item.upload),
+            'content-type': 'text/plain; charset=utf-8',
+          },
           payload: Buffer.from(`// content for ${item.path}\n`, 'utf8'),
         }),
       ),
@@ -3646,11 +3645,12 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
       { sessionKey, label: 'first draw' },
       { 'mcp-session-id': sessionId },
     );
-    const shotUrl = (minted.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+    const shotUpload = minted.structured as { url: string; upload: string };
+    const shotUrl = shotUpload.url.replace(/^https?:\/\/[^/]+/, '');
     await app.inject({
       method: 'PUT',
       url: shotUrl,
-      headers: { 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(shotUpload.upload), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
 
