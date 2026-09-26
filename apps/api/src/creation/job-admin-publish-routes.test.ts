@@ -8,7 +8,6 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
   const sessionSecret = 'dev-session-secret-change-me';
   const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
 
-  // One delivered version, gated as told.
   function gamesStoreWith(
     gate: { green: boolean } | null,
     bundle = '<!doctype html>assembled',
@@ -35,6 +34,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
   async function seedAssessment(store: InMemoryStore, reviewerUid: string, verdict: 'keep' | 'cut' | 'skip') {
     await store.upsertGameAssessment({
       slug: 'comet-courier',
+      gameVersion: 'v1',
       title: 'Comet Courier',
       source: 'creator',
       creatorHandle: null,

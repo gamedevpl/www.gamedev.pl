@@ -537,6 +537,7 @@ const FILE_BUCKET = {
   suggestions: 'community',
   'editorial-suggestions': 'community',
   'editorial-clearance': 'community',
+  'editorial-clearance-version': 'community',
   // "Who reviews this game" and "may the platform act on my behalf" are proposal/
   // suggestion routing rules, not catalog or creation business logic.
   'owner-of-record': 'community',

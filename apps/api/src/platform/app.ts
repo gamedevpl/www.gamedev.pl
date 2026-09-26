@@ -841,7 +841,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     // Policy at composition root, not a route invariant.
     editorialClearance: store
-      ? async (slug) => decideEditorialClearance(await store.listGameAssessmentsBySlug(slug), slug)
+      ? async (slug, version) => decideEditorialClearance(await store.listGameAssessmentsBySlug(slug), slug, version)
       : undefined,
   });
 
