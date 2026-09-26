@@ -691,7 +691,10 @@ Do not change the service `MAIL_FROM` — notification mail should keep using th
 When you do not know the invitee's email, open `/admin/waitlist` and use **One-time invite
 links → Create invite link**. Copy the returned link into the conversation. It is a bearer
 link: the first account to accept it through Google or Apple receives beta access, and the
-same link cannot be used by a second account.
+same link cannot be used by a second account. New links use `/invite#<code>`; the
+fragment stays in the browser and is excluded from HTTP request logs. Previously issued
+`/invite/<code>` links remain supported and still send their code in the request path.
+Revoke and replace old links if their request logs may have been exposed.
 
 The raw code is returned only when the link is created. Firestore stores its SHA-256 hash,
 and claiming uses a transaction. The panel shows claimed/revoked status and can revoke an
