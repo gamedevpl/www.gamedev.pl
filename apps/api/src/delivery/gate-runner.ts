@@ -279,7 +279,7 @@ export async function runGate(
     // harness that does it is not in their sandbox. Same remedy, and the same limit:
     // deriving the golden only settles what the game *does*, and every stage after
     // still has to pass on its own.
-    if (!previewRun && (manifest.origin === 'editor' || manifest.origin === 'seal')) {
+    if (!previewRun && !healthRun && (manifest.origin === 'editor' || manifest.origin === 'seal')) {
       const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (trace.code !== 0) {
         return {
@@ -376,10 +376,12 @@ export async function runGate(
     if (check.code !== 0) {
       // Preview for the creator; media when capture got far enough — both best-effort.
       // Preview lane never runs capture, so media store is a no-op there.
-      const artifacts = [
-        ...(await storePreview(deps, slug, version, harness)),
-        ...(previewRun ? [] : await storeCaptureMedia(deps, slug, version, harness, roots)),
-      ];
+      const artifacts = healthRun
+        ? []
+        : [
+            ...(await storePreview(deps, slug, version, harness)),
+            ...(previewRun ? [] : await storeCaptureMedia(deps, slug, version, harness, roots)),
+          ];
       const screenshot = firstGateScreenshotPath(artifacts);
       return {
         green: false,
@@ -436,6 +438,16 @@ export async function runGate(
         durationMs: now() - startedAt,
         ...(engineCommit ? { engineCommit } : {}),
         ...(screenshot ? { screenshot } : {}),
+      };
+    }
+
+    if (healthRun) {
+      return {
+        green: true,
+        report: `check:game passed against engine ${engineCommit ?? engineRef}; no artifacts stored`,
+        artifacts: [],
+        durationMs: now() - startedAt,
+        ...(engineCommit ? { engineCommit } : {}),
       };
     }
 

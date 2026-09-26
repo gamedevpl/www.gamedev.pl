@@ -576,6 +576,7 @@ const FILE_BUCKET = {
   'push-routes': 'notifications',
   pusher: 'notifications',
   'unsubscribe-token': 'notifications',
+  'unsubscribe-token-codec': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
   'uncollected-feedback': 'notifications',

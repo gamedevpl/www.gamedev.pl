@@ -80,6 +80,18 @@ describe('FirestoreIdentityStore user cache', () => {
     expect((await store.getUser('u1'))?.deletionScheduledFor).not.toBe('2026-10-09T10:00:00Z');
   });
 
+  it('does not overwrite a tier changed behind the profile cache', async () => {
+    const { db, store, seed, behindTheStore } = withUser();
+    await seed({ handle: 'ada', profileName: 'Before' });
+    await store.getUser('u1');
+    await behindTheStore({ tier: 'blocked' });
+
+    await store.updateCreatorProfile('u1', { profileName: 'After' });
+
+    const persisted = await db.collection('users').doc('u1').get();
+    expect(persisted.data()).toMatchObject({ tier: 'blocked', profileName: 'After' });
+  });
+
   // The card's own opt-out reads back through this window.
   it('drops it on each notification switch', async () => {
     const { store, seed } = withUser();

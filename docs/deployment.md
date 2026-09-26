@@ -39,7 +39,7 @@ build / image-boot run once (in CI), and deploy does not re-pay for them. Manual
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
 5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent. The step also reads `/api/auth/token-info` and warns when the CI token has **seven days or fewer** left: expiry is mandatory and a lapsed token fails this step, which blocks promotion, so the warning is the only lead time there is. It never fails the step on the expiry check alone — an expired token is already caught by the bearer 401 above it.
-6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks.
+6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks, and for why it runs in its own job with no cloud credential.
 7. **Zone host (`gamedev-world`):** when `ZONE_HOST_URL` is set, CI advances the zone host's **image only** — never its env or secrets, which stay `infra/deploy-world.sh`'s business — and only when the world's own inputs changed (`apps/world`, `packages/zone-core`, `packages/contract`, the lockfile). It is deliberately not rebuilt on every deploy: a redeploy drains running zones, and `apps/world/Dockerfile` states the rule that shipping a CSS change must not mass-hibernate every live world. Runs before promotion, same as the relay, because the host is the server and the new bundle is its client.
 8. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
 
@@ -76,6 +76,34 @@ install and the run: unpinned, `playwright install` writes to `~/.cache/ms-playw
 while the suite looks in `/opt/pw-browsers`, and the gate skips itself into uselessness.
 
 Run it yourself against anything: `E2E_BASE_URL=https://www.gamedev.pl npm run e2e`.
+
+### Why the browser gate has its own job
+
+The gate opens published games — generated code — in a real browser, so it is treated as
+running hostile code. `deploy.yml` is split into three jobs so that code never shares a
+runner with a cloud credential:
+
+| Job            | GCP credential           | Does                                                                                                                         |
+| -------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `deploy`       | WIF (`id-token: write`)  | build + push images, deploy the `candidate` revision, anonymous + authenticated smoke, move the party relay to the new image |
+| `browser-gate` | **none**                 | `npm run e2e` against the candidate URL (passed as a job output), with only `GAMEDEV_ACCESS_TOKEN`                           |
+| `promote`      | WIF again, on a fresh VM | zone host, runtime-identity assertion, Firebase Hosting assets, traffic promotion, Hosting prune                             |
+
+`promote` `needs:` the gate, so a red or cancelled gate still blocks promotion. The relay
+move stays in `deploy` because the gate opens a lobby and the relay must already trust the
+candidate's identity. The gate job does not use the npm cache: the cache is saved after the
+games have run, and `promote` restores it on a runner that holds GCP credentials.
+
+**Chromium sandbox.** `apps/e2e/src/browser.ts` launches with Chromium's sandbox on
+(Playwright otherwise passes `--no-sandbox` by default). The gate job installs a one-binary
+AppArmor profile granting user namespaces when the runner restricts them (Ubuntu 23.10+).
+Two ways the sandbox is turned off, both loud:
+
+- `E2E_CHROMIUM_NO_SANDBOX=1` — explicit opt-out. As a **repo variable** it is the deploy
+  gate's break glass for a runner image where the sandbox cannot start; unset it again once
+  the runner is fixed. The job isolation above does not depend on it.
+- Running as **root** outside the gate (Claude Code on the web, containers), where Chromium
+  cannot sandbox at all. With `E2E_REQUIRED=1` this refuses to launch instead.
 
 ## Secrets & access (current live state)
 
