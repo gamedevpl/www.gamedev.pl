@@ -28,7 +28,9 @@ function rules(): { disallow: string[]; allow: string[] } {
 function crawlable(pathname: string): boolean {
   const { disallow, allow } = rules();
   const longest = (list: string[]) =>
-    list.filter((p) => pathname.startsWith(p)).reduce((best, p) => (p.length > best ? p.length : best), -1);
+    list
+      .filter((p) => (p.endsWith('$') ? pathname === p.slice(0, -1) : pathname.startsWith(p)))
+      .reduce((best, p) => (p.length > best ? p.length : best), -1);
   const blocked = longest(disallow);
   const permitted = longest(allow);
   return blocked < 0 || permitted >= blocked;
@@ -53,12 +55,19 @@ describe('robots.txt', () => {
     expect(crawlable(pathname)).toBe(false);
   });
 
-  it.each(['/', '/privacy', '/terms', '/contact', '/ada/sky-dodge', '/play/sky-dodge', '/creators/ada'])(
-    'leaves %s crawlable',
-    (pathname) => {
-      expect(crawlable(pathname)).toBe(true);
-    },
-  );
+  it.each([
+    '/',
+    '/privacy',
+    '/terms',
+    '/contact',
+    '/ada/sky-dodge',
+    '/play/sky-dodge',
+    '/creators/ada',
+    '/invitee',
+    '/invitee/my-game',
+  ])('leaves %s crawlable', (pathname) => {
+    expect(crawlable(pathname)).toBe(true);
+  });
 
   it('does not blanket-block the API the renderer needs', () => {
     // Googlebot renders the SPA; blocking /api/ would blind it.
