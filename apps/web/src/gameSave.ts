@@ -2,6 +2,7 @@ import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
+import { isFromGameFrame, isGameFrameNavigatedAway } from './frameMessage.js';
 
 /**
  * The shell half of durable per-player progress (docs/persistent-world-plan.md P1).
@@ -84,6 +85,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       // Nothing is sent to a frame we have already torn down — but the write itself
       // still completes; see the drain loop.
       if (cancelled) return;
+      // Drop replies once the game has navigated its frame away.
+      if (isGameFrameNavigatedAway(frameRef.current)) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
       frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
@@ -119,7 +122,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     async function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not read or write this player's save.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseGameSaveMessage(event.data);
       if (!message) return;
 

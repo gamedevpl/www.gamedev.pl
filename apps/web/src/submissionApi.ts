@@ -13,6 +13,7 @@ import type {
   SubmissionState,
   SubmissionStatusResponse,
 } from '@gamedevpl/contract';
+import { withGamePreviewCsp } from '@gamedevpl/contract';
 import { fetchCached, invalidateCachedPrefix } from './core/dataLayer.js';
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
@@ -39,9 +40,8 @@ export type SubmissionStatus = SubmissionStatusResponse;
  *
  * The document is unreviewed agent output. Execution stays sandboxed: the app hands
  * it to GameTheater as srcdoc (`sandbox="allow-scripts"`, no `allow-same-origin`) and
- * injects the player bridge — the same path as a PR draft. Fetching into the parent
- * as a string is required for that bridge; it is not the same as inlining the markup
- * into the app DOM.
+ * injects the player bridge — the same path as a PR draft. srcdoc drops the
+ * route's CSP header, so the same policy is injected as a leading meta tag.
  */
 export async function getChannelPlayable(token: string, item: BuildPlayableItem): Promise<string> {
   const response = await fetch(buildPlayableUrl(token, item), { credentials: 'include' });
@@ -50,7 +50,7 @@ export async function getChannelPlayable(token: string, item: BuildPlayableItem)
     await throwResponseError(response);
   }
 
-  return response.text();
+  return withGamePreviewCsp(await response.text());
 }
 
 /**

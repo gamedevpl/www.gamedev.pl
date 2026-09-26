@@ -3,6 +3,7 @@
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GameFrame } from './GameFrame.js';
 import { parseGameSaveMessage, useGameSaveBridge } from './gameSave.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 
@@ -61,6 +62,12 @@ function Harness({ slug }: { slug?: string }) {
   return <iframe ref={frameRef} title="game" />;
 }
 
+function FrameHarness({ html }: { html: string }) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  useGameSaveBridge(frameRef, 'crypt-delver');
+  return <GameFrame title="game" html={html} frameRef={frameRef} autoFocus={false} />;
+}
+
 describe('useGameSaveBridge', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let toGame: unknown[];
@@ -94,7 +101,7 @@ describe('useGameSaveBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow, origin: 'null' }));
     };
     return { fromGame, gameWindow };
   }
@@ -147,6 +154,80 @@ describe('useGameSaveBridge', () => {
 
     await waitFor(() => expect(toGame).toHaveLength(1));
     expect(toGame[0]).toMatchObject({ t: 'save:state', available: false });
+  });
+
+  it('stops answering once the game navigates its own frame away', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
+    root = createRoot(container);
+    const render = (html: string) => act(() => root!.render(<FrameHarness html={html} />));
+    render('<!doctype html><p>one</p>');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const gameWindow = iframe.contentWindow as Window;
+    vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
+      toGame.push(message);
+    }) as typeof gameWindow.postMessage);
+    const hello = () =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: frame({ t: 'save:hello', version: 1 }),
+          source: gameWindow,
+          origin: 'null',
+        }),
+      );
+
+    act(() => iframe.dispatchEvent(new Event('load')));
+    act(() => iframe.dispatchEvent(new Event('load')));
+    hello();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(toGame).toHaveLength(0);
+  });
+
+  it('drops a pending save read when the frame loads another document first', async () => {
+    let resolveRead: (response: Response) => void = () => undefined;
+    fetchMock.mockReturnValue(new Promise<Response>((resolve) => (resolveRead = resolve)));
+    root = createRoot(container);
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>one</p>" />));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const gameWindow = iframe.contentWindow as Window;
+    vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
+      toGame.push(message);
+    }) as typeof gameWindow.postMessage);
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>two</p>" />));
+    expect(container.querySelector('iframe')).toBe(iframe);
+    act(() => iframe.dispatchEvent(new Event('load')));
+
+    const data = frame({ t: 'save:hello', version: 1 });
+    window.dispatchEvent(new MessageEvent('message', { data, source: gameWindow, origin: 'null' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    act(() => iframe.dispatchEvent(new Event('load')));
+    resolveRead(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(toGame).toHaveLength(0);
+  });
+
+  it('answers a pre-load hello from new host content after a flagged navigation', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
+    root = createRoot(container);
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>one</p>" />));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const flagged = container.querySelector('iframe') as HTMLIFrameElement;
+    act(() => flagged.dispatchEvent(new Event('load')));
+    act(() => flagged.dispatchEvent(new Event('load')));
+
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>two</p>" />));
+    const fresh = container.querySelector('iframe') as HTMLIFrameElement;
+    expect(fresh).not.toBe(flagged);
+    const gameWindow = fresh.contentWindow as Window;
+    vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
+      toGame.push(message);
+    }) as typeof gameWindow.postMessage);
+    const data = frame({ t: 'save:hello', version: 1 });
+    window.dispatchEvent(new MessageEvent('message', { data, source: gameWindow, origin: 'null' }));
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    expect(toGame[0]).toMatchObject({ t: 'save:state', available: true });
   });
 
   it('writes a save and acknowledges it', async () => {
@@ -293,6 +374,7 @@ describe('useGameSaveBridge', () => {
       new MessageEvent('message', {
         data: frame({ t: 'save:put', data: '{"hacked":true}', version: 1 }),
         source: impostor.contentWindow,
+        origin: 'null',
       }),
     );
 
