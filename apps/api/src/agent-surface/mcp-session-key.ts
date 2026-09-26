@@ -1,10 +1,10 @@
 export { looksLikeMcpSessionKey } from './mcp-session-shape.js';
-import { bindCapabilityRevision, verifyCapabilityRevision } from '../platform/capability-revision.js';
+import { verifyCapabilityRevision } from '../platform/capability-revision.js';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { COMPACT_PREFIX, mintCompactSessionKey, verifyCompactSessionKey } from './mcp-session-compact.js';
 import {
   ACTOR_UID_RE,
   decodeActorUidField,
-  encodeActorUidField,
   InvalidAgentTokenError,
   STALE_AGENT_TOKEN_REASON,
 } from '../platform/agent-token.js';
@@ -109,16 +109,7 @@ export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOpti
   const nowMs = options.now ?? Date.now();
   const ttlHours = options.ttlHours ?? mcpSessionKeyTtlHours();
   const exp = Math.floor(nowMs / 1000) + ttlHours * 60 * 60;
-  const signature = sign(options.sessionId, options.jobId, options.roundGeneration, exp, secret, options.actorUid);
-  const actorField = options.actorUid ? `.${encodeActorUidField(options.actorUid)}` : '';
-  return bindCapabilityRevision(
-    Buffer.from(
-      `${options.sessionId}.${options.jobId}.${options.roundGeneration}.${exp}${actorField}.${signature}`,
-      'utf8',
-    ).toString('base64url'),
-    options.actorRevision,
-    secret,
-  );
+  return mintCompactSessionKey(secret, options, exp);
 }
 
 /**
@@ -127,6 +118,7 @@ export function mintMcpSessionKey(secret: string, options: MintMcpSessionKeyOpti
  */
 export function verifyMcpSessionKey(token: string, secret: string): McpSessionKeyClaims {
   try {
+    if (token.startsWith(COMPACT_PREFIX)) return verifyCompactSessionKey(token, secret);
     const envelope = verifyCapabilityRevision(token, secret);
     const parts = Buffer.from(envelope.token, 'base64url').toString('utf8').split('.');
     if (parts.length !== 5 && parts.length !== 6) {

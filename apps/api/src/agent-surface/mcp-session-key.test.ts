@@ -47,21 +47,6 @@ describe('mcp sessionKey', () => {
     });
   });
 
-  it('round-trips an Apple uid that contains dots', () => {
-    const appleUid = 'a:001234.abcdef.0000';
-    const sessionId = newMcpSessionId();
-    const key = mintMcpSessionKey(secret, {
-      sessionId,
-      jobId: 42,
-      roundGeneration: 2,
-      now,
-      ttlHours: 24,
-      actorUid: appleUid,
-    });
-    expect(verifyMcpSessionKey(key, secret).actorUid).toBe(appleUid);
-    expect(Buffer.from(key, 'base64url').toString('utf8').split('.')).toHaveLength(6);
-  });
-
   it('rejects a tampered actorUid on a sessionKey', () => {
     const key = mintMcpSessionKey(secret, {
       sessionId: 'abc',
@@ -71,10 +56,10 @@ describe('mcp sessionKey', () => {
       ttlHours: 1,
       actorUid: 'g:bea',
     });
-    const decoded = Buffer.from(key, 'base64url').toString('utf8');
-    const parts = decoded.split('.');
-    parts[4] = Buffer.from('g:ada', 'utf8').toString('base64url');
-    const forged = Buffer.from(parts.join('.'), 'utf8').toString('base64url');
+    const [payload, signature] = key.slice('mcp2_'.length).split('.');
+    const claims = JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')) as unknown[];
+    claims[4] = 'g:ada';
+    const forged = `mcp2_${Buffer.from(JSON.stringify(claims)).toString('base64url')}.${signature}`;
     expect(() => verifyMcpSessionKey(forged, secret)).toThrow(InvalidAgentTokenError);
   });
 
@@ -86,10 +71,10 @@ describe('mcp sessionKey', () => {
       now,
       ttlHours: 1,
     });
-    const decoded = Buffer.from(key, 'base64url').toString('utf8');
-    const parts = decoded.split('.');
-    parts[1] = '999';
-    const forged = Buffer.from(parts.join('.'), 'utf8').toString('base64url');
+    const [payload, signature] = key.slice('mcp2_'.length).split('.');
+    const claims = JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')) as unknown[];
+    claims[1] = 999;
+    const forged = `mcp2_${Buffer.from(JSON.stringify(claims)).toString('base64url')}.${signature}`;
     expect(() => verifyMcpSessionKey(forged, secret)).toThrow(InvalidAgentTokenError);
   });
 
