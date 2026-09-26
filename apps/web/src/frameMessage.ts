@@ -4,7 +4,13 @@ import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'rea
 const navigatedAway = new WeakSet<Window>();
 
 function frameWindow(frame: HTMLIFrameElement | Window | null | undefined): Window | null {
-  return (frame && 'contentWindow' in frame ? frame.contentWindow : frame) ?? null;
+  if (!frame) return null;
+  try {
+    return 'contentWindow' in frame ? frame.contentWindow : frame;
+  } catch {
+    // Probing a cross-origin Window throws, so it is one.
+    return frame as Window;
+  }
 }
 
 // True once the game navigated this frame somewhere itself.
