@@ -1,5 +1,3 @@
-// Abuse needs no consensus: one credible report, one operator, one takedown.
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -75,15 +73,8 @@ describe('moderation flags', () => {
     return { app, store };
   }
 
-  // Detached fan-out lands a tick after the response.
   async function settledAlert(store: InMemoryStore, uid: string) {
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const rows = await store.listNotifications(uid);
-      const hit = rows.find((row) => row.type === 'operator.moderation_flag');
-      if (hit) return hit;
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    return null;
+    return (await store.listNotifications(uid)).find((row) => row.type === 'operator.moderation_flag');
   }
 
   async function raise(app: Awaited<ReturnType<typeof buildApp>>, cookieHeader: string, slug = 'sky-dodge') {
@@ -171,7 +162,6 @@ describe('moderation flags', () => {
   });
 
   it('tells the operators a report landed', async () => {
-    // The queue waits to be found, so raising pages instead.
     const { app, store } = await makeApp();
     await store.upsertUser({ uid: 'dev:boss' });
 
@@ -184,23 +174,32 @@ describe('moderation flags', () => {
     expect(alert?.link).toBe('/admin/moderation');
   });
 
-  it('answers the reviewer without waiting on mail or push', async () => {
-    // A slow mail or push endpoint must not hold the request.
+  it('waits for the notification attempt before answering the reviewer', async () => {
     const { app, store } = await makeApp();
     await store.upsertUser({ uid: 'dev:boss' });
     let release = (): void => {};
+    let begin = (): void => {};
+    const started = new Promise<void>((resolve) => {
+      begin = resolve;
+    });
     const blocked = new Promise<void>((resolve) => {
       release = resolve;
     });
     vi.spyOn(store, 'createNotification').mockImplementation(async () => {
+      begin();
       await blocked;
       throw new Error('never settles in time');
     });
 
-    const raised = await raise(app, await cookie(app, 'reviewer'));
-    expect(raised.statusCode).toBe(200);
-    expect((await store.listModerationFlags()).length).toBe(1);
+    let replied = false;
+    const raised = raise(app, await cookie(app, 'reviewer')).then((response) => {
+      replied = true;
+      return response;
+    });
+    await started;
+    expect(replied).toBe(false);
     release();
+    expect((await raised).statusCode).toBe(200);
   });
 
   it('still records the report when notifying the operators fails', async () => {

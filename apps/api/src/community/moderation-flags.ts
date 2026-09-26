@@ -136,10 +136,12 @@ export async function registerModerationFlagRoutes(
         { slug: flag.slug, reason: flag.reason, raisedByUid: flag.raisedByUid },
         'moderation flag raised on a game',
       );
-      // Detached: mail and push must not hold the reviewer's request open.
-      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
-        request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
-      });
+      // Keep notification attempts inside the request's CPU lifetime.
+      await notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch(
+        (error: unknown) => {
+          request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
+        },
+      );
       return reply.send({ flag });
     },
   );
@@ -179,10 +181,12 @@ export async function registerModerationFlagRoutes(
         createdAt: new Date(now()).toISOString(),
       });
       request.log.warn({ slug: flag.slug, reason: flag.reason }, 'player reported a game');
-      // Detached, same as the reviewer path above.
-      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
-        request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a player game report');
-      });
+      // Keep notification attempts inside the request's CPU lifetime.
+      await notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch(
+        (error: unknown) => {
+          request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a player game report');
+        },
+      );
       return reply.send({ ok: true });
     },
   );
