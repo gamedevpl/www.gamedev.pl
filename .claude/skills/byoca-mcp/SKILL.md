@@ -46,14 +46,14 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      data URL to disk in-process (`fs.writeFileSync('shot.png',
 Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
      data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` +
-     `curl --upload-file shot.png "$url"`. A black frame means those WebGL flags
+     the returned `upload` one-liner. A black frame means those WebGL flags
      were missing or the drawing
      buffer was discarded. Fallback: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d`
      (force2d). There is **no** base64 `send_screenshot` — PNG bytes must never
      enter the model
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
-     `curl --upload-file <file> "$url"` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
+     the returned `upload` one-liner — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
@@ -801,8 +801,10 @@ compositing the default buffer is gone). Do not bake
 `preserveDrawingBuffer:true` into shipped game source — only a disposable
 capture harness. Decode the data URL to
 `shot.png` in-process (`Buffer.from(dataUrl.split(',')[1], 'base64')`; never
-print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` +
-`curl --upload-file shot.png`. `page.screenshot({path:'shot.png'})` writes
+print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` and run
+its returned `upload` one-liner verbatim — it carries the capability in an
+`Authorization: Bearer` header, never in the URL, and the PUT receipt carries
+no channel state. `page.screenshot({path:'shot.png'})` writes
 PNG directly — that is the gate's path.
 Fallback when SwiftShader is unavailable: `GAME_CAPTURE_GFX=canvas2d` /
 `?gfx=canvas2d` (force2d).
