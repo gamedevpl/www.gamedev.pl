@@ -270,7 +270,7 @@ export async function registerCreatorStudioRoutes(
         store,
         studioHealthKey(request.user!.uid, slugs, requested),
         async () => {
-          spendStudioHealthScan(store, request.user!.uid, now());
+          await spendStudioHealthScan(store, request.user!.uid, now());
           const { events, scanned, truncated } = await scanOwnedSlugs(store, slugs, requested);
           const owned = new Set(slugs);
           return {

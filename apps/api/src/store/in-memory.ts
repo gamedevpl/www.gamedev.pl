@@ -1042,17 +1042,11 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
   }
 
-  async getGlobalDreamCount(dateStr: string): Promise<number> {
-    return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
-  }
-
-  async checkAndIncrementGlobalDreams(
-    dateStr: string,
-    limit: number,
-    count?: number,
-  ): Promise<{ allowed: boolean; current: number }> {
-    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit, count);
-  }
+  getGlobalDreamCount = (dateStr: string) => this.dreamQuotaStore.getGlobalDreamCount(dateStr);
+  checkAndIncrementGlobalDreams = (dateStr: string, limit: number, count?: number) =>
+    this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit, count);
+  checkAndIncrementStudioHealthScans = (uid: string, hour: string, limit: number) =>
+    this.dreamQuotaStore.checkAndIncrementStudioHealthScans(uid, hour, limit);
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {
     return this.globalQuotaStore.getGlobalBotCallCount(dateStr);

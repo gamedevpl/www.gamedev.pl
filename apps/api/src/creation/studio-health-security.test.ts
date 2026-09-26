@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CreatorHealthResponse } from './creator-studio.js';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
-import { InMemoryStore } from '../platform/store.js';
+import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
+import { fakeFirestore } from '../store/fake-firestore.js';
 import { MAX_STUDIO_HEALTH_QUERIES, MAX_STUDIO_HEALTH_SCANS_PER_HOUR } from './studio-health-scan.js';
 import { clearStudioHealthCache } from './studio-health-cache.js';
 
@@ -58,21 +59,55 @@ describe('GET /api/me/studio/health workload limits', () => {
     await app.close();
   });
 
-  it('budgets uncached scans per creator', async () => {
-    const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:creator' });
-    await publishGames(store, 1);
-    const app = await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } });
-    const responses = [];
-    for (let request = 0; request <= MAX_STUDIO_HEALTH_SCANS_PER_HOUR; request++) {
-      clearStudioHealthCache(store);
-      responses.push(await app.inject({ method: 'GET', url: '/api/me/studio/health', headers: authHeaders() }));
-    }
+  it('shares the uncached scan budget across instances', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(`${today}T12:30:00.000Z`));
+    try {
+      const store = new InMemoryStore();
+      await store.upsertUser({ uid: 'g:creator' });
+      await publishGames(store, 1);
+      const apps = [
+        await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } }),
+        await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } }),
+      ];
+      const responses = [];
+      for (let request = 0; request <= MAX_STUDIO_HEALTH_SCANS_PER_HOUR; request++) {
+        clearStudioHealthCache(store);
+        const app = apps[request % 2]!;
+        responses.push(await app.inject({ method: 'GET', url: '/api/me/studio/health', headers: authHeaders() }));
+      }
 
-    expect(responses.slice(0, -1).every((response) => response.statusCode === 200)).toBe(true);
-    const refused = responses.at(-1)!;
-    expect(refused.statusCode).toBe(429);
-    expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
-    await app.close();
+      expect(responses.slice(0, -1).every((response) => response.statusCode === 200)).toBe(true);
+      const refused = responses.at(-1)!;
+      expect(refused.statusCode).toBe(429);
+      expect(refused.headers['retry-after']).toBe('1800');
+      await Promise.all(apps.map((app) => app.close()));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe.each<[string, () => Store]>([
+  ['InMemoryStore', () => new InMemoryStore()],
+  ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
+])('%s studio health scan counter', (_name, makeStore) => {
+  it('counts per creator per hour up to the limit', async () => {
+    const store = makeStore();
+    expect(await store.checkAndIncrementStudioHealthScans('g:a', '2026-09-26T12', 2)).toEqual({
+      allowed: true,
+      current: 1,
+    });
+    expect(await store.checkAndIncrementStudioHealthScans('g:a', '2026-09-26T12', 2)).toEqual({
+      allowed: true,
+      current: 2,
+    });
+    expect(await store.checkAndIncrementStudioHealthScans('g:a', '2026-09-26T12', 2)).toEqual({
+      allowed: false,
+      current: 2,
+    });
+    expect((await store.checkAndIncrementStudioHealthScans('g:a', '2026-09-26T13', 2)).allowed).toBe(true);
+    expect((await store.checkAndIncrementStudioHealthScans('g:b', '2026-09-26T12', 2)).allowed).toBe(true);
+    expect((await store.getUsage('g:a', '2026-09-26')).submissions).toBe(0);
   });
 });

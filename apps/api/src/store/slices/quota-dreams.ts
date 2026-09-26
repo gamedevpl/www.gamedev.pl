@@ -11,10 +11,18 @@ export interface DreamQuotaStore {
     limit: number,
     count?: number,
   ): Promise<{ allowed: boolean; current: number }>;
+
+  // Spends one Studio health scan in the creator's hour bucket.
+  checkAndIncrementStudioHealthScans(
+    uid: string,
+    hour: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }>;
 }
 
 export class InMemoryDreamQuotaStore implements DreamQuotaStore {
   private globalDreams = new Map<string, number>();
+  private studioHealthScans = new Map<string, number>();
 
   async getGlobalDreamCount(dateStr: string): Promise<number> {
     return this.globalDreams.get(dateStr) ?? 0;
@@ -29,6 +37,18 @@ export class InMemoryDreamQuotaStore implements DreamQuotaStore {
     if (current + count > limit) return { allowed: false, current };
     this.globalDreams.set(dateStr, current + count);
     return { allowed: true, current: current + count };
+  }
+
+  async checkAndIncrementStudioHealthScans(
+    uid: string,
+    hour: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const key = `${uid}:${hour}`;
+    const current = this.studioHealthScans.get(key) ?? 0;
+    if (current >= limit) return { allowed: false, current };
+    this.studioHealthScans.set(key, current + 1);
+    return { allowed: true, current: current + 1 };
   }
 }
 
@@ -60,6 +80,22 @@ export class FirestoreDreamQuotaStore implements DreamQuotaStore {
       if (current + count > limit) return { allowed: false, current };
       transaction.set(ref, { dreams: current + count }, { merge: true });
       return { allowed: true, current: current + count };
+    });
+  }
+
+  // Beside the daily counters, so account erasure already removes it.
+  async checkAndIncrementStudioHealthScans(
+    uid: string,
+    hour: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.db.collection('usage').doc(uid).collection('counters').doc(`studio-health-${hour}`);
+    return await this.db.runTransaction(async (transaction) => {
+      const value = (await transaction.get(ref)).data()?.scans;
+      const current = typeof value === 'number' ? value : 0;
+      if (current >= limit) return { allowed: false, current };
+      transaction.set(ref, { scans: current + 1 }, { merge: true });
+      return { allowed: true, current: current + 1 };
     });
   }
 }
