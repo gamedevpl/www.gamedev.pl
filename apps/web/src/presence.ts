@@ -121,6 +121,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       // or a struggling connection turns into a pile-up aimed at the same endpoint.
       if (beating || cancelled) return;
       beating = true;
+      if (position) awaitingFirstHere = false;
       try {
         const snapshot = await beatPresence(slug!, position);
         if (snapshot) {
@@ -138,6 +139,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         announce(null);
       } finally {
         beating = false;
+        // A new document reported while the old beat was in flight.
+        if (awaitingFirstHere && position) void beat();
       }
     }
 
@@ -175,6 +178,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         helloAt = Date.now();
         engaged = true;
         awaitingFirstHere = true;
+        position = null;
         // The opening answer is a *read*, not a beat. A signed-out visitor gets the count
         // this way, and a signed-in one does not enter the roster until the game has had
         // a chance to say where it is — which stops everybody who opens a world game
@@ -199,7 +203,6 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         // leave a player invisible for twelve seconds after walking in, which is most of
         // the time anybody spends deciding whether a world feels inhabited.
         if (!joined || awaitingFirstHere) void beat();
-        awaitingFirstHere = false;
         return;
       }
 

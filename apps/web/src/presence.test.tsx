@@ -172,6 +172,29 @@ describe('usePresenceBridge', () => {
     expect(JSON.parse(calls('POST')[1][1].body as string)).toEqual({ col: 5, row: 6 });
   });
 
+  it('sends a swapped-in position once the old document beat settles', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    let release: (() => void) | null = null;
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && !release) await new Promise<void>((resolve) => (release = resolve));
+      return jsonResponse(roster);
+    });
+    const { fromGame } = mount();
+    fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    fromGame({ t: 'presence:here', col: 1, row: 1 });
+    await waitFor(() => expect(release).not.toBeNull());
+    now += 1_500;
+    fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(calls('GET')).toHaveLength(2));
+    fromGame({ t: 'presence:here', col: 8, row: 3 });
+    expect(calls('POST')).toHaveLength(1);
+    release!();
+    await waitFor(() => expect(calls('POST')).toHaveLength(2));
+    expect(JSON.parse(calls('POST')[1][1].body as string)).toEqual({ col: 8, row: 3 });
+  });
+
   it('never forwards a uid or any peer field the game did not ask for', async () => {
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
