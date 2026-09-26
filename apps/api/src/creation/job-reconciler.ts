@@ -166,7 +166,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     let observation;
     try {
       observation = await selected.observe(lastRef, {
-        hasCandidate: Boolean(record.deliveredVersion) || (record.roundDeliveryCount ?? 0) > 0,
+        hasCandidate: Boolean(record.deliveredVersion),
         // Pull-delivery backends harvest inside observe.
         jobId: record.jobId,
         ...(record.slug ? { slug: record.slug } : {}),
@@ -237,6 +237,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       if (!result) return null;
       // Stale: a handoff already dispatched a newer ref.
       if (fresh?.dispatch?.refs.at(-1) !== lastRef) return null;
+
+      // A preview proves delivery without sealing the round for review.
+      if (
+        result.reason === 'task_completed_without_delivery' &&
+        (fresh?.roundDeliveryCount ?? record.roundDeliveryCount ?? 0) > 0
+      ) {
+        return null;
+      }
 
       // Finished but uploaded nothing is the one failure worth answering.
 
