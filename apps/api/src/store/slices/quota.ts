@@ -377,6 +377,7 @@ export class FirestoreQuotaStore implements QuotaStore {
             ? patch.globalDailySubmissionCap
             : (existing.globalDailySubmissionCap ?? null),
         editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
+        remixTracePaused: patch.remixTracePaused ?? existing.remixTracePaused ?? false,
         globalDailyEditCap:
           patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
         chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,
