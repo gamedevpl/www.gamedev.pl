@@ -30,10 +30,6 @@ export async function registerEmailRoutes(app: FastifyInstance, options: EmailRo
     async (request, reply) => {
       const query = request.query as { token?: string; scope?: string };
       const token = query.token;
-      // The scope only ever *narrows* what the token already authorizes — a token good for
-      // "stop all email" is being used to ask for less than that — so it needs no signature
-      // of its own. Anything unrecognised falls back to the full unsubscribe, which is the
-      // safe direction for a link someone clicked to make mail stop.
       const digestOnly = query.scope === 'digest';
       if (!secret || !token) {
         return reply.type('text/html').status(400).send(page('Invalid link', 'This unsubscribe link is not valid.'));
@@ -41,7 +37,7 @@ export async function registerEmailRoutes(app: FastifyInstance, options: EmailRo
 
       let uid: string;
       try {
-        uid = verifyUnsubscribeToken(token, secret);
+        uid = verifyUnsubscribeToken(token, secret, digestOnly ? 'digest' : 'all');
       } catch (error) {
         if (error instanceof InvalidUnsubscribeTokenError) {
           return reply
