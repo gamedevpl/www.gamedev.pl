@@ -301,17 +301,22 @@ export class Zone {
    * not run the shell's copy, so this is the check that counts.
    */
   enqueue(slot: number, kind: string, value: unknown): boolean {
-    if (this.status !== 'live' || !this.seats.has(slot)) return false;
     if (this.pending.filter((event) => event.slot === slot).length >= MAX_PENDING_PER_SLOT) return false;
-
-    const valid = validateZoneInput(this.options.schema, kind, value);
+    const valid = this.touch(slot, kind, value);
     if (!valid) return false;
-    // Only accepted input counts; frames the vocabulary refused are not play.
-    this.lastActiveAt.set(slot, this.now());
     // The slot is attached here and nowhere else. A client never names its own, which is
     // what stops one player acting as another.
     this.pending.push(valid.v === undefined ? { slot, k: valid.k } : { slot, k: valid.k, v: valid.v });
     return true;
+  }
+
+  // Liveness without authority: a declared frame keeps the seat, queues nothing.
+  touch(slot: number, kind: string, value: unknown): ReturnType<typeof validateZoneInput> {
+    if (this.status !== 'live' || !this.seats.has(slot)) return null;
+    const valid = validateZoneInput(this.options.schema, kind, value);
+    // Only accepted input counts; frames the vocabulary refused are not play.
+    if (valid) this.lastActiveAt.set(slot, this.now());
+    return valid;
   }
 
   // Judgement only — the host owns sockets and does the hanging up.

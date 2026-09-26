@@ -63,7 +63,7 @@ often enough to name up front:
    URL to disk in-process (`fs.writeFileSync('shot.png',
 Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and
-   `curl --upload-file shot.png "$url"`. A black/blank
+   the returned `upload` one-liner. A black/blank
    frame means those WebGL flags were missing or the drawing buffer was already
    discarded. If SwiftShader is unavailable, `GAME_CAPTURE_GFX=canvas2d` or
    `?gfx=canvas2d` (force2d). There is no base64 screenshot tool — PNG bytes must

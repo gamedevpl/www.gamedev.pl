@@ -204,9 +204,9 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         'ALWAYS mint upload URLs in batch: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
         `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; split larger sets into batches of at most ${MAX_STAGE_UPLOAD_BATCH}; do NOT make individual parallel calls per file). Pass \`path\` only for a lone single file. ` +
         'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) verbatim ' +
-        '(curl -H "Content-Type: text/plain; charset=utf-8" --upload-file <file> "$url") or `uploadScript`. The file bytes never enter the model; the PUT applies the same ' +
+        '(curl -H "Authorization: Bearer <upload token>" -H "Content-Type: text/plain; charset=utf-8" --upload-file <file> "$url") or `uploadScript`; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same ' +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
-        'staging receipt with stop/pendingMessages. Then submit_sources({ fromStaged: true, … }). ' +
+        'staging receipt only — read stop/pendingMessages from your other channel tools. Then submit_sources({ fromStaged: true, … }). ' +
         'Use stage_source_file / patch_source_file when you have no shell. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -292,13 +292,13 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             now: issuedAt,
             ttlSeconds,
           });
-          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}?token=${encodeURIComponent(token)}`;
+          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
           return toolOk({
             url,
             expiresAt,
             expiresInSeconds: ttlSeconds,
             path,
-            upload: uploadCurlCommand(url, path, 'text/plain; charset=utf-8'),
+            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
             maxBytes: 1_000_000,
           });
         }
@@ -314,11 +314,11 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             now: issuedAt,
             ttlSeconds,
           });
-          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}?token=${encodeURIComponent(token)}`;
+          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
           return {
             path,
             url,
-            upload: uploadCurlCommand(url, path, 'text/plain; charset=utf-8'),
+            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
             expiresAt,
             expiresInSeconds: ttlSeconds,
             maxBytes: 1_000_000,

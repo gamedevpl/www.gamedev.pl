@@ -132,8 +132,8 @@ describe('agent-upload-token', () => {
   });
 
   it('builds a curl --upload-file one-liner carrying an explicit content type', () => {
-    expect(uploadCurlCommand("https://example.com/u?token=a'b", 'shot.png', 'image/png')).toBe(
-      "curl -H 'Content-Type: image/png' --upload-file shot.png 'https://example.com/u?token=a'\\''b'",
+    expect(uploadCurlCommand("https://example.com/u'b", "cap'b", 'shot.png', 'image/png')).toBe(
+      "curl -H 'Authorization: Bearer cap'\\''b' -H 'Content-Type: image/png' --upload-file shot.png 'https://example.com/u'\\''b'",
     );
   });
 });

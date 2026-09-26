@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// REMIX_DEBUG puts the player's words in the response and log.
+// REMIX_DEBUG puts the player's words in the operator log.
 
 // These pin the two directions, not whether the flag is on.
 
