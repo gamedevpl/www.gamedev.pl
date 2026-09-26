@@ -150,7 +150,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     await app.close();
   });
 
-  it('publishes when a preview round was later sealed into a delivery', async () => {
+  it('requires a fresh review when a preview round was later sealed into a delivery', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
     await store.setSubmissionPreviewVersion(1_000_001, 'v2');
     // A publish delivery advances both pointers together.
@@ -162,8 +162,8 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       headers: adminHeaders,
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(await store.getPublication('comet-courier')).toMatchObject({ currentVersion: 'v3' });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'editorial_pending', reviewers: 0 });
     await app.close();
   });
 
