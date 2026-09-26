@@ -30,7 +30,7 @@ import {
 } from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
-import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { hasPlayableHowToPlay, howToPlayShapeProblem } from '../platform/how-to-play.js';
 import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 import {
   canonicalizeUploadedSource,
@@ -188,10 +188,12 @@ export function validateSourceUpload(
   const hasIndexHtml = !!indexHtml?.content.trim();
 
   let hasHowToPlay = false;
+  let howToPlayProblem: string | null = null;
   if (gameJson) {
     try {
       const manifest = JSON.parse(gameJson.content) as { howToPlay?: unknown };
       hasHowToPlay = hasPlayableHowToPlay(manifest.howToPlay);
+      howToPlayProblem = howToPlayShapeProblem(manifest.howToPlay);
     } catch {
       // Unparseable GAME.json is reported elsewhere; it cannot supply markup.
     }
@@ -202,6 +204,9 @@ export function validateSourceUpload(
       'GAME.json.howToPlay is required — set goal and hint to non-empty {"en":"...","pl":"..."} objects. ' +
         'The platform generates the playable page; do not author index.html because fresh writes are unsupported.',
     );
+  }
+  if (!hasIndexHtml && howToPlayProblem) {
+    throw new InvalidUploadError(howToPlayProblem);
   }
   if (mode === 'preview' && gameJson) {
     try {

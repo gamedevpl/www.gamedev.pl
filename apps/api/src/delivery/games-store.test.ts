@@ -164,6 +164,16 @@ describe('validateSourceUpload — the delivery contract', () => {
       ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
+    it('names the control whose action the generated page would crash on', () => {
+      const howToPlay = { ...HOW_TO_PLAY, controls: [{ keys: 'Arrows', action: 'Steer' }] };
+      expect(() =>
+        validateSourceUpload([
+          ...MINIMAL_WITHOUT_GAME_JSON,
+          { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay }) },
+        ]),
+      ).toThrow(/howToPlay\.controls\[0\]\.action must be/);
+    });
+
     it('refuses a schema-only delivery whose GAME.json does not parse', () => {
       expect(() =>
         validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'GAME.json', content: '{"howToPlay": {' }]),

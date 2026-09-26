@@ -1,4 +1,5 @@
 import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
+import { howToPlayShapeProblem } from '../platform/how-to-play.js';
 
 // Shallow shape check — catches assemble.ts crashes before the gate does.
 
@@ -74,5 +75,5 @@ export function gameManifestHint(path: string, content: string): string | null {
     }
   }
 
-  return null;
+  return howToPlayShapeProblem(manifest.howToPlay);
 }
