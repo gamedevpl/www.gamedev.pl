@@ -7,7 +7,6 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { ShareRefusal } from '../delivery/draft-share-gate.js';
-import type { BuilderKind } from './builder.js';
 import { isPublished } from '../platform/publication-state.js';
 import { closeJob } from './close-job.js';
 
@@ -19,8 +18,7 @@ export interface DraftLifecycleRoutesOptions {
   submissionTokenSecret?: string;
   githubClient: GitHubClient | null;
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
-  backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
-  builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
+  backendForRecord: (record: SubmissionRecord) => Promise<AgentBackend | undefined>;
   releaseWorkspace: (
     jobId: number,
     workspace: string,
@@ -43,8 +41,7 @@ export async function registerDraftLifecycleRoutes(
     submissionTokenSecret,
     githubClient,
     checkUserAccess,
-    backendFor,
-    builderOf,
+    backendForRecord,
     releaseWorkspace,
     invalidateStatusCache,
     invalidatePublishedGameCaches,
@@ -141,7 +138,7 @@ export async function registerDraftLifecycleRoutes(
       }
 
       await closeJob(
-        { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache },
+        { store, now, backendForRecord, releaseWorkspace, invalidateStatusCache },
         { record, to: 'canceled', by: 'creator', reason: 'abandoned', log: request.log },
       );
 
