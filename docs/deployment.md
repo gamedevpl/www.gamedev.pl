@@ -712,8 +712,10 @@ npm run beta:invite:backfill -w @gamedevpl/api            # report only
 npm run beta:invite:backfill -w @gamedevpl/api -- --apply # write the rows
 ```
 
-It walks `betaInvites` where `status == 'claimed'`, takes email/name from the bound
-account, and skips claimants who are already approved.
+It walks `betaInvites` where `status == 'claimed'` and approves each claimant by UID.
+It copies name/locale from the bound account, removes any email on a pending row,
+and skips claimants who are already approved. Invite claims do not verify emails.
+The dry run lists only UIDs and invite IDs; `--apply` writes these UID-only approvals.
 
 ## Issuing agent access tokens
 

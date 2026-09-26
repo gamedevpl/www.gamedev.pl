@@ -87,6 +87,7 @@ const FILE_BUCKET = {
   'account-deletion-routes': 'platform',
   'submission-token': 'platform',
   'access-token': 'platform',
+  'beta-invite-backfill': 'platform',
   'access-token-routes': 'platform',
   'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
