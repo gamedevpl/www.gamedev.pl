@@ -184,10 +184,30 @@ describe('usePresenceBridge', () => {
     now += 900;
     fromGame({ t: 'presence:hello' });
     fromGame({ t: 'presence:here', col: 4, row: 7 });
+    await waitFor(() => expect(calls('GET')).toHaveLength(2), 200);
     await waitFor(() => expect(calls('POST')).toHaveLength(2));
     expect(JSON.parse(calls('POST')[1][1].body as string)).toEqual({ col: 4, row: 7 });
-    await waitFor(() => expect(calls('GET')).toHaveLength(2), 200);
     expect(toGame.at(-1)).toMatchObject({ t: 'presence:state', available: true });
+  });
+
+  it('grants at most one extra beat to hello/here ping-pong inside a window', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    fetchMock.mockResolvedValue(jsonResponse(roster));
+    const { fromGame } = mount();
+    fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    fromGame({ t: 'presence:here', col: 2, row: 2 });
+    await waitFor(() => expect(calls('POST')).toHaveLength(1));
+    now += 900;
+    for (let step = 0; step < 30; step++) {
+      fromGame({ t: 'presence:hello' });
+      fromGame({ t: 'presence:here', col: step, row: 1 });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    await waitFor(() => expect(calls('GET')).toHaveLength(2), 200);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(calls('POST')).toHaveLength(2);
   });
 
   it('sends a swapped-in position once the old document beat settles', async () => {

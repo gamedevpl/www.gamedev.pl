@@ -172,11 +172,14 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     async function openingRead() {
       helloTimer = null;
       helloAt = Date.now();
+      // Armed once per window, so hello/here ping-pong cannot spam beats.
+      awaitingFirstHere = true;
       try {
         announce(await fetchPresence(slug!));
       } catch {
         announce(null);
       }
+      if (awaitingFirstHere && position) void beat();
       schedule();
     }
 
@@ -188,7 +191,6 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (!message) return;
       if (message.t === 'presence:hello') {
         engaged = true;
-        awaitingFirstHere = true;
         position = null;
         const wait = helloAt + HELLO_MIN_INTERVAL_MS - Date.now();
         // A srcDoc swap keeps the window, so defer rather than drop.
