@@ -20,6 +20,7 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
+import { enforceDefineGamePreflight } from './define-game-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 import type { ContentChecker, RejectCategory } from '../platform/moderation.js';
 import { createDeliveryModerationGate } from './delivery-moderation.js';
@@ -389,6 +390,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         }
       };
 
+      await enforceDefineGamePreflight(input.files, () => emitRefusal('typecheck'));
       // Typecheck preflight uses the pinned kit; skip if unavailable.
       const engineRefForCheck = pinnedEngineRef ?? input.kitEngineRef;
       let typecheckBypass = Boolean(record.roundTypecheckPreflightBypassErrors);

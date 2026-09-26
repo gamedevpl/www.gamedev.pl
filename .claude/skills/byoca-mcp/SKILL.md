@@ -86,8 +86,13 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
    - Platform-managed rounds may start one automatic repair session after a red preview
      or publish gate. It receives the failed version and gate report, reads the delivered
-     sources, and submits again. The durable claim is tied to the latest version and round
-     generation. Self-build rounds are never dispatched this way.
+     sources, and submits again. The gate reconciler observes the original session at red
+     even when ordinary cost polling stopped, then dispatches as soon as it is settled.
+     The durable claim is tied to the latest version and round generation. Self-build rounds
+     are never dispatched this way. `GameKit.defineGame` errors in source or manifest
+     are refused by `submit_sources` before the gate and reported in stage hints when possible.
+     Fluent steps are tracked through local builder variables, assignments and aliases;
+     shadowed variables and callback declarations do not configure the outer builder.
    - **`preview_failed` / `red`:** do **not** stop at `stage_source_file` / `show_round`.
      Honour `warnings.code=must_fix_gate`, fix, then `submit_sources` again on the same
      key. Staging alone leaves the creator card on the refused delivery.

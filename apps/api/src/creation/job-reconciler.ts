@@ -9,6 +9,7 @@ import {
   type DeliveryGateStatus,
 } from '../platform/delivery-metrics.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { hasPendingGateRepair } from '../platform/gate-repair-sweep.js';
 import type { BuilderKind } from './builder.js';
 import { canTransition, reconcileAgentObservation, type JobState, type JobTransition } from './job-state.js';
 import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './session-crash.js';
@@ -130,11 +131,12 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     const costPending = (record.costs ?? []).some(
       (entry) => entry.kind === 'agent_session' && entry.ref === lastRef && !entry.creditsMeasured && !entry.tokens,
     );
+    const repairNeedsObservation = hasPendingGateRepair(record);
     // Observe lifecycle only while the agent's lifecycle is still the question.
 
     // Past the agent, a session is no longer authoritative for state.
     const agentActive = state === 'queued' || state === 'dispatched' || state === 'building';
-    if (!agentActive && !costPending) return null;
+    if (!agentActive && !costPending && !repairNeedsObservation) return null;
     const quietFrom = record.lastAgentSignalAt ?? record.stateSince ?? record.createdAt;
     const silence = now() - Date.parse(quietFrom);
     // A job whose branch we never learned is always asked about.
@@ -278,6 +280,13 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     }
   }
 
+  async function tryGateRepair(record: SubmissionRecord, version: string, report: string): Promise<boolean> {
+    if (!onGateRed || !store) return false;
+    const latest = await store.getSubmission(record.jobId);
+    if (latest && hasPendingGateRepair(latest)) await reconcileNativeJob(latest);
+    return onGateRed({ record, version, report });
+  }
+
   // Reads our own gate's verdict off the delivered version.
 
   // The gate runs in Cloud Build, writes to the manifest, and exits.
@@ -385,11 +394,11 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           }
         }
         if (!verdict.green) {
-          const repairing = await onGateRed?.({
+          const repairing = await tryGateRepair(
             record,
             version,
-            report: verdict.report ?? 'The publish gate rejected this delivery.',
-          });
+            verdict.report ?? 'The publish gate rejected this delivery.',
+          );
           if (repairing)
             return { to: 'dispatched', at: new Date(now()).toISOString(), by: 'reconciler', reason: 'gate_repair' };
         }
@@ -438,11 +447,11 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
         }
       }
-      const repairing = await onGateRed?.({
+      const repairing = await tryGateRepair(
         record,
         version,
-        report: preview.report ?? 'The preview gate rejected this delivery.',
-      });
+        preview.report ?? 'The preview gate rejected this delivery.',
+      );
       if (repairing)
         return { to: 'dispatched', at: new Date(now()).toISOString(), by: 'reconciler', reason: 'gate_repair' };
       return redPendingRepair ? null : transition;
