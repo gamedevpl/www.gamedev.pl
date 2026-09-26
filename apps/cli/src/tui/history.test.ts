@@ -57,11 +57,17 @@ it('isolates accounts, servers, and games and tolerates corrupt or oversized fil
 it('bounds stored history and strips terminal escapes and creator credentials', () => {
   const env = setup();
   const store = historyStore(env, 'origin', 'uid', 'game');
-  store.save({ lines: Array(300).fill('\x1b[31mhello gdpl_pat_secret'), prompts: Array(70).fill('test') });
+  const creatorKey = Buffer.from('c1.u.creator.1.1234567890.signature').toString('base64url');
+  store.save({
+    lines: Array(300).fill(`\x1b[31mhello gdpl_pat_secret Authorization: Bearer ${creatorKey}`),
+    prompts: Array(70).fill('test'),
+  });
   expect(store.load().lines).toHaveLength(200);
   expect(store.load().prompts).toHaveLength(50);
   const dir = join(env.HOME, '.config/gamedevpl/history');
   const raw = readFileSync(join(dir, readdirSync(dir)[0]!), 'utf8');
   expect(raw).not.toContain('gdpl_pat_secret');
+  expect(raw).not.toContain(creatorKey);
+  expect(store.load().lines.at(-1)).toContain('Authorization: Bearer [redacted]');
   expect(raw).toContain('[redacted]');
 });
