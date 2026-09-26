@@ -8,6 +8,7 @@ import {
   ModelGameSeeder,
   type SeedFile,
 } from './game-seed.js';
+
 import { registerSeedProvider } from './seed-provider.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
@@ -716,6 +717,33 @@ describe('ModelGameSeeder', () => {
     // The repair round is billed like the rounds before it.
     expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
     expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);
+  });
+
+  it('repairs manifest module order before publishing a seed preview', async () => {
+    const { client, prompts } = stubClientWithPrompts([
+      { text: '{"picks":["apex-sprint"]}' },
+      {
+        text:
+          GOOD_DRAFT + '\n--- games/my-game/GAME.json ---\n{"engine":{"modules":["effects","input","gfx","audio"]}}\n',
+      },
+      {
+        text: '--- games/my-game/GAME.json ---\n{"engine":{"modules":["input","gfx","effects","audio"]}}\n',
+      },
+    ]);
+    const seeder = new ModelGameSeeder({
+      context: stubContext(),
+      client,
+      bundleCheck: async () => ({ ok: true }),
+    });
+
+    const draft = await seeder.seed(request);
+
+    expect(draft?.repaired).toBe(true);
+    expect(draft?.compiles).toBe(true);
+    expect(prompts[2]).toContain('engine.modules must be unique and in canonical order');
+    expect(draft?.files.find((file) => file.path === 'GAME.json')?.content).toContain(
+      '["input","gfx","effects","audio"]',
+    );
   });
 
   it('keeps the seed with compiles=false when the repair does not take', async () => {

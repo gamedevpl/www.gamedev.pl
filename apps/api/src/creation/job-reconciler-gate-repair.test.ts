@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { createJobReconciler } from './job-reconciler.js';
+import type { AgentBackend } from '../agent-surface/agent-backend.js';
 
 const AT = '2026-09-24T12:00:00.000Z';
 
@@ -18,6 +19,7 @@ function setup(green: boolean) {
   const store = {
     setRoundLastGateMetricKey: vi.fn(async () => {}),
     recordJobTransition: vi.fn(async () => true),
+    getSubmission: vi.fn(async () => record),
   } as unknown as Store;
   const gamesStore = {
     getManifest: vi.fn(async () => ({
@@ -70,6 +72,55 @@ describe('gate repair reconciliation', () => {
     record.transitions = [{ to: 'needs_changes', at: AT, by: 'gate', reason: 'gate_red' }];
     const result = await reconciler.reconcileGateVerdict(record);
     expect(store.recordJobTransition).not.toHaveBeenCalled();
+    expect(onGateRed).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ to: 'dispatched', reason: 'gate_repair' });
+  });
+
+  it('observes a completed agent immediately after a red gate and makes repair eligible', async () => {
+    const { record, store } = setup(false);
+    record.dispatch = { backend: 'managed', refs: ['session-1'] } as SubmissionRecord['dispatch'];
+    record.costs = [{ kind: 'agent_session', at: AT, by: 'managed', ref: 'session-1', creditsMeasured: true }];
+    const observe = vi.fn(async () => ({ state: 'completed' as const }));
+    const setJobCostFinished = vi.fn(async () => {
+      const entry = record.costs?.[0];
+      if (entry) entry.finishedAt = AT;
+    });
+    Object.assign(store, {
+      recordJobTransition: vi.fn(
+        async (_jobId: number, transition: { to: SubmissionRecord['state']; reason: string }) => {
+          record.state = transition.to;
+          record.transitions = [{ to: 'needs_changes', at: AT, by: 'gate', reason: transition.reason }];
+          return true;
+        },
+      ),
+      setJobCostFinished,
+      setSubmissionAgentState: vi.fn(async () => {}),
+    });
+    const onGateRed = vi.fn(async () => Boolean(record.costs?.[0]?.finishedAt));
+    const reconciler = createJobReconciler({
+      store,
+      gamesStore: {
+        getManifest: vi.fn(async () => ({
+          roundGeneration: 2,
+          previewGate: { green: false, ranAt: AT, report: 'runtime error' },
+        })),
+      } as unknown as GamesStore,
+      log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+      now: () => Date.parse(AT),
+      observeQuietMs: 60_000,
+      maxDeliveryNudges: 1,
+      backendFor: async () => ({ observe }) as unknown as AgentBackend,
+      builderOf: () => 'platform',
+      releaseWorkspace: async () => {},
+      resumeBuild: async () => ({}),
+      acknowledgeBuilderHandoff: async () => ({ started: false }),
+      probeGateCrash: async () => null,
+      postGateScreenshot: async () => null,
+      onGateRed,
+    });
+    const result = await reconciler.reconcileGateVerdict(record);
+    expect(observe).toHaveBeenCalledOnce();
+    expect(setJobCostFinished).toHaveBeenCalledOnce();
     expect(onGateRed).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ to: 'dispatched', reason: 'gate_repair' });
   });

@@ -27,6 +27,7 @@ import type { TypeCheckResult } from './type-check.js';
 import { TYPECHECK_PREFLIGHT_BUDGET_MS } from './typecheck-preflight.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 import { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
+import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
 
 export { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
@@ -237,6 +238,27 @@ export function isUsableSeed(files: SeedFile[]): boolean {
   const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts'));
   const hasEditor = paths.has('EDITOR.json');
   return paths.has('game.ts') && paths.has('SPEC.md') && hasModule && hasEditor;
+}
+
+export function seedManifestError(files: SeedFile[]): string | null {
+  const content = files.find((file) => file.path === 'GAME.json')?.content;
+  if (!content) return null;
+  let modules: unknown;
+  try {
+    modules = (JSON.parse(content) as { engine?: { modules?: unknown } }).engine?.modules;
+  } catch {
+    return 'GAME.json: invalid JSON';
+  }
+  if (!Array.isArray(modules) || !modules.every((name) => typeof name === 'string')) {
+    return 'GAME.json: engine.modules must be an array of GameKit module names';
+  }
+  const unknown = modules.filter((name) => !(GAME_KIT_MODULES as readonly string[]).includes(name));
+  if (unknown.length) return `GAME.json: unknown engine modules ${JSON.stringify(unknown)}`;
+  const canonical = GAME_KIT_MODULES.filter((name) => modules.includes(name));
+  if (canonical.length !== modules.length || canonical.join(',') !== modules.join(',')) {
+    return `GAME.json: engine.modules must be unique and in canonical order ${JSON.stringify(canonical)}`;
+  }
+  return null;
 }
 
 function usageOf(result: GenerationResult, provider: string, fallbackModel: string): SeedUsage {
@@ -644,7 +666,7 @@ export class ModelGameSeeder implements GameSeeder {
           bundleCheck(slug, candidate),
           Promise.resolve(this.typeCheck(candidate, context.kitDeclaration)),
         ]);
-        return { bundleVerdict, typeCheckResult };
+        return { bundleVerdict, typeCheckResult, manifestError: seedManifestError(candidate) };
       };
 
       let checks = await checkDraft(files);
@@ -652,6 +674,7 @@ export class ModelGameSeeder implements GameSeeder {
       const validationErrors = () => [
         ...(checks.bundleVerdict.ok ? [] : checks.bundleVerdict.errors),
         ...(checks.typeCheckResult.verdict.ok ? [] : checks.typeCheckResult.verdict.errors),
+        ...(checks.manifestError ? [checks.manifestError] : []),
       ];
 
       if (validationErrors().length > 0) {
@@ -684,7 +707,7 @@ export class ModelGameSeeder implements GameSeeder {
         ...(parsed.notes ? { notes: parsed.notes } : {}),
         usage,
         elapsedMs: Date.now() - startedAt,
-        compiles: checks.bundleVerdict.ok,
+        compiles: checks.bundleVerdict.ok && !checks.manifestError,
         repaired,
         typeChecked: checks.typeCheckResult.checked,
         typeErrors,
