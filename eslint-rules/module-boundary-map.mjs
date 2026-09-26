@@ -282,6 +282,7 @@ const FILE_BUCKET = {
   'editor-assist': 'creation',
   'editor-contract': 'creation',
   'editor-draft-shape': 'creation',
+  'editor-draft-texts': 'creation',
   'editor-drafts': 'creation',
   remix: 'creation',
   'remix-access': 'creation',

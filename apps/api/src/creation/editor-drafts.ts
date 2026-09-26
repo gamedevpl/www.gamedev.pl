@@ -2,13 +2,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { draftShapeProblems } from './editor-draft-shape.js';
+import { textFields } from './editor-draft-texts.js';
 import { canActOnGame, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import {
   EDITOR_CONTENT_FILE,
   EDITOR_FILE,
   GENERATED_CONTENT_PATH,
-  LAYERS_KEY,
   PARAMS_KEY,
   generateEditorContentModule,
   parseEditorDefinition,
@@ -217,56 +217,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     return content;
   }
 
-  /** Every declared-text value in a content document, for moderation. */
-  function textFields(definition: EditorDefinition, content: Record<string, unknown>): string[] {
-    const texts: string[] = [];
-    if (definition.params) {
-      const values = content[PARAMS_KEY];
-      for (const [name, spec] of Object.entries(definition.params)) {
-        if (spec.type !== 'text' || !values || typeof values !== 'object') continue;
-        const value = (values as Record<string, unknown>)[name];
-        if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
-      }
-    }
-    for (const [key, spec] of Object.entries(definition.content)) {
-      const textProps = Object.entries(spec.item.properties)
-        .filter(([, propertySpec]) => propertySpec.type === 'text')
-        .map(([name]) => name);
-      if (textProps.length === 0) continue;
-      const items = content[key];
-      if (!Array.isArray(items)) continue;
-      for (const item of items) {
-        const properties = (item as { properties?: Record<string, unknown> } | null)?.properties;
-        if (!properties) continue;
-        for (const name of textProps) {
-          const value = properties[name];
-          if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
-        }
-      }
-    }
-    const layerValues = content[LAYERS_KEY];
-    if (definition.layers && layerValues && typeof layerValues === 'object' && !Array.isArray(layerValues)) {
-      for (const [key, spec] of Object.entries(definition.layers)) {
-        const textProps = Object.entries(spec.properties)
-          .filter(([, propertySpec]) => propertySpec.type === 'text')
-          .map(([name]) => name);
-        if (textProps.length === 0) continue;
-        const values = (layerValues as Record<string, unknown>)[key];
-        const items = spec.widget === 'entities' && Array.isArray(values) ? values : [values];
-        for (const item of items) {
-          const properties = (item as { properties?: Record<string, unknown> } | null)?.properties;
-          if (!properties) continue;
-          for (const name of textProps) {
-            const value = properties[name];
-            if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
-          }
-        }
-      }
-    }
-    return texts;
-  }
-
-  // Text saved once was moderated then; only new values pay.
+  // Autosave reuses stored text; publication rechecks every field.
   async function storedDraftTexts(
     uid: string,
     slug: string,
@@ -543,6 +494,21 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         return reply
           .status(429)
           .send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
+      }
+
+      // Stored drafts can predate the collector or moderation policy.
+      const publishTexts = textFields(resolved.definition, content);
+      if (publishTexts.length > 0 && options.contentChecker) {
+        const verdict = await options.contentChecker.checkFields(publishTexts);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'editor_draft',
+            uid: request.user?.uid,
+            category: verdict.category,
+            unavailable: verdict.unavailable,
+          });
+          return replyModerationBlock(reply, verdict, 'that text was rejected');
+        }
       }
 
       const gamesStore = options.gamesStore!;
