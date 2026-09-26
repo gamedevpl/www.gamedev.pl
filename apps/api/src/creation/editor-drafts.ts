@@ -485,6 +485,17 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
           .send({ error: "the draft no longer fits this game's content schema", problems: problems.slice(0, 20) });
       }
 
+      const last = lastPublishAt.get(slug) ?? 0;
+      const wait = last + PUBLISH_COOLDOWN_MS - now();
+      if (wait > 0) {
+        // A publish is a real gate run (Cloud Build, Chrome, ffmpeg). The
+        // cooldown is debounce, not a quota — drafts stay unmetered.
+        reply.header('retry-after', String(Math.ceil(wait / 1000)));
+        return reply
+          .status(429)
+          .send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
+      }
+
       // Stored drafts can predate the collector or moderation policy.
       const publishTexts = textFields(resolved.definition, content);
       if (publishTexts.length > 0 && options.contentChecker) {
@@ -498,17 +509,6 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
           });
           return replyModerationBlock(reply, verdict, 'that text was rejected');
         }
-      }
-
-      const last = lastPublishAt.get(slug) ?? 0;
-      const wait = last + PUBLISH_COOLDOWN_MS - now();
-      if (wait > 0) {
-        // A publish is a real gate run (Cloud Build, Chrome, ffmpeg). The
-        // cooldown is debounce, not a quota — drafts stay unmetered.
-        reply.header('retry-after', String(Math.ceil(wait / 1000)));
-        return reply
-          .status(429)
-          .send({ error: 'a publish is already checking — try again shortly', retryAfterMs: wait });
       }
 
       const gamesStore = options.gamesStore!;
