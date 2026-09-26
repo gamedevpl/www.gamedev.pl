@@ -126,7 +126,8 @@ so a later look can tell "judged this
 exact build" apart from "judged an older one." The **previous** assessment is archived,
 not overwritten — `GET /api/admin/assessments/history` reads it back — so the record of
 what a reviewer said the first time survives a second pass. `gameVersion` is informational
-only for the catalog (not tracked per-commit today). Creator queues and reviewer playback
+only for catalog entries without a creator candidate (not tracked per-commit today).
+Creator queues and reviewer playback
 are pinned to `previewVersion ?? deliveredVersion`; the API rejects missing or mismatched
 versions with 409. Publication counts only assessments matching its delivered candidate,
 so older or unversioned verdicts require another review.

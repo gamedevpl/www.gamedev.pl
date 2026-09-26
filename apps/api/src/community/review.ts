@@ -361,8 +361,7 @@ export async function registerReviewRoutes(
     }
 
     const candidate = await store.getSubmissionBySlug(body.data.slug);
-    const catalogGame = (await listCatalog()).some((entry) => entry.slug === body.data.slug);
-    const candidateVersion = catalogGame ? null : (candidate?.previewVersion ?? candidate?.deliveredVersion ?? null);
+    const candidateVersion = candidate?.previewVersion ?? candidate?.deliveredVersion ?? null;
     if (candidateVersion && body.data.gameVersion !== candidateVersion) {
       return reply.status(409).send({ error: 'review_version_changed' });
     }

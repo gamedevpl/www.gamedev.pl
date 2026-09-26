@@ -1,4 +1,5 @@
 import type { GamesStore } from '../delivery/games-store.js';
+import type { ReviewCatalogEntry } from './review-queue-cache.js';
 import { expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -30,13 +31,14 @@ it('binds a normal creator review to its queued candidate and excludes later del
     notifiedAt: null,
     notifiedCount: 0,
   });
+  let catalog: ReviewCatalogEntry[] = [];
   const secret = 'review-fixture-secret';
   const app = await buildApp({
     store,
     sessionSecret: secret,
     reviewerUids: 'g:reviewer',
     contentChecker: { check: async () => ({ allowed: true }), checkFields: async () => ({ allowed: true }) },
-    reviewRoutes: { listCatalog: async () => [] },
+    reviewRoutes: { listCatalog: async () => catalog },
     submissionRoutes: {
       agentChannel: {
         gamesStore: {
@@ -60,6 +62,7 @@ it('binds a normal creator review to its queued candidate and excludes later del
       (await app.inject({ method: 'GET', url: '/api/review/games/creator-game?version=v1', headers: owner }))
         .statusCode,
     ).toBe(404);
+    catalog = [{ slug: item.slug, title: 'Stale catalog entry', creatorHandle: null }];
     for (const invalid of [undefined, null, 'v0', 'v2']) {
       const rejected = await app.inject({
         method: 'POST',
