@@ -167,8 +167,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
       const message = parsePresenceMessage(event.data);
       if (!message) return;
-
       if (message.t === 'presence:hello') {
+        if (engaged) return;
         engaged = true;
         // The opening answer is a *read*, not a beat. A signed-out visitor gets the count
         // this way, and a signed-in one does not enter the roster until the game has had

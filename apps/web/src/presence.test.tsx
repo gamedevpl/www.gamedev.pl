@@ -131,9 +131,6 @@ describe('usePresenceBridge', () => {
   }
 
   it('answers a hello with a read, not a heartbeat', async () => {
-    // Reading is what a signed-out visitor gets, and it also means a signed-in player
-    // does not enter the roster before the game has said where they are — otherwise
-    // everybody who opens a world game appears at the origin tile for one poll.
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
 
@@ -145,6 +142,16 @@ describe('usePresenceBridge', () => {
     expect(calls('POST')).toHaveLength(0);
   });
 
+  it('coalesces repeated hello messages into one read', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(roster));
+    const { fromGame } = mount();
+    for (let attempt = 0; attempt < 75; attempt += 1) fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    expect(calls('GET')).toHaveLength(1);
+    fromGame({ t: 'presence:hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(calls('GET')).toHaveLength(1);
+  });
   it('never forwards a uid or any peer field the game did not ask for', async () => {
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
@@ -176,9 +183,6 @@ describe('usePresenceBridge', () => {
   });
 
   it('beats once when the game first says where it is', async () => {
-    // Waiting out a whole interval would leave a player invisible for twelve seconds
-    // after walking in, which is most of the time anybody spends deciding whether a
-    // world feels inhabited.
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
 
@@ -191,7 +195,6 @@ describe('usePresenceBridge', () => {
   });
 
   it('does not turn a flood of position reports into a flood of requests', async () => {
-    // The property the whole design exists for. Sixty `here()` calls, one heartbeat.
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
 
@@ -200,7 +203,6 @@ describe('usePresenceBridge', () => {
     for (let step = 0; step < 60; step++) fromGame({ t: 'presence:here', col: step % 15, row: 1 });
 
     await waitFor(() => expect(calls('POST')).toHaveLength(1));
-    // Give any stray timer a chance to fire before concluding there was only one.
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(calls('POST')).toHaveLength(1);
   });
@@ -214,8 +216,6 @@ describe('usePresenceBridge', () => {
     fromGame({ t: 'presence:here', col: 1, row: 1 });
     await waitFor(() => expect(toGame).toHaveLength(2));
 
-    // Walk on, then trigger the next beat the way coming back to the tab does, rather
-    // than sitting out a twelve-second interval.
     fromGame({ t: 'presence:here', col: 9, row: 8 });
     document.dispatchEvent(new Event('visibilitychange'));
 
