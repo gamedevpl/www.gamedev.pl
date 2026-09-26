@@ -58,8 +58,19 @@ describe('game preview CSP', () => {
     expect(withGamePreviewCsp(html).startsWith(META_PREFIX)).toBe(true);
   });
 
-  it('keeps comments that precede the doctype before it', () => {
-    const out = withGamePreviewCsp('\uFEFF<!-- built --> <!doctype html><p>hi</p>');
-    expect(out.startsWith(`\uFEFF<!-- built --> <!doctype html>${META_PREFIX}`)).toBe(true);
+  it('keeps comments and ASCII whitespace that precede the doctype before it', () => {
+    const out = withGamePreviewCsp('\t\r\n\f <!-- built --> <!doctype html><p>hi</p>');
+    expect(out.startsWith(`\t\r\n\f <!-- built --> <!doctype html>${META_PREFIX}`)).toBe(true);
+  });
+
+  it.each([
+    ['NBSP', '\u00A0'],
+    ['BOM, which srcdoc never strips', '\uFEFF'],
+    ['em space', '\u2003'],
+    ['line separator', '\u2028'],
+    ['vertical tab', '\v'],
+  ])('prepends when a leading %s would open the body first', (_, space) => {
+    const html = `${space}<!doctype html><script>fetch("x")</script>`;
+    expect(withGamePreviewCsp(html)).toBe(`${withGamePreviewCsp('')}${html}`);
   });
 });

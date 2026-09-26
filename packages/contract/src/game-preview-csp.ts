@@ -9,7 +9,8 @@ export const GAME_PREVIEW_CSP_HEADER = `sandbox allow-scripts allow-pointer-lock
 
 const GAME_PREVIEW_CSP_META = `<meta http-equiv="Content-Security-Policy" content="${GAME_PREVIEW_CSP}">`;
 
-const WHITESPACE = /\s/;
+// HTML's ASCII whitespace only; NBSP, BOM and the rest are text.
+const HTML_WHITESPACE = new Set(['\t', '\n', '\f', '\r', ' ']);
 
 // End of a safe leading doctype, or -1 to prepend; linear scan.
 function leadingDoctypeEnd(html: string): number {
@@ -17,7 +18,7 @@ function leadingDoctypeEnd(html: string): number {
   // Next `--!>`, which also closes a comment; searched forward only.
   let bang = html.indexOf('--!>');
   while (i < html.length) {
-    if (WHITESPACE.test(html[i])) {
+    if (HTML_WHITESPACE.has(html[i])) {
       i += 1;
     } else if (html.startsWith('<!--', i)) {
       // `<!-->` and `<!--->` are complete comments to the tokenizer.
