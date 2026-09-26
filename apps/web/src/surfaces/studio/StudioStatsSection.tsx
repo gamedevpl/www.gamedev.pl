@@ -23,7 +23,8 @@ export function StatsSection({
   game: StudioGame;
   health: GameHealth | null;
   days: number;
-  healthDays: string[];
+  // Null when the health read failed.
+  healthDays: string[] | null;
   truncated: boolean;
   scorecard: StudioScorecard | null;
   onDaysChange: (days: number) => void;
@@ -49,14 +50,15 @@ export function StatsSection({
         ))}
       </div>
 
-      {healthDays.length > 0 ? (
+      {healthDays === null ? <p className="health-note">{t('studioPanel.stats.unavailable')}</p> : null}
+      {healthDays && healthDays.length > 0 ? (
         <p className="studio-stats-range">
           {t('studioPanel.stats.range', { from: healthDays[healthDays.length - 1], to: healthDays[0] })}
         </p>
       ) : null}
       {truncated ? <p className="health-note">{t('studioPanel.stats.truncated')}</p> : null}
 
-      {!health || health.sessions === 0 ? (
+      {healthDays === null ? null : !health || health.sessions === 0 ? (
         <p className="studio-empty">{t('studioPanel.stats.empty')}</p>
       ) : (
         <ul className="funnel-stats">

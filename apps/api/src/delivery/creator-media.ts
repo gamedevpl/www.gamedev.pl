@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { GAME_PREVIEW_CSP_HEADER } from '@gamedevpl/contract';
 import { z } from 'zod';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { sendMedia } from '../platform/media-response.js';
@@ -133,12 +134,7 @@ export async function registerCreatorMediaRoutes(
         }
 
         return reply
-          .header(
-            'Content-Security-Policy',
-            "sandbox allow-scripts allow-pointer-lock; default-src 'none'; script-src 'unsafe-inline'; " +
-              "style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; " +
-              "connect-src 'none'; form-action 'none'; base-uri 'none'",
-          )
+          .header('Content-Security-Policy', GAME_PREVIEW_CSP_HEADER)
           .header('X-Content-Type-Options', 'nosniff')
           .header('Content-Disposition', 'inline')
           .header('Cache-Control', 'private, max-age=60')
