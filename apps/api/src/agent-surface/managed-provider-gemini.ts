@@ -186,8 +186,6 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
       const raw = await call('/interactions', { method: 'POST', body: JSON.stringify(body) });
       const parsed = InteractionSchema.safeParse(raw);
       if (!parsed.success) {
-        // Temporary: the generic message hides which shape actually broke it.
-        console.warn('gemini startSession unreadable interaction, raw response:', JSON.stringify(raw));
         throw new ManagedAgentError('gemini managed agents returned an unreadable interaction');
       }
       return toSession(parsed.data, model, !config.environmentId);
