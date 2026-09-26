@@ -11,15 +11,21 @@ const GAME_PREVIEW_CSP_META = `<meta http-equiv="Content-Security-Policy" conten
 
 const WHITESPACE = /\s/;
 
-// End of a leading doctype after whitespace, BOM and comments; linear scan.
+// End of a safe leading doctype, or -1 to prepend; linear scan.
 function leadingDoctypeEnd(html: string): number {
   let i = 0;
+  // Next `--!>`, which also closes a comment; searched forward only.
+  let bang = html.indexOf('--!>');
   while (i < html.length) {
     if (WHITESPACE.test(html[i])) {
       i += 1;
     } else if (html.startsWith('<!--', i)) {
+      // `<!-->` and `<!--->` are complete comments to the tokenizer.
+      if (html[i + 4] === '>' || html.startsWith('->', i + 4)) return -1;
       const close = html.indexOf('-->', i + 4);
       if (close < 0) return -1;
+      if (bang >= 0 && bang < i) bang = html.indexOf('--!>', i);
+      if (bang >= 0 && bang < close) return -1;
       i = close + 3;
     } else {
       break;
@@ -27,7 +33,11 @@ function leadingDoctypeEnd(html: string): number {
   }
   if (html.slice(i, i + 9).toLowerCase() !== '<!doctype') return -1;
   const end = html.indexOf('>', i + 9);
-  return end < 0 ? -1 : end + 1;
+  if (end < 0) return -1;
+  // A quoted identifier may hide the real `>`; prepend instead.
+  const doctype = html.slice(i, end);
+  if (doctype.includes('"') || doctype.includes("'")) return -1;
+  return end + 1;
 }
 
 // Puts the policy ahead of all of the document's own markup.

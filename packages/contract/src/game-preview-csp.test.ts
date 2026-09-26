@@ -41,6 +41,23 @@ describe('game preview CSP', () => {
     expect(closed.indexOf(META_PREFIX)).toBe('<!---->'.length * 100_000 + '<!doctype html>'.length);
   });
 
+  it.each([
+    ['double-quoted', '<!DOCTYPE html SYSTEM "a>"><script>fetch("x")</script>'],
+    ['single-quoted', "<!DOCTYPE html PUBLIC 'b>' 'c'><script>fetch('x')</script>"],
+    ['unterminated double', '<!DOCTYPE html SYSTEM "a><script>fetch("x")</script>'],
+    ['unterminated single', "<!DOCTYPE html SYSTEM 'a><script>fetch('x')</script>"],
+  ])('prepends when a %s doctype identifier could hide the real end', (_, html) => {
+    expect(withGamePreviewCsp(html)).toBe(`${withGamePreviewCsp('')}${html}`);
+  });
+
+  it.each([
+    ['<!-->', '<!--><script>fetch("x")</script><!-- --><!doctype html>'],
+    ['<!--->', '<!---><script>fetch("x")</script><!-- --><!doctype html>'],
+    ['--!>', '<!-- a --!><script>fetch("x")</script><!-- --><!doctype html>'],
+  ])('prepends when %s closes a comment early', (_, html) => {
+    expect(withGamePreviewCsp(html).startsWith(META_PREFIX)).toBe(true);
+  });
+
   it('keeps comments that precede the doctype before it', () => {
     const out = withGamePreviewCsp('\uFEFF<!-- built --> <!doctype html><p>hi</p>');
     expect(out.startsWith(`\uFEFF<!-- built --> <!doctype html>${META_PREFIX}`)).toBe(true);
