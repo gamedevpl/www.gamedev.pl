@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.22.1 — 2026-09-26
+
 ### Fixed
 
 - Local capture prevents WebRTC UDP and direct TCP traffic through a restricted browser proxy, while screenshots remain available (#1558).
