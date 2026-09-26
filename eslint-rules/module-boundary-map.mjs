@@ -327,6 +327,8 @@ const FILE_BUCKET = {
   'game-seed': 'creation',
   'seed-paths': 'creation',
   'session-crash': 'creation',
+  'session-crash-record': 'creation',
+  'observe-error-round-guard': 'creation',
   scorecard: 'creation',
   'scorecard-aggregate-log': 'creation',
   'knowledge-search': 'creation',

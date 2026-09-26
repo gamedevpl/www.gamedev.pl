@@ -1,10 +1,11 @@
-import { isActiveBuildRound, nextRoundGeneration, resolveJobState } from '../../creation/job-state.js';
+import { isActiveBuildRound, nextRoundGeneration, resolveJobState, type JobState } from '../../creation/job-state.js';
 import type { SubmissionRecord } from '../records/submission.js';
 import { lastRoundActivityAt } from '../../platform/quiet-round.js';
 
 // A transition is refused unless every field given still matches the record.
 export interface TransitionGuard {
   // The round's newest activity stamp.
+  state?: JobState;
   activityAt?: number;
   roundGeneration?: number;
   // The latest dispatch ref, so a replacement round is never closed.
@@ -12,6 +13,7 @@ export interface TransitionGuard {
 }
 
 export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boolean {
+  if (guard.state !== undefined && (sub.state ?? 'queued') !== guard.state) return false;
   if (guard.activityAt !== undefined && lastRoundActivityAt(sub) !== guard.activityAt) return false;
   if (guard.roundGeneration !== undefined && (sub.roundGeneration ?? 1) !== guard.roundGeneration) return false;
   return guard.dispatchRef === undefined || sub.dispatch?.refs.at(-1) === guard.dispatchRef;

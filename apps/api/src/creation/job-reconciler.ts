@@ -13,7 +13,8 @@ import {
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { hasPendingGateRepair } from '../platform/gate-repair-sweep.js';
 import { canTransition, reconcileAgentObservation, type JobState, type JobTransition } from './job-state.js';
-import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './session-crash.js';
+import { clearObserveFailures, noteObserveFailure } from './session-crash.js';
+import { recordSessionCrash } from './session-crash-record.js';
 
 // A logger, narrowed to what the reconcilers actually call on it.
 interface ReconcilerLog {
@@ -176,10 +177,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     } catch (error) {
       log.error({ err: error, jobId: record.jobId }, 'agent observation failed');
       if (!noteObserveFailure(lastRef)) return null;
-      const transition = sessionCrashTransition(state, now);
-      if (!transition) return null;
-      const recorded = await store.recordJobTransition(record.jobId, transition);
-      return recorded ? transition : null;
+      return recordSessionCrash(store, record, lastRef, now);
     }
     try {
       if (!observation) return null;
