@@ -1,5 +1,5 @@
 import { registerReviewPlay, type CreatorReviewPreviewLoader } from './review-play.js';
-import { loadReviewCandidate } from './review-candidate.js';
+import { loadReviewCandidate, refreshReviewCandidates } from './review-candidate.js';
 import {
   ASSESSMENT_CHECKLIST_MARKS,
   ASSESSMENT_INPUT_METHODS,
@@ -215,7 +215,7 @@ export async function registerReviewRoutes(
     const uid = request.user!.uid;
     // One row per slug per reviewer, so size is the count.
     const done = await assessedSlugsFor(uid);
-    const { items: targeted } = await targetedQueueItems(uid, sourceFilter);
+    const targeted = await refreshReviewCandidates(store, (await targetedQueueItems(uid, sourceFilter)).items);
 
     const open = await openReviewSweep();
     if (!open || open.status === 'paused') {
@@ -240,7 +240,7 @@ export async function registerReviewRoutes(
     const pool = await collectPool(open.source);
     const bySlug = new Map(pool.map((item) => [item.slug, item]));
 
-    const items: ReviewQueueItem[] = [];
+    let items: ReviewQueueItem[] = [];
     const seen = new Set<string>();
     for (const slug of open.slugs) {
       if (!unlocked.has(slug) || done.has(slug)) continue;
@@ -258,6 +258,7 @@ export async function registerReviewRoutes(
       seen.add(item.slug);
     }
 
+    items = await refreshReviewCandidates(store, items);
     return {
       source: sourceFilter,
       remaining: items.length,

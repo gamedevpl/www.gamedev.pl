@@ -1,3 +1,4 @@
+import type { ReviewQueueItem } from './review-queue-cache.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 
 export function isReviewableCreatorDraft(record: SubmissionRecord): boolean {
@@ -14,5 +15,22 @@ export function reviewableCreatorDrafts(records: SubmissionRecord[]): Submission
 
 export async function loadReviewCandidate(store: Store, slug: string): Promise<SubmissionRecord | null> {
   const siblings = await store.listSubmissionsBySlug(slug);
-  return reviewableCreatorDrafts(siblings)[0] ?? siblings.find((record) => !record.abandonedAt) ?? null;
+  return reviewableCreatorDrafts(siblings)[0] ?? null;
+}
+
+export async function refreshReviewCandidates(store: Store, items: ReviewQueueItem[]): Promise<ReviewQueueItem[]> {
+  const refreshed = await Promise.all(
+    items.map(async (item) => {
+      if (item.source !== 'creator') return item;
+      const candidate = await loadReviewCandidate(store, item.slug);
+      return candidate
+        ? {
+            ...item,
+            jobId: candidate.jobId,
+            gameVersion: candidate.previewVersion ?? candidate.deliveredVersion ?? null,
+          }
+        : null;
+    }),
+  );
+  return refreshed.filter((item): item is ReviewQueueItem => item !== null);
 }

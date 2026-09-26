@@ -51,6 +51,7 @@ const FILE_BUCKET = {
   'review-preview-loader': 'platform',
   'review-play': 'community',
   'review-candidate': 'community',
+  'review-candidate-refresh': 'community',
   'review-game-source': 'community',
   'review-version-binding': 'community',
   'review-version-roundtrip': 'community',
