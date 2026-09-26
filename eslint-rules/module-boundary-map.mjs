@@ -352,6 +352,7 @@ const FILE_BUCKET = {
   'agent-channel-gate-media': 'agent-surface',
   'mcp-server': 'agent-surface',
   'mcp-presence-capability': 'agent-surface',
+  'round-generation-guard': 'agent-surface',
   'mcp-session-shape': 'agent-surface',
   'agent-knowledge-warning': 'agent-surface',
   'mcp-tool-support': 'agent-surface',

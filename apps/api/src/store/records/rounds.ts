@@ -9,3 +9,9 @@ export interface BuilderHandoff {
 }
 
 export type AgentEndedBy = 'submit' | 'end';
+
+// A closed round's generation and the delivery its gate judged.
+export interface ReceiptRound {
+  generation: number;
+  version?: string;
+}

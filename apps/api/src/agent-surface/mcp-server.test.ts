@@ -3,12 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  classifyAgentTokenAccess,
-  mintAgentToken,
-  mintManagedMcpOpener,
-  STALE_AGENT_TOKEN_REASON,
-} from '../platform/agent-token.js';
+import { mintAgentToken, mintManagedMcpOpener, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { DREAM_FRAME_SHOT_LABEL } from '../platform/dream-shots.js';
 import { buildApp } from '../platform/app.js';
@@ -378,22 +373,6 @@ async function callTool(
 
   return { res, structured, isError };
 }
-
-describe('classifyAgentTokenAccess (terminal receipt)', () => {
-  it('returns terminal_receipt when generation is exactly one behind', () => {
-    const now = Date.now();
-    const token = mintAgentToken(1, secret, { roundGeneration: 1, now, ttlDays: 14 });
-    const claims = {
-      jobId: 1,
-      roundGeneration: 1,
-      exp: Math.floor(now / 1000) + 14 * 24 * 60 * 60,
-    };
-    expect(classifyAgentTokenAccess(claims, { roundGeneration: 2 }, now)).toBe('terminal_receipt');
-    expect(classifyAgentTokenAccess(claims, { roundGeneration: 1 }, now)).toBe('active');
-    expect(() => classifyAgentTokenAccess(claims, { roundGeneration: 3 }, now)).toThrow(STALE_AGENT_TOKEN_REASON);
-    void token;
-  });
-});
 
 describe('POST /api/mcp (BY-05)', () => {
   let app: FastifyInstance | null = null;
