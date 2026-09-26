@@ -205,9 +205,9 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         }
       }
       // Persist vendor state even when the job does not move.
-      if (observation.state !== record.agentState) {
+      if (observation.state !== record.agentState || lastRef !== record.agentStateRef) {
         try {
-          await store.setSubmissionAgentState(record.jobId, observation.state);
+          await store.setSubmissionAgentState(record.jobId, observation.state, lastRef);
         } catch (error) {
           log.error({ err: error, jobId: record.jobId }, 'could not store agent task state');
         }
@@ -431,7 +431,9 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         if (!sealable || !canTransition(state, 'ready_for_review')) return null;
         const at = new Date(now()).toISOString();
         const transition: JobTransition = { to: 'ready_for_review', at, by: 'gate', reason: 'preview_gate_green' };
-        if (!(await store.recordJobTransition(record.jobId, transition))) return null;
+        // Guarded: a handoff may have opened a newer round since this read.
+        const guard = { roundGeneration: record.roundGeneration ?? 1, dispatchRef: record.dispatch?.refs.at(-1) };
+        if (!(await store.recordJobTransition(record.jobId, transition, guard))) return null;
         // Same as the publish path: the closed round resumes a pending handoff.
         if (record.builderHandoff?.awaitsAgentAck) {
           await acknowledgeBuilderHandoff({ jobId: record.jobId, acknowledgedAt: at, log }).catch((error) => {

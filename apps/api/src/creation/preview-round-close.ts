@@ -6,9 +6,11 @@ import type { SubmissionRecord } from '../platform/store.js';
 export function currentSessionFinished(record: SubmissionRecord): boolean {
   const lastRef = record.dispatch?.refs.at(-1);
   if (!lastRef) return false;
-  // agentState outlives rounds; the per-ref cost stamp does not.
+  // The per-ref cost stamp, or a state observed for this ref.
   const session = record.costs?.find((entry) => entry.kind === 'agent_session' && entry.ref === lastRef);
-  if (session?.state === 'completed') return true;
-  // end() markers are round-scoped; the provider may still say idle.
-  return record.agentState === 'idle' && Boolean(record.agentEndedAt) && record.agentEndedBy !== 'submit';
+  const observedHere = record.agentStateRef === lastRef && record.agentState === 'completed';
+  if (session?.state === 'completed' || observedHere) return true;
+  // An explicit end() this round; self takeovers also stamp one.
+  if (record.dispatch?.backend === 'self') return false;
+  return Boolean(record.agentEndedAt) && record.agentEndedBy !== 'submit';
 }

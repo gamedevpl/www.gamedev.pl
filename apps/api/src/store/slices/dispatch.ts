@@ -1,5 +1,4 @@
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
-import { lastRoundActivityAt } from '../../platform/quiet-round.js';
 import {
   nextRoundGeneration,
   transitionClosesRound,
@@ -16,12 +15,9 @@ import {
   type JobCostEntry,
 } from '../records/dispatch.js';
 import type { SubmissionRecord } from '../records/submission.js';
-import { clearRoundSignals, stampReceiptRound } from './round-close.js';
+import { clearRoundSignals, guardHolds, stampReceiptRound, type TransitionGuard } from './round-close.js';
 
-// Refused unless the round's newest activity stamp still equals `activityAt`.
-export interface TransitionGuard {
-  activityAt: number;
-}
+export type { TransitionGuard } from './round-close.js';
 
 export interface DispatchStore {
   // Moves a job to transition.to, stamping stateSince and appending to history.
@@ -74,7 +70,7 @@ export class InMemoryDispatchStore implements DispatchStore {
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     const sub = this.submissions.get(jobId);
     if (!sub) return false;
-    if (guard && lastRoundActivityAt(sub) !== guard.activityAt) return false;
+    if (guard && !guardHolds(sub, guard)) return false;
     // Idempotent for identical arrivals; a new reason wins only for the operator.
     if (sub.state === transition.to) {
       const last = sub.transitions?.at(-1);
@@ -232,7 +228,7 @@ export class FirestoreDispatchStore implements DispatchStore {
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
       // Compared inside the transaction: the claim is what makes a close safe.
-      if (guard && lastRoundActivityAt(current) !== guard.activityAt) return false;
+      if (guard && !guardHolds(current, guard)) return false;
       // Same race as InMemoryDispatchStore -- a new reason wins only for the operator.
       if (current.state === transition.to) {
         const last = current.transitions?.at(-1);

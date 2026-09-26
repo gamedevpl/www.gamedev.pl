@@ -2,18 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { sealRefusal } from '../platform/seal-preview.js';
-import { InMemoryStore } from '../platform/store.js';
+import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
+import { fakeFirestore } from '../store/fake-firestore.js';
 import { createJobReconciler } from './job-reconciler.js';
 
 const AT = '2026-09-26T12:00:00.000Z';
 type AgentState = 'in_progress' | 'completed' | 'idle';
 
-async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0) {
+async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0, ledger = true) {
   const store = new InMemoryStore();
   await store.createSubmission(9, 'g:owner', 'Preview game');
   await store.setSubmissionSlug(9, 'preview-game');
   await store.recordDispatch(9, { backend: 'managed', ref: 'session-1', workspace: 'ws-1' });
-  await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-1', credits: 1 });
+  if (ledger)
+    await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-1', credits: 1 });
   await store.recordJobTransition(9, { to: 'building', at: AT, by: 'agent', reason: 'task_in_progress' });
   await store.setSubmissionPreviewVersion(9, 'v1');
   await store.incrementRoundDeliveryCount(9);
@@ -50,7 +52,7 @@ async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0)
     const record = (await store.getSubmission(9))!;
     return (await reconciler.reconcileNativeJob(record)) ?? (await reconciler.reconcileGateVerdict(record));
   };
-  return { store, agent, gate, observe, resumeBuild, acknowledgeBuilderHandoff, poll };
+  return { store, agent, gate, observe, resumeBuild, acknowledgeBuilderHandoff, poll, reconciler };
 }
 
 describe('a finished session that delivered only a preview', () => {
@@ -116,7 +118,7 @@ describe('a finished session that delivered only a preview', () => {
 
   it('ignores a completed state left by the previous round', async () => {
     const { store, poll } = await setup({ green: true }, 60 * 60_000);
-    await store.setSubmissionAgentState(9, 'completed');
+    await store.setSubmissionAgentState(9, 'completed', 'session-1');
     await store.recordDispatch(9, { backend: 'managed', ref: 'session-2' });
     await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-2', credits: 1 });
     await poll();
@@ -130,5 +132,46 @@ describe('a finished session that delivered only a preview', () => {
     await poll();
     expect((await store.getSubmission(9))?.state).toBe('ready_for_review');
     expect(acknowledgeBuilderHandoff).toHaveBeenCalledWith(expect.objectContaining({ jobId: 9 }));
+  });
+
+  it('does not close a replacement round opened after the read', async () => {
+    const { store, reconciler } = await setup({ green: true }, 60 * 60_000);
+    await store.setJobCostFinished(9, 'session-1', AT, 'completed');
+    const evaluated = (await store.getSubmission(9))!;
+    await store.bumpRoundGeneration(9);
+    await store.recordDispatch(9, { backend: 'managed', ref: 'session-2' });
+    expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it('seals up when the cost ledger entry was never written', async () => {
+    const { store, poll } = await setup({ green: true }, 0, false);
+    await poll();
+    await poll();
+    expect((await store.getSubmission(9))?.agentStateRef).toBe('session-1');
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('honours an explicit end marker whatever the provider reports', async () => {
+    const { store, agent, poll } = await setup({ green: true }, 0, false);
+    agent.state = 'in_progress';
+    await store.markAgentEnded(9, AT, 'end');
+    await poll();
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+});
+
+describe.each<[string, () => Store]>([
+  ['InMemoryStore', () => new InMemoryStore()],
+  ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
+])('%s round-scoped transition guard', (_name, makeStore) => {
+  it('refuses a close for another generation or dispatch ref', async () => {
+    const store = makeStore();
+    await store.createSubmission(4, 'g:owner', 'Guarded');
+    await store.recordDispatch(4, { backend: 'managed', ref: 'session-2' });
+    const close = { to: 'ready_for_review' as const, at: AT, by: 'gate' as const, reason: 'preview_gate_green' };
+    expect(await store.recordJobTransition(4, close, { dispatchRef: 'session-1' })).toBe(false);
+    expect(await store.recordJobTransition(4, close, { roundGeneration: 7 })).toBe(false);
+    expect(await store.recordJobTransition(4, close, { roundGeneration: 1, dispatchRef: 'session-2' })).toBe(true);
   });
 });
