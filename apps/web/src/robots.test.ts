@@ -42,6 +42,7 @@ describe('robots.txt', () => {
   it.each([
     '/status/MTAwMDE2NS45MDhiNzQxMmZl',
     '/draft/some-game',
+    '/invite',
     '/invite/0123456789abcdef0123456789abcdef',
     '/join/AB12CD',
     '/studio',
