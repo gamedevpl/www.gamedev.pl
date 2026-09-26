@@ -44,10 +44,13 @@ describe('unifiedDiff', () => {
 
   it('strips terminal controls from patch lines', () => {
     const esc = '\u001b';
-    const patch = unifiedDiff('game.ts', 'ok\n', `ok${esc}[2J${esc}]0;title\u0007\n`).join('\n');
+    const controls = `${esc}[2J${esc}]0;title\u0007\r\u009b31m\u009dtitle\u009c`;
+    const patch = unifiedDiff('game.ts', 'ok\n', `ok${controls}\n`).join('\n');
     expect(patch).toContain('+ok');
     expect(patch).not.toContain(esc);
     expect(patch).not.toContain('\u0007');
+    expect(patch).not.toContain('\r');
+    expect(patch).not.toMatch(/[\u0080-\u009f]/u);
   });
 
   it('does not dump a binary or a huge file', () => {

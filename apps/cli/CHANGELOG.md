@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- `gamedevpl diff` strips carriage returns and C1 terminal controls so hostile source cannot disguise patch lines (#1519).
+
 ### Internal
 
 - `genaicode` is bumped to 2.5.3 in the CLI and API; it drops `temperature` for Luna models itself (#1515).
