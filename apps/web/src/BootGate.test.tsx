@@ -43,7 +43,7 @@ describe('BootGate', () => {
   });
 
   it('carries the code through on an invite link', async () => {
-    const { text, root } = await renderAt(`/invite/${INVITE_CODE}`);
+    const { text, root } = await renderAt('/invite', `#${INVITE_CODE}`);
     expect(text).toBe(`splash:${INVITE_CODE}`);
     root.unmount();
   });
@@ -118,4 +118,3 @@ describe('BootGate, once the wall does not apply', () => {
     root.unmount();
   });
 });
-

@@ -251,9 +251,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'party' };
   }
 
-  const inviteMatch = normalizedPath.match(/^\/invite\/([^/]+)$/);
-  if (inviteMatch?.[1]) {
-    const code = decodeSegment(inviteMatch[1]);
+  const inviteCode = normalizedPath === '/invite' ? fragment : normalizedPath.match(/^\/invite\/([^/]+)$/)?.[1];
+  if (inviteCode !== undefined) {
+    const code = decodeSegment(inviteCode);
     if (code && BETA_INVITE_CODE_PATTERN.test(code)) {
       return { view: 'invite', code };
     }
@@ -601,7 +601,7 @@ export function joinPath(code: string, token: string): string {
 }
 
 export function betaInvitePath(code: string): string {
-  return `/invite/${encodeURIComponent(code)}`;
+  return `/invite#${encodeURIComponent(code)}`;
 }
 
 /**
