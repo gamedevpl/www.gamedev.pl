@@ -58,7 +58,8 @@ export function DetailsPanel({
   mediaToken?: string;
   health: GameHealth | null;
   days: number;
-  healthDays: string[];
+  // Null when the health read failed.
+  healthDays: string[] | null;
   truncated: boolean;
   scorecard: StudioScorecard | null;
   pane: DetailsPaneId;

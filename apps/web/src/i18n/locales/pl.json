@@ -766,6 +766,7 @@
       "noSlug": "Statystyki pojawią się, gdy gra otrzyma slug roboczy lub publikacyjny.",
       "range": "Zmierzone {{from}} → {{to}}",
       "truncated": "Dzień osiągnął limit odczytów — te liczby to dolna granica, nie suma.",
+      "unavailable": "Statystyki gry są teraz niedostępne. Spróbuj ponownie za chwilę.",
       "empty": "Brak sesji w tym oknie.",
       "sessions": "Sesje",
       "bounces": "Odejścia",

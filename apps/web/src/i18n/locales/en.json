@@ -756,6 +756,7 @@
       "noSlug": "Stats appear once this game has a draft or published slug.",
       "range": "Measured {{from}} → {{to}}",
       "truncated": "A day hit the read cap, so these counts are a floor rather than a total.",
+      "unavailable": "Play stats are unavailable right now. Try again in a little while.",
       "empty": "No play sessions in this window yet.",
       "sessions": "Sessions",
       "bounces": "Bounces",
