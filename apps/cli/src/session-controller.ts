@@ -31,6 +31,7 @@ export type SessionController = {
   get: () => SessionState;
   subscribe: (fn: (state: SessionState) => void) => () => void;
   writeLine: (text: string) => void;
+  setPreview: (url: string) => void;
   clearPreview: () => void;
   setLive: (live: string[]) => void;
   setLocalTask: (agent: string) => void;
@@ -242,14 +243,16 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     },
     writeLine(text) {
       savedLines = [...savedLines, ...text.split('\n')].slice(-200);
-      const preview = /^(?:local live preview|live preview while .* edits): (https?:\/\/\S+)/m.exec(text)?.[1];
-      const previewStopped = /^(?:local preview stopped|no local preview is running)$/m.test(text);
       state = {
         ...state,
         lines: [...state.lines, ...text.split('\n')],
         lastOutputAt: Date.now(),
-        previewUrl: previewStopped ? '' : (preview ?? state.previewUrl),
       };
+      emit();
+    },
+    setPreview(previewUrl) {
+      if (state.previewUrl === previewUrl) return;
+      state = { ...state, previewUrl };
       emit();
     },
     clearPreview() {

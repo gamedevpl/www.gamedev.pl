@@ -70,6 +70,7 @@ const FILE_BUCKET = {
   'capture-network-policy': 'platform',
   'capture-profile-setup': 'platform',
   'capture-network-isolation': 'platform',
+  'preview-registration-trust': 'platform',
   'oauth-page-chrome': 'platform',
   'oauth-pkce': 'platform',
   'oauth-redirect': 'platform',
