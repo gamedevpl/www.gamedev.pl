@@ -142,7 +142,7 @@ export async function handleCreatorFeedback(
   const dateStr = new Date(currentTime).toISOString().slice(0, 10);
 
   // Per-IP limit and a free quota read, ahead of the classifier.
-  if (isRateLimited(feedbackByIp, request.ip, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
+  if (isRateLimited(feedbackByIp, request.clientIp, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
     return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
   }
 
@@ -249,7 +249,7 @@ export async function handleCreatorFeedback(
       scope: 'draft',
       record,
       locale: creatorLocale,
-      ip: request.ip,
+      ip: request.clientIp,
       uid: request.user!.uid,
       images: referenceImages,
     });

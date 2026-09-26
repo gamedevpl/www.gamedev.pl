@@ -137,9 +137,7 @@ export async function registerGamePlayRoute(
         return reply.status(422).send({ error: 'this game could not be served' });
       }
       request.log.error({ err: error, slug }, 'failed to serve game');
-      // Short, non-sensitive detail — diagnosable without scraping Cloud Run logs.
-      const detail = error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 240) : 'unknown error';
-      return reply.status(502).send({ error: 'failed to load game', detail });
+      return reply.status(502).send({ error: 'failed to load game' });
     }
   });
 

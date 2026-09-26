@@ -590,7 +590,6 @@ export async function registerSubmissionRoutes(
     const vendor = await managedAvailabilityGate?.resolveVendor();
     return resolveBuilderBackend(agentBackends, resolvedBuilder, vendor);
   }
-
   function backendByStoredName(name: string | undefined): AgentBackend | undefined {
     if (!name) return undefined;
     if (agentBackends.self.name === name) return agentBackends.self;
@@ -599,7 +598,9 @@ export async function registerSubmissionRoutes(
     }
     return undefined;
   }
-
+  async function backendForRecord(record: SubmissionRecord): Promise<AgentBackend | undefined> {
+    return backendByStoredName(record.dispatch?.backend) ?? (await backendFor(builderOf(record)));
+  }
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
     return record?.builder ?? record?.defaultBuilder ?? 'platform';
   }
@@ -1313,8 +1314,7 @@ export async function registerSubmissionRoutes(
     submissionTokenSecret,
     githubClient,
     checkUserAccess,
-    backendFor,
-    builderOf,
+    backendForRecord,
     releaseWorkspace,
     invalidateStatusCache,
     invalidatePublishedGameCaches,
@@ -1364,8 +1364,7 @@ export async function registerSubmissionRoutes(
     now,
     observeQuietMs,
     maxDeliveryNudges,
-    backendFor,
-    builderOf,
+    backendForRecord,
     releaseWorkspace,
     resumeBuild,
     acknowledgeBuilderHandoff,
@@ -1704,7 +1703,7 @@ export async function registerSubmissionRoutes(
     // `stopEnforced: false` is the console's cue to say "told to stop", not "stopped":
     // Copilot has no kill switch, so there the terminal state is the cancellation.
     const { stopEnforced } = await closeJob(
-      { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache },
+      { store, now, backendForRecord, releaseWorkspace, invalidateStatusCache },
       { record, to: 'canceled', by: 'operator', reason: 'operator_canceled', log: request.log },
     );
 
@@ -1815,7 +1814,7 @@ export async function registerSubmissionRoutes(
     adminUids,
     now,
     builderOf,
-    backendFor,
+    backendForRecord,
     releaseWorkspace,
     invalidateStatusCache,
     acknowledgeBuilderHandoff,

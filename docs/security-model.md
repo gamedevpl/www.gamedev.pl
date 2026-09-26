@@ -156,9 +156,9 @@ consent and device pages, the CLI page — additionally carry:
   views travel inside the MCP protocol, not as HTTP documents, so they are unaffected and
   need no exemption.
 - `Permissions-Policy` switching off only what the product never uses (geolocation, payment,
-  USB, display capture). Microphone, camera and motion sensors are deliberately not named:
-  the shell owns the first two and delegates the sensors to the game frame via `allow=`, and
-  naming them in the header would change how that delegation resolves for the opaque origin.
+  USB, display capture). Microphone, camera and motion sensors are deliberately not named
+  because the trusted shell uses them on its own origin. It relays only bounded, structured
+  results to games; the opaque-origin game iframe receives no delegated browser capabilities.
 - `Content-Security-Policy-Report-Only`, the app-level policy, observed rather than enforced.
   Violations are posted to `/api/csp-report` (public through the beta wall, IP-rate-limited)
   and logged at warn level. `APP_CSP_REPORT_ONLY` turns it off or swaps in a draft policy.
@@ -187,16 +187,12 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
   SPA shows an interstitial rather than the game); the game iframe's sandbox is never
   relaxed to make a header fit, and the app-level CSP stays report-only until its reports
   say otherwise.
-- The game iframe's `allow=` delegation is pinned to exactly
-  `accelerometer; gyroscope; magnetometer` (opt-in GameKit tilt) and never grows —
-  asserted by `apps/web/src/GameFrame.sandbox.test.ts`. In particular it never includes
-  `tools`: WebMCP-capable browsers expose agent tool registration to a cross-origin
-  iframe only when it is granted `allow="tools"`, and granting that would let untrusted
-  game code present tools to a visitor's in-browser agent under our name. If the shell
-  ever registers WebMCP tools itself, only the shell does — game-derived capability
-  keeps crossing the postMessage bridge as data. Camera pixels and microphone loudness
-  stay shell-owned, and party input / shell-read sensors reach games only as clamped,
-  structured postMessage data.
+- The game iframe has no `allow=` delegation, asserted by
+  `apps/web/src/GameFrame.sandbox.test.ts`. In particular, raw sensors, media devices, and
+  WebMCP tool registration stay unavailable to untrusted game code. If the shell ever
+  registers WebMCP tools itself, only the shell does — game-derived capability keeps crossing
+  the postMessage bridge as data. Camera pixels and microphone loudness stay shell-owned, and
+  party input / shell-read sensors reach games only as clamped, structured postMessage data.
 - Every third-party GitHub Action is pinned to a commit SHA, never a tag. A tag is a moving
   pointer the action's owner can repoint, and the deploy job holds `id-token: write`, the
   Workload Identity credential that deploys Cloud Run, and a production access token —

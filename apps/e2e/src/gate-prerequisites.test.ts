@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { e2ePrerequisites } from './browser.js';
+import { chromiumSandbox } from './sandbox.js';
 
 /**
  * A gate that can silently skip is not a gate.
@@ -34,5 +35,9 @@ describe('deploy gate prerequisites', () => {
       `E2E_REQUIRED=1 but this suite cannot run: ${prereq.reason}. ` +
         'The gate would have skipped and let the deploy promote unverified.',
     ).toBe(true);
+
+    // Throws as root; only the explicit break-glass variable disables it.
+    const sandbox = chromiumSandbox();
+    if (!sandbox.enabled) console.warn(`::warning::deploy gate Chromium sandbox OFF: ${sandbox.reason}`);
   });
 });

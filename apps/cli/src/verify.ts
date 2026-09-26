@@ -1,4 +1,4 @@
-import { spawnCommand } from './delegate.js';
+import { childEnv, spawnCommand } from './delegate.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +30,7 @@ type VerifyRun = (
   cmd: string,
   args: string[],
   cwd: string,
+  env: NodeJS.ProcessEnv,
 ) => { status: number | null; stderr: string; stdout?: string };
 
 export function runLadder(input: {
@@ -37,7 +38,8 @@ export function runLadder(input: {
   publish: boolean;
   run?: VerifyRun;
 }): { ok: true } | { ok: false; stage: VerifyStage; detail: string } {
-  const run: VerifyRun = input.run ?? ((cmd, args, cwd) => spawnSync(cmd, args, { cwd, encoding: 'utf8' }));
+  const run: VerifyRun = input.run ?? ((cmd, args, cwd, env) => spawnSync(cmd, args, { cwd, env, encoding: 'utf8' }));
+  const env = childEnv(process.env, '');
   const scripts = verificationScripts(input.cwd);
   const steps: Array<{ stage: VerifyStage; args: string[] }> = [
     { stage: 'typecheck', args: ['run', scripts.typecheck] },
@@ -45,7 +47,7 @@ export function runLadder(input: {
   ];
   if (input.publish) steps.push({ stage: 'check_game', args: ['run', scripts.checkGame] });
   for (const step of steps) {
-    const result = run('npm', step.args, input.cwd);
+    const result = run('npm', step.args, input.cwd, env);
     if ((result.status ?? 1) !== 0) {
       return {
         ok: false,
@@ -70,6 +72,7 @@ export async function runLadderAsync(input: {
 }): Promise<ReturnType<typeof runLadder>> {
   if (input.run) return runLadder({ ...input, publish: false });
   const scripts = verificationScripts(input.cwd);
+  const env = childEnv(process.env, '');
   for (const [stage, script] of [
     ['typecheck', scripts.typecheck],
     ['check_static', scripts.checkStatic],
@@ -79,7 +82,7 @@ export async function runLadderAsync(input: {
       command: 'npm',
       args: ['run', script],
       cwd: input.cwd,
-      env: process.env,
+      env,
       timeoutMs: 5 * 60_000,
       abort: input.abort,
     });
