@@ -1,3 +1,4 @@
+import { reviewGameSource } from './review-game-source.js';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import './review.css';
@@ -139,7 +140,6 @@ export function ReviewDesk() {
     };
   }, [authLoading, user?.reviewer, source]);
 
-  // Open theater when preview media is missing.
   useEffect(() => {
     if (!current) return;
     setPlaying(!hasPreviewMedia(current));
@@ -180,7 +180,6 @@ export function ReviewDesk() {
     recognitionRef.current?.stop();
     setIsListening(false);
   };
-
   const formReady = note.trim().length > 0 && isChecklistComplete(checklist);
 
   const commit = async (verdict: AssessmentVerdict) => {
@@ -196,6 +195,7 @@ export function ReviewDesk() {
       await submitAssessment({
         slug: current.slug,
         source: current.source,
+        gameVersion: current.gameVersion ?? current.reReview?.gameVersion ?? null,
         title: current.title,
         creatorHandle: current.creatorHandle,
         verdict,
@@ -631,7 +631,7 @@ export function ReviewDesk() {
           key={current.slug}
           title={current.title}
           badge={{ icon: 'star', label: t('review.tryPlay') }}
-          source={{ slug: current.slug }}
+          source={reviewGameSource(current)}
           onExit={() => setPlaying(false)}
           trackPlay={false}
           remixable={false}

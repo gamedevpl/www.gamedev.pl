@@ -26,6 +26,7 @@ export interface ReviewQueueItem {
   creatorHandle: string | null;
   genre: string | null;
   jobId: number | null;
+  gameVersion?: string | null;
   media: ReviewCatalogMedia | null;
   // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
@@ -232,6 +233,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
           creatorHandle: handles.get(owners[index]!) ?? null,
           genre: null,
           jobId: record.jobId,
+          gameVersion: record.previewVersion ?? record.deliveredVersion ?? null,
           media: null,
         });
       }
@@ -262,6 +264,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
       creatorHandle: await creatorHandle(await ownerOf(record)),
       genre: null,
       jobId: record.jobId,
+      gameVersion: record.previewVersion ?? record.deliveredVersion ?? null,
       media: null,
     };
   }

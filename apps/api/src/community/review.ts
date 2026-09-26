@@ -1,3 +1,4 @@
+import { registerReviewPlay, type CreatorReviewPreviewLoader } from './review-play.js';
 import {
   ASSESSMENT_CHECKLIST_MARKS,
   ASSESSMENT_INPUT_METHODS,
@@ -68,6 +69,7 @@ export interface ReviewRoutesOptions {
   reviewerUids?: Set<string>;
   adminUids?: Set<string>;
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
+  loadCreatorPreview?: CreatorReviewPreviewLoader;
   now?: () => number;
   emitDeps?: EmitDeps;
   // Injected so this module has no value-level notifications import.
@@ -175,6 +177,7 @@ export async function registerReviewRoutes(
     }
     return null;
   }
+  registerReviewPlay(app, refuseUnlessReviewer, options.loadCreatorPreview);
 
   async function notifySweep(sweep: ReviewSweep, notificationId: string): Promise<number> {
     if (!options.emitDeps || !options.emitReviewSweep) return 0;

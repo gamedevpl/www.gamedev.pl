@@ -46,6 +46,11 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'review-preview-loader': 'platform',
+  'review-play': 'community',
+  'review-game-source': 'community',
+  'review-version-binding': 'community',
+  'review-version-roundtrip': 'community',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
@@ -537,6 +542,7 @@ const FILE_BUCKET = {
   suggestions: 'community',
   'editorial-suggestions': 'community',
   'editorial-clearance': 'community',
+  'editorial-clearance-version': 'community',
   // "Who reviews this game" and "may the platform act on my behalf" are proposal/
   // suggestion routing rules, not catalog or creation business logic.
   'owner-of-record': 'community',
