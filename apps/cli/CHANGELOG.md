@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Internal
 
-- `genaicode` is bumped to 2.5.3 in the CLI and API; it drops `temperature` for Luna models itself.
+- `genaicode` is bumped to 2.5.3 in the CLI and API; it drops `temperature` for Luna models itself (#1515).
 
 ## 0.22.0 — 2026-09-25
 
