@@ -73,7 +73,7 @@ describe('isKnownSpaShellPath', () => {
     '/admin/assessments',
     '/review',
     '/join/K7M3QP',
-    `/invite/${'Abc123_-'.repeat(4)}`,
+    '/invite',
     '/nightshift/neon-courier',
     // The platform's namespace is reserved against claiming but is a real address:
     // it is where every game with no creator to name lives.

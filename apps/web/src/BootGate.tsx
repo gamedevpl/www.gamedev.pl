@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { RouteChunkBoundary, readLocationRoute } from './appRouteRecovery.js';
@@ -21,7 +21,17 @@ export function BootGate() {
   const { t } = useTranslation();
   const { user, loading, privateBeta } = useAuth();
   // Canonicalises first, as App does: /gamedevpl is home.
-  const route = readLocationRoute();
+  const [route, setRoute] = useState(readLocationRoute);
+  useEffect(() => {
+    const update = () => setRoute(readLocationRoute());
+    window.addEventListener('hashchange', update);
+    window.addEventListener('popstate', update);
+    update();
+    return () => {
+      window.removeEventListener('hashchange', update);
+      window.removeEventListener('popstate', update);
+    };
+  }, []);
 
   if (needsSession(route.view)) {
     if (loading) return <AppLoadingScreen />;
