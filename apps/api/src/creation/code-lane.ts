@@ -58,7 +58,7 @@ export const MAX_KIT_CHARS = 80_000;
 export const MAX_PREVIOUS_CHARS = 24_000;
 
 /**
- * Temporary: trace every step of a lane run into the response and the log.
+ * Temporary: trace every step of a lane run into the operator log.
  *
  * The lane is three moving parts and, until this existed, the only way to see
  * any of them was to remix a real game and read the wreckage.
@@ -76,9 +76,7 @@ export const MAX_PREVIOUS_CHARS = 24_000;
  * The durable way to watch a run is `npm run remix:probe -w @gamedevpl/api`,
  * which costs no player a session and needs no flag at all.
  *
- * It carries the game's own source, which the player already has (the built
- * document contains it) — but it also carries the utterance, so it must not
- * outlive the question it was added to answer.
+ * It carries original source and the utterance, so it must be short-lived.
  */
 export function codeLaneDebugEnabled(): boolean {
   return process.env.REMIX_DEBUG === 'true';
@@ -303,7 +301,7 @@ export const DEFAULT_EDIT_CONTEXT: CodeLaneEditContext = 'kit';
 /**
  * Observation points for the local bench, which needs to see every prompt and
  * every raw reply. Distinct from `CodeLaneTrace`, which is the bounded summary
- * a `REMIX_DEBUG` deploy puts in the response: this one is callbacks, is never
+ * a `REMIX_DEBUG` deploy puts in operator logs: this one is callbacks, is never
  * wired in production, and is not bounded.
  */
 export interface CodeLaneObserver {
