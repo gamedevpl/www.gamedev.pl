@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
@@ -891,13 +891,15 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
 
         // lane may still assemble a trace, but nothing leaves the process.
         const tracing = codeLaneDebugEnabled() && !(await options.editingGate?.isTracePaused());
+        // request.id is a per-process counter; Cloud Run runs many processes.
+        const traceId = randomUUID();
         if (tracing) {
           // Before the success branch, deliberately: a trace that only ever
           // described the runs that worked would be silent on the ones the flag
           // exists to explain.
           request.log.info(
             {
-              traceId: request.id,
+              traceId,
               slug: session.slug,
               utterance: body.data.utterance,
               ok: outcome.ok,
@@ -911,7 +913,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           return reply.send({
             ok: false,
             reason: outcome.reason,
-            ...(tracing && outcome.trace ? { debug: { traceId: request.id } } : {}),
+            ...(tracing && outcome.trace ? { debug: { traceId } } : {}),
             ...(outcome.summary ? { summary: outcome.summary } : {}),
           });
         }
@@ -947,7 +949,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           html,
           undoable: true,
           region: outcome.region,
-          ...(tracing && outcome.trace ? { debug: { traceId: request.id } } : {}),
+          ...(tracing && outcome.trace ? { debug: { traceId } } : {}),
           ...(outcome.summary ? { summary: outcome.summary } : {}),
         });
       } finally {

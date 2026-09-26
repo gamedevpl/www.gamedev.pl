@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH, REMIX_TTL_MS } from './remix.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -556,15 +556,24 @@ describe('remix routes', () => {
     const quiet = await app.inject({ method: 'POST', url, headers: alice, payload });
     expect(quiet.json().debug).toBeUndefined();
 
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    // A disabled logger hands every request the app's own instance.
+    const logged = vi.spyOn(app.log, 'info');
+    const loggedTraceIds = () =>
+      logged.mock.calls
+        .filter(([, msg]) => msg === 'remix code lane trace')
+        .map(([obj]) => (obj as { traceId: string }).traceId);
     process.env.REMIX_DEBUG = 'true';
     try {
       const loud = await app.inject({ method: 'POST', url, headers: alice, payload });
-      expect(loud.json().debug).toEqual({ traceId: expect.any(String) });
+      expect(loud.json().debug).toEqual({ traceId: expect.stringMatching(uuid) });
       expect(JSON.stringify(loud.json())).not.toContain('regionCount');
       expect(JSON.stringify(loud.json())).not.toContain('private source');
       const failed = await app.inject({ method: 'POST', url, headers: alice, payload: { utterance: 'fail' } });
-      expect(failed.json().debug).toEqual({ traceId: expect.any(String) });
+      expect(failed.json().debug).toEqual({ traceId: expect.stringMatching(uuid) });
       expect(JSON.stringify(failed.json())).not.toContain('private source');
+      expect(failed.json().debug.traceId).not.toBe(loud.json().debug.traceId);
+      expect(loggedTraceIds()).toEqual([loud.json().debug.traceId, failed.json().debug.traceId]);
     } finally {
       delete process.env.REMIX_DEBUG;
     }
