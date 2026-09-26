@@ -99,4 +99,43 @@ describe('nested editor layer moderation', () => {
       await app.close();
     }
   });
+  it.each([
+    { verdict: { allowed: false as const, category: 'hate' as const }, status: 422 },
+    { verdict: { allowed: false as const, unavailable: true }, status: 503 },
+  ])('rechecks legacy stored drafts before publication: $status', async ({ verdict, status }) => {
+    vi.stubEnv('EDITORKIT_V2', 'true');
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:owner' });
+    await store.createSubmission(17, 'g:owner', 'Nested game');
+    await store.setSubmissionSlug(17, 'nested-game');
+    await store.setSubmissionDeliveredVersion(17, 'v1');
+    await store.putEditorDraft('g:owner', 'nested-game', JSON.stringify(content));
+    const app = Fastify();
+    app.addHook('onRequest', async (request) => {
+      request.user = (await store.getUser('g:owner'))!;
+    });
+    const checkFields = vi.fn(async () => verdict);
+    const getManifest = vi.fn(async () => null);
+    const putCandidateSources = vi.fn();
+    await registerEditorRoutes(app, {
+      store,
+      gamesStore: {
+        getSourceFile: async (_slug: string, _version: string, path: string) =>
+          JSON.stringify(path === 'EDITOR.json' ? declaration : content),
+        getManifest,
+        putCandidateSources,
+      } as unknown as GamesStore,
+      contentChecker: { checkFields, check: checkFields },
+    });
+    try {
+      const response = await app.inject({ method: 'POST', url: '/api/me/games/nested-game/editor/publish' });
+      expect(response.statusCode).toBe(status);
+      expect(checkFields).toHaveBeenCalledWith(['blocked caption', 'blocked text']);
+      expect(getManifest).not.toHaveBeenCalled();
+      expect(putCandidateSources).not.toHaveBeenCalled();
+      expect(await store.getSubmissionBySlug('nested-game')).toMatchObject({ jobId: 17, deliveredVersion: 'v1' });
+    } finally {
+      await app.close();
+    }
+  });
 });

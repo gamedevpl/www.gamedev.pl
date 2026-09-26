@@ -217,7 +217,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     return content;
   }
 
-  // Text saved once was moderated then; only new values pay.
+  // Autosave reuses stored text; publication rechecks every field.
   async function storedDraftTexts(
     uid: string,
     slug: string,
@@ -483,6 +483,21 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         return reply
           .status(422)
           .send({ error: "the draft no longer fits this game's content schema", problems: problems.slice(0, 20) });
+      }
+
+      // Stored drafts can predate the collector or moderation policy.
+      const publishTexts = textFields(resolved.definition, content);
+      if (publishTexts.length > 0 && options.contentChecker) {
+        const verdict = await options.contentChecker.checkFields(publishTexts);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'editor_draft',
+            uid: request.user?.uid,
+            category: verdict.category,
+            unavailable: verdict.unavailable,
+          });
+          return replyModerationBlock(reply, verdict, 'that text was rejected');
+        }
       }
 
       const last = lastPublishAt.get(slug) ?? 0;
