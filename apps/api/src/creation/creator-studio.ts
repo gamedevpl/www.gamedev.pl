@@ -12,6 +12,7 @@ import { shelfReadsFromDocument } from '../platform/shelf-reads-env.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { viewerRoleOnGame } from '../platform/game-access-permissions.js';
 import { readStudioHealthCached, studioHealthKey } from './studio-health-cache.js';
+import { scanOwnedSlugs } from './studio-health-scan.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
@@ -35,7 +36,7 @@ import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/
 import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
 import { buildSpecStub } from './creator-code.js';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
-import type { Store, TelemetryEvent } from '../platform/store.js';
+import type { Store } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';
 import { isPublished } from '../platform/publication-state.js';
 
@@ -53,8 +54,6 @@ import { isPublished } from '../platform/publication-state.js';
 
 const MAX_DAYS = 30;
 const DEFAULT_DAYS = 7;
-const MAX_EVENTS_PER_DAY = 1000;
-const MAX_EVENTS_PER_REQUEST = 5_000;
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(MAX_DAYS).optional(),
@@ -81,50 +80,6 @@ export interface CreatorStudioRoutesOptions {
 
 /** Ceiling on the scaffold we will unpack — it is a handful of text files, not a kit. */
 const MAX_SCAFFOLD_BYTES = 1024 * 1024;
-
-/**
- * Reads play events for a fixed set of slugs under one shared document budget.
- *
- * Per-slug queries (not a full-partition scan) so a quiet creator's niche game is not
- * crowded out of the budget by everyone else's traffic — the opposite problem from the
- * operator view, which deliberately covers the whole catalog.
- */
-async function scanOwnedSlugs(
-  store: Store,
-  slugs: string[],
-  days: string[],
-): Promise<{ events: TelemetryEvent[]; scanned: string[]; truncated: boolean }> {
-  const events: TelemetryEvent[] = [];
-  const scanned: string[] = [];
-  let truncated = false;
-
-  for (const dateStr of days) {
-    let dayHadRoom = false;
-    for (const slug of slugs) {
-      const remaining = MAX_EVENTS_PER_REQUEST - events.length;
-      if (remaining <= 0) {
-        truncated = true;
-        break;
-      }
-      const limit = Math.min(MAX_EVENTS_PER_DAY, remaining);
-      const dayEvents = await store.listTelemetryEvents(dateStr, { slug, limit });
-      if (dayEvents.length >= limit) truncated = true;
-      events.push(...dayEvents);
-      dayHadRoom = true;
-    }
-    if (!dayHadRoom && events.length >= MAX_EVENTS_PER_REQUEST) {
-      truncated = true;
-      break;
-    }
-    if (dayHadRoom) scanned.push(dateStr);
-    if (events.length >= MAX_EVENTS_PER_REQUEST) {
-      truncated = true;
-      break;
-    }
-  }
-
-  return { events, scanned, truncated };
-}
 
 export async function registerCreatorStudioRoutes(
   app: FastifyInstance,
@@ -173,7 +128,8 @@ export async function registerCreatorStudioRoutes(
       request.user!.uid,
       parsed.data.game,
       mint,
-      (owned, ownedNow) => recordShelfShadow({ store, log: request.log }, request.user!.uid, owned, ownedNow).then(() => undefined),
+      (owned, ownedNow) =>
+        recordShelfShadow({ store, log: request.log }, request.user!.uid, owned, ownedNow).then(() => undefined),
       { fromDocument: shelfReadsFromDocument(), verify: shelfVerifySamplerFor(app) },
     );
     const collapsed = collapseJobsToOwnerGames(records, 'shelf');
@@ -279,53 +235,61 @@ export async function registerCreatorStudioRoutes(
    * are playable via share links but are not yet "live" funnel subjects, so they
    * stay out of the scorecard.
    */
-  app.get('/api/me/studio/health', async (request, reply) => {
-    if (!requireUser(request, reply)) return reply;
+  app.get(
+    '/api/me/studio/health',
+    { config: { rateLimit: { max: 12, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return reply;
 
-    const parsed = QuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
-    }
+      const parsed = QuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
+      }
 
-    const ownedRecords = await store.listSubmissionsByOwner(request.user!.uid);
-    const records = await reconcileTransferredOwnership(store, request.user!.uid, ownedRecords);
-    const { games: published, truncated: gamesTruncated, total } = pageOwnerGames(records, 'published');
-    const slugs = published.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug));
+      const ownedRecords = await store.listSubmissionsByOwner(request.user!.uid);
+      const records = await reconcileTransferredOwnership(store, request.user!.uid, ownedRecords);
+      const { games: published, truncated: gamesTruncated, total } = pageOwnerGames(records, 'published');
+      const slugs = published.map(({ tip }) => tip.slug).filter((slug): slug is string => Boolean(slug));
 
-    if (slugs.length === 0) {
+      if (slugs.length === 0) {
+        const body: CreatorHealthResponse = {
+          days: [],
+          truncated: false,
+          gamesTruncated: gamesTruncated,
+          totalGames: total,
+          games: [],
+        };
+        return reply.send(body);
+      }
+
+      const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
+      // The shelf above stays live; only the scan is windowed. It is days x slugs
+      // queries, and an empty day still bills a read, so it is the whole cost here.
+      const window = await readStudioHealthCached(
+        store,
+        studioHealthKey(request.user!.uid, slugs, requested),
+        async () => {
+          const { events, scanned, truncated } = await scanOwnedSlugs(store, slugs, requested);
+          const owned = new Set(slugs);
+          return {
+            days: scanned,
+            truncated,
+            games: summarizeGameHealth(events).filter((game) => owned.has(game.slug)),
+          };
+        },
+        now,
+      );
+
       const body: CreatorHealthResponse = {
-        days: [],
-        truncated: false,
-        gamesTruncated: gamesTruncated,
+        days: window.days,
+        truncated: window.truncated,
+        gamesTruncated,
         totalGames: total,
-        games: [],
+        games: window.games,
       };
       return reply.send(body);
-    }
-
-    const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    // The shelf above stays live; only the scan is windowed. It is days x slugs
-    // queries, and an empty day still bills a read, so it is the whole cost here.
-    const window = await readStudioHealthCached(
-      store,
-      studioHealthKey(request.user!.uid, slugs, requested),
-      async () => {
-        const { events, scanned, truncated } = await scanOwnedSlugs(store, slugs, requested);
-        const owned = new Set(slugs);
-        return { days: scanned, truncated, games: summarizeGameHealth(events).filter((game) => owned.has(game.slug)) };
-      },
-      now,
-    );
-
-    const body: CreatorHealthResponse = {
-      days: window.days,
-      truncated: window.truncated,
-      gamesTruncated,
-      totalGames: total,
-      games: window.games,
-    };
-    return reply.send(body);
-  });
+    },
+  );
 
   /**
    * Votes and feedback themes for the creator's own published games.

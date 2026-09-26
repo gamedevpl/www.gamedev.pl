@@ -340,6 +340,8 @@ const FILE_BUCKET = {
   'editor-invite-inbox-cache': 'creation',
   'studio-health-cache': 'creation',
   'studio-health-cache.test': 'creation',
+  'studio-health-scan': 'creation',
+  'studio-health-security.test': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
