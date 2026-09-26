@@ -2,6 +2,7 @@ import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
+import { isFromGameFrame } from './frameMessage.js';
 
 /**
  * The shell half of durable per-player progress (docs/persistent-world-plan.md P1).
@@ -119,7 +120,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     async function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not read or write this player's save.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseGameSaveMessage(event.data);
       if (!message) return;
 
