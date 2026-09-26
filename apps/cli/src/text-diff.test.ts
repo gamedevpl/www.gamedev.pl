@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { unifiedDiff } from './text-diff.js';
-import { formatPatches } from './working-copy.js';
+import { formatDiffReport, formatPatches } from './working-copy.js';
 
 describe('unifiedDiff', () => {
   it('prints a hunk for a changed line and nothing when the text matches', () => {
@@ -57,5 +57,31 @@ describe('unifiedDiff', () => {
     expect(unifiedDiff('blob.bin', 'a', 'a\0b')).toContain('binary blob.bin differs');
     const big = `${'x\n'.repeat(1501)}`;
     expect(unifiedDiff('big.ts', big, `${big}y\n`).at(-1)).toMatch(/big.ts differs/);
+  });
+
+  it('strips C1 controls and carriage returns from every path in a diff report', () => {
+    const hostile = `evil\u009b2J\u009d0;title\u009c\r\u001b[31m.ts`;
+    const hit = (source: 'gitignore' | 'not-game') => ({ path: hostile, source, pattern: '*', directory: false });
+    const sync = {
+      kind: 'conflict' as const,
+      version: 'v1',
+      local: [hostile],
+      platform: [hostile],
+      conflict: [hostile],
+    };
+    const patches = formatPatches(sync, [{ path: hostile, content: 'b\n' }], [{ path: hostile, content: 'a\n' }]);
+    const report = formatDiffReport({
+      ...sync,
+      ignored: [hit('gitignore'), hit('not-game')],
+      patches,
+      incoming: { blocked: [hostile] },
+    });
+    const text = report.join('\n');
+    expect(text).toContain('evil2J0;title.ts');
+    const hidden = [...text].filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return (code < 32 && code !== 10) || (code >= 127 && code <= 159);
+    });
+    expect(hidden).toEqual([]);
   });
 });
