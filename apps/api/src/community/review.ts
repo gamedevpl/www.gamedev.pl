@@ -367,7 +367,9 @@ export async function registerReviewRoutes(
       return reply.status(409).send({ error: 'review_version_changed' });
     }
     if (candidateVersion) source = 'creator';
-    const gameVersion = candidateVersion ?? body.data.gameVersion ?? reReviewRequest?.gameVersion ?? null;
+    const gameVersion =
+      candidateVersion ??
+      (body.data.gameVersion === undefined ? (reReviewRequest?.gameVersion ?? null) : body.data.gameVersion);
 
     const assessment: GameAssessment = await store.upsertGameAssessment({
       slug: body.data.slug,

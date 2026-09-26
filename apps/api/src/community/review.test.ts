@@ -436,7 +436,6 @@ describe('reviewer assessment desk', () => {
   });
 
   it('includes shared creator drafts and exposes an admin aggregate', async () => {
-    // Seed a creator sweep; default catalog seed hides drafts.
     const { app, store } = await makeApp({ seedSweep: false });
     await store.upsertUser({ uid: 'g:creator', email: 'c@example.com', name: 'Creator' });
     await store.claimHandle('g:creator', 'pixel', new Date().toISOString());
@@ -709,7 +708,7 @@ describe('targeted re-review', () => {
     expect(JSON.parse(resolved.body).items).toEqual([]);
   });
 
-  it('lets an explicit gameVersion on the submission override the re-review request default', async () => {
+  it.each(['v3', null])('preserves explicit catalog gameVersion %s over re-review metadata', async (gameVersion) => {
     const { app, store } = await makeApp();
     const reviewer = await sessionCookie(app, 'reviewer');
     const boss = await sessionCookie(app, 'boss');
@@ -738,9 +737,9 @@ describe('targeted re-review', () => {
       verdict: 'keep',
       note: 'Better now.',
       checklist: sampleChecklist,
-      gameVersion: 'v3',
+      gameVersion,
     });
-    expect(assessment.gameVersion).toBe('v3');
+    expect(assessment.gameVersion).toBe(gameVersion);
   });
 
   it('rejects a requeue naming a uid that is not a reviewer, and caps slug x reviewer pairs', async () => {
