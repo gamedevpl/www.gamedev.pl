@@ -5,12 +5,9 @@ const navigatedAway = new WeakSet<Window>();
 
 function frameWindow(frame: HTMLIFrameElement | Window | null | undefined): Window | null {
   if (!frame) return null;
-  try {
-    return 'contentWindow' in frame ? frame.contentWindow : frame;
-  } catch {
-    // Probing a cross-origin Window throws, so it is one.
-    return frame as Window;
-  }
+  return typeof HTMLIFrameElement !== 'undefined' && frame instanceof HTMLIFrameElement
+    ? frame.contentWindow
+    : (frame as Window);
 }
 
 // True once the game navigated this frame somewhere itself.
@@ -65,4 +62,9 @@ export function isFromGameFrame(event: MessageEvent, frame: HTMLIFrameElement | 
   const win = frameWindow(frame);
   // The WindowProxy survives navigation, so source identity alone is not enough.
   return win != null && event.source === win && !isGameFrameNavigatedAway(win);
+}
+
+export function postToGameFrame(frame: HTMLIFrameElement | null, payload: unknown): void {
+  if (!frame || isGameFrameNavigatedAway(frame)) return;
+  frame.contentWindow?.postMessage(payload, '*');
 }

@@ -1,3 +1,4 @@
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useEffect, type MutableRefObject } from 'react';
 import type { ZoneLinkStep } from '@gamedevpl/contract';
 import { BRIDGE_NAMESPACE } from './mp/protocol.js';
@@ -5,29 +6,6 @@ import { MAX_INPUTS_PER_SECOND, ZONE_PROTOCOL_VERSION, parseZoneBridgeMessage } 
 import { ZoneClient } from './zone/zoneClient.js';
 import { fetchZoneAdmission } from './zoneApi.js';
 import { bindPlayRecorder } from './gamePlayer.js';
-
-/**
- * The shell half of authoritative real-time zones (docs/persistent-world-plan.md P3).
- *
- * Third bridge, same arrangement as saves and worlds and for the same unmoved reason: a
- * game runs in `sandbox="allow-scripts"` with no `allow-same-origin` and a CSP with no
- * `connect-src`, so it cannot open a socket even if its author wanted one. The socket
- * lives here, in ordinary app code on the real origin, and the game reaches it only
- * through typed messages.
- *
- * What is different from the other two bridges is the direction of trust and the
- * cadence. A save and a world entry are things the game *tells* the platform; a zone is a
- * world the platform tells the game, ten times a second, and the game's own copy of the
- * simulation is a prediction that the next frame down may correct. So this code is a
- * relay rather than a client: it validates, it never interprets. Snapshot state is an
- * opaque string on the way through, deltas are event lists it does not read, and the
- * decision about whether a prediction has drifted belongs to the sim on the other side
- * of the bridge — which is the same `sim.ts` the host is running, which is the entire
- * point of the contract.
- *
- * The bridge is live for every published game, as the others are. Nothing happens until a
- * game says `zone:hello`, and only a game that ships a sim ever does.
- */
 
 /**
  * Inputs one frame may send per second before the shell stops forwarding.
@@ -64,7 +42,7 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
       if (cancelled) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: ZONE_PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: ZONE_PROTOCOL_VERSION, ...payload });
     }
 
     function allowInput(): boolean {
@@ -154,7 +132,7 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
     function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not act as a player in this zone.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseZoneBridgeMessage(event.data, BRIDGE_NAMESPACE);
       if (!message) return;
 

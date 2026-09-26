@@ -6,16 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { parseSensingMessage, useSensingBridge, type SensingBridge } from './sensing.js';
 
-/**
- * The sensing bridge is the shell half of games-repo camera-ar-platform Phase 0: the
- * sandboxed game cannot reach the device's sensors (and the iframe must never gain an
- * `allow=` for them), so this side reads `deviceorientation` and relays a clamped,
- * throttled stick. Most of what is worth testing is what does NOT happen: no relay
- * before a game asks, no reaction to a foreign window's hello, no raw readings
- * anywhere — only the derived `{ x, y }` ever crosses into the frame, and nothing at
- * all leaves the browser.
- */
-
 function frame(payload: Record<string, unknown>) {
   return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload };
 }
@@ -107,7 +97,7 @@ describe('useSensingBridge', () => {
 
     const fromGame = (payload: Record<string, unknown>) => {
       act(() => {
-        window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+        window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
       });
     };
     return { fromGame, gameWindow };
@@ -187,7 +177,11 @@ describe('useSensingBridge', () => {
     mount();
     act(() => {
       window.dispatchEvent(
-        new MessageEvent('message', { data: frame({ t: 'sensing:hello', features: ['tilt'] }), source: window }),
+        new MessageEvent('message', {
+          origin: 'null',
+          data: frame({ t: 'sensing:hello', features: ['tilt'] }),
+          source: window,
+        }),
       );
     });
     expect(latest().engaged).toBe(false);

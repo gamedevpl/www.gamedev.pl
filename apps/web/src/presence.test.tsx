@@ -6,18 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { parsePresenceMessage, usePresenceBridge } from './presence.js';
 
-/**
- * The presence bridge is the first place on the platform where the *shell* owns a clock
- * on the game's behalf, and that is what most of this file is about.
- *
- * Everywhere else, a request happens because a player did something: they saved, they
- * planted. Here requests happen because time passed, and if the game could set that
- * interval then a hostile or merely careless generated game would have a periodic
- * request primitive pointed at our API. So: the game says *where it is*, this side
- * decides *how often anybody hears about it*, and a game calling `here()` sixty times a
- * second must produce exactly the same request rate as one calling it twice.
- */
-
 function frame(payload: Record<string, unknown>) {
   return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload };
 }
@@ -97,7 +85,7 @@ describe('usePresenceBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame, gameWindow };
   }
@@ -367,7 +355,9 @@ describe('usePresenceBridge', () => {
     fetchMock.mockResolvedValue(jsonResponse(roster));
     mount();
 
-    window.dispatchEvent(new MessageEvent('message', { data: frame({ t: 'presence:hello' }), source: window }));
+    window.dispatchEvent(
+      new MessageEvent('message', { origin: 'null', data: frame({ t: 'presence:hello' }), source: window }),
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(fetchMock).not.toHaveBeenCalled();

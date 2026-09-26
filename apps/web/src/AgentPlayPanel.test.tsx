@@ -20,11 +20,13 @@ let frameRef: { current: HTMLIFrameElement | null };
 // Stands in for the sandboxed game frame.
 function fakeFrame(): HTMLIFrameElement {
   posted = [];
-  return {
-    contentWindow: {
+  const frame = document.createElement('iframe');
+  Object.defineProperty(frame, 'contentWindow', {
+    value: {
       postMessage: (message: Posted) => posted.push(message),
     },
-  } as unknown as HTMLIFrameElement;
+  });
+  return frame;
 }
 
 // A message shaped like one the bridge would post back.

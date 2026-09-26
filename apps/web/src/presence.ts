@@ -1,33 +1,7 @@
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { beatPresence, fetchPresence, leavePresence, type PresenceSnapshot } from './presenceApi.js';
-
-/**
- * The shell half of ambient co-presence (docs/persistent-world-plan.md P2.5).
- *
- * The same arrangement as the save and world bridges — the game cannot reach the network,
- * so it postMessages here and this code, ordinary app code on the real origin holding the
- * session cookie, makes the call. What is genuinely new is that **this side owns the
- * clock**.
- *
- * Saves and world writes are driven by the player doing something. Presence is driven by
- * time, and that is the whole reason the timer lives here rather than in the module: a
- * periodic request whose interval was chosen by untrusted code inside a sandboxed iframe
- * is a denial-of-service surface with a friendly name. The game says *where it is*; the
- * shell decides *how often anybody hears about it*. A game that calls `here()` sixty
- * times a second and one that calls it twice produce exactly the same request rate.
- *
- * Two more consequences of owning the clock, both of which the module could not have
- * arranged for itself:
- *
- * - **A hidden tab stops beating entirely.** Somebody who alt-tabbed is not in the world
- *   in any sense a player would recognise, and continuing to report them would make the
- *   count mean "has this game open" rather than "is here". It also means a backgrounded
- *   game costs the platform nothing, the same standard `commons` polling holds itself to.
- * - **Leaving withdraws immediately.** A slot expires on its own, but the gap between
- *   closing a game and expiring is the whole TTL, and for all of it every other player is
- *   looking at somebody who is not there.
- */
 
 /** Mirrors the API's `PRESENCE_HEARTBEAT_MS`; the server's answer overrides it. */
 const DEFAULT_HEARTBEAT_MS = 12_000;
@@ -99,7 +73,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (cancelled) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     }
     function announce(snapshot: PresenceSnapshot | null) {
       postToGame(
@@ -186,7 +160,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     async function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not appear in or read this roster.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parsePresenceMessage(event.data);
       if (!message) return;
       if (message.t === 'presence:hello') {

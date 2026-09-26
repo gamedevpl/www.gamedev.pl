@@ -1,17 +1,6 @@
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-
-/**
- * Shell half of GameKit loudness (voice-on-phones Layer 0).
- *
- * Published games run in an opaque-origin sandboxed iframe (`allow-scripts` without
- * `allow-same-origin`). Browsers reject `getUserMedia` there even when the iframe has
- * `allow="microphone"`, so the top-level theater captures the mic after a real header
- * gesture and relays smoothed-ready levels into the frame over the gdp bridge.
- *
- * Nothing runs until a game posts `voice:hello` (createVoiceMeter while embedded), so
- * mounting this for every published play costs silent games nothing.
- */
 
 export type VoiceMeterShellStatus = 'unsupported' | 'idle' | 'pending' | 'live' | 'denied';
 
@@ -61,7 +50,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
   const postToGame = useCallback(
     (payload: Record<string, unknown>) => {
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     },
     [frameRef],
   );
@@ -180,7 +169,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
     function onMessage(event: MessageEvent) {
       if (cancelled) return;
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseVoiceMeterMessage(event.data);
       if (!message) return;
 

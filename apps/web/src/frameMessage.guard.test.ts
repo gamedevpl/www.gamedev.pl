@@ -25,7 +25,7 @@ function unguardedListeners(source: string): number[] {
       before.lastIndexOf('const onMessage = (event: MessageEvent) =>'),
     );
     const handler = start < 0 ? '' : before.slice(start);
-    if (/isFromGameFrame\(event,/.test(handler) || /event\.source\s*!==[^\n]*\.contentWindow/.test(handler)) {
+    if (/isFromGameFrame\(event,/.test(handler)) {
       continue;
     }
     missing.push(before.split('\n').length);
