@@ -192,7 +192,10 @@ export async function playGame(input: {
       write: input.write,
       stop: input.stop,
     });
-    if (!session) return { mode };
+    if (!session) {
+      if (input.stop) input.onLocalPreview?.('');
+      return { mode };
+    }
     url = session.url;
     input.onLocalPreview?.(url);
   } else {

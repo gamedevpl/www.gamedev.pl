@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Local capture prevents WebRTC UDP and direct TCP traffic through a restricted browser proxy, while screenshots remain available (#1558).
+- Preview shortcuts follow the CLI-owned local server; agent transcript URLs and spoofed stop messages cannot change them (#1559).
 - `gamedevpl diff` strips carriage returns and C1 terminal controls from patch lines and file paths, so hostile source or filenames cannot disguise the report (#1546).
 - Conversation history no longer stores MCP authorization keys printed by `/connect` (#1545).
 - Verification scripts no longer receive creator credentials from the CLI environment (#1544).
