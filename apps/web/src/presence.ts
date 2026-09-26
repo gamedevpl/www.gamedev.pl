@@ -36,7 +36,7 @@ const MIN_HEARTBEAT_MS = 5_000;
 /** Position bound. The server clamps to the game's declared grid; this only stops a
  *  runaway value from becoming a request body at all. */
 const MAX_COORDINATE = 4096;
-const HELLO_MIN_INTERVAL_MS = 1_000;
+const HELLO_MIN_INTERVAL_MS = 3_000;
 
 export type PresenceRequest =
   { t: 'presence:hello' } | { t: 'presence:here'; col: number; row: number } | { t: 'presence:away' };

@@ -163,7 +163,7 @@ describe('usePresenceBridge', () => {
     fromGame({ t: 'presence:here', col: 2, row: 2 });
     await waitFor(() => expect(toGame).toHaveLength(2));
     // The new document says hello without the old one saying away.
-    now += 1_500;
+    now += 3_500;
     fromGame({ t: 'presence:hello' });
     await waitFor(() => expect(toGame).toHaveLength(3));
     expect(calls('GET')).toHaveLength(2);
@@ -181,7 +181,7 @@ describe('usePresenceBridge', () => {
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 2, row: 2 });
     await waitFor(() => expect(toGame).toHaveLength(2));
-    now += 900;
+    now += 2_900;
     fromGame({ t: 'presence:hello' });
     fromGame({ t: 'presence:here', col: 4, row: 7 });
     await waitFor(() => expect(calls('GET')).toHaveLength(2), 200);
@@ -199,7 +199,7 @@ describe('usePresenceBridge', () => {
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 2, row: 2 });
     await waitFor(() => expect(calls('POST')).toHaveLength(1));
-    now += 900;
+    now += 2_900;
     for (let step = 0; step < 30; step++) {
       fromGame({ t: 'presence:hello' });
       fromGame({ t: 'presence:here', col: step, row: 1 });
@@ -223,7 +223,7 @@ describe('usePresenceBridge', () => {
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 1, row: 1 });
     await waitFor(() => expect(release).not.toBeNull());
-    now += 1_500;
+    now += 3_500;
     fromGame({ t: 'presence:hello' });
     await waitFor(() => expect(calls('GET')).toHaveLength(2));
     fromGame({ t: 'presence:here', col: 8, row: 3 });
