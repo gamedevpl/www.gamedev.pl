@@ -60,13 +60,30 @@ it('binds a normal creator review to its queued candidate and excludes later del
       (await app.inject({ method: 'GET', url: '/api/review/games/creator-game?version=v1', headers: owner }))
         .statusCode,
     ).toBe(404);
+    for (const invalid of [undefined, null, 'v0', 'v2']) {
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/api/review/assessments',
+        headers,
+        payload: {
+          slug: item.slug,
+          source: 'catalog',
+          gameVersion: invalid,
+          verdict: 'keep',
+          note: 'Solid game.',
+          checklist: { graphics: 'ok', gameplay: 'ok', fun: 'ok', sound: 'ok', controls: 'ok' },
+        },
+      });
+      expect(rejected.statusCode).toBe(409);
+      expect(await store.listGameAssessmentsBySlug(item.slug)).toEqual([]);
+    }
     const posted = await app.inject({
       method: 'POST',
       url: '/api/review/assessments',
       headers,
       payload: {
         slug: item.slug,
-        source: item.source,
+        source: 'catalog',
         gameVersion: item.gameVersion,
         verdict: 'keep',
         note: 'Solid game.',
@@ -76,6 +93,7 @@ it('binds a normal creator review to its queued candidate and excludes later del
     expect(posted.statusCode).toBe(200);
     const rows = await store.listGameAssessmentsBySlug('creator-game');
     expect(rows[0].gameVersion).toBe('v1');
+    expect(rows[0].source).toBe('creator');
     expect(decideEditorialClearance(rows, 'creator-game', 'v1').decision).toBe('clear');
     await store.setSubmissionDeliveredVersion(42, 'v2');
     const moved = await app.inject({ method: 'GET', url: '/api/review/games/creator-game?version=v1', headers });

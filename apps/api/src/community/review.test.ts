@@ -481,6 +481,7 @@ describe('reviewer assessment desk', () => {
         slug: 'draft-runner',
         source: 'creator',
         title: 'draft-runner',
+        gameVersion: 'v1',
         creatorHandle: 'pixel',
         verdict: 'keep',
         note: 'Solid loop, ship it.',

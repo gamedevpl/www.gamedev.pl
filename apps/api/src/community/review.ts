@@ -342,7 +342,7 @@ export async function registerReviewRoutes(
 
     const noteOrigin: AssessmentNoteOrigin = body.data.noteOrigin === 'speech' ? 'speech' : 'text';
     const verdict: AssessmentVerdict = body.data.verdict;
-    const source: AssessmentSource = body.data.source;
+    let source: AssessmentSource = body.data.source;
     const title = body.data.title?.trim() || body.data.slug;
     const reviewerUid = request.user!.uid;
 
@@ -360,8 +360,14 @@ export async function registerReviewRoutes(
       }
     }
 
-    const gameVersion =
-      body.data.gameVersion === undefined ? (reReviewRequest?.gameVersion ?? null) : body.data.gameVersion;
+    const candidate = await store.getSubmissionBySlug(body.data.slug);
+    const catalogGame = (await listCatalog()).some((entry) => entry.slug === body.data.slug);
+    const candidateVersion = catalogGame ? null : (candidate?.previewVersion ?? candidate?.deliveredVersion ?? null);
+    if (candidateVersion && body.data.gameVersion !== candidateVersion) {
+      return reply.status(409).send({ error: 'review_version_changed' });
+    }
+    if (candidateVersion) source = 'creator';
+    const gameVersion = candidateVersion ?? body.data.gameVersion ?? reReviewRequest?.gameVersion ?? null;
 
     const assessment: GameAssessment = await store.upsertGameAssessment({
       slug: body.data.slug,
