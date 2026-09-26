@@ -1,6 +1,8 @@
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
+import { currentSessionFinished } from './preview-round-close.js';
+import { lastRoundActivityAt } from '../platform/quiet-round.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   builderLabelFromRecord,
@@ -163,7 +165,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     let observation;
     try {
       observation = await selected.observe(lastRef, {
-        hasCandidate: Boolean(record.deliveredVersion) || (record.roundDeliveryCount ?? 0) > 0,
+        hasCandidate: Boolean(record.deliveredVersion),
         // Pull-delivery backends harvest inside observe.
         jobId: record.jobId,
         ...(record.slug ? { slug: record.slug } : {}),
@@ -204,9 +206,9 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         }
       }
       // Persist vendor state even when the job does not move.
-      if (observation.state !== record.agentState) {
+      if (observation.state !== record.agentState || lastRef !== record.agentStateRef) {
         try {
-          await store.setSubmissionAgentState(record.jobId, observation.state);
+          await store.setSubmissionAgentState(record.jobId, observation.state, lastRef);
         } catch (error) {
           log.error({ err: error, jobId: record.jobId }, 'could not store agent task state');
         }
@@ -234,6 +236,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       if (!result) return null;
       // Stale: a handoff already dispatched a newer ref.
       if (fresh?.dispatch?.refs.at(-1) !== lastRef) return null;
+
+      // A preview is not publish readiness; its own gate verdict decides.
+      if (
+        result.reason === 'task_completed_without_delivery' &&
+        (fresh?.roundDeliveryCount ?? record.roundDeliveryCount ?? 0) > 0
+      ) {
+        return fresh ? reconcileGateVerdict(fresh) : null;
+      }
 
       // Finished but uploaded nothing is the one failure worth answering.
 
@@ -417,7 +427,25 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           version,
           ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
         });
-        return null;
+        // Session over, preview green: the owner seals it from ready_for_review.
+        const sealable = state === 'building' && currentSessionFinished(record) && !record.deliveredVersion;
+        if (!sealable || !canTransition(state, 'ready_for_review')) return null;
+        const at = new Date(now()).toISOString();
+        const transition: JobTransition = { to: 'ready_for_review', at, by: 'gate', reason: 'preview_gate_green' };
+        // Guarded: a handoff may have opened a newer round since this read.
+        const guard = {
+          activityAt: lastRoundActivityAt(record),
+          roundGeneration: record.roundGeneration ?? 1,
+          dispatchRef: record.dispatch?.refs.at(-1),
+        };
+        if (!(await store.recordJobTransition(record.jobId, transition, guard))) return null;
+        // Same as the publish path: the closed round resumes a pending handoff.
+        if (record.builderHandoff?.awaitsAgentAck) {
+          await acknowledgeBuilderHandoff({ jobId: record.jobId, acknowledgedAt: at, log }).catch((error) => {
+            log.error({ err: error, jobId: record.jobId }, 'failed to resume handoff at round close');
+          });
+        }
+        return transition;
       }
       const to = 'needs_changes' as const;
       if (!redPendingRepair && !canTransition(state, to)) return null;

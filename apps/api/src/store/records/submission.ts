@@ -135,6 +135,7 @@ export interface SubmissionRecord {
    * blocked on an answer needs no inference at all.
    */
   agentState?: AgentTaskState;
+  agentStateRef?: string;
   /**
    * When the agent last said anything over the build channel.
    *

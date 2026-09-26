@@ -6096,9 +6096,14 @@ describe('a session that finishes without delivering', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
     await store.setDispatchWorkspace(job.jobId, 'copilot/has-the-work');
+    await store.recordJobTransition(job.jobId, {
+      to: 'building',
+      at: new Date(clock.t).toISOString(),
+      by: 'agent',
+      reason: 'task_in_progress',
+    });
     return { app, store, job, briefs, clock, cleanup, token: mintToken(job.jobId, secret) };
   }
-
   it('sends the session back to deliver instead of failing the build', async () => {
     // The work is very likely done and sitting on a branch — only the upload is
     // missing. Asking is far cheaper than the round it would otherwise cost.
@@ -6113,10 +6118,8 @@ describe('a session that finishes without delivering', () => {
     // Dispatched again, not failed: the creator is not shown an error about a round that
     // is at this moment starting. `building` waits on a real `in_progress` observation.
     expect((await store.getSubmission(job.jobId))?.state).toBe('dispatched');
-
     await app.close();
   });
-
   it('keeps the branch holding the undelivered work', async () => {
     // Every other round deletes the previous workspace, because the store has the
     // truth. Here it does not — deleting would destroy what the new round was sent
@@ -6127,7 +6130,6 @@ describe('a session that finishes without delivering', () => {
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
 
     expect(cleanup).not.toHaveBeenCalled();
-
     await app.close();
   });
 
@@ -6164,17 +6166,15 @@ describe('a session that finishes without delivering', () => {
   });
 
   it('leaves a session that only delivered a preview alone too', async () => {
-    // roundDeliveryCount proves a preview round submitted something.
     const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
     await store.setSubmissionPreviewVersion(job.jobId, 'v1');
     await store.incrementRoundDeliveryCount(job.jobId);
-
+    const generation = (await store.getSubmission(job.jobId))?.roundGeneration;
     clock.t += 3 * 60 * 1000;
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
-
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
-    expect((await store.getSubmission(job.jobId))?.state).not.toBe('failed');
-
+    const after = await store.getSubmission(job.jobId);
+    expect([after?.state, after?.roundGeneration, after?.roundDeliveryCount]).toEqual(['building', generation, 1]);
     await app.close();
   });
 

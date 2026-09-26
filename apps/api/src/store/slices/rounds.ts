@@ -26,7 +26,7 @@ export interface RoundsStore {
   pinRoundKitEngineRef(jobId: number, engineRef: string, replace?: boolean): Promise<string | null>;
 
   // Records the agent backend's last reported state, for stall detection.
-  setSubmissionAgentState(jobId: number, agentState: AgentTaskState): Promise<void>;
+  setSubmissionAgentState(jobId: number, agentState: AgentTaskState, ref: string): Promise<void>;
 
   // Records which builder owns the round; resets per-round counters if asked.
   setRoundBuilder(jobId: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
@@ -176,9 +176,9 @@ export class InMemoryRoundsStore implements RoundsStore {
     this.submissions.set(jobId, next);
   }
 
-  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState): Promise<void> {
+  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState, ref: string): Promise<void> {
     const sub = this.submissions.get(jobId);
-    if (sub) this.submissions.set(jobId, { ...sub, agentState });
+    if (sub) this.submissions.set(jobId, { ...sub, agentState, agentStateRef: ref });
   }
 
   async setRoundBuilder(jobId: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void> {
@@ -387,8 +387,8 @@ export class FirestoreRoundsStore implements RoundsStore {
     });
   }
 
-  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState): Promise<void> {
-    await this.ref(jobId).set({ agentState }, { merge: true });
+  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState, ref: string): Promise<void> {
+    await this.ref(jobId).set({ agentState, agentStateRef: ref }, { merge: true });
   }
 
   async setRoundBuilder(jobId: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void> {

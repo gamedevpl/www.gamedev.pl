@@ -10,7 +10,7 @@ export interface UncollectedFeedbackRecord {
   state?: JobState;
   lastAgentSignalAt?: string;
   agentEndedAt?: string;
-  agentEndedBy?: 'submit' | 'end';
+  agentEndedBy?: 'submit' | 'end' | 'takeover';
   agentState?: string;
 }
 

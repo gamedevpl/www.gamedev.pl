@@ -515,8 +515,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.roundsStore.clearAgentEnded(jobId);
   }
 
-  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState): Promise<void> {
-    return this.roundsStore.setSubmissionAgentState(jobId, agentState);
+  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState, ref: string): Promise<void> {
+    return this.roundsStore.setSubmissionAgentState(jobId, agentState, ref);
   }
 
   async setRoundBuilder(jobId: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void> {

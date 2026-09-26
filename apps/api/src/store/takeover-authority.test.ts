@@ -30,6 +30,7 @@ describe.each(stores)('takeover authority: %s', (_name, makeStore) => {
       ownerUid: 'g:former',
       roundGeneration: 2,
       agentEndedAt: at,
+      agentEndedBy: 'takeover',
     });
   });
 

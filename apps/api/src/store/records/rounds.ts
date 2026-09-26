@@ -8,7 +8,7 @@ export interface BuilderHandoff {
   acknowledgedAt?: string;
 }
 
-export type AgentEndedBy = 'submit' | 'end';
+export type AgentEndedBy = 'submit' | 'end' | 'takeover';
 
 // A closed round's generation and the delivery its gate judged.
 export interface ReceiptRound {
