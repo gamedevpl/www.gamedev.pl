@@ -29,7 +29,7 @@ export function resetSessionCrashCounters(): void {
 // needs_changes, not failed — same reasoning as gate_crashed.
 export function sessionCrashTransition(state: SubmissionRecord['state'], now: () => number): JobTransition | null {
   const from = state ?? 'queued';
-  if (!canTransition(from, 'needs_changes')) return null;
+  if (!['queued', 'dispatched', 'building'].includes(from) || !canTransition(from, 'needs_changes')) return null;
   return { to: 'needs_changes', at: new Date(now()).toISOString(), by: 'reconciler', reason: 'session_crashed' };
 }
 
