@@ -246,8 +246,8 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
       annotations: { title: 'Get a screenshot upload URL', ...WRITES },
       description:
         'The only way to send a mid-build screenshot. Returns a short-lived signed PUT URL — run the returned ' +
-        '`upload` one-liner verbatim (curl -H "Content-Type: application/octet-stream" --upload-file <png> "$url"). PNG bytes must never enter the model as base64; ' +
-        'there is no send_screenshot tool. The PUT validates ≤700 KB decoded PNG and returns stop/pendingMessages. ' +
+        '`upload` one-liner verbatim (curl -H "Authorization: Bearer <upload token>" -H "Content-Type: image/png" --upload-file <png> "$url"); the URL alone is not a credential, the Authorization header is. PNG bytes must never enter the model as base64; ' +
+        'there is no send_screenshot tool. The PUT validates ≤700 KB decoded PNG and returns only an upload receipt — read stop/pendingMessages from your other channel tools. ' +
         'With a shell, produce the PNG from headless Chromium: ' +
         'chromium.launch({args:["--use-gl=angle","--use-angle=swiftshader-webgl","--enable-unsafe-swiftshader","--enable-webgl","--ignore-gpu-blocklist"]}) ' +
         '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). ' +
