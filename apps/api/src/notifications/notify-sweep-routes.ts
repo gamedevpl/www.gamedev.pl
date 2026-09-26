@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
 import { runShelfRebuildPass } from '../platform/shelf-rebuild-pass.js';
@@ -34,7 +33,7 @@ export interface NotifySweepRoutesDeps {
   adminUids: Set<string> | undefined;
   now: () => number;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
-  backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
+  backendForRecord: CloseJobDeps['backendForRecord'];
   releaseWorkspace: CloseJobDeps['releaseWorkspace'];
   invalidateStatusCache: (jobId: number) => void;
   acknowledgeBuilderHandoff: (input: {
@@ -59,7 +58,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     adminUids,
     now,
     builderOf,
-    backendFor,
+    backendForRecord,
     releaseWorkspace,
     invalidateStatusCache,
     acknowledgeBuilderHandoff,
@@ -101,7 +100,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
 
-      const closeDeps: CloseJobDeps = { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache };
+      const closeDeps: CloseJobDeps = { store, now, backendForRecord, releaseWorkspace, invalidateStatusCache };
       let closed = 0;
       const closedIds = new Set<number>();
       const openRounds = await store.listOpenRounds();
