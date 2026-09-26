@@ -2,7 +2,7 @@ import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
-import { isFromGameFrame } from './frameMessage.js';
+import { gameFrameDocumentStamp, isFromGameFrame } from './frameMessage.js';
 
 /**
  * The shell half of durable per-player progress (docs/persistent-world-plan.md P1).
@@ -81,10 +81,13 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
      */
     let pending: { data: string; version: number } | null = null;
 
-    function postToGame(payload: Record<string, unknown>) {
+    function postToGame(payload: Record<string, unknown>, stamp?: number | null) {
       // Nothing is sent to a frame we have already torn down — but the write itself
       // still completes; see the drain loop.
       if (cancelled) return;
+      const current = gameFrameDocumentStamp(frameRef.current);
+      // Drop replies once the frame navigated, or loaded since the request.
+      if (current === null || (stamp !== undefined && stamp !== current)) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
       frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
@@ -125,6 +128,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (!message) return;
 
       if (message.t === 'save:hello' || message.t === 'save:load') {
+        const stamp = gameFrameDocumentStamp(frameRef.current);
         try {
           const save = await fetchGameSave(slug!);
           if (cancelled) return;
@@ -134,6 +138,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
             save
               ? { t: 'save:state', available: true, data: save.data, version: save.version }
               : { t: 'save:state', available: false, retryable: false },
+            stamp,
           );
         } catch {
           // A read that failed is also "no slot" as far as the game is concerned —
@@ -141,7 +146,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           // not read. But it is a *different* no: `retryable` tells the module this one
           // is worth one more attempt, so a blip at boot does not silently cost the
           // player their save for the rest of the session.
-          if (!cancelled) postToGame({ t: 'save:state', available: false, retryable: true });
+          if (!cancelled) postToGame({ t: 'save:state', available: false, retryable: true }, stamp);
         }
         return;
       }

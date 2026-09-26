@@ -190,6 +190,30 @@ describe('useGameSaveBridge', () => {
     expect(toGame[0]).toMatchObject({ t: 'save:state', available: true });
   });
 
+  it('drops a pending save read when the frame loads another document first', async () => {
+    let resolveRead: (response: Response) => void = () => undefined;
+    fetchMock.mockReturnValue(new Promise<Response>((resolve) => (resolveRead = resolve)));
+    root = createRoot(container);
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>one</p>" />));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const gameWindow = iframe.contentWindow as Window;
+    vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
+      toGame.push(message);
+    }) as typeof gameWindow.postMessage);
+    act(() => iframe.dispatchEvent(new Event('load')));
+    act(() => root!.render(<FrameHarness html="<!doctype html><p>two</p>" />));
+    act(() => iframe.dispatchEvent(new Event('load')));
+
+    const data = frame({ t: 'save:hello', version: 1 });
+    window.dispatchEvent(new MessageEvent('message', { data, source: gameWindow, origin: 'null' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    act(() => iframe.dispatchEvent(new Event('load')));
+    resolveRead(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(toGame).toHaveLength(0);
+  });
+
   it('writes a save and acknowledges it', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
     const { fromGame } = mount();

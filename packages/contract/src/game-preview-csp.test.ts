@@ -31,6 +31,16 @@ describe('game preview CSP', () => {
     expect(out).toContain("connect-src 'none'");
   });
 
+  it('scans a long run of unclosed comment openers in linear time', () => {
+    const hostile = '<!--'.repeat(200_000);
+    const started = performance.now();
+    const out = withGamePreviewCsp(hostile);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(out.startsWith(META_PREFIX)).toBe(true);
+    const closed = withGamePreviewCsp('<!---->'.repeat(100_000) + '<!doctype html>');
+    expect(closed.indexOf(META_PREFIX)).toBe('<!---->'.length * 100_000 + '<!doctype html>'.length);
+  });
+
   it('keeps comments that precede the doctype before it', () => {
     const out = withGamePreviewCsp('\uFEFF<!-- built --> <!doctype html><p>hi</p>');
     expect(out.startsWith(`\uFEFF<!-- built --> <!doctype html>${META_PREFIX}`)).toBe(true);
