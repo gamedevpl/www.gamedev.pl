@@ -62,8 +62,7 @@ function BackdropVideo({ stream, facing }: { stream: MediaStream; facing: Backdr
   );
 }
 
-/** A game to run, sourced either from raw assembled HTML or a published slug. */
-export type GameTheaterSource = { html: string } | { slug: string };
+export type GameTheaterSource = { html: string } | { slug: string; reviewVersion?: string };
 
 type GameTheaterProps = {
   title: string;
@@ -786,6 +785,7 @@ export function GameTheater({
           <PublishedGameFrame
             key={source.slug}
             slug={source.slug}
+            reviewVersion={source.reviewVersion}
             title={title}
             frameRef={frameRef}
             embed

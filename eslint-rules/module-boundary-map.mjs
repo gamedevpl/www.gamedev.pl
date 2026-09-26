@@ -46,6 +46,11 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'review-preview-loader': 'platform',
+  'review-play': 'community',
+  'review-game-source': 'community',
+  'review-version-binding': 'community',
+  'review-version-roundtrip': 'community',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
