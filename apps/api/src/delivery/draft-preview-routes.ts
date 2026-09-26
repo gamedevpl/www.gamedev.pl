@@ -66,8 +66,8 @@ export async function registerDraftPreviewRoutes(
     // A pulled game is not re-opened by flipping the switch.
     if (record.moderationBlockedAt) return null;
     if (!record.draftSharedAt || !record.slug) return null;
-    const current = await store.getSubmissionBySlug(record.slug);
-    if (!current || current.moderationBlockedAt) return null;
+    const siblings = await store.listSubmissionsBySlug(record.slug);
+    if (!siblings.length || siblings.some((round) => round.moderationBlockedAt)) return null;
     const version = sharedDraftVersion(record);
     if (!version || !(await shareGate.isGreen(record.slug, version))) return null;
     // Pinned: a delivery landing now must not ride this answer.
