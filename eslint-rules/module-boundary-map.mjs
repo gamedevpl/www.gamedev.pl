@@ -68,6 +68,7 @@ const FILE_BUCKET = {
   'bounded-map': 'platform',
   'oauth-as': 'platform',
   'capture-network-policy': 'platform',
+  'capture-profile-setup': 'platform',
   'capture-network-isolation': 'platform',
   'oauth-page-chrome': 'platform',
   'oauth-pkce': 'platform',

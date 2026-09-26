@@ -33,8 +33,15 @@ export async function captureBrowser(input: {
 }): Promise<CaptureImage> {
   const executable = chromeExecutable();
   const network = await captureNetworkPolicy(input.url);
-  const profile = mkdtempSync(join(tmpdir(), 'gamedev-capture-'));
-  network.prepareProfile(profile);
+  let profile = '';
+  try {
+    profile = mkdtempSync(join(tmpdir(), 'gamedev-capture-'));
+    network.prepareProfile(profile);
+  } catch (error) {
+    await network.close();
+    if (profile) rmSync(profile, { recursive: true, force: true });
+    throw error;
+  }
   const child = spawn(
     executable,
     [
