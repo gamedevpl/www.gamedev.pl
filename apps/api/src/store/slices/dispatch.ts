@@ -16,7 +16,7 @@ import {
   type JobCostEntry,
 } from '../records/dispatch.js';
 import type { SubmissionRecord } from '../records/submission.js';
-import { clearRoundSignals } from './rounds.js';
+import { clearRoundSignals, stampReceiptRound } from './round-close.js';
 
 // Refused unless the round's newest activity stamp still equals `activityAt`.
 export interface TransitionGuard {
@@ -99,7 +99,10 @@ export class InMemoryDispatchStore implements DispatchStore {
           }
         : {}),
     };
-    if (closes) clearRoundSignals(next);
+    if (closes) {
+      clearRoundSignals(next);
+      stampReceiptRound(next, sub);
+    }
     this.submissions.set(jobId, next);
     return true;
   }
@@ -252,6 +255,7 @@ export class FirestoreDispatchStore implements DispatchStore {
           roundStartedAt: transition.at,
         };
         clearRoundSignals(next);
+        stampReceiptRound(next, current);
         tx.set(ref, next);
       } else {
         tx.set(

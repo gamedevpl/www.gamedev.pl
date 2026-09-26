@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { checkUserAccess } from './auth.js';
 import { cameThroughEdge } from './client-address.js';
 
 // Headers a fronting proxy may set; nothing else is echoed.
@@ -45,7 +46,7 @@ export function registerProxyDiagnosticsRoutes(app: FastifyInstance): void {
   app.get('/api/diagnostics/proxy', async (request, reply) => {
     // Fetched through a CDN by design, so a cached copy would mislead.
     reply.header('Cache-Control', 'no-store');
-    if (!request.user) return reply.status(401).send({ error: 'authentication required' });
+    if (!checkUserAccess(request, reply)) return;
 
     const headers: Record<string, string | null> = {};
     for (const name of FORWARDING_HEADERS) headers[name] = headerValue(request, name);

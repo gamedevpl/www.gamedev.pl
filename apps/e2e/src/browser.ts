@@ -10,16 +10,12 @@ import {
 } from 'playwright-core';
 import { inject } from 'vitest';
 import { BASE_URL, proxyOptions, STORAGE_STATE_ENV } from './config.js';
+import { chromiumSandbox } from './sandbox.js';
 
 // Re-exported so test files have a single import site for the whole helper surface.
 export { BASE_URL, proxyOptions, STORAGE_STATE_ENV };
 
-/**
- * Where Claude Code's remote environments pre-install Playwright's browsers.
- * `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` is set there too, so `playwright install`
- * is not the fallback — if this returns null the suite skips rather than trying
- * to fetch a browser that the environment has deliberately pinned.
- */
+// Null means skip: remote environments pin browsers and forbid downloads.
 export function findChromium(): string | null {
   const explicit = process.env.E2E_CHROMIUM_PATH;
   if (explicit) return existsSync(explicit) ? explicit : null;
@@ -101,15 +97,15 @@ export async function launchSiteBrowser(): Promise<Browser> {
   if (!executablePath) throw new Error('no Chromium available; check e2ePrerequisites() first');
 
   const proxyServer = process.env.HTTPS_PROXY ?? process.env.https_proxy;
+  const sandbox = chromiumSandbox();
+  if (!sandbox.enabled) console.warn(`[e2e] Chromium sandbox OFF: ${sandbox.reason}`);
 
   return chromium.launch({
     executablePath,
+    // Playwright passes --no-sandbox unless this is true.
+    chromiumSandbox: sandbox.enabled,
     ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
-    args: [
-      '--no-sandbox',
-      '--autoplay-policy=no-user-gesture-required',
-      ...(proxyServer ? ['--ssl-version-max=tls1.2'] : []),
-    ],
+    args: ['--autoplay-policy=no-user-gesture-required', ...(proxyServer ? ['--ssl-version-max=tls1.2'] : [])],
   });
 }
 

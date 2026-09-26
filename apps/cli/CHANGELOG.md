@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Conversation history no longer stores MCP authorization keys printed by `/connect` (#1545).
+- Verification scripts no longer receive creator credentials from the CLI environment (#1544).
+
 ### Internal
 
 - `genaicode` is bumped to 2.5.3 in the CLI and API; it drops `temperature` for Luna models itself (#1515).

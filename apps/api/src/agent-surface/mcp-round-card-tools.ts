@@ -131,10 +131,14 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
       now: now(),
     });
 
-    const [events, shots] = await Promise.all([
-      store.listBuildEvents(auth.jobId, { limit: 1 }),
-      store.listBuildShots(auth.jobId, { limit: 1, excludeLabels: DREAM_SHOT_LABELS }),
-    ]);
+    // A receipt sees its closed round, not later notes or frames.
+    const receipt = auth.access === 'terminal_receipt';
+    const [events, shots] = receipt
+      ? [[], []]
+      : await Promise.all([
+          store.listBuildEvents(auth.jobId, { limit: 1 }),
+          store.listBuildShots(auth.jobId, { limit: 1, excludeLabels: DREAM_SHOT_LABELS }),
+        ]);
 
     const latestEvent = events[0];
     const latestShot = shots[0];
@@ -156,7 +160,7 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
 
     // Verdict follows the latest delivery; terminal receipts still read after close.
     let gate: unknown = null;
-    if (used > 0 || auth.access === 'terminal_receipt') {
+    if (used > 0 || receipt) {
       const gateRes = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.GATE, auth.channelToken);
       if (gateRes.statusCode === 200) gate = gateRes.json();
     }
@@ -232,11 +236,13 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
         const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
         const record = 'record' in auth ? auth.record : null;
         // Delivery to show frames for; may belong to an earlier round.
-        const wanted =
-          (typeof args.deliveryId === 'string' && args.deliveryId.trim()) ||
-          record?.previewVersion ||
-          record?.deliveredVersion ||
-          null;
+        const receiptOnly = 'access' in auth && auth.access === 'terminal_receipt';
+        const wanted = receiptOnly
+          ? (record?.receiptRound?.version ?? null)
+          : (typeof args.deliveryId === 'string' && args.deliveryId.trim()) ||
+            record?.previewVersion ||
+            record?.deliveredVersion ||
+            null;
         return toolOk({
           ...(status.structuredContent as Record<string, unknown>),
           mediaDeliveryId: wanted,

@@ -21,11 +21,8 @@ describe('Sandbox Invariant Security Guard', () => {
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
-    expect(iframe?.getAttribute('allow')).toBe('accelerometer; gyroscope; magnetometer');
-    // WebMCP guard: `allow="tools"` would expose browser-agent tool registration
-    // to untrusted game code. The exact match above already forbids it; this names
-    // the invariant so it survives future edits to the sensor list.
-    expect(iframe?.getAttribute('allow') ?? '').not.toContain('tools');
+    // Raw browser capabilities stay in the trusted shell, never the game frame.
+    expect(iframe?.hasAttribute('allow')).toBe(false);
 
     act(() => {
       root.unmount();

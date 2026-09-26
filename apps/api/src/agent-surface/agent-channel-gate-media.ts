@@ -38,7 +38,10 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
 
       const query = request.query as { version?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
+      const version =
+        access === 'terminal_receipt'
+          ? (requestedVersion ?? record.receiptRound?.version ?? null)
+          : (requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null);
 
       if (!version || !record.slug) {
         return reply.send({
@@ -51,8 +54,8 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
         });
       }
 
-      // Receipt access reads only the round's closing delivery, not other versions.
-      if (access === 'terminal_receipt' && version !== record.deliveredVersion) {
+      // Receipt access reads only the delivery its own round closed on.
+      if (access === 'terminal_receipt' && version !== record.receiptRound?.version) {
         return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       }
 
@@ -133,7 +136,10 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
 
       const query = request.query as { version?: string; frames?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
+      const version =
+        access === 'terminal_receipt'
+          ? (requestedVersion ?? record.receiptRound?.version ?? null)
+          : (requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null);
 
       if (!version || !record.slug) {
         return reply.send({
@@ -145,7 +151,7 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
       }
 
       // Same receipt rule as the verdict read: only the round's delivery.
-      if (access === 'terminal_receipt' && version !== record.deliveredVersion) {
+      if (access === 'terminal_receipt' && version !== record.receiptRound?.version) {
         return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
       }
 
