@@ -3,7 +3,7 @@
 // Split out of agent-backend-env.ts: seeding is creation's question.
 
 import { ModelGameSeeder, DEFAULT_SEED_PROVIDER, type GameSeeder } from './game-seed.js';
-import { createArchiveSeedContextSource } from './seed-context.js';
+import { createPublishedSeedContextSource } from './seed-published-context.js';
 import type { SeedProviderConfig } from './seed-provider.js';
 import './seed-provider-vertex.js';
 import './seed-provider-anthropic.js';
@@ -112,7 +112,6 @@ export function createGameSeederFromEnv(
 
   const token = process.env.GAMES_REPO_TOKEN?.trim() ?? process.env.GITHUB_TOKEN?.trim();
   const repo = process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games';
-  const ref = process.env.GAMES_PUBLISHED_REF?.trim() || 'main';
   if (!token) {
     (log?.error ?? log?.warn)?.call(
       log,
@@ -123,16 +122,14 @@ export function createGameSeederFromEnv(
   }
 
   const { providers, defaultProvider } = createSeedProvidersFromEnv(log);
-  log?.info({ repo, ref, defaultProvider, configuredProviders: [...providers.keys()] }, 'round-0 seeding ready');
+  log?.info({ repo, defaultProvider, configuredProviders: [...providers.keys()] }, 'round-0 seeding ready');
 
   return new ModelGameSeeder({
-    context: createArchiveSeedContextSource({
+    context: createPublishedSeedContextSource({
       repo,
-      ref,
       token,
       ...(log ? { log } : {}),
-      // Archive dropped catalog.json; snapshot is the source now.
-      ...(snapshotReader ? { getCatalog: () => snapshotReader.getCatalog() } : {}),
+      snapshotReader,
     }),
     providers,
     defaultProvider,

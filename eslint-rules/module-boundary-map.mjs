@@ -332,6 +332,8 @@ const FILE_BUCKET = {
   'creator-versions': 'creation',
   'creator-profile-routes': 'creation',
   'seed-context': 'creation',
+  'seed-published-context': 'creation',
+  'seed-published-context-env': 'creation',
   'seed-bundle': 'creation',
   'seed-availability': 'creation',
   'dream-availability': 'creation',
