@@ -41,6 +41,21 @@ describe('observe errors respect the latest job authority', () => {
     for (let i = 0; i < 2; i++) await reconciler.reconcileNativeJob((await store.getSubmission(9))!);
     expect((await store.getSubmission(9))?.state).toBe('ready_for_review');
   });
+  it('does not regain lifecycle authority when a cost-only poll races sealing', async () => {
+    const { store, observe, reconciler } = await setup();
+    await store.setSubmissionSlug(9, 'preview-game');
+    await store.setSubmissionPreviewVersion(9, 'v1');
+    await store.incrementRoundDeliveryCount(9);
+    await store.recordJobTransition(9, { to: 'ready_for_review', by: 'gate', at: AT, reason: 'preview_gate_green' });
+    await reconciler.reconcileNativeJob((await store.getSubmission(9))!);
+    observe.mockImplementationOnce(async () => {
+      expect(await store.claimSeal(9, AT)).not.toBeNull();
+      throw new Error('cost poll failed while sealing');
+    });
+    await reconciler.reconcileNativeJob((await store.getSubmission(9))!);
+    expect((await store.getSubmission(9))?.state).toBe('building');
+    expect(await store.recordJobTransition(9, { to: 'ready_for_review', by: 'system', at: AT })).toBe(true);
+  });
   it('does not reclaim a candidate whose gate closes during observation', async () => {
     const { store, observe, reconciler } = await setup();
     await reconciler.reconcileNativeJob((await store.getSubmission(9))!);

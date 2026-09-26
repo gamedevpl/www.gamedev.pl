@@ -8,6 +8,7 @@ export async function recordSessionCrash(
   dispatchRef: string,
   now: () => number,
 ): Promise<JobTransition | null> {
+  if (!sessionCrashTransition(evaluated.state, now)) return null;
   const fresh = await store.getSubmission(evaluated.jobId);
   if (!fresh) return null;
   const transition = sessionCrashTransition(fresh.state, now);
