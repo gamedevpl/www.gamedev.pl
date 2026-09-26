@@ -15,7 +15,7 @@ import {
 
 const WRITES = {
   readOnlyHint: false,
-  destructiveHint: false,
+  destructiveHint: true,
   idempotentHint: false,
   openWorldHint: false,
 } as const;
@@ -55,7 +55,7 @@ export function createGameCreateTools(deps: GameCreateToolsDeps): Record<string,
     create_game: {
       annotations: {
         title: 'Create a game',
-        // Additive: it spends the daily creation allowance and removes nothing.
+        // Creation consumes the daily allowance.
         ...WRITES,
       },
       outputSchema: {

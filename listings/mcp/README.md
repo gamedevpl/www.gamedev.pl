@@ -54,7 +54,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 
 | Tool                                 | What it does                            |             |
 | ------------------------------------ | --------------------------------------- | ----------- |
-| `create_game`                        | Create a game                           | write       |
+| `create_game`                        | Create a game                           | destructive |
 | `list_account_games`                 | List games on this account              | read        |
 | `get_game_access`                    | Read current role and members           | read        |
 | `propose_game_transfer`              | Propose a transfer for Studio confirm   | write       |
