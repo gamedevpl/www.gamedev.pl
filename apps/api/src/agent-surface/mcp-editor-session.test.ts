@@ -272,7 +272,8 @@ describe('MCP editor session actor', () => {
       { 'mcp-session-id': sessionId },
     );
     expect(issued.isError).toBe(false);
-    const url = (issued.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+    const upload = issued.structured as { url: string; upload: string };
+    const url = upload.url.replace(/^https?:\/\/[^/]+/, '');
 
     expect(await store.removeEditor(SLUG, OWNER, EDITOR, AT)).toMatchObject({ editorUids: [] });
     const next = await store.createEditorInvitation(SLUG, OWNER, EDITOR, AT);
@@ -302,7 +303,10 @@ describe('MCP editor session actor', () => {
     const put = await app.inject({
       method: 'PUT',
       url,
-      headers: { 'content-type': 'image/png' },
+      headers: {
+        authorization: upload.upload.match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '',
+        'content-type': 'image/png',
+      },
       payload: pngBytes,
     });
     expect(put.statusCode).toBe(401);
@@ -335,7 +339,8 @@ describe('MCP editor session actor', () => {
       { 'mcp-session-id': sessionId },
     );
     expect(issued.isError).toBe(false);
-    const url = (issued.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+    const upload = issued.structured as { url: string; upload: string };
+    const url = upload.url.replace(/^https?:\/\/[^/]+/, '');
 
     expect(await store.removeEditor(SLUG, OWNER, EDITOR, AT)).toMatchObject({ editorUids: [] });
 
@@ -346,7 +351,10 @@ describe('MCP editor session actor', () => {
     const put = await app.inject({
       method: 'PUT',
       url,
-      headers: { 'content-type': 'image/png' },
+      headers: {
+        authorization: upload.upload.match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '',
+        'content-type': 'image/png',
+      },
       payload: pngBytes,
     });
     expect(put.statusCode).toBe(401);

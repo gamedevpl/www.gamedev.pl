@@ -251,7 +251,7 @@
     "apps/api/src/creation/remix-suggestions.ts": 45,
     "apps/api/src/creation/remix-turns.test.ts": 29,
     "apps/api/src/creation/remix-turns.ts": 42,
-    "apps/api/src/creation/remix.test.ts": 1445,
+    "apps/api/src/creation/remix.test.ts": 1451,
     "apps/api/src/creation/remix.ts": 1396,
     "apps/api/src/creation/scorecard.test.ts": 412,
     "apps/api/src/creation/scorecard.ts": 306,
@@ -1029,7 +1029,7 @@
     "apps/world/src/app.test.ts": 360,
     "apps/world/src/app.ts": 279,
     "apps/world/src/host.test.ts": 404,
-    "apps/world/src/host.ts": 344,
+    "apps/world/src/host.ts": 345,
     "apps/world/src/server.ts": 111,
     "apps/world/src/sim-source.ts": 203,
     "apps/world/src/snapshot-store.ts": 92,
@@ -1123,6 +1123,6 @@
     "packages/zone-core/src/ticket.test.ts": 101,
     "packages/zone-core/src/ticket.ts": 111,
     "packages/zone-core/src/zone.test.ts": 711,
-    "packages/zone-core/src/zone.ts": 675
+    "packages/zone-core/src/zone.ts": 680
   }
 }
