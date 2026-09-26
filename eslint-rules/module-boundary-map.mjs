@@ -67,6 +67,8 @@ const FILE_BUCKET = {
   'canonical-base64': 'platform',
   'bounded-map': 'platform',
   'oauth-as': 'platform',
+  'capture-network-policy': 'platform',
+  'capture-network-isolation': 'platform',
   'oauth-page-chrome': 'platform',
   'oauth-pkce': 'platform',
   'oauth-redirect': 'platform',

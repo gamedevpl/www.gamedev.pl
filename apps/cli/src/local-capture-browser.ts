@@ -1,3 +1,4 @@
+import { captureNetworkPolicy } from './capture-network-policy.js';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,11 +32,14 @@ export async function captureBrowser(input: {
   signal: AbortSignal;
 }): Promise<CaptureImage> {
   const executable = chromeExecutable();
+  const network = await captureNetworkPolicy(input.url);
   const profile = mkdtempSync(join(tmpdir(), 'gamedev-capture-'));
+  network.prepareProfile(profile);
   const child = spawn(
     executable,
     [
       '--headless=new',
+      ...network.flags,
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-extensions',
@@ -203,6 +207,7 @@ export async function captureBrowser(input: {
     child.kill();
     await Promise.race([closed, delay(1500)]);
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await network.close();
     rmSync(profile, { recursive: true, force: true });
   }
 }
