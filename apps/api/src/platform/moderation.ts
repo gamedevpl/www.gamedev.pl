@@ -357,7 +357,7 @@ ${text}
 
     // A malformed body, a non-boolean `allowed`, or the abort firing all throw
     // out of here — and `check()` turns any throw into a fail-closed verdict.
-    // genaicode drops the temperature for Luna, which rejects anything but its default.
+    // genaicode strips the temperature Luna rejects.
     const verdict = await this.getClient(model)(promptText)
       .temperature(0)
       .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
