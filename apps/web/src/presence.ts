@@ -36,6 +36,7 @@ const MIN_HEARTBEAT_MS = 5_000;
 /** Position bound. The server clamps to the game's declared grid; this only stops a
  *  runaway value from becoming a request body at all. */
 const MAX_COORDINATE = 4096;
+const HELLO_MIN_INTERVAL_MS = 1_000;
 
 export type PresenceRequest =
   { t: 'presence:hello' } | { t: 'presence:here'; col: number; row: number } | { t: 'presence:away' };
@@ -90,6 +91,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     let heartbeatMs = DEFAULT_HEARTBEAT_MS;
     /** True once at least one beat has been sent, so `leave` knows there is a slot. */
     let joined = false;
+    let helloAt = -Infinity;
+    let awaitingFirstHere = false;
 
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
@@ -168,8 +171,10 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       const message = parsePresenceMessage(event.data);
       if (!message) return;
       if (message.t === 'presence:hello') {
-        if (engaged) return;
+        if (Date.now() - helloAt < HELLO_MIN_INTERVAL_MS) return;
+        helloAt = Date.now();
         engaged = true;
+        awaitingFirstHere = true;
         // The opening answer is a *read*, not a beat. A signed-out visitor gets the count
         // this way, and a signed-in one does not enter the roster until the game has had
         // a chance to say where it is — which stops everybody who opens a world game
@@ -193,7 +198,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         // The first position is worth a beat straight away: waiting a full interval would
         // leave a player invisible for twelve seconds after walking in, which is most of
         // the time anybody spends deciding whether a world feels inhabited.
-        if (!joined) void beat();
+        if (!joined || awaitingFirstHere) void beat();
+        awaitingFirstHere = false;
         return;
       }
 

@@ -152,6 +152,26 @@ describe('usePresenceBridge', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(calls('GET')).toHaveLength(1);
   });
+
+  it('answers the hello of a replacement document after a srcDoc swap', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    fetchMock.mockResolvedValue(jsonResponse(roster));
+    const { fromGame } = mount();
+    fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(toGame).toHaveLength(1));
+    fromGame({ t: 'presence:here', col: 2, row: 2 });
+    await waitFor(() => expect(toGame).toHaveLength(2));
+    // The new document says hello without the old one saying away.
+    now += 1_500;
+    fromGame({ t: 'presence:hello' });
+    await waitFor(() => expect(toGame).toHaveLength(3));
+    expect(calls('GET')).toHaveLength(2);
+    fromGame({ t: 'presence:here', col: 5, row: 6 });
+    await waitFor(() => expect(calls('POST')).toHaveLength(2));
+    expect(JSON.parse(calls('POST')[1][1].body as string)).toEqual({ col: 5, row: 6 });
+  });
+
   it('never forwards a uid or any peer field the game did not ask for', async () => {
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
