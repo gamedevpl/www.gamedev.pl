@@ -297,29 +297,29 @@ export async function registerPresenceRoutes(app: FastifyInstance, options: Pres
     };
   }
 
-  app.get('/api/games/:slug/presence', async (request, response) => {
-    const params = ParamsSchema.safeParse(request.params);
-    if (!params.success) {
-      return response.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
-    }
-    const grid = await gridFor(params.data.slug);
-    if (!grid) return response.status(404).send({ error: 'presence not found' });
+  app.get(
+    '/api/games/:slug/presence',
+    { config: { rateLimit: { max: 30, timeWindow: 60_000 } } },
+    async (request, response) => {
+      const params = ParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return response.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
+      }
+      const grid = await gridFor(params.data.slug);
+      if (!grid) return response.status(404).send({ error: 'presence not found' });
 
-    const worldId = worldIdFor(params.data.slug);
-    const uid = request.user?.uid;
-    const selfKey = uid ? slotKeyFor(worldId, uid) : undefined;
-    // A signed-in visitor who has not beaten yet reads as not visible, which is true:
-    // reading the roster does not put you in it.
-    const roster = registry.roster(worldId, selfKey);
-    return response.send(reply(roster, roster.present));
-  });
+      const worldId = worldIdFor(params.data.slug);
+      const uid = request.user?.uid;
+      const selfKey = uid ? slotKeyFor(worldId, uid) : undefined;
+      const roster = registry.roster(worldId, selfKey);
+      return response.send(reply(roster, roster.present));
+    },
+  );
 
   app.post(
     '/api/games/:slug/presence',
     {
       config: {
-        // Comfortably above the shell's cadence (one beat per 12s, so five a minute) and
-        // far below anything a runaway loop would produce. The shell owns the timer, so
         // exceeding this means a modified client rather than a busy player.
         rateLimit: { max: 30, timeWindow: 60_000 },
       },

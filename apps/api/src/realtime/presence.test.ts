@@ -6,21 +6,6 @@ import { InMemoryStore } from '../platform/store.js';
 import type { WorldSchema } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
 
-/**
- * Presence is the only feature here that reports something about a person *while they
- * are still there*, so the tests are weighted toward what it must never say rather than
- * what it says. Three things carry the feature's whole privacy story and each one has a
- * test that fails loudly if somebody removes it:
- *
- *   - no uid reaches another player, in any field, ever;
- *   - a presence tag is never the same value as a world entry's `ownerTag`, because
- *     equal tags would tell a player which stranger around them planted which thing;
- *   - a slot disappears on its own, so there is never anything to erase.
- *
- * The rest is about the count being honest: somebody who stopped playing must stop being
- * counted, and a crowded world must not report a number it trimmed out of the payload.
- */
-
 const sessionSecret = 'dev-session-secret-change-me';
 
 const green: WorldSchema = {
@@ -92,6 +77,14 @@ describe('presence routes', () => {
     expect(body.count).toBe(1);
     expect(body.peers).toHaveLength(1);
     expect(body.visible).toBe(false);
+  });
+
+  it('rate limits repeated roster reads', async () => {
+    const app = await appWith(store);
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      expect((await app.inject({ method: 'GET', url: '/api/games/green/presence' })).statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'GET', url: '/api/games/green/presence' })).statusCode).toBe(429);
   });
 
   it('refuses a heartbeat from a signed-out visitor', async () => {
