@@ -1,4 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
+import { erasedIncarnation } from '../records/game-access.js';
 
 // The shared daily allowance of concept frames (NP-1v).
 export interface DreamQuotaStore {
@@ -24,6 +25,8 @@ export class InMemoryDreamQuotaStore implements DreamQuotaStore {
   private globalDreams = new Map<string, number>();
   private studioHealthScans = new Map<string, number>();
 
+  constructor(private isErased: (uid: string) => boolean = () => false) {}
+
   async getGlobalDreamCount(dateStr: string): Promise<number> {
     return this.globalDreams.get(dateStr) ?? 0;
   }
@@ -45,6 +48,8 @@ export class InMemoryDreamQuotaStore implements DreamQuotaStore {
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
     const key = `${uid}:${hour}`;
+    // An erased account gets no counter row back.
+    if (this.isErased(uid)) return { allowed: false, current: limit };
     const current = this.studioHealthScans.get(key) ?? 0;
     if (current >= limit) return { allowed: false, current };
     this.studioHealthScans.set(key, current + 1);
@@ -90,8 +95,17 @@ export class FirestoreDreamQuotaStore implements DreamQuotaStore {
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
     const ref = this.db.collection('usage').doc(uid).collection('counters').doc(`studio-health-${hour}`);
+    const fence = this.db.collection('erasedAccounts').doc(uid);
     return await this.db.runTransaction(async (transaction) => {
-      const value = (await transaction.get(ref)).data()?.scans;
+      const [fenceSnap, snap] = await Promise.all([transaction.get(fence), transaction.get(ref)]);
+      // Erasure fence: never recreate a counter row for an erased incarnation.
+      if (fenceSnap.exists) {
+        const user = (await transaction.get(this.db.collection('users').doc(uid))).data() ?? null;
+        const erasedAt = (fenceSnap.data() as { at?: string }).at ?? null;
+        if (erasedIncarnation(user as { createdAt?: string } | null, erasedAt))
+          return { allowed: false, current: limit };
+      }
+      const value = snap.data()?.scans;
       const current = typeof value === 'number' ? value : 0;
       if (current >= limit) return { allowed: false, current };
       transaction.set(ref, { scans: current + 1 }, { merge: true });

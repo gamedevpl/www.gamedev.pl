@@ -88,12 +88,41 @@ describe('GET /api/me/studio/health workload limits', () => {
   });
 });
 
-describe.each<[string, () => Store]>([
-  ['InMemoryStore', () => new InMemoryStore()],
-  ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
+const firestoreFake = () => {
+  const { db } = fakeFirestore();
+  return { store: new FirestoreStore(db) as Store, db };
+};
+
+describe.each<[string, () => { store: Store; db?: ReturnType<typeof fakeFirestore>['db'] }]>([
+  ['InMemoryStore', () => ({ store: new InMemoryStore() })],
+  ['FirestoreStore(fake)', firestoreFake],
 ])('%s studio health scan counter', (_name, makeStore) => {
+  it('writes no counter row for an erased account', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const { store, db } = makeStore();
+      vi.setSystemTime(new Date('2026-09-26T11:00:00.000Z'));
+      await store.upsertUser({ uid: 'g:gone' });
+      await store.beginAccountErasure('g:gone', '2026-09-26T12:00:00.000Z');
+
+      expect((await store.checkAndIncrementStudioHealthScans('g:gone', '2026-09-26T12', 5)).allowed).toBe(false);
+      const row = db?.collection('usage').doc('g:gone').collection('counters').doc('studio-health-2026-09-26T12');
+      if (row) expect((await row.get()).exists).toBe(false);
+
+      await store.deleteAccountIdentity('g:gone', '2026-09-26T12:00:00.000Z');
+      vi.setSystemTime(new Date('2026-09-26T13:00:00.000Z'));
+      await store.upsertUser({ uid: 'g:gone' });
+      expect(await store.checkAndIncrementStudioHealthScans('g:gone', '2026-09-26T13', 5)).toEqual({
+        allowed: true,
+        current: 1,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('counts per creator per hour up to the limit', async () => {
-    const store = makeStore();
+    const { store } = makeStore();
     expect(await store.checkAndIncrementStudioHealthScans('g:a', '2026-09-26T12', 2)).toEqual({
       allowed: true,
       current: 1,

@@ -86,6 +86,7 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
+import { erasedIncarnation } from './records/game-access.js';
 import { InMemoryGameTransferStore, MAX_REVOKED_ROUNDS_PER_TRANSFER } from './slices/game-transfer.js';
 import { InMemoryGameTransferProposalStore } from './slices/game-transfer-proposal.js';
 import { InMemoryGameEditorInviteStore } from './slices/game-editor-invite.js';
@@ -201,7 +202,9 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
-  private dreamQuotaStore = new InMemoryDreamQuotaStore();
+  private dreamQuotaStore = new InMemoryDreamQuotaStore((uid) =>
+    erasedIncarnation(this.identityStore.users.get(uid) ?? null, this.gameAccessStore.erasedAt.get(uid) ?? null),
+  );
   private accessStore = new InMemoryAccessStore();
   private telemetryStore = new InMemoryTelemetryStore();
   private notificationsStore = new InMemoryNotificationsStore();
