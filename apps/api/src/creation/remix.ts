@@ -897,6 +897,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           // exists to explain.
           request.log.info(
             {
+              traceId: request.id,
               slug: session.slug,
               utterance: body.data.utterance,
               ok: outcome.ok,
@@ -910,7 +911,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           return reply.send({
             ok: false,
             reason: outcome.reason,
-            ...(tracing && outcome.trace ? { debug: outcome.trace } : {}),
+            ...(tracing && outcome.trace ? { debug: { traceId: request.id } } : {}),
             ...(outcome.summary ? { summary: outcome.summary } : {}),
           });
         }
@@ -946,7 +947,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           html,
           undoable: true,
           region: outcome.region,
-          ...(tracing && outcome.trace ? { debug: outcome.trace } : {}),
+          ...(tracing && outcome.trace ? { debug: { traceId: request.id } } : {}),
           ...(outcome.summary ? { summary: outcome.summary } : {}),
         });
       } finally {
