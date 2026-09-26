@@ -264,8 +264,9 @@ export class ZoneHost {
   }
 
   input(zoneId: string, slot: number, kind: string, value: unknown): void {
-    if (![...(this.members.get(zoneId) ?? [])].some((seated) => seated.slot === slot && seated.canInput)) return;
-    this.zones.get(zoneId)?.enqueue(slot, kind, value);
+    const member = [...(this.members.get(zoneId) ?? [])].some((seated) => seated.slot === slot && seated.canInput);
+    // A guest's declared frame proves it is still there; it never reaches the sim.
+    this.zones.get(zoneId)?.[member ? 'enqueue' : 'touch'](slot, kind, value);
   }
 
   resync(zoneId: string, slot: number): void {

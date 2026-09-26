@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createNodeVmCage,
   guestPlayerTag,
+  IDLE_SEAT_MS,
   mintZoneTicket,
   parseZoneSchema,
   ZONE_TICKET_TTL_MS,
@@ -19,8 +20,11 @@ const SCHEMA = parseZoneSchema({
   inputs: [{ k: 'douse', type: 'none' }],
 }) as ZoneSchema;
 const SIM = `var __SIM_BUNDLE__ = (function () {
-  function init() { return {}; }
-  function tick(state) { return state; }
+  function init() { return { acts: 0 }; }
+  function tick(state, events) {
+    for (var i = 0; i < events.length; i++) if (events[i].k === 'douse') state.acts++;
+    return state;
+  }
   function wake(state) { return state; }
   return { init: init, tick: tick, wake: wake };
 })();`;
@@ -33,15 +37,38 @@ function ticketFor(player: string): string {
   );
 }
 
-function connection(): ZoneConnection & { frames: Array<ZoneOutboundFrame | unknown> } {
-  const result = {
+function connection(): ZoneConnection & { frames: Array<ZoneOutboundFrame | unknown>; closedWith?: string } {
+  const result: ZoneConnection & { frames: Array<ZoneOutboundFrame | unknown>; closedWith?: string } = {
     frames: [] as Array<ZoneOutboundFrame | unknown>,
     send(frame: ZoneOutboundFrame | unknown) {
       result.frames.push(frame);
     },
-    close() {},
+    close(reason: string) {
+      result.closedWith = reason;
+    },
   };
   return result;
+}
+
+function makeHost(clock: { now: number }) {
+  const source: SimSource = { load: async () => ({ bundleJs: SIM, simMathJs: SIM_MATH }) };
+  const store: ZoneSnapshotStore = { load: async () => null, save: async () => {} };
+  return new ZoneHost({
+    cage: createNodeVmCage(),
+    source,
+    store,
+    schemas: { getSchema: async () => SCHEMA },
+    secret: SECRET,
+    now: () => clock.now,
+  });
+}
+
+function lastState(frames: Array<ZoneOutboundFrame | unknown>): { acts: number } {
+  const snaps = frames.filter(
+    (frame): frame is { t: 'snap'; state: string } =>
+      typeof frame === 'object' && frame !== null && 't' in frame && frame.t === 'snap',
+  );
+  return JSON.parse(snaps[snaps.length - 1]!.state) as { acts: number };
 }
 
 describe('guest authority', () => {
@@ -77,6 +104,50 @@ describe('guest authority', () => {
     );
     expect(delta?.ev).toEqual([{ slot: memberSeat.slot, k: 'douse' }]);
 
+    await host.shutdown();
+  });
+
+  // Dropped input must still count as presence, or every guest times out.
+  it('keeps a guest who keeps sending seated past the idle limit, still powerless', async () => {
+    const clock = { now: 5_000_000 };
+    const host = makeHost(clock);
+    const guest = connection();
+    const member = connection();
+    const guestSeat = await host.admit(ticketFor(guestPlayerTag('guest-nonce')), guest);
+    const memberSeat = await host.admit(ticketFor('member'), member);
+
+    let memberActs = 0;
+    for (let elapsed = 0; elapsed <= IDLE_SEAT_MS + 60_000; elapsed += 1_000) {
+      if (elapsed % 10_000 === 0) {
+        host.input('ember-watch', guestSeat.slot, 'douse', undefined);
+        host.input('ember-watch', memberSeat.slot, 'douse', undefined);
+        memberActs++;
+      }
+      clock.now += 1_000;
+      host.pump(clock.now);
+    }
+
+    expect(guest.closedWith).toBeUndefined();
+    expect(member.closedWith).toBeUndefined();
+    host.resync('ember-watch', guestSeat.slot);
+    expect(lastState(guest.frames).acts).toBe(memberActs);
+
+    await host.shutdown();
+  });
+
+  it('still reaps a guest who sends nothing, or only undeclared frames', async () => {
+    const clock = { now: 5_000_000 };
+    const host = makeHost(clock);
+    const guest = connection();
+    const guestSeat = await host.admit(ticketFor(guestPlayerTag('guest-quiet')), guest);
+
+    for (let elapsed = 0; elapsed <= IDLE_SEAT_MS + 1_000; elapsed += 1_000) {
+      if (elapsed % 10_000 === 0) host.input('ember-watch', guestSeat.slot, 'teleport', 1);
+      clock.now += 1_000;
+      host.pump(clock.now);
+    }
+
+    expect(guest.closedWith).toBe('idle');
     await host.shutdown();
   });
 });
