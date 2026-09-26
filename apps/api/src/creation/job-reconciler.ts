@@ -235,12 +235,12 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       // Stale: a handoff already dispatched a newer ref.
       if (fresh?.dispatch?.refs.at(-1) !== lastRef) return null;
 
-      // A preview proves delivery without sealing the round for review.
+      // A preview is not publish readiness; its own gate verdict decides.
       if (
         result.reason === 'task_completed_without_delivery' &&
         (fresh?.roundDeliveryCount ?? record.roundDeliveryCount ?? 0) > 0
       ) {
-        return null;
+        return fresh ? reconcileGateVerdict(fresh) : null;
       }
 
       // Finished but uploaded nothing is the one failure worth answering.
@@ -425,7 +425,16 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           version,
           ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
         });
-        return null;
+        // Session over, preview green: the owner seals it from ready_for_review.
+        const sealable = state === 'building' && record.agentState === 'completed' && !record.deliveredVersion;
+        if (!sealable || !canTransition(state, 'ready_for_review')) return null;
+        const transition: JobTransition = {
+          to: 'ready_for_review',
+          at: new Date(now()).toISOString(),
+          by: 'gate',
+          reason: 'preview_gate_green',
+        };
+        return (await store.recordJobTransition(record.jobId, transition)) ? transition : null;
       }
       const to = 'needs_changes' as const;
       if (!redPendingRepair && !canTransition(state, to)) return null;

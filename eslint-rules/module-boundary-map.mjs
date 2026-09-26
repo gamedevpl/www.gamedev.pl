@@ -247,6 +247,7 @@ const FILE_BUCKET = {
   'improvement-admission': 'creation',
   'create-game': 'creation',
   'job-reconciler': 'creation',
+  'job-reconciler-preview-completion.test': 'creation',
   'gate-repair': 'creation',
   'dispatch-build': 'creation',
   'resume-build': 'creation',

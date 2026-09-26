@@ -1,0 +1,97 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentBackend } from '../agent-surface/agent-backend.js';
+import type { GamesStore } from '../delivery/games-store.js';
+import { sealRefusal } from '../platform/seal-preview.js';
+import { InMemoryStore } from '../platform/store.js';
+import { createJobReconciler } from './job-reconciler.js';
+
+const AT = '2026-09-26T12:00:00.000Z';
+type AgentState = 'in_progress' | 'completed';
+
+async function setup(previewGate: { green: boolean } | null) {
+  const store = new InMemoryStore();
+  await store.createSubmission(9, 'g:owner', 'Preview game');
+  await store.setSubmissionSlug(9, 'preview-game');
+  await store.recordDispatch(9, { backend: 'managed', ref: 'session-1', workspace: 'ws-1' });
+  await store.recordJobTransition(9, { to: 'building', at: AT, by: 'agent', reason: 'task_in_progress' });
+  await store.setSubmissionPreviewVersion(9, 'v1');
+  await store.incrementRoundDeliveryCount(9);
+  const generation = (await store.getSubmission(9))!.roundGeneration ?? 1;
+  const agent = { state: 'completed' as AgentState };
+  const observe = vi.fn(async (_ref: string, opts: { hasCandidate: boolean }) => ({
+    state: agent.state,
+    hasCandidate: opts.hasCandidate,
+  }));
+  const gate = { current: previewGate };
+  const gamesStore = {
+    getManifest: vi.fn(async () =>
+      gate.current ? { roundGeneration: generation, previewGate: { ...gate.current, ranAt: AT } } : null,
+    ),
+  } as unknown as GamesStore;
+  const resumeBuild = vi.fn(async () => ({}));
+  const reconciler = createJobReconciler({
+    store,
+    gamesStore,
+    log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+    now: () => Date.parse(AT) + 5 * 60_000,
+    observeQuietMs: 0,
+    maxDeliveryNudges: 1,
+    backendForRecord: async () => ({ name: 'managed', observe }) as unknown as AgentBackend,
+    releaseWorkspace: async () => {},
+    resumeBuild,
+    acknowledgeBuilderHandoff: async () => ({ started: false }),
+    probeGateCrash: async () => null,
+    postGateScreenshot: async () => null,
+    onGateRed: async () => false,
+  });
+  const poll = async () => {
+    const record = (await store.getSubmission(9))!;
+    return (await reconciler.reconcileNativeJob(record)) ?? (await reconciler.reconcileGateVerdict(record));
+  };
+  return { store, agent, gate, observe, resumeBuild, poll };
+}
+
+describe('a finished session that delivered only a preview', () => {
+  it('is not publish readiness while its preview gate is still pending', async () => {
+    const { store, resumeBuild, poll } = await setup(null);
+    await poll();
+    const after = (await store.getSubmission(9))!;
+    expect(after.state).toBe('building');
+    expect(after.roundDeliveryCount).toBe(1);
+    expect(sealRefusal(after)).toBe('not_reviewable');
+    expect(resumeBuild).not.toHaveBeenCalled();
+  });
+
+  it('goes to needs_changes, not review, when its preview gate is red', async () => {
+    const { store, poll } = await setup({ green: false });
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('needs_changes');
+  });
+
+  it('becomes owner-sealable when a preview-only builder finishes green', async () => {
+    const { store, poll } = await setup({ green: true });
+    const transition = await poll();
+    expect(transition).toMatchObject({ to: 'ready_for_review', reason: 'preview_gate_green' });
+    const after = (await store.getSubmission(9))!;
+    expect(after.deliveredVersion).toBeUndefined();
+    expect(sealRefusal(after)).toBeNull();
+    expect(await store.claimSeal(9, AT)).not.toBeNull();
+  });
+
+  it('seals up once a gate that was pending at session end turns green', async () => {
+    const { store, gate, poll } = await setup(null);
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+    gate.current = { green: true };
+    await poll();
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('keeps a green preview building while the session is still live', async () => {
+    const { store, agent, poll } = await setup({ green: true });
+    agent.state = 'in_progress';
+    await poll();
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+});
