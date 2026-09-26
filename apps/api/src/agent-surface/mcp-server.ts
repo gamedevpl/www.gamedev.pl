@@ -1,4 +1,4 @@
-import { resolvePresenceJobId } from './mcp-presence-capability.js';
+import { livePresencePulseJob, resolvePresenceClaims } from './mcp-presence-capability.js';
 import { memberCapabilityCurrent } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '@gamedevpl/contract';
@@ -1685,11 +1685,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         } else if (store && agentTokenSecret && shouldPulseMcpPresence(name)) {
           // Heartbeat + short-lived thought key — never a durable chat row. Kit-browse
           // loops used to spam "Czytanie plików Creator Kit…" between real report_progress.
-          const jobId = resolvePresenceJobId(sessionKeyArg, bearerToken, agentTokenSecret);
+          const claims = resolvePresenceClaims(sessionKeyArg, bearerToken, agentTokenSecret);
           const presenceKey = mcpPresenceKey(name);
-          if (jobId !== null && presenceKey) {
+          if (presenceKey) {
             const at = now();
-            if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at, undefined, presenceKey)) {
+            const jobId = await livePresencePulseJob(claims, store, presencePulseByJob, at, presenceKey);
+            if (jobId !== null) {
               noteMcpPresencePulse(presencePulseByJob, jobId, at, presenceKey);
               try {
                 await store.touchLastAgentSignalAt(

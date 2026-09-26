@@ -39,11 +39,17 @@ async function api(path) {
 
 const minutesAgo = (iso) => (Date.now() - Date.parse(iso)) / 60_000;
 
-const runsFor = async (workflow) =>
-  (await api(`/repos/${repo}/actions/workflows/${workflow}/runs?branch=${branch}&per_page=30`)).workflow_runs ?? [];
+const runsFor = async (workflow, event) =>
+  (
+    await api(
+      `/repos/${repo}/actions/workflows/${workflow}/runs?branch=${branch}&per_page=30${event ? `&event=${event}` : ''}`,
+    )
+  ).workflow_runs ?? [];
 
 // Only ever the newest settled run: an older one is a commit master has moved past.
-const newest = (await runsFor('ci.yml')).find((run) => run.status === 'completed');
+const newest = (await runsFor('ci.yml', 'push')).find(
+  (run) => run.status === 'completed' && run.event === 'push' && run.head_repository?.full_name === repo,
+);
 
 if (!newest) {
   console.log(`No CI run on ${branch} has settled yet.`);

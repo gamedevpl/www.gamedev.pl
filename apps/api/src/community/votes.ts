@@ -2,6 +2,7 @@ import { VOTE_VALUES } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
+import { checkUserAccess } from '../platform/auth.js';
 import type { Store } from '../platform/store.js';
 
 /**
@@ -55,9 +56,7 @@ export async function registerVoteRoutes(app: FastifyInstance, options: VoteRout
   });
 
   app.post('/api/games/:slug/vote', async (request, reply) => {
-    if (!request.user) {
-      return reply.status(401).send({ error: 'authentication required' });
-    }
+    if (!checkUserAccess(request, reply)) return reply;
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
@@ -70,14 +69,12 @@ export async function registerVoteRoutes(app: FastifyInstance, options: VoteRout
       return reply.status(404).send({ error: 'game not found' });
     }
 
-    const counts = await store.castVote(params.data.slug, request.user.uid, body.data.value);
+    const counts = await store.castVote(params.data.slug, request.user!.uid, body.data.value);
     return reply.send({ ...counts, mine: body.data.value });
   });
 
   app.delete('/api/games/:slug/vote', async (request, reply) => {
-    if (!request.user) {
-      return reply.status(401).send({ error: 'authentication required' });
-    }
+    if (!checkUserAccess(request, reply)) return reply;
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
@@ -86,7 +83,7 @@ export async function registerVoteRoutes(app: FastifyInstance, options: VoteRout
       return reply.status(404).send({ error: 'game not found' });
     }
 
-    const counts = await store.clearVote(params.data.slug, request.user.uid);
+    const counts = await store.clearVote(params.data.slug, request.user!.uid);
     return reply.send({ ...counts, mine: null });
   });
 }
