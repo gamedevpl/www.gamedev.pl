@@ -2285,7 +2285,6 @@ describe('submission routes', () => {
         return true;
       },
     };
-
     const { app, authHeaders, store } = await createApp({
       githubClient,
       agentBackend: backend,
@@ -2294,7 +2293,6 @@ describe('submission routes', () => {
       dreamJob,
       seedDispatch,
     });
-
     await app.inject({
       method: 'POST',
       url: '/api/submissions',
@@ -2310,13 +2308,15 @@ describe('submission routes', () => {
       by: 'gate',
       reason: 'sources_delivered',
     });
-
     const token = mintToken(job.jobId, secret);
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(status.statusCode).toBe(200);
     // Recorded by the time the response returns: the request waited for the handoff.
     expect(handed.filter((entry) => entry.work?.action === 'dream')).toEqual([
-      { jobId: job.jobId, work: { action: 'dream', version: 'v1', screenshotPath: 'media/opening.png' } },
+      {
+        jobId: job.jobId,
+        work: { action: 'dream', version: 'v1', expectedRoundGeneration: 1, screenshotPath: 'media/opening.png' },
+      },
     ]);
     expect(runs).toHaveLength(0);
 

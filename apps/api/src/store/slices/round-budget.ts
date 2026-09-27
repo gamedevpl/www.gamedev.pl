@@ -1,3 +1,5 @@
+import { dreamClaimHolds, ownsDreamClaim, finishClaim, type DreamClaimRef } from './dream-claim.js';
+export { dreamClaimHolds, ownsDreamClaim, DREAM_CLAIM_TTL_MS, type DreamClaimRef } from './dream-claim.js';
 import { assertAgentRound, writeAgentRoundDocuments } from './agent-round-write.js';
 import { FieldValue } from '@google-cloud/firestore';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
@@ -53,38 +55,6 @@ export interface RoundBudgetStore {
 
   // Marks a run finished, posted or not; the TTL is for silence.
   finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void>;
-}
-
-// Long enough for the slowest live worker; generation runs about two minutes.
-export const DREAM_CLAIM_TTL_MS = 10 * 60_000;
-
-// Which attempt is speaking: `claimedAt` is unique per retake.
-export interface DreamClaimRef {
-  version: string;
-  claimedAt: string;
-}
-
-// True when this attempt still owns the claim it is reporting on.
-export function ownsDreamClaim(
-  held: { version: string; claimedAt: string } | undefined,
-  claim: DreamClaimRef,
-): boolean {
-  return held?.version === claim.version && held.claimedAt === claim.claimedAt;
-}
-
-// A claim blocks while the run posted, ended, or may run.
-export function dreamClaimHolds(
-  claim:
-    { version: string; claimedAt: string; roundGeneration?: number; postedAt?: string; endedAt?: string } | undefined,
-  version: string,
-  at: string,
-  roundGeneration: number,
-): boolean {
-  if (claim?.version !== version) return false;
-  // A reopen frees it; an unnumbered claim belongs to round one.
-  if ((claim.roundGeneration ?? 1) !== roundGeneration) return false;
-  if (claim.postedAt || claim.endedAt) return true;
-  return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
 }
 
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
@@ -185,7 +155,7 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     const sub = this.submissions.get(jobId);
     // An expired worker must not close the attempt that replaced it.
     if (!sub || !ownsDreamClaim(sub.dreamRun, claim)) return;
-    this.submissions.set(jobId, { ...sub, dreamRun: { ...sub.dreamRun!, endedAt: at } });
+    this.submissions.set(jobId, { ...sub, dreamRun: finishClaim(sub.dreamRun!, claim, at) });
   }
 }
 
@@ -322,6 +292,7 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
             roundGeneration,
             postedAt: FieldValue.delete(),
             endedAt: FieldValue.delete(),
+            superseded: FieldValue.delete(),
           },
         },
         { merge: true },
@@ -337,7 +308,7 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       const held = (snap.data() as SubmissionRecord | undefined)?.dreamRun;
       // An expired worker must not close the attempt that replaced it.
       if (!ownsDreamClaim(held, claim)) return;
-      tx.set(ref, { dreamRun: { ...held!, endedAt: at } }, { merge: true });
+      tx.set(ref, { dreamRun: finishClaim(held!, claim, at) }, { merge: true });
     });
   }
 }
