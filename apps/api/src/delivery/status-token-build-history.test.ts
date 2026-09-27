@@ -75,7 +75,14 @@ it.each(['anonymous', 'former-owner'])(
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().recentBuilds).toEqual([]);
+    expect(response.json().progress?.headSha).toBe('');
+    expect(response.json().previewGate).toBeUndefined();
+    expect(response.json().gateProgress).toBeUndefined();
+    expect(response.json().canSeal).toBeUndefined();
+    expect(response.json().preview).toBeUndefined();
     const member = await app.inject({ method: 'GET', url, headers: session(RECIPIENT) });
     expect(member.json().recentBuilds).toHaveLength(1);
+    expect(member.json().progress.headSha).toBe('v1');
+    expect(member.json().previewGate).toMatchObject({ green: false, ranAt: manifest.previewGate.ranAt });
   },
 );

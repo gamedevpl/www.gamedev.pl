@@ -18,7 +18,7 @@ import type {
   RecentBuild,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
-import { receiptBuilds } from './status-receipt-builds.js';
+import { receiptBuilds, redactReceiptMetadata } from './status-receipt-builds.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import type {
   BuildPreviewSummary,
@@ -400,7 +400,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
         ? { recentBuilds: receiptBuilds(status.recentBuilds, jobId, record).map(withoutAuthoredDetail) }
         : {}),
     };
-    if (!viewerOwns) delete next.totalBuildsCount;
+    if (!viewerOwns) redactReceiptMetadata(next, record);
     if (!record) return next;
 
     // Must clear stale keys too — a resumed agent drops agentEndedAt/stall.
