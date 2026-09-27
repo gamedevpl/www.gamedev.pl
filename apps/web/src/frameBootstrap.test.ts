@@ -52,6 +52,28 @@ describe('embedded GameKit transport compatibility', () => {
     );
   });
 
+  it('keeps block, loop, and catch declarations scoped while hoisting var', () => {
+    const code = `
+      { const parent = local; parent.postMessage({}, '*'); }
+      parent.postMessage({}, '*');
+      for (let parent of values) { parent.postMessage({}, '*'); }
+      parent.postMessage({}, '*');
+      try {} catch (parent) { parent.postMessage({}, '*'); }
+      parent.postMessage({}, '*');
+      function hoisted() { parent.postMessage({}, '*'); { var parent = local; } }
+      function lexical() { { let parent = local; } parent.postMessage({}, '*'); }`;
+    expect(adaptGameKitMessages(code).match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(4);
+    expect(adaptGameKitMessages(`{ let window = local; } window.parent.postMessage({}, '*');`)).toContain(
+      '__GDPL_DOCUMENT_SEND__',
+    );
+  });
+
+  it('keeps function defaults and switch discriminants outside their body declarations', () => {
+    const code = `function f(x = parent.postMessage({}, '*')) { var parent; parent.postMessage({}, '*'); }
+      switch (parent.postMessage({}, '*')) { case 0: let parent; parent.postMessage({}, '*'); }`;
+    expect(adaptGameKitMessages(code).match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(2);
+  });
+
   it('bootstraps before game code, preserves CSP and head attributes, and keeps JSON inert', () => {
     const html = withFrameDocument(
       `<!doctype html><html><head data-test="yes">

@@ -45,34 +45,69 @@ export function adaptGameKitMessages(code: string, module = false): string {
         break;
     }
   }
-  function localNames(value: unknown, root: unknown, names: Set<string>): void {
+  function hoistedNames(value: unknown, root: unknown, names: Set<string>): void {
     if (!value || typeof value !== 'object') return;
     const node = value as SyntaxNode;
-    const functionNode = ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type);
-    if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') bindings(node.id, names);
-    if (value !== root && functionNode) return;
-    if (functionNode && value === root) bindings(node.id, names);
-    if (node.type === 'VariableDeclarator') bindings(node.id, names);
-    if (node.type === 'ImportDeclaration')
-      (node.specifiers as unknown[]).forEach((specifier) => bindings(specifier, names));
-    if (functionNode) (node.params as unknown[]).forEach((param) => bindings(param, names));
+    if (
+      value !== root &&
+      [
+        'FunctionDeclaration',
+        'FunctionExpression',
+        'ArrowFunctionExpression',
+        'ClassDeclaration',
+        'ClassExpression',
+      ].includes(node.type)
+    )
+      return;
+    if (node.type === 'VariableDeclaration' && node.kind === 'var')
+      (node.declarations as SyntaxNode[]).forEach((declaration) => bindings(declaration.id, names));
     for (const child of Object.values(node)) {
-      if (Array.isArray(child)) child.forEach((value) => localNames(value, root, names));
-      else if (child && typeof child === 'object') localNames(child, root, names);
+      if (Array.isArray(child)) child.forEach((value) => hoistedNames(value, root, names));
+      else if (child && typeof child === 'object') hoistedNames(child, root, names);
+    }
+  }
+  function lexicalNames(statements: unknown[], names: Set<string>): void {
+    for (const value of statements) {
+      const node = value as SyntaxNode;
+      if (!node) continue;
+      if (node.type === 'VariableDeclaration' && node.kind !== 'var')
+        (node.declarations as SyntaxNode[]).forEach((declaration) => bindings(declaration.id, names));
+      if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') bindings(node.id, names);
+      if (node.type === 'ImportDeclaration')
+        (node.specifiers as unknown[]).forEach((specifier) => bindings(specifier, names));
+      if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportDefaultDeclaration')
+        lexicalNames([node.declaration], names);
     }
   }
   function visit(value: unknown, inherited = new Set<string>()): void {
     if (!value || typeof value !== 'object') return;
     const node = value as SyntaxNode;
     const shadowed = new Set(inherited);
-    if (
-      ['Program', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'CatchClause'].includes(
-        node.type,
-      )
-    ) {
-      localNames(node, node, shadowed);
-      if (node.type === 'CatchClause') bindings(node.param, shadowed);
+    if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type)) {
+      bindings(node.id, shadowed);
+      const params = node.params as unknown[];
+      params.forEach((param) => bindings(param, shadowed));
+      params.forEach((param) => visit(param, shadowed));
+      hoistedNames(node.body, node.body, shadowed);
+      visit(node.body, shadowed);
+      return;
     }
+    if (node.type === 'Program') hoistedNames(node, node, shadowed);
+    if (node.type === 'Program' || node.type === 'BlockStatement') lexicalNames(node.body as unknown[], shadowed);
+    if (node.type === 'CatchClause') bindings(node.param, shadowed);
+    if (['ForStatement', 'ForInStatement', 'ForOfStatement'].includes(node.type))
+      lexicalNames([node.init ?? node.left], shadowed);
+    if (node.type === 'SwitchStatement') {
+      visit(node.discriminant, inherited);
+      const branches = node.cases as SyntaxNode[];
+      lexicalNames(
+        branches.flatMap((branch) => branch.consequent as unknown[]),
+        shadowed,
+      );
+      branches.forEach((branch) => visit(branch, shadowed));
+      return;
+    }
+    if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') bindings(node.id, shadowed);
     if (node.type === 'WithStatement') ['window', 'parent', 'globalThis'].forEach((name) => shadowed.add(name));
     if (node.type === 'CallExpression') {
       const callee = node.callee as SyntaxNode;
