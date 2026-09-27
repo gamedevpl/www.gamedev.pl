@@ -89,6 +89,8 @@ const FILE_BUCKET = {
   'canonical-app-url': 'platform',
   'canonical-base64': 'platform',
   'presence-cadence': 'platform',
+  'presence-mutations': 'platform',
+  'presence-withdrawal': 'platform',
   'bounded-map': 'platform',
   'oauth-as': 'platform',
   'capture-network-policy': 'platform',

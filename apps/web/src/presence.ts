@@ -2,7 +2,8 @@ import { useFrameDocument } from './frameLifecycle.js';
 import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-import { beatPresence, fetchPresence, leavePresence, type PresenceSnapshot } from './presenceApi.js';
+import { fetchPresence, type PresenceSnapshot } from './presenceApi.js';
+import { beatPresence, leavePresence } from './presence-mutations.js';
 
 /** Mirrors the API's `PRESENCE_HEARTBEAT_MS`; the server's answer overrides it. */
 const DEFAULT_HEARTBEAT_MS = 12_000;
@@ -98,11 +99,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       beating = true;
       if (position) awaitingFirstHere = false;
       try {
-        const snapshot = await beatPresence(slug!, position);
-        if (cancelled) {
-          if (snapshot?.visible) void leavePresence(slug!);
-          return;
-        }
+        const snapshot = await beatPresence(slug!, position, () => !cancelled);
+        if (cancelled) return;
         if (snapshot) {
           joined = joined || snapshot.visible;
           // The server names the cadence, so the two halves cannot drift into disagreeing
@@ -201,7 +199,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       helloTimer = null;
       engaged = false;
       position = null;
-      if (joined) {
+      if (joined || beating) {
         joined = false;
         void leavePresence(slug!);
       }
@@ -231,7 +229,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       // Exiting the player is the most common way a session ends. Withdrawing here is
       // what keeps the count honest: without it every other player in the world spends
       // the rest of the TTL looking at somebody who has closed the tab.
-      if (joined) void leavePresence(slug);
+      if (joined || beating) void leavePresence(slug);
     };
   }, [frameRef, slug, frameDocument]);
 }
