@@ -79,7 +79,11 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
      * value surviving into the next run would be one game's progress queued against the
      * next game's save slot.
      */
-    let pending: { data: string; version: number; reply: (payload: Record<string, unknown>) => void } | null = null;
+    // A clear is queued like a put, so no older write can resurrect it.
+    let pending:
+      | { data: string; version: number; reply: (payload: Record<string, unknown>) => void }
+      | { data: null; reply: (payload: Record<string, unknown>) => void }
+      | null = null;
 
     function replyToDocument() {
       const reply = bindGameFrameReply(frameRef.current);
@@ -101,9 +105,14 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           const next = pending;
           pending = null;
           try {
-            await putGameSave(slug!, next.data, next.version);
+            if (next.data === null) await deleteGameSave(slug!);
+            else await putGameSave(slug!, next.data, next.version);
             next.reply({ t: 'save:ack', ok: true });
           } catch (error) {
+            if (next.data === null) {
+              next.reply({ t: 'save:ack', ok: false, error: 'clear failed' });
+              continue;
+            }
             // Reported, never thrown at the game: a failed save must not be able to
             // break a round that is otherwise going fine. The module surfaces it as
             // `save.lastError` for an author to notice.
@@ -155,13 +164,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       }
 
       if (message.t === 'save:clear') {
-        pending = null;
-        try {
-          await deleteGameSave(slug!);
-          if (!cancelled) postToGame({ t: 'save:ack', ok: true });
-        } catch {
-          if (!cancelled) postToGame({ t: 'save:ack', ok: false, error: 'clear failed' });
-        }
+        pending = { data: null, reply: postToGame };
+        void drainWrites();
       }
     }
 
@@ -178,7 +182,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       const last = pending;
       if (last && !writing) {
         pending = null;
-        void putGameSave(slug, last.data, last.version).catch(() => undefined);
+        const send = last.data === null ? deleteGameSave(slug) : putGameSave(slug, last.data, last.version);
+        void send.catch(() => undefined);
       }
     };
   }, [frameRef, slug]);

@@ -99,3 +99,19 @@ describe.each(['save', 'commons'] as const)('%s persistence across documents', (
     }
   });
 });
+
+it('queues a replacement clear behind an older in-flight save put', async () => {
+  const host = setup('save');
+  try {
+    host.send({ t: 'save:put', data: 'old', version: 1 });
+    host.replace();
+    host.send({ t: 'save:clear' });
+    expect(host.fetch).toHaveBeenCalledTimes(1);
+    await host.finish({ ok: true });
+    expect(host.fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['PUT', 'DELETE']);
+    await host.finish({ ok: true });
+    expect(host.replies).toEqual([expect.objectContaining({ t: 'save:ack', ok: true })]);
+  } finally {
+    host.cleanup();
+  }
+});

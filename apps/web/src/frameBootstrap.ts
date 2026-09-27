@@ -72,6 +72,8 @@ export function adaptGameKitMessages(
   function hoistedNames(value: unknown, root: unknown, names: Set<string>): void {
     if (!value || typeof value !== 'object') return;
     const node = value as SyntaxNode;
+    // Annex B: sloppy block functions also bind in the enclosing function.
+    if (value !== root && node.type === 'FunctionDeclaration') bindings(node.id, names);
     if (
       value !== root &&
       [

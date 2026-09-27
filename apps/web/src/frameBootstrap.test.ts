@@ -74,6 +74,14 @@ describe('embedded GameKit transport compatibility', () => {
     expect(adaptGameKitMessages(code).match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(2);
   });
 
+  it('treats sloppy block functions as bindings of the enclosing function', () => {
+    const code = `function f() { if (ok) { function parent() {} } parent.postMessage({}, '*'); }
+      parent.postMessage({}, '*');`;
+    const adapted = adaptGameKitMessages(code);
+    expect(adapted.match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(1);
+    expect(adapted).toContain("} parent.postMessage({}, '*'); }");
+  });
+
   it('isolates lexical and var declarations inside class static blocks', () => {
     const code = `class C {
       static { const parent = local; parent.postMessage({}, '*'); }
