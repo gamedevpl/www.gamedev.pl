@@ -28,6 +28,10 @@ export function isRetiredDeliveryPath(path: string): boolean {
   return (RETIRED_DELIVERY_PATHS as readonly string[]).includes(path);
 }
 
+export function withoutRetiredPaths<T extends { path: string }>(files: readonly T[]): T[] {
+  return files.filter((file) => !isRetiredDeliveryPath(file.path));
+}
+
 // Own modules; string form keeps `.source` equal to games-repo JSON.
 export const DELIVERY_EXTRA_MODULE_PATTERN = new RegExp('^[a-z0-9][a-z0-9/-]{0,60}\\.ts$');
 

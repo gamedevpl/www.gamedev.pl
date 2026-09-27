@@ -454,6 +454,7 @@ const FILE_BUCKET = {
   'managed-availability': 'agent-surface',
   'managed-bot-availability': 'agent-surface',
   'managed-backend': 'agent-surface',
+  'managed-idle': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',

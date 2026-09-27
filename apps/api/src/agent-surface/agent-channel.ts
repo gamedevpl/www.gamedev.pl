@@ -4,7 +4,13 @@ import { knowledgeCapWarning } from './agent-knowledge-warning.js';
 import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES, isRetiredDeliveryPath, MAX_AGENT_SHOT_BYTES, MAX_SHOT_BYTES } from '@gamedevpl/contract';
+import {
+  AGENT_CHANNEL_ROUTES,
+  isRetiredDeliveryPath,
+  MAX_AGENT_SHOT_BYTES,
+  MAX_SHOT_BYTES,
+  withoutRetiredPaths,
+} from '@gamedevpl/contract';
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
@@ -417,7 +423,7 @@ async function resolvePatchBase(input: {
     if (delivered !== null) return { content: delivered, baseFrom: 'delivery' };
   }
 
-  const seedFile = input.record.seed?.files.find((file) => file.path === input.path);
+  const seedFile = withoutRetiredPaths(input.record.seed?.files ?? []).find((file) => file.path === input.path);
   if (seedFile) return { content: seedFile.content, baseFrom: 'seed' };
   return null;
 }
@@ -2178,7 +2184,7 @@ export async function registerAgentChannelRoutes(
         return reply.send({
           delivery: null,
           origin: 'seed',
-          files: seed.files.map((file) => ({ path: file.path, content: file.content })),
+          files: withoutRetiredPaths(seed.files).map((file) => ({ path: file.path, content: file.content })),
           references: seed.references,
           notes: seed.notes ?? null,
           ...seedPayload(record),

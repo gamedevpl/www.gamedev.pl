@@ -1,5 +1,7 @@
 // AgentBackend over any ManagedAgentProvider, dispatched over MCP.
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
+import { withoutRetiredPaths } from '@gamedevpl/contract';
+import { isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
@@ -94,17 +96,6 @@ function observedBudget(
   return undefined;
 }
 
-// Idle requires_action: tool_confirmation Studio cannot Approve.
-export function isManagedIdleBlockedOnAction(stopReason: string | undefined): boolean {
-  return stopReason === 'requires_action';
-}
-
-// Nudge 400 while waiting on tool_confirmation.
-export function isUnnudgeableManagedIdleError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /tool_confirmation|requires_action|waiting for.*confirmation/i.test(message);
-}
-
 export function createManagedBackend(options: ManagedBackendOptions): AgentBackend {
   if (!options.tools.mcpEndpoints?.length) {
     throw new ManagedAgentError('a managed backend needs an MCP endpoint');
@@ -160,9 +151,9 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(options.effort ? { effort: options.effort } : {}),
       ...(seedSupported && brief.seed
         ? {
-            workspaceFiles: brief.seed.files.map((file) => ({
-              path: `games/${brief.seed!.slug}/${file.path}`,
-              content: file.content,
+            workspaceFiles: withoutRetiredPaths(brief.seed.files).map(({ path, content }) => ({
+              path: `games/${brief.seed!.slug}/${path}`,
+              content,
             })),
           }
         : {}),
