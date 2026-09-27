@@ -19,16 +19,20 @@ function stubGcs() {
     if (!body) return new Response('', { status: 404 });
     return new Response(new Uint8Array(body), { status: 200, headers: { 'x-goog-generation': '1' } });
   }) as unknown as typeof fetch;
-  return impl;
+  return { impl };
 }
 
-it('tombstones a retired EDITOR.ts but still refuses staging it', async () => {
-  const store = createGcsGamesStore({
+function storeWith(fetchImpl: typeof fetch) {
+  return createGcsGamesStore({
     bucket: 'b',
     getAccessToken: async () => 'token',
     now: () => Date.parse('2026-07-30T10:00:00Z'),
-    fetchImpl: stubGcs(),
+    fetchImpl,
   });
+}
+
+it('tombstones a retired EDITOR.ts but still refuses staging it', async () => {
+  const store = storeWith(stubGcs().impl);
   const at = { slug: 'g', jobId: 7, roundGeneration: 1, path: 'EDITOR.ts' };
 
   await expect(store.putStagedSourceFile({ ...at, content: 'export default {};' })).rejects.toThrow(

@@ -1,5 +1,4 @@
 // Where a proposal's starting point comes from.
-//
 // A proposal is a change to a published game, so it needs that game's current sources to
 // build on. The catalog has two lanes and they keep those sources in different places:
 //
@@ -18,6 +17,7 @@
 // delivery allowlist gives the write side. A proposer reads one game and writes one game.
 
 import { fetchGamesRepoArchive } from '../platform/games-repo-archive.js';
+import { isRetiredDeliveryPath } from '@gamedevpl/contract';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import type { GameSnapshotStore } from '../catalog/game-snapshot.js';
 import type { ProposalBase, Store } from '../platform/store.js';
@@ -97,7 +97,7 @@ export async function resolveProposalBase(options: ProposalBaseOptions, slug: st
         return content === null ? null : { path, content };
       }),
     );
-    const files = entries.filter((entry): entry is SourceFile => entry !== null);
+    const files = entries.filter((entry): entry is SourceFile => entry !== null && !isRetiredDeliveryPath(entry.path));
     if (files.length === 0) {
       throw new ProposalBaseUnavailableError(`${slug} has no readable sources`, 'no_sources');
     }

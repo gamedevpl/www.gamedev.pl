@@ -4,7 +4,7 @@ import { knowledgeCapWarning } from './agent-knowledge-warning.js';
 import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES, MAX_SHOT_BYTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, isRetiredDeliveryPath, MAX_AGENT_SHOT_BYTES, MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
@@ -2000,7 +2000,8 @@ export async function registerAgentChannelRoutes(
           // Inline files win on path collision so kit_outdated / small fixes overlay without
           // re-uploading the whole tree through the model.
           const byPath = new Map<string, string>();
-          for (const file of loaded) byPath.set(file.path, file.content as string);
+          for (const file of loaded)
+            if (!isRetiredDeliveryPath(file.path)) byPath.set(file.path, file.content as string);
           for (const file of files) byPath.set(file.path, file.content);
           files = [...byPath.entries()].map(([path, content]) => ({ path, content }));
         } else if (parsed.data.fromStaged) {

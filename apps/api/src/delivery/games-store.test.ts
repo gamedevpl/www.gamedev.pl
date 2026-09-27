@@ -686,22 +686,18 @@ describe('GCS games store', () => {
     });
   });
 
-  it('refuses executable editors for copied candidates as well as agent delivery', async () => {
-    const { impl } = stubGcs();
+  it('drops executable editors from server-side copies and refuses them from agents', async () => {
+    const { impl, objects } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    for (const extra of [
-      { origin: 'seal' as const },
-      { origin: 'editor' as const },
-      { origin: 'remix' as const },
-      { mode: 'proposal' as const, proposal: { id: 'p1', proposerUid: 'u1' } },
-    ]) {
+    for (const origin of ['seal', 'editor', 'remix'] as const) {
+      const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR, origin });
+      expect(objects.has(`games/g/versions/${version}/source/EDITOR.ts`)).toBe(false);
+    }
+    for (const extra of [{ mode: 'proposal' as const, proposal: { id: 'p1', proposerUid: 'u1' } }, {}]) {
       await expect(
         store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR, ...extra }),
       ).rejects.toThrow(/compiled EDITOR.json only/);
     }
-    await expect(store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR })).rejects.toThrow(
-      /compiled EDITOR.json only/,
-    );
   });
 
   it('writes the manifest last, so a dead run leaves no version claiming missing files', async () => {

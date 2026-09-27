@@ -322,6 +322,8 @@ const FILE_BUCKET = {
   'tab-complete': 'creation',
   'editor-assist': 'creation',
   'editor-contract': 'platform',
+  'editor-contract-fields': 'platform',
+  'editor-contract-items': 'platform',
   'editor-draft-shape': 'creation',
   'editor-draft-texts': 'creation',
   'editor-drafts': 'creation',

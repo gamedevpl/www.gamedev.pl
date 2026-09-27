@@ -883,10 +883,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       assertSlug(input.slug);
       const mode: DeliveryMode =
         input.mode === 'preview' ? 'preview' : input.mode === 'proposal' ? 'proposal' : 'publish';
+      // Server-side copies drop retired legacy paths.
+      const candidateFiles = input.origin
+        ? input.files.filter((file) => !isRetiredDeliveryPath(file.path.trim()))
+        : input.files;
       // A proposal is a sealed candidate — it must carry everything a publish carries,
       // because the reviewer judges a full gate run, not a compile.
       const files = validateSourceUpload(
-        input.files,
+        candidateFiles,
         mode === 'proposal' ? 'publish' : mode,
         input.origin === 'seal',
         input.requireCompiledEditor === true,
@@ -1018,8 +1022,9 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async deleteStagedSourceFile(input) {
       assertSlug(input.slug);
-      // Retired paths are refused as writes but may still be tombstoned.
-      const path = isRetiredDeliveryPath(input.path.trim()) ? input.path.trim() : assertDeliverableSourcePath(input.path);
+      const path = isRetiredDeliveryPath(input.path.trim())
+        ? input.path.trim()
+        : assertDeliverableSourcePath(input.path);
       const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
 
