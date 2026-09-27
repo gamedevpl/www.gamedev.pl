@@ -96,6 +96,7 @@ const FILE_BUCKET = {
   'capture-network-isolation': 'platform',
   'preview-registration-trust': 'platform',
   'frameMessage.navigation': 'platform',
+  'gamePlayer.outboundGuard': 'platform',
   'frameLifecycle': 'platform',
   'oauth-page-chrome': 'platform',
   'oauth-pkce': 'platform',
