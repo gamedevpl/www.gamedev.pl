@@ -143,7 +143,7 @@ describe('usePresenceBridge', () => {
 
   it('answers the hello of a replacement document after a srcDoc swap', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
     fromGame({ t: 'presence:hello' });
@@ -162,7 +162,7 @@ describe('usePresenceBridge', () => {
 
   it('defers, not drops, the hello of a document swapped in within the window', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
     fromGame({ t: 'presence:hello' });
@@ -180,7 +180,7 @@ describe('usePresenceBridge', () => {
 
   it('grants at most one extra beat to hello/here ping-pong inside a window', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
     fromGame({ t: 'presence:hello' });
@@ -200,7 +200,7 @@ describe('usePresenceBridge', () => {
 
   it('sends a swapped-in position once the old document beat settles', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     let release: (() => void) | null = null;
     fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'POST' && !release) await new Promise<void>((resolve) => (release = resolve));
@@ -284,8 +284,8 @@ describe('usePresenceBridge', () => {
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 1, row: 1 });
     await waitFor(() => expect(toGame).toHaveLength(2));
-
     fromGame({ t: 'presence:here', col: 9, row: 8 });
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3000);
     document.dispatchEvent(new Event('visibilitychange'));
 
     await waitFor(() => expect(calls('POST')).toHaveLength(2));

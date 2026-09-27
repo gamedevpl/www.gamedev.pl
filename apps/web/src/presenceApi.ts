@@ -56,11 +56,12 @@ export async function fetchPresence(slug: string): Promise<PresenceSnapshot | nu
 export async function beatPresence(
   slug: string,
   position: { col: number; row: number } | null,
+  lease?: string,
 ): Promise<PresenceSnapshot | null> {
   const res = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}/presence`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(lease ? { 'x-presence-lease': lease } : {}) },
     body: JSON.stringify(position ?? {}),
   });
   // A signed-out visitor cannot beat, but can still look — and should, because the count
@@ -71,16 +72,10 @@ export async function beatPresence(
   return parse(res, 'Presence beat failed');
 }
 
-/**
- * Withdraw from the roster.
- *
- * Not strictly needed — a slot expires on its own — but the gap between closing a game
- * and expiring is the whole TTL, and during it every other player is looking at somebody
- * who is not there. `keepalive` because this fires as the theater unmounts.
- */
-export async function leavePresence(slug: string): Promise<void> {
+export async function leavePresence(slug: string, lease?: string): Promise<void> {
   await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}/presence`, {
     method: 'DELETE',
+    headers: lease ? { 'x-presence-lease': lease } : undefined,
     credentials: 'include',
     keepalive: true,
   }).catch(() => undefined);

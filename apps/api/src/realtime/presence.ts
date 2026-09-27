@@ -1,3 +1,4 @@
+import { presenceLease } from './presence-lease.js';
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -124,6 +125,7 @@ function tagFor(worldId: string, uid: string): string {
 }
 
 interface PresenceSlot {
+  lease?: string;
   tag: string;
   col: number;
   row: number;
@@ -174,7 +176,13 @@ export class PresenceRegistry {
   }
 
   /** Records this player as present, and returns the world as everyone else sees it. */
-  beat(worldId: string, uid: string, grid: PresenceGrid, position: { col?: number; row?: number }): PresenceRoster {
+  beat(
+    worldId: string,
+    uid: string,
+    grid: PresenceGrid,
+    position: { col?: number; row?: number },
+    lease?: string,
+  ): PresenceRoster {
     this.sweep(worldId);
     let world = this.worlds.get(worldId);
     if (!world) {
@@ -185,29 +193,24 @@ export class PresenceRegistry {
     const key = slotKeyFor(worldId, uid);
     const previous = world.get(key);
     const slot: PresenceSlot = {
+      lease,
       tag: tagFor(worldId, uid),
-      // A beat with no position keeps whichever tile was last reported rather than
-      // snapping the player to the origin — the shell sends one before the game has
-      // said where it is, and a wanderer teleporting to 0,0 for one poll is a visible
-      // bug with no cause anybody could find.
       col: clamp(position.col ?? previous?.col ?? 0, grid.cols),
       row: clamp(position.row ?? previous?.row ?? 0, grid.rows),
       expiresAt: this.now() + PRESENCE_TTL_MS,
     };
-    // LRU by way of `rememberBounded`, so a world at its cap loses whoever beat longest
-    // ago rather than refusing the newcomer. Refusing would make a full world permanently
-    // full, since the people in it keep renewing.
     rememberBounded(world, key, slot, MAX_PRESENT_PER_WORLD);
     rememberBounded(this.worlds, worldId, world, MAX_PRESENT_WORLDS);
 
     return this.roster(worldId, key);
   }
 
-  /** Withdraws a player — the theater closing, or a game leaving its world behind. */
-  leave(worldId: string, uid: string): void {
+  leave(worldId: string, uid: string, lease?: string): void {
     const world = this.worlds.get(worldId);
     if (!world) return;
-    world.delete(slotKeyFor(worldId, uid));
+    const key = slotKeyFor(worldId, uid);
+    if (world.get(key)?.lease !== lease) return;
+    world.delete(key);
     if (world.size === 0) this.worlds.delete(worldId);
   }
 
@@ -345,7 +348,7 @@ export async function registerPresenceRoutes(app: FastifyInstance, options: Pres
       if (!grid) return response.status(404).send({ error: 'presence not found' });
 
       const worldId = worldIdFor(params.data.slug);
-      const roster = registry.beat(worldId, request.user.uid, grid, body.data ?? {});
+      const roster = registry.beat(worldId, request.user.uid, grid, body.data ?? {}, presenceLease(request.headers));
       return response.send(reply(roster, true));
     },
   );
@@ -356,10 +359,7 @@ export async function registerPresenceRoutes(app: FastifyInstance, options: Pres
     if (!params.success) {
       return response.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
     }
-    // No schema gate, matching the world delete: "take me out of the roster" must keep
-    // working even for a game that has left the catalog since the player walked in, or
-    // whose declaration stopped parsing while they were standing in it.
-    registry.leave(worldIdFor(params.data.slug), request.user.uid);
+    registry.leave(worldIdFor(params.data.slug), request.user.uid, presenceLease(request.headers));
     return response.send({ ok: true });
   });
 }
