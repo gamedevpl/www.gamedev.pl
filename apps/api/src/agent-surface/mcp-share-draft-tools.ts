@@ -106,7 +106,11 @@ export function createShareDraftTools(deps: ShareDraftToolsDeps): Record<string,
           if (refusal) return toolErr(refusal.message, { reason: refusal.error });
         }
 
-        await store.setDraftShared(auth.jobId, shared ? new Date(now()).toISOString() : null);
+        await store.setDraftShared(
+          auth.jobId,
+          shared ? new Date(now()).toISOString() : null,
+          auth.record.roundGeneration ?? 1,
+        );
         return toolOk({ shared, slug: record.slug ?? null, playUrl: playUrlFor(record.slug) });
       },
     },

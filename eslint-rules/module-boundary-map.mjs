@@ -46,6 +46,11 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'staged-preview-takeover': 'delivery',
+  'builder-handoff-ack': 'creation',
+  'builder-handoff': 'creation',
+  'builder-handoff-finalization': 'agent-surface',
+  'builder-handoff-fixture': 'agent-surface',
   'invite-fragment-navigation': 'platform',
   'historical-preview-takedown': 'community',
   'review-preview-loader': 'platform',
@@ -56,6 +61,9 @@ const FILE_BUCKET = {
   'review-version-binding': 'community',
   'review-version-roundtrip': 'community',
   'camera-acquisition-generation': 'platform',
+  'source-delivery-event': 'delivery',
+  'agent-round-write': 'platform',
+  'agent-takeover-write': 'agent-surface',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
@@ -269,6 +277,8 @@ const FILE_BUCKET = {
   'dispatch-build': 'creation',
   'resume-build': 'creation',
   'seed-pipeline': 'creation',
+  'seed-regeneration': 'creation',
+  'seed-regeneration-takeover.test': 'creation',
   'creator-self-routes': 'creation',
   'job-costs': 'creation',
   'token-prices': 'creation',
@@ -387,6 +397,7 @@ const FILE_BUCKET = {
   'mcp-seed-tools': 'agent-surface',
   'mcp-round-card-tools': 'agent-surface',
   'mcp-share-draft-tools': 'agent-surface',
+  'mcp-share-takeover': 'agent-surface',
   'mcp-gate-media-tools': 'agent-surface',
   'mcp-proposal-tools': 'agent-surface',
   'mcp-source-stage-tools': 'agent-surface',

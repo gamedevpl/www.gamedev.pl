@@ -1,3 +1,4 @@
+import { assertAgentRound, writeAgentRoundDocuments } from './agent-round-write.js';
 import { FieldValue } from '@google-cloud/firestore';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -25,22 +26,22 @@ export function gateRepairEligible(
 
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
-  incrementSeedRegenerations(jobId: number): Promise<number>;
+  incrementSeedRegenerations(jobId: number, generation?: number): Promise<number>;
 
   // Increments the per-round and whole-job sources-delivery counts.
-  incrementRoundDeliveryCount(jobId: number): Promise<number>;
+  incrementRoundDeliveryCount(jobId: number, generation?: number): Promise<number>;
 
   // Bumps the typecheck-preflight refusal count for this round.
-  incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number>;
+  incrementRoundTypecheckPreflightRefusals(jobId: number, generation?: number): Promise<number>;
 
   // Stores or clears bypass diagnostics after the refusal cap.
-  setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void>;
+  setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null, generation?: number): Promise<void>;
 
   // Bumps submit attempts -- every deliver call that reaches preflight.
-  incrementRoundSubmitAttempts(jobId: number): Promise<number>;
+  incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number>;
 
   // Bumps the audio or symbols preflight refusal count.
-  incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number>;
+  incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number>;
 
   // Records that a gate metric was logged for this version/status key.
   setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
@@ -89,16 +90,18 @@ export function dreamClaimHolds(
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
-  async incrementSeedRegenerations(jobId: number): Promise<number> {
+  async incrementSeedRegenerations(jobId: number, generation?: number): Promise<number> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return 0;
     const seedRegenerations = (sub.seedRegenerations ?? 0) + 1;
     this.submissions.set(jobId, { ...sub, seedRegenerations });
     return seedRegenerations;
   }
 
-  async incrementRoundDeliveryCount(jobId: number): Promise<number> {
+  async incrementRoundDeliveryCount(jobId: number, generation?: number): Promise<number> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return 0;
     const roundDeliveryCount = (sub.roundDeliveryCount ?? 0) + 1;
     const jobDeliveryCount = (sub.jobDeliveryCount ?? 0) + 1;
@@ -106,16 +109,22 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     return roundDeliveryCount;
   }
 
-  async incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number> {
+  async incrementRoundTypecheckPreflightRefusals(jobId: number, generation?: number): Promise<number> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return 0;
     const roundTypecheckPreflightRefusals = (sub.roundTypecheckPreflightRefusals ?? 0) + 1;
     this.submissions.set(jobId, { ...sub, roundTypecheckPreflightRefusals });
     return roundTypecheckPreflightRefusals;
   }
 
-  async setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void> {
+  async setRoundTypecheckPreflightBypassErrors(
+    jobId: number,
+    message: string | null,
+    generation?: number,
+  ): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return;
     if (message == null) {
       const next = { ...sub };
@@ -126,16 +135,18 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     this.submissions.set(jobId, { ...sub, roundTypecheckPreflightBypassErrors: message });
   }
 
-  async incrementRoundSubmitAttempts(jobId: number): Promise<number> {
+  async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return 0;
     const roundSubmitAttempts = (sub.roundSubmitAttempts ?? 0) + 1;
     this.submissions.set(jobId, { ...sub, roundSubmitAttempts });
     return roundSubmitAttempts;
   }
 
-  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number> {
+  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return 0;
     if (kind === 'audio') {
       const roundPreflightRefusalsAudio = (sub.roundPreflightRefusalsAudio ?? 0) + 1;
@@ -185,10 +196,11 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     return this.db.collection('submissions').doc(String(jobId));
   }
 
-  async incrementSeedRegenerations(jobId: number): Promise<number> {
+  async incrementSeedRegenerations(jobId: number, generation?: number): Promise<number> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       const seedRegenerations = (current.seedRegenerations ?? 0) + 1;
@@ -197,10 +209,11 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async incrementRoundDeliveryCount(jobId: number): Promise<number> {
+  async incrementRoundDeliveryCount(jobId: number, generation?: number): Promise<number> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       const roundDeliveryCount = (current.roundDeliveryCount ?? 0) + 1;
@@ -210,10 +223,11 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number> {
+  async incrementRoundTypecheckPreflightRefusals(jobId: number, generation?: number): Promise<number> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       const roundTypecheckPreflightRefusals = (current.roundTypecheckPreflightRefusals ?? 0) + 1;
@@ -222,19 +236,28 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void> {
+  async setRoundTypecheckPreflightBypassErrors(
+    jobId: number,
+    message: string | null,
+    generation?: number,
+  ): Promise<void> {
     const ref = this.ref(jobId);
     if (message == null) {
-      await ref.set({ roundTypecheckPreflightBypassErrors: FieldValue.delete() }, { merge: true });
+      await writeAgentRoundDocuments(this.db, jobId, generation, [
+        { ref, data: { roundTypecheckPreflightBypassErrors: FieldValue.delete() }, merge: true },
+      ]);
       return;
     }
-    await ref.set({ roundTypecheckPreflightBypassErrors: message }, { merge: true });
+    await writeAgentRoundDocuments(this.db, jobId, generation, [
+      { ref, data: { roundTypecheckPreflightBypassErrors: message }, merge: true },
+    ]);
   }
 
-  async incrementRoundSubmitAttempts(jobId: number): Promise<number> {
+  async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       const roundSubmitAttempts = (current.roundSubmitAttempts ?? 0) + 1;
@@ -243,10 +266,11 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number> {
+  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       if (kind === 'audio') {

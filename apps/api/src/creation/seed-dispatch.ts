@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { GoogleAuth } from 'google-auth-library';
 import { z } from 'zod';
+import type { SeedRegenerationInput } from './seed-regeneration.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
-
-// Round-0 seeding as a request the service makes to itself.
 
 // Outside a request Cloud Run grants CPU only when always-on.
 
@@ -16,6 +15,7 @@ import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 export type SeedWork = {
   action: 'dispatch' | 'regenerate' | 'staged-preview' | 'dream';
   steer?: string;
+  expectedRoundGeneration?: number;
   version?: string;
   screenshotPath?: string;
 };
@@ -104,7 +104,7 @@ type DispatchLog = { error: (context: object, message: string) => void };
 
 export interface SeedDispatchRouteOptions {
   dispatchQueuedJob: DispatchQueuedJob;
-  regenerateSeedNow?: ((input: { jobId: number; steer?: string; log: DispatchLog }) => Promise<void>) | null;
+  regenerateSeedNow?: ((input: SeedRegenerationInput) => Promise<void>) | null;
   publishStagedPreviewNow?: ((jobId: number) => Promise<unknown>) | null;
   // Concept frames need the CPU a request holds.
   runDreamNow?: ((input: { jobId: number; version: string; screenshotPath?: string }) => Promise<string>) | null;
@@ -115,22 +115,16 @@ const BodySchema = z.object({
   jobId: z.number().int().positive(),
   action: z.enum(['dispatch', 'regenerate', 'staged-preview', 'dream']).default('dispatch'),
   steer: z.string().max(4000).optional(),
+  expectedRoundGeneration: z.number().int().positive().optional(),
   version: z.string().max(200).optional(),
   screenshotPath: z.string().max(400).optional(),
 });
 
 function workFor(
   options: SeedDispatchRouteOptions,
-  input: {
-    jobId: number;
-    action: SeedWork['action'];
-    steer?: string;
-    version?: string;
-    screenshotPath?: string;
-    log: DispatchLog;
-  },
+  input: SeedWork & { jobId: number; log: DispatchLog },
 ): (() => Promise<{ outcome: string; reason?: string }>) | null {
-  const { jobId, steer, log } = input;
+  const { jobId, steer, log, expectedRoundGeneration } = input;
   if (input.action === 'dream') {
     const run = options.runDreamNow;
     const version = input.version;
@@ -141,7 +135,12 @@ function workFor(
   }
   if (input.action === 'regenerate') {
     const run = options.regenerateSeedNow;
-    return run ? () => run({ jobId, ...(steer ? { steer } : {}), log }).then(() => ({ outcome: 'regenerated' })) : null;
+    return run
+      ? () =>
+          run({ jobId, expectedRoundGeneration, ...(steer ? { steer } : {}), log }).then(() => ({
+            outcome: 'regenerated',
+          }))
+      : null;
   }
   if (input.action === 'staged-preview') {
     const run = options.publishStagedPreviewNow;
@@ -163,8 +162,8 @@ export async function registerSeedDispatchRoute(
       }
       const body = BodySchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid job id' });
-      const { jobId, action, steer, version, screenshotPath } = body.data;
-      const work = workFor(options, { jobId, action, steer, version, screenshotPath, log: request.log });
+      const { jobId, action } = body.data;
+      const work = workFor(options, { ...body.data, log: request.log });
       // Refused before headers, so the caller falls back to doing it inline.
       if (!work) return reply.status(503).send({ error: `${action} is not handled here` });
 

@@ -1,3 +1,5 @@
+import { acknowledgeHandoff } from './creation/builder-handoff.js';
+import type { BuilderHandoffAckInput, BuilderHandoffOutcome } from './creation/builder-handoff-ack.js';
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
 import { stillBooting } from './delivery/status-poll-floor.js';
 import { canActOnGame } from './platform/game-access-permissions.js';
@@ -54,7 +56,7 @@ import {
 } from './creation/seed-dispatch.js';
 import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
-import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
+import { createResumeBuild } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
 import { createGateRepairHandler } from './creation/gate-repair.js';
 import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
@@ -730,32 +732,8 @@ export async function registerSubmissionRoutes(
   });
 
   // Acks a pending handoff and starts the target builder.
-  async function acknowledgeBuilderHandoff(input: {
-    jobId: number;
-    acknowledgedAt: string;
-    log: { error: (context: object, message: string) => void };
-  }): Promise<ResumeOutcome | { started: false; reason: string }> {
-    if (!store) return { started: false, reason: 'not_configured' };
-    const current = await store.getSubmission(input.jobId);
-    const requested = current?.builderHandoff;
-    if (!requested) return { started: false, reason: 'handoff_not_pending' };
-    const acknowledged = await store.acknowledgeBuilderHandoff(input.jobId, input.acknowledgedAt);
-    if (!acknowledged) return { started: false, reason: 'handoff_already_acknowledged' };
-    const outcome = await resumeBuild({
-      jobId: input.jobId,
-      feedback: current?.spec ?? `Continue building "${current?.title ?? 'this game'}" for gamedev.pl.`,
-      locale: current?.locale ?? 'en',
-      log: input.log,
-      builder: acknowledged.to,
-      preserveRoundBudget: true,
-      transition: {
-        by: 'creator',
-        reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
-      },
-    });
-    if (outcome.started) await store.clearBuilderHandoff(input.jobId);
-    invalidateStatusCache(input.jobId);
-    return outcome;
+  async function acknowledgeBuilderHandoff(input: BuilderHandoffAckInput): Promise<BuilderHandoffOutcome> {
+    return acknowledgeHandoff(input, { store, resumeBuild, invalidateStatusCache });
   }
 
   /**
@@ -1102,8 +1080,8 @@ export async function registerSubmissionRoutes(
     onPreviewPublished: (jobId: number) => buildStatus.invalidateMedia(jobId),
     ...(seedDispatch
       ? {
-          handoff: (jobId: number, steer?: string) =>
-            seedDispatch.enqueue(jobId, { action: 'regenerate', ...(steer ? { steer } : {}) }),
+          handoff: (jobId: number, steer?: string, expectedRoundGeneration?: number) =>
+            seedDispatch.enqueue(jobId, { action: 'regenerate', expectedRoundGeneration, ...(steer ? { steer } : {}) }),
         }
       : {}),
   });

@@ -1,3 +1,4 @@
+import { assertAgentRound, writeAgentSeed, writeAgentSeedStatus } from './agent-round-write.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
@@ -38,19 +39,19 @@ export interface RoundsStore {
     awaitsAgentAck?: boolean,
   ): Promise<boolean>;
 
-  acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null>;
+  acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string, generation?: number): Promise<BuilderHandoff | null>;
 
   clearBuilderHandoff(jobId: number): Promise<void>;
 
   // Stores (or clears) the generated seed draft on a self-build job.
-  setSubmissionSeed(jobId: number, seed: SeedFiles | null): Promise<void>;
+  setSubmissionSeed(jobId: number, seed: SeedFiles | null, generation?: number): Promise<void>;
 
   // Atomically claims a ready_for_review round for sealing; null if ineligible.
   // Two concurrent seals must not both start a paid gate run — see the /seal route.
   claimSeal(jobId: number, at: string): Promise<SubmissionRecord | null>;
 
   // Marks seed generation pending/unavailable; a stored draft is never downgraded.
-  setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void>;
+  setSeedStatus(jobId: number, status: 'pending' | 'unavailable', generation?: number): Promise<void>;
 }
 
 // Mirrors platform/seal-preview.ts's sealRefusal, kept free of its import.
@@ -138,8 +139,13 @@ export class InMemoryRoundsStore implements RoundsStore {
     return sub;
   }
 
-  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+  async acknowledgeBuilderHandoff(
+    jobId: number,
+    acknowledgedAt: string,
+    generation?: number,
+  ): Promise<BuilderHandoff | null> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub?.builderHandoff || sub.builderHandoff.acknowledgedAt) return null;
     const handoff: BuilderHandoff = { ...sub.builderHandoff, acknowledgedAt };
     this.submissions.set(jobId, { ...sub, builderHandoff: handoff });
@@ -205,8 +211,9 @@ export class InMemoryRoundsStore implements RoundsStore {
     this.submissions.set(jobId, next);
   }
 
-  async setSubmissionSeed(jobId: number, seed: SeedFiles | null): Promise<void> {
+  async setSubmissionSeed(jobId: number, seed: SeedFiles | null, generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return;
     if (seed) {
       this.submissions.set(jobId, { ...sub, seed, seedStatus: 'available' });
@@ -217,8 +224,9 @@ export class InMemoryRoundsStore implements RoundsStore {
     this.submissions.set(jobId, next);
   }
 
-  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void> {
+  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable', generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return;
     // Never downgrade an already-stored draft.
     if (sub.seed) {
@@ -329,12 +337,17 @@ export class FirestoreRoundsStore implements RoundsStore {
     });
   }
 
-  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+  async acknowledgeBuilderHandoff(
+    jobId: number,
+    acknowledgedAt: string,
+    generation?: number,
+  ): Promise<BuilderHandoff | null> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
+      assertAgentRound(current, generation);
       if (!current.builderHandoff || current.builderHandoff.acknowledgedAt) return null;
       const handoff: BuilderHandoff = { ...current.builderHandoff, acknowledgedAt };
       tx.set(ref, { builderHandoff: handoff }, { merge: true });
@@ -422,33 +435,11 @@ export class FirestoreRoundsStore implements RoundsStore {
     });
   }
 
-  async setSubmissionSeed(jobId: number, seed: SeedFiles | null): Promise<void> {
-    const ref = this.ref(jobId);
-    if (seed) {
-      await ref.set({ seed, seedStatus: 'available' }, { merge: true });
-      return;
-    }
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      const next: SubmissionRecord = { ...current, seedStatus: 'unavailable' };
-      delete next.seed;
-      tx.set(ref, next);
-    });
+  async setSubmissionSeed(jobId: number, seed: SeedFiles | null, generation?: number): Promise<void> {
+    return writeAgentSeed(this.db, jobId, seed, generation);
   }
 
-  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void> {
-    const ref = this.ref(jobId);
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      if (current.seed) {
-        tx.set(ref, { seedStatus: 'available' }, { merge: true });
-        return;
-      }
-      tx.set(ref, { seedStatus: status }, { merge: true });
-    });
+  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable', generation?: number): Promise<void> {
+    return writeAgentSeedStatus(this.db, jobId, status, generation);
   }
 }

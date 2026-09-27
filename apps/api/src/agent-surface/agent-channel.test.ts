@@ -1,3 +1,4 @@
+import { acknowledgeHandoffFixture } from './builder-handoff-fixture.js';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
@@ -513,11 +514,7 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
     app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async ({ jobId, acknowledgedAt }) => {
-        const handoff = await store.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
-        await store.clearBuilderHandoff(jobId);
-        return { started: handoff !== null };
-      },
+      onBuilderHandoffAcknowledged: acknowledgeHandoffFixture(store),
     });
 
     const nudge = await app.inject({
@@ -703,11 +700,7 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
     app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async ({ jobId, acknowledgedAt }) => {
-        const handoff = await store.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
-        await store.clearBuilderHandoff(jobId);
-        return { started: handoff !== null };
-      },
+      onBuilderHandoffAcknowledged: acknowledgeHandoffFixture(store),
     });
 
     const end = await app.inject({
@@ -769,11 +762,7 @@ describe('agent build channel', () => {
     const msg = await store.appendCreatorMessage(ISSUE, 'feedback');
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
     app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async ({ jobId, acknowledgedAt }) => {
-        const handoff = await store.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
-        await store.clearBuilderHandoff(jobId);
-        return { started: handoff !== null };
-      },
+      onBuilderHandoffAcknowledged: acknowledgeHandoffFixture(store),
     });
 
     const end = await app.inject({

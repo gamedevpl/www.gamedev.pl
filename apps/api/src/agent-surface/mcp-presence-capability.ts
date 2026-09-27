@@ -53,3 +53,15 @@ export async function livePresencePulseJob(
   const record = await store.getSubmission(claims.jobId);
   return presenceClaimsActive(claims, record ?? null, at) ? claims.jobId : null;
 }
+
+export async function touchStartedRoundPresence(
+  store: Store,
+  jobId: number,
+  at: number,
+  key: string,
+  started: { round?: unknown },
+  record: { roundGeneration?: number } | null | undefined,
+): Promise<void> {
+  const generation = typeof started.round === 'number' ? started.round : (record?.roundGeneration ?? 1);
+  await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString(), { key }, { roundGeneration: generation });
+}

@@ -86,8 +86,8 @@ export abstract class SubmissionFacade {
   // Access record created here so no slug caller forgets it.
 
   // Only while the name is uncontested; a contested one waits for settleSlugClaim.
-  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
-    await this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce);
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string, generation?: number): Promise<void> {
+    await this.submissionStore.setSubmissionSlug(jobId, slug, admissionNonce, generation);
     // Before the access block: its early returns must not skip the mirror.
     await this.shelfMirror.afterJobWrite(jobId);
     this.dropDerivedAccess(slug);
@@ -116,16 +116,16 @@ export abstract class SubmissionFacade {
       // A throw here would strand a slug the claim already took.
     }
   }
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    await this.submissionStore.setSubmissionTitle(jobId, title);
+  async setSubmissionTitle(jobId: number, title: string, generation?: number): Promise<void> {
+    await this.submissionStore.setSubmissionTitle(jobId, title, generation);
     await this.shelfMirror.afterJobWrite(jobId);
   }
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    await this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
+  async setSubmissionDeliveredVersion(jobId: number, version: string, generation?: number): Promise<void> {
+    await this.submissionStore.setSubmissionDeliveredVersion(jobId, version, generation);
     await this.shelfMirror.afterJobWrite(jobId);
   }
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    await this.submissionStore.setSubmissionPreviewVersion(jobId, version);
+  async setSubmissionPreviewVersion(jobId: number, version: string, generation?: number): Promise<void> {
+    await this.submissionStore.setSubmissionPreviewVersion(jobId, version, generation);
     await this.shelfMirror.afterJobWrite(jobId);
   }
 

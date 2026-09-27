@@ -1,3 +1,5 @@
+import { assertAgentRound } from '../store/slices/agent-round-write.js';
+import { createSeedRegenerator, type SeedRegenerationInput } from './seed-regeneration.js';
 import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
@@ -7,9 +9,6 @@ import type { GameSeeder, SeedDraft, SeedFile } from './game-seed.js';
 import type { SeedAvailabilityGate } from './seed-availability.js';
 import type { BuilderKind } from './builder.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
-
-// Each regeneration is a paid generation, so this is a spend ceiling.
-const MAX_SEED_REGENERATIONS = 2;
 
 // Authored in both languages, not machine translated — one fixed sentence.
 const SEED_PREVIEW_LABEL = 'First rough draft — the agent is improving it';
@@ -25,7 +24,7 @@ export interface SeedPipelineOptions {
   githubClient: GitHubClient | null;
   publishedRef: string;
   // Regenerates inside a request (seed-dispatch.ts); false means run here.
-  handoff?: (jobId: number, steer?: string) => Promise<boolean>;
+  handoff?: (jobId: number, steer?: string, expectedRoundGeneration?: number) => Promise<boolean>;
   // Fired after the round-0 preview lands, to bust the media cache.
   onPreviewPublished?: (jobId: number) => void;
 }
@@ -48,29 +47,22 @@ export interface SeedPipeline {
     slug: string;
     spec: string;
     delivery: SeedDelivery;
+    expectedRoundGeneration?: number;
     steer?: string;
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedBuildResult>;
   // Queues a replacement draft, for rounds that read the job's copy.
-  regenerateSeed(input: {
-    jobId: number;
-    steer?: string;
-    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
-  }): Promise<RegenerateSeedResult>;
+  regenerateSeed(input: SeedRegenerationInput): Promise<RegenerateSeedResult>;
   publishSeedPreview(input: { jobId: number; slug: string; files: SeedFile[]; locale: string }): Promise<void>;
   // The work behind a pending regeneration; the seed route's entry.
-  runSeedRegeneration(input: {
-    jobId: number;
-    steer?: string;
-    log: { error: (context: object, message: string) => void };
-  }): Promise<void>;
+  runSeedRegeneration(input: SeedRegenerationInput): Promise<void>;
 }
 
 // Round-0 draft generation, cost ledger, redo, and its preview.
 
 // Generator lives in game-seed.ts; breaker in seed-availability.ts.
 export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
-  const { store, now, gameSeeder, seedAvailabilityGate, builderOf, backendFor, githubClient, publishedRef } = options;
+  const { store, now, gameSeeder, seedAvailabilityGate, githubClient, publishedRef } = options;
 
   function seedDeliveryFor(backend: AgentBackend | undefined, builder: BuilderKind): SeedDelivery {
     return backend?.seedDelivery?.() ?? (builder === 'self' ? 'channel' : 'workspace');
@@ -106,6 +98,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     slug: string;
     spec: string;
     delivery: SeedDelivery;
+    expectedRoundGeneration?: number;
     steer?: string;
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedBuildResult> {
@@ -113,12 +106,14 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     if (!store) return { reason: 'no_store' };
     // Checked before the paid call, so "off" costs nothing.
     if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
+    assertAgentRound((await store.getSubmission(input.jobId)) ?? undefined, input.expectedRoundGeneration);
     const seedDateStr = new Date(now()).toISOString().slice(0, 10);
     if (!(await seedAvailabilityGate.spendSeedSlot(seedDateStr))) return { reason: 'seeding_off' };
     // Resolved before the try so a failed attempt still names the vendor.
     const provider = await seedAvailabilityGate.resolveProvider();
     try {
       const record = await store.getSubmission(input.jobId);
+      assertAgentRound(record ?? undefined, input.expectedRoundGeneration);
       if (!record) return { reason: 'job_not_found', provider };
 
       const draft = await gameSeeder.seed({
@@ -139,65 +134,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     }
   }
 
-  async function regenerateSeed(input: {
-    jobId: number;
-    steer?: string;
-    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
-  }): Promise<RegenerateSeedResult> {
-    if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
-    const record = await store.getSubmission(input.jobId);
-    if (!record || !record.slug) return { ok: false, reason: 'not_found' };
-    // A workspace round already forked; a rewrite cannot catch up.
-    const roundBuilder = builderOf(record);
-    if (seedDeliveryFor(await backendFor(roundBuilder), roundBuilder) !== 'channel') {
-      return { ok: false, reason: 'seed_not_readable' };
-    }
-    // A delivered round was already judged; do not move its starting point.
-    if ((record.roundDeliveryCount ?? 0) > 0) return { ok: false, reason: 'already_delivered' };
-    // Checked before spending quota, which never resets when seeding comes back on.
-    if (!(await seedAvailabilityGate.seedingEnabled())) return { ok: false, reason: 'seeding_off' };
-
-    const used = await store.incrementSeedRegenerations(input.jobId);
-    if (used > MAX_SEED_REGENERATIONS) return { ok: false, reason: 'cap_reached' };
-
-    await store.setSeedStatus(input.jobId, 'pending');
-    const accepted = options.handoff ? await options.handoff(input.jobId, input.steer).catch(() => false) : false;
-    if (!accepted) {
-      void runSeedRegeneration(input).catch((error) => {
-        input.log.error({ err: error, jobId: input.jobId }, 'seed regeneration failed');
-      });
-    }
-
-    return { ok: true, status: 'pending', regenerationsRemaining: MAX_SEED_REGENERATIONS - used };
-  }
-
-  async function runSeedRegeneration(input: {
-    jobId: number;
-    steer?: string;
-    log: { error: (context: object, message: string) => void };
-  }): Promise<void> {
-    if (!store) return;
-    const record = await store.getSubmission(input.jobId);
-    if (!record?.slug) return;
-    const { draft } = await seedBuild({
-      jobId: input.jobId,
-      slug: record.slug,
-      spec: record.spec ?? '',
-      delivery: 'channel',
-      ...(input.steer ? { steer: input.steer } : {}),
-      log: input.log,
-    });
-    if (draft) {
-      await store.setSubmissionSeed(input.jobId, {
-        slug: draft.slug,
-        files: draft.files,
-        references: draft.references,
-        ...(draft.notes ? { notes: draft.notes } : {}),
-      });
-    } else {
-      await store.setSeedStatus(input.jobId, 'unavailable');
-    }
-  }
+  const { regenerateSeed, runSeedRegeneration } = createSeedRegenerator(options, seedBuild, seedDeliveryFor);
 
   // Reuses the published-game serve path: CSP, provenance, credential scan.
 

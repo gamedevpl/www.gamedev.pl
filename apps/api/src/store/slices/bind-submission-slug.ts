@@ -1,3 +1,4 @@
+import { assertAgentRound } from './agent-round-write.js';
 import { permitsRecoveryClaim, type RecoveryAdmission } from './recovery-admission.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { isActiveBuildRound } from '../../creation/job-state.js';
@@ -22,8 +23,13 @@ export async function bindSubmissionSlug(
   jobId: number,
   slug: string,
   admissionNonce?: string,
+  generation?: number,
 ): Promise<void> {
   await db.runTransaction(async (tx) => {
+    if (generation !== undefined) {
+      const parent = await tx.get(db.collection('submissions').doc(String(jobId)));
+      assertAgentRound(parent.exists ? (parent.data() as SubmissionRecord) : undefined, generation);
+    }
     const rows = await tx.get(db.collection('submissions').where('slug', '==', slug));
     const claim = db.collection('games').doc(slug);
     const game = await tx.get(claim);
