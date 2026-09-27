@@ -5,6 +5,8 @@ import { rememberBounded } from '../platform/bounded-map.js';
 import type { ReviewSweep, Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_SWEEP_GAMES } from './review-sweep.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { reviewableCreatorDrafts, titleFromSubmission } from './review-candidate.js';
+export { isReviewableCreatorDraft } from './review-candidate.js';
 
 export interface ReviewCatalogMedia {
   screenshots: Array<{ name: string; file: string }>;
@@ -26,21 +28,10 @@ export interface ReviewQueueItem {
   creatorHandle: string | null;
   genre: string | null;
   jobId: number | null;
+  gameVersion?: string | null;
   media: ReviewCatalogMedia | null;
   // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
-}
-
-function titleFromSubmission(record: SubmissionRecord): string {
-  const titled = record.title.trim();
-  if (titled) return titled;
-  return record.slug ?? `issue-${record.jobId}`;
-}
-
-export function isReviewableCreatorDraft(record: SubmissionRecord): boolean {
-  return Boolean(
-    record.slug && record.deliveredVersion && record.draftSharedAt && !record.publishedAt && !record.abandonedAt,
-  );
 }
 
 export interface ReviewQueueCacheDeps {
@@ -196,9 +187,11 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
 
   async function collectPool(source: ReviewSweepSource, opts?: { fresh?: boolean }): Promise<ReviewQueueItem[]> {
     const pools = await loadReviewPools(opts);
+    const creatorSlugs = new Set(reviewableCreatorDrafts(pools.delivered).map((record) => record.slug));
     const items: ReviewQueueItem[] = [];
     if (source === 'catalog' || source === 'all') {
       for (const entry of pools.catalog) {
+        if (creatorSlugs.has(entry.slug)) continue;
         items.push({
           slug: entry.slug,
           title: entry.title || entry.slug,
@@ -214,8 +207,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     if ((source === 'creator' || source === 'all') && items.length < MAX_SWEEP_GAMES) {
       const seen = new Set(items.map((item) => item.slug));
       const drafts: SubmissionRecord[] = [];
-      for (const record of pools.delivered) {
-        if (!isReviewableCreatorDraft(record)) continue;
+      for (const record of reviewableCreatorDrafts(pools.delivered)) {
         const slug = record.slug!;
         if (seen.has(slug)) continue;
         seen.add(slug);
@@ -232,6 +224,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
           creatorHandle: handles.get(owners[index]!) ?? null,
           genre: null,
           jobId: record.jobId,
+          gameVersion: record.previewVersion ?? record.deliveredVersion ?? null,
           media: null,
         });
       }
@@ -242,7 +235,8 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   // Single-slug lookup for a targeted re-review, against already-loaded pools.
   async function findQueueItem(slug: string, pools: ReviewPools): Promise<ReviewQueueItem | null> {
     const entry = pools.catalog.find((row) => row.slug === slug);
-    if (entry) {
+    const record = reviewableCreatorDrafts(pools.delivered).find((row) => row.slug === slug);
+    if (entry && !record) {
       return {
         slug: entry.slug,
         title: entry.title || entry.slug,
@@ -253,7 +247,6 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
         media: entry.media ?? null,
       };
     }
-    const record = pools.delivered.find((row) => row.slug === slug && isReviewableCreatorDraft(row));
     if (!record) return null;
     return {
       slug,
@@ -262,6 +255,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
       creatorHandle: await creatorHandle(await ownerOf(record)),
       genre: null,
       jobId: record.jobId,
+      gameVersion: record.previewVersion ?? record.deliveredVersion ?? null,
       media: null,
     };
   }

@@ -1,3 +1,4 @@
+import { assertAgentRound } from './agent-round-write.js';
 import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
 import { canClaimManualRound } from './manual-round-claim.js';
 import { assertRecoveryBinding } from './bind-submission-slug.js';
@@ -144,7 +145,8 @@ export class InMemorySubmissionStore implements SubmissionStore {
     return true;
   }
 
-  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string, generation?: number): Promise<void> {
+    assertAgentRound(this.submissions.get(jobId), generation);
     const holder = [...this.submissions.values()]
       .filter((r) => r.slug === slug)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
@@ -153,18 +155,21 @@ export class InMemorySubmissionStore implements SubmissionStore {
     if (sub) this.submissions.set(jobId, { ...sub, slug });
   }
 
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
+  async setSubmissionTitle(jobId: number, title: string, generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (sub) this.submissions.set(jobId, { ...sub, title });
   }
 
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
+  async setSubmissionDeliveredVersion(jobId: number, version: string, generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (sub) this.submissions.set(jobId, { ...sub, deliveredVersion: version, previewVersion: version });
   }
 
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
+  async setSubmissionPreviewVersion(jobId: number, version: string, generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (sub) this.submissions.set(jobId, { ...sub, previewVersion: version });
   }
 
@@ -186,8 +191,9 @@ export class InMemorySubmissionStore implements SubmissionStore {
     if (sub) this.submissions.set(jobId, { ...sub, abandonedAt: at });
   }
 
-  async setDraftShared(jobId: number, at: string | null): Promise<void> {
+  async setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return;
     const next = { ...sub };
     if (at) next.draftSharedAt = at;

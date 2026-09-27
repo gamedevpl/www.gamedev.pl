@@ -1,3 +1,4 @@
+import { retryClosedPreviewDream } from './closed-preview-dream-retry.js';
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
@@ -13,7 +14,8 @@ import {
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { hasPendingGateRepair } from '../platform/gate-repair-sweep.js';
 import { canTransition, reconcileAgentObservation, type JobState, type JobTransition } from './job-state.js';
-import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './session-crash.js';
+import { clearObserveFailures, noteObserveFailure } from './session-crash.js';
+import { recordSessionCrash } from './session-crash-record.js';
 
 // A logger, narrowed to what the reconcilers actually call on it.
 interface ReconcilerLog {
@@ -176,10 +178,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     } catch (error) {
       log.error({ err: error, jobId: record.jobId }, 'agent observation failed');
       if (!noteObserveFailure(lastRef)) return null;
-      const transition = sessionCrashTransition(state, now);
-      if (!transition) return null;
-      const recorded = await store.recordJobTransition(record.jobId, transition);
-      return recorded ? transition : null;
+      return recordSessionCrash(store, record, lastRef, now);
     }
     try {
       if (!observation) return null;
@@ -294,22 +293,16 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     return onGateRed({ record, version, report });
   }
 
-  // Reads our own gate's verdict off the delivered version.
-
-  // The gate runs in Cloud Build, writes to the manifest, and exits.
-
-  // Nothing told the job, so a delivered game sat in submitted forever.
-
-  // Read rather than pushed back: the verdict is already durable here.
-
-  // A callback would duplicate a fact the manifest already holds.
   async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
     if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
     const redPendingRepair =
       state === 'needs_changes' && ['gate_red', 'kit_outdated'].includes(record.transitions?.at(-1)?.reason ?? '');
-    if (state !== 'building' && state !== 'submitted' && !redPendingRepair) return null;
     try {
+      if (state !== 'building' && state !== 'submitted' && !redPendingRepair) {
+        if (state === 'ready_for_review') await retryClosedPreviewDream(record, gamesStore, onPreviewGateGreen, now);
+        return null;
+      }
       const roundGeneration = record.roundGeneration ?? 1;
       // Retained versions may belong to an older round.
 

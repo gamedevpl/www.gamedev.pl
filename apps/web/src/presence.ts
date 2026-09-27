@@ -1,6 +1,10 @@
 import { useEffect, type MutableRefObject } from 'react';
+import * as cadence from './presence-cadence.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-import { beatPresence, fetchPresence, leavePresence, type PresenceSnapshot } from './presenceApi.js';
+import { fetchPresence, type PresenceSnapshot } from './presenceApi.js';
+import { beatPresence, leavePresence } from './presence-mutations.js';
+import { useFrameDocument } from './frameLifecycle.js';
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 
 /**
  * The shell half of ambient co-presence (docs/persistent-world-plan.md P2.5).
@@ -29,14 +33,9 @@ import { beatPresence, fetchPresence, leavePresence, type PresenceSnapshot } fro
  *   looking at somebody who is not there.
  */
 
-/** Mirrors the API's `PRESENCE_HEARTBEAT_MS`; the server's answer overrides it. */
-const DEFAULT_HEARTBEAT_MS = 12_000;
-/** Never beat faster than this, whatever a server response claims the cadence is. */
-const MIN_HEARTBEAT_MS = 5_000;
 /** Position bound. The server clamps to the game's declared grid; this only stops a
  *  runaway value from becoming a request body at all. */
 const MAX_COORDINATE = 4096;
-const HELLO_MIN_INTERVAL_MS = 1_000;
 
 export type PresenceRequest =
   { t: 'presence:hello' } | { t: 'presence:here'; col: number; row: number } | { t: 'presence:away' };
@@ -71,37 +70,33 @@ export function parsePresenceMessage(raw: unknown): PresenceRequest | null {
   return null;
 }
 
-/**
- * Serves presence for the game running in `frameRef` on the published `slug`.
- *
- * Nothing happens until a game says `presence:hello`, exactly as with saves and worlds,
- * so the bridge being mounted for every published game costs the ones that never ask for
- * a roster precisely nothing.
- */
 export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
+  const frameDocument = useFrameDocument(frameRef);
   useEffect(() => {
     if (!slug) return;
-    let cancelled = false;
+    let cancelled = false,
+      generation = 0;
     /** True once a game has asked for a roster — until then this whole effect is inert. */
     let engaged = false;
     /** Newest tile the game reported, or null before it has said anything. */
     let position: { col: number; row: number } | null = null;
     let timer: number | null = null;
     let beating = false;
-    let heartbeatMs = DEFAULT_HEARTBEAT_MS;
+    let lease: string | undefined,
+      attempted = false;
+    const budget = cadence.createPresenceCadence(() => {
+      if (engaged && position) void beat();
+    });
+    let heartbeatMs = cadence.HEARTBEAT_MS;
     /** True once at least one beat has been sent, so `leave` knows there is a slot. */
     let joined = false;
     let helloAt = -Infinity;
     let awaitingFirstHere = false;
     let helloTimer: number | null = null;
-
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
-      // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
-      // the game in turn only accepts messages whose source is its parent.
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     }
-
     function announce(snapshot: PresenceSnapshot | null) {
       postToGame(
         snapshot
@@ -116,84 +111,75 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           : { t: 'presence:state', available: false },
       );
     }
-
     async function beat() {
-      // One beat at a time. A slow request must not let the next tick start a second,
-      // or a struggling connection turns into a pile-up aimed at the same endpoint.
-      if (beating || cancelled) return;
+      if (beating || cancelled || !engaged || !budget.allow(Date.now())) return;
       beating = true;
+      const acquired = generation,
+        acquiredLease = lease;
+      attempted = true;
       if (position) awaitingFirstHere = false;
       try {
-        const snapshot = await beatPresence(slug!, position);
+        const snapshot = await beatPresence(
+          slug!,
+          position,
+          () => !cancelled && acquired === generation,
+          acquiredLease,
+        );
+        if (cancelled || acquired !== generation) return;
         if (snapshot) {
           joined = joined || snapshot.visible;
-          // The server names the cadence, so the two halves cannot drift into disagreeing
-          // about how many missed beats a TTL is worth. Floored, so a bad or hostile
-          // answer cannot turn this into a tight loop.
-          heartbeatMs = Math.max(MIN_HEARTBEAT_MS, snapshot.heartbeatMs || DEFAULT_HEARTBEAT_MS);
+          heartbeatMs = Math.max(cadence.MIN_BEAT_MS, snapshot.heartbeatMs || cadence.HEARTBEAT_MS);
         }
+        if (!snapshot?.visible) budget.failed(Date.now());
         announce(snapshot);
       } catch {
-        // A beat that failed is "no presence" as far as the game is concerned, and the
-        // next beat is one interval away by construction — which is why, unlike the save
-        // and world bridges, there is no retry ladder here to get wrong.
+        if (cancelled || acquired !== generation) return;
+        budget.failed(Date.now());
         announce(null);
       } finally {
         beating = false;
-        // A new document reported while the old beat was in flight.
-        if (awaitingFirstHere && position) void beat();
+        if (engaged && awaitingFirstHere && position) void beat();
       }
     }
 
-    /**
-     * Chained rather than an interval, the same reasoning `commons` polling uses: each
-     * beat is scheduled only once the previous one has been asked for, so a slow server
-     * can never accumulate a queue of requests that all land at once.
-     */
     function schedule() {
       if (timer !== null || cancelled || !engaged) return;
       timer = window.setTimeout(() => {
         timer = null;
-        // Never beat for a tab nobody is looking at: somebody who alt-tabbed is not in
-        // the world in any sense a player would recognise. The visibility listener beats
-        // immediately when they come back.
         if (document.visibilityState !== 'hidden') void beat();
         schedule();
       }, heartbeatMs);
     }
 
     function stop() {
+      budget.stop();
       if (timer === null) return;
       window.clearTimeout(timer);
       timer = null;
     }
 
-    // The opening answer is a *read*, so nobody joins at the origin tile.
     async function openingRead() {
       helloTimer = null;
       helloAt = Date.now();
-      // Armed once per window, so hello/here ping-pong cannot spam beats.
       awaitingFirstHere = true;
       try {
         announce(await fetchPresence(slug!));
       } catch {
         announce(null);
       }
-      if (awaitingFirstHere && position) void beat();
+      if (engaged && awaitingFirstHere && position) void beat();
       schedule();
     }
 
     async function onMessage(event: MessageEvent) {
-      // Pin to this theater's frame: any other window posting `gdp` traffic is not the
-      // game we are serving, and must not appear in or read this roster.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parsePresenceMessage(event.data);
       if (!message) return;
       if (message.t === 'presence:hello') {
+        if (!engaged) lease = crypto.randomUUID();
         engaged = true;
         position = null;
-        const wait = helloAt + HELLO_MIN_INTERVAL_MS - Date.now();
-        // A srcDoc swap keeps the window, so defer rather than drop.
+        const wait = helloAt + cadence.HELLO_INTERVAL_MS - Date.now();
         if (wait > 0) helloTimer ??= window.setTimeout(() => void openingRead(), wait);
         else await openingRead();
         return;
@@ -201,29 +187,21 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
 
       if (message.t === 'presence:here') {
         position = { col: message.col, row: message.row };
-        // Only for a game that actually opened a roster. Without this, a game that never
-        // said hello — or one that has already walked away — could still put this side
-        // on the network by posting a position, which is exactly the control the shell
-        // owns the clock in order to keep.
         if (!engaged) return;
-        // The first position is worth a beat straight away: waiting a full interval would
-        // leave a player invisible for twelve seconds after walking in, which is most of
-        // the time anybody spends deciding whether a world feels inhabited.
         if (!joined || awaitingFirstHere) void beat();
         return;
       }
 
-      // presence:away — the game has walked out of its world. Stop beating and withdraw
-      // now rather than letting the slot expire, so nobody is drawn standing where
-      // somebody used to be.
       stop();
       if (helloTimer !== null) window.clearTimeout(helloTimer);
       helloTimer = null;
       engaged = false;
+      generation++;
       position = null;
-      if (joined) {
+      if (joined || attempted) {
+        attempted = false;
         joined = false;
-        void leavePresence(slug!);
+        void leavePresence(slug!, lease);
       }
       announce(null);
     }
@@ -234,8 +212,6 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         return;
       }
       if (!engaged) return;
-      // Back from a hidden tab: beat immediately rather than waiting out an interval, so
-      // the player rejoins the world at roughly the moment they look at it again.
       void beat();
       schedule();
     }
@@ -244,14 +220,12 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
+      generation++;
       stop();
       if (helloTimer !== null) window.clearTimeout(helloTimer);
       window.removeEventListener('message', onMessage);
       document.removeEventListener('visibilitychange', onVisibility);
-      // Exiting the player is the most common way a session ends. Withdrawing here is
-      // what keeps the count honest: without it every other player in the world spends
-      // the rest of the TTL looking at somebody who has closed the tab.
-      if (joined) void leavePresence(slug);
+      if (joined || attempted) void leavePresence(slug, lease);
     };
-  }, [frameRef, slug]);
+  }, [frameRef, slug, frameDocument]);
 }

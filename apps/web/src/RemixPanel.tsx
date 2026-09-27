@@ -1,3 +1,4 @@
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
@@ -50,7 +51,6 @@ import './remix-composer.css';
 import './remix-result.css';
 import './remix-editor-stage.css';
 
-/** Successful landings before we offer to keep the remix in Studio. */
 const KEEP_OFFER_AFTER = 3;
 /** After this many landings the sheet becomes a mini sidebar chat. */
 const CHAT_MODE_AFTER = 2;
@@ -323,9 +323,9 @@ export function RemixPanel(props: {
   const pushToGame = useCallback(
     (next: Record<string, EditorParamValue>, contentOverride?: EditorContentDoc) => {
       const collections = contentOverride ?? contentDocRef.current;
-      props.frameRef.current?.contentWindow?.postMessage(
+      postToGameFrame(
+        props.frameRef.current,
         editorContentMessage({ ...collections, params: next }, selectionRef.current),
-        '*',
       );
     },
     [props.frameRef],
@@ -907,7 +907,7 @@ export function RemixPanel(props: {
     // The pause seam. Freeze first, so nothing can land mid-jump.
     setLane('building');
     setSlow(false);
-    props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'pause' }, '*');
+    postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'pause' });
     const controller = new AbortController();
     const slowTimer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
     const hardTimer = window.setTimeout(() => controller.abort(), CODE_TIMEOUT_MS);
@@ -946,7 +946,7 @@ export function RemixPanel(props: {
         noteSuccessfulChange();
       } else {
         recordRemixStep(result.reason === 'refused' ? 'refused' : 'handoff');
-        props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
+        postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'resume' });
         const textOut =
           summaryFor(text, result.summary, '') ||
           // Each reason gets its own words. A refusal was reading as "too big",
@@ -966,7 +966,7 @@ export function RemixPanel(props: {
     } catch (error) {
       // Whatever went wrong — timeout, network, 5xx — the old document simply
       // resumes; the player never pays for our slow afternoon with their run.
-      props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
+      postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'resume' });
       failStreakRef.current += 1;
       const status = (error as RemixApiError).status;
       const timedOut = controller.signal.aborted;
@@ -1001,7 +1001,7 @@ export function RemixPanel(props: {
     const active = session;
     if (!active || lane !== 'idle') return;
     setLane('building');
-    props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'pause' }, '*');
+    postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'pause' });
     try {
       const result = await remixUndo(active.remixId);
       props.onSwapDocument(result.html);
@@ -1016,7 +1016,7 @@ export function RemixPanel(props: {
       if (chatMode) appendChat('assistant', t('remix.undone'), { canUndo: result.undoable });
       else setNote({ kind: 'ok', text: t('remix.undone') });
     } catch {
-      props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
+      postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'resume' });
       setNote({ kind: 'error', text: t('remix.undoFailed') });
     } finally {
       setLane('idle');
@@ -1030,7 +1030,7 @@ export function RemixPanel(props: {
       if (event.origin !== 'null') return;
       // Read the frame's window at delivery time: the swap replaced the document,
       // so the window captured before it is not the one now reporting.
-      if (event.source !== props.frameRef.current?.contentWindow) return;
+      if (!isFromGameFrame(event, props.frameRef.current)) return;
       const data = event.data as { source?: string; type?: string } | null;
       if (data?.source !== 'gdpl-player' || data.type !== 'error') return;
       stop();

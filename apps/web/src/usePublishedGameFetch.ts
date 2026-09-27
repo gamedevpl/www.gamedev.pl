@@ -11,7 +11,7 @@ const MAX_FETCH_RETRIES = 3;
 // Backs off 1s, 2s, 4s: fresh drafts settle, unknown slugs fail fast.
 export const PUBLISHED_FETCH_RETRY_MS = 1_000;
 
-export function usePublishedGameFetch(slug: string, attempt = 0) {
+export function usePublishedGameFetch(slug: string, attempt = 0, reviewVersion?: string) {
   const [game, setGame] = useState<PublishedGame | null>(null);
   const [progress, setProgress] = useState<FetchProgress>({ loaded: 0, total: null });
   const [error, setError] = useState<GameFetchError | null>(null);
@@ -28,6 +28,7 @@ export function usePublishedGameFetch(slug: string, attempt = 0) {
     const run = () => {
       fetchPublishedGame(slug, {
         signal: abort.signal,
+        reviewVersion,
         onProgress: (next) => {
           if (!cancelled) setProgress(next);
         },
@@ -53,7 +54,7 @@ export function usePublishedGameFetch(slug: string, attempt = 0) {
       abort.abort();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [slug, attempt]);
+  }, [slug, attempt, reviewVersion]);
 
   return { game, progress, error };
 }

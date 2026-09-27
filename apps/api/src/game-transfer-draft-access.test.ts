@@ -109,7 +109,7 @@ describe('after a transfer, the sender cannot reach the draft', () => {
       body.recentBuilds?.find((build) => build.version === 'v0');
 
     const sender = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: session(SENDER) });
-    expect(priorOf(sender.json())).toBeDefined();
+    expect(priorOf(sender.json())).toBeUndefined();
     // No stored summary: the only source is that round's channel.
     expect(priorOf(sender.json())?.summary).toBeUndefined();
     expect(readEvents.mock.calls.map((call) => call[0])).not.toContain(priorJobId);

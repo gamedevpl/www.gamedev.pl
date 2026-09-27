@@ -499,8 +499,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.roundsStore.claimSeal(jobId, at);
   }
 
-  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
-    return this.roundsStore.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
+  async acknowledgeBuilderHandoff(jobId: number, at: string, generation?: number): Promise<BuilderHandoff | null> {
+    return this.roundsStore.acknowledgeBuilderHandoff(jobId, at, generation);
   }
 
   async clearBuilderHandoff(jobId: number): Promise<void> {
@@ -523,36 +523,39 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.roundsStore.setRoundBuilder(jobId, builder, options);
   }
 
-  async setSubmissionSeed(jobId: number, seed: SeedFiles | null): Promise<void> {
-    return this.roundsStore.setSubmissionSeed(jobId, seed);
+  async setSubmissionSeed(jobId: number, seed: SeedFiles | null, generation?: number): Promise<void> {
+    return this.roundsStore.setSubmissionSeed(jobId, seed, generation);
   }
 
-  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void> {
-    return this.roundsStore.setSeedStatus(jobId, status);
+  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable', generation?: number): Promise<void> {
+    return this.roundsStore.setSeedStatus(jobId, status, generation);
   }
 
-  async incrementSeedRegenerations(jobId: number): Promise<number> {
-    return this.roundBudgetStore.incrementSeedRegenerations(jobId);
+  async incrementSeedRegenerations(jobId: number, generation?: number): Promise<number> {
+    return this.roundBudgetStore.incrementSeedRegenerations(jobId, generation);
   }
 
-  async incrementRoundDeliveryCount(jobId: number): Promise<number> {
-    return this.roundBudgetStore.incrementRoundDeliveryCount(jobId);
+  async incrementRoundDeliveryCount(jobId: number, generation?: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundDeliveryCount(jobId, generation);
   }
 
-  async incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number> {
-    return this.roundBudgetStore.incrementRoundTypecheckPreflightRefusals(jobId);
+  async incrementRoundTypecheckPreflightRefusals(jobId: number, generation?: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundTypecheckPreflightRefusals(jobId, generation);
   }
 
-  async setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void> {
-    return this.roundBudgetStore.setRoundTypecheckPreflightBypassErrors(jobId, message);
+  async setRoundTypecheckPreflightBypassErrors(
+    jobId: number,
+    message: string | null,
+    generation?: number,
+  ): Promise<void> {
+    return this.roundBudgetStore.setRoundTypecheckPreflightBypassErrors(jobId, message, generation);
+  }
+  async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundSubmitAttempts(jobId, generation);
   }
 
-  async incrementRoundSubmitAttempts(jobId: number): Promise<number> {
-    return this.roundBudgetStore.incrementRoundSubmitAttempts(jobId);
-  }
-
-  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number> {
-    return this.roundBudgetStore.incrementRoundPreflightRefusal(jobId, kind);
+  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundPreflightRefusal(jobId, kind, generation);
   }
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
@@ -676,8 +679,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     await this.shelfMirror.afterJobWrite(jobId);
   }
 
-  async setDraftShared(jobId: number, at: string | null): Promise<void> {
-    await this.submissionStore.setDraftShared(jobId, at);
+  async setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void> {
+    await this.submissionStore.setDraftShared(jobId, at, generation);
     await this.shelfMirror.afterJobWrite(jobId);
   }
 
@@ -707,7 +710,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   async appendBuildEvent(
     jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
-    options?: { preserveEnded?: boolean },
+    options?: { preserveEnded?: boolean; roundGeneration?: number },
   ): Promise<BuildEvent> {
     return this.buildLogStore.appendBuildEvent(jobId, event, options);
   }
@@ -716,13 +719,12 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     jobId: number,
     at?: string,
     presence?: { key: string },
-    options?: { preserveEnded?: boolean },
+    options?: { preserveEnded?: boolean; roundGeneration?: number },
   ): Promise<void> {
     return this.buildLogStore.touchLastAgentSignalAt(jobId, at, presence, options);
   }
-
-  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    return this.buildLogStore.markAgentEnded(jobId, at, by);
+  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end', generation?: number): Promise<void> {
+    return this.buildLogStore.markAgentEnded(jobId, at, by, generation);
   }
 
   async listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
@@ -732,12 +734,12 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   async countBuildEvents(jobId: number): Promise<number> {
     return this.buildLogStore.countBuildEvents(jobId);
   }
-
   async appendBuildShot(
     jobId: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
+    generation?: number,
   ): Promise<BuildShot> {
-    return this.buildMediaStore.appendBuildShot(jobId, shot);
+    return this.buildMediaStore.appendBuildShot(jobId, shot, generation);
   }
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
@@ -771,8 +773,9 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
+    generation?: number,
   ): Promise<BuildPreview> {
-    return this.buildMediaStore.appendBuildPreview(jobId, preview);
+    return this.buildMediaStore.appendBuildPreview(jobId, preview, generation);
   }
 
   async listBuildPreviews(jobId: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
@@ -829,8 +832,8 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.buildLogStore.listCreatorMessages(jobId, opts);
   }
 
-  async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
-    return this.buildLogStore.markCreatorMessagesDelivered(jobId, ids);
+  async markCreatorMessagesDelivered(jobId: number, ids: string[], generation?: number): Promise<void> {
+    return this.buildLogStore.markCreatorMessagesDelivered(jobId, ids, generation);
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {

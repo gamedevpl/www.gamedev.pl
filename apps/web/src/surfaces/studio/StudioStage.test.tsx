@@ -111,19 +111,17 @@ describe('StudioStage', () => {
     unmount();
   });
 
-  // Dispatches the bridge's activity message as if the game sent it.
   function sendGameActivity(host: HTMLElement) {
     const iframe = host.querySelector('iframe')!;
-    const event = new MessageEvent('message', { data: { source: 'gdpl-player', type: 'activity' } });
+    const event = new MessageEvent('message', { origin: 'null', data: { source: 'gdpl-player', type: 'activity' } });
     Object.defineProperty(event, 'source', { value: iframe.contentWindow });
     Object.defineProperty(event, 'origin', { value: 'null' });
     window.dispatchEvent(event);
   }
 
-  // Dispatches the bridge's held message for a pointer press or release.
   function sendPointerHeld(host: HTMLElement, held: boolean) {
     const iframe = host.querySelector('iframe')!;
-    const event = new MessageEvent('message', { data: { source: 'gdpl-player', type: 'held', held } });
+    const event = new MessageEvent('message', { origin: 'null', data: { source: 'gdpl-player', type: 'held', held } });
     Object.defineProperty(event, 'source', { value: iframe.contentWindow });
     Object.defineProperty(event, 'origin', { value: 'null' });
     window.dispatchEvent(event);
@@ -141,7 +139,6 @@ describe('StudioStage', () => {
       source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
 
-    // Held while input is still fresh — no toast, no manual choice offered.
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
     expect(host.querySelector('.studio-swap-toast')).toBeNull();
 
@@ -390,6 +387,7 @@ describe('StudioStage', () => {
     const iframe = host.querySelector('iframe')!;
     await act(async () => {
       const event = new MessageEvent('message', {
+        origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
       Object.defineProperty(event, 'source', { value: iframe.contentWindow });
@@ -416,6 +414,7 @@ describe('StudioStage', () => {
     const iframe = host.querySelector('iframe')!;
     await act(async () => {
       const event = new MessageEvent('message', {
+        origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'Bastion requires gfx3d' },
       });
       Object.defineProperty(event, 'source', { value: iframe.contentWindow });
@@ -445,6 +444,7 @@ describe('StudioStage', () => {
     const iframe = host.querySelector('iframe')!;
     await act(async () => {
       const event = new MessageEvent('message', {
+        origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
       Object.defineProperty(event, 'source', { value: iframe.contentWindow });

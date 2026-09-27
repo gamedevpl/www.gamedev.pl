@@ -1,3 +1,5 @@
+import type { Store, SubmissionRecord } from '../platform/store.js';
+import { isSlugTakenDown } from './slug-takedown.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
 
 export type ShareRefusal = 'nothing_delivered' | 'gate_pending' | 'gate_red' | 'moderation_blocked';
@@ -38,13 +40,27 @@ export async function refuseUngatedShare(input: {
 
 // refuseUngatedShare plus its wire message, in one call.
 export async function refuseShareOf(input: {
+  store?: Pick<Store, 'listSubmissionsBySlug'>;
   gamesStore?: GamesStore;
   slug?: string;
   version?: string;
   moderationBlockedAt?: string;
 }): Promise<{ error: ShareRefusal; message: string } | null> {
-  const refusal = await refuseUngatedShare(input);
+  const blocked =
+    input.moderationBlockedAt || (input.store && input.slug && (await isSlugTakenDown(input.store, input.slug)));
+  const refusal = blocked ? 'moderation_blocked' : await refuseUngatedShare(input);
   return refusal ? { error: refusal, message: SHARE_REFUSAL_MESSAGES[refusal] } : null;
+}
+
+export function createDraftShareRefusal(store: Store | undefined, gamesStore?: GamesStore) {
+  return (record: SubmissionRecord) =>
+    refuseShareOf({
+      store,
+      gamesStore,
+      slug: record.slug,
+      version: sharedDraftVersion(record),
+      moderationBlockedAt: record.moderationBlockedAt,
+    });
 }
 
 export interface SharedDraftGate {

@@ -18,9 +18,12 @@ async function readApiErrorMessage(response: Response, fallback: string): Promis
 
 export async function fetchPublishedGame(
   slug: string,
-  options?: { onProgress?: (progress: FetchProgress) => void; signal?: AbortSignal },
+  options?: { onProgress?: (progress: FetchProgress) => void; signal?: AbortSignal; reviewVersion?: string },
 ): Promise<PublishedGame> {
-  const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`, {
+  const path = options?.reviewVersion
+    ? `/api/review/games/${encodeURIComponent(slug)}?version=${encodeURIComponent(options.reviewVersion)}`
+    : `/api/games/${encodeURIComponent(slug)}`;
+  const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     ...(options?.signal ? { signal: options.signal } : {}),
   });

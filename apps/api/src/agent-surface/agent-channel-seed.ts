@@ -29,7 +29,12 @@ export interface AgentChannelSeedRoutesDeps {
   store: Store | undefined;
   gamesStore: GamesStore | undefined;
   onRegenerateSeed:
-    | ((input: { jobId: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
+    | ((input: {
+        jobId: number;
+        steer?: string;
+        expectedRoundGeneration?: number;
+        log: FastifyRequest['log'];
+      }) => Promise<
         | { ok: true; status: 'pending'; regenerationsRemaining: number }
         | {
             ok: false;
@@ -46,7 +51,7 @@ export interface AgentChannelSeedRoutesDeps {
 }
 
 export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: AgentChannelSeedRoutesDeps): void {
-  const { resolveBuild, store, gamesStore, onRegenerateSeed } = deps;
+  const { resolveBuild, gamesStore, onRegenerateSeed } = deps;
 
   app.get(
     AGENT_CHANNEL_ROUTES.SEED,
@@ -106,10 +111,8 @@ export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: Agent
         return reply.status(400).send({ error: 'invalid_request', message: parsed.error.issues[0]?.message });
       }
 
+      const roundGeneration = record.roundGeneration ?? 1;
       if (gamesStore && record.slug) {
-        const roundGeneration = store
-          ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
-          : (record.roundGeneration ?? 1);
         const staged = await gamesStore.listStagedSources({
           slug: record.slug,
           jobId,
@@ -127,6 +130,7 @@ export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: Agent
 
       const result = await onRegenerateSeed({
         jobId,
+        expectedRoundGeneration: roundGeneration,
         ...(parsed.data.steer ? { steer: parsed.data.steer } : {}),
         log: request.log,
       });

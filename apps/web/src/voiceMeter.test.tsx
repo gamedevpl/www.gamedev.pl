@@ -111,7 +111,7 @@ describe('useVoiceMeterBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame };
   }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
-import { isFromGameFrame } from './frameMessage.js';
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 
 export { embedGameHtml } from '@gamedevpl/contract';
 const HOST = 'gdpl-host';
@@ -18,7 +18,7 @@ const PLAYER = 'gdpl-player';
  * subscribes to. Exported because the envelope tag lives only in this file.
  */
 export function postGameHostMessage(frame: HTMLIFrameElement | null, message: Record<string, unknown>): void {
-  frame?.contentWindow?.postMessage({ source: HOST, ...message }, '*');
+  postToGameFrame(frame, { source: HOST, ...message });
 }
 
 // Awaits one reply of `type` from `frame`, or null/false after `timeoutMs`.
@@ -348,7 +348,7 @@ export function useGamePlayer(
     // listener attached (or the game was swapped), nudge it a few times.
     let tries = 0;
     const timer = window.setInterval(() => {
-      frameRef.current?.contentWindow?.postMessage({ source: HOST, type: 'hello' }, '*');
+      postGameHostMessage(frameRef.current, { type: 'hello' });
       if (++tries >= 5) window.clearInterval(timer);
     }, 200);
     return () => {
@@ -360,7 +360,7 @@ export function useGamePlayer(
   const toggleSound = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
-      frameRef.current?.contentWindow?.postMessage({ source: HOST, type: 'setSound', muted: next }, '*');
+      postGameHostMessage(frameRef.current, { type: 'setSound', muted: next });
       return next;
     });
   }, [frameRef]);
@@ -482,7 +482,7 @@ export function useCreatorPlaytest(frameRef: MutableRefObject<HTMLIFrameElement 
 
   const post = useCallback(
     (message: Record<string, unknown>) => {
-      frameRef.current?.contentWindow?.postMessage({ source: HOST, ...message }, '*');
+      postGameHostMessage(frameRef.current, message);
     },
     [frameRef],
   );

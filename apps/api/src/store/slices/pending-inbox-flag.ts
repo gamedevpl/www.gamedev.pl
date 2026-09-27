@@ -1,3 +1,4 @@
+import { assertAgentRound } from './agent-round-write.js';
 import type { DocumentReference } from '@google-cloud/firestore';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
@@ -70,10 +71,11 @@ export async function stampEmptyInbox(
   await writePendingInboxFlag(db, jobId, false);
 }
 
-export async function clearPendingInboxFlag(db: GuardedFirestore, jobId: number): Promise<void> {
+export async function clearPendingInboxFlag(db: GuardedFirestore, jobId: number, generation?: number): Promise<void> {
   const ref = db.collection('submissions').doc(String(jobId));
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
+    assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
     if (!snap.exists) return;
     tx.set(ref, { pendingCreatorMessage: false }, { merge: true });
   });

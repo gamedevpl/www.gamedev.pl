@@ -1,3 +1,4 @@
+import { createReviewPreviewLoader } from './review-preview-loader.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerLocalActivityRoutes } from '../creation/local-activity-routes.js';
 import cors from '@fastify/cors';
@@ -43,7 +44,7 @@ import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
 import { applyProposalToRepo } from '../community/proposal-apply-bot.js';
-import { createSnapshotReaderFromEnv, type GameSnapshotStore } from '../catalog/game-snapshot.js';
+import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes } from './spend-brake.js';
 import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from '../creation/creator-code.js';
@@ -408,7 +409,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    * and a reviewer's diff cannot disagree about a game's sources.
    */
   const proposalGithubToken = options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN;
-  const snapshotReader = createSnapshotReaderFromEnv();
+  const snapshotReader = resolveSnapshotReader(options.submissionRoutes?.snapshotReader);
   const gamesRepoName =
     options.submissionRoutes?.gamesRepo ?? process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
   const gamesRepoClient =
@@ -458,9 +459,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
 
   const platformConnectorSecret = options.platformConnectorSecret ?? process.env.COPILOT_MCP_CONNECTOR_SECRET;
-
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
+    snapshotReader,
     store,
     contentChecker,
     // Mirrors the beta wall below, and closes with it when the rung is pulled.
@@ -575,7 +576,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // self-build games (never in catalog.json) are visible to the same callers the
   // /play route already serves. Call-site overrides still win via the spreads below.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
-    repoGate: await createPublishedSlugGateFromEnv(),
+    repoGate: await createPublishedSlugGateFromEnv(undefined, snapshotReader),
     store,
   });
   await registerTelemetryRoutes(app, {
@@ -725,6 +726,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reviewerUids,
     adminUids,
     listCatalog: defaultReviewCatalog,
+    loadCreatorPreview: createReviewPreviewLoader(store, gamesStore),
     emitDeps: submissionSeams.buildNotifyDeps(),
     emitReviewSweep,
     ...options.reviewRoutes,
@@ -841,7 +843,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     // Policy at composition root, not a route invariant.
     editorialClearance: store
-      ? async (slug) => decideEditorialClearance(await store.listGameAssessmentsBySlug(slug), slug)
+      ? async (slug, version) => decideEditorialClearance(await store.listGameAssessmentsBySlug(slug), slug, version)
       : undefined,
   });
 

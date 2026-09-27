@@ -20,7 +20,7 @@ function row(
       controls: 'ok',
     },
     clientContext: null,
-    gameVersion: partial.gameVersion ?? null,
+    gameVersion: partial.gameVersion ?? 'v1',
     resolution: partial.resolution ?? null,
     createdAt: '2026-08-07T00:00:00.000Z',
     updatedAt: partial.updatedAt ?? '2026-08-07T00:00:00.000Z',
@@ -30,7 +30,7 @@ function row(
 
 describe('decideEditorialClearance', () => {
   it('refuses as pending when nobody has reviewed', () => {
-    expect(decideEditorialClearance([], 'draft-a')).toMatchObject({
+    expect(decideEditorialClearance([], 'draft-a', 'v1')).toMatchObject({
       decision: 'pending',
       reviewers: 0,
       keep: 0,
@@ -44,7 +44,7 @@ describe('decideEditorialClearance', () => {
       row({ slug: 'draft-a', reviewerUid: 'r1', verdict: 'skip' }),
       row({ slug: 'draft-a', reviewerUid: 'r2', verdict: 'skip' }),
     ];
-    expect(decideEditorialClearance(rows, 'draft-a')).toMatchObject({
+    expect(decideEditorialClearance(rows, 'draft-a', 'v1')).toMatchObject({
       decision: 'pending',
       reviewers: 2,
       keep: 0,
@@ -55,7 +55,7 @@ describe('decideEditorialClearance', () => {
 
   it('clears on one keep', () => {
     const rows = [row({ slug: 'draft-a', reviewerUid: 'r1', verdict: 'keep' })];
-    expect(decideEditorialClearance(rows, 'draft-a')).toMatchObject({
+    expect(decideEditorialClearance(rows, 'draft-a', 'v1')).toMatchObject({
       decision: 'clear',
       reviewers: 1,
       keep: 1,
@@ -65,13 +65,13 @@ describe('decideEditorialClearance', () => {
 
   it('needs two reviewers to block a cut, so one cut stays pending', () => {
     const oneCut = [row({ slug: 'draft-a', reviewerUid: 'r1', verdict: 'cut' })];
-    expect(decideEditorialClearance(oneCut, 'draft-a').decision).toBe('pending');
+    expect(decideEditorialClearance(oneCut, 'draft-a', 'v1').decision).toBe('pending');
 
     const twoCuts = [
       row({ slug: 'draft-a', reviewerUid: 'r1', verdict: 'cut' }),
       row({ slug: 'draft-a', reviewerUid: 'r2', verdict: 'cut' }),
     ];
-    expect(decideEditorialClearance(twoCuts, 'draft-a').decision).toBe('blocked');
+    expect(decideEditorialClearance(twoCuts, 'draft-a', 'v1').decision).toBe('blocked');
   });
 
   it('blocks when two reviewers split keep/cut because cut >= keep', () => {
@@ -79,7 +79,7 @@ describe('decideEditorialClearance', () => {
       row({ slug: 'draft-a', reviewerUid: 'r1', verdict: 'cut' }),
       row({ slug: 'draft-a', reviewerUid: 'r2', verdict: 'keep' }),
     ];
-    expect(decideEditorialClearance(rows, 'draft-a').decision).toBe('blocked');
+    expect(decideEditorialClearance(rows, 'draft-a', 'v1').decision).toBe('blocked');
   });
 
   it('ignores catalog rows and other slugs', () => {
@@ -87,7 +87,7 @@ describe('decideEditorialClearance', () => {
       row({ slug: 'draft-a', reviewerUid: 'r1', verdict: 'cut', source: 'catalog' }),
       row({ slug: 'other', reviewerUid: 'r1', verdict: 'keep' }),
     ];
-    expect(decideEditorialClearance(rows, 'draft-a').decision).toBe('pending');
+    expect(decideEditorialClearance(rows, 'draft-a', 'v1').decision).toBe('pending');
   });
 
   it('surfaces weakOrBad facet tallies on the refusal payload', () => {
@@ -100,7 +100,7 @@ describe('decideEditorialClearance', () => {
       }),
       row({ slug: 'draft-a', reviewerUid: 'r2', verdict: 'cut' }),
     ];
-    expect(decideEditorialClearance(rows, 'draft-a').weakOrBad).toEqual({
+    expect(decideEditorialClearance(rows, 'draft-a', 'v1').weakOrBad).toEqual({
       graphics: 0,
       gameplay: 1,
       fun: 1,

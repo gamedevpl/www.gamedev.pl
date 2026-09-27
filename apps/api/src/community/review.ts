@@ -1,3 +1,5 @@
+import { registerReviewPlay, type CreatorReviewPreviewLoader } from './review-play.js';
+import { loadReviewCandidate, refreshReviewCandidates } from './review-candidate.js';
 import {
   ASSESSMENT_CHECKLIST_MARKS,
   ASSESSMENT_INPUT_METHODS,
@@ -68,6 +70,7 @@ export interface ReviewRoutesOptions {
   reviewerUids?: Set<string>;
   adminUids?: Set<string>;
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
+  loadCreatorPreview?: CreatorReviewPreviewLoader;
   now?: () => number;
   emitDeps?: EmitDeps;
   // Injected so this module has no value-level notifications import.
@@ -175,6 +178,7 @@ export async function registerReviewRoutes(
     }
     return null;
   }
+  registerReviewPlay(app, refuseUnlessReviewer, options.loadCreatorPreview);
 
   async function notifySweep(sweep: ReviewSweep, notificationId: string): Promise<number> {
     if (!options.emitDeps || !options.emitReviewSweep) return 0;
@@ -211,15 +215,16 @@ export async function registerReviewRoutes(
     const uid = request.user!.uid;
     // One row per slug per reviewer, so size is the count.
     const done = await assessedSlugsFor(uid);
-    const { items: targeted } = await targetedQueueItems(uid, sourceFilter);
+    const targeted = (await targetedQueueItems(uid, sourceFilter)).items.slice(0, MAX_QUEUE);
 
     const open = await openReviewSweep();
     if (!open || open.status === 'paused') {
+      const currentTargeted = await refreshReviewCandidates(store, targeted);
       return {
         source: sourceFilter,
-        remaining: targeted.length,
+        remaining: currentTargeted.length,
         assessed: done.size,
-        items: targeted,
+        items: currentTargeted,
         sweep: open
           ? {
               id: open.id,
@@ -228,7 +233,8 @@ export async function registerReviewRoutes(
               released: effectiveReleasedCount(open, now()),
             }
           : null,
-        emptyReason: targeted.length > 0 ? null : open ? ('sweep_paused' as const) : ('no_active_sweep' as const),
+        emptyReason:
+          currentTargeted.length > 0 ? null : open ? ('sweep_paused' as const) : ('no_active_sweep' as const),
       };
     }
 
@@ -236,7 +242,7 @@ export async function registerReviewRoutes(
     const pool = await collectPool(open.source);
     const bySlug = new Map(pool.map((item) => [item.slug, item]));
 
-    const items: ReviewQueueItem[] = [];
+    let items: ReviewQueueItem[] = [];
     const seen = new Set<string>();
     for (const slug of open.slugs) {
       if (!unlocked.has(slug) || done.has(slug)) continue;
@@ -254,6 +260,7 @@ export async function registerReviewRoutes(
       seen.add(item.slug);
     }
 
+    items = await refreshReviewCandidates(store, items);
     return {
       source: sourceFilter,
       remaining: items.length,
@@ -339,7 +346,7 @@ export async function registerReviewRoutes(
 
     const noteOrigin: AssessmentNoteOrigin = body.data.noteOrigin === 'speech' ? 'speech' : 'text';
     const verdict: AssessmentVerdict = body.data.verdict;
-    const source: AssessmentSource = body.data.source;
+    let source: AssessmentSource = body.data.source;
     const title = body.data.title?.trim() || body.data.slug;
     const reviewerUid = request.user!.uid;
 
@@ -357,8 +364,18 @@ export async function registerReviewRoutes(
       }
     }
 
+    const candidate = await loadReviewCandidate(store, body.data.slug);
+    const candidateVersion = candidate?.previewVersion ?? candidate?.deliveredVersion ?? null;
+    if (
+      (!candidateVersion && source === 'creator') ||
+      (candidateVersion && body.data.gameVersion !== candidateVersion)
+    ) {
+      return reply.status(409).send({ error: 'review_version_changed' });
+    }
+    if (candidateVersion) source = 'creator';
     const gameVersion =
-      body.data.gameVersion === undefined ? (reReviewRequest?.gameVersion ?? null) : body.data.gameVersion;
+      candidateVersion ??
+      (body.data.gameVersion === undefined ? (reReviewRequest?.gameVersion ?? null) : body.data.gameVersion);
 
     const assessment: GameAssessment = await store.upsertGameAssessment({
       slug: body.data.slug,

@@ -388,7 +388,6 @@ describe('POST /api/mcp (BY-05)', () => {
     app = null;
   });
 
-  // Pin the annotation value, not just the name.
   it('documents each advertised tool with the annotation it actually reports', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -2936,6 +2935,7 @@ declare const GameKit: { defineGame(): unknown };
       'patch_source_file',
       'delete_source_file',
       'clear_staged_sources',
+      'create_game',
     ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }

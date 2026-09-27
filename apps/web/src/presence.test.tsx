@@ -6,18 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { parsePresenceMessage, usePresenceBridge } from './presence.js';
 
-/**
- * The presence bridge is the first place on the platform where the *shell* owns a clock
- * on the game's behalf, and that is what most of this file is about.
- *
- * Everywhere else, a request happens because a player did something: they saved, they
- * planted. Here requests happen because time passed, and if the game could set that
- * interval then a hostile or merely careless generated game would have a periodic
- * request primitive pointed at our API. So: the game says *where it is*, this side
- * decides *how often anybody hears about it*, and a game calling `here()` sixty times a
- * second must produce exactly the same request rate as one calling it twice.
- */
-
 function frame(payload: Record<string, unknown>) {
   return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload };
 }
@@ -97,7 +85,7 @@ describe('usePresenceBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame, gameWindow };
   }
@@ -155,7 +143,7 @@ describe('usePresenceBridge', () => {
 
   it('answers the hello of a replacement document after a srcDoc swap', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
     fromGame({ t: 'presence:hello' });
@@ -163,7 +151,7 @@ describe('usePresenceBridge', () => {
     fromGame({ t: 'presence:here', col: 2, row: 2 });
     await waitFor(() => expect(toGame).toHaveLength(2));
     // The new document says hello without the old one saying away.
-    now += 1_500;
+    now += 3_500;
     fromGame({ t: 'presence:hello' });
     await waitFor(() => expect(toGame).toHaveLength(3));
     expect(calls('GET')).toHaveLength(2);
@@ -174,14 +162,14 @@ describe('usePresenceBridge', () => {
 
   it('defers, not drops, the hello of a document swapped in within the window', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
     fromGame({ t: 'presence:hello' });
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 2, row: 2 });
     await waitFor(() => expect(toGame).toHaveLength(2));
-    now += 900;
+    now += 2_900;
     fromGame({ t: 'presence:hello' });
     fromGame({ t: 'presence:here', col: 4, row: 7 });
     await waitFor(() => expect(calls('GET')).toHaveLength(2), 200);
@@ -192,14 +180,14 @@ describe('usePresenceBridge', () => {
 
   it('grants at most one extra beat to hello/here ping-pong inside a window', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     fetchMock.mockResolvedValue(jsonResponse(roster));
     const { fromGame } = mount();
     fromGame({ t: 'presence:hello' });
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 2, row: 2 });
     await waitFor(() => expect(calls('POST')).toHaveLength(1));
-    now += 900;
+    now += 2_900;
     for (let step = 0; step < 30; step++) {
       fromGame({ t: 'presence:hello' });
       fromGame({ t: 'presence:here', col: step, row: 1 });
@@ -212,7 +200,7 @@ describe('usePresenceBridge', () => {
 
   it('sends a swapped-in position once the old document beat settles', async () => {
     let now = 1_000_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(Date, 'now').mockImplementation(() => now + performance.now());
     let release: (() => void) | null = null;
     fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'POST' && !release) await new Promise<void>((resolve) => (release = resolve));
@@ -223,7 +211,7 @@ describe('usePresenceBridge', () => {
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 1, row: 1 });
     await waitFor(() => expect(release).not.toBeNull());
-    now += 1_500;
+    now += 3_500;
     fromGame({ t: 'presence:hello' });
     await waitFor(() => expect(calls('GET')).toHaveLength(2));
     fromGame({ t: 'presence:here', col: 8, row: 3 });
@@ -296,8 +284,8 @@ describe('usePresenceBridge', () => {
     await waitFor(() => expect(toGame).toHaveLength(1));
     fromGame({ t: 'presence:here', col: 1, row: 1 });
     await waitFor(() => expect(toGame).toHaveLength(2));
-
     fromGame({ t: 'presence:here', col: 9, row: 8 });
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3000);
     document.dispatchEvent(new Event('visibilitychange'));
 
     await waitFor(() => expect(calls('POST')).toHaveLength(2));
@@ -367,7 +355,9 @@ describe('usePresenceBridge', () => {
     fetchMock.mockResolvedValue(jsonResponse(roster));
     mount();
 
-    window.dispatchEvent(new MessageEvent('message', { data: frame({ t: 'presence:hello' }), source: window }));
+    window.dispatchEvent(
+      new MessageEvent('message', { origin: 'null', data: frame({ t: 'presence:hello' }), source: window }),
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(fetchMock).not.toHaveBeenCalled();

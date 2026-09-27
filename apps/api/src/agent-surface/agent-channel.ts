@@ -1,3 +1,4 @@
+import type { BuilderHandoffAckInput } from '../creation/builder-handoff-ack.js';
 import { stagedBudgetWarning } from './staged-budget.js';
 import { knowledgeCapWarning } from './agent-knowledge-warning.js';
 import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
@@ -8,7 +9,7 @@ import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
-import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
+import { registerAgentChannelSeedRoutes, type AgentChannelSeedRoutesDeps } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
 import { authedRoundGeneration } from './round-generation-guard.js';
@@ -466,11 +467,7 @@ export interface AgentChannelOptions {
   onMediaEvent?: (jobId: number) => void;
   // Operator switch for concept proposals; absent means off.
   dreamingEnabled?: () => Promise<boolean>;
-  onBuilderHandoffAcknowledged?: (input: {
-    jobId: number;
-    acknowledgedAt: string;
-    log: FastifyRequest['log'];
-  }) => Promise<{ started: boolean; reason?: string }>;
+  onBuilderHandoffAcknowledged?: (input: BuilderHandoffAckInput) => Promise<{ started: boolean; reason?: string }>;
   /**
    * Localizes a progress report that arrived without one. Runs here, on the write, and
    * never on the status read — a translation on the read path costs one model call per
@@ -536,14 +533,7 @@ export interface AgentChannelOptions {
    */
   onSourcesStaged?: (input: { jobId: number; slug: string; roundGeneration: number }) => void;
   // Queues a replacement draft. Absent when nothing seeds.
-  onRegenerateSeed?: (input: { jobId: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
-    | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | {
-        ok: false;
-        reason:
-          'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' | 'seeding_off';
-      }
-  >;
+  onRegenerateSeed?: AgentChannelSeedRoutesDeps['onRegenerateSeed'];
   onSourcesDelivered?: (input: {
     jobId: number;
     slug: string;
@@ -864,19 +854,17 @@ export async function registerAgentChannelRoutes(
   async function markBuildingFromChannel(jobId: number, record: SubmissionRecord): Promise<JobState> {
     const current = (record.state ?? 'queued') as JobState;
     if (!store) return current;
-    if (!canTransition(current, 'building')) {
-      // Common case: already `building` (every progress call after the first). The
-      // request-local snapshot from resolveBuild is fresh enough — avoid an extra
-      // store read on the hot path. Callers that need a post-write snapshot (sources)
-      // re-read explicitly.
-      return current;
-    }
-    await store.recordJobTransition(jobId, {
-      to: 'building',
-      at: new Date().toISOString(),
-      by: 'agent',
-      reason: 'channel_signal',
-    });
+    if (!canTransition(current, 'building')) return current;
+    await store.recordJobTransition(
+      jobId,
+      {
+        to: 'building',
+        at: new Date().toISOString(),
+        by: 'agent',
+        reason: 'channel_signal',
+      },
+      { roundGeneration: record.roundGeneration ?? 1 },
+    );
     return 'building';
   }
 
@@ -1068,7 +1056,7 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: 'text is required' });
       }
 
-      const stored = await store!.appendBuildEvent(jobId, event);
+      const stored = await store!.appendBuildEvent(jobId, event, { roundGeneration: record.roundGeneration ?? 1 });
       const stateAfterSignal = await markBuildingFromChannel(jobId, record);
       options.onEvent?.(jobId);
 
@@ -1275,7 +1263,11 @@ export async function registerAgentChannelRoutes(
         if (!outcome.ok) return reject(outcome.refused);
         stored = outcome.shot;
       } else {
-        stored = await store!.appendBuildShot(jobId, { data: body64, ...(label ? { label } : {}) });
+        stored = await store!.appendBuildShot(
+          jobId,
+          { data: body64, ...(label ? { label } : {}) },
+          record.roundGeneration ?? 1,
+        );
       }
       options.onEvent?.(jobId);
       options.onMediaEvent?.(jobId);
@@ -1344,12 +1336,16 @@ export async function registerAgentChannelRoutes(
         : '';
       const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
 
-      const stored = await store!.appendBuildPreview(jobId, {
-        data: bytes.toString('base64'),
-        ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
-        ...(label ? { label } : {}),
-        ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
-      });
+      const stored = await store!.appendBuildPreview(
+        jobId,
+        {
+          data: bytes.toString('base64'),
+          ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
+          ...(label ? { label } : {}),
+          ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
+        },
+        record.roundGeneration ?? 1,
+      );
       // Pruning after the write, not before: a push that succeeds and then fails to tidy up
       // has still delivered the thing the creator is waiting for.
       await store!.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
@@ -1405,7 +1401,7 @@ export async function registerAgentChannelRoutes(
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
       }
       if (!record.slug && store) {
-        await store.setSubmissionSlug(jobId, slug);
+        await store.setSubmissionSlug(jobId, slug, undefined, record.roundGeneration ?? 1);
       }
 
       const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
@@ -1424,7 +1420,7 @@ export async function registerAgentChannelRoutes(
         // a platform handoff while the agent is still uploading files. Also busts the
         // status cache so a prior submit auto-end does not keep stall=ended on screen.
         await markBuildingFromChannel(jobId, record);
-        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' }, { roundGeneration });
         options.onEvent?.(jobId);
         // After the buffer is durable, so the assembly it schedules reads this file too.
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
@@ -1531,7 +1527,7 @@ export async function registerAgentChannelRoutes(
           content,
         });
         await markBuildingFromChannel(jobId, record);
-        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' }, { roundGeneration });
         options.onEvent?.(jobId);
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, content);
@@ -1608,7 +1604,7 @@ export async function registerAgentChannelRoutes(
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
       }
       if (!record.slug && store) {
-        await store.setSubmissionSlug(jobId, slug);
+        await store.setSubmissionSlug(jobId, slug, undefined, record.roundGeneration ?? 1);
       }
 
       const roundGeneration = await authedRoundGeneration(store, jobId, record.roundGeneration);
@@ -1704,7 +1700,7 @@ export async function registerAgentChannelRoutes(
           });
         }
         await markBuildingFromChannel(jobId, record);
-        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' }, { roundGeneration });
         options.onEvent?.(jobId);
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
 
@@ -1897,7 +1893,7 @@ export async function registerAgentChannelRoutes(
           path: parsed.data.path,
         });
         await markBuildingFromChannel(jobId, record);
-        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' }, { roundGeneration });
         options.onEvent?.(jobId);
         options.onSourcesStaged?.({ jobId, slug: record.slug, roundGeneration });
         return reply.send({
@@ -2068,6 +2064,7 @@ export async function registerAgentChannelRoutes(
           files,
           mode,
           bindSlug: true,
+          expectedRoundGeneration: roundGeneration,
           ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
           ...(summary ? { summary } : {}),
           ...(record.dispatch?.backend || record.builder
@@ -2276,7 +2273,7 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      await store!.markCreatorMessagesDelivered(jobId, parsed.data.ids);
+      await store!.markCreatorMessagesDelivered(jobId, parsed.data.ids, record.roundGeneration ?? 1);
       options.onEvent?.(jobId);
       return reply.send({ ok: true, ...(await channelState(jobId, record)) });
     },
@@ -2314,7 +2311,7 @@ export async function registerAgentChannelRoutes(
           ...(parsed.data.locale ? { locale: parsed.data.locale } : {}),
         });
         if (!event) return false;
-        await store!.appendBuildEvent(jobId, event);
+        await store!.appendBuildEvent(jobId, event, { roundGeneration: record.roundGeneration ?? 1 });
         const version = record.previewVersion ?? record.deliveredVersion;
         if (record.slug && version && options.gamesStore?.setVersionSummary) {
           await options.gamesStore.setVersionSummary(record.slug, version, event.text).catch(() => {});
@@ -2327,10 +2324,17 @@ export async function registerAgentChannelRoutes(
         record.builderHandoff.awaitsAgentAck !== false &&
         options.onBuilderHandoffAcknowledged
       ) {
+        let summarized = false;
         const outcome = await options.onBuilderHandoffAcknowledged({
           jobId,
           acknowledgedAt: new Date(now()).toISOString(),
           log: request.log,
+          roundGeneration: record.roundGeneration ?? 1,
+          finalize: async () => {
+            if (parsed.data.ackInboxIds?.length)
+              await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds, record.roundGeneration ?? 1);
+            summarized = await recordSummary();
+          },
         });
         const fresh = (await store!.getSubmission(jobId)) ?? record;
         if (!outcome.started) {
@@ -2341,10 +2345,6 @@ export async function registerAgentChannelRoutes(
             ...(await channelState(jobId, fresh)),
           });
         }
-        if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
-          await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds);
-        }
-        const summarized = await recordSummary();
         const state = await channelState(jobId, fresh);
         return reply.send({
           accepted: true,
@@ -2361,12 +2361,12 @@ export async function registerAgentChannelRoutes(
       }
 
       if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
-        await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds);
+        await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds, record.roundGeneration ?? 1);
       }
 
       // Submit-ended still records; a prior or legacy end does not.
       const summarized = record.agentEndedAt && record.agentEndedBy !== 'submit' ? false : await recordSummary();
-      await store!.markAgentEnded(jobId);
+      await store!.markAgentEnded(jobId, undefined, 'end', record.roundGeneration ?? 1);
       options.onEvent?.(jobId);
       const fresh = (await store!.getSubmission(jobId)) ?? record;
       return reply.send({

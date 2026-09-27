@@ -22,7 +22,6 @@ vi.mock('../../visitTelemetry.js', async (importOriginal) => ({
   recordPartyStep: vi.fn(),
 }));
 
-// This stand-in only has to carry a contentWindow.
 vi.mock('../../PublishedGameFrame.js', () => ({
   PublishedGameFrame: ({ frameRef }: { frameRef: MutableRefObject<HTMLIFrameElement | null> }) =>
     createElement('iframe', { ref: frameRef, title: 'game' }),
@@ -34,6 +33,7 @@ const SESSION = { code: 'ABCD', hostToken: 'token', maxPlayers: 4 } as PartySess
 function bridgeMessage(frame: HTMLIFrameElement, data: Record<string, unknown>) {
   window.dispatchEvent(
     new MessageEvent('message', {
+      origin: 'null',
       data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...data },
       source: frame.contentWindow,
     }),

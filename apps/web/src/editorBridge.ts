@@ -1,3 +1,4 @@
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { fetchGameEditor, type EditorContentDoc, type GameEditorState } from './studioApi.js';
 import { recordEditorStep } from './visitTelemetry.js';
@@ -101,10 +102,12 @@ export function useEditorDraftBridge(
       controllerStoodDownRef.current = true;
       setControllerStatus('failed');
       setControllerReason(reason);
-      frameRef.current?.contentWindow?.postMessage(
-        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:mode', mode: 'fallback' },
-        '*',
-      );
+      postToGameFrame(frameRef.current, {
+        ns: BRIDGE_NAMESPACE,
+        v: PROTOCOL_VERSION,
+        t: 'editor:mode',
+        mode: 'fallback',
+      });
       recordEditorStep('controller_failed');
     },
     [frameRef],
@@ -168,10 +171,7 @@ export function useEditorDraftBridge(
 
     function post(content: EditorContentDoc, selection: EditorSelection | null) {
       lastRevisionRef.current ??= 1;
-      frameRef.current?.contentWindow?.postMessage(
-        editorContentMessage(content, selection, lastRevisionRef.current),
-        '*',
-      );
+      postToGameFrame(frameRef.current, editorContentMessage(content, selection, lastRevisionRef.current));
     }
 
     function failController(reason: string) {
@@ -195,7 +195,7 @@ export function useEditorDraftBridge(
       // Opaque-origin frame: origin is "null" and the source must be our iframe.
       if (event.origin !== 'null') return;
       const frame = frameRef.current;
-      if (!frame || event.source !== frame.contentWindow) return;
+      if (!isFromGameFrame(event, frame)) return;
       const data = parseEditorControllerEnvelope(event.data);
       if (!data) {
         const raw = event.data as Record<string, unknown> | null;
@@ -276,9 +276,9 @@ export function useEditorDraftBridge(
       lastRevisionRef.current = (lastRevisionRef.current ?? 0) + 1;
       setChecksFresh(false);
       armCheckWatchdog();
-      frameRef.current?.contentWindow?.postMessage(
+      postToGameFrame(
+        frameRef.current,
         editorContentMessage(content, lastSelectionRef.current, lastRevisionRef.current),
-        '*',
       );
     },
     [armCheckWatchdog, frameRef],
@@ -286,7 +286,7 @@ export function useEditorDraftBridge(
 
   const send = useCallback(
     (message: EditorControllerOutbound) => {
-      frameRef.current?.contentWindow?.postMessage(message, '*');
+      postToGameFrame(frameRef.current, message);
     },
     [frameRef],
   );

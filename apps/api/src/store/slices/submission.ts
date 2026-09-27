@@ -1,3 +1,4 @@
+import { writeAgentRoundVersion, writeAgentRoundShared } from './agent-round-write.js';
 import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { bindSubmissionSlug } from './bind-submission-slug.js';
@@ -33,16 +34,16 @@ export interface SubmissionStore {
   setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void>;
 
   // Records the game directory a submission is building, once it is known.
-  setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void>;
+  setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string, generation?: number): Promise<void>;
 
   // Updates the shelf/studio/notification name -- delivery adopts the SPEC title.
-  setSubmissionTitle(jobId: number, title: string): Promise<void>;
+  setSubmissionTitle(jobId: number, title: string, generation?: number): Promise<void>;
 
   // Records the candidate version a delivery just stored.
-  setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void>;
+  setSubmissionDeliveredVersion(jobId: number, version: string, generation?: number): Promise<void>;
 
   // Latest playable version for Studio (preview or publish).
-  setSubmissionPreviewVersion(jobId: number, version: string): Promise<void>;
+  setSubmissionPreviewVersion(jobId: number, version: string, generation?: number): Promise<void>;
 
   // Counts a send-back for finishing without delivering. Returns the new total.
   recordDeliveryNudge(jobId: number): Promise<number>;
@@ -54,7 +55,7 @@ export interface SubmissionStore {
   setSubmissionAbandoned(jobId: number, at: string): Promise<void>;
 
   // Turns the shared draft link on (a timestamp) or off (null).
-  setDraftShared(jobId: number, at: string | null): Promise<void>;
+  setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void>;
 
   // Operator-only: blocks sharing and the public draft read.
   setModerationBlocked(jobId: number, at: string | null): Promise<void>;
@@ -219,20 +220,19 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       return true;
     });
   }
-  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string): Promise<void> {
-    await bindSubmissionSlug(this.db, jobId, slug, admissionNonce);
+  async setSubmissionSlug(jobId: number, slug: string, admissionNonce?: string, generation?: number): Promise<void> {
+    await bindSubmissionSlug(this.db, jobId, slug, admissionNonce, generation);
   }
 
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    await setShelfVisibleFields(this.db, this.ref(jobId), { title });
+  async setSubmissionTitle(jobId: number, title: string, generation?: number): Promise<void> {
+    await setShelfVisibleFields(this.db, this.ref(jobId), { title }, generation);
   }
 
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    await this.ref(jobId).set({ deliveredVersion: version, previewVersion: version }, { merge: true });
+  async setSubmissionDeliveredVersion(jobId: number, version: string, generation?: number): Promise<void> {
+    await writeAgentRoundVersion(this.db, jobId, version, generation, true);
   }
-
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    await this.ref(jobId).set({ previewVersion: version }, { merge: true });
+  async setSubmissionPreviewVersion(jobId: number, version: string, generation?: number): Promise<void> {
+    await writeAgentRoundVersion(this.db, jobId, version, generation);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {
@@ -258,9 +258,9 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     await setShelfVisibleFields(this.db, this.ref(jobId), { abandonedAt: at, openRound: false });
   }
 
-  async setDraftShared(jobId: number, at: string | null): Promise<void> {
+  async setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void> {
     // Deleted, not set false -- "shared" is one shape: present or absent.
-    await this.ref(jobId).set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
+    await writeAgentRoundShared(this.db, jobId, at, generation);
   }
 
   async setModerationBlocked(jobId: number, at: string | null): Promise<void> {

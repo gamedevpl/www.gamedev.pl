@@ -50,10 +50,10 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 Creates a new game on the creator's account, so it writes state.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-Purely additive: it makes a game that did not exist and removes nothing. It spends the same daily creation quota and passes the same moderation as creating a game on the website.
+Creates a game and consumes the creator's limited daily creation quota, reducing their remaining allowance. The same quota and moderation rules apply as on the website.
 ```
 
 **Idempotent: False**

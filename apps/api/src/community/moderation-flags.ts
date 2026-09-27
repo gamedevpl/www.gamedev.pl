@@ -5,7 +5,7 @@ import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
 import type { Store } from '../platform/store.js';
-import type { ModerationFlag } from '../store/records/moderation-flag.js';
+import { notifyModerationFlag } from './moderation-flag-alert.js';
 import { isReviewerSession } from './review.js';
 
 export interface ModerationFlagRoutesOptions {
@@ -90,11 +90,6 @@ export async function takeDownSlug(input: {
   return { blocked, unshared, unpublished, stillPublic };
 }
 
-// Reopened flags page again; still-open ones must not page twice.
-function alertFlagId(reopened: boolean, flag: ModerationFlag): string {
-  return reopened ? `${flag.id}@${flag.createdAt}` : flag.id;
-}
-
 export async function registerModerationFlagRoutes(
   app: FastifyInstance,
   options: ModerationFlagRoutesOptions,
@@ -136,10 +131,7 @@ export async function registerModerationFlagRoutes(
         { slug: flag.slug, reason: flag.reason, raisedByUid: flag.raisedByUid },
         'moderation flag raised on a game',
       );
-      // Detached: mail and push must not hold the reviewer's request open.
-      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
-        request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
-      });
+      await notifyModerationFlag(notifyFlagRaised, request.log, flag, reopened);
       return reply.send({ flag });
     },
   );
@@ -179,10 +171,7 @@ export async function registerModerationFlagRoutes(
         createdAt: new Date(now()).toISOString(),
       });
       request.log.warn({ slug: flag.slug, reason: flag.reason }, 'player reported a game');
-      // Detached, same as the reviewer path above.
-      void notifyFlagRaised?.({ flagId: alertFlagId(reopened, flag), slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
-        request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a player game report');
-      });
+      await notifyModerationFlag(notifyFlagRaised, request.log, flag, reopened);
       return reply.send({ ok: true });
     },
   );

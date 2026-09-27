@@ -395,7 +395,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         const gateStarted = body.gateStarted === true;
         // Marks ended here since agents often submit without calling end.
         if (accepted && store) {
-          await store.markAgentEnded(auth.jobId, undefined, 'submit').catch(() => {});
+          await store.markAgentEnded(auth.jobId, undefined, 'submit', auth.record.roundGeneration ?? 1).catch(() => {});
         }
         const warnings: Array<{ code: string; message: string }> = [];
         if (accepted) {

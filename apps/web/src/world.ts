@@ -1,27 +1,8 @@
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteWorldEntry, fetchWorld, putWorldEntry } from './worldApi.js';
-
-/**
- * The shell half of shared asynchronous worlds (docs/persistent-world-plan.md P2).
- *
- * Same arrangement as the save bridge: a game cannot reach the network, so its GameKit
- * `commons` module posts a request here and this code — ordinary app code on the real
- * origin, holding the session cookie — makes the call.
- *
- * As with saves, the bridge is live for **every** published game rather than only those
- * the catalog flags. Nothing happens until a game says `commons:hello`, and only a game
- * that selected the module ever does, so the capability is derived from what the game
- * actually does rather than from a declaration that could have drifted from it.
- *
- * What is different here is the blast radius. A save is one person's data; a world entry
- * is shown to everybody who opens the game. So the shell forwards writes but decides
- * nothing about them: the schema, the ownership rule, the quota and the moderation all
- * live on the server, where a modified client cannot reach them. Everything arriving
- * from the frame is checked for type and size before it is forwarded, and nothing from
- * the game is rendered, evaluated, or sent anywhere but this one API for this one slug.
- */
 
 /** Mirrors MAX_WORLD_KEY_LENGTH in the API. */
 const MAX_KEY_LENGTH = MAX_WORLD_KEY_LENGTH;
@@ -105,7 +86,7 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
       if (cancelled) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     }
 
     async function sendState() {
@@ -168,7 +149,7 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
     async function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not read or write this world.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseWorldMessage(event.data);
       if (!message) return;
 
