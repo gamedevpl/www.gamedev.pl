@@ -1,3 +1,4 @@
+import { isFromGameFrame } from '../../frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from '../../GameFrame.js';
@@ -247,7 +248,7 @@ export function StudioStage({
     let sawFrame = false;
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
-      if (event.source !== frameRef.current?.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const data = event.data as { source?: string; type?: string; message?: string; frames?: number } | null;
       if (data?.source !== 'gdpl-player') return;
       if (data.type === 'error') {

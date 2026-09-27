@@ -1,3 +1,4 @@
+import { isFromGameFrame, postToGameFrame } from '../../frameMessage.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './party.css';
@@ -27,14 +28,6 @@ type PartyStageProps = {
   onExit: () => void;
 };
 
-/**
- * The shared screen: lobby first (QR + who has joined), then the game with a live
- * bridge relaying phone input into the sandboxed iframe.
- *
- * The game is deliberately NOT mounted during the lobby. Our games start their
- * round the moment they load, so mounting early would burn the first minute of
- * play while everyone is still scanning.
- */
 export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   const { t } = useTranslation();
   const [roster, setRoster] = useState<RosterSlot[]>([]);
@@ -52,7 +45,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   const postToGame = useCallback((payload: Record<string, unknown>) => {
     // The frame is sandboxed to an opaque origin, so '*' is the only possible
     // target; the frame in turn only accepts messages from its parent.
-    frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+    postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
   }, []);
 
   // False until the game answers our start command with a round.
@@ -150,7 +143,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   // knows which slots are on phones. Messages from the frame are untrusted.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseGameBridgeMessage(event.data);
       if (!message) return;
       if (message.t === 'hello') {

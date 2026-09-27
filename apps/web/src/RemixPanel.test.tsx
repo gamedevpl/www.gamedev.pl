@@ -5,13 +5,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 
-/*
- * The panel's promise is one door: say what you want. These pin what happens
- * when there is no door — the case that reaches most of the catalog today,
- * because a game only gets a lane by declaring parameters or by living in the
- * store, and a silent panel reads as broken rather than as not-yet.
- */
-
 // A stable identity, as the real context has: `user` is state there, so it does
 // not change on every render.
 const alice = { uid: 'g:alice' };
@@ -72,7 +65,9 @@ afterEach(() => {
 
 /** Stands in for the game frame, so a message can claim to come from it. */
 const frameWindow = { postMessage: () => {} } as unknown as Window;
-const frameRef = { current: { contentWindow: frameWindow } } as unknown as React.RefObject<HTMLIFrameElement>;
+const frame = document.createElement('iframe');
+Object.defineProperty(frame, 'contentWindow', { value: frameWindow });
+const frameRef = { current: frame };
 
 function panel(props: { initialRequest?: string; theaterChromeHidden?: boolean; session?: object } = {}) {
   return (

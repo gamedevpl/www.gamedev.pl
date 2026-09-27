@@ -41,7 +41,9 @@ describe('game frame message binding', () => {
   it('ignores another source and another origin in playtest and telemetry', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const gameWindow = { postMessage: vi.fn() } as unknown as Window;
-    const frameRef = { current: { contentWindow: gameWindow } as HTMLIFrameElement };
+    const frame = document.createElement('iframe');
+    Object.defineProperty(frame, 'contentWindow', { value: gameWindow });
+    const frameRef = { current: frame };
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);

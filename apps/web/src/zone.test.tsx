@@ -8,16 +8,6 @@ import { ZONE_PROTOCOL_VERSION } from './zone/protocol.js';
 import { useZoneBridge } from './zone.js';
 import * as playerModule from './gamePlayer.js';
 
-/**
- * The zone bridge is the third and last of the shell's bridges, and the one where the
- * game is not asking for something but being told what is true, ten times a second.
- *
- * What these tests hold is that the shell stays a relay. It never reads a snapshot, it
- * forwards a delta without interpreting it, it refuses the two things a client must not
- * be allowed to assert, and it hangs up when the player leaves rather than letting an
- * empty world tick — which is the mechanism the whole cost model rests on.
- */
-
 function frame(payload: Record<string, unknown>) {
   return { ns: BRIDGE_NAMESPACE, v: ZONE_PROTOCOL_VERSION, ...payload };
 }
@@ -52,7 +42,9 @@ class FakeSocket {
   }
 
   deliver(payload: Record<string, unknown>) {
-    this.onmessage?.(new MessageEvent('message', { data: JSON.stringify({ v: ZONE_PROTOCOL_VERSION, ...payload }) }));
+    this.onmessage?.(
+      new MessageEvent('message', { origin: 'null', data: JSON.stringify({ v: ZONE_PROTOCOL_VERSION, ...payload }) }),
+    );
   }
 
   framesSent() {
@@ -112,7 +104,7 @@ describe('useZoneBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame, gameWindow };
   }
@@ -270,7 +262,9 @@ describe('useZoneBridge', () => {
 
   it('ignores traffic from any window that is not the game frame', async () => {
     const { socket } = await connected();
-    window.dispatchEvent(new MessageEvent('message', { data: frame({ t: 'zone:send', k: 'move', d: 'n' }) }));
+    window.dispatchEvent(
+      new MessageEvent('message', { origin: 'null', data: frame({ t: 'zone:send', k: 'move', d: 'n' }) }),
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(socket.framesSent()).toHaveLength(1);

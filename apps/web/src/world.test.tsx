@@ -6,17 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { parseWorldMessage, useWorldBridge } from './world.js';
 
-/**
- * The world bridge has the same trust boundary as the save bridge — hostile generated
- * code on one side, an authenticated API on the other — plus one the save bridge does
- * not: what crosses it ends up on other players' screens.
- *
- * The shell still decides nothing about a write. Schema, ownership, quota and
- * moderation all live server-side where a modified client cannot reach them, so these
- * tests are about what the bridge *forwards*, what it drops before spending a request,
- * and that two writes to one entry can never land out of order.
- */
-
 function frame(payload: Record<string, unknown>) {
   return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload };
 }
@@ -116,7 +105,7 @@ describe('useWorldBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame, gameWindow };
   }
@@ -278,6 +267,7 @@ describe('useWorldBridge', () => {
 
     window.dispatchEvent(
       new MessageEvent('message', {
+        origin: 'null',
         data: frame({ t: 'commons:put', key: 'plot.1', fields: { note: 'not from the game' } }),
         source: window,
       }),

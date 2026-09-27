@@ -1,3 +1,5 @@
+import { useFrameDocument } from './frameLifecycle.js';
+import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { landmarksFromVideo, loadHandLandmarker } from './handLandmarker.js';
 import { createHandVerbState, sampleHandVerbs, type HandAim } from './handVerbs.js';
@@ -161,6 +163,7 @@ function cameraSupported(): boolean {
  * every listener / stops every track on unmount.
  */
 export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>): SensingBridge {
+  const frameDocument = useFrameDocument(frameRef);
   const [tiltEngaged, setTiltEngaged] = useState(false);
   const [supported, setSupported] = useState(false);
   const [needsPermission, setNeedsPermission] = useState(false);
@@ -198,17 +201,14 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
   }, []);
 
   const postState = useCallback(() => {
-    frameRef.current?.contentWindow?.postMessage(
-      {
-        ns: BRIDGE_NAMESPACE,
-        v: PROTOCOL_VERSION,
-        t: 'sensing:state',
-        active: tiltActiveRef.current,
-        backdrop: backdropLiveRef.current,
-        hand: handReadyRef.current,
-      },
-      '*',
-    );
+    postToGameFrame(frameRef.current, {
+      ns: BRIDGE_NAMESPACE,
+      v: PROTOCOL_VERSION,
+      t: 'sensing:state',
+      active: tiltActiveRef.current,
+      backdrop: backdropLiveRef.current,
+      hand: handReadyRef.current,
+    });
   }, [frameRef]);
 
   const stopBackdropTracks = useCallback(() => {
@@ -291,7 +291,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     function onMessage(event: MessageEvent) {
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving.
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseSensingMessage(event.data);
       if (!message) return;
 
@@ -334,8 +334,15 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     }
 
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [frameRef, postState, stopBackdropTracks]);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      wantsTiltRef.current = wantsBackdropRef.current = wantsHandRef.current = false;
+      setTiltEngaged(false);
+      setHandEngaged(false);
+      setBackdropEngaged(false);
+      stopBackdropTracks();
+    };
+  }, [frameRef, postState, stopBackdropTracks, frameDocument]);
 
   // Camera stream must die when the tab hides or the theater unmounts — OS camera
   // indicator and trust both depend on MediaStreamTrack.stop(), not pause().
@@ -356,7 +363,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     if (!listening) return;
 
     function postToGame(payload: Record<string, unknown>) {
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     }
 
     const onOrientation = (event: TiltReading) => {
@@ -441,7 +448,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     void video.play().catch(() => undefined);
 
     function postToGame(payload: Record<string, unknown>) {
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     }
 
     void loadHandLandmarker().then((landmarker) => {
