@@ -1,3 +1,4 @@
+import { closeDreamClaim } from './dream-claim-finalization.js';
 import { randomUUID } from 'node:crypto';
 import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
 import {
@@ -327,16 +328,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     async runForVersion(input) {
       const startedAt = now();
       const claimedAt = new Date(now()).toISOString();
-      // Any answer ends the claim; the TTL is for silence.
-      const finish = async () => {
-        await store
-          .finishDreamRun(input.record.jobId, { version: input.version, claimedAt }, new Date(now()).toISOString())
-          .catch((error: unknown) => log.warn({ err: error, jobId: input.record.jobId }, 'dream claim not closed'));
-      };
+      const finish = (superseded = false) => closeDreamClaim(store, input, claimedAt, now, log, superseded);
       try {
         const outcome = await run(input, claimedAt);
         if (outcome !== 'already_ran') {
-          await finish();
+          await finish(outcome === 'superseded');
           log.info(
             { jobId: input.record.jobId, version: input.version, outcome, durationMs: now() - startedAt },
             'dream job finished',

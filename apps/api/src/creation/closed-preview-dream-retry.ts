@@ -26,7 +26,12 @@ export async function retryClosedPreviewDream(
     return;
   const at = new Date(now()).toISOString();
   if (
-    dreamClaimHolds(record.dreamRun, version, at, receipt.generation) ||
+    dreamClaimHolds(
+      record.dreamRun?.superseded && !record.dreamRun.postedAt ? undefined : record.dreamRun,
+      version,
+      at,
+      receipt.generation,
+    ) ||
     dreamClaimHolds(record.dreamRun, version, at, record.roundGeneration)
   )
     return;

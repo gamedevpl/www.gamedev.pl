@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { createJobReconciler, type JobReconcilerDeps } from './job-reconciler.js';
+import { retryClosedPreviewDream } from './closed-preview-dream-retry.js';
 
 const AT = '2026-09-26T12:00:00.000Z';
 async function setup(accepted = false) {
@@ -72,4 +73,25 @@ describe('dream handoff after a preview round closes', () => {
     await poll();
     expect(handoff).toHaveBeenCalledOnce();
   });
+});
+
+it.each([false, true])('retries only superseded ended old-generation claims: %s', async (superseded) => {
+  const { store, handoff, poll } = await setup(true);
+  await poll();
+  await store.finishDreamRun(9, { version: 'v1', claimedAt: AT, superseded }, AT);
+  await poll();
+  expect(handoff).toHaveBeenCalledTimes(superseded ? 2 : 1);
+});
+
+it('never repeats a posted claim even with a superseded marker', async () => {
+  const { store, manifest, handoff, poll } = await setup(true);
+  await poll();
+  const record = (await store.getSubmission(9))!;
+  await retryClosedPreviewDream(
+    { ...record, dreamRun: { ...record.dreamRun!, postedAt: AT, superseded: true } },
+    { getManifest: async () => manifest } as unknown as GamesStore,
+    handoff,
+    () => Date.parse(AT),
+  );
+  expect(handoff).toHaveBeenCalledOnce();
 });
