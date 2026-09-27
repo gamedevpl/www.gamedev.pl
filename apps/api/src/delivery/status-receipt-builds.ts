@@ -21,3 +21,12 @@ export function redactReceiptMetadata(status: SubmissionStatusResponse, record: 
   delete status.canSeal;
   delete status.preview;
 }
+
+export function finishReceiptStatus(
+  status: SubmissionStatusResponse,
+  record: SubmissionRecord | null,
+  viewerOwns: boolean,
+): SubmissionStatusResponse {
+  if (!viewerOwns) redactReceiptMetadata(status, record);
+  return status;
+}

@@ -50,9 +50,9 @@ it.each(['anonymous', 'former-owner'])('limits an old token to its own job recei
   expect(member.json().totalBuildsCount).toBe(999);
 });
 
-it.each(['anonymous', 'former-owner'])(
-  'hides inherited legacy preview bases from a new receipt: %s',
-  async (viewer) => {
+it.each(['anonymous', 'former-owner'].flatMap((viewer) => [false, true].map((pending) => [viewer, pending] as const)))(
+  'hides inherited legacy preview bases from a new receipt: %s (pending: %s)',
+  async (viewer, pending) => {
     const store = new InMemoryStore();
     const { at } = await gameWithHistory(store);
     const nextJobId = await store.allocateJobId();
@@ -60,9 +60,12 @@ it.each(['anonymous', 'former-owner'])(
     await store.setSubmissionSlug(nextJobId, 'comet-courier');
     await store.setSubmissionPreviewVersion(nextJobId, 'v1');
     const base = stubGamesStore();
-    const manifest = (await base.listVersions!('comet-courier', { limit: 8 }))[0]!;
+    const baseManifest = (await base.listVersions!('comet-courier', { limit: 8 }))[0]!;
+    const gateProgress = { lane: 'preview' as const, stage: 'capture' as const, index: 7, total: 12, at };
+    const manifest = { ...baseManifest, ...(pending ? { previewGate: undefined, gateProgress } : {}) };
     const app = await createTransferApp(store, apps, undefined, {
       ...base,
+      getManifest: async () => manifest,
       listVersions: async () => [manifest],
       countVersions: async () => 1,
     } as GamesStore);
@@ -83,6 +86,7 @@ it.each(['anonymous', 'former-owner'])(
     const member = await app.inject({ method: 'GET', url, headers: session(RECIPIENT) });
     expect(member.json().recentBuilds).toHaveLength(1);
     expect(member.json().progress.headSha).toBe('v1');
-    expect(member.json().previewGate).toMatchObject({ green: false, ranAt: manifest.previewGate.ranAt });
+    if (pending) expect(member.json().gateProgress).toEqual(gateProgress);
+    else expect(member.json().previewGate).toMatchObject({ green: false, ranAt: baseManifest.previewGate.ranAt });
   },
 );
