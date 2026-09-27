@@ -1,5 +1,5 @@
 import { createGitHubClient } from './github-client.js';
-import type { GameSnapshotReader } from './game-snapshot.js';
+import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './game-snapshot.js';
 import { createPublishedSlugGate, type PublishedSlugGate } from './published-slugs.js';
 
 export async function createPublishedSlugGateFromEnv(
@@ -32,4 +32,10 @@ export async function createPublishedSlugGateFromEnv(
   }
 
   return null;
+}
+
+export type { GameSnapshotStore } from './game-snapshot.js';
+
+export function resolveSnapshotReader(override: GameSnapshotReader | null | undefined): GameSnapshotReader | null {
+  return override === undefined ? createSnapshotReaderFromEnv() : override;
 }
