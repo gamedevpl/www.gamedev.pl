@@ -1156,7 +1156,11 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getManifest(slug, version) {
       const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-      return body ? parseVersionManifest(body) : null;
+      if (!body) return null;
+      // Readers copy sourceFiles forward; retired legacy paths never reach them.
+      const manifest = parseVersionManifest(body);
+      if (!Array.isArray(manifest.sourceFiles)) return manifest;
+      return { ...manifest, sourceFiles: manifest.sourceFiles.filter((file) => !isRetiredDeliveryPath(file)) };
     },
 
     async setVersionSummary(slug, version, summary) {

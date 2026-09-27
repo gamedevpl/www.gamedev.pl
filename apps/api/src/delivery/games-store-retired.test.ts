@@ -43,3 +43,20 @@ it('tombstones a retired EDITOR.ts but still refuses staging it', async () => {
   const assembled = await store.getStagedSourceFiles({ slug: 'g', jobId: 7, roundGeneration: 1 });
   expect(assembled).toEqual([{ path: 'EDITOR.ts', content: '', deleted: true }]);
 });
+
+it('hides a legacy EDITOR.ts from stored manifests so no copy carries it forward', async () => {
+  const { impl } = stubGcs();
+  const store = storeWith(impl);
+  const manifest = {
+    slug: 'g',
+    version: 'v1',
+    createdAt: '2026-07-30T10:00:00Z',
+    jobId: 1,
+    sourceFiles: ['game.ts', 'EDITOR.ts'],
+  };
+  await impl('https://storage/upload?name=' + encodeURIComponent('games/g/versions/v1/manifest.json'), {
+    method: 'POST',
+    body: new TextEncoder().encode(JSON.stringify(manifest)),
+  });
+  expect((await store.getManifest('g', 'v1'))?.sourceFiles).toEqual(['game.ts']);
+});
