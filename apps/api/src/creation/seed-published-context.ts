@@ -11,6 +11,7 @@ type Options = Omit<ArchiveSeedContextOptions, 'ref' | 'getCatalog'> & {
 
 export function createPublishedSeedContextSource(options: Options): SeedContextSource {
   let cached: { key: string; source: SeedContextSource } | null = null;
+  const inFlight = new Map<string, ReturnType<SeedContextSource['load']>>();
   return {
     async load() {
       const reader = options.snapshotReader;
@@ -24,6 +25,8 @@ export function createPublishedSeedContextSource(options: Options): SeedContextS
           if (after?.snapshotId !== before.snapshotId || after.commitSha !== before.commitSha) continue;
           if (!catalog) return null;
           const key = `${before.snapshotId}:${before.commitSha}`;
+          const pending = inFlight.get(key);
+          if (pending) return await pending;
           if (cached?.key !== key) {
             cached = {
               key,
@@ -34,7 +37,9 @@ export function createPublishedSeedContextSource(options: Options): SeedContextS
               }),
             };
           }
-          return await cached.source.load();
+          const loading = cached.source.load().finally(() => inFlight.delete(key));
+          inFlight.set(key, loading);
+          return await loading;
         }
         return null;
       } catch (error) {
