@@ -139,3 +139,13 @@ it('shares an older snapshot load across overlapping publication initialization'
   expect(results[0]).toBe(results[1]);
   expect(results[2]?.renderReferences(['reference'], 1000)).toContain(nextSha);
 });
+
+it('reuses a coherent cached context when catalog reads later fail', async () => {
+  const readCatalog = vi.fn().mockResolvedValue(catalog);
+  const context = configure({ getPointer: async () => pointer(), getCatalog: readCatalog });
+  const first = await context.load();
+  readCatalog.mockRejectedValue(new Error('storage unavailable'));
+  expect(await context.load()).toBe(first);
+  expect(readCatalog).toHaveBeenCalledTimes(1);
+  expect(fixtures.refs).toEqual([sha]);
+});

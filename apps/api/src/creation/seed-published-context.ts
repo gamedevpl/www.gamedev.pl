@@ -20,11 +20,14 @@ export function createPublishedSeedContextSource(options: Options): SeedContextS
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const before = await reader.getPointer();
           if (!before?.commitSha || !/^[a-f0-9]{40}$/i.test(before.commitSha)) return null;
+          const key = `${before.snapshotId}:${before.commitSha}`;
+          const active = inFlight.get(key);
+          if (active) return await active;
+          if (cached?.key === key) return await cached.source.load();
           const catalog = await reader.getCatalog();
           const after = await reader.getPointer();
           if (after?.snapshotId !== before.snapshotId || after.commitSha !== before.commitSha) continue;
           if (!catalog) return null;
-          const key = `${before.snapshotId}:${before.commitSha}`;
           const pending = inFlight.get(key);
           if (pending) return await pending;
           if (cached?.key !== key) {
