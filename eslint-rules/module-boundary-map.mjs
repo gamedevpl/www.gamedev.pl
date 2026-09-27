@@ -534,6 +534,8 @@ const FILE_BUCKET = {
   'review-checklist': 'community',
   'review-queue-cache': 'community',
   'moderation-flags': 'community',
+  'moderation-flag-alert': 'community',
+  'moderation-alert-lifetime': 'community',
   'review-sweep': 'community',
   'proposal-apply-bot': 'community',
   'proposal-base': 'community',
