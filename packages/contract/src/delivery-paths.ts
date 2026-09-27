@@ -21,6 +21,13 @@ export const DELIVERY_FIXED_FILES = [
   'sim.ts',
 ] as const;
 
+// Formerly deliverable, now refused; overlays drop them from bases.
+export const RETIRED_DELIVERY_PATHS = ['EDITOR.ts'] as const;
+
+export function isRetiredDeliveryPath(path: string): boolean {
+  return (RETIRED_DELIVERY_PATHS as readonly string[]).includes(path);
+}
+
 // Own modules; string form keeps `.source` equal to games-repo JSON.
 export const DELIVERY_EXTRA_MODULE_PATTERN = new RegExp('^[a-z0-9][a-z0-9/-]{0,60}\\.ts$');
 
@@ -54,7 +61,7 @@ const ALLOWED_SOURCES_HINT = `${DELIVERY_FIXED_FILES.join(', ')}, your own .ts m
 // Refusal for config-, executable- or media-shaped paths, else null.
 export function forbiddenDeliveryPathReason(path: string): string | null {
   const basename = path.split('/').pop() ?? path;
-  if (path === 'EDITOR.ts') return `path not deliverable: ${path}. Deliver compiled EDITOR.json only.`;
+  if (isRetiredDeliveryPath(path)) return `path not deliverable: ${path}. Deliver compiled EDITOR.json only.`;
   if (path.startsWith('.') || path.split('/').some((segment) => segment.startsWith('.'))) {
     return (
       `path not deliverable: ${path}. Dotfiles and hidden paths are config/executable-shaped — ` +

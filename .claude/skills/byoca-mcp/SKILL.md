@@ -31,7 +31,7 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - The draft is a starting point, not an authority: where it and the brief disagree, the
      brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
      describes — then keep building rather than waiting on it
-2. Build; `report_progress`; every game delivery must include an EditorKit declaration (`EDITOR.json` (required compiled contract; `EDITOR.ts` is optional authoring source)) with at least three meaningful tunables or one content collection. If `EDITOR.ts` is present, run `npm run editor:gen -- <slug>` and ship its matching `EDITOR.json`; the gate rejects stale pairs. Keep generated editor content (`EDITOR.content.json` when applicable and `game/editor-content.ts`) in sync and consumed by the game. Screenshot when something draws:
+2. Build; `report_progress`; every game delivery must include an EditorKit declaration (`EDITOR.json` (required compiled contract; `EDITOR.ts` is optional local authoring source)) with at least three meaningful tunables or one content collection. If `EDITOR.ts` is present, run `npm run editor:gen -- <slug>` and stage only the compiled `EDITOR.json`; `EDITOR.ts` and executable `validate` functions are refused, so use declarative bounds or constraints. Keep generated editor content (`EDITOR.content.json` when applicable and `game/editor-content.ts`) in sync and consumed by the game. Screenshot when something draws:
    - **No shell/browser:** skip mid-build screenshots. Deliver `mode=preview` then
      `end`. On a later/resumed run call `get_gate_verdict` once (`start` does not
      surface `preview_passed`); if a preview verdict is already available, then

@@ -18,7 +18,7 @@ import { retryStorageWrite } from './storage-write-retry.js';
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
-import { deliveryPathRefusal, type DeliveryMode } from '@gamedevpl/contract';
+import { deliveryPathRefusal, isRetiredDeliveryPath, type DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { isPublishableMode } from '../platform/publication-state.js';
 import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
@@ -1018,7 +1018,8 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async deleteStagedSourceFile(input) {
       assertSlug(input.slug);
-      const path = assertDeliverableSourcePath(input.path);
+      // Retired paths are refused as writes but may still be tombstoned.
+      const path = isRetiredDeliveryPath(input.path.trim()) ? input.path.trim() : assertDeliverableSourcePath(input.path);
       const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
 

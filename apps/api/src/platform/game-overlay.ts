@@ -2,6 +2,7 @@
 
 // Shape and readiness rules only, never the rendering.
 
+import { isRetiredDeliveryPath } from '@gamedevpl/contract';
 import { hasPlayableHowToPlay } from './how-to-play.js';
 import { resolveRoundBaseVersion, type BaseVersionRecord, type BaseVersionStore } from './round-base-version.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
@@ -20,7 +21,8 @@ export type OverlayLayers = {
 export function overlayGameSources(layers: OverlayLayers): Record<string, string> {
   const overlay: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const layer of [layers.seed, layers.delivered]) {
-    for (const file of layer ?? []) overlay[file.path] = file.content;
+    // Legacy EDITOR.ts bases would make carried-forward candidates refusable.
+    for (const file of layer ?? []) if (!isRetiredDeliveryPath(file.path)) overlay[file.path] = file.content;
   }
   for (const file of layers.staged ?? []) {
     if (file.deleted) delete overlay[file.path];
