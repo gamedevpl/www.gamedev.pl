@@ -50,6 +50,7 @@ import {
 } from './source-link-check.js';
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 import { missingFreshEditorFile } from './editor-upload-requirements.js';
+import { editorUploadProblem } from './editor-upload-validation.js';
 
 export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 
@@ -181,9 +182,10 @@ export function validateSourceUpload(
   if (missingEditorFile) {
     throw new InvalidUploadError(missingEditorFile.message, undefined, [missingEditorFile.path]);
   }
+  const editorProblem = editorUploadProblem(files);
+  if (editorProblem) throw new InvalidUploadError(editorProblem);
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
-  // A blank index.html is absent, same as getGameSources treats it.
   const indexHtml = files.find((file) => file.path.trim() === 'index.html');
   const hasIndexHtml = !!indexHtml?.content.trim();
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { stripLeadingDocComment } from '../platform/games-repo-contract.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const LOCAL_EDITOR_CONTRACT_PATH = path.join(HERE, '../creation/editor-contract.ts');
+export const LOCAL_EDITOR_CONTRACT_PATH = path.join(HERE, '../platform/editor-contract.ts');
 const REPO_ROOT = path.join(HERE, '../../../..');
 const LOCAL_VALIDATE_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-validate.ts');
 const LOCAL_VALIDATE_REACH_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-validate-reach.ts');

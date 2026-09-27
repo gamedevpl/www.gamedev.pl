@@ -138,7 +138,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
       submissionRoutes: {
         submissionTokenSecret,
         agentChannel: { gamesStore: options.games ?? games, objectStore: options.objectStore },
-        // registerSubmissionRoutes only honors an injected client alongside a token.
         ...(options.githubClient ? { githubClient: options.githubClient, githubToken: 'test-github-token' } : {}),
       },
       creatorCodeRoutes: {
@@ -250,7 +249,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
     it('marks a self-build round as watchable even though it is never read-only', async () =>
       withApp(async (app) => {
-        // readOnly needs dispatch.refs; a self-build MCP round has none.
         const res = await app.inject({
           method: 'GET',
           url: '/api/me/studio/games/sky-dodge/sources',
@@ -264,7 +262,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
     it('keeps watching across the submit handoff, which any later stage undoes', async () =>
       withApp(async (app) => {
-        // agentEndedAt is self-clearing: the next stage call deletes it.
         await store.markAgentEnded(10);
         const res = await app.inject({
           method: 'GET',
@@ -315,14 +312,12 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(body.roundOpened).toEqual(expect.any(Number));
         expect(body.roundOpened).not.toBe(10);
 
-        // The closed round's own buffer stays untouched...
         const oldRoundListed = await games.listStagedSources({
           slug: 'sky-dodge',
           jobId: 10,
           roundGeneration: 1,
         });
         expect(oldRoundListed.files).toEqual([]);
-        // ...and the write landed in the new round's buffer instead.
         const newRoundListed = await games.listStagedSources({
           slug: 'sky-dodge',
           jobId: body.roundOpened,
@@ -330,7 +325,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         expect(newRoundListed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
 
-        // The new round is now what owner reads resolve to.
         const opened = await store.getSubmission(body.roundOpened);
         expect(opened?.slug).toBe('sky-dodge');
         expect(opened?.ownerUid).toBe('g:creator');
@@ -366,7 +360,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
         const originalBegin = store.beginCheckoutRecovery.bind(store);
         vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
-          // Ownership moves between the route's own ownership check and this lease.
           await store.recordSettledOwner('sky-dodge', 'g:other', 999, at, at);
           return originalBegin(...args);
         });
@@ -378,7 +371,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
           payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
         });
         expect(res.statusCode).toBe(409);
-        // No stray round was opened for the now-stale caller.
         expect(await store.listSubmissionsBySlug('sky-dodge')).toHaveLength(1);
       }));
 
@@ -655,7 +647,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       );
     });
 
-    it('accepts EDITOR.ts that imports defineEditor from the kit', async () => {
+    it('typechecks local EDITOR.ts that imports defineEditor from the kit', async () => {
       const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
         'shared/editor-def.ts': 'export function defineEditor(value: number) { return value; }\n',
       });
@@ -675,7 +667,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
             },
           });
           expect(res.statusCode).toBe(200);
-          expect(res.json()).toEqual({ ok: true });
         },
         { objectStore, games: withKitGames },
       );
@@ -683,7 +674,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
   });
 
   describe('POST /api/me/studio/games/:slug/sources/preview', () => {
-    // A minimal getGameSources fake — see github-client.test.ts for real assembly.
     function stubGithubClient(): GitHubClient {
       return {
         getGameSources: async (ref, slug, overrides) => ({
@@ -697,7 +687,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
     }
 
     it('503s when no githubClient is configured on this deployment', async () => {
-      // Clears GITHUB_TOKEN — app.ts otherwise falls back to it silently.
       const priorToken = process.env.GITHUB_TOKEN;
       delete process.env.GITHUB_TOKEN;
       try {
@@ -777,7 +766,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
         jobId: 10,
         roundGeneration: 1,
         path: 'GAME.json',
-        // index.html is refused — howToPlay satisfies hasPlayableOverlay instead.
         content: JSON.stringify({
           engine: { modules: [] },
           howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
@@ -807,7 +795,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
           expect(body.html).toContain('export const boot = 1;');
           expect(body.timings?.totalMs).toBeGreaterThanOrEqual(0);
 
-          // No BuildPreview artifact landed — this is a synchronous read.
           expect(await store.listBuildPreviews(10)).toEqual([]);
         },
         { objectStore, games: withKitGames, githubClient: stubGithubClient() },
@@ -887,7 +874,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
   });
 
   describe('the base a round builds on (round-base-version.ts)', () => {
-    // Delivers the three required files under round 10.
     async function deliverBase(): Promise<string> {
       await games.putCandidateSources({
         slug: 'sky-dodge',
@@ -902,7 +888,11 @@ describe('the Code surface routes (creator-code.ts)', () => {
             }),
           },
           { path: 'game.ts', content: 'export const boot = 1;' },
-          { path: 'EDITOR.json', content: '{}' },
+          {
+            path: 'EDITOR.json',
+            content:
+              '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+          },
         ],
         mode: 'preview',
       });
@@ -932,7 +922,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         expect(listed.statusCode).toBe(200);
         const files = listed.json().files as Array<{ path: string; content: string; base?: string }>;
-        // Editing one file must not read as "the others are gone".
         expect(files.map((file) => file.path)).toEqual(['EDITOR.json', 'GAME.json', 'SPEC.md', 'game.ts']);
         expect(files.find((file) => file.path === 'game.ts')?.base).toBe('export const boot = 1;');
       }));
@@ -1154,7 +1143,10 @@ describe('the Code surface routes (creator-code.ts)', () => {
           }),
         );
         await stage('game.ts', 'export const boot = () => {};');
-        await stage('EDITOR.json', '{}');
+        await stage(
+          'EDITOR.json',
+          '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+        );
 
         const res = await app.inject({
           method: 'POST',
@@ -1199,7 +1191,11 @@ describe('the Code surface routes (creator-code.ts)', () => {
           true,
         );
         await stage('game.ts', 'export const boot = () => {};', true);
-        await stage('EDITOR.json', '{}', true);
+        await stage(
+          'EDITOR.json',
+          '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+          true,
+        );
 
         const res = await app.inject({
           method: 'POST',
@@ -1250,10 +1246,11 @@ describe('the Code surface routes (creator-code.ts)', () => {
         }),
       );
       await stageAgent('game.ts', 'export const boot = () => {};');
-      await stageAgent('EDITOR.json', '{}');
+      await stageAgent(
+        'EDITOR.json',
+        '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+      );
 
-      // A separate `withApp` each time — its per-slug deliver cooldown is process-local
-      // to that app instance, so this does not need to wait it out between the two.
       const firstVersion = await withApp(async (app) => {
         const res = await app.inject({
           method: 'POST',
@@ -1266,9 +1263,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
       });
       expect((await games.getManifest('sky-dodge', firstVersion))?.authorship).toBe('agent');
 
-      // The owner discards their own staged paths (there are none) or simply never
-      // staged anything this round — either way the buffer is empty, and the delivered
-      // content is byte-identical to the agent-authored version above.
       await games.clearStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1, paths: [...paths] });
 
       const secondVersion = await withApp(async (app) => {
@@ -1304,7 +1298,10 @@ describe('the Code surface routes (creator-code.ts)', () => {
           }),
         );
         await stage('game.ts', 'export const boot = () => {};');
-        await stage('EDITOR.json', '{}');
+        await stage(
+          'EDITOR.json',
+          '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+        );
         await stage('TRACE.json', '{"samples":[]}');
         await stage('PLAYTEST.json', '{"expectProgress":["round-start"]}');
 
@@ -1417,7 +1414,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
               payload: { path: 'game.ts', prefixWindow: 'a', suffixWindow: 'b' },
             });
             expect(res.statusCode).toBe(503);
-            // A refused global gate must leave the daily allowance untouched.
             const dateStr = new Date().toISOString().slice(0, 10);
             expect((await store.getUsage('g:creator', dateStr)).tabCompletes).toBe(0);
           },

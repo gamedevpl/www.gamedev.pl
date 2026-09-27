@@ -13,7 +13,6 @@ export const DELIVERY_FIXED_FILES = [
   'PLAYTEST.json',
   'AGENT.json',
   'EDITOR.json',
-  'EDITOR.ts',
   'EDITOR.content.json',
   // index.html and style.css are generated from GAME.json when absent.
   'index.html',
@@ -55,6 +54,7 @@ const ALLOWED_SOURCES_HINT = `${DELIVERY_FIXED_FILES.join(', ')}, your own .ts m
 // Refusal for config-, executable- or media-shaped paths, else null.
 export function forbiddenDeliveryPathReason(path: string): string | null {
   const basename = path.split('/').pop() ?? path;
+  if (path === 'EDITOR.ts') return `path not deliverable: ${path}. Deliver compiled EDITOR.json only.`;
   if (path.startsWith('.') || path.split('/').some((segment) => segment.startsWith('.'))) {
     return (
       `path not deliverable: ${path}. Dotfiles and hidden paths are config/executable-shaped — ` +

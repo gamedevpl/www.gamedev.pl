@@ -16,7 +16,6 @@ describe('seed path containment', () => {
       'style.css',
       'ACCEPTANCE.json',
       'EDITOR.json',
-      'EDITOR.ts',
       'EDITOR.content.json',
       'game/model.ts',
       'game/ai/steering.ts',
@@ -25,6 +24,7 @@ describe('seed path containment', () => {
     }
 
     for (const refused of [
+      'EDITOR.ts',
       'games/other-game/game.ts',
       'shared/modules/gfx.ts',
       'tools/validate.ts',
