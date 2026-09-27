@@ -1,5 +1,6 @@
-import { createGitHubClient, type GitHubClient } from './github-client.js';
+import type { GitHubClient } from './github-client.js';
 import type { Store } from '../platform/store.js';
+export { createPublishedSlugGateFromEnv } from './published-slugs-source.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
 
 /**
@@ -81,34 +82,6 @@ export function createPublishedSlugGate(options: PublishedSlugGateOptions): Publ
       }
     },
   };
-}
-
-/**
- * Builds the repo-catalog gate from the environment, or returns null when the games
- * repo is not configured (secret-less deploys run browse/play-only). A null result
- * means there is no catalog view — not "drop every slug". Callers that need the full
- * published set should wrap this with `createCombinedPublishedSlugGate`, which still
- * admits store-published self-build games when the catalog gate is absent.
- *
- * In local development (no token, not production/test) the gate reads the same
- * fixture/checkout catalog the browse surface serves — otherwise every vote and
- * play-telemetry flush would 404 against fixture slugs that are clearly published.
- */
-export async function createPublishedSlugGateFromEnv(fetchImpl?: typeof fetch): Promise<PublishedSlugGate | null> {
-  const token = process.env.GITHUB_TOKEN?.trim();
-  const repo = process.env.GAMES_REPO?.trim();
-  if (token && repo) {
-    return createPublishedSlugGate({ client: createGitHubClient({ token, repo, fetchImpl }) });
-  }
-
-  const nodeEnv = process.env.NODE_ENV;
-  if (nodeEnv !== 'production' && nodeEnv !== 'test') {
-    const { resolveLocalGamesDir, createLocalGamesClient } = await import('./local-games-repo.js');
-    const local = await resolveLocalGamesDir();
-    return createPublishedSlugGate({ client: createLocalGamesClient({ rootDir: local.rootDir }) });
-  }
-
-  return null;
 }
 
 export interface CombinedPublishedSlugGateOptions {

@@ -576,7 +576,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // self-build games (never in catalog.json) are visible to the same callers the
   // /play route already serves. Call-site overrides still win via the spreads below.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
-    repoGate: await createPublishedSlugGateFromEnv(),
+    repoGate: await createPublishedSlugGateFromEnv(undefined, snapshotReader),
     store,
   });
   await registerTelemetryRoutes(app, {
