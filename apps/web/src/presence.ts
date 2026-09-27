@@ -36,7 +36,7 @@ const MIN_HEARTBEAT_MS = 5_000;
 /** Position bound. The server clamps to the game's declared grid; this only stops a
  *  runaway value from becoming a request body at all. */
 const MAX_COORDINATE = 4096;
-const HELLO_MIN_INTERVAL_MS = 1_000;
+const HELLO_MIN_INTERVAL_MS = 3_000;
 
 export type PresenceRequest =
   { t: 'presence:hello' } | { t: 'presence:here'; col: number; row: number } | { t: 'presence:away' };
@@ -88,20 +88,19 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     let position: { col: number; row: number } | null = null;
     let timer: number | null = null;
     let beating = false;
+    let retryAt = -Infinity;
     let heartbeatMs = DEFAULT_HEARTBEAT_MS;
     /** True once at least one beat has been sent, so `leave` knows there is a slot. */
     let joined = false;
     let helloAt = -Infinity;
     let awaitingFirstHere = false;
     let helloTimer: number | null = null;
-
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
       frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
     }
-
     function announce(snapshot: PresenceSnapshot | null) {
       postToGame(
         snapshot
@@ -116,11 +115,10 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           : { t: 'presence:state', available: false },
       );
     }
-
     async function beat() {
       // One beat at a time. A slow request must not let the next tick start a second,
       // or a struggling connection turns into a pile-up aimed at the same endpoint.
-      if (beating || cancelled) return;
+      if (beating || cancelled || Date.now() < retryAt) return;
       beating = true;
       if (position) awaitingFirstHere = false;
       try {
@@ -132,11 +130,13 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           // answer cannot turn this into a tight loop.
           heartbeatMs = Math.max(MIN_HEARTBEAT_MS, snapshot.heartbeatMs || DEFAULT_HEARTBEAT_MS);
         }
+        if (!snapshot?.visible) retryAt = Date.now() + 6_000;
         announce(snapshot);
       } catch {
         // A beat that failed is "no presence" as far as the game is concerned, and the
         // next beat is one interval away by construction — which is why, unlike the save
         // and world bridges, there is no retry ladder here to get wrong.
+        retryAt = Date.now() + 6_000;
         announce(null);
       } finally {
         beating = false;

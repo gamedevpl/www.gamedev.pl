@@ -86,6 +86,7 @@ const FILE_BUCKET = {
   'image-size.test': 'platform',
   'canonical-app-url': 'platform',
   'canonical-base64': 'platform',
+  'presence-cadence': 'platform',
   'bounded-map': 'platform',
   'oauth-as': 'platform',
   'capture-network-policy': 'platform',
