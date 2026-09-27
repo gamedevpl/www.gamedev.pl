@@ -129,13 +129,10 @@ function workFor(
   if (input.action === 'dream') {
     const run = options.runDreamNow;
     const version = input.version;
-    if (!run || !version || !input.expectedRoundGeneration) return null;
-    const expectedRoundGeneration = input.expectedRoundGeneration;
+    if (!run || !version || !expectedRoundGeneration) return null;
     const screenshotPath = input.screenshotPath;
-    return () =>
-      run({ jobId, version, expectedRoundGeneration, ...(screenshotPath ? { screenshotPath } : {}) }).then(
-        (outcome) => ({ outcome }),
-      );
+    const work = { jobId, version, expectedRoundGeneration, ...(screenshotPath ? { screenshotPath } : {}) };
+    return () => run(work).then((outcome) => ({ outcome }));
   }
   if (input.action === 'regenerate') {
     const run = options.regenerateSeedNow;
