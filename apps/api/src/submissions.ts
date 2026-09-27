@@ -1,5 +1,6 @@
 import { acknowledgeHandoff } from './creation/builder-handoff.js';
 import type { BuilderHandoffAckInput, BuilderHandoffOutcome } from './creation/builder-handoff-ack.js';
+import { runDreamWorker, type DreamWorkInput } from './creation/dream-worker.js';
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
 import { stillBooting } from './delivery/status-poll-floor.js';
 import { canActOnGame } from './platform/game-access-permissions.js';
@@ -411,7 +412,7 @@ export interface SubmissionRoutesHandle {
   regenerateSeedNow: SeedPipeline['runSeedRegeneration'];
   publishStagedPreviewNow: ((jobId: number) => Promise<unknown>) | null;
   // Same route, same reason: concept frames need a request's CPU.
-  runDreamNow: (input: { jobId: number; version: string; screenshotPath?: string }) => Promise<string>;
+  runDreamNow: (input: DreamWorkInput) => Promise<string>;
 }
 
 /**
@@ -1377,6 +1378,7 @@ export async function registerSubmissionRoutes(
     const handed = await seedDispatch.enqueue(record.jobId, {
       action: 'dream',
       version,
+      expectedRoundGeneration: record.roundGeneration ?? 1,
       ...(screenshotPath ? { screenshotPath } : {}),
     });
     if (!handed) {
@@ -1385,16 +1387,8 @@ export async function registerSubmissionRoutes(
   }
 
   // The seed route's worker for a handed-off dream; never throws.
-  async function runDreamNow(input: { jobId: number; version: string; screenshotPath?: string }): Promise<string> {
-    const job = dreamJob;
-    if (!job) return 'unavailable';
-    const record = await store?.getSubmission(input.jobId);
-    if (!record) return 'no_job';
-    return await job.runForVersion({
-      record,
-      version: input.version,
-      ...(input.screenshotPath ? { screenshotPath: input.screenshotPath } : {}),
-    });
+  async function runDreamNow(input: DreamWorkInput): Promise<string> {
+    return runDreamWorker(store, dreamJob, input);
   }
 
   function resolveDreamJob(): DreamJob | null {

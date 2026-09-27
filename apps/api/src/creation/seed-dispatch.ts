@@ -1,3 +1,4 @@
+import type { DreamWorkInput } from './dream-worker.js';
 import type { FastifyInstance } from 'fastify';
 import { GoogleAuth } from 'google-auth-library';
 import { z } from 'zod';
@@ -107,7 +108,7 @@ export interface SeedDispatchRouteOptions {
   regenerateSeedNow?: ((input: SeedRegenerationInput) => Promise<void>) | null;
   publishStagedPreviewNow?: ((jobId: number) => Promise<unknown>) | null;
   // Concept frames need the CPU a request holds.
-  runDreamNow?: ((input: { jobId: number; version: string; screenshotPath?: string }) => Promise<string>) | null;
+  runDreamNow?: ((input: DreamWorkInput) => Promise<string>) | null;
   internalAuthVerifier: InternalAuthVerifier;
 }
 
@@ -128,10 +129,13 @@ function workFor(
   if (input.action === 'dream') {
     const run = options.runDreamNow;
     const version = input.version;
-    if (!run || !version) return null;
+    if (!run || !version || !input.expectedRoundGeneration) return null;
+    const expectedRoundGeneration = input.expectedRoundGeneration;
     const screenshotPath = input.screenshotPath;
     return () =>
-      run({ jobId, version, ...(screenshotPath ? { screenshotPath } : {}) }).then((outcome) => ({ outcome }));
+      run({ jobId, version, expectedRoundGeneration, ...(screenshotPath ? { screenshotPath } : {}) }).then(
+        (outcome) => ({ outcome }),
+      );
   }
   if (input.action === 'regenerate') {
     const run = options.regenerateSeedNow;

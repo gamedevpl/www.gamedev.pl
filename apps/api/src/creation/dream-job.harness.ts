@@ -80,5 +80,5 @@ export async function harness(params: {
   const job = createDreamJob(deps);
   const run = (overrides: Partial<{ version: string; screenshotPath?: string }> = {}): Promise<DreamOutcome> =>
     job.runForVersion({ record, version: 'v1', screenshotPath: 'media/opening.png', ...overrides });
-  return { store, record, frames, ideas: ideaGenerator, posted, run };
+  return { store, record, job, frames, ideas: ideaGenerator, posted, run };
 }

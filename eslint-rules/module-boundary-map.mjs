@@ -66,6 +66,8 @@ const FILE_BUCKET = {
   'agent-takeover-write': 'agent-surface',
   'editor-param-spec': 'creation',
   'editor-param-defaults': 'creation',
+  'dream-worker': 'creation',
+  'dream-seed-handoff': 'creation',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
