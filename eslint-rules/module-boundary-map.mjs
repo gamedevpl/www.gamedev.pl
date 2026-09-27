@@ -64,6 +64,8 @@ const FILE_BUCKET = {
   'source-delivery-event': 'delivery',
   'agent-round-write': 'platform',
   'agent-takeover-write': 'agent-surface',
+  'editor-param-spec': 'creation',
+  'editor-param-defaults': 'creation',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
