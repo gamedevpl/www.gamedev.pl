@@ -150,3 +150,37 @@ it('does not attach an uploaded old candidate to a replacement round', async () 
   expect(await store.getSubmission(JOB)).toEqual(before);
   expect(gate).not.toHaveBeenCalled();
 });
+it('preserves the replacement round after takeover during the final gate handoff', async () => {
+  const store = new InMemoryStore();
+  await seed(store);
+  let replacement: Awaited<ReturnType<typeof store.getSubmission>>;
+  const service = createSourceDeliveryService({
+    store,
+    gamesStore: { putCandidateSources: async () => ({ version: 'candidate', manifest: {} }) } as unknown as GamesStore,
+    translator: new NoopTranslator(),
+    parseSpecTitle: () => 'Preview',
+    runTypecheckPreflight: async () => ({ ok: true }),
+    sharedSourcesFromKitTree: () => ({}),
+    typecheckPreflightMaxRefusals: 3,
+    onSourcesDelivered: async () => {
+      await store.bumpRoundGeneration(JOB);
+      await store.markAgentEnded(JOB, AT, 'end');
+      replacement = await store.getSubmission(JOB);
+      return { accepted: true };
+    },
+  });
+  const result = await service
+    .deliver({
+      jobId: JOB,
+      slug: 'original-game',
+      mode: 'preview',
+      expectedRoundGeneration: 1,
+      files: [
+        { path: 'SPEC.md', content: '---\ntitle: Preview\n---' },
+        { path: 'game.ts', content: 'export {};' },
+      ],
+    })
+    .catch((error: unknown) => error);
+  expect(result).toMatchObject({ statusCode: 401 });
+  expect(await store.getSubmission(JOB)).toEqual(replacement!);
+});

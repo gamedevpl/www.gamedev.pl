@@ -287,14 +287,18 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
 
     const storeWriteStartedAt = Date.now();
     const locale = record.locale ?? '';
-    await options.store.appendBuildPreview(jobId, {
-      data: Buffer.from(html, 'utf8').toString('base64'),
-      slug,
-      // A tree mid-upload: worth showing, never worth calling ready.
-      origin: 'staged',
-      label: STAGED_PREVIEW_LABEL,
-      ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
-    });
+    await options.store.appendBuildPreview(
+      jobId,
+      {
+        data: Buffer.from(html, 'utf8').toString('base64'),
+        slug,
+        // A tree mid-upload: worth showing, never worth calling ready.
+        origin: 'staged',
+        label: STAGED_PREVIEW_LABEL,
+        ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
+      },
+      roundGeneration,
+    );
     // After the write, like the channel's own preview verb: a push that lands and then
     // fails to tidy up has still delivered the thing the creator was waiting for.
     await options.store.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
@@ -461,14 +465,18 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
 
       const storeWriteStartedAt = Date.now();
       const locale = input.locale ?? '';
-      await options.store.appendBuildPreview(jobId, {
-        data: Buffer.from(html, 'utf8').toString('base64'),
-        slug,
-        // Submitted, unlike the debounced assembly: the agent handed this over.
-        origin: 'candidate',
-        label: STAGED_PREVIEW_LABEL,
-        ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
-      });
+      await options.store.appendBuildPreview(
+        jobId,
+        {
+          data: Buffer.from(html, 'utf8').toString('base64'),
+          slug,
+          // Submitted, unlike the debounced assembly: the agent handed this over.
+          origin: 'candidate',
+          label: STAGED_PREVIEW_LABEL,
+          ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
+        },
+        roundGen,
+      );
       await options.store.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
       const storeWriteMs = Date.now() - storeWriteStartedAt;
 

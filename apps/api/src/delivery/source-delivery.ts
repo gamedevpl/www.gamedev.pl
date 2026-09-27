@@ -589,6 +589,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       // A creator's own manual delivery is not the agent resuming.
       await options.store.touchLastAgentSignalAt(input.jobId, undefined, undefined, {
         preserveEnded: transitionActor === 'creator',
+        roundGeneration,
       });
 
       return {

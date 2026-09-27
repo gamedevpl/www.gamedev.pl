@@ -46,6 +46,7 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'staged-preview-takeover': 'delivery',
   'builder-handoff-ack': 'creation',
   'builder-handoff': 'creation',
   'builder-handoff-finalization': 'agent-surface',
