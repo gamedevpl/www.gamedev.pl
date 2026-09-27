@@ -1,5 +1,6 @@
 import { beatPresence as beat, leavePresence as leave } from './presenceApi.js';
 
+type Position = Parameters<typeof beat>[1];
 const pending = new Map<string, Promise<void>>();
 
 function enqueue<T>(slug: string, run: () => Promise<T>): Promise<T> {
@@ -15,10 +16,9 @@ function enqueue<T>(slug: string, run: () => Promise<T>): Promise<T> {
   return operation;
 }
 
-export function beatPresence(slug: string, position: { col: number; row: number } | null, active: () => boolean) {
-  return enqueue(slug, () => (active() ? beat(slug, position) : Promise.resolve(null)));
+export function beatPresence(slug: string, position: Position, active: () => boolean, lease?: string) {
+  return enqueue(slug, () => (active() ? beat(slug, position, lease) : Promise.resolve(null)));
 }
-
-export function leavePresence(slug: string): Promise<void> {
-  return enqueue(slug, () => leave(slug));
+export function leavePresence(slug: string, lease?: string): Promise<void> {
+  return enqueue(slug, () => leave(slug, lease));
 }
