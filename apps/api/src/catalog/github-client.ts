@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { prependAudio } from './audio-bank.js';
 import { build, transform } from 'esbuild';
 import {
   CATALOG_ORIENTATIONS,
@@ -1459,25 +1460,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
       const musicMs = Date.now() - musicStartedAt;
 
-      if (Object.keys(assets).length > 0) {
-        assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
-      }
-
-      // Per-game audio.bank clips (games-repo tools/lib/audio-bank.ts).
-      const bankNames = Object.keys(manifest.bank);
-      if (bankNames.length > 0) {
-        const clips = await Promise.all(
-          bankNames.map((name) => readRawBytes(`games/${slug}/${manifest.bank[name]}`, ref)),
-        );
-        if (clips.some((clip) => clip === null)) {
-          return null;
-        }
-        const bank: Record<string, string> = {};
-        bankNames.forEach((name, i) => {
-          bank[name] = `data:audio/mpeg;base64,${Buffer.from(clips[i] as Uint8Array).toString('base64')}`;
-        });
-        assetChunks.unshift(`window.__GAME_AUDIO_BANK__ = Object.freeze(${JSON.stringify(bank)});`);
-      }
+      const read = (rel: string) => readRawBytes(`games/${slug}/${rel}`, ref);
+      if (!(await prependAudio(assetChunks, assets, manifest.bank, read))) return null;
 
       let loaderHtml = '';
       const bakedImages = await bakeGameImageAssets(manifest.images, (relPath, name) =>
