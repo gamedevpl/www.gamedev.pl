@@ -41,6 +41,7 @@ function configure(reader: Partial<GameSnapshotReader>) {
 }
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   fixtures.refs.length = 0;
   fixtures.archiveWait.clear();
   fixtures.context = null;
@@ -98,47 +99,59 @@ it('coalesces concurrent cold loads of one publication', async () => {
   expect(results[0]).toBe(results[1]);
   expect(fixtures.refs).toEqual([sha]);
 });
-it('shares an older snapshot load across overlapping publication initialization', async () => {
-  const older = latch();
-  const newer = latch();
-  const heldPointer = latch();
-  const pointerEntered = latch();
-  const nextSha = 'b'.repeat(40);
-  fixtures.archiveWait.set(sha, older.promise);
-  fixtures.archiveWait.set(nextSha, newer.promise);
-  let published = pointer();
-  let pointerReads = 0;
-  const context = configure({
-    getPointer: async () => {
-      const captured = published;
-      if (++pointerReads === 3) {
-        pointerEntered.release();
-        await heldPointer.promise;
-      }
-      return captured;
-    },
-    getCatalog: async () => catalog,
-  });
-  const loads = [context.load()];
-  try {
-    await vi.waitFor(() => expect(fixtures.refs).toEqual([sha]));
-    loads.push(context.load());
-    await pointerEntered.promise;
-    published = pointer('published-2', nextSha);
-    loads.push(context.load());
-    await vi.waitFor(() => expect(fixtures.refs).toEqual([sha, nextSha]));
-    heldPointer.release();
-    await new Promise<void>((resolve) => setImmediate(resolve));
+it.each([false, true])(
+  'shares an older snapshot load across overlapping initialization, expired cache: %s',
+  async (warm) => {
+    const older = latch();
+    const newer = latch();
+    const heldPointer = latch();
+    const pointerEntered = latch();
+    const nextSha = 'b'.repeat(40);
+    let published = pointer();
+    let pointerReads = 0;
+    let armed = !warm;
+    const context = configure({
+      getPointer: async () => {
+        const captured = published;
+        if (++pointerReads === (warm ? 2 : 3) && armed) {
+          pointerEntered.release();
+          await heldPointer.promise;
+        }
+        return captured;
+      },
+      getCatalog: async () => catalog,
+    });
+    if (warm) {
+      await context.load();
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000);
+      fixtures.refs.length = 0;
+      pointerReads = 0;
+      armed = true;
+    }
+    fixtures.archiveWait.set(sha, older.promise);
+    fixtures.archiveWait.set(nextSha, newer.promise);
+    const loads = [context.load()];
+    try {
+      await vi.waitFor(() => expect(fixtures.refs).toEqual([sha]));
+      loads.push(context.load());
+      await pointerEntered.promise;
+      published = pointer('published-2', nextSha);
+      loads.push(context.load());
+      await vi.waitFor(() => expect(fixtures.refs).toEqual([sha, nextSha]));
+      heldPointer.release();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(fixtures.refs).toEqual([sha, nextSha]);
+    } finally {
+      heldPointer.release();
+      older.release();
+      newer.release();
+    }
+    const results = await Promise.all(loads);
+    expect(results[0]).toBe(results[1]);
     expect(fixtures.refs).toEqual([sha, nextSha]);
-  } finally {
-    heldPointer.release();
-    older.release();
-    newer.release();
-  }
-  const results = await Promise.all(loads);
-  expect(results[0]).toBe(results[1]);
-  expect(results[2]?.renderReferences(['reference'], 1000)).toContain(nextSha);
-});
+    expect(results[2]?.renderReferences(['reference'], 1000)).toContain(nextSha);
+  },
+);
 
 it('reuses a coherent cached context when catalog reads later fail', async () => {
   const readCatalog = vi.fn().mockResolvedValue(catalog);
