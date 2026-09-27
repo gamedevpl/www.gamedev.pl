@@ -11,15 +11,16 @@ function Harness() {
   return <iframe ref={frameRef} />;
 }
 
-it('keeps hello/here traffic below each 30-per-minute route budget', async () => {
+it.each([200, 401, 403, 404, 500])('keeps hello/here within route budgets after status %i', async (status) => {
   vi.useFakeTimers();
   vi.setSystemTime(0);
-  const fetch = vi.fn(async () => ({
-    ok: true,
+  const fetch = vi.fn(async (_url: string, init?: RequestInit) => ({
+    status: init?.method === 'POST' ? status : 200,
+    ok: !init?.method || status === 200,
     json: async () => ({
       count: 1,
       peers: [],
-      visible: true,
+      visible: status === 200,
       ttlMs: 40000,
       heartbeatMs: 12000,
     }),
