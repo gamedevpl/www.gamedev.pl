@@ -1,7 +1,9 @@
-// Discovery Engine seam for knowledge_query. Fail-open: answer -> chunks -> warning result.
+// Keep creator-authored specs outside synthesis and shared response caches.
 
 import { GoogleAuth } from 'google-auth-library';
 import { rememberBounded } from '../platform/bounded-map.js';
+import { isCreatorSpec, scopeToFilter } from './knowledge-corpus-policy.js';
+export { scopeToFilter } from './knowledge-corpus-policy.js';
 
 export type KnowledgeMode = 'answer' | 'chunks';
 export type KnowledgeScope = 'kit' | 'editor' | 'examples' | 'docs';
@@ -94,22 +96,6 @@ export function normalizeKnowledgeQuery(query: string): string {
   return query.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-// Mapping is coordinated with the games-repo corpus's structData.corpus enum.
-export function scopeToFilter(scope: KnowledgeScope | undefined): string | undefined {
-  switch (scope) {
-    case 'kit':
-      return 'corpus: ANY("kit-api","module","vertical","digest")';
-    case 'editor':
-      return 'corpus: ANY("editor")';
-    case 'examples':
-      return 'corpus: ANY("example")';
-    case 'docs':
-      return 'corpus: ANY("doc","skill","spec")';
-    default:
-      return undefined;
-  }
-}
-
 export function looksLikeEmptyAnswer(answerText: string, state?: string): boolean {
   if (state && state !== 'SUCCEEDED') return true;
   const trimmed = answerText.trim();
@@ -171,6 +157,7 @@ function extractChunksFromSearchResponse(json: unknown): ExtractedSource {
     const structData = structDataOf(container);
     const repoPath = repoPathOf(container, structData);
     const corpus = asString(structData.corpus);
+    if (isCreatorSpec(corpus, repoPath)) continue;
     const sourceCommit = sourceCommitOf(structData);
     if (sourceCommit && !indexedCommit) indexedCommit = sourceCommit;
     if (repoPath) repoPaths.add(repoPath);
@@ -205,6 +192,7 @@ function extractFromAnswerResponse(json: unknown): ExtractedSource & { answerTex
     const content = asString(container.content) ?? asString(container.snippet);
     const structData = structDataOf(container);
     const repoPath = repoPathOf(container, structData);
+    if (isCreatorSpec(asString(structData.corpus), repoPath)) throw new EmptyAnswerError();
     const sourceCommit = sourceCommitOf(structData);
     if (sourceCommit && !indexedCommit) indexedCommit = sourceCommit;
     if (repoPath) repoPaths.add(repoPath);
@@ -347,7 +335,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
   let lastIndexedCommit: string | undefined;
 
   function cacheKey(input: { mode: KnowledgeMode; scope?: KnowledgeScope; query: string }): string {
-    return `${input.mode}:${input.scope ?? 'all'}:${normalizeKnowledgeQuery(input.query)}`;
+    return `trusted-corpus-v2:${input.mode}:${input.scope ?? 'all'}:${normalizeKnowledgeQuery(input.query)}`;
   }
 
   function noteIndexedCommit(commit: string | undefined): void {
