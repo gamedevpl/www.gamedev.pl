@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+import { documentMessage, replaceTestFrameDocument } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import { markGameFrameNavigatedAway, markGameFrameLoadedByHost } from './frameMessage.js';
+import { markGameFrameNavigatedAway, markGameFrameLoadedByHost, prepareGameFrameDocument } from './frameMessage.js';
+import { useFrameDocument } from './frameLifecycle.js';
 import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useSensingBridge } from './sensing.js';
 import { usePresenceBridge } from './presence.js';
@@ -82,7 +84,7 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const send = (t: string, fields = {}) =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t, ...fields },
@@ -100,7 +102,10 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
       send('presence:here', { col: 1, row: 2 });
     });
     expect(sockets).toHaveLength(1);
-    await act(async () => markGameFrameLoadedByHost(frame));
+    await act(async () => {
+      markGameFrameLoadedByHost(frame);
+      replaceTestFrameDocument(frame.contentWindow!);
+    });
     if (!pending) {
       expect(voice.live).toBe(true);
       expect(camera.backdrop.live).toBe(true);
@@ -117,7 +122,10 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
     expect(camera.backdrop.engaged).toBe(false);
     expect(camera.backdrop.live).toBe(false);
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
-    await act(async () => markGameFrameLoadedByHost(frame));
+    await act(async () => {
+      markGameFrameLoadedByHost(frame);
+      replaceTestFrameDocument(frame.contentWindow!);
+    });
     await act(async () => send('voice:hello'));
     expect(voice.available).toBe(true);
   } finally {
@@ -125,5 +133,39 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
     container.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  }
+});
+
+it('counts preparation and its requested load as one document epoch', () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  function Harness() {
+    const ref = useRef<HTMLIFrameElement | null>(null);
+    const epoch = useFrameDocument(ref);
+    return <iframe ref={ref} data-epoch={epoch} />;
+  }
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  let release = () => {};
+  try {
+    act(() => root.render(<Harness />));
+    const frame = container.querySelector('iframe')!;
+    act(() => {
+      release = prepareGameFrameDocument(frame, 'first');
+    });
+    expect(frame.dataset.epoch).toBe('1');
+    act(() => markGameFrameLoadedByHost(frame));
+    expect(frame.dataset.epoch).toBe('1');
+    act(() => {
+      release();
+      release = prepareGameFrameDocument(frame, 'second');
+    });
+    expect(frame.dataset.epoch).toBe('2');
+    act(() => markGameFrameLoadedByHost(frame));
+    expect(frame.dataset.epoch).toBe('2');
+  } finally {
+    release();
+    act(() => root.unmount());
+    container.remove();
   }
 });

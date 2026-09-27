@@ -16,7 +16,7 @@ describe('frame helpers given a cross-origin Window', () => {
     expect(() => isGameFrameNavigatedAway(win)).not.toThrow();
     expect(isGameFrameNavigatedAway(win)).toBe(false);
     const event = { data: {}, origin: 'null', source: win } as unknown as MessageEvent;
-    expect(isFromGameFrame(event, win)).toBe(true);
+    expect(isFromGameFrame(event, win)).toBe(false);
     expect(deny).not.toHaveBeenCalled();
   });
 });

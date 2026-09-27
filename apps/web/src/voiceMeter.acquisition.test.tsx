@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage, replaceTestFrameDocument } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
@@ -49,7 +50,7 @@ it.each(['resolve', 'reject'])('ignores stale microphone %s after replacement ca
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const hello = () =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: 'gdp', v: 1, t: 'voice:hello' },
@@ -59,7 +60,10 @@ it.each(['resolve', 'reject'])('ignores stale microphone %s after replacement ca
     act(() => bridge.toggle());
     expect(bridge.status).toBe('pending');
     await act(async () => markGameFrameNavigatedAway(frame));
-    await act(async () => markGameFrameLoadedByHost(frame));
+    await act(async () => {
+      markGameFrameLoadedByHost(frame);
+      replaceTestFrameDocument(frame.contentWindow!);
+    });
     act(hello);
     await act(async () => bridge.toggle());
     expect(bridge.status).toBe('pending');

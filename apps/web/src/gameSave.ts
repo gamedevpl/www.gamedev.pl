@@ -2,7 +2,7 @@ import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
-import { isFromGameFrame, isGameFrameNavigatedAway } from './frameMessage.js';
+import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
 
 /**
  * The shell half of durable per-player progress (docs/persistent-world-plan.md P1).
@@ -79,17 +79,17 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
      * value surviving into the next run would be one game's progress queued against the
      * next game's save slot.
      */
-    let pending: { data: string; version: number } | null = null;
+    // A clear is queued like a put, so no older write can resurrect it.
+    let pending:
+      | { data: string; version: number; reply: (payload: Record<string, unknown>) => void }
+      | { data: null; reply: (payload: Record<string, unknown>) => void }
+      | null = null;
 
-    function postToGame(payload: Record<string, unknown>) {
-      // Nothing is sent to a frame we have already torn down — but the write itself
-      // still completes; see the drain loop.
-      if (cancelled) return;
-      // Drop replies once the game has navigated its frame away.
-      if (isGameFrameNavigatedAway(frameRef.current)) return;
-      // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
-      // the game in turn only accepts messages whose source is its parent.
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+    function replyToDocument() {
+      const reply = bindGameFrameReply(frameRef.current);
+      return (payload: Record<string, unknown>) => {
+        if (!cancelled) reply({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
+      };
     }
 
     async function drainWrites() {
@@ -105,13 +105,18 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           const next = pending;
           pending = null;
           try {
-            await putGameSave(slug!, next.data, next.version);
-            postToGame({ t: 'save:ack', ok: true });
+            if (next.data === null) await deleteGameSave(slug!);
+            else await putGameSave(slug!, next.data, next.version);
+            next.reply({ t: 'save:ack', ok: true });
           } catch (error) {
+            if (next.data === null) {
+              next.reply({ t: 'save:ack', ok: false, error: 'clear failed' });
+              continue;
+            }
             // Reported, never thrown at the game: a failed save must not be able to
             // break a round that is otherwise going fine. The module surfaces it as
             // `save.lastError` for an author to notice.
-            postToGame({ t: 'save:ack', ok: false, error: error instanceof Error ? error.message : 'save failed' });
+            next.reply({ t: 'save:ack', ok: false, error: error instanceof Error ? error.message : 'save failed' });
           }
         }
       } finally {
@@ -125,6 +130,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (!isFromGameFrame(event, frameRef.current)) return;
       const message = parseGameSaveMessage(event.data);
       if (!message) return;
+      const postToGame = replyToDocument();
 
       if (message.t === 'save:hello' || message.t === 'save:load') {
         try {
@@ -152,19 +158,14 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         // `message.version` verbatim, with no fallback: the parser has already replaced
         // an absent or nonsense version with 1, so a `||` here would only ever fire for
         // an explicit version 0 — silently rewriting the one value a game stated plainly.
-        pending = { data: message.data, version: message.version };
+        pending = { data: message.data, version: message.version, reply: postToGame };
         void drainWrites();
         return;
       }
 
       if (message.t === 'save:clear') {
-        pending = null;
-        try {
-          await deleteGameSave(slug!);
-          if (!cancelled) postToGame({ t: 'save:ack', ok: true });
-        } catch {
-          if (!cancelled) postToGame({ t: 'save:ack', ok: false, error: 'clear failed' });
-        }
+        pending = { data: null, reply: postToGame };
+        void drainWrites();
       }
     }
 
@@ -181,7 +182,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       const last = pending;
       if (last && !writing) {
         pending = null;
-        void putGameSave(slug, last.data, last.version).catch(() => undefined);
+        const send = last.data === null ? deleteGameSave(slug) : putGameSave(slug, last.data, last.version);
+        void send.catch(() => undefined);
       }
     };
   }, [frameRef, slug]);

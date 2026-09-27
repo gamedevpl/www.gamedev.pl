@@ -1,4 +1,5 @@
 import { useEffect, type MutableRefObject } from 'react';
+import { postToGameFrame } from './frameMessage.js';
 import { BRIDGE_NAMESPACE, INPUT_KEYS, PROTOCOL_VERSION, type InputKey } from './mp/protocol.js';
 
 const AXIS_THRESHOLD = 0.5;
@@ -167,8 +168,7 @@ export function useGamepadSpike(frameRef: MutableRefObject<HTMLIFrameElement | n
       post: (frame) => {
         const target = frameRef.current?.contentWindow;
         if (!target) return false;
-        target.postMessage(frame, '*');
-        return true;
+        return postToGameFrame(frameRef.current, frame);
       },
     });
   }, [frameRef]);

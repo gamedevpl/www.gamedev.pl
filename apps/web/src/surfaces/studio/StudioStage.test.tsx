@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from '../../test-utils/frameMessage.js';
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -113,17 +114,21 @@ describe('StudioStage', () => {
 
   function sendGameActivity(host: HTMLElement) {
     const iframe = host.querySelector('iframe')!;
-    const event = new MessageEvent('message', { origin: 'null', data: { source: 'gdpl-player', type: 'activity' } });
-    Object.defineProperty(event, 'source', { value: iframe.contentWindow });
-    Object.defineProperty(event, 'origin', { value: 'null' });
+    const event = documentMessage('message', {
+      source: iframe.contentWindow,
+      origin: 'null',
+      data: { source: 'gdpl-player', type: 'activity' },
+    });
     window.dispatchEvent(event);
   }
 
   function sendPointerHeld(host: HTMLElement, held: boolean) {
     const iframe = host.querySelector('iframe')!;
-    const event = new MessageEvent('message', { origin: 'null', data: { source: 'gdpl-player', type: 'held', held } });
-    Object.defineProperty(event, 'source', { value: iframe.contentWindow });
-    Object.defineProperty(event, 'origin', { value: 'null' });
+    const event = documentMessage('message', {
+      source: iframe.contentWindow,
+      origin: 'null',
+      data: { source: 'gdpl-player', type: 'held', held },
+    });
     window.dispatchEvent(event);
   }
 
@@ -142,7 +147,6 @@ describe('StudioStage', () => {
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
     expect(host.querySelector('.studio-swap-toast')).toBeNull();
 
-    // Once idle, the held build applies after its snapshot request times out.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(900);
     });
@@ -171,7 +175,6 @@ describe('StudioStage', () => {
 
     expect(mockedRequestStateSnapshot).toHaveBeenCalledExactlyOnceWith(oldFrame);
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
-    // Restores against the now-swapped frame, which is the same DOM node.
     expect(mockedRequestStateRestore).toHaveBeenCalledExactlyOnceWith(host.querySelector('iframe'), { score: 7 });
     unmount();
   });
@@ -386,12 +389,11 @@ describe('StudioStage', () => {
     // that just crashed.
     const iframe = host.querySelector('iframe')!;
     await act(async () => {
-      const event = new MessageEvent('message', {
+      const event = documentMessage('message', {
+        source: iframe.contentWindow,
         origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
-      Object.defineProperty(event, 'source', { value: iframe.contentWindow });
-      Object.defineProperty(event, 'origin', { value: 'null' });
       window.dispatchEvent(event);
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -413,12 +415,11 @@ describe('StudioStage', () => {
 
     const iframe = host.querySelector('iframe')!;
     await act(async () => {
-      const event = new MessageEvent('message', {
+      const event = documentMessage('message', {
+        source: iframe.contentWindow,
         origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'Bastion requires gfx3d' },
       });
-      Object.defineProperty(event, 'source', { value: iframe.contentWindow });
-      Object.defineProperty(event, 'origin', { value: 'null' });
       window.dispatchEvent(event);
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -443,12 +444,11 @@ describe('StudioStage', () => {
 
     const iframe = host.querySelector('iframe')!;
     await act(async () => {
-      const event = new MessageEvent('message', {
+      const event = documentMessage('message', {
+        source: iframe.contentWindow,
         origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
-      Object.defineProperty(event, 'source', { value: iframe.contentWindow });
-      Object.defineProperty(event, 'origin', { value: 'null' });
       window.dispatchEvent(event);
       await vi.advanceTimersByTimeAsync(0);
     });

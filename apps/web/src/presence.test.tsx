@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -85,7 +86,7 @@ describe('usePresenceBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(documentMessage('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame, gameWindow };
   }
@@ -356,7 +357,7 @@ describe('usePresenceBridge', () => {
     mount();
 
     window.dispatchEvent(
-      new MessageEvent('message', { origin: 'null', data: frame({ t: 'presence:hello' }), source: window }),
+      documentMessage('message', { origin: 'null', data: frame({ t: 'presence:hello' }), source: window }),
     );
 
     await new Promise((resolve) => setTimeout(resolve, 30));

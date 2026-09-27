@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -101,7 +102,7 @@ describe('useGameSaveBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { data: frame(payload), source: gameWindow, origin: 'null' }));
+      window.dispatchEvent(documentMessage('message', { data: frame(payload), source: gameWindow, origin: 'null' }));
     };
     return { fromGame, gameWindow };
   }
@@ -169,7 +170,7 @@ describe('useGameSaveBridge', () => {
     }) as typeof gameWindow.postMessage);
     const hello = () =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           data: frame({ t: 'save:hello', version: 1 }),
           source: gameWindow,
           origin: 'null',
@@ -195,14 +196,11 @@ describe('useGameSaveBridge', () => {
     vi.spyOn(gameWindow, 'postMessage').mockImplementation(((message: unknown) => {
       toGame.push(message);
     }) as typeof gameWindow.postMessage);
+    const data = frame({ t: 'save:hello', version: 1 });
+    act(() => window.dispatchEvent(documentMessage('message', { data, source: gameWindow, origin: 'null' })));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     act(() => root!.render(<FrameHarness html="<!doctype html><p>two</p>" />));
     expect(container.querySelector('iframe')).toBe(iframe);
-    act(() => iframe.dispatchEvent(new Event('load')));
-
-    const data = frame({ t: 'save:hello', version: 1 });
-    window.dispatchEvent(new MessageEvent('message', { data, source: gameWindow, origin: 'null' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    act(() => iframe.dispatchEvent(new Event('load')));
     resolveRead(jsonResponse({ data: '{"level":5}', version: 1, updatedAt: 'now' }));
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(toGame).toHaveLength(0);
@@ -225,7 +223,7 @@ describe('useGameSaveBridge', () => {
       toGame.push(message);
     }) as typeof gameWindow.postMessage);
     const data = frame({ t: 'save:hello', version: 1 });
-    window.dispatchEvent(new MessageEvent('message', { data, source: gameWindow, origin: 'null' }));
+    window.dispatchEvent(documentMessage('message', { data, source: gameWindow, origin: 'null' }));
     await waitFor(() => expect(toGame).toHaveLength(1));
     expect(toGame[0]).toMatchObject({ t: 'save:state', available: true });
   });
@@ -371,7 +369,7 @@ describe('useGameSaveBridge', () => {
     const impostor = document.createElement('iframe');
     document.body.appendChild(impostor);
     window.dispatchEvent(
-      new MessageEvent('message', {
+      documentMessage('message', {
         data: frame({ t: 'save:put', data: '{"hacked":true}', version: 1 }),
         source: impostor.contentWindow,
         origin: 'null',

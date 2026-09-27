@@ -7,7 +7,7 @@ const BRIDGE = `(function(){
   // Shared with GameKit's postSignal — lets the host tell a fresh document from a resend.
   window.__GDPL_LOAD_ID__=window.__GDPL_LOAD_ID__||Math.random();
   function el(id){return document.getElementById(id);}
-  function post(m){m.source='${PLAYER}';m.loadId=window.__GDPL_LOAD_ID__;parent.postMessage(m,'*');}
+  function post(m){m.source='${PLAYER}';m.loadId=window.__GDPL_LOAD_ID__;var send=window.__GDPL_DOCUMENT_SEND__;if(send)send(m);else parent.postMessage(m,'*');}
   function isMuted(){var s=el('sound-toggle');return s?s.getAttribute('aria-pressed')==='true':false;}
   function sendMeta(){
     var t=el('game-title'),d=el('game-desc');

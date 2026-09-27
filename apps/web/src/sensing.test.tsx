@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -97,7 +98,7 @@ describe('useSensingBridge', () => {
 
     const fromGame = (payload: Record<string, unknown>) => {
       act(() => {
-        window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
+        window.dispatchEvent(documentMessage('message', { origin: 'null', data: frame(payload), source: gameWindow }));
       });
     };
     return { fromGame, gameWindow };
@@ -177,7 +178,7 @@ describe('useSensingBridge', () => {
     mount();
     act(() => {
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           data: frame({ t: 'sensing:hello', features: ['tilt'] }),
           source: window,

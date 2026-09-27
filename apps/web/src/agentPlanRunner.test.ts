@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseAgentPlan } from './agentPlan.js';
 import { runAgentPlan } from './agentPlanRunner.js';
-import { dispatchFromFrame } from './test-utils/frameMessage.js';
+import { dispatchFromFrame, messageFromFrame } from './test-utils/frameMessage.js';
 
 type Sent = { type?: string; id?: number; command?: { kind?: string; frames?: number } };
 
@@ -47,6 +47,7 @@ function fakeGame(options: { startsPlayingAfter?: number; score?: (frame: number
     }, 0);
   }
 
+  messageFromFrame(contentWindow, {});
   return { frame: { contentWindow } as unknown as HTMLIFrameElement, sent, frames: () => frame };
 }
 

@@ -132,7 +132,7 @@ never be committed or pasted into a game, an issue, or a PR description. Full gu
   line, put it in `docs/` or a skill — not above the function. `npm run comment-prose` (also
   part of `npm run lint`) freezes each file's prose-comment word count in
   `eslint-rules/comment-prose-baseline.json`; new files start at 0. When you touch a file
-  that still carries debt, shrink it and run `npm run comment-prose -- --write`. See
+  that still carries debt, shrink it and run `npm run comment-prose -- <path> --write`. See
   [`comment-prose-debt.md`](./comment-prose-debt.md). Safety comments that stay (e.g. why the
   iframe has no `allow-same-origin`) must still fit the one-liner bar.
 - **Validate untrusted input** at the API boundary with `zod`. Treat the generator as an

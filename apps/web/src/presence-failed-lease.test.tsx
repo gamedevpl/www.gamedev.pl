@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
@@ -35,7 +36,7 @@ it.each([
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const send = (t: string) =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: 'gdp', v: 1, t, col: 2, row: 3 },

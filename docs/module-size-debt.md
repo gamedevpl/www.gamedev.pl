@@ -68,7 +68,7 @@ this ratchet is what makes that an enforced rule rather than a request.
 ## Cost-effective cleanup
 
 1. **Opportunistic** — a PR that already touches a heavy file extracts a cohesive piece
-   while it's there, then `npm run module-size -- --write`.
+   while it's there, then `npm run module-size -- <path> --write`.
 2. **Hot-path first** — `store.ts`, `submissions.ts`, `mcp-server.ts`, `agent-channel.ts`
    are also the files agents re-read most; shrinking them cuts token spend as well as
    ceiling debt.
