@@ -17,8 +17,7 @@ export function isParamSpec(value: unknown): value is ParamSpec {
         !Number.isFinite(spec.min) ||
         !Number.isFinite(spec.max) ||
         spec.min > spec.max ||
-        !Number.isFinite(spec.max - spec.min) ||
-        (spec.type === 'int' && (!Number.isInteger(spec.min) || !Number.isInteger(spec.max)))
+        !Number.isFinite(spec.max - spec.min)
       )
         return false;
       break;

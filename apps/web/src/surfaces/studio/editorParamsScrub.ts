@@ -51,8 +51,9 @@ export function scrubStep(spec: NumericRange): number {
   return span > 0 ? span / 100 : 0.01;
 }
 
-// Clamps to range and, for int, rounds.
+// Clamps numeric scrubs; integer values stay within declared bounds.
 export function clampParamValue(spec: NumericRange, value: number): number {
-  const clamped = Math.min(spec.max, Math.max(spec.min, value));
-  return spec.type === 'int' ? Math.round(clamped) : clamped;
+  return spec.type === 'int'
+    ? Math.min(Math.floor(spec.max), Math.max(Math.ceil(spec.min), Math.round(value)))
+    : Math.min(spec.max, Math.max(spec.min, value));
 }
