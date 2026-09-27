@@ -78,3 +78,36 @@ export async function writeAgentRoundShared(
     },
   ]);
 }
+
+export async function writeAgentSeed(
+  db: GuardedFirestore,
+  jobId: number,
+  seed: import('../../agent-surface/agent-backend.js').SeedFiles | null,
+  generation?: number,
+): Promise<void> {
+  const ref = db.collection('submissions').doc(String(jobId));
+  if (seed)
+    return writeAgentRoundDocuments(db, jobId, generation, [
+      { ref, data: { seed, seedStatus: 'available' }, merge: true },
+    ]);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
+    if (snap.exists) tx.set(ref, { seed: FieldValue.delete(), seedStatus: 'unavailable' }, { merge: true });
+  });
+}
+
+export async function writeAgentSeedStatus(
+  db: GuardedFirestore,
+  jobId: number,
+  status: 'pending' | 'unavailable',
+  generation?: number,
+): Promise<void> {
+  const ref = db.collection('submissions').doc(String(jobId));
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
+    if (snap.exists)
+      tx.set(ref, { seedStatus: (snap.data() as SubmissionRecord).seed ? 'available' : status }, { merge: true });
+  });
+}

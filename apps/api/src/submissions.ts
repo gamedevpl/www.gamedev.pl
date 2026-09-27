@@ -1080,8 +1080,8 @@ export async function registerSubmissionRoutes(
     onPreviewPublished: (jobId: number) => buildStatus.invalidateMedia(jobId),
     ...(seedDispatch
       ? {
-          handoff: (jobId: number, steer?: string) =>
-            seedDispatch.enqueue(jobId, { action: 'regenerate', ...(steer ? { steer } : {}) }),
+          handoff: (jobId: number, steer?: string, expectedRoundGeneration?: number) =>
+            seedDispatch.enqueue(jobId, { action: 'regenerate', expectedRoundGeneration, ...(steer ? { steer } : {}) }),
         }
       : {}),
   });

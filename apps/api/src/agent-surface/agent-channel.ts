@@ -9,7 +9,7 @@ import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
-import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
+import { registerAgentChannelSeedRoutes, type AgentChannelSeedRoutesDeps } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
 import { authedRoundGeneration } from './round-generation-guard.js';
@@ -533,14 +533,7 @@ export interface AgentChannelOptions {
    */
   onSourcesStaged?: (input: { jobId: number; slug: string; roundGeneration: number }) => void;
   // Queues a replacement draft. Absent when nothing seeds.
-  onRegenerateSeed?: (input: { jobId: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
-    | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | {
-        ok: false;
-        reason:
-          'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' | 'seeding_off';
-      }
-  >;
+  onRegenerateSeed?: AgentChannelSeedRoutesDeps['onRegenerateSeed'];
   onSourcesDelivered?: (input: {
     jobId: number;
     slug: string;

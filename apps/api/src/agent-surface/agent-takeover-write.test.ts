@@ -20,6 +20,10 @@ async function seed(store: Store) {
   await store.ensureRoundGeneration(JOB);
 }
 const mutations: Array<[string, (store: Store) => Promise<unknown>]> = [
+  ['seed counter', (store) => store.incrementSeedRegenerations(JOB, 1)],
+  ['seed status', (store) => store.setSeedStatus(JOB, 'pending', 1)],
+  ['seed contents', (store) => store.setSubmissionSeed(JOB, { slug: 'original-game', files: [], references: [] }, 1)],
+  ['seed deletion', (store) => store.setSubmissionSeed(JOB, null, 1)],
   ['progress', (store) => store.appendBuildEvent(JOB, { kind: 'step', text: 'old progress' }, { roundGeneration: 1 })],
   ['presence', (store) => store.touchLastAgentSignalAt(JOB, AT, { key: 'staging_sources' }, { roundGeneration: 1 })],
   ['end', (store) => store.markAgentEnded(JOB, AT, 'end', 1)],

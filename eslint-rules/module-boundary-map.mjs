@@ -277,6 +277,8 @@ const FILE_BUCKET = {
   'dispatch-build': 'creation',
   'resume-build': 'creation',
   'seed-pipeline': 'creation',
+  'seed-regeneration': 'creation',
+  'seed-regeneration-takeover.test': 'creation',
   'creator-self-routes': 'creation',
   'job-costs': 'creation',
   'token-prices': 'creation',

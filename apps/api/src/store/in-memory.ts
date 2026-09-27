@@ -523,16 +523,16 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.roundsStore.setRoundBuilder(jobId, builder, options);
   }
 
-  async setSubmissionSeed(jobId: number, seed: SeedFiles | null): Promise<void> {
-    return this.roundsStore.setSubmissionSeed(jobId, seed);
+  async setSubmissionSeed(jobId: number, seed: SeedFiles | null, generation?: number): Promise<void> {
+    return this.roundsStore.setSubmissionSeed(jobId, seed, generation);
   }
 
-  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void> {
-    return this.roundsStore.setSeedStatus(jobId, status);
+  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable', generation?: number): Promise<void> {
+    return this.roundsStore.setSeedStatus(jobId, status, generation);
   }
 
-  async incrementSeedRegenerations(jobId: number): Promise<number> {
-    return this.roundBudgetStore.incrementSeedRegenerations(jobId);
+  async incrementSeedRegenerations(jobId: number, generation?: number): Promise<number> {
+    return this.roundBudgetStore.incrementSeedRegenerations(jobId, generation);
   }
 
   async incrementRoundDeliveryCount(jobId: number, generation?: number): Promise<number> {

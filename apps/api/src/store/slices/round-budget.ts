@@ -26,7 +26,7 @@ export function gateRepairEligible(
 
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
-  incrementSeedRegenerations(jobId: number): Promise<number>;
+  incrementSeedRegenerations(jobId: number, generation?: number): Promise<number>;
 
   // Increments the per-round and whole-job sources-delivery counts.
   incrementRoundDeliveryCount(jobId: number, generation?: number): Promise<number>;
@@ -90,8 +90,9 @@ export function dreamClaimHolds(
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
-  async incrementSeedRegenerations(jobId: number): Promise<number> {
+  async incrementSeedRegenerations(jobId: number, generation?: number): Promise<number> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return 0;
     const seedRegenerations = (sub.seedRegenerations ?? 0) + 1;
     this.submissions.set(jobId, { ...sub, seedRegenerations });
@@ -195,10 +196,11 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     return this.db.collection('submissions').doc(String(jobId));
   }
 
-  async incrementSeedRegenerations(jobId: number): Promise<number> {
+  async incrementSeedRegenerations(jobId: number, generation?: number): Promise<number> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      assertAgentRound(snap.exists ? (snap.data() as SubmissionRecord) : undefined, generation);
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       const seedRegenerations = (current.seedRegenerations ?? 0) + 1;
