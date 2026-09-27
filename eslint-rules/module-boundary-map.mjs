@@ -68,6 +68,7 @@ const FILE_BUCKET = {
   'editor-param-defaults': 'creation',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
+  'app.snapshotMembership': 'platform',
   'error-handler': 'platform',
   server: 'platform',
   auth: 'platform',
@@ -535,6 +536,7 @@ const FILE_BUCKET = {
   recommend: 'catalog',
   recommendations: 'catalog',
   'published-slugs': 'catalog',
+  'published-slugs-source': 'catalog',
   'game-page-routes': 'catalog',
   'game-health': 'catalog',
   'games-repo-client': 'catalog',
