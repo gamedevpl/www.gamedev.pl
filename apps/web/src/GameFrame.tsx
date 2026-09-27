@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type MutableRefObject } from 'react';
 import i18n from './i18n/index.js';
 import { prepareGameFrameDocument, useHostLoadTracking } from './frameMessage.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
-import { withFrameDocument } from './frameBootstrap.js';
+import { usePreparedFrameDocument } from './frameAdapter.js';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
 
 type GameFrameProps = GameFrameSource & {
   frameRef?: MutableRefObject<HTMLIFrameElement | null>;
-  // When shown in the app's game player, inject the bridge that hides the game's
-  // own title/description/sound chrome and relays sound control to the header.
+  // Player only: hide the game's own chrome and relay its sound.
   embed?: boolean;
+  // False: never steal focus, and leave the tab order.
   autoFocus?: boolean;
   // Agent executor, served to reviewers only; absent means no mode.
   agentBridge?: string | null;
@@ -19,19 +19,14 @@ type GameFrameProps = GameFrameSource & {
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = props.frameRef ?? localRef;
-  // Localize the game to the app's current language (rewrites <html lang>), then —
-  // only in the app's player — inject the chrome-hiding bridge. Locale applies to
-  // every game regardless of embed; the bridge is player-only. `i18n.language` is
-  // read at render, and hosts re-render on language change so this stays current.
+  // Locale applies to every game; hosts re-render on language change.
   let srcDoc = props.html ?? undefined;
   if (srcDoc != null) {
     srcDoc = withGameLocale(srcDoc, i18n.language);
     if (props.embed) srcDoc = embedGameHtml(srcDoc, props.agentBridge);
   }
-  const prepared = useMemo(() => {
-    const nonce = crypto.randomUUID();
-    return { nonce, html: srcDoc === undefined ? undefined : withFrameDocument(srcDoc, nonce) };
-  }, [srcDoc]);
+  const prepared = usePreparedFrameDocument(srcDoc);
+  const shownSource = prepared.source;
   useLayoutEffect(() => {
     const frame = iframeRef.current;
     if (frame && prepared.html !== undefined) return prepareGameFrameDocument(frame, prepared.nonce);
@@ -45,26 +40,28 @@ export function GameFrame(props: GameFrameProps) {
     const frame = iframeRef.current;
     if (!frame) return;
     frame.focus();
-    // Focus the committed document as well as its iframe element.
+    // A later commit steals focus; opaque windows still accept `focus()`.
     frame.contentWindow?.focus();
   }, [iframeRef, autoFocus]);
 
-  const { onLoad, frameKey } = useHostLoadTracking(iframeRef, srcDoc ?? props.src, focusGame);
+  const { onLoad, frameKey } = useHostLoadTracking(iframeRef, shownSource ?? props.src, focusGame);
 
   useEffect(() => {
     // Backstop for the cases the load event doesn't cover — a document that had
     // already loaded before this effect ran, or a re-render that swaps srcDoc.
     const timer = setTimeout(focusGame, 100);
     return () => clearTimeout(timer);
-  }, [props.html, props.src, focusGame]);
+  }, [shownSource, props.src, focusGame]);
 
+  // No iframe before its first document: a blank load would count as navigation.
+  if (props.src === undefined && prepared.html === undefined) return null;
   return (
-    // Opaque origins prevent games from reaching host cookies and storage.
     <iframe
       key={frameKey}
       ref={iframeRef}
       className="game-frame"
       title={props.title}
+      // Never add allow-same-origin or an allow list: docs/security-model.md.
       sandbox="allow-scripts allow-pointer-lock"
       src={props.src}
       srcDoc={prepared.html}

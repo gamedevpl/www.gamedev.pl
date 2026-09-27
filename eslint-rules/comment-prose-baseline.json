@@ -424,7 +424,7 @@
     "apps/web/src/GameDetailPage.test.tsx": 15,
     "apps/web/src/GameDetailPage.tsx": 36,
     "apps/web/src/GameFrame.sandbox.test.ts": 34,
-    "apps/web/src/GameFrame.tsx": 148,
+    "apps/web/src/GameFrame.tsx": 92,
     "apps/web/src/GameHealthView.test.tsx": 302,
     "apps/web/src/GameHealthView.tsx": 494,
     "apps/web/src/GamePage.tsx": 87,

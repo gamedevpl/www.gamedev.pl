@@ -1,7 +1,26 @@
 import { parse, type Node } from 'acorn';
-import { parse as parseHtml, parseFragment, serialize, type DefaultTreeAdapterMap } from 'parse5';
+import { parse as parseHtml, serialize, type DefaultTreeAdapterMap } from 'parse5';
+import { insertFrameBootstrap, type AdaptedFrameDocument } from './frameBootstrapScript.js';
 
 type SyntaxNode = Node & { [key: string]: unknown };
+
+const SCOPES = new Set([
+  'FunctionDeclaration',
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+  'Program',
+  'BlockStatement',
+  'StaticBlock',
+  'CatchClause',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'SwitchStatement',
+  'ClassExpression',
+  'ClassDeclaration',
+  'WithStatement',
+]);
+const SCRIPT_TYPES = ['', 'module', 'text/javascript', 'application/javascript'];
 
 function isMember(node: unknown, object: string, property: string): boolean {
   const member = node as SyntaxNode | null;
@@ -87,7 +106,8 @@ export function adaptGameKitMessages(
   function visit(value: unknown, inherited = new Set<string>()): void {
     if (!value || typeof value !== 'object') return;
     const node = value as SyntaxNode;
-    const shadowed = new Set(inherited);
+    // Only scope nodes copy the set; per-node copies dominated large games.
+    const shadowed = SCOPES.has(node.type) ? new Set(inherited) : inherited;
     if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type)) {
       bindings(node.id, shadowed);
       const params = node.params as unknown[];
@@ -156,10 +176,11 @@ export function adaptGameKitMessages(
   return code;
 }
 
-export function withFrameDocument(html: string, nonce: string): string {
+// Heavy half: parses HTML and scripts, in a worker when available.
+export function adaptFrameDocument(html: string, salt = 'frame'): AdaptedFrameDocument {
   // Exclude baked raster bytes from both parsers; restore them unchanged.
   const assets: string[] = [];
-  let marker = `__GDPL_RASTER_${nonce}_`;
+  let marker = `__GDPL_RASTER_${salt}_`;
   while (html.includes(marker)) marker += '_';
   const compact = html.replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, (asset) => {
     const index = assets.push(asset) - 1;
@@ -171,11 +192,9 @@ export function withFrameDocument(html: string, nonce: string): string {
   function visit(node: DefaultTreeAdapterMap['node']): void {
     if ('tagName' in node && node.tagName === 'head') head = node;
     if ('tagName' in node && node.tagName === 'script') {
-      const type = node.attrs.find((attr) => attr.name === 'type')?.value;
-      if (
-        !node.attrs.some((attr) => attr.name === 'src') &&
-        (!type || ['module', 'text/javascript', 'application/javascript'].includes(type))
-      ) {
+      // Browsers ignore case and MIME parameters here, so the adapter must too.
+      const type = (node.attrs.find((attr) => attr.name === 'type')?.value ?? '').split(';')[0]!.trim().toLowerCase();
+      if (!node.attrs.some((attr) => attr.name === 'src') && SCRIPT_TYPES.includes(type)) {
         for (const child of node.childNodes) {
           if ('value' in child) scripts.push({ text: child, module: type === 'module' });
         }
@@ -191,29 +210,21 @@ export function withFrameDocument(html: string, nonce: string): string {
   for (const script of scripts) {
     script.text.value = adaptGameKitMessages(script.text.value, script.module, documentBindings);
   }
-  const bootstrap = `<script>(function(){
-    var nonce=${JSON.stringify(nonce).replaceAll('<', '\\u003c')},host=parent,send=host.postMessage.bind(host),channel=new MessageChannel();
-    var Event=MessageEvent,dispatch=window.dispatchEvent.bind(window),post=channel.port1.postMessage.bind(channel.port1);
-    var close=channel.port1.close.bind(channel.port1);
-    var getData=Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MessageEvent.prototype,'data').get);
-    Object.defineProperty(window,'__GDPL_DOCUMENT_SEND__',{value:function(payload){
-      post({payload:payload,documentNonce:nonce});
-    },writable:false,configurable:false});
-    channel.port1.onmessage=function(event){dispatch(new Event('message',{data:getData(event),source:host}));};
-    channel.port1.start();
-    window.addEventListener('pagehide',function(){
-      post({payload:{type:'gdpl-document-retired'},documentNonce:nonce});close();
-    },true);
-    document.currentScript.remove();
-    send({type:'gdpl-document-ready',documentNonce:nonce},'*',[channel.port2]);
-  })();</script>`;
+  let bootstrap = `<!--__GDPL_BOOTSTRAP_${salt}_`;
+  while (html.includes(bootstrap)) bootstrap += '_';
+  bootstrap += '-->';
   if (head) {
-    const script = parseFragment(bootstrap).childNodes[0]!;
     const target = head as DefaultTreeAdapterMap['element'];
-    script.parentNode = target;
-    target.childNodes.unshift(script);
+    target.childNodes.unshift({ nodeName: '#comment', data: bootstrap.slice(4, -3), parentNode: target });
   }
   const rendered = serialize(doc);
   const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return rendered.replace(new RegExp(`${escapedMarker}(\\d+)__`, 'g'), (_, index: string) => assets[Number(index)]!);
+  return {
+    html: rendered.replace(new RegExp(`${escapedMarker}(\\d+)__`, 'g'), (_, index: string) => assets[Number(index)]!),
+    marker: bootstrap,
+  };
+}
+
+export function withFrameDocument(html: string, nonce: string): string {
+  return insertFrameBootstrap(adaptFrameDocument(html, nonce), nonce);
 }

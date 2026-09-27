@@ -57,6 +57,10 @@ without rebuilding stored historical games or changing their committed source/me
 Baked raster data URLs are replaced with collision-free placeholders before HTML and JavaScript
 parsing, then restored byte-for-byte after serialization, keeping asset payloads out of both ASTs.
 URL-only frames cannot establish privileged bridges because they have no host bootstrap.
+The parsers load lazily and run in a module Web Worker, outside the shell chunk and off the
+main thread; the per-load bootstrap is spliced into the cached, adapted document. If the
+worker cannot start, the same adapter runs inline. The embed bridge calls the bootstrap
+send function directly and uses `parent.postMessage` only where no bootstrap exists.
 
 Run `npm run e2e -- src/frame-document.test.ts` with `E2E_CHROMIUM_PATH` to check real browser
 document navigation and delayed saves against a local fixture, without credentials or writes

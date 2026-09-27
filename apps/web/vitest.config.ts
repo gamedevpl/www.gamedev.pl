@@ -11,6 +11,6 @@ export default defineConfig({
     // Headroom for CPU contention; these assert behaviour, never latency.
     testTimeout: 20_000,
     hookTimeout: 20_000,
-    setupFiles: ['./src/i18nTestSetup.ts'],
+    setupFiles: ['./src/i18nTestSetup.ts', './src/frameAdapterTestSetup.ts'],
   },
 });
