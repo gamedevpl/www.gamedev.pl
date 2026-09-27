@@ -91,6 +91,7 @@ const FILE_BUCKET = {
   'presence-rejoin-cadence': 'platform',
   'presence-lease': 'platform',
   'presence-failed-lease': 'platform',
+  'presence-uncertain-lease': 'platform',
   'presence-cadence': 'platform',
   'presence-mutations': 'platform',
   'voiceMeter.acquisition': 'platform',

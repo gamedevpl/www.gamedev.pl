@@ -82,7 +82,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     let position: { col: number; row: number } | null = null;
     let timer: number | null = null;
     let beating = false;
-    let lease: string | undefined, pendingLease: string | undefined;
+    let lease: string | undefined,
+      attempted = false;
     const budget = cadence.createPresenceCadence(() => {
       if (engaged && position) void beat();
     });
@@ -114,7 +115,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (beating || cancelled || !engaged || !budget.allow(Date.now())) return;
       beating = true;
       const acquired = generation,
-        acquiredLease = (pendingLease = crypto.randomUUID());
+        acquiredLease = lease;
+      attempted = true;
       if (position) awaitingFirstHere = false;
       try {
         const snapshot = await beatPresence(
@@ -123,13 +125,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           () => !cancelled && acquired === generation,
           acquiredLease,
         );
-        if (cancelled) return;
-        if (acquired !== generation) {
-          await leavePresence(slug!, acquiredLease);
-          return;
-        }
+        if (cancelled || acquired !== generation) return;
         if (snapshot) {
-          if (snapshot.visible) lease = acquiredLease;
           joined = joined || snapshot.visible;
           heartbeatMs = Math.max(cadence.MIN_BEAT_MS, snapshot.heartbeatMs || cadence.HEARTBEAT_MS);
         }
@@ -141,7 +138,6 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         announce(null);
       } finally {
         beating = false;
-        pendingLease = undefined;
         if (engaged && awaitingFirstHere && position) void beat();
       }
     }
@@ -180,6 +176,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       const message = parsePresenceMessage(event.data);
       if (!message) return;
       if (message.t === 'presence:hello') {
+        if (!engaged) lease = crypto.randomUUID();
         engaged = true;
         position = null;
         const wait = helloAt + cadence.HELLO_INTERVAL_MS - Date.now();
@@ -201,7 +198,8 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       engaged = false;
       generation++;
       position = null;
-      if (joined) {
+      if (joined || attempted) {
+        attempted = false;
         joined = false;
         void leavePresence(slug!, lease);
       }
@@ -227,8 +225,7 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (helloTimer !== null) window.clearTimeout(helloTimer);
       window.removeEventListener('message', onMessage);
       document.removeEventListener('visibilitychange', onVisibility);
-      if (beating) void leavePresence(slug, pendingLease);
-      if (joined) void leavePresence(slug, lease);
+      if (joined || attempted) void leavePresence(slug, lease);
     };
   }, [frameRef, slug, frameDocument]);
 }
