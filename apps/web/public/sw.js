@@ -186,6 +186,11 @@ self.addEventListener('fetch', (event) => {
   if (isApiRequest(url)) return;
   if (isServerRenderedRoute(url)) return;
 
+  // A framed navigation needs the server's own frame-ancestors for its path. The cached
+  // shell carries the headers of `/`, which forbid framing, so answering an embed with
+  // it blocked every /play/ permalink on the second load under another site's iframe.
+  if (request.mode === 'navigate' && request.destination !== 'document') return;
+
   if (request.mode === 'navigate') {
     event.respondWith(navigationResponse(request));
     return;
