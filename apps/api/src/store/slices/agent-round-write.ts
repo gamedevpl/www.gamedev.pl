@@ -63,3 +63,18 @@ export async function writeAgentRoundVersion(
     },
   ]);
 }
+
+export async function writeAgentRoundShared(
+  db: GuardedFirestore,
+  jobId: number,
+  at: string | null,
+  generation?: number,
+): Promise<void> {
+  await writeAgentRoundDocuments(db, jobId, generation, [
+    {
+      ref: db.collection('submissions').doc(String(jobId)),
+      merge: true,
+      data: { draftSharedAt: at ?? FieldValue.delete() },
+    },
+  ]);
+}

@@ -676,8 +676,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     await this.submissionStore.setSubmissionAbandoned(jobId, at);
   }
 
-  async setDraftShared(jobId: number, at: string | null): Promise<void> {
-    await this.submissionStore.setDraftShared(jobId, at);
+  async setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void> {
+    await this.submissionStore.setDraftShared(jobId, at, generation);
     await this.shelfMirror.afterJobWrite(jobId);
   }
 

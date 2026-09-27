@@ -23,6 +23,7 @@ const mutations: Array<[string, (store: Store) => Promise<unknown>]> = [
   ['progress', (store) => store.appendBuildEvent(JOB, { kind: 'step', text: 'old progress' }, { roundGeneration: 1 })],
   ['presence', (store) => store.touchLastAgentSignalAt(JOB, AT, { key: 'staging_sources' }, { roundGeneration: 1 })],
   ['end', (store) => store.markAgentEnded(JOB, AT, 'end', 1)],
+  ['share toggle', (store) => store.setDraftShared(JOB, AT, 1)],
   ['handoff acknowledgement', (store) => store.acknowledgeBuilderHandoff(JOB, AT, 1)],
   [
     'inbox acknowledgement',

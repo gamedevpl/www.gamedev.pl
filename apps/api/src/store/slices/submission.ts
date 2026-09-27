@@ -1,4 +1,4 @@
-import { writeAgentRoundVersion } from './agent-round-write.js';
+import { writeAgentRoundVersion, writeAgentRoundShared } from './agent-round-write.js';
 import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { bindSubmissionSlug } from './bind-submission-slug.js';
@@ -55,7 +55,7 @@ export interface SubmissionStore {
   setSubmissionAbandoned(jobId: number, at: string): Promise<void>;
 
   // Turns the shared draft link on (a timestamp) or off (null).
-  setDraftShared(jobId: number, at: string | null): Promise<void>;
+  setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void>;
 
   // Operator-only: blocks sharing and the public draft read.
   setModerationBlocked(jobId: number, at: string | null): Promise<void>;
@@ -258,9 +258,9 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     await setShelfVisibleFields(this.db, this.ref(jobId), { abandonedAt: at, openRound: false });
   }
 
-  async setDraftShared(jobId: number, at: string | null): Promise<void> {
+  async setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void> {
     // Deleted, not set false -- "shared" is one shape: present or absent.
-    await this.ref(jobId).set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
+    await writeAgentRoundShared(this.db, jobId, at, generation);
   }
 
   async setModerationBlocked(jobId: number, at: string | null): Promise<void> {

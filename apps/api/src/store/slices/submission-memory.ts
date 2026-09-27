@@ -191,8 +191,9 @@ export class InMemorySubmissionStore implements SubmissionStore {
     if (sub) this.submissions.set(jobId, { ...sub, abandonedAt: at });
   }
 
-  async setDraftShared(jobId: number, at: string | null): Promise<void> {
+  async setDraftShared(jobId: number, at: string | null, generation?: number): Promise<void> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     if (!sub) return;
     const next = { ...sub };
     if (at) next.draftSharedAt = at;
