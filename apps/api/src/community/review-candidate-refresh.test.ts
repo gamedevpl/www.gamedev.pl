@@ -5,7 +5,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { GamesStore } from '../delivery/games-store.js';
 
 const checklist = { graphics: 'ok', gameplay: 'ok', fun: 'ok', sound: 'ok', controls: 'ok' };
-async function setup(mode: 'creator' | 'unshared' | 'published', targeted = false) {
+async function setup(mode: 'creator' | 'unshared' | 'published' | 'overlap', targeted = false) {
   const store = new InMemoryStore();
   const at = new Date().toISOString();
   await store.upsertUser({ uid: 'owner' });
@@ -18,7 +18,7 @@ async function setup(mode: 'creator' | 'unshared' | 'published', targeted = fals
   await store.createReviewSweep({
     id: 'sweep',
     status: 'active',
-    source: mode === 'creator' ? 'creator' : 'catalog',
+    source: mode === 'overlap' ? 'all' : mode === 'creator' ? 'creator' : 'catalog',
     slugs: ['public-game'],
     releasedCount: 1,
     releasePerDay: null,
@@ -104,3 +104,30 @@ it.each([false, true])('refreshes a cached candidate after redelivery (targeted:
     await app.close();
   }
 });
+
+it.each([false, true])(
+  'queues a pinned creator candidate before an overlapping catalog row (targeted: %s)',
+  async (targeted) => {
+    const { app, headers } = await setup('overlap', targeted);
+    try {
+      const queue = await app.inject({ method: 'GET', url: '/api/review/queue', headers });
+      expect(queue.json().items[0]).toMatchObject({ source: 'creator', jobId: 1, gameVersion: 'v1' });
+      const assessment = await app.inject({
+        method: 'POST',
+        url: '/api/review/assessments',
+        headers,
+        payload: {
+          slug: 'public-game',
+          source: 'creator',
+          gameVersion: 'v1',
+          verdict: 'keep',
+          note: 'Pinned candidate reviewed.',
+          checklist,
+        },
+      });
+      expect(assessment.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  },
+);

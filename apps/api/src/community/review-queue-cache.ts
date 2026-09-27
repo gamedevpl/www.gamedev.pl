@@ -193,9 +193,11 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
 
   async function collectPool(source: ReviewSweepSource, opts?: { fresh?: boolean }): Promise<ReviewQueueItem[]> {
     const pools = await loadReviewPools(opts);
+    const creatorSlugs = new Set(reviewableCreatorDrafts(pools.delivered).map((record) => record.slug));
     const items: ReviewQueueItem[] = [];
     if (source === 'catalog' || source === 'all') {
       for (const entry of pools.catalog) {
+        if (creatorSlugs.has(entry.slug)) continue;
         items.push({
           slug: entry.slug,
           title: entry.title || entry.slug,
@@ -239,7 +241,8 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   // Single-slug lookup for a targeted re-review, against already-loaded pools.
   async function findQueueItem(slug: string, pools: ReviewPools): Promise<ReviewQueueItem | null> {
     const entry = pools.catalog.find((row) => row.slug === slug);
-    if (entry) {
+    const record = reviewableCreatorDrafts(pools.delivered).find((row) => row.slug === slug);
+    if (entry && !record) {
       return {
         slug: entry.slug,
         title: entry.title || entry.slug,
@@ -250,7 +253,6 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
         media: entry.media ?? null,
       };
     }
-    const record = reviewableCreatorDrafts(pools.delivered).find((row) => row.slug === slug);
     if (!record) return null;
     return {
       slug,
