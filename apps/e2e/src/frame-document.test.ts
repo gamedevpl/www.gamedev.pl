@@ -172,6 +172,25 @@ describe.skipIf(!prerequisite.ok)('iframe document authorization in native Chrom
     }
   });
 
+  it('keeps global parent senders working when window is a local parameter', async () => {
+    const page = await openFixture();
+    try {
+      await render(
+        page,
+        html(
+          listen +
+            `function send(window) {
+        parent.postMessage({ns:'gdp',v:1,t:'save:hello',version:1},'*');
+      } send({});`,
+        ),
+      );
+      await expect.poll(async () => (await state(page)).accepted.length).toBe(1);
+      expect((await state(page)).accepted[0]!.data).toBe('{"secret":"current-save"}');
+    } finally {
+      await page.close();
+    }
+  });
+
   it('does not deliver an in-flight save to a self-navigation destination', async () => {
     const page = await openFixture('pending');
     const leaks: string[] = [];

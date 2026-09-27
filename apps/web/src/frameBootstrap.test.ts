@@ -74,6 +74,29 @@ describe('embedded GameKit transport compatibility', () => {
     expect(adaptGameKitMessages(code).match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(2);
   });
 
+  it('isolates lexical and var declarations inside class static blocks', () => {
+    const code = `class C {
+      static { const parent = local; parent.postMessage({}, '*'); }
+      static { parent.postMessage({}, '*'); { var parent = local; } }
+      static { parent.postMessage({}, '*'); }
+    }
+    parent.postMessage({}, '*');`;
+    const adapted = adaptGameKitMessages(code);
+    expect(adapted.match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(2);
+    expect(adapted).toContain("const parent = local; parent.postMessage({}, '*')");
+    expect(adapted).toContain("parent.postMessage({}, '*'); { var parent = local; }");
+  });
+
+  it('uses an unshadowed global receiver when window is a local parameter', () => {
+    const code = `function send(window) { parent.postMessage({}, '*'); globalThis.parent.postMessage({}, '*'); window.parent.postMessage({}, '*'); }`;
+    const adapted = adaptGameKitMessages(code);
+    expect(adapted.match(/globalThis\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(2);
+    expect(adapted).toContain("window.parent.postMessage({}, '*')");
+    expect(adaptGameKitMessages(`function send(window, globalThis) { parent.postMessage({}, '*'); }`)).toContain(
+      "parent.postMessage({}, '*')",
+    );
+  });
+
   it('bootstraps before game code, preserves CSP and head attributes, and keeps JSON inert', () => {
     const html = withFrameDocument(
       `<!doctype html><html><head data-test="yes">

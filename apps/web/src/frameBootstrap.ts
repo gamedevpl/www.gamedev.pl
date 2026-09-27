@@ -16,7 +16,7 @@ function isMember(node: unknown, object: string, property: string): boolean {
 }
 
 export function adaptGameKitMessages(code: string, module = false): string {
-  const replacements: { start: number; end: number }[] = [];
+  const replacements: { start: number; end: number; receiver: string }[] = [];
   function bindings(value: unknown, names: Set<string>): void {
     if (!value || typeof value !== 'object') return;
     const node = value as SyntaxNode;
@@ -92,8 +92,9 @@ export function adaptGameKitMessages(code: string, module = false): string {
       visit(node.body, shadowed);
       return;
     }
-    if (node.type === 'Program') hoistedNames(node, node, shadowed);
-    if (node.type === 'Program' || node.type === 'BlockStatement') lexicalNames(node.body as unknown[], shadowed);
+    if (node.type === 'Program' || node.type === 'StaticBlock') hoistedNames(node, node, shadowed);
+    if (['Program', 'BlockStatement', 'StaticBlock'].includes(node.type))
+      lexicalNames(node.body as unknown[], shadowed);
     if (node.type === 'CatchClause') bindings(node.param, shadowed);
     if (['ForStatement', 'ForInStatement', 'ForOfStatement'].includes(node.type))
       lexicalNames([node.init ?? node.left], shadowed);
@@ -117,13 +118,14 @@ export function adaptGameKitMessages(code: string, module = false): string {
       const isWindowParent =
         (isMember(object, 'window', 'parent') && !shadowed.has('window')) ||
         (isMember(object, 'globalThis', 'parent') && !shadowed.has('globalThis'));
+      const receiver = !shadowed.has('window') ? 'window' : !shadowed.has('globalThis') ? 'globalThis' : null;
       if (
         callee?.type === 'MemberExpression' &&
-        !shadowed.has('window') &&
+        receiver !== null &&
         (isParent || isWindowParent) &&
         (callee.computed ? property?.value === 'postMessage' : property?.name === 'postMessage')
       ) {
-        replacements.push({ start: callee.start, end: callee.end });
+        replacements.push({ start: callee.start, end: callee.end, receiver });
       }
     }
     for (const child of Object.values(node)) {
@@ -137,7 +139,8 @@ export function adaptGameKitMessages(code: string, module = false): string {
     return code;
   }
   for (const replacement of replacements.sort((a, b) => b.start - a.start)) {
-    code = code.slice(0, replacement.start) + 'window.__GDPL_DOCUMENT_SEND__' + code.slice(replacement.end);
+    code =
+      code.slice(0, replacement.start) + `${replacement.receiver}.__GDPL_DOCUMENT_SEND__` + code.slice(replacement.end);
   }
   return code;
 }
