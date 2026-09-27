@@ -1460,14 +1460,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
       const musicMs = Date.now() - musicStartedAt;
 
-      const read = (rel: string) => readRawBytes(`games/${slug}/${rel}`, ref);
-      if (!(await prependAudio(assetChunks, assets, manifest.bank, read))) return null;
+      const readGame = (rel: string) => readRawBytes(`games/${slug}/${rel}`, ref);
+      const bankSrc = { overrides, noRefFallback: options?.noRefFallback, read: readGame };
+      if (!(await prependAudio(assetChunks, assets, manifest.bank, bankSrc))) return null;
 
       let loaderHtml = '';
       const bakedImages = await bakeGameImageAssets(manifest.images, (relPath, name) =>
-        resolveGameImageBytes(relPath, name, overrides, options?.noRefFallback, () =>
-          readRawBytes(`games/${slug}/${relPath}`, ref),
-        ),
+        resolveGameImageBytes(relPath, name, overrides, options?.noRefFallback, () => readGame(relPath)),
       );
       if (bakedImages) {
         assetChunks.push(bakedImages.assetChunk);
