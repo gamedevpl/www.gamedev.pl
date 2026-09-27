@@ -15,7 +15,12 @@ function isMember(node: unknown, object: string, property: string): boolean {
   );
 }
 
-export function adaptGameKitMessages(code: string, module = false): string {
+export function adaptGameKitMessages(
+  code: string,
+  module = false,
+  documentBindings = new Set<string>(),
+  collectBindings = false,
+): string {
   const replacements: { start: number; end: number; receiver: string }[] = [];
   function bindings(value: unknown, names: Set<string>): void {
     if (!value || typeof value !== 'object') return;
@@ -134,7 +139,13 @@ export function adaptGameKitMessages(code: string, module = false): string {
     }
   }
   try {
-    visit(parse(code, { ecmaVersion: 'latest', sourceType: module ? 'module' : 'script' }));
+    const tree = parse(code, { ecmaVersion: 'latest', sourceType: module ? 'module' : 'script' });
+    if (collectBindings) {
+      hoistedNames(tree, tree, documentBindings);
+      lexicalNames(tree.body as unknown[], documentBindings);
+      return code;
+    }
+    visit(tree, documentBindings);
   } catch {
     return code;
   }
@@ -156,6 +167,7 @@ export function withFrameDocument(html: string, nonce: string): string {
   });
   const doc = parseHtml(compact);
   let head: DefaultTreeAdapterMap['element'] | null = null;
+  const scripts: { text: DefaultTreeAdapterMap['textNode']; module: boolean }[] = [];
   function visit(node: DefaultTreeAdapterMap['node']): void {
     if ('tagName' in node && node.tagName === 'head') head = node;
     if ('tagName' in node && node.tagName === 'script') {
@@ -165,13 +177,20 @@ export function withFrameDocument(html: string, nonce: string): string {
         (!type || ['module', 'text/javascript', 'application/javascript'].includes(type))
       ) {
         for (const child of node.childNodes) {
-          if ('value' in child) child.value = adaptGameKitMessages(child.value, type === 'module');
+          if ('value' in child) scripts.push({ text: child, module: type === 'module' });
         }
       }
     }
     if ('childNodes' in node) node.childNodes.forEach(visit);
   }
   visit(doc);
+  const documentBindings = new Set<string>();
+  for (const script of scripts) {
+    if (!script.module) adaptGameKitMessages(script.text.value, false, documentBindings, true);
+  }
+  for (const script of scripts) {
+    script.text.value = adaptGameKitMessages(script.text.value, script.module, documentBindings);
+  }
   const bootstrap = `<script>(function(){
     var nonce=${JSON.stringify(nonce).replaceAll('<', '\\u003c')},host=parent,send=host.postMessage.bind(host),channel=new MessageChannel();
     var Event=MessageEvent,dispatch=window.dispatchEvent.bind(window),post=channel.port1.postMessage.bind(channel.port1);

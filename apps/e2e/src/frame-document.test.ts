@@ -191,6 +191,24 @@ describe.skipIf(!prerequisite.ok)('iframe document authorization in native Chrom
     }
   });
 
+  it('preserves a local sender declared by a preceding classic script', async () => {
+    const page = await openFixture();
+    try {
+      await render(
+        page,
+        html(`const parent={postMessage(){window.parent.postMessage({proof:'local-sender'},'*');}};`) +
+          `<script>parent.postMessage({ns:'gdp',v:1,t:'save:hello',version:1},'*');</script>`,
+      );
+      await expect.poll(async () => (await state(page)).accepted.length).toBe(1);
+      expect(await state(page)).toMatchObject({
+        reads: 0,
+        accepted: [expect.objectContaining({ proof: 'local-sender' })],
+      });
+    } finally {
+      await page.close();
+    }
+  });
+
   it('does not deliver an in-flight save to a self-navigation destination', async () => {
     const page = await openFixture('pending');
     const leaks: string[] = [];

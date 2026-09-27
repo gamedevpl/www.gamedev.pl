@@ -97,6 +97,38 @@ describe('embedded GameKit transport compatibility', () => {
     );
   });
 
+  it('shares classic bindings across scripts without leaking module declarations', () => {
+    const output = withFrameDocument(
+      `<html><head>
+      <script>const parent = local;</script>
+      <script>parent.postMessage('local', '*'); window.parent.postMessage('global', '*');</script>
+      <script type="module">parent.postMessage('also-local', '*');</script>
+      </head></html>`,
+      'nonce',
+    );
+    expect(output).toContain("parent.postMessage('local', '*')");
+    expect(output).toContain("parent.postMessage('also-local', '*')");
+    expect(output).toContain("window.__GDPL_DOCUMENT_SEND__('global', '*')");
+    const isolated = withFrameDocument(
+      `<script type="module">const parent = local;</script>
+      <script>parent.postMessage('global', '*');</script>
+      <script type="module">parent.postMessage('module-global', '*');</script>`,
+      'nonce',
+    );
+    expect(isolated).toContain("window.__GDPL_DOCUMENT_SEND__('global', '*')");
+    expect(isolated).toContain("window.__GDPL_DOCUMENT_SEND__('module-global', '*')");
+  });
+
+  it('preserves earlier closures that later classic declarations can shadow', () => {
+    const output = withFrameDocument(
+      `<script>function send(){parent.postMessage('local', '*');}</script>
+      <script>let parent = local; send();</script>`,
+      'nonce',
+    );
+    expect(output).toContain("parent.postMessage('local', '*')");
+    expect(output).not.toContain("__GDPL_DOCUMENT_SEND__('local'");
+  });
+
   it('bootstraps before game code, preserves CSP and head attributes, and keeps JSON inert', () => {
     const html = withFrameDocument(
       `<!doctype html><html><head data-test="yes">

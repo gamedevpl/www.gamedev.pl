@@ -49,7 +49,9 @@ The iframe sandbox remains `allow-scripts allow-pointer-lock` without `allow-sam
 Older assembled GameKit versions are adapted in the browser before their document executes.
 A JavaScript parser rewrites direct global `parent.postMessage`, `window.parent.postMessage`
 and `globalThis.parent.postMessage` calls to the bootstrap send function. Comments, strings,
-JSON scripts and locally shadowed objects are preserved. Invalid scripts and unsupported
+JSON scripts and locally shadowed objects are preserved. Classic-script top-level bindings
+are collected across the document, including later declarations that earlier closures may
+observe. Module-local declarations stay isolated; modules can observe classic global bindings. Invalid scripts and unsupported
 dynamic or aliased senders get no fallback authorization. This covers both catalog lanes
 without rebuilding stored historical games or changing their committed source/media hashes.
 Baked raster data URLs are replaced with collision-free placeholders before HTML and JavaScript
