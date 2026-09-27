@@ -48,7 +48,8 @@ type NumericRange = { type: 'int' | 'number'; min: number; max: number };
 export function scrubStep(spec: NumericRange): number {
   if (spec.type === 'int') return 1;
   const span = spec.max - spec.min;
-  return span > 0 ? span / 100 : 0.01;
+  const step = Number.isFinite(span) ? span / 100 : spec.max / 100 - spec.min / 100;
+  return step > 0 ? step : 0.01;
 }
 
 // Clamps numeric scrubs; integer values stay within declared bounds.

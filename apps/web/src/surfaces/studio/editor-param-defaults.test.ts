@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampParamValue, parseEditorParams, withParamDefault } from './editorParamsScrub.js';
+import { clampParamValue, parseEditorParams, scrubStep, withParamDefault } from './editorParamsScrub.js';
 
 const label = { en: 'Value', pl: 'Wartość' };
 const valid = { type: 'number', min: 0, max: 10, default: 5, label };
@@ -47,4 +47,17 @@ it.each([
   { min: -3.5, max: -0.5, value: 0, expected: -1 },
 ])('clamps integer scrubs to legal values inside fractional bounds: %j', ({ min, max, value, expected }) => {
   expect(clampParamValue({ type: 'int', min, max }, value)).toBe(expected);
+});
+
+it.each(['number', 'int'] as const)('keeps finite %s endpoints when their span overflows', (type) => {
+  const spec = { type, min: -1e308, max: 1e308, default: 0, label };
+  const text = JSON.stringify({ params: { wide: spec } });
+  expect(parseEditorParams(text)?.params.wide).toEqual(spec);
+  expect(JSON.parse(withParamDefault(text, 'wide', 1)!).params.wide.default).toBe(1);
+});
+it('uses a finite positive step when endpoint subtraction overflows', () => {
+  expect(scrubStep({ type: 'number', min: -1e308, max: 1e308 })).toBe(2e306);
+});
+it('uses a positive step when dividing a tiny span underflows', () => {
+  expect(scrubStep({ type: 'number', min: 0, max: Number.MIN_VALUE })).toBeGreaterThan(0);
 });
