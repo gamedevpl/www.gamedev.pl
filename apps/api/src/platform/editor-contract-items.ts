@@ -30,7 +30,7 @@ import {
   validateProperties,
 } from './editor-contract-fields.js';
 
-export function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): TilemapItemSpec | null {
+function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): TilemapItemSpec | null {
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: "item" must be an object`);
     return null;
@@ -174,7 +174,7 @@ export function validateTilemapSpec(owner: string, raw: unknown, errors: string[
   return { widget: 'tilemap', grid: g, tiles, properties, constraints };
 }
 
-export function validateEntitiesSpec(owner: string, raw: unknown, errors: string[]): EntitiesItemSpec | null {
+function validateEntitiesSpec(owner: string, raw: unknown, errors: string[]): EntitiesItemSpec | null {
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: "item" must be an object`);
     return null;
@@ -206,7 +206,7 @@ export function validateEntitiesSpec(owner: string, raw: unknown, errors: string
   return { widget: 'entities', properties, constraints };
 }
 
-export function validatePathSpec(owner: string, raw: unknown, errors: string[]): PathItemSpec | null {
+function validatePathSpec(owner: string, raw: unknown, errors: string[]): PathItemSpec | null {
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: "item" must be an object`);
     return null;
@@ -254,11 +254,7 @@ export function validatePathSpec(owner: string, raw: unknown, errors: string[]):
 }
 
 // Per-level stack; top-level `layers` is one board per game.
-export function validateLayeredSpec(
-  owner: string,
-  raw: Record<string, unknown>,
-  errors: string[],
-): LayeredItemSpec | null {
+function validateLayeredSpec(owner: string, raw: Record<string, unknown>, errors: string[]): LayeredItemSpec | null {
   if (!isPlainObject(raw.layers)) {
     errors.push(`${owner}: "layers" must be an object of layer declarations`);
     return null;
@@ -286,7 +282,7 @@ export function validateLayeredSpec(
   };
 }
 
-export function validateCollectionItemSpec(owner: string, raw: unknown, errors: string[]): CollectionItemSpec | null {
+function validateCollectionItemSpec(owner: string, raw: unknown, errors: string[]): CollectionItemSpec | null {
   if (isPlainObject(raw) && raw.widget === 'entities') return validateEntitiesSpec(owner, raw, errors);
   if (isPlainObject(raw) && raw.widget === 'tilemap') return validateTilemapSpec(owner, raw, errors);
   if (isPlainObject(raw) && raw.widget === 'path') return validatePathSpec(owner, raw, errors);
@@ -298,7 +294,7 @@ export function validateCollectionItemSpec(owner: string, raw: unknown, errors: 
 }
 
 // Stacked tilemaps share one grid, so bounds and budget must agree.
-export function checkLayerGrids(owner: string, layers: Record<string, EditorLayerSpec>, errors: string[]): void {
+function checkLayerGrids(owner: string, layers: Record<string, EditorLayerSpec>, errors: string[]): void {
   const tilemaps = Object.values(layers).filter((layer): layer is TilemapLayerSpec => layer.widget === 'tilemap');
   const grids = tilemaps.map((layer) => JSON.stringify(layer.grid));
   if (grids.some((grid) => grid !== grids[0])) {
@@ -310,7 +306,7 @@ export function checkLayerGrids(owner: string, layers: Record<string, EditorLaye
   }
 }
 
-export function validateLayerSpec(owner: string, raw: unknown, errors: string[]): EditorLayerSpec | null {
+function validateLayerSpec(owner: string, raw: unknown, errors: string[]): EditorLayerSpec | null {
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: must be an object`);
     return null;
@@ -348,7 +344,7 @@ export function validateLayerSpec(owner: string, raw: unknown, errors: string[])
   return null;
 }
 
-export function validateLayerConstraints(
+function validateLayerConstraints(
   raw: unknown,
   layers: Record<string, EditorLayerSpec>,
   errors: string[],
@@ -399,3 +395,14 @@ export function validateLayerConstraints(
   }
   return result;
 }
+
+export {
+  validateTilemapSpec,
+  validateEntitiesSpec,
+  validatePathSpec,
+  validateLayeredSpec,
+  validateCollectionItemSpec,
+  checkLayerGrids,
+  validateLayerSpec,
+  validateLayerConstraints,
+};

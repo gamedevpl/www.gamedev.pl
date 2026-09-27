@@ -57,7 +57,7 @@ const MAX_GAME_ARCHIVE_BYTES = 8 * 1024 * 1024;
  * directory is source the delivery contract already knows how to validate on the way back.
  */
 function isProposableRepoPath(relative: string): boolean {
-  if (relative.startsWith('media/')) return false;
+  if (relative.startsWith('media/') || isRetiredDeliveryPath(relative)) return false;
   // `.` segments and absolute paths cannot appear in a tar entry we accepted, but the
   // check is cheap and this is the boundary that keeps a proposal inside one game.
   return !relative.includes('..') && relative.length > 0;

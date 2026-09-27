@@ -37,6 +37,8 @@ describe('editor-contract lockstep fingerprint', () => {
     const source = readLocalEditorContract(defaultReadLocalFile);
     expect(extractNamedFunction(source, 'parseEditorDefinition')).toBeTruthy();
     expect(extractNamedFunction(source, 'generateEditorContentModule')).toBeTruthy();
+    expect(extractNamedFunction(source, 'validateParams')).toBeTruthy();
+    expect(extractNamedFunction(source, 'validateLayerConstraints')).toBeTruthy();
     expect(extractNamedFunction(source, 'validateEditorContent')).toContain('content must be an object');
     expect(editorContractFingerprint(source)).toContain('function valueProblem');
     expect(editorContractFingerprint(source)).toContain('MAX_TEXT_LENGTH = 240');

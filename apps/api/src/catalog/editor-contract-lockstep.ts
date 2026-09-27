@@ -6,6 +6,8 @@ import { stripLeadingDocComment } from '../platform/games-repo-contract.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const LOCAL_EDITOR_CONTRACT_PATH = path.join(HERE, '../platform/editor-contract.ts');
+const LOCAL_FIELDS_PATH = path.join(HERE, '../platform/editor-contract-fields.ts');
+const LOCAL_ITEMS_PATH = path.join(HERE, '../platform/editor-contract-items.ts');
 const REPO_ROOT = path.join(HERE, '../../../..');
 const LOCAL_VALIDATE_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-validate.ts');
 const LOCAL_VALIDATE_REACH_PATH = path.join(REPO_ROOT, 'packages/contract/src/editor-validate-reach.ts');
@@ -161,7 +163,8 @@ export function editorContractFingerprint(source: string): string {
 
 export function readLocalEditorContract(readLocalFile: (filePath: string) => string): string {
   const api = readLocalFile(LOCAL_EDITOR_CONTRACT_PATH);
-  const extras = [LOCAL_VALIDATE_PATH, LOCAL_VALIDATE_REACH_PATH, LOCAL_KIT_PATH].map((filePath) => {
+  const sources = [LOCAL_FIELDS_PATH, LOCAL_ITEMS_PATH, LOCAL_VALIDATE_PATH, LOCAL_VALIDATE_REACH_PATH, LOCAL_KIT_PATH];
+  const extras = sources.map((filePath) => {
     const text = readLocalFile(filePath);
     return text === api ? '' : text;
   });

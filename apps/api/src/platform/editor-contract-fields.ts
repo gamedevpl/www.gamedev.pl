@@ -14,12 +14,12 @@ import {
   type PropertySpec,
 } from '@gamedevpl/contract';
 
-export const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{0,23}$/;
-export const TILE_KEY_PATTERN = /^[a-z][a-z0-9-]{0,15}$/;
-export const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
-export const PROPERTY_TYPES = ['text', 'int', 'number', 'enum', 'bool'] as const;
+const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{0,23}$/;
+const TILE_KEY_PATTERN = /^[a-z][a-z0-9-]{0,15}$/;
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+const PROPERTY_TYPES = ['text', 'int', 'number', 'enum', 'bool'] as const;
 
-export function isLabel(value: unknown): value is EditorLabel {
+function isLabel(value: unknown): value is EditorLabel {
   return (
     isPlainObject(value) &&
     Object.keys(value).length === 2 &&
@@ -32,7 +32,7 @@ export function isLabel(value: unknown): value is EditorLabel {
   );
 }
 
-export function validateProperties(owner: string, raw: unknown, errors: string[]): Record<string, PropertySpec> {
+function validateProperties(owner: string, raw: unknown, errors: string[]): Record<string, PropertySpec> {
   const out: Record<string, PropertySpec> = {};
   if (!isPlainObject(raw)) {
     errors.push(`${owner}: "properties" must be an object mapping property names to type declarations`);
@@ -92,7 +92,7 @@ export function validateProperties(owner: string, raw: unknown, errors: string[]
   return out;
 }
 
-export function validateParams(raw: unknown, errors: string[], requireDefaults: boolean): Record<string, ParamSpec> {
+function validateParams(raw: unknown, errors: string[], requireDefaults: boolean): Record<string, ParamSpec> {
   const out: Record<string, ParamSpec> = {};
   if (!isPlainObject(raw)) {
     errors.push('"params" must be an object mapping param names to declarations');
@@ -130,3 +130,13 @@ export function validateParams(raw: unknown, errors: string[], requireDefaults: 
   }
   return out;
 }
+
+export {
+  KEY_PATTERN,
+  TILE_KEY_PATTERN,
+  HEX_COLOR_PATTERN,
+  PROPERTY_TYPES,
+  isLabel,
+  validateProperties,
+  validateParams,
+};
