@@ -31,10 +31,6 @@ function mediaSupported(): boolean {
   );
 }
 
-/**
- * Captures microphone loudness on the real origin and posts `voice:state` /
- * `voice:level` into `frameRef`. Returns UI state for the theater Mic control.
- */
 export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>) {
   const frameDocument = useFrameDocument(frameRef);
   const [available, setAvailable] = useState(false);
@@ -49,7 +45,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
   const timeDomainRef = useRef<Uint8Array | null>(null);
   const rafRef = useRef<number | null>(null);
   const levelRef = useRef(0);
-
+  const acquisition = useRef(0);
   const postToGame = useCallback(
     (payload: Record<string, unknown>) => {
       postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
@@ -67,6 +63,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
   );
 
   const teardown = useCallback(() => {
+    acquisition.current++;
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -128,18 +125,20 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
     if (!contextRef.current) contextRef.current = new AC();
     if (contextRef.current.state === 'suspended') void contextRef.current.resume();
 
+    const generation = ++acquisition.current;
     publishStatus('pending');
     void navigator.mediaDevices
       .getUserMedia({ audio: true, video: false })
       .then((mediaStream) => {
         if (
+          generation !== acquisition.current ||
           statusRef.current !== 'pending' ||
           document.hidden ||
           !availableRef.current ||
           isGameFrameNavigatedAway(frameRef.current)
         ) {
           for (const track of mediaStream.getTracks()) track.stop();
-          if (statusRef.current === 'pending' && document.hidden) stopMic();
+          if (generation === acquisition.current && document.hidden) stopMic();
           return;
         }
         streamRef.current = mediaStream;
@@ -161,6 +160,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
         rafRef.current = requestAnimationFrame(pumpLevels);
       })
       .catch(() => {
+        if (generation !== acquisition.current) return;
         teardown();
         publishStatus('denied');
       });
