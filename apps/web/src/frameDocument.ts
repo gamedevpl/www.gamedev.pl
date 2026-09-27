@@ -34,11 +34,12 @@ export function bindFrameDocumentMessage(win: Window): (event: MessageEvent) => 
   return (event) => state !== undefined && documents.get(win) === state && isFrameDocumentMessage(event, win);
 }
 
-export function bindFrameDocumentReply(win: Window | null): (payload: unknown) => void {
+export function bindFrameDocumentReply(win: Window | null): (payload: unknown) => boolean {
   const state = win && documents.get(win);
   return (payload) => {
-    if (!win || !state || documents.get(win) !== state || !state.port) return;
+    if (!win || !state || documents.get(win) !== state || !state.port) return false;
     state.port.postMessage(payload);
+    return true;
   };
 }
 

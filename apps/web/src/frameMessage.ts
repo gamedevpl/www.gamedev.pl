@@ -9,6 +9,7 @@ import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'rea
 
 // Frames whose current document is not one this app loaded.
 const navigatedAway = new WeakSet<Window>();
+const preparedFrames = new WeakSet<HTMLIFrameElement>();
 
 function frameWindow(frame: HTMLIFrameElement | Window | null | undefined): Window | null {
   if (!frame) return null;
@@ -35,12 +36,13 @@ export function markGameFrameNavigatedAway(frame: HTMLIFrameElement): void {
 // A load the host did request: bridges may answer this document again.
 export function markGameFrameLoadedByHost(frame: HTMLIFrameElement): void {
   if (frame.contentWindow) navigatedAway.delete(frame.contentWindow);
-  notifyFrameDocument(frame, false);
+  if (!preparedFrames.delete(frame)) notifyFrameDocument(frame, false);
 }
 
 export function prepareGameFrameDocument(frame: HTMLIFrameElement, nonce: string): () => void {
   const win = frame.contentWindow;
   if (!win) return () => {};
+  preparedFrames.add(frame);
   const release = registerFrameDocument(win, nonce, (event) => {
     if (event.data.type === 'gdpl-document-retired') markGameFrameNavigatedAway(frame);
     else window.dispatchEvent(event);
@@ -87,9 +89,9 @@ export function isFromGameFrame(event: MessageEvent, frame: HTMLIFrameElement | 
   return win != null && event.source === win && !isGameFrameNavigatedAway(win) && isFrameDocumentMessage(event, win);
 }
 
-export function postToGameFrame(frame: HTMLIFrameElement | null, payload: unknown): void {
-  if (!frame || isGameFrameNavigatedAway(frame)) return;
-  bindFrameDocumentReply(frame.contentWindow)(payload);
+export function postToGameFrame(frame: HTMLIFrameElement | null, payload: unknown): boolean {
+  if (!frame || isGameFrameNavigatedAway(frame)) return false;
+  return bindFrameDocumentReply(frame.contentWindow)(payload);
 }
 
 export function bindGameFrameReply(frame: HTMLIFrameElement | null): (payload: unknown) => void {

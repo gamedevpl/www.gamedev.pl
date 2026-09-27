@@ -200,6 +200,36 @@ describe.skipIf(!prerequisite.ok)('iframe document authorization in native Chrom
     }
   });
 
+  it('answers a replacement hello started before its delayed host load', async () => {
+    const page = await openFixture('pending');
+    let unblock!: () => void;
+    await page.route('**/slow', async (route) => {
+      await new Promise<void>((resolve) => {
+        unblock = resolve;
+      });
+      await route.fulfill({ contentType: 'image/png', body: '' });
+    });
+    try {
+      await render(page, html(''));
+      await expect.poll(async () => (await state(page)).loads).toBe(1);
+      await render(page, html(listen + hello) + '<img src="/slow">');
+      await expect.poll(async () => (await state(page)).reads).toBe(1);
+      await expect.poll(() => Boolean(unblock)).toBe(true);
+      expect((await state(page)).loads).toBe(1);
+      unblock();
+      await expect.poll(async () => (await state(page)).loads).toBe(2);
+      await page.evaluate(() => {
+        (window as unknown as { bridgeFixture: { release: (value: string) => void } }).bridgeFixture.release(
+          'replacement-save',
+        );
+      });
+      await expect.poll(async () => (await state(page)).accepted.length).toBe(1);
+      expect((await state(page)).accepted[0]!.data).toBe('{"secret":"replacement-save"}');
+    } finally {
+      await page.close();
+    }
+  });
+
   it('binds a delayed save to its initiating document across host replacement', async () => {
     const page = await openFixture('pending');
     try {

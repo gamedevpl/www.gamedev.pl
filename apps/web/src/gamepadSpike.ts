@@ -167,8 +167,7 @@ export function useGamepadSpike(frameRef: MutableRefObject<HTMLIFrameElement | n
       post: (frame) => {
         const target = frameRef.current?.contentWindow;
         if (!target) return false;
-        postToGameFrame(frameRef.current, frame);
-        return true;
+        return postToGameFrame(frameRef.current, frame);
       },
     });
   }, [frameRef]);

@@ -11,6 +11,7 @@ import {
   isGameFrameNavigatedAway,
   markGameFrameLoadedByHost,
   prepareGameFrameDocument,
+  postToGameFrame,
 } from './frameMessage.js';
 
 function message(win: Window, data: unknown, ports: MessagePort[] = [], origin = 'null') {
@@ -33,6 +34,15 @@ function documentFixture(nonce: string) {
 }
 
 describe('document capabilities', () => {
+  it('reports undelivered messages until the private port is ready', () => {
+    const { frame, win, port, release } = documentFixture('expected');
+    expect(postToGameFrame(frame, { held: true })).toBe(false);
+    window.dispatchEvent(message(win, { type: 'gdpl-document-ready', documentNonce: 'expected' }, [port]));
+    expect(postToGameFrame(frame, { held: true })).toBe(true);
+    expect(port.postMessage).toHaveBeenCalledWith({ held: true });
+    release();
+    frame.remove();
+  });
   it('retires resources only on an authenticated document lifecycle message', () => {
     const { frame, win, port, release } = documentFixture('expected');
     const close = prepareGameFrameDocument(frame, 'expected');

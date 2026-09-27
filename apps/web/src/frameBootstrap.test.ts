@@ -41,6 +41,17 @@ describe('embedded GameKit transport compatibility', () => {
     expect(adapted.match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(1);
   });
 
+  it('counts only bound names in destructuring, defaults, and imports', () => {
+    const code = `import { parent as node } from 'sdk';
+      const { parent: other, x = parent } = value;
+      function sender({ window: local }, [entry = globalThis]) { parent.postMessage({}, '*'); }
+      parent.postMessage({}, '*');`;
+    expect(adaptGameKitMessages(code, true).match(/window\.__GDPL_DOCUMENT_SEND__/g)).toHaveLength(2);
+    expect(adaptGameKitMessages("const { x: parent } = value; parent.postMessage({}, '*');")).not.toContain(
+      '__GDPL_DOCUMENT_SEND__',
+    );
+  });
+
   it('bootstraps before game code, preserves CSP and head attributes, and keeps JSON inert', () => {
     const html = withFrameDocument(
       `<!doctype html><html><head data-test="yes">

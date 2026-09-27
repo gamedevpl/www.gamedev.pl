@@ -3,7 +3,6 @@ import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
 import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
-import { useFrameDocument } from './frameLifecycle.js';
 
 /**
  * The shell half of durable per-player progress (docs/persistent-world-plan.md P1).
@@ -69,7 +68,6 @@ export function parseGameSaveMessage(raw: unknown): SaveRequest | null {
  * which is the one failure mode of a save system nobody forgives.
  */
 export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
-  const frameDocument = useFrameDocument(frameRef);
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
@@ -183,5 +181,5 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         void putGameSave(slug, last.data, last.version).catch(() => undefined);
       }
     };
-  }, [frameRef, slug, frameDocument]);
+  }, [frameRef, slug]);
 }

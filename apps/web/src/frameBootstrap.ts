@@ -20,13 +20,30 @@ export function adaptGameKitMessages(code: string, module = false): string {
   function bindings(value: unknown, names: Set<string>): void {
     if (!value || typeof value !== 'object') return;
     const node = value as SyntaxNode;
-    if (node.type === 'Identifier' && ['window', 'parent', 'globalThis'].includes(node.name as string))
-      names.add(node.name as string);
-    else
-      for (const child of Object.values(node)) {
-        if (Array.isArray(child)) child.forEach((value) => bindings(value, names));
-        else if (child && typeof child === 'object') bindings(child, names);
-      }
+    switch (node.type) {
+      case 'Identifier':
+        if (['window', 'parent', 'globalThis'].includes(node.name as string)) names.add(node.name as string);
+        break;
+      case 'ObjectPattern':
+        (node.properties as SyntaxNode[]).forEach((property) =>
+          bindings(property.type === 'RestElement' ? property.argument : property.value, names),
+        );
+        break;
+      case 'ArrayPattern':
+        (node.elements as unknown[]).forEach((element) => bindings(element, names));
+        break;
+      case 'AssignmentPattern':
+        bindings(node.left, names);
+        break;
+      case 'RestElement':
+        bindings(node.argument, names);
+        break;
+      case 'ImportSpecifier':
+      case 'ImportDefaultSpecifier':
+      case 'ImportNamespaceSpecifier':
+        bindings(node.local, names);
+        break;
+    }
   }
   function localNames(value: unknown, root: unknown, names: Set<string>): void {
     if (!value || typeof value !== 'object') return;
@@ -36,8 +53,9 @@ export function adaptGameKitMessages(code: string, module = false): string {
     if (value !== root && functionNode) return;
     if (functionNode && value === root) bindings(node.id, names);
     if (node.type === 'VariableDeclarator') bindings(node.id, names);
-    if (node.type === 'ImportDeclaration') bindings(node.specifiers, names);
-    if (functionNode) bindings(node.params, names);
+    if (node.type === 'ImportDeclaration')
+      (node.specifiers as unknown[]).forEach((specifier) => bindings(specifier, names));
+    if (functionNode) (node.params as unknown[]).forEach((param) => bindings(param, names));
     for (const child of Object.values(node)) {
       if (Array.isArray(child)) child.forEach((value) => localNames(value, root, names));
       else if (child && typeof child === 'object') localNames(child, root, names);

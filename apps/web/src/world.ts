@@ -1,5 +1,4 @@
 import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
-import { useFrameDocument } from './frameLifecycle.js';
 import { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
@@ -70,29 +69,28 @@ export function parseWorldMessage(raw: unknown): WorldRequest | null {
  * hold up every other.
  */
 export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
-  const frameDocument = useFrameDocument(frameRef);
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    let reply: ((payload: unknown) => void) | null = null;
     /**
      * Newest queued value per key, and which keys have a request in flight. Both owned
      * by this effect run: the effect is keyed on the slug, so anything surviving into
      * the next run would be one game's writes aimed at the next game's world.
      */
-    const pending = new Map<string, Record<string, unknown> | null>();
+    const pending = new Map<
+      string,
+      { fields: Record<string, unknown> | null; reply: (payload: Record<string, unknown>) => void }
+    >();
     const inFlight = new Set<string>();
 
-    function postToGame(payload: Record<string, unknown>) {
-      // Nothing is sent to a frame we have already torn down — but the write itself
-      // still completes; see the drain loop.
-      if (cancelled) return;
-      // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
-      // the game in turn only accepts messages whose source is its parent.
-      reply?.({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
+    function replyToDocument() {
+      const reply = bindGameFrameReply(frameRef.current);
+      return (payload: Record<string, unknown>) => {
+        if (!cancelled) reply({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
+      };
     }
 
-    async function sendState() {
+    async function sendState(postToGame: (payload: Record<string, unknown>) => void) {
       try {
         const world = await fetchWorld(slug!);
         if (cancelled) return;
@@ -131,12 +129,13 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
           const next = pending.get(key)!;
           pending.delete(key);
           try {
-            const result = next === null ? await deleteWorldEntry(slug!, key) : await putWorldEntry(slug!, key, next);
-            postToGame({ t: 'commons:ack', ok: result.ok, key, ...(result.error ? { error: result.error } : {}) });
+            const result =
+              next.fields === null ? await deleteWorldEntry(slug!, key) : await putWorldEntry(slug!, key, next.fields);
+            next.reply({ t: 'commons:ack', ok: result.ok, key, ...(result.error ? { error: result.error } : {}) });
           } catch (error) {
             // Reported, never thrown at the game: a write that failed must not be able
             // to break a session that is otherwise going fine.
-            postToGame({
+            next.reply({
               t: 'commons:ack',
               ok: false,
               key,
@@ -153,16 +152,18 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not read or write this world.
       if (!isFromGameFrame(event, frameRef.current)) return;
-      reply ??= bindGameFrameReply(frameRef.current);
       const message = parseWorldMessage(event.data);
       if (!message) return;
 
       if (message.t === 'commons:hello' || message.t === 'commons:list') {
-        await sendState();
+        await sendState(replyToDocument());
         return;
       }
 
-      pending.set(message.key, message.t === 'commons:put' ? message.fields : null);
+      pending.set(message.key, {
+        fields: message.t === 'commons:put' ? message.fields : null,
+        reply: replyToDocument(),
+      });
       void drainKey(message.key);
     }
 
@@ -176,12 +177,12 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
       //
       // Only for keys with no drain running. If one is, it owns that key's queue and
       // will send it in order; firing here as well would race two writes for one entry.
-      for (const [key, fields] of [...pending]) {
+      for (const [key, { fields }] of [...pending]) {
         if (inFlight.has(key)) continue;
         pending.delete(key);
         const send = fields === null ? deleteWorldEntry(slug, key) : putWorldEntry(slug, key, fields);
         void send.catch(() => undefined);
       }
     };
-  }, [frameRef, slug, frameDocument]);
+  }, [frameRef, slug]);
 }

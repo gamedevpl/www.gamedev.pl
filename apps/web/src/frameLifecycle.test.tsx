@@ -3,7 +3,8 @@ import { documentMessage, replaceTestFrameDocument } from './test-utils/frameMes
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import { markGameFrameNavigatedAway, markGameFrameLoadedByHost } from './frameMessage.js';
+import { markGameFrameNavigatedAway, markGameFrameLoadedByHost, prepareGameFrameDocument } from './frameMessage.js';
+import { useFrameDocument } from './frameLifecycle.js';
 import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useSensingBridge } from './sensing.js';
 import { usePresenceBridge } from './presence.js';
@@ -132,5 +133,39 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
     container.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  }
+});
+
+it('counts preparation and its requested load as one document epoch', () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  function Harness() {
+    const ref = useRef<HTMLIFrameElement | null>(null);
+    const epoch = useFrameDocument(ref);
+    return <iframe ref={ref} data-epoch={epoch} />;
+  }
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  let release = () => {};
+  try {
+    act(() => root.render(<Harness />));
+    const frame = container.querySelector('iframe')!;
+    act(() => {
+      release = prepareGameFrameDocument(frame, 'first');
+    });
+    expect(frame.dataset.epoch).toBe('1');
+    act(() => markGameFrameLoadedByHost(frame));
+    expect(frame.dataset.epoch).toBe('1');
+    act(() => {
+      release();
+      release = prepareGameFrameDocument(frame, 'second');
+    });
+    expect(frame.dataset.epoch).toBe('2');
+    act(() => markGameFrameLoadedByHost(frame));
+    expect(frame.dataset.epoch).toBe('2');
+  } finally {
+    release();
+    act(() => root.unmount());
+    container.remove();
   }
 });
