@@ -12,7 +12,7 @@ export interface ParsedGameManifest {
   sounds: string[];
   music: string | null;
   musicTracks: string[];
-  // Per-game clips billed as media; mirrors games-repo tools/lib/audio-bank.ts.
+  // Per-game clips; mirrors games-repo tools/lib/audio-bank.ts.
   bank: Record<string, string>;
   images: ImageManifest;
 }
