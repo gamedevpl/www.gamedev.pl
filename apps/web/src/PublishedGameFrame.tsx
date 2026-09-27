@@ -16,8 +16,8 @@ import './remix-host.css';
 
 type PublishedGameFrameProps = {
   slug: string;
+  reviewVersion?: string;
   title: string;
-  // Agent executor for reviewers; absent means the mode does not exist here.
   agentBridge?: string | null;
   // True only while the executor answer is still in flight.
   agentBridgePending?: boolean;
@@ -65,6 +65,7 @@ type PublishedGameFrameProps = {
  */
 export function PublishedGameFrame({
   slug,
+  reviewVersion,
   title,
   frameRef,
   embed,
@@ -85,7 +86,7 @@ export function PublishedGameFrame({
   const { t } = useTranslation();
   const [gameTitle, setGameTitle] = useState<string>(title);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const { game, progress, error } = usePublishedGameFetch(slug, loadAttempt);
+  const { game, progress, error } = usePublishedGameFetch(slug, loadAttempt, reviewVersion);
   const html = game?.html ?? null;
   /**
    * A remix swaps the whole document — the only way new code can enter an

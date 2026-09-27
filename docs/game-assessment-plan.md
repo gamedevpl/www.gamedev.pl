@@ -121,12 +121,19 @@ optionally the `gameVersion` the fix is expected to be judged against and a `rea
 pair opens (or re-opens) a `ReReviewRequest`. Only that reviewer sees that slug surface
 again — the general sweep pool and every other reviewer are unaffected. The reviewer's
 next verdict on that slug resolves the request and stamps the assessment's `gameVersion`
-(from the submission if given, else the request's) so a later look can tell "judged this
+(from the client or request for catalog games; from the server candidate for creator games)
+so a later look can tell "judged this
 exact build" apart from "judged an older one." The **previous** assessment is archived,
 not overwritten — `GET /api/admin/assessments/history` reads it back — so the record of
 what a reviewer said the first time survives a second pass. `gameVersion` is informational
-only for the catalog (not tracked per-commit today); creator drafts pass their
-`deliveredVersion`.
+only for catalog entries without a creator candidate (not tracked per-commit today).
+Creator queues and reviewer playback
+are pinned to `previewVersion ?? deliveredVersion`; the API rejects missing or mismatched
+versions with 409. Publication counts only assessments matching its delivered candidate,
+so older or unversioned verdicts require another review.
+When a slug has several jobs, the queue, playback, and assessment use the same eligible
+shared draft, ordered by creation time and job ID. A newer abandoned or unshared sibling
+cannot replace the queued draft.
 
 ### Resolving an assessment
 

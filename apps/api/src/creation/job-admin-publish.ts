@@ -51,18 +51,18 @@ export function readPublishOverride(
 }
 
 export async function resolveEditorialPublish(opts: {
-  editorialClearance?: (slug: string) => Promise<EditorialPublishCounts>;
+  editorialClearance?: (slug: string, version: string) => Promise<EditorialPublishCounts>;
   ownerUid: string;
   slug: string;
+  version?: string;
   body: unknown;
 }): Promise<EditorialPublishResult> {
   const parsed = readPublishOverride(opts.body);
   if ('error' in parsed) return { status: 400, body: { error: parsed.error } };
-  // Policy at composition root, not a route invariant.
   if (!opts.editorialClearance || opts.ownerUid.startsWith(BOT_UID_PREFIX)) {
     return { reason: 'approved' };
   }
-  const clearance = await opts.editorialClearance(opts.slug);
+  const clearance = await opts.editorialClearance(opts.slug, opts.version ?? '');
   if (clearance.decision !== 'clear' && !parsed.override) {
     return {
       status: 409,

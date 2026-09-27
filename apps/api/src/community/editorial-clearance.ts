@@ -17,8 +17,14 @@ export interface EditorialClearance {
   weakOrBad: Record<ChecklistFacet, number>;
 }
 
-export function decideEditorialClearance(rows: readonly GameAssessment[], slug: string): EditorialClearance {
-  const agg = aggregateCreatorAssessments(rows).find((row) => row.slug === slug);
+export function decideEditorialClearance(
+  rows: readonly GameAssessment[],
+  slug: string,
+  version: string,
+): EditorialClearance {
+  const agg = aggregateCreatorAssessments(rows.filter((row) => row.gameVersion === version)).find(
+    (row) => row.slug === slug,
+  );
   if (!agg) return emptyPending();
   if (hasEditorialCutConsensus(agg)) return fromAggregate(agg, 'blocked');
   if (agg.keep >= 1) return fromAggregate(agg, 'clear');

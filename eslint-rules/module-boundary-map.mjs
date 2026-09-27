@@ -48,6 +48,13 @@ const DEFAULT_BUCKET = 'platform';
 const FILE_BUCKET = {
   'invite-fragment-navigation': 'platform',
   'historical-preview-takedown': 'community',
+  'review-preview-loader': 'platform',
+  'review-play': 'community',
+  'review-candidate': 'community',
+  'review-candidate-refresh': 'community',
+  'review-game-source': 'community',
+  'review-version-binding': 'community',
+  'review-version-roundtrip': 'community',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
@@ -550,6 +557,7 @@ const FILE_BUCKET = {
   suggestions: 'community',
   'editorial-suggestions': 'community',
   'editorial-clearance': 'community',
+  'editorial-clearance-version': 'community',
   // "Who reviews this game" and "may the platform act on my behalf" are proposal/
   // suggestion routing rules, not catalog or creation business logic.
   'owner-of-record': 'community',
