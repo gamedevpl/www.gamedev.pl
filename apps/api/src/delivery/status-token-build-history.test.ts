@@ -90,3 +90,43 @@ it.each(['anonymous', 'former-owner'].flatMap((viewer) => [false, true].map((pen
     else expect(member.json().previewGate).toMatchObject({ green: false, ranAt: baseManifest.previewGate.ranAt });
   },
 );
+
+it.each(['anonymous', 'former-owner'].flatMap((viewer) => [false, true].map((pending) => [viewer, pending] as const)))(
+  'keeps exact-job preview metadata outside the recent history page: %s (pending: %s)',
+  async (viewer, pending) => {
+    const store = new InMemoryStore();
+    const { at } = await gameWithHistory(store);
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, SENDER, 'Comet Courier');
+    await store.setSubmissionSlug(jobId, 'comet-courier');
+    await store.setSubmissionPreviewVersion(jobId, 'own-preview');
+    const base = stubGamesStore();
+    const original = (await base.listVersions!('comet-courier', { limit: 8 }))[0]!;
+    const gateProgress = { lane: 'preview' as const, stage: 'capture' as const, index: 7, total: 12, at };
+    const manifest = {
+      ...original,
+      version: 'own-preview',
+      jobId,
+      ...(pending ? { previewGate: undefined, gateProgress } : {}),
+    };
+    const app = await createTransferApp(store, apps, undefined, {
+      ...base,
+      getManifest: async () => manifest,
+      listVersions: async () =>
+        Array.from({ length: 8 }, (_, i) => ({ ...original, version: `proposal-${i}`, jobId: jobId + i + 1 })),
+    } as GamesStore);
+    await handOver(app, store, SENDER, RECIPIENT, at);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, SECRET)}`,
+      ...(viewer === 'former-owner' ? { headers: session(SENDER) } : {}),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().recentBuilds).toEqual([]);
+    expect(response.json().progress.headSha).toBe('own-preview');
+    expect(response.json().preview).toEqual({ slug: 'comet-courier' });
+    if (pending) expect(response.json().gateProgress).toEqual(gateProgress);
+    else expect(response.json().previewGate).toMatchObject({ green: false, ranAt: original.previewGate.ranAt });
+    expect(response.json().previewGate?.report).toBeUndefined();
+  },
+);
