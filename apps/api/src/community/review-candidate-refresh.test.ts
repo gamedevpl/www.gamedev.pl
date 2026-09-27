@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { refreshReviewCandidates } from './review-candidate.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
@@ -172,6 +173,48 @@ it.each([true, false])('plays a preview-only candidate only with its green previ
     const response = await app.inject({ method: 'GET', url: '/api/review/games/public-game?version=v2', headers });
     expect(response.statusCode).toBe(green ? 200 : 409);
     if (green) expect(response.json().html).toBe('<title>preview-v2</title>');
+  } finally {
+    await app.close();
+  }
+});
+
+it('refreshes 500 displayed rows through one bulk delivered read', async () => {
+  const store = new InMemoryStore();
+  const single = vi.spyOn(store, 'listSubmissionsBySlug');
+  const bulk = vi.spyOn(store, 'listSubmissionsWithDelivery');
+  const items = Array.from({ length: 500 }, (_, i) => ({
+    slug: `game-${i}`,
+    title: `Game ${i}`,
+    source: 'catalog' as const,
+    creatorHandle: null,
+    genre: null,
+    jobId: null,
+    media: null,
+  }));
+  expect(await refreshReviewCandidates(store, items)).toEqual(items);
+  expect(bulk).toHaveBeenCalledTimes(1);
+  expect(single).not.toHaveBeenCalled();
+});
+it('refreshes the candidate title when an eligible sibling replaces it', async () => {
+  const { app, headers, store } = await setup('creator');
+  try {
+    await app.inject({ method: 'GET', url: '/api/review/queue', headers });
+    await store.createSubmission(2, 'owner', 'Replacement title');
+    await store.setSubmissionSlug(2, 'public-game');
+    await store.setSubmissionDeliveredVersion(2, 'v2');
+    await store.setDraftShared(2, new Date().toISOString());
+    await store.setSubmissionAbandoned(1, new Date().toISOString());
+    const response = await app.inject({ method: 'GET', url: '/api/review/queue', headers });
+    const item = response.json().items[0];
+    expect(item).toMatchObject({ jobId: 2, gameVersion: 'v2', title: 'Replacement title' });
+    const assessment = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers,
+      payload: { ...item, verdict: 'keep', note: 'Replacement reviewed.', checklist },
+    });
+    expect(assessment.statusCode).toBe(200);
+    expect((await store.listGameAssessmentsBySlug('public-game'))[0].title).toBe('Replacement title');
   } finally {
     await app.close();
   }

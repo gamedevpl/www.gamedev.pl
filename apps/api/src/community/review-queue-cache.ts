@@ -5,7 +5,7 @@ import { rememberBounded } from '../platform/bounded-map.js';
 import type { ReviewSweep, Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_SWEEP_GAMES } from './review-sweep.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
-import { reviewableCreatorDrafts } from './review-candidate.js';
+import { reviewableCreatorDrafts, titleFromSubmission } from './review-candidate.js';
 export { isReviewableCreatorDraft } from './review-candidate.js';
 
 export interface ReviewCatalogMedia {
@@ -32,12 +32,6 @@ export interface ReviewQueueItem {
   media: ReviewCatalogMedia | null;
   // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
-}
-
-function titleFromSubmission(record: SubmissionRecord): string {
-  const titled = record.title.trim();
-  if (titled) return titled;
-  return record.slug ?? `issue-${record.jobId}`;
 }
 
 export interface ReviewQueueCacheDeps {

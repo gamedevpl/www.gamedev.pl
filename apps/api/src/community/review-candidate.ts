@@ -18,19 +18,28 @@ export async function loadReviewCandidate(store: Store, slug: string): Promise<S
   return reviewableCreatorDrafts(siblings)[0] ?? null;
 }
 
+export function titleFromSubmission(record: SubmissionRecord): string {
+  return record.title.trim() || record.slug || `issue-${record.jobId}`;
+}
+
 export async function refreshReviewCandidates(store: Store, items: ReviewQueueItem[]): Promise<ReviewQueueItem[]> {
-  const refreshed = await Promise.all(
-    items.map(async (item) => {
-      const candidate = await loadReviewCandidate(store, item.slug);
-      if (item.source === 'catalog') return candidate ? null : item;
-      return candidate
-        ? {
+  if (!items.length) return [];
+  const candidates = new Map<string, SubmissionRecord>();
+  for (const candidate of reviewableCreatorDrafts(await store.listSubmissionsWithDelivery())) {
+    if (!candidates.has(candidate.slug!)) candidates.set(candidate.slug!, candidate);
+  }
+  return items.flatMap((item) => {
+    const candidate = candidates.get(item.slug);
+    if (item.source === 'catalog') return candidate ? [] : [item];
+    return candidate
+      ? [
+          {
             ...item,
+            title: titleFromSubmission(candidate),
             jobId: candidate.jobId,
             gameVersion: candidate.previewVersion ?? candidate.deliveredVersion ?? null,
-          }
-        : null;
-    }),
-  );
-  return refreshed.filter((item): item is ReviewQueueItem => item !== null);
+          },
+        ]
+      : [];
+  });
 }
