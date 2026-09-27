@@ -25,16 +25,23 @@ describe('new-game editor delivery contract', () => {
 
   it('accepts compiled JSON and rejects authoring source alone', () => {
     expect(
-      validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{}' }], 'preview', false, true),
-    ).toHaveLength(FILES.length + 1);
-    expect(() =>
       validateSourceUpload(
-        [...FILES, { path: 'EDITOR.ts', content: 'export default {}' }],
+        [
+          ...FILES,
+          {
+            path: 'EDITOR.json',
+            content:
+              '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+          },
+        ],
         'preview',
         false,
         true,
       ),
-    ).toThrow(/EDITOR\.json is required/);
+    ).toHaveLength(FILES.length + 1);
+    expect(() =>
+      validateSourceUpload([...FILES, { path: 'EDITOR.ts', content: 'export default {}' }], 'preview', false, true),
+    ).toThrow(/compiled EDITOR.json only/);
 
     try {
       validateSourceUpload(FILES, 'preview', false, true);
@@ -44,11 +51,18 @@ describe('new-game editor delivery contract', () => {
   });
 
   it('requires the content document paired with a fresh v2 declaration', () => {
-    const v2Files = [...FILES, { path: 'EDITOR.json', content: '{"version":2}' }];
+    const v2Files = [
+      ...FILES,
+      {
+        path: 'EDITOR.json',
+        content: JSON.stringify({
+          version: 2,
+          params: { speed: { type: 'int', min: 1, max: 10, label: { en: 'Speed', pl: 'Tempo' } } },
+        }),
+      },
+    ];
 
-    expect(() => validateSourceUpload(v2Files, 'preview', false, true)).toThrow(
-      /EDITOR\.content\.json is required/,
-    );
+    expect(() => validateSourceUpload(v2Files, 'preview', false, true)).toThrow(/EDITOR\.content\.json is required/);
     try {
       validateSourceUpload(v2Files, 'preview', false, true);
     } catch (error) {
@@ -57,7 +71,7 @@ describe('new-game editor delivery contract', () => {
 
     expect(
       validateSourceUpload(
-        [...v2Files, { path: 'EDITOR.content.json', content: '{"params":{}}' }],
+        [...v2Files, { path: 'EDITOR.content.json', content: '{"params":{"speed":3}}' }],
         'preview',
         false,
         true,
@@ -65,13 +79,25 @@ describe('new-game editor delivery contract', () => {
     ).toHaveLength(v2Files.length + 1);
   });
 
-  it('keeps v1 and malformed declarations on their existing gate-validation path', () => {
+  it('validates compiled definitions as data at upload', () => {
     expect(
-      validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{"version":1}' }], 'preview', false, true),
+      validateSourceUpload(
+        [
+          ...FILES,
+          {
+            path: 'EDITOR.json',
+            content:
+              '{"version":1,"params":{"speed":{"type":"int","min":1,"max":10,"default":3,"label":{"en":"Speed","pl":"Tempo"}}}}',
+          },
+        ],
+        'preview',
+        false,
+        true,
+      ),
     ).toHaveLength(FILES.length + 1);
-    expect(
+    expect(() =>
       validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{' }], 'preview', false, true),
-    ).toHaveLength(FILES.length + 1);
+    ).toThrow(/EDITOR.json/);
   });
 
   it('keeps legacy revision uploads compatible by default', () => {

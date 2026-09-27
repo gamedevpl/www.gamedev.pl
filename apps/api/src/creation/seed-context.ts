@@ -1,17 +1,8 @@
-// What the seed generator learns from: the catalog and published game sources.
-//
-// No embedding index: the catalog is one-good-game-per-genre, so the whole
-// `slug — title — genre` list fits in the picker's prompt for a few hundred tokens.
-//
-// Sources come from the games-repo tarball, cached across dispatches — one request
-// instead of a thousand, on a token whose budget is shared with serving.
-
 import { fetchGamesRepoArchive, type GamesRepoArchive } from '../platform/games-repo-archive.js';
 
 /** Text-only: sources, specs, manifests, and the catalog. No media. */
 const TEXT_EXTENSIONS = ['.ts', '.json', '.md', '.css', '.html'];
 
-// Mirrors DEFAULT_STARTER in the games repo and agent-build-examples.json.
 export const SEED_SCAFFOLD_SLUG = 'block-cascade';
 
 /**
@@ -30,7 +21,16 @@ function seedInclude(relativePath: string): boolean {
 }
 
 /** Order matters: this is the shape a game has, and the order the model sees it in. */
-const GAME_TOP_LEVEL_FILES = ['SPEC.md', 'GAME.json', 'EDITOR.json', 'EDITOR.ts', 'EDITOR.content.json', 'game.ts', 'index.html', 'style.css', 'ACCEPTANCE.json'];
+const GAME_TOP_LEVEL_FILES = [
+  'SPEC.md',
+  'GAME.json',
+  'EDITOR.json',
+  'EDITOR.content.json',
+  'game.ts',
+  'index.html',
+  'style.css',
+  'ACCEPTANCE.json',
+];
 
 /** One reference file this big is a generated blob, not something to learn a style from. */
 const MAX_REFERENCE_FILE_BYTES = 80_000;
@@ -41,7 +41,6 @@ const CONTEXT_SCAFFOLD_BUDGET = 60_000;
 export interface SeedContext {
   /** `slug — title — genre` per published game, the picker's whole world. */
   catalogIndex: string;
-  // Empty means SEED_SCAFFOLD_SLUG is missing; the caller omits the section.
   scaffold: string;
   /** GameKit declarations for validation, never rendered into a prompt. */
   kitDeclaration: string | null;
@@ -71,7 +70,6 @@ export interface SeedFileIndex {
   read(path: string): string | null;
 }
 
-// catalogEntries overrides the archive's dropped catalog.json when given.
 export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogEntry[] | null): SeedContext | null {
   let entries: CatalogEntry[];
   if (catalogEntries !== undefined) {
@@ -93,8 +91,6 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
       typeof entry.slug === 'string' &&
       typeof entry.title === 'string' &&
       typeof entry.genre === 'string' &&
-      // A disabled or archived game is not a model to copy: it is either broken or
-      // withdrawn, and either way it should not shape a new game's first draft.
       (entry.status === undefined || entry.status === 'published'),
   );
   if (published.length === 0) return null;

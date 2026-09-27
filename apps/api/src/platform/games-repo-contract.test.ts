@@ -159,7 +159,6 @@ describe('delivery contract (website half)', () => {
       'PLAYTEST.json',
       'AGENT.json',
       'EDITOR.json',
-      'EDITOR.ts',
       'EDITOR.content.json',
       'index.html',
       'game.ts',

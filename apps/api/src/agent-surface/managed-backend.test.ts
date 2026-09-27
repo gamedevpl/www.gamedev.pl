@@ -127,7 +127,7 @@ describe('managed backend', () => {
     });
 
     await backend.dispatch(
-      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }], references: [] } }),
+      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }, { path: 'EDITOR.ts', content: '' }], references: [] } }),
     );
 
     expect(started).toHaveLength(1);
@@ -142,7 +142,7 @@ describe('managed backend', () => {
     const backend = createManagedBackend({ provider, tools: TOOLS });
 
     await backend.dispatch(
-      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }], references: [] } }),
+      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }, { path: 'EDITOR.ts', content: '' }], references: [] } }),
     );
 
     expect(started).toHaveLength(1);

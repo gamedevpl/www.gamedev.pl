@@ -18,7 +18,7 @@ import { retryStorageWrite } from './storage-write-retry.js';
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
-import { deliveryPathRefusal, type DeliveryMode } from '@gamedevpl/contract';
+import { deliveryPathRefusal, isRetiredDeliveryPath, type DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { isPublishableMode } from '../platform/publication-state.js';
 import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
@@ -50,6 +50,7 @@ import {
 } from './source-link-check.js';
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 import { missingFreshEditorFile } from './editor-upload-requirements.js';
+import { editorUploadProblem } from './editor-upload-validation.js';
 
 export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 
@@ -181,9 +182,10 @@ export function validateSourceUpload(
   if (missingEditorFile) {
     throw new InvalidUploadError(missingEditorFile.message, undefined, [missingEditorFile.path]);
   }
+  const editorProblem = editorUploadProblem(files);
+  if (editorProblem) throw new InvalidUploadError(editorProblem);
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
-  // A blank index.html is absent, same as getGameSources treats it.
   const indexHtml = files.find((file) => file.path.trim() === 'index.html');
   const hasIndexHtml = !!indexHtml?.content.trim();
 
@@ -881,10 +883,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       assertSlug(input.slug);
       const mode: DeliveryMode =
         input.mode === 'preview' ? 'preview' : input.mode === 'proposal' ? 'proposal' : 'publish';
+      // Server-side copies drop retired legacy paths.
+      const candidateFiles = input.origin
+        ? input.files.filter((file) => !isRetiredDeliveryPath(file.path.trim()))
+        : input.files;
       // A proposal is a sealed candidate — it must carry everything a publish carries,
       // because the reviewer judges a full gate run, not a compile.
       const files = validateSourceUpload(
-        input.files,
+        candidateFiles,
         mode === 'proposal' ? 'publish' : mode,
         input.origin === 'seal',
         input.requireCompiledEditor === true,
@@ -1016,7 +1022,9 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async deleteStagedSourceFile(input) {
       assertSlug(input.slug);
-      const path = assertDeliverableSourcePath(input.path);
+      const path = isRetiredDeliveryPath(input.path.trim())
+        ? input.path.trim()
+        : assertDeliverableSourcePath(input.path);
       const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
 
@@ -1148,7 +1156,11 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getManifest(slug, version) {
       const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-      return body ? parseVersionManifest(body) : null;
+      if (!body) return null;
+      // Readers copy sourceFiles forward; retired legacy paths never reach them.
+      const manifest = parseVersionManifest(body);
+      if (!Array.isArray(manifest.sourceFiles)) return manifest;
+      return { ...manifest, sourceFiles: manifest.sourceFiles.filter((file) => !isRetiredDeliveryPath(file)) };
     },
 
     async setVersionSummary(slug, version, summary) {

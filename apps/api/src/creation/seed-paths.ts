@@ -8,7 +8,6 @@ const TOP_LEVEL_ALLOWED = new Set([
   'style.css',
   'ACCEPTANCE.json',
   'EDITOR.json',
-  'EDITOR.ts',
   'EDITOR.content.json',
 ]);
 

@@ -13,7 +13,6 @@ export const DELIVERY_FIXED_FILES = [
   'PLAYTEST.json',
   'AGENT.json',
   'EDITOR.json',
-  'EDITOR.ts',
   'EDITOR.content.json',
   // index.html and style.css are generated from GAME.json when absent.
   'index.html',
@@ -21,6 +20,17 @@ export const DELIVERY_FIXED_FILES = [
   'style.css',
   'sim.ts',
 ] as const;
+
+// Formerly deliverable, now refused; overlays drop them from bases.
+export const RETIRED_DELIVERY_PATHS = ['EDITOR.ts'] as const;
+
+export function isRetiredDeliveryPath(path: string): boolean {
+  return (RETIRED_DELIVERY_PATHS as readonly string[]).includes(path);
+}
+
+export function withoutRetiredPaths<T extends { path: string }>(files: readonly T[]): T[] {
+  return files.filter((file) => !isRetiredDeliveryPath(file.path));
+}
 
 // Own modules; string form keeps `.source` equal to games-repo JSON.
 export const DELIVERY_EXTRA_MODULE_PATTERN = new RegExp('^[a-z0-9][a-z0-9/-]{0,60}\\.ts$');
@@ -55,6 +65,7 @@ const ALLOWED_SOURCES_HINT = `${DELIVERY_FIXED_FILES.join(', ')}, your own .ts m
 // Refusal for config-, executable- or media-shaped paths, else null.
 export function forbiddenDeliveryPathReason(path: string): string | null {
   const basename = path.split('/').pop() ?? path;
+  if (isRetiredDeliveryPath(path)) return `path not deliverable: ${path}. Deliver compiled EDITOR.json only.`;
   if (path.startsWith('.') || path.split('/').some((segment) => segment.startsWith('.'))) {
     return (
       `path not deliverable: ${path}. Dotfiles and hidden paths are config/executable-shaped — ` +

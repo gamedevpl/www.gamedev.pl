@@ -8,7 +8,12 @@ export async function materializeCandidate(
   manifest: VersionManifest,
   gameDir: string,
 ): Promise<void> {
+  if (manifest.sourceFiles.some((file) => path.posix.normalize(file.replaceAll('\\', '/')) === 'EDITOR.ts')) {
+    throw new Error('Untrusted deliveries must use compiled EDITOR.json; EDITOR.ts is refused');
+  }
   await rm(gameDir, { recursive: true, force: true });
+  await mkdir(gameDir, { recursive: true });
+  await writeFile(path.join(gameDir, '.untrusted-delivery'), '', 'utf8');
 
   for (const relative of manifest.sourceFiles) {
     const content = await store.getSourceFile(manifest.slug, manifest.version, relative);

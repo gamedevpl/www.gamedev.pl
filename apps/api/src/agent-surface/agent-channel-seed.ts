@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, withoutRetiredPaths } from '@gamedevpl/contract';
 import { seedPayload } from './seed-status.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -67,7 +67,7 @@ export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: Agent
           available: true,
           status: seed.seedStatus,
           notice: seed.seedNotice,
-          files: record.seed.files,
+          files: withoutRetiredPaths(record.seed.files),
           references: record.seed.references,
           notes: record.seed.notes ?? null,
         });
