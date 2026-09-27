@@ -451,6 +451,8 @@ const FILE_BUCKET = {
 
   // delivery: staging, games-store, gate
   'build-status': 'delivery',
+  'status-receipt-builds': 'delivery',
+  'status-token-build-history': 'delivery',
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
   'draft-share-gate': 'delivery',

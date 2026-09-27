@@ -18,6 +18,7 @@ import type {
   RecentBuild,
   SubmissionStatusResponse,
 } from '../platform/submission-status.js';
+import { receiptBuilds, finishReceiptStatus, refreshReceiptGateProgress } from './status-receipt-builds.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import type {
   BuildPreviewSummary,
@@ -373,9 +374,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     // State is a receipt the token carries; what was said is not.
     const viewerOwns = Boolean(
       store &&
-        record &&
-        viewerUid &&
-        (record.slug ? access && canActOnGame(access, viewerUid, 'read') : record.ownerUid === viewerUid),
+      record &&
+      viewerUid &&
+      (record.slug ? access && canActOnGame(access, viewerUid, 'read') : record.ownerUid === viewerUid),
     );
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
@@ -395,9 +396,11 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
         : {}),
       // Authored prose, not state: same viewer test as events.
       ...(!viewerOwns && status.previewGate ? { previewGate: withoutGateReport(status.previewGate) } : {}),
-      ...(!viewerOwns && status.recentBuilds ? { recentBuilds: status.recentBuilds.map(withoutAuthoredDetail) } : {}),
+      ...(!viewerOwns && status.recentBuilds
+        ? { recentBuilds: receiptBuilds(status.recentBuilds, jobId, record).map(withoutAuthoredDetail) }
+        : {}),
     };
-    if (!record) return next;
+    if (!record) return finishReceiptStatus(next, record, viewerOwns);
 
     // Must clear stale keys too — a resumed agent drops agentEndedAt/stall.
     if (record.lastAgentSignalAt) next.lastAgentSignalAt = record.lastAgentSignalAt;
@@ -436,20 +439,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (floor === undefined) delete next.pollAfterMs;
     else next.pollAfterMs = floor;
 
-    // Gate milestones — refresh outside the 60s cache.
-    const playableVersion = record.previewVersion ?? record.deliveredVersion;
-    if (record.slug && playableVersion && gamesStore?.getManifest) {
-      try {
-        const manifest = await gamesStore.getManifest(record.slug, playableVersion);
-        if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
-          next.gateProgress = manifest.gateProgress;
-        } else {
-          delete next.gateProgress;
-        }
-      } catch {
-        // Keep cached.
-      }
-    }
+    const trustedReceiptVersion = await refreshReceiptGateProgress(next, record, gamesStore, jobId);
 
     // Soft: sibling history must not 500 the live thread poll.
     if (viewerOwns) {
@@ -478,7 +468,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       }
     }
 
-    return next;
+    return finishReceiptStatus(next, record, viewerOwns, trustedReceiptVersion);
   }
 
   function invalidateEvents(jobId: number): void {
