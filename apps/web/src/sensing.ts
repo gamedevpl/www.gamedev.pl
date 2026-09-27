@@ -255,7 +255,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
         },
       })
       .then((stream) => {
-        acquiringRef.current = false;
+        if (gen === acquireGenRef.current) acquiringRef.current = false;
         // Theater closed, feature dropped, tab hidden, or a newer stop invalidated us.
         if (
           gen !== acquireGenRef.current ||
@@ -273,7 +273,7 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       })
       // Denied / no camera: the game keeps its stand-in. Do not surface an error.
       .catch(() => {
-        acquiringRef.current = false;
+        if (gen === acquireGenRef.current) acquiringRef.current = false;
       });
   }, [postState]);
 

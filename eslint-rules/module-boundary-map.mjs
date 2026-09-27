@@ -55,6 +55,7 @@ const FILE_BUCKET = {
   'review-game-source': 'community',
   'review-version-binding': 'community',
   'review-version-roundtrip': 'community',
+  'camera-acquisition-generation': 'platform',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
