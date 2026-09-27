@@ -58,11 +58,12 @@ describe('scopeToFilter', () => {
     expect(scopeToFilter('kit')).toBe('corpus: ANY("kit-api","module","vertical","digest")');
     expect(scopeToFilter('editor')).toBe('corpus: ANY("editor")');
     expect(scopeToFilter('examples')).toBe('corpus: ANY("example")');
-    expect(scopeToFilter('docs')).toBe('corpus: ANY("doc","skill","spec")');
-    expect(scopeToFilter(undefined)).toBeUndefined();
+    expect(scopeToFilter('docs')).toBe('corpus: ANY("doc","skill")');
+    expect(scopeToFilter(undefined)).toBe(
+      'corpus: ANY("kit-api","module","vertical","digest","editor","example","doc","skill")',
+    );
   });
 });
-
 describe('looksLikeEmptyAnswer', () => {
   it('flags the known "no answer" boilerplate', () => {
     expect(looksLikeEmptyAnswer('This cannot be answered from the given sources.')).toBe(true);
@@ -119,7 +120,6 @@ describe('queryKnowledge — mode=answer', () => {
     const body = {
       answer: {
         ...oneRef.answer,
-        // One chunk cited twice, as answer synthesis does for multi-sentence support.
         references: [...oneRef.answer.references, ...oneRef.answer.references],
       },
     };
