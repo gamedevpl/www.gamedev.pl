@@ -54,7 +54,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 
 | Tool                                 | What it does                            |             |
 | ------------------------------------ | --------------------------------------- | ----------- |
-| `create_game`                        | Create a game                           | write       |
+| `create_game`                        | Create a game                           | destructive |
 | `list_account_games`                 | List games on this account              | read        |
 | `get_game_access`                    | Read current role and members           | read        |
 | `propose_game_transfer`              | Propose a transfer for Studio confirm   | write       |
@@ -97,11 +97,12 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `get_transcript`                     | Read the creator conversation           | read        |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
-`readOnlyHint`, `destructive` is `destructiveHint`. Nine tools are destructive, and the
+`readOnlyHint`, `destructive` is `destructiveHint`. Eleven tools are destructive, and the
 protocol's opposite of destructive is _additive_, not "deletes" — a client may skip its
 approval prompt for anything marked non-destructive, so anything that consumes or
 overwrites is marked honestly even when nothing is erased. What each one actually does:
 
+- `create_game` consumes a capped daily creation allowance;
 - `stage_source_file` overwrites the same path if staged again;
 - `patch_source_file` can remove lines;
 - `delete_source_file` and `clear_staged_sources` delete staged files;
@@ -110,6 +111,7 @@ overwrites is marked honestly even when nothing is erased. What each one actuall
   that decides what publishes;
 - `report_progress` sends a persistent creator-thread message;
 - `end` can send a closing message and acknowledge creator messages;
+- `suggest_next_round` posts a persistent proposal in the creator thread;
 - `ack_inbox` makes creator messages stop appearing.
 
 The staging tools touch scratch space, which is undelivered by definition. The others
