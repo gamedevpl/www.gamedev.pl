@@ -215,15 +215,16 @@ export async function registerReviewRoutes(
     const uid = request.user!.uid;
     // One row per slug per reviewer, so size is the count.
     const done = await assessedSlugsFor(uid);
-    const targeted = await refreshReviewCandidates(store, (await targetedQueueItems(uid, sourceFilter)).items);
+    const targeted = (await targetedQueueItems(uid, sourceFilter)).items.slice(0, MAX_QUEUE);
 
     const open = await openReviewSweep();
     if (!open || open.status === 'paused') {
+      const currentTargeted = await refreshReviewCandidates(store, targeted);
       return {
         source: sourceFilter,
-        remaining: targeted.length,
+        remaining: currentTargeted.length,
         assessed: done.size,
-        items: targeted,
+        items: currentTargeted,
         sweep: open
           ? {
               id: open.id,
@@ -232,7 +233,8 @@ export async function registerReviewRoutes(
               released: effectiveReleasedCount(open, now()),
             }
           : null,
-        emptyReason: targeted.length > 0 ? null : open ? ('sweep_paused' as const) : ('no_active_sweep' as const),
+        emptyReason:
+          currentTargeted.length > 0 ? null : open ? ('sweep_paused' as const) : ('no_active_sweep' as const),
       };
     }
 

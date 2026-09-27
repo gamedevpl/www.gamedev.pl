@@ -21,8 +21,8 @@ export async function loadReviewCandidate(store: Store, slug: string): Promise<S
 export async function refreshReviewCandidates(store: Store, items: ReviewQueueItem[]): Promise<ReviewQueueItem[]> {
   const refreshed = await Promise.all(
     items.map(async (item) => {
-      if (item.source !== 'creator') return item;
       const candidate = await loadReviewCandidate(store, item.slug);
+      if (item.source === 'catalog') return candidate ? null : item;
       return candidate
         ? {
             ...item,

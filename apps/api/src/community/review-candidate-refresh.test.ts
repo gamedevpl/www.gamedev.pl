@@ -131,3 +131,27 @@ it.each([false, true])(
     }
   },
 );
+
+it.each([false, true])(
+  'hides cached catalog rows when a live creator candidate appears (targeted: %s)',
+  async (targeted) => {
+    const { app, headers, store } = await setup('unshared', targeted);
+    try {
+      await store.updateReviewSweep('sweep', { source: 'all' });
+      const first = await app.inject({ method: 'GET', url: '/api/review/queue', headers });
+      expect(first.json().items[0]).toMatchObject({ source: 'catalog' });
+      await store.setDraftShared(1, new Date().toISOString());
+      const refreshed = await app.inject({ method: 'GET', url: '/api/review/queue', headers });
+      expect(refreshed.json().items).toEqual([]);
+      const stale = await app.inject({
+        method: 'POST',
+        url: '/api/review/assessments',
+        headers,
+        payload: { slug: 'public-game', source: 'catalog', verdict: 'keep', note: 'Old public version.', checklist },
+      });
+      expect(stale.statusCode).toBe(409);
+    } finally {
+      await app.close();
+    }
+  },
+);
