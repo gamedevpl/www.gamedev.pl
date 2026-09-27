@@ -1,3 +1,4 @@
+import { acknowledgeHandoff } from './creation/builder-handoff.js';
 import type { BuilderHandoffAckInput, BuilderHandoffOutcome } from './creation/builder-handoff-ack.js';
 import { withImprovementAdmission, abandonImprovement } from './creation/improvement-admission.js';
 import { stillBooting } from './delivery/status-poll-floor.js';
@@ -732,31 +733,7 @@ export async function registerSubmissionRoutes(
 
   // Acks a pending handoff and starts the target builder.
   async function acknowledgeBuilderHandoff(input: BuilderHandoffAckInput): Promise<BuilderHandoffOutcome> {
-    if (!store) return { started: false, reason: 'not_configured' };
-    const current = await store.getSubmission(input.jobId);
-    if (!current?.builderHandoff) return { started: false, reason: 'handoff_not_pending' };
-    const acknowledged = await store.acknowledgeBuilderHandoff(
-      input.jobId,
-      input.acknowledgedAt,
-      input.roundGeneration,
-    );
-    if (!acknowledged) return { started: false, reason: 'handoff_already_acknowledged' };
-    await input.finalize?.();
-    const outcome = await resumeBuild({
-      jobId: input.jobId,
-      feedback: current?.spec ?? `Continue building "${current?.title ?? 'this game'}" for gamedev.pl.`,
-      locale: current?.locale ?? 'en',
-      log: input.log,
-      builder: acknowledged.to,
-      preserveRoundBudget: true,
-      transition: {
-        by: 'creator',
-        reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
-      },
-    });
-    if (outcome.started) await store.clearBuilderHandoff(input.jobId);
-    invalidateStatusCache(input.jobId);
-    return outcome;
+    return acknowledgeHandoff(input, { store, resumeBuild, invalidateStatusCache });
   }
 
   /**

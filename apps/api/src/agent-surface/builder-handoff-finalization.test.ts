@@ -84,3 +84,30 @@ it('cannot acknowledge a new handoff after takeover while the old end request wa
     await app.close();
   }
 });
+
+it.each(['inbox', 'summary'] as const)(
+  'continues a claimed handoff after a transient %s finalization failure',
+  async (failed) => {
+    const { store, app, headers } = await setup();
+    const message = await store.appendCreatorMessage(7, 'Continue the build');
+    if (failed === 'inbox')
+      vi.spyOn(store, 'markCreatorMessagesDelivered').mockRejectedValueOnce(new Error('temporary storage failure'));
+    else vi.spyOn(store, 'appendBuildEvent').mockRejectedValueOnce(new Error('temporary storage failure'));
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/end',
+        headers,
+        payload: { summary: 'Handing over.', ackInboxIds: [message.id] },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ accepted: true, handoffAcknowledged: true });
+      expect((await store.getSubmission(7))?.roundGeneration).toBe(2);
+      expect((await store.getSubmission(7))?.builderHandoff).toBeUndefined();
+      expect((await store.listBuildEvents(7)).filter((event) => event.kind === 'done')).toEqual([]);
+      expect(await store.listPendingCreatorMessages(7)).toHaveLength(failed === 'inbox' ? 1 : 0);
+    } finally {
+      await app.close();
+    }
+  },
+);
