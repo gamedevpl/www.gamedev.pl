@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 
 import { act, type MutableRefObject } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -61,7 +62,6 @@ describe('controller bridge boundary', () => {
   let mountedFrameRef: MutableRefObject<HTMLIFrameElement | null>;
 
   function mount() {
-    // Real, so a load is dispatchable; detached, so none fires alone.
     const frame = document.createElement('iframe');
     Object.defineProperty(frame, 'contentWindow', { value: gameWindow });
     mountedFrameRef = { current: frame };
@@ -78,8 +78,7 @@ describe('controller bridge boundary', () => {
   }
 
   function send(data: Record<string, unknown>, source = gameWindow, origin = 'null') {
-    const event = new MessageEvent('message', { data, origin });
-    Object.defineProperty(event, 'source', { value: source });
+    const event = documentMessage('message', { source: source, data, origin });
     act(() => window.dispatchEvent(event));
   }
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage, replaceTestFrameDocument } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
@@ -82,7 +83,7 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const send = (t: string, fields = {}) =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t, ...fields },
@@ -100,7 +101,10 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
       send('presence:here', { col: 1, row: 2 });
     });
     expect(sockets).toHaveLength(1);
-    await act(async () => markGameFrameLoadedByHost(frame));
+    await act(async () => {
+      markGameFrameLoadedByHost(frame);
+      replaceTestFrameDocument(frame.contentWindow!);
+    });
     if (!pending) {
       expect(voice.live).toBe(true);
       expect(camera.backdrop.live).toBe(true);
@@ -117,7 +121,10 @@ it.each([false, true])('retires resources across navigation, pending=%s', async 
     expect(camera.backdrop.engaged).toBe(false);
     expect(camera.backdrop.live).toBe(false);
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
-    await act(async () => markGameFrameLoadedByHost(frame));
+    await act(async () => {
+      markGameFrameLoadedByHost(frame);
+      replaceTestFrameDocument(frame.contentWindow!);
+    });
     await act(async () => send('voice:hello'));
     expect(voice.available).toBe(true);
   } finally {

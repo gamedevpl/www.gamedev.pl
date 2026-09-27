@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage, replaceTestFrameDocument } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
@@ -50,7 +51,7 @@ it.each([false, true])('withdraws before replacement joins, pending beat: %s', a
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const send = (t: string) =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t, col: 1, row: 2 },
@@ -61,7 +62,10 @@ it.each([false, true])('withdraws before replacement joins, pending beat: %s', a
       send('presence:here');
     });
     await act(async () => markGameFrameNavigatedAway(frame));
-    await act(async () => markGameFrameLoadedByHost(frame));
+    await act(async () => {
+      markGameFrameLoadedByHost(frame);
+      replaceTestFrameDocument(frame.contentWindow!);
+    });
     await act(async () => {
       send('presence:hello');
       send('presence:here');

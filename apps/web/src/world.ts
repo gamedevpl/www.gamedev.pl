@@ -1,4 +1,5 @@
-import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
+import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
+import { useFrameDocument } from './frameLifecycle.js';
 import { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
@@ -69,9 +70,11 @@ export function parseWorldMessage(raw: unknown): WorldRequest | null {
  * hold up every other.
  */
 export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
+  const frameDocument = useFrameDocument(frameRef);
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
+    let reply: ((payload: unknown) => void) | null = null;
     /**
      * Newest queued value per key, and which keys have a request in flight. Both owned
      * by this effect run: the effect is keyed on the slug, so anything surviving into
@@ -86,7 +89,7 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
       if (cancelled) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
-      postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
+      reply?.({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload });
     }
 
     async function sendState() {
@@ -150,6 +153,7 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
       // Pin to this theater's frame: any other window posting `gdp` traffic is not the
       // game we are serving, and must not read or write this world.
       if (!isFromGameFrame(event, frameRef.current)) return;
+      reply ??= bindGameFrameReply(frameRef.current);
       const message = parseWorldMessage(event.data);
       if (!message) return;
 
@@ -179,5 +183,5 @@ export function useWorldBridge(frameRef: MutableRefObject<HTMLIFrameElement | nu
         void send.catch(() => undefined);
       }
     };
-  }, [frameRef, slug]);
+  }, [frameRef, slug, frameDocument]);
 }

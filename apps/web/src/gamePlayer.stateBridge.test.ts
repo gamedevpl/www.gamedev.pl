@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
-
 import { describe, expect, it, vi } from 'vitest';
 import { requestStateRestore, requestStateSnapshot } from './gamePlayer.js';
-import { dispatchFromFrame } from './test-utils/frameMessage.js';
+import { dispatchFromFrame, messageFromFrame } from './test-utils/frameMessage.js';
 
 function makeFrame(): { frame: HTMLIFrameElement; posted: Array<Record<string, unknown>> } {
   const frame = document.createElement('iframe');
@@ -10,6 +9,7 @@ function makeFrame(): { frame: HTMLIFrameElement; posted: Array<Record<string, u
   Object.defineProperty(frame, 'contentWindow', {
     value: { postMessage: vi.fn((message: Record<string, unknown>) => posted.push(message)) },
   });
+  messageFromFrame(frame.contentWindow!, {});
   return { frame, posted };
 }
 

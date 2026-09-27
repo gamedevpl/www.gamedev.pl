@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-
+import { documentMessage } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -111,7 +111,7 @@ describe('useVoiceMeterBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(documentMessage('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame };
   }

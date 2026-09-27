@@ -4,19 +4,13 @@ import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './tel
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
+import { bindFrameDocumentMessage } from './frameDocument.js';
 
 export { embedGameHtml } from '@gamedevpl/contract';
 const HOST = 'gdpl-host';
 const PLAYER = 'gdpl-player';
 
-/**
- * Sends one host message into an embedded game frame.
- *
- * The bridge's contract (`pause`, `resume`, `setSound`, `capture`, `hello`,
- * `snapshotState`, `restoreState`) is useful to callers that want none of the state the
- * hooks below keep — the floating live preview wants to mute and freeze a frame it never
- * subscribes to. Exported because the envelope tag lives only in this file.
- */
+// Sends only through the active document’s private channel.
 export function postGameHostMessage(frame: HTMLIFrameElement | null, message: Record<string, unknown>): void {
   postToGameFrame(frame, { source: HOST, ...message });
 }
@@ -31,6 +25,7 @@ function awaitBridgeReply<T>(
 ): Promise<T> {
   const contentWindow = frame?.contentWindow;
   if (!contentWindow) return Promise.resolve(fallback);
+  const fromDocument = bindFrameDocumentMessage(contentWindow);
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', onMessage);
@@ -38,6 +33,7 @@ function awaitBridgeReply<T>(
     }, timeoutMs);
     function onMessage(event: MessageEvent) {
       if (!isFromGameFrame(event, contentWindow)) return;
+      if (!fromDocument(event)) return;
       const data = event.data as { source?: string; type?: string } | null;
       if (!data || data.source !== PLAYER || data.type !== type) return;
       window.clearTimeout(timer);

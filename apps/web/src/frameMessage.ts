@@ -1,4 +1,10 @@
 import { notifyFrameDocument } from './frameLifecycle.js';
+import {
+  bindFrameDocumentReply,
+  isFrameDocumentMessage,
+  registerFrameDocument,
+  retireFrameDocument,
+} from './frameDocument.js';
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react';
 
 // Frames whose current document is not one this app loaded.
@@ -19,7 +25,10 @@ export function isGameFrameNavigatedAway(frame: HTMLIFrameElement | Window | nul
 
 // A load the host never requested: the game navigated itself.
 export function markGameFrameNavigatedAway(frame: HTMLIFrameElement): void {
-  if (frame.contentWindow) navigatedAway.add(frame.contentWindow);
+  if (frame.contentWindow) {
+    navigatedAway.add(frame.contentWindow);
+    retireFrameDocument(frame.contentWindow);
+  }
   notifyFrameDocument(frame, true);
 }
 
@@ -27,6 +36,17 @@ export function markGameFrameNavigatedAway(frame: HTMLIFrameElement): void {
 export function markGameFrameLoadedByHost(frame: HTMLIFrameElement): void {
   if (frame.contentWindow) navigatedAway.delete(frame.contentWindow);
   notifyFrameDocument(frame, false);
+}
+
+export function prepareGameFrameDocument(frame: HTMLIFrameElement, nonce: string): () => void {
+  const win = frame.contentWindow;
+  if (!win) return () => {};
+  const release = registerFrameDocument(win, nonce, (event) => {
+    if (event.data.type === 'gdpl-document-retired') markGameFrameNavigatedAway(frame);
+    else window.dispatchEvent(event);
+  });
+  notifyFrameDocument(frame, true);
+  return release;
 }
 
 // Returns onLoad and key; `source` is the srcdoc or src.
@@ -64,10 +84,18 @@ export function isFromGameFrame(event: MessageEvent, frame: HTMLIFrameElement | 
   if (event.origin !== 'null') return false;
   const win = frameWindow(frame);
   // The WindowProxy survives navigation, so source identity alone is not enough.
-  return win != null && event.source === win && !isGameFrameNavigatedAway(win);
+  return win != null && event.source === win && !isGameFrameNavigatedAway(win) && isFrameDocumentMessage(event, win);
 }
 
 export function postToGameFrame(frame: HTMLIFrameElement | null, payload: unknown): void {
   if (!frame || isGameFrameNavigatedAway(frame)) return;
-  frame.contentWindow?.postMessage(payload, '*');
+  bindFrameDocumentReply(frame.contentWindow)(payload);
+}
+
+export function bindGameFrameReply(frame: HTMLIFrameElement | null): (payload: unknown) => void {
+  const win = frame?.contentWindow ?? null;
+  const reply = bindFrameDocumentReply(win);
+  return (payload) => {
+    if (!isGameFrameNavigatedAway(win)) reply(payload);
+  };
 }

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -47,7 +48,7 @@ it.each(['resolved', 'rejected'] as const)(
     vi.spyOn(source, 'postMessage').mockImplementation(() => {});
     act(() =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           source,
           origin: 'null',
           data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'sensing:hello', features: ['backdrop'] },

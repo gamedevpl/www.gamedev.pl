@@ -623,7 +623,7 @@
     "apps/web/src/GameDetailPage.test.tsx": 181,
     "apps/web/src/GameDetailPage.tsx": 179,
     "apps/web/src/GameFrame.sandbox.test.ts": 90,
-    "apps/web/src/GameFrame.tsx": 106,
+    "apps/web/src/GameFrame.tsx": 89,
     "apps/web/src/GameHealthView.test.tsx": 351,
     "apps/web/src/GameHealthView.tsx": 324,
     "apps/web/src/gamepadSpike.test.ts": 193,

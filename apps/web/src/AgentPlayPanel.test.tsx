@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { POLICY_API_HELP } from './agentPolicy.js';
-import { dispatchFromFrame } from './test-utils/frameMessage.js';
+import { dispatchFromFrame, messageFromFrame } from './test-utils/frameMessage.js';
 
 type Posted = Record<string, unknown>;
 
@@ -26,6 +26,7 @@ function fakeFrame(): HTMLIFrameElement {
       postMessage: (message: Posted) => posted.push(message),
     },
   });
+  messageFromFrame(frame.contentWindow!, {});
   return frame;
 }
 

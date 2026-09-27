@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -43,7 +44,7 @@ class FakeSocket {
 
   deliver(payload: Record<string, unknown>) {
     this.onmessage?.(
-      new MessageEvent('message', { origin: 'null', data: JSON.stringify({ v: ZONE_PROTOCOL_VERSION, ...payload }) }),
+      documentMessage('message', { origin: 'null', data: JSON.stringify({ v: ZONE_PROTOCOL_VERSION, ...payload }) }),
     );
   }
 
@@ -104,7 +105,7 @@ describe('useZoneBridge', () => {
     }) as typeof gameWindow.postMessage);
 
     const fromGame = (payload: Record<string, unknown>) => {
-      window.dispatchEvent(new MessageEvent('message', { origin: 'null', data: frame(payload), source: gameWindow }));
+      window.dispatchEvent(documentMessage('message', { origin: 'null', data: frame(payload), source: gameWindow }));
     };
     return { fromGame, gameWindow };
   }
@@ -263,7 +264,7 @@ describe('useZoneBridge', () => {
   it('ignores traffic from any window that is not the game frame', async () => {
     const { socket } = await connected();
     window.dispatchEvent(
-      new MessageEvent('message', { origin: 'null', data: frame({ t: 'zone:send', k: 'move', d: 'n' }) }),
+      documentMessage('message', { origin: 'null', data: frame({ t: 'zone:send', k: 'move', d: 'n' }) }),
     );
 
     await new Promise((resolve) => setTimeout(resolve, 10));

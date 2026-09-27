@@ -52,7 +52,7 @@ one-liners do not count as prose words.
 ## Cost-effective cleanup
 
 1. **Opportunistic** — any PR that already edits a file shrinks its comments, then
-   `npm run comment-prose -- --write`.
+   `npm run comment-prose -- <path> --write`.
 2. **Hot-path first** — files agents re-read most (`apps/api/src/platform/app.ts`, submissions,
    Studio / MCP). Cleaning those cuts token spend fastest.
 3. **Mechanical batches** — one module (or one heavy file) per PR; comment-only diffs.

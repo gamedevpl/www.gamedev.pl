@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage, messageFromFrame } from './test-utils/frameMessage.js';
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -67,6 +68,7 @@ afterEach(() => {
 const frameWindow = { postMessage: () => {} } as unknown as Window;
 const frame = document.createElement('iframe');
 Object.defineProperty(frame, 'contentWindow', { value: frameWindow });
+messageFromFrame(frameWindow, {});
 const frameRef = { current: frame };
 
 function panel(props: { initialRequest?: string; theaterChromeHidden?: boolean; session?: object } = {}) {
@@ -407,6 +409,7 @@ describe('RemixPanel', () => {
     const focusFrameRef = {
       current: { focus: frameFocus, contentWindow: { focus: contentFocus, postMessage: () => {} } },
     } as unknown as React.MutableRefObject<HTMLIFrameElement | null>;
+    messageFromFrame(focusFrameRef.current!.contentWindow!, {});
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
       params: null,
@@ -492,6 +495,7 @@ describe('RemixPanel', () => {
     const frameRef = {
       current: { contentWindow: { postMessage } },
     } as unknown as React.MutableRefObject<HTMLIFrameElement | null>;
+    messageFromFrame(frameRef.current!.contentWindow!, {});
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
       params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
@@ -546,6 +550,7 @@ describe('RemixPanel', () => {
     const frameRef = {
       current: { contentWindow: { postMessage } },
     } as unknown as React.MutableRefObject<HTMLIFrameElement | null>;
+    messageFromFrame(frameRef.current!.contentWindow!, {});
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
       params: null,
@@ -695,14 +700,11 @@ describe('RemixPanel', () => {
     // The frame reports its uncaught error over the same channel play telemetry
     // uses; the panel is listening rather than leaving the player to notice.
     await act(async () => {
-      const event = new MessageEvent('message', {
+      const event = documentMessage('message', {
+        source: frameWindow,
+        origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
-      // jsdom will not take a plain object as `source`/`origin` through the
-      // constructor, and the panel checks both — an opaque-origin frame is the
-      // only thing it listens to.
-      Object.defineProperty(event, 'source', { value: frameWindow });
-      Object.defineProperty(event, 'origin', { value: 'null' });
       window.dispatchEvent(event);
     });
 
@@ -751,11 +753,11 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
 
     await act(async () => {
-      const event = new MessageEvent('message', {
+      const event = documentMessage('message', {
+        source: frameWindow,
+        origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
-      Object.defineProperty(event, 'source', { value: frameWindow });
-      Object.defineProperty(event, 'origin', { value: 'null' });
       window.dispatchEvent(event);
     });
 
@@ -885,11 +887,11 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-bubble-undo')).not.toBeNull();
 
     await act(async () => {
-      const event = new MessageEvent('message', {
+      const event = documentMessage('message', {
+        source: frameWindow,
+        origin: 'null',
         data: { source: 'gdpl-player', type: 'error', message: 'boom' },
       });
-      Object.defineProperty(event, 'source', { value: frameWindow });
-      Object.defineProperty(event, 'origin', { value: 'null' });
       window.dispatchEvent(event);
     });
 

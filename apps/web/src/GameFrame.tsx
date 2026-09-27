@@ -1,49 +1,21 @@
-import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import i18n from './i18n/index.js';
-import { useHostLoadTracking } from './frameMessage.js';
+import { prepareGameFrameDocument, useHostLoadTracking } from './frameMessage.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
+import { withFrameDocument } from './frameBootstrap.js';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
 
-/**
- * `frameRef` lets a multiplayer host reach this iframe's contentWindow to relay
- * controller input over postMessage. Single-player callers omit it and nothing
- * about the frame changes — the sandbox attribute is identical either way.
- */
 type GameFrameProps = GameFrameSource & {
   frameRef?: MutableRefObject<HTMLIFrameElement | null>;
   // When shown in the app's game player, inject the bridge that hides the game's
   // own title/description/sound chrome and relays sound control to the header.
   embed?: boolean;
-  /** Skip stealing keyboard focus on load/srcDoc swap, and drop the frame out of the
-   * tab order. Defaults to true. Studio's watch posture sets this false: the frame is
-   * already pointer-inert there, and a build landing mid-poll must not yank focus out
-   * of whatever the creator is typing into. */
   autoFocus?: boolean;
   // Agent executor, served to reviewers only; absent means no mode.
   agentBridge?: string | null;
 };
 
-/**
- * Runs a generated game inside a sandboxed iframe. `allow-scripts` with NO
- * `allow-same-origin` puts the code in an opaque origin — it can't reach this
- * app's DOM, storage, or cookies. That isolation is the safety boundary for
- * arbitrary generated code (the same model itch.io / CodePen use).
- *
- * `allow-pointer-lock` is additive and does not weaken the opaque-origin
- * boundary: scene3d FPS games may request mouse-look after a user gesture.
- *
- * Device sensing stays shell-owned. Games receive only bounded values over the
- * postMessage bridge, never direct access to raw sensors or media devices.
- *
- * Microphone loudness for shout games is owned by the theater shell
- * (`useVoiceMeterBridge`). Opaque-origin documents cannot call `getUserMedia`
- * without `allow-same-origin`, which we never grant.
- *
- * The iframe must never gain an `allow` list. Game code is untrusted and must
- * not receive browser capabilities, including WebMCP tool registration.
- * Asserted in GameFrame.sandbox.test.ts; invariant in docs/security-model.md.
- */
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = props.frameRef ?? localRef;
@@ -56,6 +28,14 @@ export function GameFrame(props: GameFrameProps) {
     srcDoc = withGameLocale(srcDoc, i18n.language);
     if (props.embed) srcDoc = embedGameHtml(srcDoc, props.agentBridge);
   }
+  const prepared = useMemo(() => {
+    const nonce = crypto.randomUUID();
+    return { nonce, html: srcDoc === undefined ? undefined : withFrameDocument(srcDoc, nonce) };
+  }, [srcDoc]);
+  useLayoutEffect(() => {
+    const frame = iframeRef.current;
+    if (frame && prepared.html !== undefined) return prepareGameFrameDocument(frame, prepared.nonce);
+  }, [iframeRef, prepared]);
 
   const autoFocus = props.autoFocus ?? true;
 
@@ -65,10 +45,7 @@ export function GameFrame(props: GameFrameProps) {
     const frame = iframeRef.current;
     if (!frame) return;
     frame.focus();
-    // Focusing the element is not enough on its own: the focus has to land *inside*
-    // the game's document, and a document that commits after we focused the element
-    // takes it back. `focus()` is one of the few methods callable across an opaque
-    // origin, so this works under sandbox="allow-scripts allow-pointer-lock".
+    // Focus the committed document as well as its iframe element.
     frame.contentWindow?.focus();
   }, [iframeRef, autoFocus]);
 
@@ -82,6 +59,7 @@ export function GameFrame(props: GameFrameProps) {
   }, [props.html, props.src, focusGame]);
 
   return (
+    // Opaque origins prevent games from reaching host cookies and storage.
     <iframe
       key={frameKey}
       ref={iframeRef}
@@ -89,7 +67,7 @@ export function GameFrame(props: GameFrameProps) {
       title={props.title}
       sandbox="allow-scripts allow-pointer-lock"
       src={props.src}
-      srcDoc={srcDoc}
+      srcDoc={prepared.html}
       // Focuses the game, and flags a document the game navigated to itself.
       onLoad={onLoad}
       // Parent-side backstop for the iOS callout when the long-press hits the iframe

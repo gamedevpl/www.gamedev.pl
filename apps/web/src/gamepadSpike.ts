@@ -1,4 +1,5 @@
 import { useEffect, type MutableRefObject } from 'react';
+import { postToGameFrame } from './frameMessage.js';
 import { BRIDGE_NAMESPACE, INPUT_KEYS, PROTOCOL_VERSION, type InputKey } from './mp/protocol.js';
 
 const AXIS_THRESHOLD = 0.5;
@@ -73,7 +74,6 @@ function partyState(gamepad: Gamepad | null): GamepadPartyState {
   state.left = pressed(gamepad, 14) || horizontal <= -AXIS_THRESHOLD;
   state.right = pressed(gamepad, 15) || horizontal >= AXIS_THRESHOLD;
   state.a = pressed(gamepad, 0);
-  // Standard button 9 is Start: the pad's own `menu`.
   state.menu = pressed(gamepad, 9);
   return state;
 }
@@ -167,7 +167,7 @@ export function useGamepadSpike(frameRef: MutableRefObject<HTMLIFrameElement | n
       post: (frame) => {
         const target = frameRef.current?.contentWindow;
         if (!target) return false;
-        target.postMessage(frame, '*');
+        postToGameFrame(frameRef.current, frame);
         return true;
       },
     });

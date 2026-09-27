@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { documentMessage } from './test-utils/frameMessage.js';
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
@@ -35,7 +36,7 @@ it.each([200])('keeps away/hello/here churn within route budgets after status %i
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const send = (t: string) =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t, col: 2, row: 3 },
@@ -94,7 +95,7 @@ it('withdraws a deferred beat that resolves after away', async () => {
     vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
     const send = (t: string) =>
       window.dispatchEvent(
-        new MessageEvent('message', {
+        documentMessage('message', {
           origin: 'null',
           source: frame.contentWindow,
           data: { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t, col: 2, row: 3 },

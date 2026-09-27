@@ -28,10 +28,36 @@ the games origin must not carry app cookies, credentials, or privileged APIs.
 
 #### Frame messages
 
-The player, playtest, and agent-play handlers accept a game message only when its origin is
-`"null"` and its source is that game's iframe window. `isFromGameFrame` in
-`apps/web/src/frameMessage.ts` applies both checks. A message from another frame or window
-does not update the game's state or telemetry.
+Every assembled iframe document receives an unpredictable nonce and an early, shell-owned
+bootstrap. The bootstrap keeps its nonce and `MessagePort` in a closure, removes its script
+element, and exposes only an immutable send function. The host adopts the transferred port
+only when the nonce, opaque origin and iframe window match the expected document.
+
+All game messages travel through that port and echo the document nonce. The host constructs
+authenticated events for its existing bridge handlers; `isFromGameFrame` rejects raw window
+messages, including messages carrying a copied nonce. A first iframe `load` is not proof of
+document identity. All host replies also use the document's private port, which cannot follow
+its `WindowProxy` into a self-navigation destination.
+
+The bootstrap retires its channel on `pagehide`; the authenticated retirement message tears
+down shell resources even before a later iframe `load`. Replacing the host document rotates
+the nonce and closes the old channel. Save replies and
+snapshot/restore waits are bound to their initiating document; late replies cannot attach to
+a replacement. Navigation still retires sensing, microphone, presence and zone resources.
+The iframe sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
+
+Older assembled GameKit versions are adapted in the browser before their document executes.
+A JavaScript parser rewrites direct global `parent.postMessage`, `window.parent.postMessage`
+and `globalThis.parent.postMessage` calls to the bootstrap send function. Comments, strings,
+JSON scripts and locally shadowed objects are preserved. Invalid scripts and unsupported
+dynamic or aliased senders get no fallback authorization. This covers both catalog lanes
+without rebuilding stored historical games or changing their committed source/media hashes.
+URL-only frames cannot establish privileged bridges because they have no host bootstrap.
+
+Run `npm run e2e -- src/frame-document.test.ts` with `E2E_CHROMIUM_PATH` to check real browser
+document navigation and delayed saves against a local fixture, without credentials or writes
+to production. Optional `FRAME_DOCUMENT_GAMEKIT_SAVE_PATH` tests an actual GameKit save module
+instead of the standalone protocol fixture. The test logs which sender it used.
 
 ### 2. Public specs and issue text
 
