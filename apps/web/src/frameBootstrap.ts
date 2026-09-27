@@ -90,7 +90,15 @@ export function adaptGameKitMessages(code: string, module = false): string {
 }
 
 export function withFrameDocument(html: string, nonce: string): string {
-  const doc = parseHtml(html);
+  // Exclude baked raster bytes from both parsers; restore them unchanged.
+  const assets: string[] = [];
+  let marker = `__GDPL_RASTER_${nonce}_`;
+  while (html.includes(marker)) marker += '_';
+  const compact = html.replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, (asset) => {
+    const index = assets.push(asset) - 1;
+    return `${marker}${index}__`;
+  });
+  const doc = parseHtml(compact);
   let head: DefaultTreeAdapterMap['element'] | null = null;
   function visit(node: DefaultTreeAdapterMap['node']): void {
     if ('tagName' in node && node.tagName === 'head') head = node;
@@ -130,5 +138,7 @@ export function withFrameDocument(html: string, nonce: string): string {
     script.parentNode = target;
     target.childNodes.unshift(script);
   }
-  return serialize(doc);
+  const rendered = serialize(doc);
+  const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return rendered.replace(new RegExp(`${escapedMarker}(\\d+)__`, 'g'), (_, index: string) => assets[Number(index)]!);
 }

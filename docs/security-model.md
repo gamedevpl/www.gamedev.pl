@@ -52,6 +52,8 @@ and `globalThis.parent.postMessage` calls to the bootstrap send function. Commen
 JSON scripts and locally shadowed objects are preserved. Invalid scripts and unsupported
 dynamic or aliased senders get no fallback authorization. This covers both catalog lanes
 without rebuilding stored historical games or changing their committed source/media hashes.
+Baked raster data URLs are replaced with collision-free placeholders before HTML and JavaScript
+parsing, then restored byte-for-byte after serialization, keeping asset payloads out of both ASTs.
 URL-only frames cannot establish privileged bridges because they have no host bootstrap.
 
 Run `npm run e2e -- src/frame-document.test.ts` with `E2E_CHROMIUM_PATH` to check real browser

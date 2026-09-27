@@ -1,4 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { parse as parseJavaScript } from 'acorn';
+import { parse as parseHtml } from 'parse5';
+
+vi.mock('acorn', async (original) => {
+  const actual = await original<typeof import('acorn')>();
+  return { ...actual, parse: vi.fn(actual.parse) };
+});
+vi.mock('parse5', async (original) => {
+  const actual = await original<typeof import('parse5')>();
+  return { ...actual, parse: vi.fn(actual.parse) };
+});
 import { adaptGameKitMessages, withFrameDocument } from './frameBootstrap.js';
 
 describe('embedded GameKit transport compatibility', () => {
@@ -46,5 +57,18 @@ describe('embedded GameKit transport compatibility', () => {
     expect(html).toContain('{"text":"parent.postMessage()"}');
     expect(html).toContain('document.currentScript.remove()');
     expect(html).toContain('writable:false,configurable:false');
+  });
+  it('excludes a full raster-budget asset from both parsers and restores its bytes', () => {
+    vi.mocked(parseJavaScript).mockClear();
+    vi.mocked(parseHtml).mockClear();
+    const asset = 'data:image/png;base64,' + 'A'.repeat(32 * 1024 * 1024);
+    const source = `<html><head></head><body><script>window.assets=Object.freeze({hero:"${asset}"});parent.postMessage({t:'save:hello'},'*');</script><img src="${asset}"></body></html>`;
+    const result = withFrameDocument(source, 'nonce');
+    expect(vi.mocked(parseHtml).mock.calls[0]![0].length).toBeLessThan(1024);
+    expect(vi.mocked(parseJavaScript).mock.calls.every(([code]) => code.length < 1024)).toBe(true);
+    expect(result).toContain(`hero:"${asset}"`);
+    expect(result).toContain(`<img src="${asset}">`);
+    expect(result).toContain("window.__GDPL_DOCUMENT_SEND__({t:'save:hello'}");
+    expect(result).not.toContain('__GDPL_RASTER_');
   });
 });
