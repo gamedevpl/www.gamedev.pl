@@ -446,6 +446,8 @@ const FILE_BUCKET = {
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
   'draft-share-gate': 'delivery',
+  'slug-takedown': 'delivery',
+  'takedown-share-authorization': 'community',
   'delivered-prose': 'delivery',
   'delivery-moderation': 'delivery',
   'editor-upload-requirements': 'delivery',

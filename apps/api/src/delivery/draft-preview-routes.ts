@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { isSlugTakenDown } from './slug-takedown.js';
 import { createSharedDraftGate, sharedDraftVersion } from './draft-share-gate.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
@@ -66,8 +67,7 @@ export async function registerDraftPreviewRoutes(
     // A pulled game is not re-opened by flipping the switch.
     if (record.moderationBlockedAt) return null;
     if (!record.draftSharedAt || !record.slug) return null;
-    const siblings = await store.listSubmissionsBySlug(record.slug);
-    if (!siblings.length || siblings.some((round) => round.moderationBlockedAt)) return null;
+    if (await isSlugTakenDown(store, record.slug)) return null;
     const version = sharedDraftVersion(record);
     if (!version || !(await shareGate.isGreen(record.slug, version))) return null;
     // Pinned: a delivery landing now must not ride this answer.
