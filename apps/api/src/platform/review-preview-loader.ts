@@ -10,7 +10,9 @@ export function createReviewPreviewLoader(store: Store, gamesStore?: GamesStore)
       return null;
     if (await refuseUngatedShare({ gamesStore, slug, version, moderationBlockedAt: record.moderationBlockedAt }))
       return null;
-    const bundle = await gamesStore!.getDerivedArtifact(slug, version, 'bundle.html');
+    const bundle =
+      (await gamesStore!.getDerivedArtifact(slug, version, 'bundle.html')) ??
+      (await gamesStore!.getDerivedArtifact(slug, version, 'preview.html'));
     return bundle ? { slug, title: record.title || slug, html: bundle.toString('utf8') } : null;
   };
 }

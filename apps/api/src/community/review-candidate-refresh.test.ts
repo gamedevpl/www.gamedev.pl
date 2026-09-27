@@ -5,7 +5,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { GamesStore } from '../delivery/games-store.js';
 
 const checklist = { graphics: 'ok', gameplay: 'ok', fun: 'ok', sound: 'ok', controls: 'ok' };
-async function setup(mode: 'creator' | 'unshared' | 'published' | 'overlap', targeted = false) {
+async function setup(mode: 'creator' | 'unshared' | 'published' | 'overlap', targeted = false, artifacts?: GamesStore) {
   const store = new InMemoryStore();
   const at = new Date().toISOString();
   await store.upsertUser({ uid: 'owner' });
@@ -46,10 +46,12 @@ async function setup(mode: 'creator' | 'unshared' | 'published' | 'overlap', tar
     },
     submissionRoutes: {
       agentChannel: {
-        gamesStore: {
-          getManifest: async () => ({ gate: { green: true } }),
-          getDerivedArtifact: async (_slug: string, version: string) => Buffer.from(`<title>${version}</title>`),
-        } as unknown as GamesStore,
+        gamesStore:
+          artifacts ??
+          ({
+            getManifest: async () => ({ gate: { green: true } }),
+            getDerivedArtifact: async (_slug: string, version: string) => Buffer.from(`<title>${version}</title>`),
+          } as unknown as GamesStore),
       },
     },
   });
@@ -155,3 +157,22 @@ it.each([false, true])(
     }
   },
 );
+
+it.each([true, false])('plays a preview-only candidate only with its green preview verdict (%s)', async (green) => {
+  const artifacts = {
+    getManifest: async () => ({ deliveryMode: 'preview', previewGate: { green }, gate: { green: true } }),
+    getDerivedArtifact: async (_slug: string, version: string, name: string) =>
+      name === 'preview.html' ? Buffer.from(`<title>preview-${version}</title>`) : null,
+  } as unknown as GamesStore;
+  const { app, headers, store } = await setup('creator', false, artifacts);
+  try {
+    await store.setSubmissionPreviewVersion(1, 'v2');
+    const queue = await app.inject({ method: 'GET', url: '/api/review/queue', headers });
+    expect(queue.json().items[0].gameVersion).toBe('v2');
+    const response = await app.inject({ method: 'GET', url: '/api/review/games/public-game?version=v2', headers });
+    expect(response.statusCode).toBe(green ? 200 : 409);
+    if (green) expect(response.json().html).toBe('<title>preview-v2</title>');
+  } finally {
+    await app.close();
+  }
+});
