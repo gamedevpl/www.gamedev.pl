@@ -1,4 +1,5 @@
-import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
+import { useFrameDocument } from './frameLifecycle.js';
+import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 
@@ -35,6 +36,7 @@ function mediaSupported(): boolean {
  * `voice:level` into `frameRef`. Returns UI state for the theater Mic control.
  */
 export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>) {
+  const frameDocument = useFrameDocument(frameRef);
   const [available, setAvailable] = useState(false);
   const [status, setStatus] = useState<VoiceMeterShellStatus>(() => (mediaSupported() ? 'idle' : 'unsupported'));
 
@@ -111,7 +113,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
   }, [postToGame]);
 
   const startMic = useCallback(() => {
-    if (!availableRef.current) return;
+    if (!availableRef.current || isGameFrameNavigatedAway(frameRef.current)) return;
     if (statusRef.current === 'live' || statusRef.current === 'pending' || statusRef.current === 'unsupported') {
       return;
     }
@@ -130,7 +132,12 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
     void navigator.mediaDevices
       .getUserMedia({ audio: true, video: false })
       .then((mediaStream) => {
-        if (statusRef.current !== 'pending' || document.hidden || !availableRef.current) {
+        if (
+          statusRef.current !== 'pending' ||
+          document.hidden ||
+          !availableRef.current ||
+          isGameFrameNavigatedAway(frameRef.current)
+        ) {
           for (const track of mediaStream.getTracks()) track.stop();
           if (statusRef.current === 'pending' && document.hidden) stopMic();
           return;
@@ -157,7 +164,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
         teardown();
         publishStatus('denied');
       });
-  }, [publishStatus, pumpLevels, stopMic, teardown]);
+  }, [frameRef, publishStatus, pumpLevels, stopMic, teardown]);
 
   const toggle = useCallback(() => {
     if (statusRef.current === 'live' || statusRef.current === 'pending') stopMic();
@@ -205,9 +212,10 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
       window.removeEventListener('message', onMessage);
       document.removeEventListener('visibilitychange', onVisibility);
       availableRef.current = false;
-      teardown();
+      setAvailable(false);
+      stopMic();
     };
-  }, [frameRef, publishStatus, stopMic, teardown]);
+  }, [frameRef, publishStatus, stopMic, teardown, frameDocument]);
 
   return {
     /** True once a game with createVoiceMeter has said hello. */

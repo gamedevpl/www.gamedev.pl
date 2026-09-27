@@ -1,3 +1,4 @@
+import { notifyFrameDocument } from './frameLifecycle.js';
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react';
 
 // Frames whose current document is not one this app loaded.
@@ -19,11 +20,13 @@ export function isGameFrameNavigatedAway(frame: HTMLIFrameElement | Window | nul
 // A load the host never requested: the game navigated itself.
 export function markGameFrameNavigatedAway(frame: HTMLIFrameElement): void {
   if (frame.contentWindow) navigatedAway.add(frame.contentWindow);
+  notifyFrameDocument(frame, true);
 }
 
 // A load the host did request: bridges may answer this document again.
 export function markGameFrameLoadedByHost(frame: HTMLIFrameElement): void {
   if (frame.contentWindow) navigatedAway.delete(frame.contentWindow);
+  notifyFrameDocument(frame, false);
 }
 
 // Returns onLoad and key; `source` is the srcdoc or src.

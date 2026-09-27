@@ -1,4 +1,5 @@
-import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
+import { useFrameDocument } from './frameLifecycle.js';
+import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { beatPresence, fetchPresence, leavePresence, type PresenceSnapshot } from './presenceApi.js';
@@ -53,8 +54,9 @@ export function parsePresenceMessage(raw: unknown): PresenceRequest | null {
  * a roster precisely nothing.
  */
 export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
+  const frameDocument = useFrameDocument(frameRef);
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || isGameFrameNavigatedAway(frameRef.current)) return;
     let cancelled = false;
     /** True once a game has asked for a roster — until then this whole effect is inert. */
     let engaged = false;
@@ -97,6 +99,10 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (position) awaitingFirstHere = false;
       try {
         const snapshot = await beatPresence(slug!, position);
+        if (cancelled) {
+          if (snapshot?.visible) void leavePresence(slug!);
+          return;
+        }
         if (snapshot) {
           joined = joined || snapshot.visible;
           // The server names the cadence, so the two halves cannot drift into disagreeing
@@ -227,5 +233,5 @@ export function usePresenceBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       // the rest of the TTL looking at somebody who has closed the tab.
       if (joined) void leavePresence(slug);
     };
-  }, [frameRef, slug]);
+  }, [frameRef, slug, frameDocument]);
 }

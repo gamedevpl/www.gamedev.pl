@@ -1,3 +1,4 @@
+import { useFrameDocument } from './frameLifecycle.js';
 import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { landmarksFromVideo, loadHandLandmarker } from './handLandmarker.js';
@@ -162,6 +163,7 @@ function cameraSupported(): boolean {
  * every listener / stops every track on unmount.
  */
 export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>): SensingBridge {
+  const frameDocument = useFrameDocument(frameRef);
   const [tiltEngaged, setTiltEngaged] = useState(false);
   const [supported, setSupported] = useState(false);
   const [needsPermission, setNeedsPermission] = useState(false);
@@ -332,8 +334,15 @@ export function useSensingBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     }
 
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [frameRef, postState, stopBackdropTracks]);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      wantsTiltRef.current = wantsBackdropRef.current = wantsHandRef.current = false;
+      setTiltEngaged(false);
+      setHandEngaged(false);
+      setBackdropEngaged(false);
+      stopBackdropTracks();
+    };
+  }, [frameRef, postState, stopBackdropTracks, frameDocument]);
 
   // Camera stream must die when the tab hides or the theater unmounts — OS camera
   // indicator and trust both depend on MediaStreamTrack.stop(), not pause().

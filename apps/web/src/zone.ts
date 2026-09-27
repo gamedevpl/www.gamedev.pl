@@ -1,4 +1,5 @@
-import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
+import { useFrameDocument } from './frameLifecycle.js';
+import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useEffect, type MutableRefObject } from 'react';
 import type { ZoneLinkStep } from '@gamedevpl/contract';
 import { BRIDGE_NAMESPACE } from './mp/protocol.js';
@@ -18,8 +19,9 @@ import { bindPlayRecorder } from './gamePlayer.js';
 const INPUT_BUDGET = MAX_INPUTS_PER_SECOND;
 
 export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, slug: string | undefined) {
+  const frameDocument = useFrameDocument(frameRef);
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || isGameFrameNavigatedAway(frameRef.current)) return;
     let cancelled = false;
     let client: ZoneClient | null = null;
     /** Guards against a game that says hello twice — one zone per frame, per session. */
@@ -39,7 +41,7 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
     let recordPlayEvent: (event: { type: 'zone_link'; step: ZoneLinkStep }) => void = () => {};
 
     function postToGame(payload: Record<string, unknown>) {
-      if (cancelled) return;
+      if (cancelled || isGameFrameNavigatedAway(frameRef.current)) return;
       // The frame is sandboxed to an opaque origin, so '*' is the only possible target;
       // the game in turn only accepts messages whose source is its parent.
       postToGameFrame(frameRef.current, { ns: BRIDGE_NAMESPACE, v: ZONE_PROTOCOL_VERSION, ...payload });
@@ -61,7 +63,7 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
       joined = false;
       try {
         const admission = await fetchZoneAdmission(slug!);
-        if (cancelled) return;
+        if (cancelled || isGameFrameNavigatedAway(frameRef.current)) return;
         if (!admission) {
           // No zone here: not published, declares none, or zones are not running on this
           // deployment. All three are the same fact from the game's side, and it is a
@@ -165,5 +167,5 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
       client?.close();
       client = null;
     };
-  }, [frameRef, slug]);
+  }, [frameRef, slug, frameDocument]);
 }
