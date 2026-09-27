@@ -38,7 +38,7 @@ import {
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerModerationFlagRoutes } from './community/moderation-flags.js';
 import { emitModerationFlag } from './notifications/notify.js';
-import { refuseShareOf, sharedDraftVersion } from './delivery/draft-share-gate.js';
+import { createDraftShareRefusal } from './delivery/draft-share-gate.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
@@ -1299,13 +1299,7 @@ export async function registerSubmissionRoutes(
   });
   // Shared by the creator's own share toggle (Studio) and the MCP tool (an agent acting
   // on the creator's behalf) — one place decides what a shared link needs to be true.
-  const refuseShare = (record: SubmissionRecord) =>
-    refuseShareOf({
-      gamesStore: options.agentChannel?.gamesStore,
-      slug: record.slug,
-      version: sharedDraftVersion(record),
-      ...(record.moderationBlockedAt ? { moderationBlockedAt: record.moderationBlockedAt } : {}),
-    });
+  const refuseShare = createDraftShareRefusal(store, options.agentChannel?.gamesStore);
 
   await registerDraftLifecycleRoutes(app, {
     store,

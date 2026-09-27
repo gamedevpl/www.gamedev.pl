@@ -47,6 +47,7 @@ const DEFAULT_BUCKET = 'platform';
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
   'invite-fragment-navigation': 'platform',
+  'historical-preview-takedown': 'community',
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
   'error-handler': 'platform',
@@ -445,6 +446,8 @@ const FILE_BUCKET = {
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
   'draft-share-gate': 'delivery',
+  'slug-takedown': 'delivery',
+  'takedown-share-authorization': 'community',
   'delivered-prose': 'delivery',
   'delivery-moderation': 'delivery',
   'editor-upload-requirements': 'delivery',
