@@ -111,7 +111,7 @@ it('shares an older snapshot load across overlapping publication initialization'
   const context = configure({
     getPointer: async () => {
       const captured = published;
-      if (++pointerReads === 4) {
+      if (++pointerReads === 3) {
         pointerEntered.release();
         await heldPointer.promise;
       }
