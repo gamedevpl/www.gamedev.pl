@@ -538,6 +538,7 @@ const FILE_BUCKET = {
   'catalog-routes': 'catalog',
   'catalog-search-routes': 'catalog',
   'embedding-service': 'catalog',
+  'audio-bank': 'catalog',
   'github-client': 'catalog',
   'github-client-images': 'catalog',
   'bake-game-images': 'catalog',

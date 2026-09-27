@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { prependAudio } from './audio-bank.js';
 import { build, transform } from 'esbuild';
 import {
   CATALOG_ORIENTATIONS,
@@ -1459,15 +1460,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
       const musicMs = Date.now() - musicStartedAt;
 
-      if (Object.keys(assets).length > 0) {
-        assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
-      }
+      const readGame = (rel: string) => readRawBytes(`games/${slug}/${rel}`, ref);
+      const bankSrc = { overrides, noRefFallback: options?.noRefFallback, read: readGame };
+      if (!(await prependAudio(assetChunks, assets, manifest.bank, bankSrc))) return null;
 
       let loaderHtml = '';
       const bakedImages = await bakeGameImageAssets(manifest.images, (relPath, name) =>
-        resolveGameImageBytes(relPath, name, overrides, options?.noRefFallback, () =>
-          readRawBytes(`games/${slug}/${relPath}`, ref),
-        ),
+        resolveGameImageBytes(relPath, name, overrides, options?.noRefFallback, () => readGame(relPath)),
       );
       if (bakedImages) {
         assetChunks.push(bakedImages.assetChunk);
