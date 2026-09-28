@@ -63,7 +63,7 @@ export async function resolveAuthorizedRoundBaseVersion(
   const version = publishedVersion(publication);
   if (!version) return null;
   const published = await store.getPublishedSubmissionBySlug(slug);
-  if (!published || published.jobId === record.jobId) return null;
+  if (!published || published.jobId === record.jobId || published.deliveredVersion !== version) return null;
   if (access.source === 'derived' && published.ownerUid !== record.ownerUid) return null;
   return version;
 }

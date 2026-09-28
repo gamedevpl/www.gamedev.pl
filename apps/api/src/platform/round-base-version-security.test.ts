@@ -61,13 +61,28 @@ describe('source restore provenance', () => {
     expect(await resolveAuthorizedRoundBaseVersion(store, attacker, slug)).toBe('victim-draft');
   });
 
-  it('restores the publication for a legitimate improvement with no sibling candidate', async () => {
+  it('does not infer publication provenance from an owner with no matching delivery', async () => {
     const store = legacyStore([{ ...victim, ownerUid: 'attacker', deliveredVersion: undefined }]);
+    expect(await resolveAuthorizedRoundBaseVersion(store, attacker, slug)).toBeNull();
+  });
+
+  it('rejects an owned published row whose delivery differs from the live version', async () => {
+    const store = legacyStore([
+      { ...victim, jobId: 3, ownerUid: 'attacker', state: 'canceled', deliveredVersion: 'older' },
+      { ...victim, state: 'canceled', deliveredVersion: 'victim-live' },
+    ]);
+    expect(await resolveAuthorizedRoundBaseVersion(store, attacker, slug)).toBeNull();
+  });
+
+  it('restores a live publication only when its published row delivered that version', async () => {
+    const store = legacyStore([
+      { ...victim, ownerUid: 'attacker', state: 'canceled', deliveredVersion: 'victim-live' },
+    ]);
     expect(await resolveAuthorizedRoundBaseVersion(store, attacker, slug)).toBe('victim-live');
   });
 
   it('lets the current canonical owner restore a predecessor after a transfer', async () => {
-    const store = legacyStore([{ ...victim, deliveredVersion: undefined }]);
+    const store = legacyStore([{ ...victim, deliveredVersion: 'victim-live' }]);
     vi.mocked(store.getGameAccess).mockResolvedValue({
       slug,
       ownerUid: 'attacker',
