@@ -461,7 +461,8 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                                                                            |
 | `MANAGED_AGENT_MCP_URL`                  | MCP endpoint — **required, every vendor**; triggers the per-round vault + `overrideTools` on Anthropic/Gemini/OpenAI |
 | `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations                                                            |
-| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`                                                                                            |
+| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`, sent on every vendor's request; Anthropic rejects it — use the next row                   |
+| `MANAGED_AGENT_ANTHROPIC_EFFORT`         | Anthropic session effort; the session's model override drops the Agent's own `effort`, so this is what runs          |
 | `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor**                                                |
 | `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                                                                             |
 | `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                                                                            |

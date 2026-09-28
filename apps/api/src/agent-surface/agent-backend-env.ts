@@ -57,6 +57,18 @@ export interface ManagedBackendDeps {
   githubClientFactory?: CopilotGitHubClientFactory;
 }
 
+const EFFORTS: readonly ManagedAgentEffort[] = ['low', 'medium', 'high'];
+
+// Gemini rejects any effort, so Anthropic's never rides the shared variable.
+export function managedEffortFor(vendor: string, log?: Logger): ManagedAgentEffort | undefined {
+  if (vendor !== 'anthropic') return process.env.MANAGED_AGENT_EFFORT?.trim() as ManagedAgentEffort | undefined;
+  const value = process.env.MANAGED_AGENT_ANTHROPIC_EFFORT?.trim();
+  if (!value || (EFFORTS as readonly string[]).includes(value)) return value as ManagedAgentEffort | undefined;
+  // A typo falls back to the model default, never a guessed effort.
+  log?.warn({ effort: value }, 'MANAGED_AGENT_ANTHROPIC_EFFORT is not low, medium or high; using the model default');
+  return undefined;
+}
+
 // One vendor's backend — a bad Gemini key must not affect Anthropic.
 function buildManagedBackendForVendor(
   vendor: string,
@@ -144,7 +156,7 @@ function buildManagedBackendForVendor(
     return undefined;
   }
 
-  const effort = process.env.MANAGED_AGENT_EFFORT?.trim() as ManagedAgentEffort | undefined;
+  const effort = managedEffortFor(vendor, log);
   const deliveryMode = process.env.MANAGED_AGENT_DELIVERY_MODE?.trim() === 'publish' ? 'publish' : 'preview';
 
   let provider;
