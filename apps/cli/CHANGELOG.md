@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- `genaicode` is bumped to 2.6.0 in the CLI and API; Muse tool events carry ids and plain tool names (#1586).
+
 ## 0.22.1 — 2026-09-26
 
 ### Fixed
