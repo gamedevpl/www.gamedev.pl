@@ -61,7 +61,7 @@ import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creatio
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
-import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
+import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
@@ -1629,7 +1629,7 @@ export async function registerAgentChannelRoutes(
           ];
 
       try {
-        const version = await resolveRoundBaseVersion(store!, record, slug);
+        const version = await resolveAuthorizedRoundBaseVersion(store!, record, slug, resolved.actorUid);
         const prepared: Array<{
           path: string;
           content: string;
@@ -2027,7 +2027,7 @@ export async function registerAgentChannelRoutes(
           // delivery over the seed. A one-file patch_source_file (or a partial stage) can
           // therefore submit a complete tree without re-uploading unchanged paths.
           let delivered: Array<{ path: string; content: string }> = [];
-          const version = await resolveRoundBaseVersion(store!, record, slug);
+          const version = await resolveAuthorizedRoundBaseVersion(store!, record, slug, actorUid);
           if (version) {
             const manifest = await options.gamesStore.getManifest(slug, version);
             if (!manifest) {
@@ -2176,7 +2176,7 @@ export async function registerAgentChannelRoutes(
       }
 
       const slug = record.slug;
-      const version = slug ? await resolveRoundBaseVersion(store!, record, slug) : null;
+      const version = slug ? await resolveAuthorizedRoundBaseVersion(store!, record, slug, resolved.actorUid) : null;
 
       // Round 0 arrives here, not through a verb of its own: one read for every round.
       if (slug && !version && (record.seed?.files.length ?? 0) > 0) {

@@ -150,6 +150,11 @@ export class InMemorySubmissionStore implements SubmissionStore {
     const holder = [...this.submissions.values()]
       .filter((r) => r.slug === slug)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+    if (generation !== undefined && (await this.publication?.getPublication(slug)) && !holder) {
+      throw Object.assign(new Error('The game is already published. Refresh before continuing.'), {
+        statusCode: 409,
+      });
+    }
     assertRecoveryBinding(jobId, holder, this.recoveryAdmissions.get(slug), admissionNonce);
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, slug });

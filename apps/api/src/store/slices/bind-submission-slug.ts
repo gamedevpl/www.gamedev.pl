@@ -36,6 +36,11 @@ export async function bindSubmissionSlug(
     const holder = rows.docs
       .map((d) => fromStoredSubmission(d.data()))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+    if (generation !== undefined && game.data()?.publication && !holder) {
+      throw Object.assign(new Error('The game is already published. Refresh before continuing.'), {
+        statusCode: 409,
+      });
+    }
     assertRecoveryBinding(jobId, holder, game.data()?.recoveryAdmission, admissionNonce);
     tx.set(claim, { slugClaimJobId: jobId }, { merge: true });
     tx.set(db.collection('submissions').doc(String(jobId)), { slug }, { merge: true });
