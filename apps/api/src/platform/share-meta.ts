@@ -9,18 +9,29 @@ import { normalizePathname } from './spa-paths.js';
 import type { Store } from './store.js';
 
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
-const PLAY_PATH = new RegExp(`^/play/(${SLUG})$`);
+const PLAY_PATH = /^\/(?:play|ay|ai)\/([^/]+)$/;
+const SLUG_ONLY = new RegExp(`^${SLUG}$`);
 // Same shape as GAME_PAGE_PATTERN in spa-paths.ts.
 const GAME_PAGE_PATH = new RegExp(`^/([a-z][a-z0-9_]{2,23})/(${SLUG})(?:/(?:board|review|releases|sources))?$`);
 
 const SITE_NAME = 'gamedev.pl';
 const DESCRIPTION_MAX = 200;
 
+function decodedSlug(segment: string): string | null {
+  try {
+    const slug = decodeURIComponent(segment);
+    return SLUG_ONLY.test(slug) ? slug : null;
+  } catch {
+    return null;
+  }
+}
+
 // The game a shareable path is about, else null.
 export function shareableGameSlug(urlOrPath: string): string | null {
   const pathname = normalizePathname(urlOrPath);
   const play = pathname.match(PLAY_PATH);
-  if (play?.[1]) return play[1];
+  // Decoded before validation, as spa-paths.ts and the client router do.
+  if (play?.[1]) return decodedSlug(play[1]);
   const page = pathname.match(GAME_PAGE_PATH);
   // `/studio/<token>` shares the shape; reserved words are never handles.
   if (!page?.[1] || !page[2]) return null;
@@ -51,12 +62,10 @@ export interface ShareMetaInput {
   entry: Pick<CatalogGameEntry, 'slug' | 'title' | 'genre' | 'tagline' | 'media'>;
   // `https://host`, no trailing slash.
   origin: string;
-  // Becomes og:url.
-  pathname: string;
 }
 
 // Title and meta tags for one game, every value escaped.
-export function renderShareMeta({ entry, origin, pathname }: ShareMetaInput): { title: string; tags: string } {
+export function renderShareMeta({ entry, origin }: ShareMetaInput): { title: string; tags: string } {
   // Title and tagline are agent-authored: escape, never trust.
   const title = clip(`${entry.title} — ${SITE_NAME}`, 120);
   const description = clip(
@@ -73,7 +82,8 @@ export function renderShareMeta({ entry, origin, pathname }: ShareMetaInput): { 
     ['property', 'og:site_name', SITE_NAME],
     ['property', 'og:title', entry.title],
     ['property', 'og:description', description],
-    ['property', 'og:url', `${origin}${normalizePathname(pathname)}`],
+    // Page-URL handles are unverified; /play/<slug> never goes stale.
+    ['property', 'og:url', `${origin}/play/${encodeURIComponent(entry.slug)}`],
     ['name', 'description', description],
     ['name', 'twitter:card', image ? 'summary_large_image' : 'summary'],
     ['name', 'twitter:title', entry.title],
@@ -150,7 +160,7 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
         throw error;
       });
       const origin = canonicalHost ? `https://${canonicalHost}` : `${request.protocol}://${request.host}`;
-      return injectShareMeta(await shell, renderShareMeta({ entry, origin, pathname: request.url }));
+      return injectShareMeta(await shell, renderShareMeta({ entry, origin }));
     } catch {
       return null;
     }

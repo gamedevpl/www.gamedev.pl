@@ -41,6 +41,8 @@ describe('shareableGameSlug', () => {
   it('reads the slug from play links and game pages', () => {
     expect(shareableGameSlug('/play/biplane-skirmish')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/play/biplane-skirmish?via=share')).toBe('biplane-skirmish');
+    expect(shareableGameSlug('/play/biplane%2Dskirmish')).toBe('biplane-skirmish');
+    expect(shareableGameSlug('/ay/biplane-skirmish')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/gtanczyk/biplane-skirmish')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/gtanczyk/biplane-skirmish/releases')).toBe('biplane-skirmish');
   });
@@ -49,6 +51,7 @@ describe('shareableGameSlug', () => {
     expect(shareableGameSlug('/')).toBeNull();
     expect(shareableGameSlug('/gtanczyk')).toBeNull();
     expect(shareableGameSlug('/play/Bad_Slug')).toBeNull();
+    expect(shareableGameSlug('/play/%E0%A4%A')).toBeNull();
     expect(shareableGameSlug('/studio/abc/build')).toBeNull();
     expect(shareableGameSlug('/studio/abc')).toBeNull();
     expect(shareableGameSlug('/gamedevpl/biplane-skirmish')).toBe('biplane-skirmish');
@@ -60,7 +63,6 @@ describe('renderShareMeta', () => {
     const meta = renderShareMeta({
       entry: entry(),
       origin: 'https://www.gamedev.pl',
-      pathname: '/play/biplane-skirmish?x=1',
     });
     expect(meta.title).toBe('Biplane Skirmish — gamedev.pl');
     expect(meta.tags).toContain(
@@ -75,7 +77,6 @@ describe('renderShareMeta', () => {
     const meta = renderShareMeta({
       entry: entry({ title: '"><script>alert(1)</script>', tagline: null }),
       origin: 'https://www.gamedev.pl',
-      pathname: '/play/biplane-skirmish',
     });
     expect(meta.tags).not.toContain('<script>');
     expect(meta.tags).toContain('&quot;&gt;&lt;script&gt;');
@@ -86,7 +87,6 @@ describe('renderShareMeta', () => {
     const meta = renderShareMeta({
       entry: entry({ media: null }),
       origin: 'https://x',
-      pathname: '/play/biplane-skirmish',
     });
     expect(meta.tags).toContain('<meta name="twitter:card" content="summary" />');
     expect(meta.tags).not.toContain('og:image');
@@ -139,6 +139,9 @@ describe('createSharePreviewShell', () => {
       isShareable: async () => true,
     });
     expect(await shell(request)).toContain('http://localhost:8080/api/games/biplane-skirmish/media/combat.png');
+    expect(await shell({ ...request, url: '/oldowner/biplane-skirmish' })).toContain(
+      '<meta property="og:url" content="http://localhost:8080/play/biplane-skirmish" />',
+    );
   });
 
   it('says nothing about games a stranger cannot open', async () => {
