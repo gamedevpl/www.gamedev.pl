@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Muse runs show real tool names (`bash` instead of `toolCall` or `tool:bash`) and no longer list Muse's internal reminder subagents as unfinished tool calls; `genaicode` is bumped to 2.6.0 in the CLI and API (#1586).
+
 ## 0.22.1 — 2026-09-26
 
 ### Fixed
