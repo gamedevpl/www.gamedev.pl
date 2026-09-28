@@ -248,7 +248,7 @@ export function JobRow({
   const [confirming, setConfirming] = useState<'publish' | 'cancel' | null>(null);
   const [override, setOverride] = useState<Extract<PublishOutcome, { refused: string }> | null>(null);
 
-  const publishable = job.state === 'ready_for_review';
+  const publishable = job.state === 'ready_for_review' && Boolean(job.reviewVersion);
   const previewable = publishable || Boolean(job.slug);
 
   const runPublish = useCallback(
@@ -256,7 +256,7 @@ export function JobRow({
       setBusy('publish');
       setMessage(null);
       try {
-        const result = body ? await publishJob(job.jobId, body) : await publishJob(job.jobId);
+        const result = await publishJob(job.jobId, { expectedVersion: job.reviewVersion ?? '', ...body });
         if ('refused' in result) {
           setMessage(publishRefusalCopy(result.refused, result.editorial));
           if (isEditorialRefusal(result.refused) && !body?.override) setOverride(result);
@@ -273,7 +273,7 @@ export function JobRow({
         setConfirming(null);
       }
     },
-    [job.jobId, onPublished],
+    [job.jobId, job.reviewVersion, onPublished],
   );
 
   const onCancel = useCallback(async () => {

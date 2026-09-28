@@ -8,10 +8,12 @@ import { publishJob, type JobQueueEntry, type PublishOutcome } from './adminJobs
 
 export function AdminJobPreviewPublish({
   job,
+  expectedVersion,
   onPublished,
   onMessage,
 }: {
   job: JobQueueEntry;
+  expectedVersion: string;
   onPublished?: () => void;
   onMessage: (message: string | null) => void;
 }) {
@@ -24,7 +26,7 @@ export function AdminJobPreviewPublish({
       setPublishing(true);
       onMessage(null);
       try {
-        const result = body ? await publishJob(job.jobId, body) : await publishJob(job.jobId);
+        const result = await publishJob(job.jobId, { expectedVersion, ...body });
         if ('refused' in result) {
           onMessage(publishRefusalCopy(result.refused, result.editorial));
           if (isEditorialRefusal(result.refused) && !body?.override) setOverride(result);
@@ -41,7 +43,7 @@ export function AdminJobPreviewPublish({
         setConfirming(false);
       }
     },
-    [job.jobId, onMessage, onPublished],
+    [job.jobId, expectedVersion, onMessage, onPublished],
   );
 
   return (

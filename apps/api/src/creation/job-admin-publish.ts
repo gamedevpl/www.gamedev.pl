@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from '../platform/store.js';
+import { resolveJobState } from './job-state.js';
 
 export type EditorialPublishDecision = 'blocked' | 'pending' | 'clear';
 
@@ -87,6 +88,32 @@ export async function resolveEditorialPublish(opts: {
 export function previewMatchesDelivery(record: SubmissionRecord, version: string): boolean {
   if (record.deliveredVersion !== version) return false;
   return !record.previewVersion || record.previewVersion === version;
+}
+
+export function reviewedPublishError(record: SubmissionRecord, expectedVersion: string): string | null {
+  if (resolveJobState(record) !== 'ready_for_review') return 'not_ready_for_review';
+  if (record.deliveredVersion !== expectedVersion) return 'review_version_changed';
+  if (!previewMatchesDelivery(record, expectedVersion)) return 'preview_superseded_delivery';
+  return null;
+}
+
+export async function claimReviewedPublish(
+  store: Store,
+  record: SubmissionRecord,
+  expectedVersion: string,
+  at: string,
+  reason: string,
+): Promise<boolean> {
+  return store.recordJobTransition(
+    record.jobId,
+    { to: 'publishing', at, by: 'operator', reason },
+    {
+      state: 'ready_for_review',
+      deliveredVersion: expectedVersion,
+      previewVersion: record.previewVersion,
+      roundGeneration: record.roundGeneration ?? 1,
+    },
+  );
 }
 
 // Supersede earlier rounds for this slug on publish.

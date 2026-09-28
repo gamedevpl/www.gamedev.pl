@@ -40,6 +40,7 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
     await store.createSubmission(909, 'bot:seeder', 'Sky Dodge');
     await store.setSubmissionSlug(909, 'sky-dodge');
     await store.setSubmissionDeliveredVersion(909, 'v1');
+    await store.recordJobTransition(909, { to: 'ready_for_review', at, by: 'agent' });
     await store.ensureGameAccess('sky-dodge', 'bot:seeder', at, at);
 
     const later = new Date(Date.now() + 1000).toISOString();
@@ -61,6 +62,7 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
         method: 'POST',
         url: '/api/admin/jobs/909/publish',
         headers: ADMIN_HEADERS,
+        payload: { expectedVersion: 'v1' },
       });
 
       // The creator now owns the game: editorial review cannot be bypassed.
@@ -82,6 +84,7 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
     await store.createSubmission(909, 'bot:seeder', 'Sky Dodge');
     await store.setSubmissionSlug(909, 'sky-dodge');
     await store.setSubmissionDeliveredVersion(909, 'v1');
+    await store.recordJobTransition(909, { to: 'ready_for_review', at, by: 'agent' });
     await store.ensureGameAccess('sky-dodge', 'bot:seeder', at, at);
 
     const later = new Date(Date.now() + 1000).toISOString();
@@ -120,6 +123,7 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
         method: 'POST',
         url: '/api/admin/jobs/909/publish',
         headers: ADMIN_HEADERS,
+        payload: { expectedVersion: 'v1' },
       });
 
       expect(response.statusCode).toBe(409);

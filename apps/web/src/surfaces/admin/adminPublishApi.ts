@@ -11,6 +11,9 @@ export type PublishRefusal =
   | 'nothing_delivered'
   | 'profile_required'
   | 'preview_superseded_delivery'
+  | 'expected_version_required'
+  | 'review_version_changed'
+  | 'not_ready_for_review'
   | 'store_unavailable'
   | 'editorial_cut'
   | 'editorial_pending'
@@ -30,12 +33,13 @@ export type PublishOutcome = PublishResult | { refused: PublishRefusal; editoria
 
 export async function publishJob(
   jobId: number,
-  body?: { override?: boolean; overrideReason?: string },
+  body: { expectedVersion: string; override?: boolean; overrideReason?: string },
 ): Promise<PublishOutcome> {
   const response = await fetch(`/api/admin/jobs/${jobId}/publish`, {
     method: 'POST',
     credentials: 'include',
-    ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
   });
   if (response.ok) return (await response.json()) as PublishResult;
   const payload = (await response.json().catch(() => ({}))) as Partial<EditorialCounts> & { error?: string };
@@ -45,6 +49,9 @@ export async function publishJob(
     'nothing_delivered',
     'profile_required',
     'preview_superseded_delivery',
+    'expected_version_required',
+    'review_version_changed',
+    'not_ready_for_review',
     'store_unavailable',
     'editorial_cut',
     'editorial_pending',

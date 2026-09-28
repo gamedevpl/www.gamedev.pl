@@ -75,8 +75,13 @@ export function AdminJobPreviewModal({
             </div>
           </div>
           <div className="admin-preview-actions">
-            {job.state === 'ready_for_review' && (
-              <AdminJobPreviewPublish job={job} onPublished={onPublished} onMessage={setMessage} />
+            {job.state === 'ready_for_review' && state === 'ready' && preview && (
+              <AdminJobPreviewPublish
+                job={job}
+                expectedVersion={preview.version}
+                onPublished={onPublished}
+                onMessage={setMessage}
+              />
             )}
             <button type="button" className="admin-preview-close-btn" onClick={onClose} aria-label="Close preview">
               ✕
