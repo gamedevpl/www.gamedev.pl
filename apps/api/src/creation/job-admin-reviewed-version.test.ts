@@ -18,19 +18,23 @@ describe('publish reviewed version', () => {
       putDerivedArtifact: async () => {},
     } as unknown as GamesStore;
   }
-  async function appWithJob(gamesStore: GamesStore) {
+  async function appWithJob(gamesStore: GamesStore, legacy = false) {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:boss' });
     await store.claimHandle('g:boss', 'boss', '2026-07-01T00:00:00.000Z');
     await store.createSubmission(1_000_001, 'g:boss', 'Comet Courier');
     await store.setSubmissionSlug(1_000_001, 'comet-courier');
     await store.setSubmissionDeliveredVersion(1_000_001, 'v1');
-    await store.recordJobTransition(1_000_001, {
-      to: 'ready_for_review',
-      at: '2026-07-30T10:00:00Z',
-      by: 'agent',
-      reason: 'delivered',
-    });
+    if (legacy) {
+      await store.setSubmissionLastStatus(1_000_001, 'in_review');
+    } else {
+      await store.recordJobTransition(1_000_001, {
+        to: 'ready_for_review',
+        at: '2026-07-30T10:00:00Z',
+        by: 'agent',
+        reason: 'delivered',
+      });
+    }
     await store.upsertGameAssessment({
       slug: 'comet-courier',
       gameVersion: 'v1',
@@ -73,6 +77,20 @@ describe('publish reviewed version', () => {
     expect(stale.statusCode).toBe(409);
     expect(stale.json()).toEqual({ error: 'review_version_changed' });
     expect(await store.getPublication('comet-courier')).toBeNull();
+    await app.close();
+  });
+
+  it('publishes a legacy review-ready job with only lastStatus', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }), true);
+    expect((await store.getSubmission(1_000_001))?.state).toBeUndefined();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(await store.getPublication('comet-courier')).toMatchObject({ currentVersion: 'v1' });
     await app.close();
   });
 

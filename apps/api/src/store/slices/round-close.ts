@@ -15,7 +15,7 @@ export interface TransitionGuard {
 }
 
 export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boolean {
-  if (guard.state !== undefined && (sub.state ?? 'queued') !== guard.state) return false;
+  if (guard.state !== undefined && (resolveJobState(sub) ?? 'queued') !== guard.state) return false;
   if (guard.activityAt !== undefined && lastRoundActivityAt(sub) !== guard.activityAt) return false;
   if (guard.roundGeneration !== undefined && (sub.roundGeneration ?? 1) !== guard.roundGeneration) return false;
   if (guard.deliveredVersion !== undefined && sub.deliveredVersion !== guard.deliveredVersion) return false;
