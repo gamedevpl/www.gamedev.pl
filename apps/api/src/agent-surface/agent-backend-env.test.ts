@@ -2,14 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createAgentBackendRegistryFromEnv } from './agent-backend-env.js';
 import { registerManagedProvider, type ManagedProviderConfig } from './managed-agent.js';
-import { createAnthropicManagedProvider } from './managed-provider-anthropic.js';
 import { createGeminiManagedProvider } from './managed-provider-gemini.js';
 
 const ENV_KEYS = [
   'MANAGED_AGENT_VENDOR',
   'MANAGED_AGENT_API_KEY',
   'MANAGED_AGENT_MODEL',
-  'MANAGED_AGENT_ANTHROPIC_EFFORT',
   'MANAGED_AGENT_GEMINI_MODEL',
   'MANAGED_AGENT_OPENAI_MODEL',
   'MANAGED_AGENT_ID',
@@ -148,48 +146,6 @@ describe('createAgentBackendRegistryFromEnv', () => {
       expect(seen?.agentId).toBeUndefined();
       expect(seen?.environmentId).toBeUndefined();
     } finally {
-      registerManagedProvider('gemini', createGeminiManagedProvider);
-    }
-  });
-
-  it('gives Anthropic its own effort, never Gemini, and drops a typo', () => {
-    const seen: Record<string, ManagedProviderConfig> = {};
-    registerManagedProvider('anthropic', (config) => {
-      seen.anthropic = config;
-      return createAnthropicManagedProvider(config);
-    });
-    registerManagedProvider('gemini', (config) => {
-      seen.gemini = config;
-      return createGeminiManagedProvider(config);
-    });
-    const env = {
-      MANAGED_AGENT_VENDOR: 'anthropic',
-      MANAGED_AGENT_API_KEY: randomBytes(32).toString('hex'),
-      MANAGED_AGENT_MODEL: 'claude-sonnet-5-5',
-      MANAGED_AGENT_ID: 'agent_test',
-      MANAGED_AGENT_ENVIRONMENT_ID: 'env_test',
-      MANAGED_AGENT_MAX_SECONDS: '120',
-      MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
-      MANAGED_AGENT_MCP_URL: MCP_URL,
-      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
-      GEMINI_API_KEY: `gemini-${randomUUID()}`,
-    };
-    try {
-      setEnv({ ...env, MANAGED_AGENT_ANTHROPIC_EFFORT: 'medium' });
-      registryFromEnv({ info: vi.fn(), warn: vi.fn() });
-      expect(seen.anthropic?.effort).toBe('medium');
-      expect(seen.gemini?.effort).toBeUndefined();
-
-      const warn = vi.fn();
-      setEnv({ ...env, MANAGED_AGENT_ANTHROPIC_EFFORT: 'meduim' });
-      registryFromEnv({ info: vi.fn(), warn });
-      expect(seen.anthropic?.effort).toBeUndefined();
-      expect(warn).toHaveBeenCalledWith(
-        { effort: 'meduim' },
-        expect.stringContaining('MANAGED_AGENT_ANTHROPIC_EFFORT'),
-      );
-    } finally {
-      registerManagedProvider('anthropic', createAnthropicManagedProvider);
       registerManagedProvider('gemini', createGeminiManagedProvider);
     }
   });

@@ -81,7 +81,6 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const agentId = config.agentId?.trim();
   const environmentId = config.environmentId?.trim();
   const maxListCostCents = config.maxListCostCents;
-  const effort = config.effort;
   const vaultIds = config.vaultIds?.filter(Boolean);
   const overrideTools = config.overrideTools === true;
 
@@ -152,9 +151,6 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
           'anthropic managed agents uses the configured environment, not inline workspace files',
         );
       }
-      if (request.effort) {
-        throw new ManagedAgentError('anthropic managed agents takes effort from its provider config');
-      }
       if (request.tools?.allowedHosts?.length || request.tools?.credentialNames?.length) {
         throw new ManagedAgentError('anthropic managed agents does not map host or credential names from this seam');
       }
@@ -178,7 +174,8 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
         agent: {
           type: 'agent_with_overrides',
           id: agentId,
-          model: { id: request.model, ...(effort ? { effort: { type: effort } } : {}) },
+          // Replaces the Agent's model in full, effort included.
+          model: { id: request.model, ...(request.effort ? { effort: { type: request.effort } } : {}) },
           ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
           ...(mcpServers?.length
             ? {

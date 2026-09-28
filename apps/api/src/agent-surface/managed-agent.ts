@@ -185,8 +185,6 @@ export interface ManagedProviderConfig {
   agentId?: string;
   environmentId?: string;
   maxListCostCents?: number;
-  // Anthropic: the session's model override drops the agent's own effort.
-  effort?: ManagedAgentEffort;
   vaultIds?: string[];
   // Replace the agent's own tools and servers; off, its config wins.
   overrideTools?: boolean;

@@ -68,26 +68,6 @@ describe('anthropic managed provider', () => {
     });
   });
 
-  it('resends the effort inside the model override, which replaces the agent model', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ id: 'sess_2', status: 'queued' }));
-    const provider = createAnthropicManagedProvider({
-      apiKey: 'k',
-      model: 'claude-sonnet-5-5',
-      agentId: 'agent_test',
-      environmentId: 'env_test',
-      effort: 'medium',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-    });
-
-    await provider.startSession({ correlationId: '7', prompt: 'p', model: 'claude-sonnet-5-5', outputPath: 'o' });
-
-    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect(JSON.parse(String(init.body)).agent.model).toEqual({
-      id: 'claude-sonnet-5-5',
-      effort: { type: 'medium' },
-    });
-  });
-
   it('creates a per-round vault and returns its opaque lease', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith('/v1/vaults')) return jsonResponse({ id: 'vlt_round' });
