@@ -187,7 +187,10 @@ describe('createSharePreviewShell', () => {
       },
       isShareable: async () => true,
       canonicalHost: 'www.gamedev.pl',
-      store: { getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v3' }) as never },
+      store: {
+        getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v3' }),
+        listCatalogEnrichments: async () => [{ slug: 'sky-duel', tagline: { en: 'Duel over the clouds.' } }],
+      } as never,
       gamesStore: {
         getSourceFile: async (_slug, version, file) => (version === 'v3' && file === 'SPEC.md' ? spec : null),
         getDerivedArtifact: async (_slug, _version, file) =>
@@ -196,6 +199,7 @@ describe('createSharePreviewShell', () => {
     });
     const html = await shell({ ...request, url: '/play/sky-duel' });
     expect(html).toContain('<title>Sky Duel — gamedev.pl</title>');
+    expect(html).toContain('<meta property="og:description" content="Duel over the clouds." />');
     expect(repoLooked).toBe(false);
   });
 });

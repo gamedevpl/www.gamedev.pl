@@ -1,5 +1,6 @@
 // Link previews for shared game links: unfurlers never run the SPA.
 
+import { attachCatalogEnrichments } from '../catalog/catalog-enricher.js';
 import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { PLATFORM_HANDLE, RESERVED_HANDLES } from './creator-profile.js';
@@ -104,7 +105,7 @@ export interface SharePreviewShellOptions {
   readIndexHtml: () => Promise<string>;
   getCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
   // Store-lane publications, checked first as /play does.
-  store?: Pick<Store, 'getPublication'>;
+  store?: Store;
   gamesStore?: Pick<GamesStore, 'getSourceFile' | 'getDerivedArtifact'>;
   // Only games a stranger can open; others would leak past the wall.
   isShareable: (slug: string) => Promise<boolean>;
@@ -140,8 +141,10 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
     if (!slug) return null;
     try {
       if (!(await options.isShareable(slug))) return null;
-      const entry = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
-      if (!entry) return null;
+      const raw = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
+      if (!raw) return null;
+      // Taglines live in stored enrichments, as on GET /api/catalog.
+      const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
       shell ??= options.readIndexHtml().catch((error: unknown) => {
         shell = null;
         throw error;
