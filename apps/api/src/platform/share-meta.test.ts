@@ -43,6 +43,7 @@ describe('shareableGameSlug', () => {
     expect(shareableGameSlug('/play/biplane-skirmish?via=share')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/play/biplane%2Dskirmish')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/ay/biplane-skirmish')).toBe('biplane-skirmish');
+    expect(shareableGameSlug('/draft/biplane-skirmish')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/gtanczyk/biplane-skirmish')).toBe('biplane-skirmish');
     expect(shareableGameSlug('/gtanczyk/biplane-skirmish/releases')).toBe('biplane-skirmish');
   });
@@ -118,30 +119,50 @@ describe('injectShareMeta', () => {
 });
 
 describe('createSharePreviewShell', () => {
-  const request = { url: '/play/biplane-skirmish', host: 'localhost:8080', protocol: 'http' };
+  const request = { url: '/play/biplane-skirmish' };
 
   it('previews a shareable published game', async () => {
     const shell = createSharePreviewShell({
       readIndexHtml: async () => SHELL,
       getCatalogEntry: async () => entry(),
       isShareable: async () => true,
-      canonicalHost: 'www.gamedev.pl',
     });
     const html = await shell(request);
     expect(html).toContain('<title>Biplane Skirmish — gamedev.pl</title>');
     expect(html).toContain('https://www.gamedev.pl/api/games/biplane-skirmish/media/combat.png');
   });
 
-  it('uses the request origin without a canonical host', async () => {
+  it('uses the configured origin, never the request host', async () => {
     const shell = createSharePreviewShell({
       readIndexHtml: async () => SHELL,
       getCatalogEntry: async () => entry(),
       isShareable: async () => true,
+      origin: 'https://staging.example',
     });
-    expect(await shell(request)).toContain('http://localhost:8080/api/games/biplane-skirmish/media/combat.png');
-    expect(await shell({ ...request, url: '/oldowner/biplane-skirmish' })).toContain(
-      '<meta property="og:url" content="http://localhost:8080/play/biplane-skirmish" />',
+    expect(await shell(request)).toContain('https://staging.example/api/games/biplane-skirmish/media/combat.png');
+    expect(await shell({ url: '/oldowner/biplane-skirmish' })).toContain(
+      '<meta property="og:url" content="https://staging.example/play/biplane-skirmish" />',
     );
+  });
+
+  it('caches previews per slug for a short window', async () => {
+    let lookups = 0;
+    let clock = 0;
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        lookups += 1;
+        return entry();
+      },
+      isShareable: async () => true,
+      now: () => clock,
+    });
+    await shell(request);
+    await shell({ url: '/draft/biplane-skirmish' });
+    expect(lookups).toBe(1);
+    clock = 60_001;
+    await shell(request);
+    expect(lookups).toBe(2);
   });
 
   it('says nothing about games a stranger cannot open', async () => {
@@ -189,7 +210,6 @@ describe('createSharePreviewShell', () => {
         return null;
       },
       isShareable: async () => true,
-      canonicalHost: 'www.gamedev.pl',
       store: {
         getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v3' }),
         listCatalogEnrichments: async () => [{ slug: 'sky-duel', tagline: { en: 'Duel over the clouds.' } }],

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 
-type PreviewShell = (request: { url: string; host: string; protocol: string }) => Promise<string | null>;
+type PreviewShell = (request: { url: string }) => Promise<string | null>;
 
 // Deep links boot with 200, unknown paths with a real 404.
 export function registerSpaShellFallback(app: FastifyInstance, previewShell: PreviewShell): void {

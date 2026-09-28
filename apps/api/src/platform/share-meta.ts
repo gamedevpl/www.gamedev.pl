@@ -4,12 +4,13 @@ import { attachCatalogEnrichments } from '../catalog/catalog-enricher.js';
 import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { PLATFORM_HANDLE, RESERVED_HANDLES } from './creator-profile.js';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { isPublished } from './publication-state.js';
 import { normalizePathname } from './spa-paths.js';
 import type { Store } from './store.js';
 
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
-const PLAY_PATH = /^\/(?:play|ay|ai)\/([^/]+)$/;
+const PLAY_PATH = /^\/(?:play|ay|ai|draft)\/([^/]+)$/;
 const SLUG_ONLY = new RegExp(`^${SLUG}$`);
 // Same shape as GAME_PAGE_PATTERN in spa-paths.ts.
 const GAME_PAGE_PATH = new RegExp(`^/([a-z][a-z0-9_]{2,23})/(${SLUG})(?:/(?:board|review|releases|sources))?$`);
@@ -119,8 +120,9 @@ export interface SharePreviewShellOptions {
   gamesStore?: Pick<GamesStore, 'getSourceFile' | 'getDerivedArtifact'>;
   // Only games a stranger can open; others would leak past the wall.
   isShareable: (slug: string) => Promise<boolean>;
-  // Canonical host; the request's own host when unset.
-  canonicalHost?: string;
+  // Never the request Host header: a spoofed Host must not reach previews.
+  origin?: string;
+  now?: () => number;
 }
 
 // A store-lane game's entry from its published SPEC and media.
@@ -141,26 +143,41 @@ async function storePublishedEntry(
   );
 }
 
+const PREVIEW_TTL_MS = 60_000;
+const PREVIEW_CACHE_MAX = 256;
+
 // The game's shell, or null for plain index.html. Never throws.
 export function createSharePreviewShell(options: SharePreviewShellOptions) {
   let shell: Promise<string> | null = null;
-  const canonicalHost = options.canonicalHost?.trim() || null;
+  const origin = options.origin ?? canonicalAppBaseUrl();
+  const now = options.now ?? Date.now;
+  // Bounds storage reads on this public path; misses are cached too.
+  const cache = new Map<string, { html: string | null; expiresAt: number }>();
 
-  return async (request: { url: string; host: string; protocol: string }): Promise<string | null> => {
+  async function render(slug: string): Promise<string | null> {
+    const raw = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
+    if (!raw) return null;
+    // Taglines live in stored enrichments, as on GET /api/catalog.
+    const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
+    shell ??= options.readIndexHtml().catch((error: unknown) => {
+      shell = null;
+      throw error;
+    });
+    return injectShareMeta(await shell, renderShareMeta({ entry, origin }));
+  }
+
+  return async (request: { url: string }): Promise<string | null> => {
     const slug = shareableGameSlug(request.url);
     if (!slug) return null;
     try {
       if (!(await options.isShareable(slug))) return null;
-      const raw = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
-      if (!raw) return null;
-      // Taglines live in stored enrichments, as on GET /api/catalog.
-      const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
-      shell ??= options.readIndexHtml().catch((error: unknown) => {
-        shell = null;
-        throw error;
-      });
-      const origin = canonicalHost ? `https://${canonicalHost}` : `${request.protocol}://${request.host}`;
-      return injectShareMeta(await shell, renderShareMeta({ entry, origin }));
+      const cached = cache.get(slug);
+      if (cached && cached.expiresAt > now()) return cached.html;
+      const html = await render(slug);
+      cache.delete(slug);
+      if (cache.size >= PREVIEW_CACHE_MAX) cache.delete(cache.keys().next().value as string);
+      cache.set(slug, { html, expiresAt: now() + PREVIEW_TTL_MS });
+      return html;
     } catch {
       return null;
     }

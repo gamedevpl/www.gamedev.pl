@@ -1225,7 +1225,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         store,
         gamesStore,
         isShareable: playableAnonymously,
-        canonicalHost: process.env.CANONICAL_HOST,
       }),
     );
   }
