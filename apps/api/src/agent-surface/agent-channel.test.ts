@@ -1734,6 +1734,32 @@ describe('agent build channel', () => {
       expect(stored).toHaveLength(1);
     });
 
+    it('cannot bind a slugless job to another game’s orphan publication', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setPublication({
+        slug: 'victim-game',
+        state: 'published',
+        currentVersion: 'victim-live',
+        publishedAt: '2026-07-01T00:00:00.000Z',
+      });
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'victim-game', files: MINIMAL },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect((await store.getSubmission(ISSUE))?.slug).toBeUndefined();
+      expect(stored).toHaveLength(0);
+      const restore = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+      expect(restore.json()).toMatchObject({ origin: null, delivery: null, files: [] });
+    });
+
     it('explains a rejected path instead of failing opaquely', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
@@ -2880,11 +2906,7 @@ describe('agent build channel', () => {
       expect(response.json()).toMatchObject({ origin: null, files: [], seedStatus: 'pending' });
     });
 
-    it('restores the live publication for an improvement job that has not delivered yet', async () => {
-      // An improvement is a *new* job on a published slug (job-state.ts: publishing is
-      // terminal). That job inherits the slug before it has a deliveredVersion of its
-      // own — without the publication fallback, restore reports nothing and the agent
-      // rebuilds from the spec instead of revising the game the creator played.
+    it('does not restore an orphan publication from a bound job', async () => {
       const IMPROVEMENT = 1000004;
       const store = new InMemoryStore();
       await seedSubmission(store, IMPROVEMENT);
@@ -2909,14 +2931,7 @@ describe('agent build channel', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        origin: 'delivery',
-        delivery: { slug: 'global-thermonuclear-strategy', version: 'v3' },
-        files: [
-          { path: 'SPEC.md', content: '# Global Thermonuclear Strategy' },
-          { path: 'game.ts', content: 'export const tick = () => {};' },
-        ],
-      });
+      expect(response.json()).toMatchObject({ origin: null, delivery: null, files: [] });
     });
 
     it('prefers this job’s own delivery over the publication when both exist', async () => {
