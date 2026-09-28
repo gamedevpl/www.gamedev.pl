@@ -223,7 +223,7 @@ describe('createSharePreviewShell', () => {
     const html = await shell({ ...request, url: '/play/sky-duel' });
     expect(html).toContain('<title>Sky Duel — gamedev.pl</title>');
     expect(html).toContain('<meta property="og:description" content="Duel over the clouds." />');
-    expect(repoLooked).toBe(false);
+    expect(repoLooked).toBe(true);
   });
 
   it('caps storage lookups per minute however many slugs are tried', async () => {
@@ -243,5 +243,37 @@ describe('createSharePreviewShell', () => {
     clock = 60_000;
     await shell({ url: '/play/missing-300' });
     expect(lookups).toBe(61);
+  });
+
+  it('shares one render between concurrent requests for a slug', async () => {
+    let lookups = 0;
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        lookups += 1;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return entry();
+      },
+      isShareable: async () => true,
+    });
+    const pages = await Promise.all(Array.from({ length: 10 }, () => shell(request)));
+    expect(lookups).toBe(1);
+    expect(pages.every((html) => html?.includes('Biplane Skirmish'))).toBe(true);
+  });
+
+  it('prefers the repo entry when both lanes carry the slug', async () => {
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => entry(),
+      isShareable: async () => true,
+      store: {
+        getPublication: async () => {
+          throw new Error('store must not be read for a repo-lane slug');
+        },
+        listCatalogEnrichments: async () => [],
+      } as never,
+      gamesStore: {} as never,
+    });
+    expect(await shell(request)).toContain('<title>Biplane Skirmish — gamedev.pl</title>');
   });
 });

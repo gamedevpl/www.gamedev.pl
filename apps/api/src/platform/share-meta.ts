@@ -115,7 +115,7 @@ export interface SharePreviewShellOptions {
   // The built shell, read once on first use.
   readIndexHtml: () => Promise<string>;
   getCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
-  // Store-lane publications, checked first as /play does.
+  // Store-lane publications, used when the repo catalog lacks the slug.
   store?: Store;
   gamesStore?: Pick<GamesStore, 'getSourceFile' | 'getDerivedArtifact'>;
   // Only games a stranger can open; others would leak past the wall.
@@ -157,9 +157,11 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
   const cache = new Map<string, { html: string | null; expiresAt: number }>();
   let missesLeft = 0;
   let missWindowEndsAt = 0;
+  const inFlight = new Map<string, Promise<string | null>>();
 
   async function render(slug: string): Promise<string | null> {
-    const raw = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
+    // Repo first, as the catalog, game page and media route resolve it.
+    const raw = (await options.getCatalogEntry(slug)) ?? (await storePublishedEntry(options, slug));
     if (!raw) return null;
     // Taglines live in stored enrichments, as on GET /api/catalog.
     const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
@@ -181,13 +183,23 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
         missWindowEndsAt = now() + PREVIEW_TTL_MS;
         missesLeft = PREVIEW_MISS_BUDGET;
       }
+      // Concurrent requests for one slug share a render and one budget unit.
+      const pending = inFlight.get(slug);
+      if (pending) return await pending;
       if (missesLeft <= 0) return null;
       missesLeft -= 1;
-      const html = await render(slug);
-      cache.delete(slug);
-      if (cache.size >= PREVIEW_CACHE_MAX) cache.delete(cache.keys().next().value as string);
-      cache.set(slug, { html, expiresAt: now() + PREVIEW_TTL_MS });
-      return html;
+      const rendering = render(slug).then((html) => {
+        cache.delete(slug);
+        if (cache.size >= PREVIEW_CACHE_MAX) cache.delete(cache.keys().next().value as string);
+        cache.set(slug, { html, expiresAt: now() + PREVIEW_TTL_MS });
+        return html;
+      });
+      inFlight.set(slug, rendering);
+      try {
+        return await rendering;
+      } finally {
+        inFlight.delete(slug);
+      }
     } catch {
       return null;
     }
