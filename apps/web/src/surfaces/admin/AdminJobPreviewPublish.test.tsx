@@ -55,7 +55,9 @@ describe('AdminJobPreviewPublish', () => {
     const root = createRoot(host);
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await act(async () => {
-      root.render(createElement(AdminJobPreviewPublish, { job: job(), onMessage, onPublished: vi.fn() }));
+      root.render(
+        createElement(AdminJobPreviewPublish, { job: job(), expectedVersion: 'v1', onMessage, onPublished: vi.fn() }),
+      );
     });
 
     await act(async () => {
@@ -66,6 +68,7 @@ describe('AdminJobPreviewPublish', () => {
       await Promise.resolve();
     });
 
+    expect(mocked.publishJob).toHaveBeenCalledWith(1_000_001, { expectedVersion: 'v1' });
     expect(onMessage).toHaveBeenCalledWith(expect.stringContaining('no reviewer has cleared this game yet'));
     expect(onMessage).toHaveBeenCalledWith(expect.stringContaining('0 reviewers'));
     expect(dialog()?.textContent).toMatch(/Publish with no reviewer keep/i);

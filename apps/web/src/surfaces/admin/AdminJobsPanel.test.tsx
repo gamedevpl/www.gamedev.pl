@@ -25,6 +25,7 @@ function job(overrides: Partial<JobQueueEntry> = {}): JobQueueEntry {
     title: 'Comet Courier',
     ownerUid: 'g:1',
     slug: 'comet-courier',
+    reviewVersion: 'v1',
     state: 'ready_for_review',
     creatorStatus: 'in_review',
     ageMs: 90 * 60_000,

@@ -233,7 +233,7 @@ export function AdminJobsPanel() {
         const item = publishable[i];
         setBatchProgress({ running: true, current: i + 1, total: publishable.length, success, failed });
         try {
-          const res = await publishJob(item.jobId);
+          const res = await publishJob(item.jobId, { expectedVersion: item.reviewVersion ?? '' });
           if ('refused' in res) {
             if (isEditorialRefusal(res.refused)) {
               holds.push({ job: item, refused: res.refused, editorial: res.editorial });
@@ -258,7 +258,11 @@ export function AdminJobsPanel() {
       if (!hold || batchProgress?.running) return;
       setBatchProgress((prev) => (prev ? { ...prev, running: true } : prev));
       try {
-        const res = await publishJob(hold.job.jobId, { override: true, overrideReason: reason });
+        const res = await publishJob(hold.job.jobId, {
+          expectedVersion: hold.job.reviewVersion ?? '',
+          override: true,
+          overrideReason: reason,
+        });
         if ('refused' in res) {
           setBatchProgress((prev) => (prev ? { ...prev, running: false } : prev));
           return;

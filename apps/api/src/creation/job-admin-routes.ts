@@ -14,8 +14,16 @@ import { isPublishableMode } from '../platform/publication-state.js';
 import { resolveGameAccess, sameOwner } from '../platform/game-access-resolve.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { loadJobPreview } from './job-admin-preview.js';
-import { previewMatchesDelivery, resolveEditorialPublish, supersedeOtherRounds } from './job-admin-publish.js';
+import {
+  claimReviewedPublish,
+  previewMatchesDelivery,
+  resolveEditorialPublish,
+  reviewedPublishError,
+  supersedeOtherRounds,
+} from './job-admin-publish.js';
 import type { EditorialPublishCounts } from './job-admin-publish.js';
+
+type PublishBody = { expectedVersion?: string; override?: boolean; overrideReason?: string };
 
 /**
  * The operator's view of the build queue.
@@ -38,6 +46,7 @@ export interface JobQueueEntry {
   title: string;
   ownerUid: string;
   slug?: string;
+  reviewVersion?: string;
   /** Internal state — richer than what the creator is shown. */
   state: JobState;
   /** What the creator sees for the same job, so the two can be compared at a glance. */
@@ -94,6 +103,7 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
         title: record.title,
         ownerUid: record.ownerUid,
         slug: record.slug,
+        reviewVersion: record.previewVersion ?? record.deliveredVersion,
         state,
         creatorStatus: toSubmissionStatus(state),
         stateSince,
@@ -152,20 +162,10 @@ export async function registerJobAdminRoutes(
   });
 
   /**
-   * Publishes a gate-green build. This is the moderation boundary, exercised.
-   *
-   * Deliberately an operator action rather than something the gate does on green. The
-   * gate answers "does this run"; a human answers "may this be on the site", and those
-   * are different questions — the second is the one the DSA and the AI Act care about,
-   * and automating it would delete the boundary while leaving every document that claims
-   * we have one. So the gate records a verdict, and this is where someone acts on it.
-   *
-   * The green check is re-read from the manifest here rather than trusted from the job's
-   * state. Job state is derived on a poll and can be stale or adopted from an older
-   * record; the manifest is what the gate actually wrote. Publishing is the one action
-   * where the difference could put an unverified game in front of players.
+   * Operator publish boundary: reread the green gate from the manifest, since job state
+   * can be stale, and bind approval to the version the operator reviewed.
    */
-  app.post<{ Params: { jobId: string }; Body: { override?: boolean; overrideReason?: string } }>(
+  app.post<{ Params: { jobId: string }; Body: PublishBody }>(
     '/api/admin/jobs/:jobId/publish',
     async (request, reply) => {
       if (!isAdminSession(request, adminUids)) {
@@ -182,12 +182,13 @@ export async function registerJobAdminRoutes(
 
       const record = await store.getSubmission(jobId);
       if (!record) return reply.code(404).send({ error: 'not_found' });
-      if (!record.slug || !record.deliveredVersion) {
-        return reply.code(409).send({ error: 'nothing_delivered' });
+      const expectedVersion = request.body?.expectedVersion;
+      if (typeof expectedVersion !== 'string' || !expectedVersion) {
+        return reply.code(400).send({ error: 'expected_version_required' });
       }
-      if (!previewMatchesDelivery(record, record.deliveredVersion)) {
-        return reply.code(409).send({ error: 'preview_superseded_delivery' });
-      }
+      if (!record.slug || !record.deliveredVersion) return reply.code(409).send({ error: 'nothing_delivered' });
+      const reviewError = reviewedPublishError(record, expectedVersion);
+      if (reviewError) return reply.code(409).send({ error: reviewError });
 
       // Creator-owned games need a publishable profile: the canonical owner's.
       const initialAccess = await resolveGameAccess(store, record.slug);
@@ -228,7 +229,7 @@ export async function registerJobAdminRoutes(
 
       // Re-checked after every await above: a delivery may have landed meanwhile.
       const fresh = await store.getSubmission(jobId);
-      if (!fresh || !previewMatchesDelivery(fresh, record.deliveredVersion)) {
+      if (!fresh || !previewMatchesDelivery(fresh, expectedVersion)) {
         return reply.code(409).send({ error: 'preview_superseded_delivery' });
       }
 
@@ -236,7 +237,8 @@ export async function registerJobAdminRoutes(
       // Through `publishing` rather than straight to `published`: the intermediate state is
       // what a job is in while this is happening, and skipping it would leave no record
       // that it ever was — which is the state a failed publish has to fall back from.
-      await store.recordJobTransition(jobId, { to: 'publishing', at, by: 'operator', reason: clearance.reason });
+      const claimed = await claimReviewedPublish(store, fresh, expectedVersion, at, clearance.reason);
+      if (!claimed) return reply.code(409).send({ error: 'review_version_changed' });
       await store.setPublication({
         slug: record.slug,
         state: 'published',

@@ -10,12 +10,16 @@ export interface TransitionGuard {
   roundGeneration?: number;
   // The latest dispatch ref, so a replacement round is never closed.
   dispatchRef?: string;
+  deliveredVersion?: string;
+  previewVersion?: string;
 }
 
 export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boolean {
   if (guard.state !== undefined && (sub.state ?? 'queued') !== guard.state) return false;
   if (guard.activityAt !== undefined && lastRoundActivityAt(sub) !== guard.activityAt) return false;
   if (guard.roundGeneration !== undefined && (sub.roundGeneration ?? 1) !== guard.roundGeneration) return false;
+  if (guard.deliveredVersion !== undefined && sub.deliveredVersion !== guard.deliveredVersion) return false;
+  if ('previewVersion' in guard && sub.previewVersion !== guard.previewVersion) return false;
   return guard.dispatchRef === undefined || sub.dispatch?.refs.at(-1) === guard.dispatchRef;
 }
 

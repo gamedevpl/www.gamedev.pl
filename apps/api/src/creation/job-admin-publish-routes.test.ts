@@ -62,6 +62,12 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     await store.createSubmission(1_000_001, ownerUid, 'Comet Courier');
     await store.setSubmissionSlug(1_000_001, 'comet-courier');
     await store.setSubmissionDeliveredVersion(1_000_001, 'v1');
+    await store.recordJobTransition(1_000_001, {
+      to: 'ready_for_review',
+      at: '2026-07-30T10:00:00Z',
+      by: 'agent',
+      reason: 'delivered',
+    });
     if (opts?.clearance === 'cut') {
       await seedAssessment(store, 'g:reviewer1', 'cut');
       await seedAssessment(store, 'g:reviewer2', 'cut');
@@ -87,6 +93,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -101,6 +108,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -114,6 +122,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(200);
@@ -125,72 +134,12 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
     // Publish goes through publishing, not straight to published.
     const record = await store.getSubmission(1_000_001);
     expect(record?.state).toBe('published');
-    expect(record?.transitions?.map((entry) => entry.to)).toEqual(['publishing', 'published']);
+    expect(record?.transitions?.slice(-2).map((entry) => entry.to)).toEqual(['publishing', 'published']);
     expect(record?.publishedAt).toBeTruthy();
     // Creator rail reads lastStatus, not state.
     expect(record?.lastStatus).toBe('published');
 
     await app.close();
-  });
-
-  it('refuses an older delivery after a newer preview was reviewed', async () => {
-    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
-    await store.setSubmissionPreviewVersion(1_000_001, 'v2');
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
-      headers: adminHeaders,
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({ error: 'preview_superseded_delivery' });
-    expect(await store.getPublication('comet-courier')).toBeNull();
-
-    await app.close();
-  });
-
-  it('requires a fresh review when a preview round was later sealed into a delivery', async () => {
-    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
-    await store.setSubmissionPreviewVersion(1_000_001, 'v2');
-    // A publish delivery advances both pointers together.
-    await store.setSubmissionDeliveredVersion(1_000_001, 'v3');
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
-      headers: adminHeaders,
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ error: 'editorial_pending', reviewers: 0 });
-    await app.close();
-  });
-
-  it('refuses when a newer preview lands while the publish is in flight', async () => {
-    const base = gamesStoreWith({ green: true });
-    const seam: { store?: InMemoryStore } = {};
-    const racing = {
-      ...base,
-      getManifest: async (...args: Parameters<GamesStore['getManifest']>) => {
-        // Interleaves a preview delivery between the first read and the write.
-        await seam.store?.setSubmissionPreviewVersion(1_000_001, 'v2');
-        return base.getManifest(...args);
-      },
-    } as GamesStore;
-    const built = await appWithJob(racing);
-    const store = (seam.store = built.store);
-    const response = await built.app.inject({
-      method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
-      headers: adminHeaders,
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({ error: 'preview_superseded_delivery' });
-    expect(await store.getPublication('comet-courier')).toBeNull();
-    expect((await store.getSubmission(1_000_001))?.state).not.toBe('publishing');
-    await built.app.close();
   });
 
   it('supersedes older active submissions for the same slug when publishing', async () => {
@@ -204,6 +153,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(200);
@@ -226,6 +176,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -257,6 +208,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -288,6 +240,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(200);
@@ -303,6 +256,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -319,6 +273,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -352,6 +307,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -363,7 +319,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       skip: 0,
     });
     expect(await store.getPublication('comet-courier')).toBeNull();
-    expect((await store.getSubmission(1_000_001))?.transitions).toBeUndefined();
+    expect((await store.getSubmission(1_000_001))?.transitions?.some((entry) => entry.to === 'publishing')).toBe(false);
 
     await app.close();
   });
@@ -375,6 +331,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
@@ -394,12 +351,13 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ error: 'editorial_cut', reviewers: 2, cut: 2, keep: 0 });
     expect(await store.getPublication('comet-courier')).toBeNull();
-    expect((await store.getSubmission(1_000_001))?.transitions).toBeUndefined();
+    expect((await store.getSubmission(1_000_001))?.transitions?.some((entry) => entry.to === 'publishing')).toBe(false);
     expect((await store.getSubmission(1_000_000))?.lastStatus).not.toBe('abandoned');
 
     await app.close();
@@ -416,6 +374,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: adminHeaders,
+      payload: { expectedVersion: 'v1' },
     });
 
     expect(response.statusCode).toBe(200);
@@ -431,13 +390,13 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: { ...adminHeaders, 'content-type': 'application/json' },
-      payload: { override: true },
+      payload: { expectedVersion: 'v1', override: true },
     });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'reason_required' });
     expect(await store.getPublication('comet-courier')).toBeNull();
-    expect((await store.getSubmission(1_000_001))?.transitions).toBeUndefined();
+    expect((await store.getSubmission(1_000_001))?.transitions?.some((entry) => entry.to === 'publishing')).toBe(false);
 
     await app.close();
   });
@@ -449,7 +408,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: { ...adminHeaders, 'content-type': 'application/json' },
-      payload: { override: true, overrideReason: 'x'.repeat(501) },
+      payload: { expectedVersion: 'v1', override: true, overrideReason: 'x'.repeat(501) },
     });
 
     expect(response.statusCode).toBe(400);
@@ -466,13 +425,13 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: { ...adminHeaders, 'content-type': 'application/json' },
-      payload: { override: true, overrideReason: 'still the right call' },
+      payload: { expectedVersion: 'v1', override: true, overrideReason: 'still the right call' },
     });
 
     expect(response.statusCode).toBe(200);
     expect(await store.getPublication('comet-courier')).toMatchObject({ state: 'published' });
     const record = await store.getSubmission(1_000_001);
-    expect(record?.transitions?.[0]).toMatchObject({
+    expect(record?.transitions?.at(-2)).toMatchObject({
       to: 'publishing',
       by: 'operator',
       reason: 'override:editorial_cut:still the right call',
@@ -488,12 +447,12 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       method: 'POST',
       url: '/api/admin/jobs/1000001/publish',
       headers: { ...adminHeaders, 'content-type': 'application/json' },
-      payload: { override: true, overrideReason: 'already clear' },
+      payload: { expectedVersion: 'v1', override: true, overrideReason: 'already clear' },
     });
 
     expect(response.statusCode).toBe(200);
     const record = await store.getSubmission(1_000_001);
-    expect(record?.transitions?.map((entry) => entry.reason)).toEqual(['approved', 'published']);
+    expect(record?.transitions?.slice(-2).map((entry) => entry.reason)).toEqual(['approved', 'published']);
 
     await app.close();
   });

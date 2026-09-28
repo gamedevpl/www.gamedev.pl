@@ -25,6 +25,7 @@ function job(overrides: Partial<JobQueueEntry> = {}): JobQueueEntry {
     title: 'Comet Courier',
     ownerUid: 'g:1',
     slug: 'comet-courier',
+    reviewVersion: 'v1',
     state: 'ready_for_review',
     creatorStatus: 'in_review',
     ageMs: 90 * 60_000,
@@ -98,7 +99,7 @@ describe('AdminJobsPanel confirmations', () => {
       await Promise.resolve();
     });
 
-    expect(mocked.publishJob).toHaveBeenCalledWith(1_000_001);
+    expect(mocked.publishJob).toHaveBeenCalledWith(1_000_001, { expectedVersion: 'v1' });
     expect(container.querySelector('.admin-job-message')?.textContent).toContain('published comet-courier');
     expect(mocked.fetchJobQueue).toHaveBeenCalledTimes(2);
 
@@ -208,6 +209,7 @@ describe('AdminJobsPanel confirmations', () => {
       await Promise.resolve();
     });
     expect(mocked.publishJob).toHaveBeenLastCalledWith(1_000_001, {
+      expectedVersion: 'v1',
       override: true,
       overrideReason: 'reviewers are offline',
     });
@@ -314,7 +316,7 @@ describe('AdminJobsPanel confirmations', () => {
       confirmDialogButton('Publish').click();
       await Promise.resolve();
     });
-    expect(mocked.publishJob).toHaveBeenCalledWith(1234);
+    expect(mocked.publishJob).toHaveBeenCalledWith(1234, { expectedVersion: 'v1' });
 
     await act(async () => root.unmount());
   });
@@ -348,8 +350,8 @@ describe('AdminJobsPanel confirmations', () => {
       await Promise.resolve();
     });
 
-    expect(mocked.publishJob).toHaveBeenCalledWith(10);
-    expect(mocked.publishJob).toHaveBeenCalledWith(11);
+    expect(mocked.publishJob).toHaveBeenCalledWith(10, { expectedVersion: 'v1' });
+    expect(mocked.publishJob).toHaveBeenCalledWith(11, { expectedVersion: 'v1' });
     expect(mocked.publishJob).not.toHaveBeenCalledWith(9);
     expect(mocked.publishJob).not.toHaveBeenCalledWith(12);
 
@@ -412,6 +414,7 @@ describe('AdminJobsPanel confirmations', () => {
       await Promise.resolve();
     });
     expect(mocked.publishJob).toHaveBeenLastCalledWith(10, {
+      expectedVersion: 'v1',
       override: true,
       overrideReason: 'reviewers are offline',
     });

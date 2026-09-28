@@ -21,6 +21,7 @@ export interface JobQueueEntry {
   title: string;
   ownerUid: string;
   slug?: string;
+  reviewVersion?: string;
   state: JobState;
   creatorStatus: string;
   stateSince?: string;
