@@ -4,6 +4,8 @@
 
 [**Play now → www.gamedev.pl**](https://www.gamedev.pl) · closed beta
 
+Follow along: [YouTube](https://www.youtube.com/@gamedev_pl) · [X](https://x.com/gtanczyk)
+
 ![Stars](https://img.shields.io/github/stars/gamedevpl/www.gamedev.pl?style=flat-square)
 ![License](https://img.shields.io/github/license/gamedevpl/www.gamedev.pl?style=flat-square)
 
