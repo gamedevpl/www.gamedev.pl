@@ -246,6 +246,7 @@ on every revision because `--set-env-vars` replaces the whole map:
 | ----------------------------------- | ----------------------------------------------------------------------- |
 | `MANAGED_AGENT_VENDOR`              | Provider adapter: `anthropic`, `copilot`, `gemini`, or `openai`         |
 | `MANAGED_AGENT_MODEL`               | Anthropic model label                                                   |
+| `MANAGED_AGENT_ANTHROPIC_EFFORT`    | Anthropic session effort (`low`/`medium`/`high`); unset = model default |
 | `MANAGED_AGENT_GEMINI_MODEL`        | Gemini model label; falls back to the built-in default                  |
 | `MANAGED_AGENT_OPENAI_MODEL`        | OpenAI model label — **required for OpenAI, never defaulted**           |
 | `MANAGED_AGENT_ID`                  | Managed Agent resource                                                  |

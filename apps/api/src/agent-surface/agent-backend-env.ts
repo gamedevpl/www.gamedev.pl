@@ -57,6 +57,17 @@ export interface ManagedBackendDeps {
   githubClientFactory?: CopilotGitHubClientFactory;
 }
 
+const EFFORTS: readonly ManagedAgentEffort[] = ['low', 'medium', 'high'];
+
+// A typo falls back to the model default, never a guessed effort.
+function parseEffort(raw: string | undefined, log: Logger | undefined): ManagedAgentEffort | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  if ((EFFORTS as readonly string[]).includes(value)) return value as ManagedAgentEffort;
+  log?.warn({ effort: value }, 'MANAGED_AGENT_ANTHROPIC_EFFORT is not low, medium or high; using the model default');
+  return undefined;
+}
+
 // One vendor's backend — a bad Gemini key must not affect Anthropic.
 function buildManagedBackendForVendor(
   vendor: string,
@@ -145,6 +156,8 @@ function buildManagedBackendForVendor(
   }
 
   const effort = process.env.MANAGED_AGENT_EFFORT?.trim() as ManagedAgentEffort | undefined;
+  const anthropicEffort =
+    vendor === 'anthropic' ? parseEffort(process.env.MANAGED_AGENT_ANTHROPIC_EFFORT, log) : undefined;
   const deliveryMode = process.env.MANAGED_AGENT_DELIVERY_MODE?.trim() === 'publish' ? 'publish' : 'preview';
 
   let provider;
@@ -160,6 +173,7 @@ function buildManagedBackendForVendor(
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
+      ...(anthropicEffort ? { effort: anthropicEffort } : {}),
       ...((isGemini || isOpenAi) && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
         ? { budget: { unit: 'tokens' as const, max: maxTotalTokens } }
         : {}),
