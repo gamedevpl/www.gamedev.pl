@@ -173,4 +173,29 @@ describe('createSharePreviewShell', () => {
     });
     expect(await failing(request)).toBeNull();
   });
+
+  it('previews a store-lane game from its published SPEC and media', async () => {
+    const spec =
+      '---\ntitle: Sky Duel\nslug: sky-duel\ngenre: flight\ncontrols: keys\nstatus: published\n---\n\nA duel.\n';
+    const media = JSON.stringify({ formatVersion: 1, captures: { combat: { file: 'combat.png', frame: 1 } } });
+    let repoLooked = false;
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        repoLooked = true;
+        return null;
+      },
+      isShareable: async () => true,
+      canonicalHost: 'www.gamedev.pl',
+      store: { getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v3' }) as never },
+      gamesStore: {
+        getSourceFile: async (_slug, version, file) => (version === 'v3' && file === 'SPEC.md' ? spec : null),
+        getDerivedArtifact: async (_slug, _version, file) =>
+          file === 'media/metadata.json' ? Buffer.from(media) : null,
+      } as never,
+    });
+    const html = await shell({ ...request, url: '/play/sky-duel' });
+    expect(html).toContain('<title>Sky Duel — gamedev.pl</title>');
+    expect(repoLooked).toBe(false);
+  });
 });

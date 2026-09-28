@@ -1,8 +1,11 @@
 // Link previews for shared game links: unfurlers never run the SPA.
 
-import type { CatalogGameEntry } from '../catalog/github-client.js';
+import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
+import type { GamesStore } from '../delivery/games-store.js';
 import { PLATFORM_HANDLE, RESERVED_HANDLES } from './creator-profile.js';
+import { isPublished } from './publication-state.js';
 import { normalizePathname } from './spa-paths.js';
+import type { Store } from './store.js';
 
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
 const PLAY_PATH = new RegExp(`^/play/(${SLUG})$`);
@@ -100,10 +103,31 @@ export interface SharePreviewShellOptions {
   // The built shell, read once on first use.
   readIndexHtml: () => Promise<string>;
   getCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
+  // Store-lane publications, checked first as /play does.
+  store?: Pick<Store, 'getPublication'>;
+  gamesStore?: Pick<GamesStore, 'getSourceFile' | 'getDerivedArtifact'>;
   // Only games a stranger can open; others would leak past the wall.
   isShareable: (slug: string) => Promise<boolean>;
   // Canonical host; the request's own host when unset.
   canonicalHost?: string;
+}
+
+// A store-lane game's entry from its published SPEC and media.
+async function storePublishedEntry(
+  { store, gamesStore }: Pick<SharePreviewShellOptions, 'store' | 'gamesStore'>,
+  slug: string,
+): Promise<CatalogGameEntry | null> {
+  if (!store || !gamesStore) return null;
+  const publication = await store.getPublication(slug);
+  if (!isPublished(publication)) return null;
+  const [spec, media] = await Promise.all([
+    gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md'),
+    gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json'),
+  ]);
+  if (!spec) return null;
+  return catalogEntryFromSpec(slug, spec, (name) =>
+    name === 'media/metadata.json' && media ? media.toString('utf8') : null,
+  );
 }
 
 // The game's shell, or null for plain index.html. Never throws.
@@ -116,7 +140,7 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
     if (!slug) return null;
     try {
       if (!(await options.isShareable(slug))) return null;
-      const entry = await options.getCatalogEntry(slug);
+      const entry = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
       if (!entry) return null;
       shell ??= options.readIndexHtml().catch((error: unknown) => {
         shell = null;

@@ -1222,6 +1222,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       createSharePreviewShell({
         readIndexHtml: () => readFile(path.join(webDistDir, 'index.html'), 'utf8'),
         getCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+        store,
+        gamesStore,
         isShareable: playableAnonymously,
         canonicalHost: process.env.CANONICAL_HOST,
       }),
