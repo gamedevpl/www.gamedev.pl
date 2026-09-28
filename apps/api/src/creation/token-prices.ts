@@ -3,7 +3,7 @@ import type { AgentSessionTokens } from './job-state.js';
 // Token twin of USD_PER_CREDIT: published list rates, so conversion estimates nothing.
 
 // Bumped on any rate change, and reported beside the money it produced.
-export const TOKEN_PRICE_TABLE_VERSION = '2026-09-15';
+export const TOKEN_PRICE_TABLE_VERSION = '2026-09-29';
 
 export interface TokenRate {
   inputPerMTok: number;
@@ -14,7 +14,10 @@ export interface TokenRate {
 
 // Keyed on model: `by` holds a backend name on some kinds.
 const RATES: Readonly<Record<string, TokenRate>> = {
-  'claude-sonnet-5': { inputPerMTok: 3, outputPerMTok: 15 },
+  // Booked at $3 / $15 until 2026-09-29.
+  'claude-sonnet-5': { inputPerMTok: 2, outputPerMTok: 10 },
+  'claude-sonnet-5-5': { inputPerMTok: 2, outputPerMTok: 10, cachedInputPerMTok: 0.2 },
+  'claude-opus-5-5': { inputPerMTok: 4, outputPerMTok: 20, cachedInputPerMTok: 0.2 },
   'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5 },
 
   // Vertex standard tier, not the halved Gemini API introductory tier.

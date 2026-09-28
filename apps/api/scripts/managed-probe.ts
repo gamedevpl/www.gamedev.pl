@@ -116,7 +116,7 @@ const model =
         ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim()
         : process.env.MANAGED_AGENT_MODEL?.trim()) ??
   (vendor === 'anthropic'
-    ? 'claude-sonnet-5'
+    ? 'claude-sonnet-5-5'
     : vendor === 'copilot'
       ? 'claude-sonnet-4.6'
       : vendor === 'gemini'

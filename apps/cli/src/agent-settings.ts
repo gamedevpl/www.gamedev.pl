@@ -8,7 +8,7 @@ export type AgentSelection = { model?: string; effort?: string };
 const EFFORTS: Record<string, string[]> = {
   codex: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
   muse: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-  claude: ['low', 'medium', 'high', 'max'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   agy: ['low', 'medium', 'high'],
   copilot: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
 };

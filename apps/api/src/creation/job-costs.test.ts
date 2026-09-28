@@ -226,8 +226,8 @@ describe('buildCostReport', () => {
       }),
     ]);
 
-    // $3 of input plus $1.50 of output.
-    expect(report.jobs[0].usd).toBe(4.5);
+    // $2 of input plus $1 of output.
+    expect(report.jobs[0].usd).toBe(3);
     expect(report.jobs[0].usdBounded).toBe(true);
     expect(report.unpricedModels).toEqual([]);
   });

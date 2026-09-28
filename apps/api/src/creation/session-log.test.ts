@@ -69,7 +69,7 @@ describe('buildSessionLog', () => {
 
     const [row] = buildSessionLog([record({ jobId: 1, costs: [entry] })], 10);
 
-    expect(row.usd).toBe(4.5);
+    expect(row.usd).toBe(3);
     expect(row.usdBounded).toBe(true);
     expect(row.model).toBe('claude-sonnet-5');
   });
