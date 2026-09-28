@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl model` offers the `xhigh` effort for Claude Code, between `high` and `max`.
+- `gamedevpl model` offers the `xhigh` effort for Claude Code, between `high` and `max` (#1590).
 
 ### Fixed
 
