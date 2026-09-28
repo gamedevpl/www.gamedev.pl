@@ -188,6 +188,9 @@ export const MUSIC_CONTRACT = {
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
+  /** Optional `audio.bank` in GAME.json: clip name to a repo-relative MP3 path. */
+  manifestBankFieldType: 'Record<string, string>',
+  windowBankName: '__GAME_AUDIO_BANK__',
 } as const;
 
 /**

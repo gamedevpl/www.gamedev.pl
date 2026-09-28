@@ -1,4 +1,5 @@
 import { decodeCanonicalBase64 } from '../platform/canonical-base64.js';
+import { MUSIC_CONTRACT } from '../platform/games-repo-contract.js';
 
 export interface BankSource {
   // Candidate sources win; with noRefFallback the repo is never read.
@@ -36,6 +37,6 @@ export async function prependAudio(
   names.forEach((name, i) => {
     out[name] = `data:audio/mpeg;base64,${Buffer.from(clips[i] as Uint8Array).toString('base64')}`;
   });
-  chunks.unshift(`window.__GAME_AUDIO_BANK__ = Object.freeze(${JSON.stringify(out)});`);
+  chunks.unshift(`window.${MUSIC_CONTRACT.windowBankName} = Object.freeze(${JSON.stringify(out)});`);
   return true;
 }

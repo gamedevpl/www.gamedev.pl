@@ -79,7 +79,7 @@ describe('games-repo-contract (website half)', () => {
       authorBudgetBytes: number;
       platformCeilingBytes: number;
       rasterBudgetBytes?: number;
-      audio: { musicField: string; musicTracksField: string };
+      audio: { musicField: string; musicTracksField: string; bankField: string; injectedGlobals: Record<string, string> };
     };
     expect(fixture.version).toBe(2);
     // The audio injection shape is half of what this fixture exists to pin: `music` is the
@@ -87,6 +87,10 @@ describe('games-repo-contract (website half)', () => {
     // must embed both, or a published game's mid-round score change silently no-ops.
     expect(fixture.audio.musicField).toBe(MUSIC_CONTRACT.manifestFieldType);
     expect(fixture.audio.musicTracksField).toBe(MUSIC_CONTRACT.manifestTracksFieldType);
+    // Per-game audio.bank clips: serve-time assembly embeds them under the same global.
+    expect(fixture.audio.bankField).toBe(MUSIC_CONTRACT.manifestBankFieldType);
+    expect(fixture.audio.injectedGlobals.bank).toBe(MUSIC_CONTRACT.windowBankName);
+    expect(fixture.audio.injectedGlobals.tracks).toBe(MUSIC_CONTRACT.windowTracksName);
     expect(fixture.maxProjectBytes).toBe(MAX_PROJECT_BYTES);
     expect(fixture.authorBudgetBytes).toBe(GAME_BUDGET_BYTES);
     expect(fixture.platformCeilingBytes).toBe(GAMEKIT_PLATFORM_BYTES);
