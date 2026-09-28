@@ -520,8 +520,10 @@ without a second vendor, a dual write, or dismantling the spend brake. It raises
 
 **No content negotiation.** Vite builds this app for `baseline-widely-available`, which is
 Safari 16 and up; WebP has been supported since Safari 14. Every browser that can run the
-app can read the format, so there is no `Accept` branch and no `Vary` to get wrong. Nothing
-else consumes these URLs either — the site serves no `og:image` or `twitter:image`.
+app can read the format, so there is no `Accept` branch and no `Vary` to get wrong. The one
+other consumer is the link preview: a shared `/play/<slug>` or game page of a game a stranger
+can open carries `og:image` / `twitter:image` pointing at the full-size PNG
+(`apps/api/src/platform/share-meta.ts`), which unfurlers read in either format.
 
 **Both formats are written anyway.** `media-object-choice.ts` prefers the asked-for width
 first and WebP within it, falling through to whatever an older snapshot happens to hold.
