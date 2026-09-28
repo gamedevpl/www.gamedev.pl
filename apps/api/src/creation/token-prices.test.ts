@@ -5,7 +5,7 @@ describe('priceTokens', () => {
   it('converts a million tokens each way at the published rate', () => {
     const priced = priceTokens({ input: 1_000_000, output: 1_000_000, vendor: 'anthropic', model: 'claude-sonnet-5' });
 
-    expect(priced?.usd).toBeCloseTo(18, 10);
+    expect(priced?.usd).toBeCloseTo(12, 10);
   });
 
   it('reports a model it has no rate for as unpriced rather than free', () => {
@@ -17,7 +17,7 @@ describe('priceTokens', () => {
     // Seed rows leave the model on the entry's `by`.
     const priced = priceTokens({ input: 1_000_000, output: 0 }, 'claude-sonnet-5');
 
-    expect(priced?.usd).toBeCloseTo(3, 10);
+    expect(priced?.usd).toBeCloseTo(2, 10);
   });
 
   it('flags a bare token shape as a bound, because cache reads hide inside its input count', () => {

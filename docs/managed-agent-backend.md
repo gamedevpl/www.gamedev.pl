@@ -333,7 +333,7 @@ watching.
 probe then verified the current contract: `POST /v1/sessions`, the
 `managed-agents-2026-04-01` beta header, initial `user.message` events, session polling,
 the Files API and deletion all work against the live API. The session uses the
-preconfigured Agent and Environment; Sonnet 5 belongs on the Agent resource, not in the
+preconfigured Agent and Environment; the model belongs on the Agent resource, not in the
 session body:
 
 ```bash
@@ -344,7 +344,7 @@ npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
   --wait-seconds 120 --budget-usd 1
 ```
 
-The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to `claude-sonnet-5`;
+The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to `claude-sonnet-5-5`;
 `MANAGED_AGENT_API_KEY` or `--model` overrides either value. `MANAGED_AGENT_ID` and
 `MANAGED_AGENT_ENVIRONMENT_ID` identify the preconfigured Anthropic resources.
 `MANAGED_AGENT_MCP_URL` makes the adapter create a round-scoped vault containing the build

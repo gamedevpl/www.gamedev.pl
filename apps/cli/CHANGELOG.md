@@ -7,9 +7,17 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl model` offers the `xhigh` effort for Claude Code, between `high` and `max` (#1590).
+
 ### Fixed
 
 - Muse runs show real tool names (`bash` instead of `toolCall` or `tool:bash`) and no longer list Muse's internal reminder subagents as unfinished tool calls; `genaicode` is bumped to 2.6.0 in the CLI and API (#1586).
+
+### Internal
+
+- `genaicode` is bumped to 2.7.0 in the CLI and API; it sends request shapes Claude Sonnet 5.5 and Opus 5.5 accept (#1590).
 
 ## 0.22.1 — 2026-09-26
 
