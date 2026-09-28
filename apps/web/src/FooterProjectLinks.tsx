@@ -3,7 +3,7 @@ import githubIcon from './assets/github-mark-white.svg';
 import { REPO_URL } from './github.js';
 
 export const YOUTUBE_URL = 'https://www.youtube.com/@gamedev_pl';
-export const X_URL = 'https://x.com/gtanczyk';
+export const X_URL = 'https://x.com/plgamedev';
 
 // Where the project lives and where it posts; brand names stay untranslated.
 export function FooterProjectLinks() {
