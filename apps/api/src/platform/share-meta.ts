@@ -159,10 +159,28 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
   let missWindowEndsAt = 0;
   const inFlight = new Map<string, Promise<string | null>>();
 
-  async function render(slug: string): Promise<string | null> {
+  // Repo misses fall through to storage, which the budget bounds.
+  function spendMiss(): boolean {
+    if (now() >= missWindowEndsAt) {
+      missWindowEndsAt = now() + PREVIEW_TTL_MS;
+      missesLeft = PREVIEW_MISS_BUDGET;
+    }
+    if (missesLeft <= 0) return false;
+    missesLeft -= 1;
+    return true;
+  }
+
+  async function lookup(slug: string): Promise<CatalogGameEntry | null | undefined> {
     // Repo first, as the catalog, game page and media route resolve it.
-    const raw = (await options.getCatalogEntry(slug)) ?? (await storePublishedEntry(options, slug));
-    if (!raw) return null;
+    const repo = await options.getCatalogEntry(slug).catch(() => null);
+    if (repo) return repo;
+    // Undefined means over budget: answered plainly, never cached.
+    return spendMiss() ? storePublishedEntry(options, slug) : undefined;
+  }
+
+  async function render(slug: string): Promise<string | null | undefined> {
+    const raw = await lookup(slug);
+    if (!raw) return raw;
     // Taglines live in stored enrichments, as on GET /api/catalog.
     const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
     shell ??= options.readIndexHtml().catch((error: unknown) => {
@@ -179,16 +197,11 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
       if (!(await options.isShareable(slug))) return null;
       const cached = cache.get(slug);
       if (cached && cached.expiresAt > now()) return cached.html;
-      if (now() >= missWindowEndsAt) {
-        missWindowEndsAt = now() + PREVIEW_TTL_MS;
-        missesLeft = PREVIEW_MISS_BUDGET;
-      }
       // Concurrent requests for one slug share a render and one budget unit.
       const pending = inFlight.get(slug);
       if (pending) return await pending;
-      if (missesLeft <= 0) return null;
-      missesLeft -= 1;
       const rendering = render(slug).then((html) => {
+        if (html === undefined) return null;
         cache.delete(slug);
         if (cache.size >= PREVIEW_CACHE_MAX) cache.delete(cache.keys().next().value as string);
         cache.set(slug, { html, expiresAt: now() + PREVIEW_TTL_MS });

@@ -231,18 +231,45 @@ describe('createSharePreviewShell', () => {
     let clock = 0;
     const shell = createSharePreviewShell({
       readIndexHtml: async () => SHELL,
-      getCatalogEntry: async () => {
-        lookups += 1;
-        return null;
-      },
+      getCatalogEntry: async (slug) => (slug === 'biplane-skirmish' ? entry() : null),
       isShareable: async () => true,
       now: () => clock,
+      store: {
+        getPublication: async () => {
+          lookups += 1;
+          return null;
+        },
+        listCatalogEnrichments: async () => [],
+      } as never,
+      gamesStore: {} as never,
     });
     for (let i = 0; i < 300; i += 1) await shell({ url: `/play/missing-${i}` });
     expect(lookups).toBe(60);
+    // Repo-catalog games still preview once the budget is spent.
+    expect(await shell(request)).toContain('<title>Biplane Skirmish — gamedev.pl</title>');
     clock = 60_000;
     await shell({ url: '/play/missing-300' });
     expect(lookups).toBe(61);
+  });
+
+  it('falls back to the store when the repo catalog fails', async () => {
+    const spec = '---\ntitle: Sky Duel\nslug: sky-duel\ngenre: flight\ncontrols: keys\nstatus: published\n---\n';
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        throw new Error('catalog down');
+      },
+      isShareable: async () => true,
+      store: {
+        getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v1' }),
+        listCatalogEnrichments: async () => [],
+      } as never,
+      gamesStore: {
+        getSourceFile: async () => spec,
+        getDerivedArtifact: async () => null,
+      } as never,
+    });
+    expect(await shell({ url: '/play/sky-duel' })).toContain('<title>Sky Duel — gamedev.pl</title>');
   });
 
   it('shares one render between concurrent requests for a slug', async () => {
