@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
@@ -125,7 +126,8 @@ import { registerRecommendationRoutes, type RecommendationRoutesOptions } from '
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from '../catalog/published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from '../catalog/catalog-genre-source.js';
 import { registerRateLimit } from './rate-limit.js';
-import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
+import { createSharePreviewShell } from './share-meta.js';
+import { registerSpaShellFallback } from './spa-shell-fallback.js';
 import { registerOAuthProtectedResourceRoutes } from '../agent-surface/mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from '../agent-surface/mcp-server-discovery.js';
 import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
@@ -1215,20 +1217,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }
       },
     });
-    // SPA shell: known deep links (`/play/<slug>`, …) keep HTTP 200 so refresh
-    // works; everything else gets a *proper* HTTP 404 with the same `index.html`
-    // so crawlers/tools see a real miss while the client can still render NotFound.
-    // Missing extension-bearing files stay hard 404s (never the HTML shell).
-    app.setNotFoundHandler((request, reply) => {
-      if (request.method !== 'GET' || request.url.startsWith('/api')) {
-        return reply.status(404).send({ error: 'not found' });
-      }
-      if (looksLikeStaticAsset(request.url)) {
-        return reply.status(404).send({ error: 'not found' });
-      }
-      const status = isKnownSpaShellPath(request.url) ? 200 : 404;
-      return reply.status(status).type('text/html').sendFile('index.html');
-    });
+    registerSpaShellFallback(
+      app,
+      createSharePreviewShell({
+        readIndexHtml: () => readFile(path.join(webDistDir, 'index.html'), 'utf8'),
+        getCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+        isShareable: playableAnonymously,
+        canonicalHost: process.env.CANONICAL_HOST,
+      }),
+    );
   }
 
   return app;
