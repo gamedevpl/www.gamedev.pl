@@ -42,10 +42,12 @@
     "musicField": "string",
     "musicTracksField": "string[]",
     "musicCatalogRequiredKeys": ["version", "tracks"],
+    "bankField": "Record<string, string>",
     "injectedGlobals": {
       "assets": "__GAME_AUDIO_ASSETS__",
       "defaultMusic": "__GAME_AUDIO_MUSIC__",
-      "tracks": "__GAME_MUSIC_TRACKS__"
+      "tracks": "__GAME_MUSIC_TRACKS__",
+      "bank": "__GAME_AUDIO_BANK__"
     }
   },
   "images": {

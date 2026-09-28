@@ -188,6 +188,8 @@ export const MUSIC_CONTRACT = {
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
+  manifestBankFieldType: 'Record<string, string>',
+  windowBankName: '__GAME_AUDIO_BANK__',
 } as const;
 
 /**
