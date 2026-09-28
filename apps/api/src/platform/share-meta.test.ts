@@ -225,4 +225,23 @@ describe('createSharePreviewShell', () => {
     expect(html).toContain('<meta property="og:description" content="Duel over the clouds." />');
     expect(repoLooked).toBe(false);
   });
+
+  it('caps storage lookups per minute however many slugs are tried', async () => {
+    let lookups = 0;
+    let clock = 0;
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        lookups += 1;
+        return null;
+      },
+      isShareable: async () => true,
+      now: () => clock,
+    });
+    for (let i = 0; i < 300; i += 1) await shell({ url: `/play/missing-${i}` });
+    expect(lookups).toBe(60);
+    clock = 60_000;
+    await shell({ url: '/play/missing-300' });
+    expect(lookups).toBe(61);
+  });
 });

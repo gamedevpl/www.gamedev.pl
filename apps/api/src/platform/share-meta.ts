@@ -145,6 +145,8 @@ async function storePublishedEntry(
 
 const PREVIEW_TTL_MS = 60_000;
 const PREVIEW_CACHE_MAX = 256;
+// Cache misses read storage; rotating slugs must not buy more reads.
+const PREVIEW_MISS_BUDGET = 60;
 
 // The game's shell, or null for plain index.html. Never throws.
 export function createSharePreviewShell(options: SharePreviewShellOptions) {
@@ -153,6 +155,8 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
   const now = options.now ?? Date.now;
   // Bounds storage reads on this public path; misses are cached too.
   const cache = new Map<string, { html: string | null; expiresAt: number }>();
+  let missesLeft = 0;
+  let missWindowEndsAt = 0;
 
   async function render(slug: string): Promise<string | null> {
     const raw = (await storePublishedEntry(options, slug)) ?? (await options.getCatalogEntry(slug));
@@ -173,6 +177,12 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
       if (!(await options.isShareable(slug))) return null;
       const cached = cache.get(slug);
       if (cached && cached.expiresAt > now()) return cached.html;
+      if (now() >= missWindowEndsAt) {
+        missWindowEndsAt = now() + PREVIEW_TTL_MS;
+        missesLeft = PREVIEW_MISS_BUDGET;
+      }
+      if (missesLeft <= 0) return null;
+      missesLeft -= 1;
       const html = await render(slug);
       cache.delete(slug);
       if (cache.size >= PREVIEW_CACHE_MAX) cache.delete(cache.keys().next().value as string);
