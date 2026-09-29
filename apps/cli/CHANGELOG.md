@@ -14,7 +14,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Muse runs show real tool names (`bash` instead of `toolCall` or `tool:bash`) and no longer list Muse's internal reminder subagents as unfinished tool calls; `genaicode` is bumped to 2.6.0 in the CLI and API (#1586).
-- OpenCode runs list every tool call, including ones that fail, before the failure itself; `genaicode` is bumped to 2.9.1 in the CLI and API (#PRNUM).
+- OpenCode runs list every tool call, including ones that fail, before the failure itself; `genaicode` is bumped to 2.9.1 in the CLI and API (#1595).
 
 ### Internal
 
