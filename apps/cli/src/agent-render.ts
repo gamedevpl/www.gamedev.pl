@@ -52,7 +52,7 @@ export function createEventRenderer(adapter: string) {
         started.add(event.id ?? '');
         return `⚙ ${toolLabel(event)}`;
       case 'tool-end':
-        // OpenCode reports only finished tools.
+        // A tool-end without a tool-start still names the tool.
         if (!event.isError) return event.name && !started.has(event.id ?? '') ? `⚙ ${event.name}` : undefined;
         if (event.name === 'shell') return;
         return `Tool failed: ${event.name ?? 'tool'}${event.output?.trim() ? ` — ${sanitizeEventPayload(event.output, 500)}` : ''}`;

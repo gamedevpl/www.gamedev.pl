@@ -80,7 +80,7 @@ it('reads completed OpenCode parts and failures while hiding step metadata', () 
       { type: 'error', error: { name: 'APIError', data: { message: 'Login required' } } },
       { type: 'step_finish', part: { text: 'hidden' } },
     ]),
-  ).toEqual(['Fixed the camera', '⚙ edit', 'Tool failed: bash — Permission denied', 'Login required']);
+  ).toEqual(['Fixed the camera', '⚙ edit', '⚙ bash', 'Tool failed: bash — Permission denied', 'Login required']);
 });
 
 it('renders Codex commands, MCP outcomes and edited files without opaque item events', () => {
