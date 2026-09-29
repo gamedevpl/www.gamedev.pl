@@ -60,10 +60,7 @@ export interface VisitFunnel {
   betaWelcome?: Array<{ step: string; visits: number }>;
   /** EditorKit revision funnel in step order, every step present even at zero. */
   editing: Array<{ step: string; visits: number }>;
-  /**
-   * The NL tuning lane's outcomes. Optional: a client can outlive the deploy that
-   * added it, and the panel renders an empty block rather than crashing.
-   */
+  // NL tuning outcomes; optional since a client can outlive a deploy.
   assisting?: Array<{ step: string; visits: number }>;
   coding?: Array<{ step: string; visits: number }>;
   cli?: Array<{ step: string; visits: number }>;
@@ -102,6 +99,7 @@ export interface VisitFunnel {
     accepted: number;
     declined: number;
   };
+  imageExport?: { requested: number; saved: number; dismissed: number; rejected: number };
   completion?: {
     requests: number;
     shown: number;

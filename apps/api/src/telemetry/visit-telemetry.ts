@@ -7,6 +7,7 @@ import {
   CREATE_STEPS,
   EDITOR_STEPS,
   FRAMED_PLAY_STEPS,
+  IMAGE_EXPORT_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
   PARTY_STEPS,
@@ -85,11 +86,7 @@ const RemixViaSchema = z.enum(REMIX_PAINTED_VIAS);
 const RemixControlSchema = z.enum(REMIX_CONTROLS);
 const HowToPlayViaSchema = z.enum(HOW_TO_PLAY_VIAS);
 const PlayViaSchema = z.enum(PLAY_VIAS);
-/**
- * Acquisition strings are re-validated here rather than trusted from the client. The
- * browser filters them for cleanliness; this filters them because a value that reaches a
- * grouping key must not be able to carry punctuation, markup, or an address.
- */
+// Re-validated: a grouping key must not carry markup or an address.
 const UtmSchema = z
   .string()
   .trim()
@@ -131,6 +128,7 @@ const EventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
   z.object({ type: z.literal('share_step'), step: ShareStepSchema, ...offsetField }),
   z.object({ type: z.literal('framed_play_step'), step: FramedPlayStepSchema, ...offsetField }),
+  z.object({ type: z.literal('image_export_step'), step: z.enum(IMAGE_EXPORT_STEPS), ...offsetField }),
   z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
   z.object({
     type: z.literal('party_step'),
@@ -275,6 +273,7 @@ export async function registerVisitTelemetryRoutes(
         case 'share_step':
           return { ...base, type: event.type, step: event.step };
         case 'framed_play_step':
+        case 'image_export_step':
           return { ...base, type: event.type, step: event.step };
         case 'invite_step':
           return { ...base, type: event.type, step: event.step };

@@ -19,7 +19,6 @@ import { useGamePlayer } from './gamePlayer.js';
 import { useGamepadSpike } from './gamepadSpike.js';
 import { recordRemixStep, recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
-import { useImageExportBridge } from './imageExport.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge, type BackdropFacing } from './sensing.js';
 import { useVoiceMeterBridge } from './voiceMeter.js';
@@ -288,7 +287,6 @@ export function GameTheater({
 
   // Published slug only: drafts change save formats (persistent-world-plan P1).
   useGameSaveBridge(frameRef, reportSlug);
-  useImageExportBridge(frameRef);
 
   // Shared worlds, for the games that declare one (P2). Keyed on the published slug
   // for the same reason and one more: a world is *shared*, so entries a draft wrote

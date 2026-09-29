@@ -2313,5 +2313,10 @@
       },
       "retry": "Try again"
     }
+  },
+  "imageExport": {
+    "prompt": "This game wants to save a photo: {{filename}}",
+    "save": "Save",
+    "notNow": "Not now"
   }
 }

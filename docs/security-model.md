@@ -48,16 +48,26 @@ The iframe sandbox remains `allow-scripts allow-pointer-lock` without `allow-sam
 
 #### Image export
 
-A game may ask the shell to save a PNG to the player's device (`apps/web/src/imageExport.ts`).
-The sandbox is unchanged — still no `allow-downloads` — so the game only posts
-`{ t: 'image:export', name, data }` over the authenticated bridge, and the shell, on its own
-origin, triggers the download from a `Blob` of type `image/png` via a temporary object URL
-that it revokes shortly after. The shell accepts only messages from the current game document,
-only `data:image/png;base64,` payloads of at most 8,000,000 characters whose decoded bytes
-start with the PNG signature, and at most one export per 1.5 s per bridge; everything else is
-answered `{ t: 'image:exported', ok: false }`. The filename is reduced to lowercase
-`[a-z0-9-]` (48 chars max, `photo` fallback) with a forced `.png` extension. The image is never
-rendered, evaluated, uploaded or otherwise used by the shell.
+A game may ask to save a PNG to the player's device (`apps/web/src/imageExport.ts`), but the
+shell never downloads on the game's say-so. The sandbox is unchanged — still no
+`allow-downloads` — so the game only posts `{ t: 'image:export', id, name, data }` over the
+authenticated bridge. `id` must be an integer ≥ 0; the shell echoes it on every reply so the
+kit can ignore replies meant for another request, and refuses a request without one. The
+shell accepts only messages from the current game document, only `data:image/png;base64,`
+payloads of at most 8,000,000 characters whose decoded bytes start with the PNG signature,
+at most one request per 1.5 s, and one pending request at a time; everything else is
+answered `{ t: 'image:exported', id, ok: false }`. An accepted request is answered
+`{ t: 'image:export-pending', id }` and shows a shell-owned, text-only prompt
+(`ImageExportPrompt`, mounted inside `GameFrame` so every play surface gets it) naming the
+sanitized filename — lowercase `[a-z0-9-]`, 48 chars max, `photo` fallback, forced `.png`.
+The download happens only in the click handler of the prompt's Save button, a real
+shell-side user gesture, from a `Blob` of type `image/png` via a temporary object URL the
+shell revokes shortly after; Save stays disabled for its first 500 ms so a game cannot time
+a player's click onto it. Save replies `ok: true`; Not now or a 60 s timeout reply
+`ok: false`; the frame loading another document drops the request without a reply. The
+image is never rendered, evaluated or uploaded by the shell. Outcomes are counted as
+`image_export_step` on the visit stream (`requested` / `saved` / `dismissed` / `rejected`),
+with no slug, filename or image data.
 
 Older assembled GameKit versions are adapted in the browser before their document executes.
 A JavaScript parser rewrites direct global `parent.postMessage`, `window.parent.postMessage`

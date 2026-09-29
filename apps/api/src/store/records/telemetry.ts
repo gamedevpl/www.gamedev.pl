@@ -96,6 +96,7 @@ export interface VisitEvent {
     | 'waitlist_step'
     | 'share_step'
     | 'framed_play_step'
+    | 'image_export_step'
     | 'invite_step'
     | 'party_step'
     | 'transfer_step'

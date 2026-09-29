@@ -14,6 +14,7 @@ import {
   type EditorStep,
   type FramedPlayStep,
   type HowToPlayVia,
+  type ImageExportStep,
   type InviteStep,
   type PartyStep,
   type TransferStep,
@@ -111,32 +112,21 @@ export type VisitEvent =
    * "the card did not answer". Distinct-visit rates are derived on the read side.
    */
   | { type: 'how_to_play_opened'; via: HowToPlayVia; reopen?: true }
-  /**
-   * A step of the creation funnel was reached. Carries no prompt text, ever.
-   * Optional `builder` dimensions platform vs self-build once the creator has chosen.
-   */
+  // Creation funnel step; never prompt text. `builder` once chosen.
   | { type: 'create_step'; step: CreateStep; builder?: BuilderDimension }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
   | { type: 'share_step'; step: ShareStep }
   // Framed /play/ interstitial: shown, then which exit they took.
   | { type: 'framed_play_step'; step: FramedPlayStep }
+  | { type: 'image_export_step'; step: ImageExportStep }
   | { type: 'invite_step'; step: InviteStep }
-  /**
-   * Party mode's lifecycle on the shared screen. No slug and no room code — the visit
-   * stream stays unjoinable with the play stream, and a code identifies a gathering.
-   * `via` is the only dimension: `bar` for the host's chrome, `seat` for anything the
-   * game itself reported, which is a phone's menu button or the host keyboard.
-   */
+  // Party lifecycle; no slug or room code. `seat` is phone or keyboard.
   | { type: 'party_step'; step: PartyStep; via?: PartyVia }
   // A game changing hands. No slug, no counterparty, no code.
   | { type: 'transfer_step'; step: TransferStep }
   | { type: 'beta_welcome_step'; step: BetaWelcomeStep }
-  /**
-   * Studio / self-build funnel facts on the same visit stream as `create_step`.
-   * Always carries `builder` so BYOCA reach-to-publish is measurable without a
-   * parallel stream. No game slug, no uid — visit-scoped only.
-   */
+  // Studio / self-build facts; always `builder`, never slug or uid.
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
@@ -435,12 +425,18 @@ export function recordFramedPlayStep(step: FramedPlayStep): void {
   if (step !== 'shown') currentSession.flush();
 }
 
+let recordedImageExportSteps = new Set<ImageExportStep>();
+
+// Game photo prompt outcomes; never the filename or image.
+export function recordImageExportStep(step: ImageExportStep): void {
+  if (!currentSession || recordedImageExportSteps.has(step)) return;
+  recordedImageExportSteps.add(step);
+  currentSession.record({ type: 'image_export_step', step });
+}
+
 let recordedTransferSteps = new Set<TransferStep>();
 
-/**
- * Handing a game over. The step names carry which side acted, so no second
- * dimension is needed; the slug and the counterparty deliberately never travel.
- */
+// Handing a game over; slug and counterparty never travel.
 export function recordTransferStep(step: TransferStep): void {
   if (!currentSession || recordedTransferSteps.has(step)) return;
   recordedTransferSteps.add(step);
@@ -639,6 +635,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
   recordedTransferSteps = new Set();
+  recordedImageExportSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
@@ -684,6 +681,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   recordedFramedPlaySteps = new Set();
   recordedPartySteps = new Set();
   recordedTransferSteps = new Set();
+  recordedImageExportSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
