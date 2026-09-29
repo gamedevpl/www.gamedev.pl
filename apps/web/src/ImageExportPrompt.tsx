@@ -1,4 +1,5 @@
 import { useEffect, useState, type MutableRefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { IMAGE_EXPORT_ARM_MS, useImageExportBridge } from './imageExport.js';
 import './image-export-prompt.css';
@@ -18,7 +19,8 @@ export function ImageExportPrompt({ frameRef }: { frameRef: MutableRefObject<HTM
   }, [filename]);
 
   if (!prompt) return null;
-  return (
+  // Portaled so no Studio sheet or stacking context can cover it.
+  return createPortal(
     <div className="image-export-prompt" role="alertdialog" aria-live="polite" aria-label={t('imageExport.save')}>
       <p className="image-export-prompt__text">{t('imageExport.prompt', { filename: prompt.filename })}</p>
       <div className="image-export-prompt__actions">
@@ -29,6 +31,7 @@ export function ImageExportPrompt({ frameRef }: { frameRef: MutableRefObject<HTM
           {t('imageExport.notNow')}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

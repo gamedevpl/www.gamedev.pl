@@ -3,7 +3,8 @@
   position: fixed;
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 960;
+  /* Above Studio sheets (1100-1300), below full-screen modals. */
+  z-index: 1400;
   transform: translateX(-50%);
   box-sizing: border-box;
   width: min(420px, calc(100vw - 32px));

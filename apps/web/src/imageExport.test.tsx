@@ -147,9 +147,9 @@ describe('image export prompt', () => {
     return attach(container.querySelector('iframe') as HTMLIFrameElement);
   }
 
-  const promptText = () => container.querySelector('.image-export-prompt__text')?.textContent ?? null;
-  const saveButton = () => container.querySelector<HTMLButtonElement>('.image-export-prompt__save');
-  const dismissButton = () => container.querySelector<HTMLButtonElement>('.image-export-prompt__dismiss');
+  const promptText = () => document.querySelector('.image-export-prompt__text')?.textContent ?? null;
+  const saveButton = () => document.querySelector<HTMLButtonElement>('.image-export-prompt__save');
+  const dismissButton = () => document.querySelector<HTMLButtonElement>('.image-export-prompt__dismiss');
   const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 
   it('prompts first, replies pending, and downloads nothing on its own', () => {
@@ -158,8 +158,9 @@ describe('image export prompt', () => {
     fromGame({ name: 'Best Run', data: PNG_DATA });
 
     expect(promptText()).toBe('This game wants to save a photo: best-run.png');
-    expect(container.querySelector('.image-export-prompt img, .image-export-prompt canvas')).toBeNull();
-    expect(container.innerHTML).not.toContain('base64');
+    expect(document.querySelector('.image-export-prompt img, .image-export-prompt canvas')).toBeNull();
+    expect(document.body.innerHTML).not.toContain('base64');
+    expect(document.querySelector('.image-export-prompt')?.parentElement).toBe(document.body);
     expect(toGame).toEqual([PENDING]);
     expect(downloads).toHaveLength(0);
     expect(steps).toEqual(['requested']);
