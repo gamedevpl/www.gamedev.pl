@@ -66,7 +66,7 @@ shell revokes shortly after; Save stays disabled for its first 500 ms so a game 
 a player's click onto it. Save replies `ok: true`; Not now or a 60 s timeout reply
 `ok: false`; the frame loading another document drops the request without a reply. The
 image is never rendered, evaluated or uploaded by the shell. Outcomes are counted as
-`image_export_step` on the visit stream (`requested` / `saved` / `dismissed` / `rejected`),
+`image_export_step` on the visit stream (`requested` / `saved` / `dismissed` / `failed` / `rejected`),
 with no slug, filename or image data.
 
 Older assembled GameKit versions are adapted in the browser before their document executes.
