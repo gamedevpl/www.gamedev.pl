@@ -11,6 +11,14 @@ export function ImageExportPrompt({ frameRef }: { frameRef: MutableRefObject<HTM
   const [armed, setArmed] = useState(false);
   const filename = prompt?.filename ?? null;
 
+  // Fullscreen shows only its own subtree, so the prompt must live there.
+  const [host, setHost] = useState<Element>(() => fullscreenHost());
+  useEffect(() => {
+    const onChange = () => setHost(fullscreenHost());
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
   useEffect(() => {
     setArmed(false);
     if (filename === null) return;
@@ -32,6 +40,11 @@ export function ImageExportPrompt({ frameRef }: { frameRef: MutableRefObject<HTM
         </button>
       </div>
     </div>,
-    document.body,
+    host,
   );
+}
+
+function fullscreenHost(): Element {
+  const full = document.fullscreenElement;
+  return full && full.tagName !== 'IFRAME' ? full : document.body;
 }

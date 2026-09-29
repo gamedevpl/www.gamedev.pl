@@ -188,6 +188,22 @@ describe('image export prompt', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:shell/1');
   });
 
+  it('shows the prompt inside the fullscreen stage and follows it out', () => {
+    const fromGame = mount();
+    const stage = document.createElement('div');
+    document.body.appendChild(stage);
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => stage });
+    act(() => document.dispatchEvent(new Event('fullscreenchange')));
+
+    fromGame({ name: 'x', data: PNG_DATA });
+    expect(document.querySelector('.image-export-prompt')?.parentElement).toBe(stage);
+
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => null });
+    act(() => document.dispatchEvent(new Event('fullscreenchange')));
+    expect(document.querySelector('.image-export-prompt')?.parentElement).toBe(document.body);
+    stage.remove();
+  });
+
   it('records a download that throws as failed, not dismissed', () => {
     const fromGame = mount();
     fromGame({ name: 'x', data: PNG_DATA });
