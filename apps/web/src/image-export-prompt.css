@@ -1,0 +1,50 @@
+/* Shell-owned "save this game photo?" card (ImageExportPrompt.tsx). */
+.image-export-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  /* Above Studio sheets (1100-1300), below full-screen modals. */
+  z-index: 1400;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  color: var(--text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.image-export-prompt__text {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.image-export-prompt__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.image-export-prompt__actions button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.image-export-prompt__actions .image-export-prompt__save {
+  border-color: var(--turquoise);
+  background: var(--turquoise);
+  color: var(--bg);
+}
+
+.image-export-prompt__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

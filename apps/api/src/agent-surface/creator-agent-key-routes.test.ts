@@ -611,7 +611,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     // Two back-to-back reads are identical even without the fix — `exp` has second
     // granularity — so a same-second probe could never have produced the failure.
     await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
-    const MINTED_AT = '2026-07-01T00:00:00.000Z';
+    const MINTED_AT = new Date(Math.floor(Date.now() / 86_400_000 - 7) * 86_400_000).toISOString();
     const records = (store as unknown as { agentKeysStore: { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> } })
       .agentKeysStore.creatorAgentKeys;
     records.set(OWNER, { ...records.get(OWNER)!, updatedAt: MINTED_AT });

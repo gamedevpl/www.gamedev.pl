@@ -628,6 +628,7 @@ const FILE_BUCKET = {
   'visit-cli-event': 'telemetry',
   'visit-cli-funnel': 'telemetry',
   'visit-cli-pilot': 'telemetry',
+  'visit-image-export': 'telemetry',
   'visit-proposals': 'telemetry',
   'visit-transfers': 'telemetry',
   'visit-telemetry-limit': 'telemetry',

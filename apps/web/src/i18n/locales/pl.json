@@ -2327,5 +2327,10 @@
       },
       "retry": "Spróbuj ponownie"
     }
+  },
+  "imageExport": {
+    "prompt": "Ta gra chce zapisać zdjęcie: {{filename}}",
+    "save": "Zapisz",
+    "notNow": "Nie teraz"
   }
 }

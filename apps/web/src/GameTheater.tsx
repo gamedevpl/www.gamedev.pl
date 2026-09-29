@@ -285,11 +285,7 @@ export function GameTheater({
   const hasControls =
     controlRows.length > 0 || Boolean(player.controls?.pad) || (player.controls?.padButtons.length ?? 0) > 0;
 
-  // Durable progress for games that ask for it (docs/persistent-world-plan.md P1).
-  // Keyed on `reportSlug` — the *published* slug — for the same reason the vote and
-  // feedback widgets are: a draft is rebuilt commit by commit, and progress saved
-  // against a format the next build changes is worse than no progress at all. Games
-  // that never open a slot cost nothing here; the bridge simply stays quiet.
+  // Published slug only: drafts change save formats (persistent-world-plan P1).
   useGameSaveBridge(frameRef, reportSlug);
 
   // Shared worlds, for the games that declare one (P2). Keyed on the published slug

@@ -37,6 +37,7 @@ import { summarizeCliFunnel } from './visit-cli-funnel.js';
 import { summarizeCliPilot, type CliPilotRead } from './visit-cli-pilot.js';
 import { summarizeProposals, type ProposalRead } from './visit-proposals.js';
 import { summarizeTransfers, type TransferRead } from './visit-transfers.js';
+import { summarizeImageExport, type ImageExportRead } from './visit-image-export.js';
 /**
  * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.
  *
@@ -99,10 +100,7 @@ export interface VisitFunnel {
    * step where everyone stopped.
    */
   creating: Array<{ step: CreateStep; visits: number }>;
-  /**
-   * The closed-beta waitlist funnel, always in step order and always with every step
-   * present — including zeroes. Same posture as `creating`.
-   */
+  // Waitlist funnel; same posture as `creating`.
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
   sharing: Array<{ step: ShareStep; visits: number }>;
   // Framed /play/ interstitial; every step, zeroes included.
@@ -128,6 +126,7 @@ export interface VisitFunnel {
   proposals: ProposalRead;
   // Handing a game over, both sides, each against its own denominator.
   transfers: TransferRead;
+  imageExport: ImageExportRead;
   completion: CodeCompletionFunnel;
   /**
    * The NL tuning lane, against `asked` as its denominator: of the sittings that
@@ -583,6 +582,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     cliPilot: summarizeCliPilot(events),
     proposals: summarizeProposals(events),
     transfers: summarizeTransfers(events),
+    imageExport: summarizeImageExport(events),
     completion: {
       requests: completionRows.reduce((total, row) => total + row.requests, 0),
       shown: completionRows.reduce((total, row) => total + row.shown, 0),
