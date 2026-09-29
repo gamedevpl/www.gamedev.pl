@@ -130,7 +130,7 @@ export function useImageExportBridge(
         }
       }
       current.finish(ok);
-      recordImageExportStep(ok ? 'saved' : 'dismissed');
+      recordImageExportStep(ok ? 'saved' : save ? 'failed' : 'dismissed');
     };
     settleRef.current = settle;
 

@@ -17,9 +17,10 @@ function render(imageExport: VisitFunnel['imageExport']): string {
 
 describe('ImageExportFunnelBlock', () => {
   it('renders outcomes against prompted visits', () => {
-    const text = render({ requested: 4, saved: 3, dismissed: 1, rejected: 2 });
+    const text = render({ requested: 4, saved: 2, dismissed: 1, failed: 1, rejected: 2 });
     expect(text).toContain('Game photos');
-    expect(text).toContain('75%');
+    expect(text).toContain('50%');
+    expect(text).toContain('download failed');
     expect(text).toContain('25%');
   });
 

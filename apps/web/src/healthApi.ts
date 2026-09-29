@@ -99,7 +99,7 @@ export interface VisitFunnel {
     accepted: number;
     declined: number;
   };
-  imageExport?: { requested: number; saved: number; dismissed: number; rejected: number };
+  imageExport?: { requested: number; saved: number; dismissed: number; failed?: number; rejected: number };
   completion?: {
     requests: number;
     shown: number;

@@ -19,21 +19,24 @@ describe('summarizeImageExport', () => {
       step('b', 'dismissed'),
       step('c', 'rejected'),
       step('c', 'rejected'),
+      step('d', 'requested'),
+      step('d', 'failed'),
     ]);
-    expect(read).toEqual({ requested: 2, saved: 1, dismissed: 1, rejected: 1 });
+    expect(read).toEqual({ requested: 3, saved: 1, dismissed: 1, failed: 1, rejected: 1 });
   });
 
   it('never counts an outcome whose request batch was lost', () => {
     const read = summarizeImageExport([step('a', 'saved'), step('b', 'dismissed')]);
-    expect(read).toEqual({ requested: 0, saved: 0, dismissed: 0, rejected: 0 });
+    expect(read).toEqual({ requested: 0, saved: 0, dismissed: 0, failed: 0, rejected: 0 });
   });
 
   it('ignores other event types and unknown steps', () => {
     const other = { ...step('a', 'requested'), type: 'share_step' as const };
-    expect(summarizeImageExport([other, step('b', 'bogus')])).toEqual({
+    expect(summarizeImageExport([other, step('b', 'bogus'), step('c', 'toString')])).toEqual({
       requested: 0,
       saved: 0,
       dismissed: 0,
+      failed: 0,
       rejected: 0,
     });
   });
@@ -68,6 +71,6 @@ describe('image_export_step intake and rollup', () => {
 
   it('surfaces the rollup on the visit funnel', () => {
     const funnel = summarizeVisitFunnel([step('v1', 'requested'), step('v1', 'saved')]);
-    expect(funnel.imageExport).toEqual({ requested: 1, saved: 1, dismissed: 0, rejected: 0 });
+    expect(funnel.imageExport).toEqual({ requested: 1, saved: 1, dismissed: 0, failed: 0, rejected: 0 });
   });
 });

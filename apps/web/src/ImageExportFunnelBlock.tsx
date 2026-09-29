@@ -14,6 +14,7 @@ export function ImageExportFunnelBlock({ funnel }: { funnel: VisitFunnel }): JSX
     ['was asked to save a photo', read.requested, '—'],
     ['saved it', read.saved, percent(read.saved, read.requested)],
     ['said not now or let it lapse', read.dismissed, percent(read.dismissed, read.requested)],
+    ['tried to save, but the download failed', read.failed ?? 0, percent(read.failed ?? 0, read.requested)],
     ['had a request refused by the shell', read.rejected, '—'],
   ];
 

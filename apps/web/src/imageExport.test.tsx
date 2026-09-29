@@ -188,6 +188,20 @@ describe('image export prompt', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:shell/1');
   });
 
+  it('records a download that throws as failed, not dismissed', () => {
+    const fromGame = mount();
+    fromGame({ name: 'x', data: PNG_DATA });
+    URL.createObjectURL = vi.fn(() => {
+      throw new Error('blocked');
+    });
+
+    advance(IMAGE_EXPORT_ARM_MS);
+    act(() => saveButton()!.click());
+
+    expect(toGame).toEqual([PENDING, REFUSED]);
+    expect(steps).toEqual(['requested', 'failed']);
+  });
+
   it('replies ok:false on Not now without downloading', () => {
     const fromGame = mount();
     fromGame({ name: 'x', data: PNG_DATA });
