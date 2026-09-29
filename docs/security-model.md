@@ -46,6 +46,19 @@ snapshot/restore waits are bound to their initiating document; late replies cann
 a replacement. Navigation still retires sensing, microphone, presence and zone resources.
 The iframe sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
 
+#### Image export
+
+A game may ask the shell to save a PNG to the player's device (`apps/web/src/imageExport.ts`).
+The sandbox is unchanged — still no `allow-downloads` — so the game only posts
+`{ t: 'image:export', name, data }` over the authenticated bridge, and the shell, on its own
+origin, triggers the download from a `Blob` of type `image/png` via a temporary object URL
+that it revokes shortly after. The shell accepts only messages from the current game document,
+only `data:image/png;base64,` payloads of at most 8,000,000 characters whose decoded bytes
+start with the PNG signature, and at most one export per 1.5 s per bridge; everything else is
+answered `{ t: 'image:exported', ok: false }`. The filename is reduced to lowercase
+`[a-z0-9-]` (48 chars max, `photo` fallback) with a forced `.png` extension. The image is never
+rendered, evaluated, uploaded or otherwise used by the shell.
+
 Older assembled GameKit versions are adapted in the browser before their document executes.
 A JavaScript parser rewrites direct global `parent.postMessage`, `window.parent.postMessage`
 and `globalThis.parent.postMessage` calls to the bootstrap send function. Comments, strings,
