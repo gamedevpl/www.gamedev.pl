@@ -178,3 +178,44 @@ jobs:
             cd /opt/platform
             node -e "import(\"@gamedevpl/contract\").then(() => console.log(\"packages resolve\"))"
           '
+
+  # Browser suites that need no deployment and no token, run before merge.
+  #
+  # They used to run only in deploy.yml's browser gate, after merge. #1593 broke the
+  # frame-document bundle, CI stayed green, and every deploy was refused for three days.
+  # These files serve their own fixtures, so a PR can run them with no secret at all.
+  hermetic_browser:
+    name: Hermetic browser tests
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build:packages
+      # Same install and hand-off as deploy.yml's browser gate. A missing binary fails
+      # here: without E2E_CHROMIUM_PATH the suites skip and the job passes on nothing.
+      - name: Install Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
+        run: |
+          npx playwright install --with-deps chromium
+          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
+          if [ -z "$BIN" ]; then
+            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH"
+            exit 1
+          fi
+          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
+      # The fixtures load hostile frames, so keep Chromium's sandbox on (see deploy.yml).
+      - name: Let Chromium use its sandbox
+        run: |
+          RESTRICT=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
+          if [ "$RESTRICT" != "1" ]; then exit 0; fi
+          PROFILE=/etc/apparmor.d/e2e-chromium
+          printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile e2e-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' \
+            "$E2E_CHROMIUM_PATH" | sudo tee "$PROFILE"
+          sudo apparmor_parser -r "$PROFILE"
+      - run: npm run e2e:hermetic -w @gamedevpl/e2e
