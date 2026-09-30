@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.23.0 — 2026-09-29
+
 ### Added
 
 - `gamedevpl model` offers the `xhigh` effort for Claude Code, between `high` and `max` (#1590).
