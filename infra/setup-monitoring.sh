@@ -1060,6 +1060,59 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
 }
 EOF
 
+# A34 -- Firestore writes, daily total. The write-side twin of A31, and the number is A34
+# only because A32/A33 went to bucket egress first. A29 thresholds the write *rate* at a
+# 10/s floor that is ~20x the busiest ten-minute window ever measured, which is right for
+# a runaway loop and blind to everything slower: a regression that adds one write a second
+# and never stops is ~86K extra writes a day, several times this project's whole normal
+# day, and A29 would never see it. That is the same gap reads had, and the same lesson the
+# ops cost plan now records -- every metered resource wants one alert on its rate and one
+# on its daily total.
+#
+# Same shape as A31: ALIGN_DELTA over 86400s with REDUCE_SUM is the real count of document
+# writes in the trailing day, evaluated on a sliding window.
+#
+# THRESHOLD 40000/day, from the numbers A29 was calibrated on (see its comment above):
+#   Sep 5 20:06 - Sep 7 22:06 UTC: 38,518 writes in 50h, ~18.5K/day -- the busiest window
+#     measured, taken right after #1152 put a counter write on every ceiling.
+#   Sep 15 - Sep 24: 10-minute max 0.29-0.45/s, median 0.01/s. Even the max held for a
+#     full day is 0.45 x 86400 = ~38.9K, so no day in that window can have reached 40K.
+# 40K is ~2.2x the busiest measured day, and twice the 20K/day free tier.
+# It fires on one extra write a second held for most of a day, which A29 never would.
+#
+# What was NOT measured: true per-day totals for Sep 15-24, which are almost certainly far
+# lower than the bound above. Before relying on this number, read them in the condition's
+# own shape (the reads recipe in the ops cost plan, with document/write_count), and if the
+# busiest clean day is well under 20K, lower this toward 2x that day -- never raise it to fit
+# a measured day; a day over 40K is a leak to find, not a floor.
+cat > "${POLICY_DIR}/a34.json" <<EOF
+{
+  "displayName": "A34 Firestore writes daily total",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "document writes over the last day above the daily budget",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/write_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "86400s",
+        "perSeriesAligner": "ALIGN_DELTA",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 40000,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore took more than 40K document writes in the last 24 hours. This is the write-side slow-leak detector, the twin of A31 for reads: A29 watches the write *rate* with a 10/s floor for a runaway loop, and is blind to a regression that adds a write a second and simply never stops. If this fires while A29 stayed quiet, nothing spiked -- something now writes on a path that used to only read, or a counter started writing per request instead of per event. Triage: group document/write_count by metric.op (CREATE is new documents, UPDATE is counters and state) and compare the day against the previous week to find the step change, then match that time to a deploy. This metric has no collection label; per-collection attribution comes from /admin costs, which reports each lane's writes for the day. The busiest measured day as of 2026-09 was ~18.5K writes; the free tier is 20K/day. A hot counter is fixed by sharding only when the problem is contention -- a high daily total is fixed by writing less, not by spreading the same writes across more documents.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 # A32 — the games bucket is shipping bytes at a rate nothing here explains.
 #
 # Media moved off the origin to signed Cloud Storage URLs on 2026-09-11, which took those
