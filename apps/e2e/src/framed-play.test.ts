@@ -28,7 +28,7 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
     return context.newPage();
   }
 
-  it('shows the interstitial inside an iframe, never the theater', async () => {
+  async function framedHost(): Promise<Page> {
     const page = await hostPage();
     // setContent leaves about:blank, which frame-ancestors * refuses.
     await page.route(HOST_URL, (route) =>
@@ -39,12 +39,37 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
       }),
     );
     await page.goto(HOST_URL);
+    return page;
+  }
+
+  async function expectInterstitial(page: Page): Promise<void> {
     const frame = page.frameLocator('iframe');
     await expect.poll(() => frame.locator('.framed-play').count(), { timeout: 20_000 }).toBe(1);
+  }
+
+  it('shows the interstitial inside an iframe, never the theater', async () => {
+    const page = await framedHost();
+    await expectInterstitial(page);
+    const frame = page.frameLocator('iframe');
     expect(await frame.locator('.stage').count()).toBe(0);
     expect(await frame.locator('a[target="_blank"]').count()).toBe(1);
     expect(await frame.locator('a[target="_top"]').count()).toBe(1);
     expect((await frame.locator('a[target="_blank"]').getAttribute('rel')) ?? '').toMatch(/noopener/);
+    await page.context().close();
+  });
+
+  // Smoke only; headless Chromium never replayed the cached-shell framing block.
+  it('still shows the interstitial once the service worker controls the frame', async () => {
+    const page = await framedHost();
+    await expectInterstitial(page);
+    const first = page.frames().find((frame) => frame.url().startsWith(BASE_URL));
+    expect(first, 'play frame').toBeDefined();
+    await first!.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+
+    await page.reload();
+    await expectInterstitial(page);
+    const again = page.frames().find((frame) => frame.url().startsWith(BASE_URL));
+    expect(await again!.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
     await page.context().close();
   });
 });
