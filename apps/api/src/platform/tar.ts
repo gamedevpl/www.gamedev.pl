@@ -60,7 +60,7 @@ export interface ReadTarOptions {
   maxTotalBytes?: number;
 }
 
-const DEFAULT_MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
 
 function readString(block: Uint8Array, offset: number, length: number): string {
   const slice = block.subarray(offset, offset + length);

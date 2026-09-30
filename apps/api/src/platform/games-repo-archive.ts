@@ -53,7 +53,18 @@ export interface GamesRepoArchive extends RepoFileSource {
 function defaultInclude(path: string): boolean {
   // Legacy committed catalog.json is still retained when present so older SHAs
   // keep working; the bake prefers deriving from games/ via listPaths.
-  return path === 'catalog.json' || path.startsWith('games/') || path.startsWith('shared/');
+  if (path === 'catalog.json' || path.startsWith('shared/')) {
+    return true;
+  }
+  if (!path.startsWith('games/')) {
+    return false;
+  }
+  // Offline review media (~1.8GB) is excluded.
+  const mediaIndex = path.indexOf('/media/');
+  if (mediaIndex !== -1 && path.indexOf('/', mediaIndex + '/media/'.length) !== -1) {
+    return false;
+  }
+  return true;
 }
 
 /**
