@@ -28,6 +28,7 @@ const REPO_FILES = {
   'catalog.json': '[{"slug":"pong"}]',
   'games/pong/game.ts': 'export const speed = 3;',
   'games/pong/media/opening.png': PNG_BYTES,
+  'games/pong/media/visual-review/before.png': PNG_BYTES,
   'shared/modules/core.ts': 'export const core = 1;',
   'tools/validate.ts': 'const MAX_BUNDLE_BYTES = 1;',
   'docs/notes.md': '# notes',
@@ -72,6 +73,7 @@ describe('fetchGamesRepoArchive', () => {
     // tools/ and docs/ are most of the repo by file count and none of it by use.
     expect(archive.fileCount).toBe(4);
     await expect(archive.readText('tools/validate.ts', 'main')).resolves.toBeNull();
+    await expect(archive.readBytes('games/pong/media/visual-review/before.png', 'main')).resolves.toBeNull();
   });
 
   it('refuses to answer for a ref it does not hold', async () => {
