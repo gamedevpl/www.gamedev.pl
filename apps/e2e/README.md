@@ -36,6 +36,11 @@ Because it needs a credential, this suite **does not run in normal PR CI** — i
 there. Run it against a candidate URL before promoting a deploy, or by hand while
 working on the front end.
 
+The exception is the **hermetic** files — `frame-document`, `editor-sensing`, and
+`editor-dock-geometry`. They serve their own fixtures and never touch a deployment or a
+token, so CI runs them on every PR (`npm run e2e:hermetic -w @gamedevpl/e2e`, job
+_Hermetic browser tests_ in `ci.yml`). A new file that needs neither belongs in that script.
+
 ### Do not put `GAMEDEV_ACCESS_TOKEN` in `ci.yml`
 
 This is a public repo, and making the suite run in CI is the obvious next thought. It is
