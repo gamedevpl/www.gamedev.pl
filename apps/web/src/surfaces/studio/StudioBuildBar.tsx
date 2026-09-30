@@ -5,9 +5,17 @@ import { buildBarModel } from '../../buildBarModel.js';
 import type { SubmissionStatus } from '../../submissionApi.js';
 import './studio-strip.css';
 
-export function StudioBuildBar({ status, onOpen }: { status?: SubmissionStatus | null; onOpen?: () => void }) {
+export function StudioBuildBar({
+  status,
+  liveVersion,
+  onOpen,
+}: {
+  status?: SubmissionStatus | null;
+  liveVersion?: string | null;
+  onOpen?: () => void;
+}) {
   const { t } = useTranslation();
-  const model = buildBarModel(status, t);
+  const model = buildBarModel(status, t, { liveVersion });
   if (!model) return null;
 
   const pct = model.fraction === null ? null : Math.round(model.fraction * 100);
@@ -15,6 +23,10 @@ export function StudioBuildBar({ status, onOpen }: { status?: SubmissionStatus |
     model.etaMinutes !== null && (model.state === 'running' || model.state === 'starting')
       ? t('studioPanel.buildBar.eta').replace('{{minutes}}', String(model.etaMinutes))
       : null;
+
+  const isChecking = model.state === 'running' || model.state === 'starting';
+  const showLiveDifferent =
+    model.liveTag && model.liveVersion && model.processingVersion && model.liveVersion !== model.processingVersion;
 
   return (
     <button
@@ -31,7 +43,7 @@ export function StudioBuildBar({ status, onOpen }: { status?: SubmissionStatus |
         aria-valuenow={pct ?? undefined}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-busy={model.state === 'running' || model.state === 'starting'}
+        aria-busy={isChecking}
       >
         <span
           className={`studio-build-bar-fill${pct === null ? ' is-indeterminate' : ''}`}
@@ -39,6 +51,24 @@ export function StudioBuildBar({ status, onOpen }: { status?: SubmissionStatus |
         />
       </span>
       <span className="studio-build-bar-label">{model.label}</span>
+      {isChecking && model.processingTag ? (
+        <span className="studio-build-bar-tag is-processing" title={model.processingVersion ?? undefined}>
+          {model.processingTag}
+        </span>
+      ) : null}
+      {showLiveDifferent ? (
+        <span
+          className="studio-build-bar-tag is-live"
+          title={t('studioPanel.buildBar.liveTitle', { version: model.liveVersion })}
+        >
+          {t('studioPanel.buildBar.livePrefix', 'Live: ')}
+          {model.liveTag}
+        </span>
+      ) : !isChecking && model.liveTag ? (
+        <span className="studio-build-bar-tag is-live" title={model.liveVersion ?? undefined}>
+          {model.liveTag}
+        </span>
+      ) : null}
       {eta ? <span className="studio-build-bar-eta">{eta}</span> : null}
     </button>
   );

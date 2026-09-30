@@ -61,7 +61,7 @@ export function useStageSource(
   options?: UseStageSourceOptions,
 ): UseStageSourceResult {
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
-  const [preview, setPreview] = useState<{ html: string; at: number } | null>(null);
+  const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{
     html: string;
@@ -171,7 +171,11 @@ export function useStageSource(
         // latter is only comparable to a channel build's `createdAt` while the page
         // stays open (see the CE-12 note above).
         const producedAt = gateRunAt ? Date.parse(gateRunAt) : NaN;
-        setPreview({ html: result.html, at: Number.isFinite(producedAt) ? producedAt : Date.now() });
+        setPreview({
+          html: result.html,
+          at: Number.isFinite(producedAt) ? producedAt : Date.now(),
+          version: headSha ?? null,
+        });
       })
       .catch(() => {
         // Keep last-good on a refetch failure — a stale stage beats a blank one. But
@@ -323,7 +327,7 @@ export function useStageSource(
   } else if (showChannel) {
     origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
-    origin = { kind: 'staged', at: preview.at, versionLabel: null };
+    origin = { kind: 'staged', at: preview.at, versionLabel: preview.version ?? null };
   } else if (channel) {
     origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
   } else if (published) {
@@ -334,7 +338,7 @@ export function useStageSource(
 
   // Track 2: a synchronous preview beats waiting on the next status poll.
   const pushPreview = useCallback((nextHtml: string) => {
-    setPreview({ html: nextHtml, at: Date.now() });
+    setPreview({ html: nextHtml, at: Date.now(), version: null });
   }, []);
 
   return { html, rawHtml, origin, pushPreview };

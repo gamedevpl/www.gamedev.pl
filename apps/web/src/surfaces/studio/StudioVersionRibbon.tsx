@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { formatBuildTag } from '../../buildBarModel.js';
 import type { StageOrigin } from '../../useStageSource.js';
 import type { StageStatus } from './StudioStage.js';
 import './studio-stage.css';
@@ -30,8 +31,8 @@ export type StudioVersionRibbonProps = {
 function worstException(props: StudioVersionRibbonProps): RibbonException | null {
   if (props.stageStatus.kind === 'crashed') return { kind: 'crashed', message: props.stageStatus.message };
   if (props.stageStatus.kind === 'drew-nothing') return { kind: 'drew-nothing' };
-  if (props.deliveryInGate) return { kind: 'delivery-in-gate' };
   if (props.newerStageWaiting) return { kind: 'newer-stage-waiting' };
+  if (props.deliveryInGate) return { kind: 'delivery-in-gate' };
   return null;
 }
 
@@ -44,16 +45,19 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
   const { origin } = props;
   if (origin.kind === 'none') return null;
 
+  const tag = origin.versionLabel ? formatBuildTag(origin.versionLabel) : null;
+  const tagSuffix = tag ? ` (${tag})` : '';
+
   const identity =
     origin.kind === 'delivered'
       ? props.publishedAt
-        ? t('studioPanel.ribbon.delivered', { time: formatClock(Date.parse(props.publishedAt)) })
-        : t('studioPanel.ribbon.deliveredUnknown')
+        ? t('studioPanel.ribbon.delivered', { time: formatClock(Date.parse(props.publishedAt)) }) + tagSuffix
+        : t('studioPanel.ribbon.deliveredUnknown') + tagSuffix
       : origin.kind === 'seed'
         ? t('studioPanel.ribbon.seed')
         : origin.at != null
-          ? t('studioPanel.ribbon.staged', { time: formatClock(origin.at) })
-          : t('studioPanel.ribbon.stagedUnknown');
+          ? t('studioPanel.ribbon.staged', { time: formatClock(origin.at) }) + tagSuffix
+          : t('studioPanel.ribbon.stagedUnknown') + tagSuffix;
 
   const exception = worstException(props);
 
@@ -72,10 +76,10 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
         </span>
       ) : props.checked != null ? (
         <span
-          className="studio-version-ribbon-depth"
-          title={props.checked ? t('studioPanel.ribbon.checkedTitle') : t('studioPanel.ribbon.notCheckedTitle')}
+          className={`studio-version-ribbon-depth${props.checked ? '' : ' is-failed'}`}
+          title={props.checked ? t('studioPanel.ribbon.checkedTitle') : t('studioPanel.buildBar.failed')}
         >
-          {props.checked ? t('studioPanel.ribbon.checked') : t('studioPanel.ribbon.notChecked')}
+          {props.checked ? t('studioPanel.ribbon.checked') : t('studioPanel.buildBar.failed')}
         </span>
       ) : null}
     </div>

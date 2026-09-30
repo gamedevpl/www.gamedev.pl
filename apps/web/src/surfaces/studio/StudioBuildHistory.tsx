@@ -263,7 +263,7 @@ export function StudioBuildHistory({
                       <button
                         type="button"
                         className="studio-build-action-btn is-revert"
-                        disabled={isReverting || live}
+                        disabled={isReverting || (index === 0 && !activePreviewVersion)}
                         onClick={() => void handleRevert(build)}
                       >
                         <PixelIcon name="undo" size={12} />

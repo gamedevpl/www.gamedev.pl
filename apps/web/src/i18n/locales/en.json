@@ -699,7 +699,9 @@
       "failed": "Check failed",
       "passed": "Checks passed",
       "eta": "usually ~{{minutes}} min",
-      "open": "Open build progress"
+      "open": "Open build progress",
+      "livePrefix": "Live: ",
+      "liveTitle": "Live on stage: {{version}}"
     },
     "share": {
       "title": "Share the draft",

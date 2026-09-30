@@ -707,7 +707,9 @@
       "failed": "Sprawdzian niezaliczony",
       "passed": "Sprawdziany zaliczone",
       "eta": "zwykle ~{{minutes}} min",
-      "open": "Otwórz postęp buildu"
+      "open": "Otwórz postęp buildu",
+      "livePrefix": "Na żywo: ",
+      "liveTitle": "Aktywny na scenie: {{version}}"
     },
     "share": {
       "title": "Udostępnij wersję roboczą",

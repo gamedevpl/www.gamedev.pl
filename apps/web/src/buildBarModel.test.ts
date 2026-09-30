@@ -103,4 +103,21 @@ describe('buildBarModel', () => {
 
     expect(model?.fraction).toBeCloseTo(4 / 6);
   });
+
+  it('formats build tags and carries processing and live versions', () => {
+    const model = buildBarModel(
+      status({
+        recentBuilds: [build({ version: 'v20260930T224758596Z-613108d9d61d', verdict: 'pending' })],
+      }),
+      t,
+      { liveVersion: 'v20260930T223014079Z-e07ba9772fd5' },
+    );
+
+    expect(model).toMatchObject({
+      processingVersion: 'v20260930T224758596Z-613108d9d61d',
+      processingTag: '#613108',
+      liveVersion: 'v20260930T223014079Z-e07ba9772fd5',
+      liveTag: '#e07ba9',
+    });
+  });
 });
