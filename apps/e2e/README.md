@@ -100,6 +100,36 @@ while the deploy still went green (#392). The loading-state cases hold the shelf
 deliberately. The real React tree and stylesheet still run; only the JSON is replaced,
 so the suite stays read-only against production.
 
+## Framed play against a local build
+
+`src/framed-play.test.ts` frames `/play/<slug>` from a routed cross-site host and reloads
+once the service worker controls the frame. It needs no token, and it runs against a local
+server as well as a candidate:
+
+```bash
+npm run build
+```
+
+```bash
+WEB_DIST_DIR=$PWD/apps/web/dist PORT=3099 node apps/api/dist/platform/server.js
+```
+
+```bash
+env -u GAMEDEV_ACCESS_TOKEN -u HTTPS_PROXY E2E_BASE_URL=http://localhost:3099 npm run e2e -w @gamedevpl/e2e -- src/framed-play.test.ts
+```
+
+Both variables go: a token makes globalSetup exchange it against the local server, which
+refuses it, and Playwright sends even loopback traffic through a configured proxy. The test grants `local-network-access`; without it Chromium holds a public-looking host's
+iframe of a loopback URL at a permission prompt and the page never loads.
+
+To see the reload case fail, serve a worker that answers framed navigations with the cached
+shell (drop the `request.destination` line from `dist/sw.js`). **Delete `dist/sw.js.br`
+and `dist/sw.js.gz` too.** The server prefers the precompressed files, so a browser keeps
+getting the untouched worker while `curl` shows your edit, and the case passes for a reason
+that has nothing to do with the fix. That is how this check was first judged unable to fail.
+A genuine failure reads `Refused to frame ... frame-ancestors 'none'`, the same message the
+js13kgames.com embed showed.
+
 ## This suite cannot see WebKit-only bugs
 
 Everything here runs on the pre-installed Playwright **Chromium**, with `isMobile`/

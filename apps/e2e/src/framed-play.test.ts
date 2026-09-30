@@ -25,6 +25,8 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
 
   async function hostPage(): Promise<Page> {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    // Lets the routed host frame a loopback E2E_BASE_URL without a prompt.
+    await context.grantPermissions(['local-network-access']);
     return context.newPage();
   }
 
@@ -42,9 +44,11 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
     return page;
   }
 
-  async function expectInterstitial(page: Page): Promise<void> {
+  async function expectInterstitial(page: Page, refusals: string[] = []): Promise<void> {
     const frame = page.frameLocator('iframe');
-    await expect.poll(() => frame.locator('.framed-play').count(), { timeout: 20_000 }).toBe(1);
+    await expect
+      .poll(() => frame.locator('.framed-play').count(), { timeout: 20_000, message: refusals.join('\n') })
+      .toBe(1);
   }
 
   it('shows the interstitial inside an iframe, never the theater', async () => {
@@ -58,7 +62,7 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
     await page.context().close();
   });
 
-  // Smoke only; headless Chromium never replayed the cached-shell framing block.
+  // Fails on a worker answering the frame with the cached shell.
   it('still shows the interstitial once the service worker controls the frame', async () => {
     const page = await framedHost();
     await expectInterstitial(page);
@@ -66,8 +70,13 @@ describe.skipIf(!prereq.ok)('framed play permalink', () => {
     expect(first, 'play frame').toBeDefined();
     await first!.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
 
+    const refusals: string[] = [];
+    page.on('console', (message) => {
+      if (message.text().includes('Refused to frame')) refusals.push(message.text());
+    });
     await page.reload();
-    await expectInterstitial(page);
+    await expectInterstitial(page, refusals);
+    expect(refusals).toEqual([]);
     const again = page.frames().find((frame) => frame.url().startsWith(BASE_URL));
     expect(await again!.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
     await page.context().close();
