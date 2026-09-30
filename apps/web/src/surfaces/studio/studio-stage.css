@@ -274,6 +274,10 @@
   cursor: default;
 }
 
+.studio-version-ribbon-depth.is-failed {
+  color: #fca5a5;
+}
+
 .studio-stage-play-bar {
   display: inline-flex;
   align-items: center;

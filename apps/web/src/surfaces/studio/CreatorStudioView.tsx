@@ -20,6 +20,7 @@ import { usePlayChromeIdle } from '../../usePlayChromeIdle.js';
 import { StudioChatRail } from './StudioChatRail.js';
 import { StudioStageCard } from './StudioStageCard.js';
 import { StudioFullBleed } from './StudioFullBleed.js';
+import { stageCheckVerdict } from '../../stageCheckVerdict.js';
 import { useStageSource } from '../../useStageSource.js';
 import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
 import { GameTheater } from '../../GameTheater.js';
@@ -334,9 +335,7 @@ export function CreatorStudioView({
   const firstStageTokenAppliedRef = useRef(false);
   const [activePreviewVersion, setActivePreviewVersion] = useState<string | null>(null);
   const studioStatus = useStudioStatusPoll(stageToken);
-  const stageSource = useStageSource(stageToken ?? '', studioStatus, {
-    selectedPreviewVersion: activePreviewVersion,
-  });
+  const stageSource = useStageSource(stageToken ?? '', studioStatus, { selectedPreviewVersion: activePreviewVersion });
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
   // "Fix it" seeds this; the composer consumes it once, then clears it.
   const [chatDraft, setChatDraft] = useState<{ text: string; seq: number } | null>(null);
@@ -918,7 +917,7 @@ export function CreatorStudioView({
                         title={activeGame.title}
                         slug={activeGame.slug ?? undefined}
                         status={studioStatus}
-                        liveVersion={activePreviewVersion ?? stageSource.origin.versionLabel ?? null}
+                        liveVersion={stageSource.origin.version ?? null}
                         posture={posture}
                         onPostureChange={changePosture}
                         stageEmpty={!stageSource.html}
@@ -1015,7 +1014,7 @@ export function CreatorStudioView({
                           publishedAt={activeGame.publishedAt ?? activeGame.livePublishedAt}
                           deliveryInGate={Boolean(studioStatus?.gateProgress)}
                           newerStageWaiting={newerStageWaiting}
-                          checked={studioStatus?.previewGate ? studioStatus.previewGate.green : null}
+                          checked={stageCheckVerdict(studioStatus, stageSource.origin.version)}
                         />
 
                         {stageStatus.kind === 'empty' &&

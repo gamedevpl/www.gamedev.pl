@@ -23,6 +23,8 @@ export type StageOrigin = {
   kind: StageOriginKind;
   at: number | null;
   versionLabel: string | null;
+  // Gate version on stage; versionLabel may be a free-text caption.
+  version?: string | null;
 };
 
 export type StageSource = {
@@ -321,13 +323,14 @@ export function useStageSource(
 
   let origin: StageOrigin = NONE_ORIGIN;
   if (hasVersionPreview) {
-    origin = { kind: 'staged', at: versionPreview!.at, versionLabel: versionPreview!.version };
+    const { at, version } = versionPreview!;
+    origin = { kind: 'staged', at, versionLabel: version, version };
   } else if (isPublished) {
     origin = { kind: 'delivered', at: null, versionLabel: null };
   } else if (showChannel) {
     origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
-    origin = { kind: 'staged', at: preview.at, versionLabel: preview.version ?? null };
+    origin = { kind: 'staged', at: preview.at, versionLabel: null, version: preview.version ?? null };
   } else if (channel) {
     origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
   } else if (published) {

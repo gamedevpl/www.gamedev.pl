@@ -24,7 +24,7 @@ export type StudioVersionRibbonProps = {
   stageStatus: StageStatus;
   deliveryInGate?: boolean;
   newerStageWaiting?: boolean;
-  /** Green/not-yet from the preview gate — the only depth signal available client-side today. */
+  /** The staged build's gate verdict: true passed, false failed, null unknown or pending. */
   checked?: boolean | null;
 };
 
@@ -45,7 +45,7 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
   const { origin } = props;
   if (origin.kind === 'none') return null;
 
-  const tag = origin.versionLabel ? formatBuildTag(origin.versionLabel) : null;
+  const tag = formatBuildTag(origin.version);
   const tagSuffix = tag ? ` (${tag})` : '';
 
   const identity =
@@ -77,9 +77,9 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
       ) : props.checked != null ? (
         <span
           className={`studio-version-ribbon-depth${props.checked ? '' : ' is-failed'}`}
-          title={props.checked ? t('studioPanel.ribbon.checkedTitle') : t('studioPanel.buildBar.failed')}
+          title={props.checked ? t('studioPanel.ribbon.checkedTitle') : t('studioPanel.ribbon.checkFailedTitle')}
         >
-          {props.checked ? t('studioPanel.ribbon.checked') : t('studioPanel.buildBar.failed')}
+          {props.checked ? t('studioPanel.ribbon.checked') : t('studioPanel.ribbon.checkFailed')}
         </span>
       ) : null}
     </div>

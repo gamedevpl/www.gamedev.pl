@@ -33,10 +33,10 @@ export function medianGateMinutes(builds: readonly RecentBuild[] | undefined): n
 
 export function formatBuildTag(version: string | null | undefined): string | null {
   if (!version) return null;
-  const match = version.match(/-([0-9a-f]{6,12})$/i);
-  if (match) return `#${match[1].slice(0, 6)}`;
-  if (version.length <= 10) return version;
-  return `${version.slice(0, 8)}…`;
+  // Gate versions end in `-<hex>`; PR lane sends a bare sha.
+  const match = version.match(/(?:^|-)([0-9a-f]{6,40})$/i);
+  if (match) return `#${match[1].slice(0, 6).toLowerCase()}`;
+  return version.length <= 10 ? `#${version}` : `#${version.slice(0, 8)}…`;
 }
 
 export function buildBarModel(

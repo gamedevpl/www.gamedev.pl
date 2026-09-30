@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildBarModel, medianGateMinutes } from './buildBarModel.js';
+import { buildBarModel, formatBuildTag, medianGateMinutes } from './buildBarModel.js';
 import type { RecentBuild, SubmissionStatus } from './submissionApi.js';
 
 const t = (key: string) => key;
@@ -119,5 +119,22 @@ describe('buildBarModel', () => {
       liveVersion: 'v20260930T223014079Z-e07ba9772fd5',
       liveTag: '#e07ba9',
     });
+  });
+});
+
+describe('formatBuildTag', () => {
+  it('shortens a gate version to its hash suffix', () => {
+    expect(formatBuildTag('v20260930T223014079Z-e07ba9772fd5')).toBe('#e07ba9');
+  });
+
+  it('shortens a bare git sha from the PR lane', () => {
+    expect(formatBuildTag('E07BA9772FD5C0FFEE0000000000000000000000')).toBe('#e07ba9');
+  });
+
+  it('keeps short versions whole and clips long free-form ones', () => {
+    expect(formatBuildTag('v3')).toBe('#v3');
+    expect(formatBuildTag('release-candidate-final')).toBe('#release-…');
+    expect(formatBuildTag(null)).toBeNull();
+    expect(formatBuildTag('')).toBeNull();
   });
 });
