@@ -86,6 +86,8 @@ describe.skipIf(!prerequisite.ok)('iframe document authorization in native Chrom
     const result = await build({
       stdin: { contents: entry, resolveDir: web, sourcefile: 'document-fixture.tsx', loader: 'tsx' },
       bundle: true,
+      // Stylesheets never matter to the frame bridge fixture.
+      loader: { '.css': 'empty' },
       alias: { '@gamedevpl/contract': resolve(web, '../../packages/contract/src/index.ts') },
       write: false,
       platform: 'browser',
