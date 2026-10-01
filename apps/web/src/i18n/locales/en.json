@@ -1323,8 +1323,8 @@
     "signedInAs": "Signed in as {{name}}"
   },
   "betaSplash": {
-    "headline": "Create games with AI. Play what others made.",
-    "sub": "Describe an idea in a sentence — an AI coding agent builds it, and it's live for everyone to play.",
+    "headline": "Create and play games.",
+    "sub": "Describe your idea, build it, play it.",
     "badge": "Closed beta",
     "blockedMsg": "The beta is closed right now — access is invite-only.",
     "joinWaitlist": "Join the waitlist",
