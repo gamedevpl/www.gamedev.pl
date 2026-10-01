@@ -25,16 +25,12 @@ export function StudioBuildBar({
       : null;
 
   const isChecking = model.state === 'running' || model.state === 'starting';
-  const showLiveDifferent =
-    model.liveTag && model.liveVersion && model.processingVersion && model.liveVersion !== model.processingVersion;
-  const processingText = isChecking ? model.processingTag : null;
-  const liveText = showLiveDifferent
-    ? `${t('studioPanel.buildBar.livePrefix', 'Live: ')}${model.liveTag}`
-    : !isChecking
-      ? model.liveTag
-      : null;
+  // Playing the build in the gate: one tag says both.
+  const playingChecked = isChecking && Boolean(model.liveVersion) && model.liveVersion === model.processingVersion;
+  const processingText = isChecking && !playingChecked ? model.processingTag : null;
+  const playingText = model.liveTag ? t('studioPanel.buildBar.playing', { tag: model.liveTag }) : null;
   // aria-label overrides visible text, so it carries the tags.
-  const accessibleName = [t('studioPanel.buildBar.open'), model.label, processingText, liveText]
+  const accessibleName = [t('studioPanel.buildBar.open'), model.label, processingText, playingText]
     .filter(Boolean)
     .join(' · ');
 
@@ -62,16 +58,19 @@ export function StudioBuildBar({
       </span>
       <span className="studio-build-bar-label">{model.label}</span>
       {processingText ? (
-        <span className="studio-build-bar-tag is-processing" title={model.processingVersion ?? undefined}>
+        <span
+          className="studio-build-bar-tag is-processing"
+          title={t('studioPanel.buildBar.processingTitle', { version: model.processingVersion })}
+        >
           {processingText}
         </span>
       ) : null}
-      {liveText ? (
+      {playingText ? (
         <span
-          className="studio-build-bar-tag is-live"
-          title={t('studioPanel.buildBar.liveTitle', { version: model.liveVersion })}
+          className={`studio-build-bar-tag is-playing${playingChecked ? ' is-processing' : ''}${processingText ? ' is-secondary' : ''}`}
+          title={t('studioPanel.buildBar.playingTitle', { version: model.liveVersion })}
         >
-          {liveText}
+          {playingText}
         </span>
       ) : null}
       {eta ? <span className="studio-build-bar-eta">{eta}</span> : null}

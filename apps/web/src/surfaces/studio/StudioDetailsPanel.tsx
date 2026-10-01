@@ -46,6 +46,7 @@ export function DetailsPanel({
   onOpenPlaytest,
   onSelectPreviewVersion,
   activePreviewVersion,
+  playingVersion,
   onReverted,
   onSwitchToPlatform,
   onPlay,
@@ -69,6 +70,8 @@ export function DetailsPanel({
   onOpenPlaytest: () => void;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
+  // The build on stage right now.
+  playingVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
   onSwitchToPlatform: () => Promise<void>;
   onPlay: () => void;
@@ -277,6 +280,7 @@ export function DetailsPanel({
               emptyLabel={t('studioPanel.rail.buildEmpty')}
               onSelectPreviewVersion={onSelectPreviewVersion}
               activePreviewVersion={activePreviewVersion}
+              playingVersion={playingVersion}
               onReverted={onReverted}
             />
           ) : (

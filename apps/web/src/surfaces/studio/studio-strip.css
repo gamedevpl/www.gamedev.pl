@@ -201,10 +201,15 @@
   border: 1px solid rgba(255, 193, 7, 0.35);
 }
 
-.studio-build-bar-tag.is-live {
+.studio-build-bar-tag.is-playing {
   background: rgba(0, 228, 172, 0.18);
   color: var(--turquoise);
   border: 1px solid rgba(0, 228, 172, 0.4);
+}
+
+/* Playing the build in the gate: still the play colour, gate outline. */
+.studio-build-bar-tag.is-playing.is-processing {
+  border-color: rgba(255, 193, 7, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

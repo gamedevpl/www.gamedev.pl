@@ -213,6 +213,38 @@ describe('StudioBuildHistory', () => {
     unmount();
   });
 
+  it('flags the build being played and says a pending build is checking, not idle', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <StudioBuildHistory
+          status={{
+            ...base,
+            status: 'in_review',
+            recentBuilds: [
+              { version: 'v2', createdAt: new Date().toISOString(), mode: 'preview', verdict: 'pending' },
+              {
+                version: 'v1',
+                createdAt: new Date(Date.now() - 60_000).toISOString(),
+                mode: 'preview',
+                verdict: 'green',
+              },
+            ],
+          }}
+          playingVersion="v2"
+        />,
+      );
+    });
+    const rows = host.querySelectorAll('.studio-build-history-row');
+    expect(rows[0]?.querySelector('.studio-build-history-playing')?.textContent).toContain('Playing');
+    expect(rows[1]?.querySelector('.studio-build-history-playing')).toBeNull();
+    expect(host.querySelector('.studio-build-history-live')?.classList.contains('is-live')).toBe(true);
+    expect(host.querySelector('.studio-build-history-live')?.textContent).toContain('you can already play it');
+    await act(async () => root.unmount());
+  });
+
   it('offers to seal only the current round build, by jobId — not by row position', async () => {
     // A newer sibling round on the same slug can outrank the current one in the list
     // (contract note on RecentBuild.jobId). Sealing must still bind to the round

@@ -16,12 +16,12 @@ const builds: SubmissionStatus['recentBuilds'] = [
 describe('stageCheckVerdict', () => {
   it('reads the verdict of the build actually on stage, not the latest gate run', () => {
     const s = status({ recentBuilds: builds, previewGate: { green: false, ranAt: '2026-09-30T22:48:00.000Z' } });
-    expect(stageCheckVerdict(s, 'v-old')).toBe(true);
-    expect(stageCheckVerdict(s, 'v-new')).toBe(false);
+    expect(stageCheckVerdict(s, 'v-old')).toBe('passed');
+    expect(stageCheckVerdict(s, 'v-new')).toBe('failed');
   });
 
-  it('says nothing while the staged build is still in the gate', () => {
-    expect(stageCheckVerdict(status({ recentBuilds: builds }), 'v-wip')).toBeNull();
+  it('plays on while the staged build is still in the gate', () => {
+    expect(stageCheckVerdict(status({ recentBuilds: builds }), 'v-wip')).toBe('checking');
   });
 
   it('never claims a failure for a build it cannot identify', () => {
@@ -36,8 +36,8 @@ describe('stageCheckVerdict', () => {
       previewGate: gate,
       progress: { headSha: 'sha-head', commits: [], checklist: [], revisions: [] },
     });
-    expect(stageCheckVerdict(s, 'sha-head')).toBe(true);
-    expect(stageCheckVerdict({ ...s, previewGate: { ...gate, green: false } }, 'sha-head')).toBe(false);
+    expect(stageCheckVerdict(s, 'sha-head')).toBe('passed');
+    expect(stageCheckVerdict({ ...s, previewGate: { ...gate, green: false } }, 'sha-head')).toBe('failed');
     // A fresher channel build has no version: unverified bytes are never "checked".
     expect(stageCheckVerdict(s, null)).toBeNull();
     expect(stageCheckVerdict(s, 'sha-older')).toBeNull();

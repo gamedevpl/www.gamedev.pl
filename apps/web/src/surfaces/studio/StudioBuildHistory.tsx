@@ -17,6 +17,7 @@ export function StudioBuildHistory({
   emptyLabel,
   onSelectPreviewVersion,
   activePreviewVersion,
+  playingVersion,
   onReverted,
   onSealed,
 }: {
@@ -27,6 +28,8 @@ export function StudioBuildHistory({
   emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
+  // The build on stage now, flagged so creators know what they play.
+  playingVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
   // Called right after a successful seal, so the caller can refresh status immediately
   // rather than wait out its own poll — `canSeal` would otherwise stay stale that long.
@@ -198,6 +201,9 @@ export function StudioBuildHistory({
                   ) : null}
                 </span>
                 <span className="studio-build-history-mode">{t(`studioPanel.buildHistory.mode.${build.mode}`)}</span>
+                {playingVersion === build.version ? (
+                  <span className="studio-build-history-playing">▶ {t('studioPanel.buildHistory.playing')}</span>
+                ) : null}
                 <span className="studio-build-history-verdict">
                   {build.status === 'kit_outdated'
                     ? t('studioPanel.buildHistory.kitOutdated')

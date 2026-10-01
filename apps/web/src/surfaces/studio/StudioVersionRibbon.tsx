@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { formatBuildTag } from '../../buildBarModel.js';
+import type { StageCheck } from '../../stageCheckVerdict.js';
 import type { StageOrigin } from '../../useStageSource.js';
 import type { StageStatus } from './StudioStage.js';
 import './studio-stage.css';
@@ -24,8 +25,8 @@ export type StudioVersionRibbonProps = {
   stageStatus: StageStatus;
   deliveryInGate?: boolean;
   newerStageWaiting?: boolean;
-  /** The staged build's gate verdict: true passed, false failed, null unknown or pending. */
-  checked?: boolean | null;
+  /** The shown build's gate state; 'checking' is the normal fast path. */
+  check?: StageCheck;
 };
 
 function worstException(props: StudioVersionRibbonProps): RibbonException | null {
@@ -46,18 +47,17 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
   if (origin.kind === 'none') return null;
 
   const tag = formatBuildTag(origin.version);
-  const tagSuffix = tag ? ` (${tag})` : '';
-
-  const identity =
+  // Lead with what is being played; when it landed comes second.
+  const playing = tag ? t('studioPanel.ribbon.playingTag', { tag }) : t('studioPanel.ribbon.playing');
+  const landed =
     origin.kind === 'delivered'
       ? props.publishedAt
-        ? t('studioPanel.ribbon.delivered', { time: formatClock(Date.parse(props.publishedAt)) }) + tagSuffix
-        : t('studioPanel.ribbon.deliveredUnknown') + tagSuffix
-      : origin.kind === 'seed'
-        ? t('studioPanel.ribbon.seed')
-        : origin.at != null
-          ? t('studioPanel.ribbon.staged', { time: formatClock(origin.at) }) + tagSuffix
-          : t('studioPanel.ribbon.stagedUnknown') + tagSuffix;
+        ? t('studioPanel.ribbon.delivered', { time: formatClock(Date.parse(props.publishedAt)) })
+        : t('studioPanel.ribbon.deliveredUnknown')
+      : origin.at != null
+        ? t('studioPanel.ribbon.staged', { time: formatClock(origin.at) })
+        : t('studioPanel.ribbon.stagedUnknown');
+  const identity = origin.kind === 'seed' ? t('studioPanel.ribbon.seed') : `${playing} · ${landed}`;
 
   const exception = worstException(props);
 
@@ -74,12 +74,12 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
                 ? t('studioPanel.ribbon.deliveryInGate')
                 : t('studioPanel.ribbon.newerStageWaiting')}
         </span>
-      ) : props.checked != null ? (
+      ) : props.check ? (
         <span
-          className={`studio-version-ribbon-depth${props.checked ? '' : ' is-failed'}`}
-          title={props.checked ? t('studioPanel.ribbon.checkedTitle') : t('studioPanel.ribbon.checkFailedTitle')}
+          className={`studio-version-ribbon-depth is-${props.check}`}
+          title={t(`studioPanel.ribbon.${props.check}Title`)}
         >
-          {props.checked ? t('studioPanel.ribbon.checked') : t('studioPanel.ribbon.checkFailed')}
+          {t(`studioPanel.ribbon.${props.check}`)}
         </span>
       ) : null}
     </div>

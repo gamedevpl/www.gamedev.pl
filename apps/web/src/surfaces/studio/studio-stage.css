@@ -278,6 +278,13 @@
   color: #fca5a5;
 }
 
+/* Background news, not a warning: the creator keeps playing. */
+.studio-version-ribbon-depth.is-checking {
+  color: inherit;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 .studio-stage-play-bar {
   display: inline-flex;
   align-items: center;

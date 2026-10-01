@@ -13,6 +13,7 @@ export function StudioDetailsBuildProgress({
   emptyLabel,
   onSelectPreviewVersion,
   activePreviewVersion,
+  playingVersion,
   onReverted,
 }: {
   token: string;
@@ -20,6 +21,7 @@ export function StudioDetailsBuildProgress({
   emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
+  playingVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -53,6 +55,7 @@ export function StudioDetailsBuildProgress({
       emptyLabel={emptyLabel}
       onSelectPreviewVersion={onSelectPreviewVersion}
       activePreviewVersion={activePreviewVersion}
+      playingVersion={playingVersion}
       onReverted={onReverted}
       onSealed={() => pokeStudioStatus(token, i18n.language)}
     />
