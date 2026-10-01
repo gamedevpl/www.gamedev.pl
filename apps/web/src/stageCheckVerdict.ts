@@ -4,7 +4,9 @@ import type { SubmissionStatus } from './submissionApi.js';
 export function stageCheckVerdict(status: SubmissionStatus | null | undefined, version?: string | null) {
   const build = version ? status?.recentBuilds?.find((entry) => entry.version === version) : undefined;
   if (build) return build.verdict === 'pending' ? null : build.verdict === 'green';
-  return status?.previewGate?.green ? true : null;
+  // The preview gate speaks only for the head commit it ran on.
+  const gate = version && version === status?.progress?.headSha ? status?.previewGate : undefined;
+  return gate ? gate.green : null;
 }
 
 // Live publication: the newest green publish build, if still listed.

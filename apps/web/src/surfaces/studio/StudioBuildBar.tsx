@@ -27,13 +27,23 @@ export function StudioBuildBar({
   const isChecking = model.state === 'running' || model.state === 'starting';
   const showLiveDifferent =
     model.liveTag && model.liveVersion && model.processingVersion && model.liveVersion !== model.processingVersion;
+  const processingText = isChecking ? model.processingTag : null;
+  const liveText = showLiveDifferent
+    ? `${t('studioPanel.buildBar.livePrefix', 'Live: ')}${model.liveTag}`
+    : !isChecking
+      ? model.liveTag
+      : null;
+  // aria-label overrides visible text, so it carries the tags.
+  const accessibleName = [t('studioPanel.buildBar.open'), model.label, processingText, liveText]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <button
       type="button"
       className={`studio-build-bar is-${model.state}`}
       onClick={onOpen}
-      aria-label={t('studioPanel.buildBar.open')}
+      aria-label={accessibleName}
       title={eta ? `${model.label} · ${eta}` : model.label}
       data-testid="studio-build-bar"
     >
@@ -51,22 +61,17 @@ export function StudioBuildBar({
         />
       </span>
       <span className="studio-build-bar-label">{model.label}</span>
-      {isChecking && model.processingTag ? (
+      {processingText ? (
         <span className="studio-build-bar-tag is-processing" title={model.processingVersion ?? undefined}>
-          {model.processingTag}
+          {processingText}
         </span>
       ) : null}
-      {showLiveDifferent ? (
+      {liveText ? (
         <span
           className="studio-build-bar-tag is-live"
           title={t('studioPanel.buildBar.liveTitle', { version: model.liveVersion })}
         >
-          {t('studioPanel.buildBar.livePrefix', 'Live: ')}
-          {model.liveTag}
-        </span>
-      ) : !isChecking && model.liveTag ? (
-        <span className="studio-build-bar-tag is-live" title={model.liveVersion ?? undefined}>
-          {model.liveTag}
+          {liveText}
         </span>
       ) : null}
       {eta ? <span className="studio-build-bar-eta">{eta}</span> : null}

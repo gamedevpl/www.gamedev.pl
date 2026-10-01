@@ -30,9 +30,17 @@ describe('stageCheckVerdict', () => {
     expect(stageCheckVerdict(red, 'v-unknown')).toBeNull();
   });
 
-  it('falls back to a green preview gate when the build is not listed', () => {
-    const green = status({ previewGate: { green: true, ranAt: '2026-09-30T22:48:00.000Z' } });
-    expect(stageCheckVerdict(green, null)).toBe(true);
+  it('trusts the preview gate only for the head commit it ran on', () => {
+    const gate = { green: true, ranAt: '2026-09-30T22:48:00.000Z' };
+    const s = status({
+      previewGate: gate,
+      progress: { headSha: 'sha-head', commits: [], checklist: [], revisions: [] },
+    });
+    expect(stageCheckVerdict(s, 'sha-head')).toBe(true);
+    expect(stageCheckVerdict({ ...s, previewGate: { ...gate, green: false } }, 'sha-head')).toBe(false);
+    // A fresher channel build has no version: unverified bytes are never "checked".
+    expect(stageCheckVerdict(s, null)).toBeNull();
+    expect(stageCheckVerdict(s, 'sha-older')).toBeNull();
     expect(stageCheckVerdict(null, null)).toBeNull();
   });
 });

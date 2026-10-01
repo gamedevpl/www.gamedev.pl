@@ -38,6 +38,11 @@ describe('StudioBuildBar tags', () => {
     const host = await mount({ status: status('pending'), liveVersion: LIVE });
     expect(host.querySelector('.studio-build-bar-tag.is-processing')?.textContent).toBe('#613108');
     expect(host.querySelector('.studio-build-bar-tag.is-live')?.textContent).toBe('Live: #e07ba9');
+    // Screen readers hear the tags too, not just the action.
+    const name = host.querySelector('.studio-build-bar')?.getAttribute('aria-label') ?? '';
+    expect(name).toContain('Open build progress');
+    expect(name).toContain('#613108');
+    expect(name).toContain('Live: #e07ba9');
   });
 
   it('shows one tag while the build in the gate is already the one on stage', async () => {
