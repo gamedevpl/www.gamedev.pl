@@ -47,19 +47,19 @@ export function buildBarModel(
   const latest = status?.recentBuilds?.[0];
   if (!latest) return null;
   const eta = medianGateMinutes(status?.recentBuilds);
-  const processingVersion = latest.version ?? null;
-  const processingTag = formatBuildTag(processingVersion);
+  const priorRound =
+    typeof status?.jobId === 'number' && typeof latest.jobId === 'number' && latest.jobId !== status.jobId;
+  // A prior round's newest build is not the one being processed.
+  const processingVersion = priorRound ? null : (latest.version ?? null);
   const liveVersion = options?.liveVersion ?? null;
-  const liveTag = formatBuildTag(liveVersion);
-
   const tags = {
     processingVersion,
-    processingTag,
+    processingTag: formatBuildTag(processingVersion),
     liveVersion,
-    liveTag,
+    liveTag: formatBuildTag(liveVersion),
   };
 
-  if (typeof status?.jobId === 'number' && typeof latest.jobId === 'number' && latest.jobId !== status.jobId) {
+  if (priorRound) {
     return {
       state: 'starting',
       fraction: null,

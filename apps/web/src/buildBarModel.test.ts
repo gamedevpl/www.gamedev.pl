@@ -122,6 +122,17 @@ describe('buildBarModel', () => {
   });
 });
 
+describe('buildBarModel prior round', () => {
+  it('does not call a prior round build the one being processed', () => {
+    const model = buildBarModel(
+      status({ jobId: 2, recentBuilds: [build({ jobId: 1, version: 'v20260930T224758596Z-613108d9d61d' })] }),
+      t,
+    );
+
+    expect(model).toMatchObject({ state: 'starting', processingVersion: null, processingTag: null });
+  });
+});
+
 describe('formatBuildTag', () => {
   it('shortens a gate version to its hash suffix', () => {
     expect(formatBuildTag('v20260930T223014079Z-e07ba9772fd5')).toBe('#e07ba9');

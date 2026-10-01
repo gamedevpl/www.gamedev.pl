@@ -46,6 +46,8 @@ export function StudioBuildHistory({
 
   const statusBuilds = status.recentBuilds ?? [];
   const builds = extraBuilds ?? statusBuilds;
+  // `extraBuilds` can lag a new build; the status head is current.
+  const headVersion = statusBuilds[0]?.version ?? builds[0]?.version;
 
   useEffect(() => {
     // Reset extra builds when game / status changes
@@ -263,7 +265,7 @@ export function StudioBuildHistory({
                       <button
                         type="button"
                         className="studio-build-action-btn is-revert"
-                        disabled={isReverting || index === 0}
+                        disabled={isReverting || build.version === headVersion}
                         onClick={() => void handleRevert(build)}
                       >
                         <PixelIcon name="undo" size={12} />
