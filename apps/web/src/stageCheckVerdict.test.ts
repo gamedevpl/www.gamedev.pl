@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { stageCheckVerdict } from './stageCheckVerdict.js';
+import { publishedBuildVersion, stageCheckVerdict } from './stageCheckVerdict.js';
 import type { SubmissionStatus } from './submissionApi.js';
 
 function status(overrides: Partial<SubmissionStatus>): SubmissionStatus {
@@ -34,5 +34,24 @@ describe('stageCheckVerdict', () => {
     const green = status({ previewGate: { green: true, ranAt: '2026-09-30T22:48:00.000Z' } });
     expect(stageCheckVerdict(green, null)).toBe(true);
     expect(stageCheckVerdict(null, null)).toBeNull();
+  });
+});
+
+describe('publishedBuildVersion', () => {
+  it('names the newest green publish build, skipping previews and failed publishes', () => {
+    const s = status({
+      recentBuilds: [
+        { version: 'v-pre', createdAt: '2026-09-30T22:50:00.000Z', mode: 'preview', verdict: 'green' },
+        { version: 'v-red', createdAt: '2026-09-30T22:40:00.000Z', mode: 'publish', verdict: 'red' },
+        { version: 'v-live', createdAt: '2026-09-30T22:30:00.000Z', mode: 'publish', verdict: 'green' },
+        { version: 'v-older', createdAt: '2026-09-30T22:20:00.000Z', mode: 'publish', verdict: 'green' },
+      ],
+    });
+    expect(publishedBuildVersion(s)).toBe('v-live');
+  });
+
+  it('says nothing once the publication has left the recent window', () => {
+    expect(publishedBuildVersion(status({ recentBuilds: builds }))).toBeNull();
+    expect(publishedBuildVersion(null)).toBeNull();
   });
 });

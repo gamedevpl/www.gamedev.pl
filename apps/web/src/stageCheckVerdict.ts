@@ -6,3 +6,8 @@ export function stageCheckVerdict(status: SubmissionStatus | null | undefined, v
   if (build) return build.verdict === 'pending' ? null : build.verdict === 'green';
   return status?.previewGate?.green ? true : null;
 }
+
+// Live publication: the newest green publish build, if still listed.
+export function publishedBuildVersion(status: SubmissionStatus | null | undefined): string | null {
+  return status?.recentBuilds?.find((build) => build.mode === 'publish' && build.verdict === 'green')?.version ?? null;
+}

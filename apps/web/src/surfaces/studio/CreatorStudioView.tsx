@@ -915,7 +915,7 @@ export function CreatorStudioView({
                         title={activeGame.title}
                         slug={activeGame.slug ?? undefined}
                         status={studioStatus}
-                        liveVersion={shownStageVersion}
+                        liveVersion={stageSource.html ? shownStageVersion : null}
                         posture={posture}
                         onPostureChange={changePosture}
                         stageEmpty={!stageSource.html}

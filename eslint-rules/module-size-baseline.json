@@ -997,7 +997,7 @@
     "apps/web/src/usePullToRefresh.ts": 277,
     "apps/web/src/useScreenWakeLock.ts": 53,
     "apps/web/src/useStageSource.test.ts": 277,
-    "apps/web/src/useStageSource.ts": 348,
+    "apps/web/src/useStageSource.ts": 349,
     "apps/web/src/VisitFunnelPanel.test.tsx": 388,
     "apps/web/src/VisitFunnelPanel.tsx": 832,
     "apps/web/src/visitTelemetry.dom.test.ts": 131,

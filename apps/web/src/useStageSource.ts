@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import i18n from './i18n/index.js';
 import { fetchPublishedGame } from './catalog.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
+import { publishedBuildVersion } from './stageCheckVerdict.js';
 import { getChannelPlayable, getSubmissionPreview, type SubmissionStatus } from './submissionApi.js';
 
 /**
@@ -326,7 +327,7 @@ export function useStageSource(
     const { at, version } = versionPreview!;
     origin = { kind: 'staged', at, versionLabel: version, version };
   } else if (isPublished) {
-    origin = { kind: 'delivered', at: null, versionLabel: null };
+    origin = { kind: 'delivered', at: null, versionLabel: null, version: publishedBuildVersion(status) };
   } else if (showChannel) {
     origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
@@ -334,7 +335,7 @@ export function useStageSource(
   } else if (channel) {
     origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
   } else if (published) {
-    origin = { kind: 'delivered', at: null, versionLabel: null };
+    origin = { kind: 'delivered', at: null, versionLabel: null, version: publishedBuildVersion(status) };
   } else if (status && !status.preview && !status.playable?.length) {
     origin = NONE_ORIGIN;
   }
