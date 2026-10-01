@@ -668,7 +668,8 @@
       "members": "Członkowie"
     },
     "buildHistory": {
-      "live": "Sprawdzamy Twój najnowszy build — możesz już w niego grać",
+      "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
+      "livePlaying": "Sprawdzamy Twój najnowszy build — możesz już w niego grać",
       "idle": "Żaden build nie jest teraz uruchomiony",
       "title": "Ostatnie buildy",
       "mode": {

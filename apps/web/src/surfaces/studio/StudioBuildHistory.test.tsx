@@ -242,6 +242,12 @@ describe('StudioBuildHistory', () => {
     expect(rows[1]?.querySelector('.studio-build-history-playing')).toBeNull();
     expect(host.querySelector('.studio-build-history-live')?.classList.contains('is-live')).toBe(true);
     expect(host.querySelector('.studio-build-history-live')?.textContent).toContain('you can already play it');
+
+    // Live but nothing playable on stage yet: no promise of play.
+    await act(async () => {
+      root.render(<StudioBuildHistory status={{ ...base, status: 'building' }} playingVersion={null} />);
+    });
+    expect(host.querySelector('.studio-build-history-live')?.textContent).toBe('Checking your latest changes now');
     await act(async () => root.unmount());
   });
 

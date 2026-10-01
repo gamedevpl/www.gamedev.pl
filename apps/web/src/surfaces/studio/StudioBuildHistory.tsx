@@ -58,6 +58,10 @@ export function StudioBuildHistory({
   }, [status.slug]);
 
   const live = isBuildLive(status);
+  // Promise play only when the gated build is on stage.
+  const head = statusBuilds[0];
+  const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
+  const liveKey = !live ? 'idle' : playingPending ? 'livePlaying' : 'live';
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
   if (!showLiveRoundRow && builds.length === 0) {
     return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
@@ -129,7 +133,7 @@ export function StudioBuildHistory({
     <div className="studio-build-history" data-testid="studio-build-history">
       <div className={`studio-build-history-live${live ? ' is-live' : ''}`}>
         <span className="live-dot" aria-hidden="true" />
-        <span>{t(live ? 'studioPanel.buildHistory.live' : 'studioPanel.buildHistory.idle')}</span>
+        <span>{t(`studioPanel.buildHistory.${liveKey}`)}</span>
       </div>
       <div className="studio-build-history-header">
         <h3 className="studio-rail-section-title">{t('studioPanel.buildHistory.title')}</h3>

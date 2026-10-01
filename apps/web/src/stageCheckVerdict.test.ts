@@ -21,7 +21,10 @@ describe('stageCheckVerdict', () => {
   });
 
   it('plays on while the staged build is still in the gate', () => {
-    expect(stageCheckVerdict(status({ recentBuilds: builds }), 'v-wip')).toBe('checking');
+    const head = (headSha: string) => ({ headSha, commits: [], checklist: [], revisions: [] });
+    expect(stageCheckVerdict(status({ recentBuilds: builds, progress: head('v-wip') }), 'v-wip')).toBe('checking');
+    // An old pending row is history, not the build in the gate.
+    expect(stageCheckVerdict(status({ recentBuilds: builds, progress: head('v-new') }), 'v-wip')).toBeNull();
   });
 
   it('never claims a failure for a build it cannot identify', () => {

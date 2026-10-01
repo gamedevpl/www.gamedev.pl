@@ -662,7 +662,8 @@
       "members": "Members"
     },
     "buildHistory": {
-      "live": "Checking your latest build — you can already play it",
+      "live": "Checking your latest changes now",
+      "livePlaying": "Checking your latest build — you can already play it",
       "idle": "No build is running right now",
       "title": "Recent builds",
       "mode": {
