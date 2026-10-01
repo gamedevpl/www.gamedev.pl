@@ -81,6 +81,8 @@ describe('useStageSource', () => {
       await Promise.resolve();
     });
     expect(latest().rawHtml).toBe('<p>A</p>');
+    // The gate version tags the stage, never an agent caption.
+    expect(latest().origin).toMatchObject({ kind: 'staged', version: 'sha-a', versionLabel: null });
 
     // Switching to a different game's token — with `status` not caught up yet, exactly
     // as it arrives from CreatorStudioView on the render where `stageToken` first

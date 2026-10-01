@@ -699,7 +699,9 @@
       "failed": "Check failed",
       "passed": "Checks passed",
       "eta": "usually ~{{minutes}} min",
-      "open": "Open build progress"
+      "open": "Open build progress",
+      "livePrefix": "Live: ",
+      "liveTitle": "Live on stage: {{version}}"
     },
     "share": {
       "title": "Share the draft",
@@ -865,9 +867,9 @@
       "deliveryInGate": "delivery in the gate",
       "newerStageWaiting": "newer stage waiting",
       "checked": "checked ✓",
-      "notChecked": "not yet checked",
+      "checkFailed": "check failed ✗",
       "checkedTitle": "This build passed the preview gate.",
-      "notCheckedTitle": "This build hasn't been checked yet."
+      "checkFailedTitle": "This build failed the preview gate."
     },
     "transfer": {
       "intro": "Hand this game to another creator. Nothing moves until they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",

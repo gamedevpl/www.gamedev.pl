@@ -76,7 +76,10 @@ export type StudioStageProps = {
   publishedAt?: string;
   deliveryInGate?: boolean;
   newerStageWaiting?: boolean;
-  checked?: boolean | null;
+  /** Gate verdict for a version; resolved against the build actually on screen. */
+  checkVerdict?: (version?: string | null) => boolean | null;
+  /** The version actually on screen, which can trail `source.origin`. */
+  onShownVersionChange?: (version: string | null) => void;
 };
 
 export function StudioStage({
@@ -99,7 +102,8 @@ export function StudioStage({
   publishedAt,
   deliveryInGate,
   newerStageWaiting,
-  checked,
+  checkVerdict,
+  onShownVersionChange,
 }: StudioStageProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -114,6 +118,8 @@ export function StudioStage({
   // swap is held during play (Codex review of PR #739: the ribbon must not claim the
   // held/pending build's provenance for a document that hasn't been applied yet).
   const [shownOrigin, setShownOrigin] = useState<StageOrigin>(source.origin);
+  const shownVersion = shownOrigin.version ?? null;
+  useEffect(() => onShownVersionChange?.(shownVersion), [shownVersion, onShownVersionChange]);
   const [pendingHtml, setPendingHtml] = useState<string | null>(null);
   const [pendingOrigin, setPendingOrigin] = useState<StageOrigin | null>(null);
   const [shimmer, setShimmer] = useState(false);
@@ -552,7 +558,7 @@ export function StudioStage({
         stageStatus={status}
         deliveryInGate={deliveryInGate}
         newerStageWaiting={Boolean(newerStageWaiting) || pendingHtml !== null}
-        checked={checked}
+        checked={checkVerdict ? checkVerdict(shownVersion) : null}
         posture={posture}
         shownHtml={shownHtml}
         paused={paused}

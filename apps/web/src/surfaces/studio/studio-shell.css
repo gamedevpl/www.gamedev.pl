@@ -209,6 +209,11 @@
     display: none;
   }
 
+  /* One row has no room for two tags: keep the build in the gate. */
+  .app:has(.studio-layout.is-game-open) .studio-build-bar-tag.is-live {
+    display: none;
+  }
+
   /* The pill's own text can't shrink, so on the narrowest phones (portrait,
      not the wider end of this band a landscape phone lands in) it's the one
      thing this row drops rather than squeezing the title to a few letters. */
@@ -220,7 +225,8 @@
     /* The bar keeps its track here rather than going away with the pill: it is
        the only build status on the row, and 42px of it still reads. */
     .app:has(.studio-layout.is-game-open) .studio-build-bar-label,
-    .app:has(.studio-layout.is-game-open) .studio-build-bar-eta {
+    .app:has(.studio-layout.is-game-open) .studio-build-bar-eta,
+    .app:has(.studio-layout.is-game-open) .studio-build-bar-tag {
       display: none;
     }
   }

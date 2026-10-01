@@ -102,4 +102,44 @@ describe('StudioVersionRibbon', () => {
     expect(host.querySelector('.studio-version-ribbon-identity')?.textContent).toMatch(/delivered/i);
     unmount();
   });
+
+  it('tags the staged build with its short version', async () => {
+    const { host, unmount } = await mount({
+      origin: {
+        kind: 'staged',
+        at: Date.now(),
+        versionLabel: 'Added jumping',
+        version: 'v20260930T223014079Z-e07ba9772fd5',
+      },
+      stageStatus: { kind: 'ready' },
+    });
+    const identity = host.querySelector('.studio-version-ribbon-identity')?.textContent ?? '';
+    expect(identity).toContain('(#e07ba9)');
+    // An agent caption is not a version, never a tag.
+    expect(identity).not.toContain('Added');
+    unmount();
+  });
+
+  it('says a failed check out loud instead of "not yet checked"', async () => {
+    const { host, unmount } = await mount({
+      origin: { kind: 'staged', at: Date.now(), versionLabel: null },
+      stageStatus: { kind: 'ready' },
+      checked: false,
+    });
+    const depth = host.querySelector('.studio-version-ribbon-depth');
+    expect(depth?.classList.contains('is-failed')).toBe(true);
+    expect(depth?.textContent).toMatch(/check failed/i);
+    unmount();
+  });
+
+  it('prefers a waiting newer stage over a delivery in the gate', async () => {
+    const { host, unmount } = await mount({
+      origin: { kind: 'staged', at: Date.now(), versionLabel: null },
+      stageStatus: { kind: 'ready' },
+      newerStageWaiting: true,
+      deliveryInGate: true,
+    });
+    expect(host.querySelector('.studio-version-ribbon-exception')?.textContent).toContain('newer stage waiting');
+    unmount();
+  });
 });

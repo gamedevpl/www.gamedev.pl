@@ -47,6 +47,7 @@ export type StudioStripProps = {
   isCompact?: boolean;
   onExit?: () => void;
   isChromeIdle?: boolean;
+  liveVersion?: string | null;
 };
 
 export function StudioStrip({
@@ -79,6 +80,7 @@ export function StudioStrip({
   isCompact = false,
   onExit,
   isChromeIdle = false,
+  liveVersion,
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -143,7 +145,7 @@ export function StudioStrip({
       <div className="studio-strip-spacer" />
 
       <div className="studio-strip-status">
-        <StudioBuildBar status={status} onOpen={onOpenBuild} />
+        <StudioBuildBar status={status} liveVersion={liveVersion} onOpen={onOpenBuild} />
         {showPhasePill ? (
           <button
             type="button"

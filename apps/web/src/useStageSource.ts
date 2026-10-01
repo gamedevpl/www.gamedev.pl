@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import i18n from './i18n/index.js';
 import { fetchPublishedGame } from './catalog.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
+import { publishedBuildVersion } from './stageCheckVerdict.js';
 import { getChannelPlayable, getSubmissionPreview, type SubmissionStatus } from './submissionApi.js';
 
 /**
@@ -23,6 +24,8 @@ export type StageOrigin = {
   kind: StageOriginKind;
   at: number | null;
   versionLabel: string | null;
+  // Gate version on stage; versionLabel may be a free-text caption.
+  version?: string | null;
 };
 
 export type StageSource = {
@@ -61,7 +64,7 @@ export function useStageSource(
   options?: UseStageSourceOptions,
 ): UseStageSourceResult {
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
-  const [preview, setPreview] = useState<{ html: string; at: number } | null>(null);
+  const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{
     html: string;
@@ -171,7 +174,11 @@ export function useStageSource(
         // latter is only comparable to a channel build's `createdAt` while the page
         // stays open (see the CE-12 note above).
         const producedAt = gateRunAt ? Date.parse(gateRunAt) : NaN;
-        setPreview({ html: result.html, at: Number.isFinite(producedAt) ? producedAt : Date.now() });
+        setPreview({
+          html: result.html,
+          at: Number.isFinite(producedAt) ? producedAt : Date.now(),
+          version: headSha ?? null,
+        });
       })
       .catch(() => {
         // Keep last-good on a refetch failure — a stale stage beats a blank one. But
@@ -317,24 +324,25 @@ export function useStageSource(
 
   let origin: StageOrigin = NONE_ORIGIN;
   if (hasVersionPreview) {
-    origin = { kind: 'staged', at: versionPreview!.at, versionLabel: versionPreview!.version };
+    const { at, version } = versionPreview!;
+    origin = { kind: 'staged', at, versionLabel: version, version };
   } else if (isPublished) {
-    origin = { kind: 'delivered', at: null, versionLabel: null };
+    origin = { kind: 'delivered', at: null, versionLabel: null, version: publishedBuildVersion(status) };
   } else if (showChannel) {
     origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
-    origin = { kind: 'staged', at: preview.at, versionLabel: null };
+    origin = { kind: 'staged', at: preview.at, versionLabel: null, version: preview.version ?? null };
   } else if (channel) {
     origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
   } else if (published) {
-    origin = { kind: 'delivered', at: null, versionLabel: null };
+    origin = { kind: 'delivered', at: null, versionLabel: null, version: publishedBuildVersion(status) };
   } else if (status && !status.preview && !status.playable?.length) {
     origin = NONE_ORIGIN;
   }
 
   // Track 2: a synchronous preview beats waiting on the next status poll.
   const pushPreview = useCallback((nextHtml: string) => {
-    setPreview({ html: nextHtml, at: Date.now() });
+    setPreview({ html: nextHtml, at: Date.now(), version: null });
   }, []);
 
   return { html, rawHtml, origin, pushPreview };

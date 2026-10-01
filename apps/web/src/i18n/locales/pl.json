@@ -707,7 +707,9 @@
       "failed": "Sprawdzian niezaliczony",
       "passed": "Sprawdziany zaliczone",
       "eta": "zwykle ~{{minutes}} min",
-      "open": "Otwórz postęp buildu"
+      "open": "Otwórz postęp buildu",
+      "livePrefix": "Na żywo: ",
+      "liveTitle": "Aktywny na scenie: {{version}}"
     },
     "share": {
       "title": "Udostępnij wersję roboczą",
@@ -875,9 +877,9 @@
       "deliveryInGate": "dostawa w bramce kontrolnej",
       "newerStageWaiting": "czeka nowsza wersja",
       "checked": "sprawdzona ✓",
-      "notChecked": "jeszcze niesprawdzona",
+      "checkFailed": "sprawdzian niezaliczony ✗",
       "checkedTitle": "Ta wersja przeszła bramkę podglądu.",
-      "notCheckedTitle": "Ta wersja nie została jeszcze sprawdzona."
+      "checkFailedTitle": "Ta wersja nie przeszła bramki podglądu."
     },
     "transfer": {
       "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",

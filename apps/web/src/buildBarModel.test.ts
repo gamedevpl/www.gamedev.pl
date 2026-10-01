@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildBarModel, medianGateMinutes } from './buildBarModel.js';
+import { buildBarModel, formatBuildTag, medianGateMinutes } from './buildBarModel.js';
 import type { RecentBuild, SubmissionStatus } from './submissionApi.js';
 
 const t = (key: string) => key;
@@ -102,5 +102,50 @@ describe('buildBarModel', () => {
     );
 
     expect(model?.fraction).toBeCloseTo(4 / 6);
+  });
+
+  it('formats build tags and carries processing and live versions', () => {
+    const model = buildBarModel(
+      status({
+        recentBuilds: [build({ version: 'v20260930T224758596Z-613108d9d61d', verdict: 'pending' })],
+      }),
+      t,
+      { liveVersion: 'v20260930T223014079Z-e07ba9772fd5' },
+    );
+
+    expect(model).toMatchObject({
+      processingVersion: 'v20260930T224758596Z-613108d9d61d',
+      processingTag: '#613108',
+      liveVersion: 'v20260930T223014079Z-e07ba9772fd5',
+      liveTag: '#e07ba9',
+    });
+  });
+});
+
+describe('buildBarModel prior round', () => {
+  it('does not call a prior round build the one being processed', () => {
+    const model = buildBarModel(
+      status({ jobId: 2, recentBuilds: [build({ jobId: 1, version: 'v20260930T224758596Z-613108d9d61d' })] }),
+      t,
+    );
+
+    expect(model).toMatchObject({ state: 'starting', processingVersion: null, processingTag: null });
+  });
+});
+
+describe('formatBuildTag', () => {
+  it('shortens a gate version to its hash suffix', () => {
+    expect(formatBuildTag('v20260930T223014079Z-e07ba9772fd5')).toBe('#e07ba9');
+  });
+
+  it('shortens a bare git sha from the PR lane', () => {
+    expect(formatBuildTag('E07BA9772FD5C0FFEE0000000000000000000000')).toBe('#e07ba9');
+  });
+
+  it('keeps short versions whole and clips long free-form ones', () => {
+    expect(formatBuildTag('v3')).toBe('#v3');
+    expect(formatBuildTag('release-candidate-final')).toBe('#release-…');
+    expect(formatBuildTag(null)).toBeNull();
+    expect(formatBuildTag('')).toBeNull();
   });
 });

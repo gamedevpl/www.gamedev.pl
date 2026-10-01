@@ -189,6 +189,30 @@ describe('StudioBuildHistory', () => {
     unmount();
   });
 
+  it('lets an older build be reverted to while a new one is in the gate, but not the head itself', async () => {
+    const { host, unmount } = await mount({
+      ...base,
+      status: 'building',
+      slug: 'my-game',
+      gateProgress: { lane: 'preview', stage: 'smoke', index: 1, total: 6, at: new Date().toISOString() },
+      recentBuilds: [
+        { version: 'v3', createdAt: new Date().toISOString(), mode: 'preview', verdict: 'red' },
+        { version: 'v2', createdAt: new Date(Date.now() - 60_000).toISOString(), mode: 'preview', verdict: 'green' },
+      ],
+    });
+
+    const revertButton = async (row: number, version: string) => {
+      await act(async () => {
+        host.querySelectorAll<HTMLElement>('.studio-build-history-summary')[row]?.click();
+      });
+      return host.querySelector<HTMLButtonElement>(`[data-testid="build-details-${version}"] .is-revert`);
+    };
+
+    expect((await revertButton(0, 'v3'))?.disabled).toBe(true);
+    expect((await revertButton(1, 'v2'))?.disabled).toBe(false);
+    unmount();
+  });
+
   it('offers to seal only the current round build, by jobId — not by row position', async () => {
     // A newer sibling round on the same slug can outrank the current one in the list
     // (contract note on RecentBuild.jobId). Sealing must still bind to the round
