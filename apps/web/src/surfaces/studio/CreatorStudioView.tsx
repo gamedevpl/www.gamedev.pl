@@ -341,6 +341,7 @@ export function CreatorStudioView({
   const [chatDraft, setChatDraft] = useState<{ text: string; seq: number } | null>(null);
   const [newerStageWaiting, setNewerStageWaiting] = useState(false);
   const [shownStageVersion, setShownStageVersion] = useState<string | null>(null);
+  const playingVersion = stageSource.html ? shownStageVersion : null;
   const [checklistUnread, setChecklistUnread] = useState(0);
   const [railManualOpen, setRailManualOpen] = useState<boolean | null>(null);
   const railOpen = railManualOpen ?? defaultRailOpen(studioStatus);
@@ -915,7 +916,7 @@ export function CreatorStudioView({
                         title={activeGame.title}
                         slug={activeGame.slug ?? undefined}
                         status={studioStatus}
-                        liveVersion={stageSource.html ? shownStageVersion : null}
+                        liveVersion={playingVersion}
                         posture={posture}
                         onPostureChange={changePosture}
                         stageEmpty={!stageSource.html}
@@ -1145,11 +1146,10 @@ export function CreatorStudioView({
                                 onOpenPlaytest={() => changePosture('play')}
                                 onSelectPreviewVersion={setActivePreviewVersion}
                                 activePreviewVersion={activePreviewVersion}
+                                playingVersion={playingVersion}
                                 onReverted={(result) => {
                                   setActivePreviewVersion(null);
-                                  if (result.token) {
-                                    setHandoffToken(result.token);
-                                  }
+                                  if (result.token) setHandoffToken(result.token);
                                   openTab('thread');
                                 }}
                                 onSwitchToPlatform={async () => {

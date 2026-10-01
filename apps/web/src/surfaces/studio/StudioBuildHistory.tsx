@@ -17,6 +17,7 @@ export function StudioBuildHistory({
   emptyLabel,
   onSelectPreviewVersion,
   activePreviewVersion,
+  playingVersion,
   onReverted,
   onSealed,
 }: {
@@ -27,6 +28,8 @@ export function StudioBuildHistory({
   emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
+  // The build on stage now, flagged so creators know what they play.
+  playingVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
   // Called right after a successful seal, so the caller can refresh status immediately
   // rather than wait out its own poll — `canSeal` would otherwise stay stale that long.
@@ -55,6 +58,10 @@ export function StudioBuildHistory({
   }, [status.slug]);
 
   const live = isBuildLive(status);
+  // Promise play only when the gated build is on stage.
+  const head = statusBuilds[0];
+  const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
+  const liveKey = !live ? 'idle' : playingPending ? 'livePlaying' : 'live';
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
   if (!showLiveRoundRow && builds.length === 0) {
     return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
@@ -126,7 +133,7 @@ export function StudioBuildHistory({
     <div className="studio-build-history" data-testid="studio-build-history">
       <div className={`studio-build-history-live${live ? ' is-live' : ''}`}>
         <span className="live-dot" aria-hidden="true" />
-        <span>{t(live ? 'studioPanel.buildHistory.live' : 'studioPanel.buildHistory.idle')}</span>
+        <span>{t(`studioPanel.buildHistory.${liveKey}`)}</span>
       </div>
       <div className="studio-build-history-header">
         <h3 className="studio-rail-section-title">{t('studioPanel.buildHistory.title')}</h3>
@@ -198,6 +205,9 @@ export function StudioBuildHistory({
                   ) : null}
                 </span>
                 <span className="studio-build-history-mode">{t(`studioPanel.buildHistory.mode.${build.mode}`)}</span>
+                {playingVersion === build.version ? (
+                  <span className="studio-build-history-playing">▶ {t('studioPanel.buildHistory.playing')}</span>
+                ) : null}
                 <span className="studio-build-history-verdict">
                   {build.status === 'kit_outdated'
                     ? t('studioPanel.buildHistory.kitOutdated')

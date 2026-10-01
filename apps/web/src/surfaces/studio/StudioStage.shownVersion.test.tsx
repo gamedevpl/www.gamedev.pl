@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
+import type { StageCheck } from '../../stageCheckVerdict.js';
 import type { StageSource } from '../../useStageSource.js';
 import { StudioStage, type StudioStageProps } from './StudioStage.js';
 
@@ -41,7 +42,7 @@ describe('StudioStage shown version', () => {
   it('reports and checks the build on screen, not one held back during play', async () => {
     vi.useFakeTimers();
     const onShownVersionChange = vi.fn();
-    const checkVerdict = vi.fn((version?: string | null) => (version === 'v-a' ? true : false));
+    const checkVerdict = vi.fn((version?: string | null): StageCheck => (version === 'v-a' ? 'passed' : 'checking'));
     const props: StudioStageProps = {
       token: 'tok',
       title: 'Sky Dodge',
@@ -79,5 +80,28 @@ describe('StudioStage shown version', () => {
     expect(onShownVersionChange).toHaveBeenLastCalledWith('v-b');
     expect(checkVerdict).toHaveBeenLastCalledWith('v-b');
     unmount();
+  });
+
+  it('stays quiet while the gate checks the very build being played', async () => {
+    const props = (check: StageCheck): StudioStageProps => ({
+      token: 'tok',
+      title: 'Sky Dodge',
+      published: false,
+      source: source(GAME_A, 'v-a'),
+      posture: 'watch',
+      onPostureChange: vi.fn(),
+      covered: false,
+      deliveryInGate: true,
+      checkVerdict: () => check,
+    });
+    const playingChecked = await mount(props('checking'));
+    expect(playingChecked.host.querySelector('.studio-version-ribbon-exception')).toBeNull();
+    expect(playingChecked.host.querySelector('.studio-version-ribbon-depth.is-checking')).not.toBeNull();
+    playingChecked.unmount();
+
+    // A different build in the gate is still worth a word.
+    const otherInGate = await mount(props('passed'));
+    expect(otherInGate.host.querySelector('.studio-version-ribbon-exception')).not.toBeNull();
+    otherInGate.unmount();
   });
 });

@@ -34,31 +34,38 @@ describe('StudioBuildBar tags', () => {
     document.body.innerHTML = '';
   });
 
-  it('names the build in the gate and the different one still live on stage', async () => {
+  it('names the build in the gate and the different one still being played', async () => {
     const host = await mount({ status: status('pending'), liveVersion: LIVE });
     expect(host.querySelector('.studio-build-bar-tag.is-processing')?.textContent).toBe('#613108');
-    expect(host.querySelector('.studio-build-bar-tag.is-live')?.textContent).toBe('Live: #e07ba9');
+    const playing = host.querySelector('.studio-build-bar-tag.is-playing');
+    expect(playing?.textContent).toBe('Playing #e07ba9');
+    // The phone strip drops this second tag first.
+    expect(playing?.classList.contains('is-secondary')).toBe(true);
     // Screen readers hear the tags too, not just the action.
     const name = host.querySelector('.studio-build-bar')?.getAttribute('aria-label') ?? '';
     expect(name).toContain('Open build progress');
     expect(name).toContain('#613108');
-    expect(name).toContain('Live: #e07ba9');
+    expect(name).toContain('Playing #e07ba9');
   });
 
-  it('shows one tag while the build in the gate is already the one on stage', async () => {
+  it('says you are already playing the build that is being checked', async () => {
     const host = await mount({ status: status('pending'), liveVersion: PROCESSING });
-    expect(host.querySelectorAll('.studio-build-bar-tag')).toHaveLength(1);
-    expect(host.querySelector('.studio-build-bar-tag.is-processing')?.textContent).toBe('#613108');
+    const tags = host.querySelectorAll('.studio-build-bar-tag');
+    expect(tags).toHaveLength(1);
+    expect(tags[0]?.textContent).toBe('Playing #613108');
+    expect(tags[0]?.classList.contains('is-processing')).toBe(true);
+    expect(tags[0]?.classList.contains('is-secondary')).toBe(false);
   });
 
   it('drops the processing tag once the verdict is in and names the live build', async () => {
     const host = await mount({ status: status('green'), liveVersion: PROCESSING });
     expect(host.querySelector('.studio-build-bar-tag.is-processing')).toBeNull();
-    expect(host.querySelector('.studio-build-bar-tag.is-live')?.textContent).toBe('#613108');
+    expect(host.querySelector('.studio-build-bar-tag.is-playing')?.textContent).toBe('Playing #613108');
   });
 
   it('shows no live tag when the stage build is unknown', async () => {
     const host = await mount({ status: status('pending'), liveVersion: null });
-    expect(host.querySelector('.studio-build-bar-tag.is-live')).toBeNull();
+    expect(host.querySelector('.studio-build-bar-tag.is-playing')).toBeNull();
+    expect(host.querySelector('.studio-build-bar-tag.is-processing')?.textContent).toBe('#613108');
   });
 });

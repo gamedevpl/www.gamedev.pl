@@ -669,6 +669,7 @@
     },
     "buildHistory": {
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
+      "livePlaying": "Sprawdzamy Twój najnowszy build — możesz już w niego grać",
       "idle": "Żaden build nie jest teraz uruchomiony",
       "title": "Ostatnie buildy",
       "mode": {
@@ -699,7 +700,8 @@
       "fileCount_few": "{{count}} pliki źródłowe",
       "fileCount_many": "{{count}} plików źródłowych",
       "fileCount_other": "{{count}} plików źródłowych",
-      "versionLabel": "Wersja {{version}}"
+      "versionLabel": "Wersja {{version}}",
+      "playing": "Grasz"
     },
     "buildBar": {
       "starting": "Sprawdzanie się zaczyna",
@@ -708,8 +710,9 @@
       "passed": "Sprawdziany zaliczone",
       "eta": "zwykle ~{{minutes}} min",
       "open": "Otwórz postęp buildu",
-      "livePrefix": "Na żywo: ",
-      "liveTitle": "Aktywny na scenie: {{version}}"
+      "playing": "Grasz w {{tag}}",
+      "playingTitle": "Teraz na scenie: {{version}}",
+      "processingTitle": "Sprawdzany: {{version}}"
     },
     "share": {
       "title": "Udostępnij wersję roboczą",
@@ -867,19 +870,23 @@
       }
     },
     "ribbon": {
-      "staged": "WERSJA ROBOCZA {{time}} · jeszcze niedostarczona",
-      "stagedUnknown": "WERSJA ROBOCZA · jeszcze niedostarczona",
-      "delivered": "Dostarczono {{time}}",
-      "deliveredUnknown": "Dostarczono",
+      "playing": "Grasz",
+      "playingTag": "Grasz w {{tag}}",
+      "staged": "wersja robocza {{time}}",
+      "stagedUnknown": "wersja robocza",
+      "delivered": "opublikowana {{time}}",
+      "deliveredUnknown": "opublikowana",
+      "passed": "sprawdzona ✓",
+      "passedTitle": "Ta wersja przeszła sprawdziany.",
+      "failed": "sprawdzian niezaliczony ✗",
+      "failedTitle": "Ta wersja nie przeszła sprawdzianów.",
+      "checking": "sprawdziany lecą w tle",
+      "checkingTitle": "Graj dalej, sprawdziany Cię nie blokują.",
       "seed": "ZALĄŻEK",
       "crashed": "wysypała się",
       "drewNothing": "niczego nie narysowała",
-      "deliveryInGate": "dostawa w bramce kontrolnej",
-      "newerStageWaiting": "czeka nowsza wersja",
-      "checked": "sprawdzona ✓",
-      "checkFailed": "sprawdzian niezaliczony ✗",
-      "checkedTitle": "Ta wersja przeszła bramkę podglądu.",
-      "checkFailedTitle": "Ta wersja nie przeszła bramki podglądu."
+      "deliveryInGate": "nowszy build w sprawdzaniu",
+      "newerStageWaiting": "czeka nowsza wersja"
     },
     "transfer": {
       "intro": "Przekaż tę grę innemu twórcy. Nic się nie zmienia, dopóki nie przyjmie. Udostępniane są źródła, wersje oraz wcześniejsze prompty i rozmowy projektu. Prywatne rozmowy konta i dane logowania pozostają wyłączone.",

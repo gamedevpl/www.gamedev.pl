@@ -16,6 +16,7 @@ import { submitImprovement } from '../../studioApi.js';
 import type { StageOrigin, StageSource } from '../../useStageSource.js';
 import './status-feedback.css';
 import './studio-stage.css';
+import type { StageCheck } from '../../stageCheckVerdict.js';
 import { StudioStageStatusbar } from './StudioStageStatusbar.js';
 import { noteStudioInteraction } from './studioStatusStore.js';
 import { toFeedbackContext } from './studioFeedbackContext.js';
@@ -77,7 +78,7 @@ export type StudioStageProps = {
   deliveryInGate?: boolean;
   newerStageWaiting?: boolean;
   /** Gate verdict for a version; resolved against the build actually on screen. */
-  checkVerdict?: (version?: string | null) => boolean | null;
+  checkVerdict?: (version?: string | null) => StageCheck;
   /** The version actually on screen, which can trail `source.origin`. */
   onShownVersionChange?: (version: string | null) => void;
 };
@@ -119,6 +120,9 @@ export function StudioStage({
   // held/pending build's provenance for a document that hasn't been applied yet).
   const [shownOrigin, setShownOrigin] = useState<StageOrigin>(source.origin);
   const shownVersion = shownOrigin.version ?? null;
+  const shownCheck = checkVerdict ? checkVerdict(shownVersion) : null;
+  // The gate checking the played build is the fast path.
+  const gateIsNews = Boolean(deliveryInGate) && shownCheck !== 'checking';
   useEffect(() => onShownVersionChange?.(shownVersion), [shownVersion, onShownVersionChange]);
   const [pendingHtml, setPendingHtml] = useState<string | null>(null);
   const [pendingOrigin, setPendingOrigin] = useState<StageOrigin | null>(null);
@@ -556,9 +560,9 @@ export function StudioStage({
         shownOrigin={shownOrigin}
         publishedAt={publishedAt}
         stageStatus={status}
-        deliveryInGate={deliveryInGate}
+        deliveryInGate={gateIsNews}
         newerStageWaiting={Boolean(newerStageWaiting) || pendingHtml !== null}
-        checked={checkVerdict ? checkVerdict(shownVersion) : null}
+        check={shownCheck}
         posture={posture}
         shownHtml={shownHtml}
         paused={paused}

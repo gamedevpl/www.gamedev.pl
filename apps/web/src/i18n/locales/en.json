@@ -663,6 +663,7 @@
     },
     "buildHistory": {
       "live": "Checking your latest changes now",
+      "livePlaying": "Checking your latest build — you can already play it",
       "idle": "No build is running right now",
       "title": "Recent builds",
       "mode": {
@@ -691,7 +692,8 @@
       },
       "fileCount_one": "{{count}} source file",
       "fileCount_other": "{{count}} source files",
-      "versionLabel": "Version {{version}}"
+      "versionLabel": "Version {{version}}",
+      "playing": "Playing"
     },
     "buildBar": {
       "starting": "Verification starting",
@@ -700,8 +702,9 @@
       "passed": "Checks passed",
       "eta": "usually ~{{minutes}} min",
       "open": "Open build progress",
-      "livePrefix": "Live: ",
-      "liveTitle": "Live on stage: {{version}}"
+      "playing": "Playing {{tag}}",
+      "playingTitle": "On stage now: {{version}}",
+      "processingTitle": "Being checked: {{version}}"
     },
     "share": {
       "title": "Share the draft",
@@ -857,19 +860,23 @@
       }
     },
     "ribbon": {
-      "staged": "STAGED {{time}} · not delivered yet",
-      "stagedUnknown": "STAGED · not delivered yet",
-      "delivered": "Delivered {{time}}",
-      "deliveredUnknown": "Delivered",
+      "playing": "Playing",
+      "playingTag": "Playing {{tag}}",
+      "staged": "staged {{time}}",
+      "stagedUnknown": "staged",
+      "delivered": "published {{time}}",
+      "deliveredUnknown": "published",
+      "passed": "checked ✓",
+      "passedTitle": "This build passed its checks.",
+      "failed": "check failed ✗",
+      "failedTitle": "This build failed its checks.",
+      "checking": "checks running in the background",
+      "checkingTitle": "Keep playing; the checks do not block you.",
       "seed": "SEED",
       "crashed": "crashed",
       "drewNothing": "drew nothing",
-      "deliveryInGate": "delivery in the gate",
-      "newerStageWaiting": "newer stage waiting",
-      "checked": "checked ✓",
-      "checkFailed": "check failed ✗",
-      "checkedTitle": "This build passed the preview gate.",
-      "checkFailedTitle": "This build failed the preview gate."
+      "deliveryInGate": "a newer build is being checked",
+      "newerStageWaiting": "newer stage waiting"
     },
     "transfer": {
       "intro": "Hand this game to another creator. Nothing moves until they accept. Sources, versions and earlier project prompts and conversations are shared. Private account conversations and credentials are excluded.",

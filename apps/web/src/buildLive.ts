@@ -7,6 +7,9 @@ export function isBuildLive(status: SubmissionStatus): boolean {
   if (status.gateProgress) return true;
   if (status.phase === 'submitted') return true;
   if (status.stall) return false;
+  // A delivered build waits on its gate before the first stage reports.
+  const newest = status.recentBuilds?.[0];
+  if (newest?.verdict === 'pending' && newestBuildIsCurrentRound(status.recentBuilds ?? [], status)) return true;
   return CURRENTLY_MOVING_STATUSES.has(status.status);
 }
 

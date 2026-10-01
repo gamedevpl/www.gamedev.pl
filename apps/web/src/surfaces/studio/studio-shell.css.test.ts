@@ -59,9 +59,9 @@ describe('studio shell claim selectors', () => {
   });
 
   // Build tags are extra width on a row that must not wrap.
-  it('drops the live tag on a phone and every tag on the narrowest one', () => {
+  it('drops the secondary tag on a phone and every tag on the narrowest one', () => {
     expect(css).toMatch(
-      /@media \(max-width: 800px\), \(max-height: 500px\)[\s\S]*?\.studio-build-bar-tag\.is-live\s*\{[^}]*display:\s*none/,
+      /@media \(max-width: 800px\), \(max-height: 500px\)[\s\S]*?\.studio-build-bar-tag\.is-secondary\s*\{[^}]*display:\s*none/,
     );
     expect(css).toMatch(/@media \(max-width: 460px\)[\s\S]*?\.studio-build-bar-tag\s*\{[^}]*display:\s*none/);
   });

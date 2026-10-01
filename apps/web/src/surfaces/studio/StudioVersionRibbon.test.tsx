@@ -44,7 +44,7 @@ describe('StudioVersionRibbon', () => {
       origin: { kind: 'staged', at, versionLabel: null },
       stageStatus: { kind: 'ready' },
     });
-    expect(host.querySelector('.studio-version-ribbon-identity')?.textContent).toContain('STAGED');
+    expect(host.querySelector('.studio-version-ribbon-identity')?.textContent).toContain('staged');
     expect(host.querySelector('.studio-version-ribbon-exception')).toBeNull();
     unmount();
   });
@@ -79,7 +79,7 @@ describe('StudioVersionRibbon', () => {
     const withException = await mount({
       origin: { kind: 'staged', at: Date.now(), versionLabel: null },
       stageStatus: { kind: 'crashed', message: 'boom' },
-      checked: true,
+      check: 'passed',
     });
     expect(withException.host.querySelector('.studio-version-ribbon-depth')).toBeNull();
     withException.unmount();
@@ -87,7 +87,7 @@ describe('StudioVersionRibbon', () => {
     const clean = await mount({
       origin: { kind: 'staged', at: Date.now(), versionLabel: null },
       stageStatus: { kind: 'ready' },
-      checked: true,
+      check: 'passed',
     });
     expect(clean.host.querySelector('.studio-version-ribbon-depth')).not.toBeNull();
     clean.unmount();
@@ -99,7 +99,7 @@ describe('StudioVersionRibbon', () => {
       publishedAt: '2026-08-10T12:04:00Z',
       stageStatus: { kind: 'ready' },
     });
-    expect(host.querySelector('.studio-version-ribbon-identity')?.textContent).toMatch(/delivered/i);
+    expect(host.querySelector('.studio-version-ribbon-identity')?.textContent).toMatch(/published/i);
     unmount();
   });
 
@@ -114,7 +114,7 @@ describe('StudioVersionRibbon', () => {
       stageStatus: { kind: 'ready' },
     });
     const identity = host.querySelector('.studio-version-ribbon-identity')?.textContent ?? '';
-    expect(identity).toContain('(#e07ba9)');
+    expect(identity).toContain('Playing #e07ba9');
     // An agent caption is not a version, never a tag.
     expect(identity).not.toContain('Added');
     unmount();
@@ -124,7 +124,7 @@ describe('StudioVersionRibbon', () => {
     const { host, unmount } = await mount({
       origin: { kind: 'staged', at: Date.now(), versionLabel: null },
       stageStatus: { kind: 'ready' },
-      checked: false,
+      check: 'failed',
     });
     const depth = host.querySelector('.studio-version-ribbon-depth');
     expect(depth?.classList.contains('is-failed')).toBe(true);
@@ -140,6 +140,20 @@ describe('StudioVersionRibbon', () => {
       deliveryInGate: true,
     });
     expect(host.querySelector('.studio-version-ribbon-exception')?.textContent).toContain('newer stage waiting');
+    unmount();
+  });
+
+  it('treats checks on the build being played as background, not a warning', async () => {
+    const { host, unmount } = await mount({
+      origin: { kind: 'staged', at: Date.now(), versionLabel: null, version: 'v20261001T091300495Z-4475b2265463' },
+      stageStatus: { kind: 'ready' },
+      check: 'checking',
+    });
+    expect(host.querySelector('.studio-version-ribbon-identity')?.textContent).toMatch(/^Playing #4475b2 · staged/);
+    expect(host.querySelector('.studio-version-ribbon')?.classList.contains('has-exception')).toBe(false);
+    const depth = host.querySelector('.studio-version-ribbon-depth');
+    expect(depth?.classList.contains('is-checking')).toBe(true);
+    expect(depth?.textContent).toBe('checks running in the background');
     unmount();
   });
 });

@@ -210,7 +210,7 @@
   }
 
   /* One row has no room for two tags: keep the build in the gate. */
-  .app:has(.studio-layout.is-game-open) .studio-build-bar-tag.is-live {
+  .app:has(.studio-layout.is-game-open) .studio-build-bar-tag.is-secondary {
     display: none;
   }
 
