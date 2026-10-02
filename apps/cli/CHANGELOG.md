@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Local preview uses the same full bleed game embedding as the workbench, with preview controls overlaid instead of a permanent header.
+- Local preview uses the same full bleed game embedding as the workbench, with preview controls overlaid instead of a permanent header (#1609).
 
 ## 0.23.0 — 2026-09-29
 
