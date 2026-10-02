@@ -1,25 +1,41 @@
+import { PLAY_EMBED_SCRIPT } from './generated/play-ui.js';
+
 export const PLAY_PAGE = String.raw`<!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>gamedevpl play</title>
 <style>
-html,body{margin:0;height:100%;background:#12151c;color:#eee;font:14px system-ui}
-body{display:flex;flex-direction:column}
-header{padding:10px 16px}
-button{margin-left:12px}
-pre{white-space:pre-wrap;max-height:25vh;overflow:auto;color:#ffd398;margin:0 16px}
-iframe{width:100%;flex:1;border:0;min-height:0;background:#000}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#eee;font:14px system-ui}
+iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}
+details{position:fixed;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:1;max-width:calc(100% - 24px);background:#12151ce6;border-radius:12px;padding:10px}
+summary,button{cursor:pointer}
+button{font:inherit;color:inherit;background:#252b37;border:1px solid #536075;border-radius:8px;padding:8px;margin-top:8px}
+#controls{white-space:pre-wrap;max-height:30dvh;overflow:auto}
+pre{position:fixed;bottom:max(12px,env(safe-area-inset-bottom));left:12px;right:12px;z-index:1;white-space:pre-wrap;max-height:25dvh;overflow:auto;color:#ffd398;background:#12151ce6;border-radius:12px;padding:12px;margin:0}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
-<header>gamedevpl · Live preview <button id="pause">Pause reload</button><span id="status" role="status"></span></header>
-<pre id="error"></pre>
 <iframe title="Game preview" sandbox="allow-scripts allow-pointer-lock"></iframe>
+<details><summary>Preview controls</summary><button id="pause">Pause reload</button> <button id="sound">Sound: On</button><div id="controls"></div><div id="status" role="status"></div></details>
+<pre id="error" role="status" hidden></pre>
 <script>
-let revision = '', paused = false;
+${PLAY_EMBED_SCRIPT}
+let revision = '', paused = false, muted = false;
 const frame = document.querySelector('iframe');
 const status = document.querySelector('#status');
+const errorBox = document.querySelector('#error');
+const sound = document.querySelector('#sound');
+function posture(type,data={}) { frame.contentWindow?.postMessage({source:'gdpl-host',type,...data},'*'); }
+frame.onload=()=>{posture('hello');posture('setSound',{muted});};
+sound.onclick=()=>{muted=!muted;posture('setSound',{muted});sound.textContent=muted?'Sound: Off':'Sound: On';};
+addEventListener('message',event=>{
+  const data=event.data;
+  if(event.source!==frame.contentWindow||data?.source!=='gdpl-player')return;
+  if(data.type==='controls'&&Array.isArray(data.rows))document.querySelector('#controls').textContent=data.rows.slice(0,30).map(row=>[row?.keys,row?.action].filter(value=>typeof value==='string').map(value=>value.slice(0,200)).join(' · ')).join('\n');
+});
 document.querySelector('#pause').onclick = event => {
   paused = !paused;
   event.target.textContent = paused ? 'Resume reload' : 'Pause reload';
@@ -27,11 +43,12 @@ document.querySelector('#pause').onclick = event => {
 async function tick() {
   try {
     const state = await fetch(location.pathname + 'status', {cache:'no-store'}).then(r => r.json());
-    document.querySelector('#error').textContent = state.error;
+    errorBox.textContent = state.error;
+    errorBox.hidden = !state.error;
     status.textContent = state.busy ? ' · rebuilding…' : paused ? ' · paused' : ' · watching files';
     if (!paused && state.revision && state.revision !== revision) {
       const html = await fetch(location.pathname + 'game', {cache:'no-store'}).then(r => r.text());
-      frame.srcdoc = html;
+      frame.srcdoc = GAME_EMBED.embedGameHtml(html);
       revision = state.revision;
     }
   } catch {

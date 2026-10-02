@@ -13,6 +13,10 @@ their previous behavior. Explicit `create --play` and `play --edit` also launch 
 browser without a TTY; they cannot be combined with JSON, stop or raw-preview flags.
 `--no-open` prints the complete session URL instead of opening it.
 
+Raw preview uses the same full bleed game embedding as the workbench. Reload, sound
+and game instructions live in the overlaid Preview controls; they reserve no stage
+space. Build errors appear over the last playable build.
+
 The launcher exits and the session stays alive until **Commands → End session**.
 Repeated launches resume the matching session without replaying a supplied idea.
 New-game intake never inherits the launch directory's existing checkout. An unknown
