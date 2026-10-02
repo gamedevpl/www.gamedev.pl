@@ -48,6 +48,18 @@ const client = await build({
 });
 const script = client.outputFiles.find((f) => f.path.endsWith('.js')).text;
 const css = client.outputFiles.find((f) => f.path.endsWith('.css')).text;
+const embedding = await build({
+  stdin: {
+    contents: "export { embedGameHtml } from '../../../packages/contract/src/game-embed.ts';",
+    resolveDir: join(root, 'browser'),
+    loader: 'ts',
+  },
+  bundle: true,
+  minify: true,
+  format: 'iife',
+  globalName: 'GAME_EMBED',
+  write: false,
+});
 await writeFile(
   join(generated, 'play-ui.ts'),
   'export const PLAY_MARKUP = ' +
@@ -58,6 +70,9 @@ await writeFile(
     ';\n' +
     'export const PLAY_STYLE = ' +
     JSON.stringify(css) +
+    ';\n' +
+    'export const PLAY_EMBED_SCRIPT = ' +
+    JSON.stringify(embedding.outputFiles[0].text.replace(/<\/script/gi, '<\\/script')) +
     ';\n',
 );
 await rm(serverFile);
