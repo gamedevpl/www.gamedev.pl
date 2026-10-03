@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 const styles = readFileSync(new URL('./catalog-rail.css', import.meta.url), 'utf8');
 
+describe('catalog rail phone spacing', () => {
+  it('tightens the gap between shelves on a phone', () => {
+    const mobile = /@media \(max-width: 768px\) \{([\s\S]*)$/.exec(styles)?.[1] ?? '';
+    expect(mobile).toMatch(/\.catalog-rail-section \{[\s\S]*margin-bottom:\s*20px;/);
+  });
+});
+
 describe('catalog rail capability layout', () => {
   it('keeps mobile capability badges stacked before the preview toggle', () => {
     const mobile =
