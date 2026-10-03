@@ -267,7 +267,7 @@ describe('the injected bridge reports health', () => {
     });
 
     expect(session.type).toBe('playback');
-    const Ctx = bridge.frameWindow.AudioContext as typeof FakeAudioContext;
+    const Ctx = bridge.frameWindow.AudioContext as unknown as typeof FakeAudioContext;
     const ctx = new Ctx({ sampleRate: 22050 });
     expect(ctx.sampleRate).toBe(22050);
     expect(ctx.state).toBe('running');
@@ -310,7 +310,7 @@ describe('the injected bridge reports health', () => {
     const bridge = runBridge('', (frameWindow) => {
       Object.defineProperty(frameWindow, 'AudioContext', { configurable: true, writable: true, value: SlowContext });
     });
-    const Ctx = bridge.frameWindow.AudioContext as typeof SlowContext;
+    const Ctx = bridge.frameWindow.AudioContext as unknown as typeof SlowContext;
     new Ctx();
     expect(started).toHaveLength(0);
     bridge.frameWindow.dispatchEvent(new bridge.frameWindow.Event('touchend'));
