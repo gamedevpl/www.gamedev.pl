@@ -745,11 +745,21 @@ export function GameTheater({
                       <ReportGameButton slug={reportSlug} title={displayTitle} />
                     </>
                   )}
+                  <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
+                  <button
+                    type="button"
+                    className="theater-menu-item theater-exit-item theater-mobile-chrome"
+                    role="menuitem"
+                    onClick={onExit}
+                  >
+                    <PixelIcon name="close" size={13} />
+                    <span className="btn-label">{t('player.exitGame')}</span>
+                  </button>
                 </div>
               </div>
             )}
             <button
-              className="secondary-btn exit-btn"
+              className="secondary-btn exit-btn theater-desktop-chrome"
               onClick={onExit}
               ref={exitRef}
               aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}

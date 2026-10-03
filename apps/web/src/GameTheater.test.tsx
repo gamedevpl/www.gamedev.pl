@@ -615,6 +615,21 @@ describe('GameTheater how-to-play visit telemetry', () => {
     }
   });
 
+  it('leaves the game from the phone menu instead of a bar button', async () => {
+    const onExit = vi.fn();
+    await draw({ onExit });
+    const item = container.querySelector('.theater-exit-item') as HTMLButtonElement;
+    expect(item.textContent).toContain('Exit game');
+    expect(item.classList.contains('theater-mobile-chrome')).toBe(true);
+    expect(
+      container.querySelector('.game-theater-actions > .exit-btn')?.classList.contains('theater-desktop-chrome'),
+    ).toBe(true);
+
+    await click(container.querySelector('.theater-more-btn'));
+    await click(item);
+    expect(onExit).toHaveBeenCalledOnce();
+  });
+
   it('keeps Close off the corner the reveal thumb occupies', async () => {
     const onExit = vi.fn();
     await draw({ onExit });

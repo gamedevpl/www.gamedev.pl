@@ -43,8 +43,8 @@ describe('game theater floating bar', () => {
     expect(idle).toMatch(/transition-delay:\s*0s,\s*0s,\s*700ms/);
   });
 
-  it('lines the phone overflow menu up with the corner hide control, past close', () => {
-    expect(css).toMatch(/right:\s*calc\(-2 \* \(44px \+ 6px\)\)/);
+  it('lines the phone overflow menu up with the corner hide control', () => {
+    expect(css).toMatch(/right:\s*calc\(-1 \* \(44px \+ 6px\)\)/);
   });
 
   it('leaves a quiet thumb-sized route back to the complete bar', () => {
