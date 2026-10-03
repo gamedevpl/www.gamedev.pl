@@ -140,7 +140,7 @@ export function GameHealthView() {
         </div>
       </header>
 
-      {data && <FramePerformancePanel report={data.performance} />}
+      {state === 'ready' && data && <FramePerformancePanel report={data.performance} />}
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}
 
