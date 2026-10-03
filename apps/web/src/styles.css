@@ -1463,6 +1463,7 @@ button:disabled {
 .featured-game-title-link {
   color: inherit;
   text-decoration: none;
+  overflow-wrap: anywhere;
   transition: color 0.15s ease;
 }
 
@@ -1583,9 +1584,19 @@ button:disabled {
   }
 
   .featured-game-title {
-    flex: 1 1 10rem;
-    min-width: min(100%, 10rem);
+    flex: 1 1 40%;
+    /* 40% keeps play beside the title; a wide pair wraps. */
+    min-width: 40%;
+    max-width: 100%;
+    overflow: hidden;
     font-size: 1.2rem;
+  }
+
+  .featured-game-title-link {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
   }
 
   .featured-game-actions {

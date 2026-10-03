@@ -33,7 +33,12 @@ describe('mobile featured slot', () => {
     expect(ruleBody('.featured-game-kicker', 'first')).toMatch(/display:\s*inline-flex/);
 
     expect(ruleBody('.featured-game-body', 'last')).toMatch(/flex-wrap:\s*wrap/);
-    expect(ruleBody('.featured-game-title', 'last')).toMatch(/flex:\s*1\s+1\s+10rem/);
+    const title = ruleBody('.featured-game-title', 'last');
+    expect(title).toMatch(/flex:\s*1\s+1\s+40%/);
+    expect(title).toMatch(/min-width:\s*40%/);
+    expect(title).toMatch(/overflow:\s*hidden/);
+    expect(ruleBody('.featured-game-title-link', 'last')).toMatch(/-webkit-line-clamp:\s*2/);
+    expect(ruleBody('.featured-game-title-link', 'first')).toMatch(/overflow-wrap:\s*anywhere/);
     expect(ruleBody('.featured-game-actions', 'last')).toMatch(/margin-top:\s*0/);
     expect(ruleBody('.hero-prompt-section', 'last')).toMatch(/margin-bottom:\s*12px/);
   });
