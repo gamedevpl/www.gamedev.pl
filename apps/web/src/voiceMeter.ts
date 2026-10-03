@@ -2,7 +2,7 @@ import { useFrameDocument } from './frameLifecycle.js';
 import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-
+import { setCaptureAudioSession } from './audioSession.js';
 export type VoiceMeterShellStatus = 'unsupported' | 'idle' | 'pending' | 'live' | 'denied';
 
 export type VoiceMeterGameMessage = { t: 'voice:hello' } | { t: 'voice:stop' };
@@ -121,7 +121,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
     const AC =
       window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    // Unlock inside the theater Mic gesture before awaiting permission.
+    setCaptureAudioSession();
     if (!contextRef.current) contextRef.current = new AC();
     if (contextRef.current.state === 'suspended') void contextRef.current.resume();
 
