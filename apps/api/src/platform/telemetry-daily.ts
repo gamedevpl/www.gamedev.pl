@@ -11,7 +11,7 @@ import type { TelemetryEvent } from './store.js';
 // Bump when the shape changes, or when the summarizer's counting does.
 
 // A stored day at the wrong version is ignored, never merged.
-export const DAILY_AGGREGATE_VERSION = 1;
+export const DAILY_AGGREGATE_VERSION = 2;
 
 // Values kept per metric per game on a quiet day.
 

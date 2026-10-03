@@ -1,33 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { MAX_MULTIPLAYER_SLOTS, ZONE_LINK_STEPS } from '@gamedevpl/contract';
+import {
+  normalizePlayDevice,
+  normalizeFramePerformance,
+  normalizeArtifactVersion,
+  MAX_MULTIPLAYER_SLOTS,
+  ZONE_LINK_STEPS,
+} from '@gamedevpl/contract';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 
-/**
- * Play-session telemetry intake (docs/improvement-loop-plan.md IL-1).
- *
- * The platform is blind after publish: nothing today can answer "did anyone open
- * this game, did it run, where did they stop". This is the write half of that —
- * capture only, no aggregation, no dashboard, no agent. It exists now because the
- * data has to accumulate before it can be worth reading, and because a game that
- * throws on load is a fact one session proves, not a statistic needing volume.
- *
- * Everything here arrives from inside a sandboxed iframe or from a page hosting
- * one, so it is treated as hostile input: fixed vocabulary, per-request cap,
- * per-session ceiling, per-IP window, server-assigned timestamps, and no free text
- * beyond a truncated error message. Nothing recorded identifies a player — no uid,
- * no IP, no user agent — so these rows answer "how did this game do" and cannot
- * answer "what did this person play".
- *
- * Only *published* games are recorded, judged by catalog membership — see
- * [published-slugs.ts](./published-slugs.ts) for why the submission document is the
- * wrong authority for that question. A creator playtesting their own draft is real
- * signal, but it is developer traffic, and mixing it into the funnel would make
- * every number a creator sees partly a reflection of themselves; a draft preview is
- * not in the published catalog, so it stays out.
- */
 
 /** Bounds one flush; the shell batches ~4 events per 15s, so this is generous. */
 const MAX_EVENTS_PER_REQUEST = 50;
@@ -72,6 +55,8 @@ const EventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('game_opened'),
     slots: z.number().int().min(1).max(MAX_MULTIPLAYER_SLOTS).optional(),
+    device: z.unknown().transform(normalizePlayDevice).optional(),
+    artifactVersion: z.unknown().transform(normalizeArtifactVersion).optional(),
     ...offsetField,
   }),
   z.object({ type: z.literal('play_time'), seconds: z.number().int().min(1).max(3600), ...offsetField }),
@@ -85,7 +70,12 @@ const EventSchema = z.discriminatedUnion('type', [
       .max(MAX_MESSAGE_LENGTH * 4),
     ...offsetField,
   }),
-  z.object({ type: z.literal('alive'), frames: z.number().int().min(0).max(100_000), ...offsetField }),
+  z.object({
+    type: z.literal('alive'),
+    frames: z.number().int().min(0).max(100_000),
+    performance: z.unknown().transform(normalizeFramePerformance).optional(),
+    ...offsetField,
+  }),
   z.object({
     type: z.literal('progress'),
     label: z
@@ -206,15 +196,6 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       return reply.status(202).send({ accepted: 0 });
     }
 
-    /**
-     * When did this event actually happen?
-     *
-     * The flush's arrival is a real instant we measured; the client tells us how old
-     * the session was at that moment and how old it was at each event. The difference
-     * is a duration, and subtracting it from the arrival time dates the event without
-     * trusting the client's clock for anything. Missing either offset — an older client
-     * — falls back to receipt time, the behaviour every event used to have.
-     */
     const flushOffset = parsed.data.flushMsSinceOpen;
     function eventTimeIso(msSinceOpen: number | undefined): string {
       if (flushOffset === undefined || msSinceOpen === undefined) return new Date(currentTime).toISOString();
@@ -231,7 +212,13 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       };
       switch (event.type) {
         case 'game_opened':
-          return { ...base, type: event.type, ...(event.slots === undefined ? {} : { slots: event.slots }) };
+          return {
+            ...base,
+            type: event.type,
+            ...(event.slots === undefined ? {} : { slots: event.slots }),
+            ...(event.device ? { device: event.device } : {}),
+            ...(event.artifactVersion ? { artifactVersion: event.artifactVersion } : {}),
+          };
         case 'play_time':
           return { ...base, type: event.type, seconds: event.seconds };
         case 'error':
@@ -239,7 +226,12 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
           // not the trust boundary for its own input.
           return { ...base, type: event.type, message: event.message.slice(0, MAX_MESSAGE_LENGTH) };
         case 'alive':
-          return { ...base, type: event.type, frames: event.frames };
+          return {
+            ...base,
+            type: event.type,
+            frames: event.frames,
+            ...(event.performance ? { performance: event.performance } : {}),
+          };
         case 'progress':
           return {
             ...base,

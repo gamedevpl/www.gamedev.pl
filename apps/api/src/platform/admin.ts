@@ -7,6 +7,7 @@ import {
 import { RECHECK_HOURLY_MS } from './sweep-cadence.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { summarizeFramePerformance, type PerformanceReport } from './frame-performance.js';
 import { isAdminSession } from './admin-session.js';
 import { MANAGED_AGENT_VENDORS } from '../agent-surface/agent-backend-env.js';
 import { DEFAULT_SEED_PROVIDER } from '../creation/game-seed.js';
@@ -64,21 +65,6 @@ import {
   type WaitlistEntry,
 } from './store.js';
 
-/**
- * Operator-only reads over play telemetry (docs/improvement-loop-plan.md IL-2).
- *
- * The first read path for data IL-1 has been capturing since 2026-07-25. Scoped to
- * operators rather than creators for a reason worth keeping: a creator-facing scorecard
- * has to attribute a game to a person, attribution runs through `submissions.ownerUid`,
- * and most catalog games have no submission document — so a per-creator view would cover
- * a fraction of the catalog while claiming to answer "is my game working". The operator
- * view sidesteps attribution entirely and covers every published game.
- *
- * Raw events are never returned, only aggregates. That is the same rule the plan sets
- * for what agents may read, and it holds here for the same reason: an `error` message or
- * a `progress` label is game-controlled text, and a view that echoed it verbatim would
- * be an injection channel into whatever reads this next.
- */
 
 /** Widest window one request may ask for. Each day is a separate Firestore query. */
 const MAX_DAYS = 30;
@@ -314,6 +300,7 @@ export interface HealthResponse {
   /** True when any partition hit a cap, so every count below is a floor. */
   truncated: boolean;
   games: GameHealth[];
+  performance: PerformanceReport;
 }
 
 export interface VisitsResponse {
@@ -899,7 +886,12 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       (dateStr, limit) => store.listTelemetryEvents(dateStr, { limit }),
     );
 
-    const body: HealthResponse = { days: scanned, truncated, games: summarizeGameHealth(events) };
+    const body: HealthResponse = {
+      days: scanned,
+      truncated,
+      games: summarizeGameHealth(events),
+      performance: summarizeFramePerformance(events),
+    };
     return reply.status(200).send(body);
   });
 

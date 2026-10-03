@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { recentPartitions, summarizeGameHealth } from './telemetry-health.js';
 import type { TelemetryEvent } from './store.js';
 
-/**
- * Builds a session's events from offsets, dating each one from a base wall clock so the
- * two clocks agree — which is the normal case. Tests that care about them disagreeing
- * (sleep, throttling) construct their events by hand.
- */
 function session(
   slug: string,
   sessionId: string,
@@ -81,12 +76,6 @@ describe('summarizeGameHealth', () => {
     expect(row.resumeTicksIgnored).toBe(0);
   });
 
-  /**
-   * The regression this module exists to avoid. Replays the shape of the real
-   * `brick-storm` session of 2026-07-25: ~300 frames per tick during play, then the
-   * machine slept for three hours, and the first tick after the resume reported one
-   * frame. Reading that as a stall would condemn a perfectly healthy game.
-   */
   it('does not count the first tick after a long gap as a stall', () => {
     const play = healthySession('brick-storm', 's1', '2026-07-25T10:04:39.000Z', 115);
     const afterSleep: TelemetryEvent[] = [
@@ -325,11 +314,6 @@ describe('summarizeGameHealth depth signals', () => {
     ]);
   });
 
-  /**
-   * `progress` is hostile input: a single session could name hundreds of distinct
-   * throwaway labels within its 400-event budget and drown out every real landmark in
-   * the tally for the whole game. Caps how many *new* labels one session can contribute.
-   */
   it('stops one session from flooding the progress tally with distinct labels', () => {
     const flood = session(
       'g',
@@ -478,5 +462,17 @@ describe('zone join rate', () => {
     ]);
 
     expect(rows[0]).toMatchObject({ zoneAdmitted: 1, zoneJoined: 1, zoneJoinRate: 1 });
+  });
+});
+
+describe('frame rate denominator', () => {
+  it('ignores progress between heartbeats and uses explicit measurement duration', () => {
+    const events = session('space-hop', 's1', '2026-10-03T10:00:00Z', [
+      { type: 'game_opened', msSinceOpen: 0 },
+      { type: 'alive', frames: 300, msSinceOpen: 5000 },
+      { type: 'progress', label: 'wave-2', msSinceOpen: 9000 },
+      { type: 'alive', frames: 300, msSinceOpen: 10000 },
+    ]);
+    expect(summarizeGameHealth(events)[0].medianFps).toBe(60);
   });
 });

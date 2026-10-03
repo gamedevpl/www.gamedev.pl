@@ -1,11 +1,9 @@
 // One game's play health over a telemetry window, aggregates only.
 export interface GameHealth {
   slug: string;
-  // Distinct opens of the game.
   sessions: number;
   // Sessions that opened but never recorded play time.
   bounces: number;
-  // Sessions that reported a clean exit.
   closes: number;
   // Median of each session's total focused play time.
   medianPlaySeconds: number;
@@ -21,7 +19,6 @@ export interface GameHealth {
   // Rounds that reached a conclusion, counted per round.
   outcomes: { won: number; lost: number; quit: number };
   sessionsWithEnding: number;
-  // Sessions that finished a round, over all sessions.
   finishRate: number;
   // Sessions issued a seat in a shared world.
   zoneAdmitted: number;
@@ -38,3 +35,4 @@ export interface GameHealth {
   // Sessions that reported a render backend on progress or end.
   gfxBackends: { canvas2d: number; webgl: number; webgl3d: number };
 }
+export * from './frame-telemetry.js';

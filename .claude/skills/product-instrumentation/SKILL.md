@@ -402,3 +402,13 @@ agent launches; opening a session does not count as a build.
 
 Muse Code uses the `muse` adapter dimension for local checkout delegation.
 `CLI_ADAPTERS` drives the pilot aggregation and its adapter table directly.
+
+## Frame performance context
+
+Play telemetry extends the existing `game_opened` and `alive` shapes with bounded
+context from `packages/contract/src/frame-telemetry.ts`. See
+[`docs/frame-performance-telemetry.md`](../../../docs/frame-performance-telemetry.md).
+Device families are derived locally; raw user-agent and exact model/GPU strings stay
+out of the stream. `alive.performance` measures iframe cadence and optionally the
+existing GameKit presented-frame counter. The health read exposes aggregate device,
+resolution and content-version groups. No new event type or network path is involved.

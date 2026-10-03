@@ -42,7 +42,7 @@ export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
 export * from './delivery-paths.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
-export type { GameHealth } from './game-health.js';
+export * from './game-health.js';
 export type { GameProject } from './game-project.js';
 export {
   MAX_AGENT_SHOT_BYTES,

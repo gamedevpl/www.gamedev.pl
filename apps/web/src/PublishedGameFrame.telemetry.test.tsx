@@ -15,15 +15,6 @@ vi.mock('./catalog', () => ({
 import { PublishedGameFrame } from './PublishedGameFrame.js';
 import type { PublishedGame } from './catalog.js';
 
-/**
- * The wiring test: a real play of a published game must report itself.
- *
- * The pieces are unit-tested either side of this (the queue's caps, the bridge's
- * health signals), but neither proves the hook is actually mounted where published
- * games play. This one does, and it is the check that would fail if someone later
- * moved playback to a component that forgot to bring the session along.
- */
-
 type WireEvent = { type: string; msSinceOpen: number; slots?: number };
 type TelemetryBody = { slug: string; sessionId: string; flushMsSinceOpen: number; events: WireEvent[] };
 type FetchSpy = MockInstance<typeof globalThis.fetch>;
@@ -65,7 +56,9 @@ describe('PublishedGameFrame telemetry', () => {
     const opened = telemetryBodies(fetchSpy);
     expect(opened).toHaveLength(1);
     expect(opened[0].slug).toBe('space-hop');
-    expect(payloads(opened[0].events)).toEqual([{ type: 'game_opened' }]);
+    expect(payloads(opened[0].events)).toMatchObject([
+      { type: 'game_opened', device: { deviceClass: expect.any(String) } },
+    ]);
     // Every event carries its age within the session, so batching cannot lose timing.
     expect(opened[0].events[0].msSinceOpen).toBeGreaterThanOrEqual(0);
     expect(typeof opened[0].flushMsSinceOpen).toBe('number');
@@ -89,7 +82,9 @@ describe('PublishedGameFrame telemetry', () => {
       root.render(<PublishedGameFrame slug="space-hop" title="Space Hop" embed slots={4} />);
     });
 
-    expect(payloads(telemetryBodies(fetchSpy)[0].events)).toEqual([{ type: 'game_opened', slots: 4 }]);
+    expect(payloads(telemetryBodies(fetchSpy)[0].events)).toMatchObject([
+      { type: 'game_opened', slots: 4, device: { deviceClass: expect.any(String) } },
+    ]);
     await act(async () => root.unmount());
   });
 
@@ -109,7 +104,9 @@ describe('PublishedGameFrame telemetry', () => {
       release({ slug: 'space-hop', title: 'Space Hop', html: '<html><body>game</body></html>' });
     });
 
-    expect(payloads(telemetryBodies(fetchSpy)[0].events)).toEqual([{ type: 'game_opened' }]);
+    expect(payloads(telemetryBodies(fetchSpy)[0].events)).toMatchObject([
+      { type: 'game_opened', device: { deviceClass: expect.any(String) } },
+    ]);
     await act(async () => root.unmount());
   });
 
