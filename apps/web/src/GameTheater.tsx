@@ -587,9 +587,7 @@ export function GameTheater({
           className="theater-reveal-btn"
           aria-label={t('player.showControls')}
           title={t('player.showControls')}
-          // Pointerdown makes the control immediate on touch. Click keeps the same
-          // route available to Enter/Space, which do not emit pointer events.
-          onPointerDown={revealChrome}
+          // Click, not pointerdown: press used to land on Exit.
           onClick={revealChrome}
         >
           <PixelIcon name="chevronDown" size={15} />
@@ -745,9 +743,28 @@ export function GameTheater({
                       <PlayerGameReport slug={reportSlug} title={displayTitle} />
                     </>
                   )}
+                  <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
+                  <button
+                    type="button"
+                    className="theater-menu-item theater-exit-item theater-mobile-chrome"
+                    role="menuitem"
+                    onClick={onExit}
+                  >
+                    <PixelIcon name="close" size={13} />
+                    <span className="btn-label">{t('player.exitGame')}</span>
+                  </button>
                 </div>
               </div>
             )}
+            <button
+              className="secondary-btn exit-btn theater-desktop-chrome"
+              onClick={onExit}
+              ref={exitRef}
+              aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+            >
+              <PixelIcon name="close" size={14} />
+            </button>
             <button
               type="button"
               className="secondary-btn theater-hide-btn"
@@ -756,15 +773,6 @@ export function GameTheater({
               title={t('player.hideControls')}
             >
               <PixelIcon name="chevronUp" size={15} />
-            </button>
-            <button
-              className="secondary-btn exit-btn"
-              onClick={onExit}
-              ref={exitRef}
-              aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-              title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-            >
-              <PixelIcon name="close" size={14} />
             </button>
           </div>
         </div>

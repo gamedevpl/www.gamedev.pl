@@ -615,6 +615,49 @@ describe('GameTheater how-to-play visit telemetry', () => {
     }
   });
 
+  it('leaves the game from the phone menu instead of a bar button', async () => {
+    const onExit = vi.fn();
+    await draw({ onExit });
+    const item = container.querySelector('.theater-exit-item') as HTMLButtonElement;
+    expect(item.textContent).toContain('Exit game');
+    expect(item.classList.contains('theater-mobile-chrome')).toBe(true);
+    expect(
+      container.querySelector('.game-theater-actions > .exit-btn')?.classList.contains('theater-desktop-chrome'),
+    ).toBe(true);
+
+    await click(container.querySelector('.theater-more-btn'));
+    await click(item);
+    expect(onExit).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Close off the corner the reveal thumb occupies', async () => {
+    const onExit = vi.fn();
+    await draw({ onExit });
+    const actions = container.querySelector('.game-theater-actions') as HTMLElement;
+    const hide = actions.querySelector('.theater-hide-btn') as HTMLButtonElement;
+    const exit = actions.querySelector(':scope > .exit-btn') as HTMLButtonElement;
+
+    // Hide is the last control, in the same top-right slot as the reveal chevron.
+    expect(actions.lastElementChild).toBe(hide);
+    expect(exit.nextElementSibling).toBe(hide);
+
+    await click(hide);
+    const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement;
+    expect(reveal).not.toBeNull();
+
+    // A press must not swap the corner for Close before the finger lifts.
+    await act(async () => {
+      reveal.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    });
+    expect(container.querySelector('.theater-reveal-btn')).toBe(reveal);
+    expect(onExit).not.toHaveBeenCalled();
+
+    await click(reveal);
+    expect(container.querySelector('.theater-reveal-btn')).toBeNull();
+    expect(container.querySelector('.game-theater-bar')?.classList.contains('is-idle')).toBe(false);
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
   it('keeps controls hidden after an explicit hide until the player reveals them', async () => {
     await draw();
     const bar = container.querySelector('.game-theater-bar') as HTMLElement;

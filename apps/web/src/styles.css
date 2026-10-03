@@ -2501,9 +2501,8 @@ body.player-open {
     display: block;
   }
 
-  /* Align the menu with the right edge of the action cluster (exit sits past the
-     hamburger: 44px thumb target + 6px gap). Flush with the trigger alone left a
-     gap under the close control that read as misaligned on phones. */
+  /* Hide is the only thumb past the hamburger. Close is a menu row on a
+     phone, so the panel flushes to that one corner control. */
   .theater-more-panel {
     right: calc(-1 * (44px + 6px));
     min-width: 240px;
