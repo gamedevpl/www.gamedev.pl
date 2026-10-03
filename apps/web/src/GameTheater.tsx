@@ -444,6 +444,10 @@ export function GameTheater({
     isNarrow ||
     (hasControls && isMidWidth) ||
     (voiceMeter.available && isMidWidth);
+  const openPlayerMenu = useCallback(() => {
+    revealChrome();
+    if (showMoreMenu) setMoreOpen(true);
+  }, [revealChrome, showMoreMenu]);
   const canRemix = remixable && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
@@ -586,14 +590,15 @@ export function GameTheater({
         <button
           type="button"
           className="theater-reveal-btn"
-          aria-label={t('player.showControls')}
-          title={t('player.showControls')}
+          aria-label={t('player.menu')}
+          title={t('player.menu')}
           // Pointerdown makes the control immediate on touch. Click keeps the same
           // route available to Enter/Space, which do not emit pointer events.
-          onPointerDown={revealChrome}
-          onClick={revealChrome}
+          onPointerDown={openPlayerMenu}
+          onClick={openPlayerMenu}
         >
-          <PixelIcon name="chevronDown" size={15} />
+          <PixelIcon name="menu" size={15} />
+          <span className="menu-label">{t('player.menu')}</span>
         </button>
       )}
       {!fullscreen && (
@@ -685,7 +690,7 @@ export function GameTheater({
                   className="secondary-btn theater-more-btn"
                   aria-expanded={moreOpen}
                   aria-haspopup="menu"
-                  aria-label={t('player.moreActions')}
+                  aria-label={t('player.menu')}
                   onClick={() => setMoreOpen((open) => !open)}
                 >
                   {/* Stay a hamburger when open — swapping to X sat next to Exit and
@@ -693,6 +698,19 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
+                  <button
+                    type="button"
+                    className="theater-menu-item theater-leave"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      quitGame();
+                    }}
+                  >
+                    <PixelIcon name="arrowLeft" size={13} />
+                    <span className="btn-label">{t('player.leaveGame')}</span>
+                  </button>
+                  <div className="theater-menu-divider" role="separator" />
                   {howToPlayControl('theater-menu-item howto-menu', 'more')}
                   {agentAvailable ? (
                     <button
@@ -763,8 +781,8 @@ export function GameTheater({
               className="secondary-btn exit-btn"
               onClick={onExit}
               ref={exitRef}
-              aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-              title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              aria-label={t('player.leaveGame')}
+              title={t('player.leaveGame')}
             >
               <PixelIcon name="close" size={14} />
             </button>

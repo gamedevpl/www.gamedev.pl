@@ -158,6 +158,18 @@ describe('GameTheater more menu', () => {
     expect(container.querySelector('.theater-more.is-open')).toBeNull();
   });
 
+  it('leaves the game from the menu, which is the phone path without Escape', async () => {
+    const onExit = vi.fn();
+    await draw({ onExit });
+    const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;
+    expect(more.getAttribute('aria-label')).toBe('Menu');
+    await click(more);
+    const leave = container.querySelector('.theater-leave');
+    expect(leave?.textContent).toContain('Leave game');
+    await click(leave);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps menu-row icons the same size so labels share one left edge', async () => {
     await draw();
     const panel = container.querySelector('.theater-more-panel') as HTMLElement;
@@ -530,13 +542,17 @@ describe('GameTheater how-to-play visit telemetry', () => {
       expect(bar.getAttribute('aria-hidden')).toBe('true');
       const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement | null;
       expect(reveal).not.toBeNull();
-      expect(reveal!.getAttribute('aria-label')).toBe('Show controls');
+      expect(reveal!.getAttribute('aria-label')).toBe('Menu');
+      expect(reveal!.textContent).toContain('Menu');
 
       await act(async () => {
         reveal!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
       expect(bar.classList.contains('is-idle')).toBe(false);
       expect(container.querySelector('.theater-reveal-btn')).toBeNull();
+      expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
+      await pressEscape();
+      expect(container.querySelector('.theater-more.is-open')).toBeNull();
       await act(async () => {
         vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
       });
