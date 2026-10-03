@@ -133,13 +133,8 @@ const BRIDGE = `(function(){
       if(_caf)_caf(id);
     };
   }
-  // iOS Safari and iOS Chrome are both WebKit. Web Audio defaults to the ringer
-  // channel, so the hardware silent switch mutes every game while <audio>/<video>
-  // still play. playback is the media channel. Set it before any game script
-  // constructs an AudioContext. A tap inside this frame must also resume the
-  // context and start a buffer in that same turn: resume() alone stays silent in
-  // a sandboxed iframe, and the game's own unlock runs after a touch control has
-  // already called preventDefault on pointerdown.
+  // iOS WebKit (Safari and Chrome) mutes Web Audio on the ringer channel. playback
+  // is the media channel, and a tap must start a buffer before preventDefault.
   function setPlaybackSession(){
     try{
       var s=navigator.audioSession;
@@ -148,8 +143,7 @@ const BRIDGE = `(function(){
   }
   setPlaybackSession();
   var primed=typeof WeakSet==='function'?new WeakSet():null;
-  // 0.1s of 8-bit silence. media-src allows data:; a looping media element is what
-  // pulls Web Audio onto the media channel on iOS that have no audioSession.
+  // 0.1s of 8-bit silence. A looping data: WAV opens the media channel without audioSession.
   var SILENT_WAV='data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
   var iosMedia=null,pendingMedia=null;
   function primeMediaElement(){
@@ -199,8 +193,7 @@ const BRIDGE = `(function(){
     primeMediaElement();
     for(var i=0;i<audioCtxs.length;i++)primeAudio(audioCtxs[i]);
   }
-  // Capture runs before a touch control's preventDefault, while the gesture is
-  // still valid. touchend covers iOS versions that only unlock on touchend.
+  // Capture beats a touch control's preventDefault. touchend covers older iOS.
   addEventListener('pointerdown',onAudioGesture,true);
   addEventListener('touchend',onAudioGesture,true);
   addEventListener('keydown',onAudioGesture,true);

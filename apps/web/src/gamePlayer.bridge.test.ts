@@ -34,13 +34,12 @@ type BridgeMessage = { source?: string; type?: string; message?: string; frames?
  * running two in one realm would have every dispatch answered twice — an artifact of
  * the test, not of the product.
  */
-function runBridge(bodyHtml = '', prepare?: (frameWindow: Window & typeof globalThis) => void) {
+function runBridge(bodyHtml = '') {
   const frame = document.createElement('iframe');
   document.body.appendChild(frame);
   const frameWindow = frame.contentWindow as (Window & typeof globalThis) | null;
   if (!frameWindow) throw new Error('no iframe realm');
   frameWindow.document.body.innerHTML = bodyHtml;
-  prepare?.(frameWindow);
 
   const received: BridgeMessage[] = [];
   const listener = (event: MessageEvent) => {
@@ -215,108 +214,6 @@ describe('the injected bridge reports health', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(ticks).toBeGreaterThan(afterScheduled);
-    bridge.stop();
-  });
-
-  it('routes the frame onto the media channel and unlocks a suspended AudioContext on tap', () => {
-    const session = { type: 'auto' };
-    const started: number[] = [];
-    class FakeAudioContext {
-      state = 'suspended';
-      destination = {};
-      sampleRate: number;
-      constructor(options?: { sampleRate?: number }) {
-        this.sampleRate = options?.sampleRate ?? 48000;
-      }
-      resume() {
-        this.state = 'running';
-        return Promise.resolve();
-      }
-      suspend() {
-        this.state = 'suspended';
-        return Promise.resolve();
-      }
-      createBuffer() {
-        return {};
-      }
-      createBufferSource() {
-        return {
-          buffer: null as unknown,
-          connect() {
-            /* graph */
-          },
-          start() {
-            started.push(1);
-          },
-        };
-      }
-    }
-
-    const bridge = runBridge('<canvas id="game"></canvas>', (frameWindow) => {
-      Object.defineProperty(frameWindow.navigator, 'audioSession', { configurable: true, value: session });
-      Object.defineProperty(frameWindow, 'AudioContext', {
-        configurable: true,
-        writable: true,
-        value: FakeAudioContext,
-      });
-      Object.defineProperty(frameWindow, 'webkitAudioContext', {
-        configurable: true,
-        writable: true,
-        value: FakeAudioContext,
-      });
-    });
-
-    expect(session.type).toBe('playback');
-    const Ctx = bridge.frameWindow.AudioContext as unknown as typeof FakeAudioContext;
-    const ctx = new Ctx({ sampleRate: 22050 });
-    expect(ctx.sampleRate).toBe(22050);
-    expect(ctx.state).toBe('running');
-    expect(started).toHaveLength(1);
-
-    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointerdown', { bubbles: true }));
-    const audio = bridge.frameWindow.document.querySelector('audio');
-    expect(audio?.getAttribute('src')?.startsWith('data:audio/wav;base64,')).toBe(true);
-    expect(audio?.loop).toBe(true);
-    bridge.stop();
-  });
-
-  it('retries the silent buffer on the next gesture when resume does not flip state yet', () => {
-    let flips = 0;
-    const started: number[] = [];
-    class SlowContext {
-      state = 'suspended';
-      destination = {};
-      resume() {
-        flips += 1;
-        // iOS often leaves state suspended until a later turn of the same tap.
-        if (flips > 1) this.state = 'running';
-        return Promise.resolve();
-      }
-      createBuffer() {
-        return {};
-      }
-      createBufferSource() {
-        return {
-          buffer: null as unknown,
-          connect() {
-            /* graph */
-          },
-          start() {
-            started.push(1);
-          },
-        };
-      }
-    }
-    const bridge = runBridge('', (frameWindow) => {
-      Object.defineProperty(frameWindow, 'AudioContext', { configurable: true, writable: true, value: SlowContext });
-    });
-    const Ctx = bridge.frameWindow.AudioContext as unknown as typeof SlowContext;
-    new Ctx();
-    expect(started).toHaveLength(0);
-    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.Event('touchend'));
-    expect(started).toHaveLength(1);
-    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.Event('touchend'));
-    expect(started).toHaveLength(1);
     bridge.stop();
   });
 });

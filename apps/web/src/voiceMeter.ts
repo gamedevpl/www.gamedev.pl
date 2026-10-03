@@ -2,7 +2,7 @@ import { useFrameDocument } from './frameLifecycle.js';
 import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-
+import { setCaptureAudioSession } from './audioSession.js';
 export type VoiceMeterShellStatus = 'unsupported' | 'idle' | 'pending' | 'live' | 'denied';
 
 export type VoiceMeterGameMessage = { t: 'voice:hello' } | { t: 'voice:stop' };
@@ -121,17 +121,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
     const AC =
       window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    // The game frame asks for the media channel so the ringer switch does not mute
-    // it. Capture needs play-and-record, and it has to be set inside this gesture.
-    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
-    if (session) {
-      try {
-        session.type = 'play-and-record';
-      } catch {
-        /* leave the category the game frame set */
-      }
-    }
-    // Unlock inside the theater Mic gesture before awaiting permission.
+    setCaptureAudioSession();
     if (!contextRef.current) contextRef.current = new AC();
     if (contextRef.current.state === 'suspended') void contextRef.current.resume();
 
