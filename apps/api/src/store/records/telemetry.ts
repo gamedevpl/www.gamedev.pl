@@ -12,6 +12,8 @@
  * generated per game-open and never persisted anywhere in the browser, so these rows
  * answer "how did this game do" and cannot answer "what did this person play".
  */
+import type { PlayDevice, FramePerformance } from '@gamedevpl/contract';
+
 export type TelemetryEventType =
   | 'game_opened'
   | 'play_time'
@@ -56,6 +58,9 @@ export interface TelemetryEvent {
   seconds?: number;
   /** `alive`: animation frames observed since the previous tick. 0 means stalled. */
   frames?: number;
+  performance?: FramePerformance;
+  device?: PlayDevice;
+  artifactVersion?: string;
   /** `game_opened`: connected controller slots, when the game was opened as a party. */
   slots?: number;
   /** `error`: bounded, truncated message. Never a stack — that is a code-leak channel. */

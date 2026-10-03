@@ -6,12 +6,6 @@ import type { CatalogGameEntry, GameSources, GitHubClient } from './catalog/gith
 import { InMemoryStore } from './platform/store.js';
 import { MEDIA_URL_ANCHOR_SECONDS } from './delivery/media-url-signer.js';
 
-/**
- * The serve half of the snapshot: when configured, published games are read
- * only from the bucket. Misses and Storage errors fail the request — they do
- * not assemble from GitHub. Unset snapshotReader keeps the GitHub / local path.
- */
-
 const sessionSecret = 'dev-session-secret-change-me';
 const repo = 'gamedevpl/www.gamedev.pl-games';
 
@@ -129,7 +123,12 @@ describe('playing a published game', () => {
     const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ slug: 'bubble-pop', title: 'Bubble Pop', html: '<!doctype html><p>baked</p>' });
+    expect(response.json()).toMatchObject({
+      slug: 'bubble-pop',
+      title: 'Bubble Pop',
+      html: '<!doctype html><p>baked</p>',
+      artifactVersion: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
     expect(getGameSources).not.toHaveBeenCalled();
     await app.close();
   });
@@ -462,7 +461,6 @@ describe('with no snapshot configured', () => {
   });
 });
 
-// Redirects keep media bytes off the origin. See docs/deployment.md.
 describe('serving media straight from Cloud Storage', () => {
   const withSignedMedia = { ...catalogEntry('bubble-pop'), media: { screenshots: [{ file: 'opening.png' }] } };
 

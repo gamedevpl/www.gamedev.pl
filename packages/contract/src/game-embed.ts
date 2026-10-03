@@ -1,3 +1,5 @@
+import { FRAME_MONITOR_BRIDGE } from './frame-monitor-bridge.js';
+
 // Envelope tags distinguish the trusted host from sandbox messages.
 const HOST = 'gdpl-host';
 const PLAYER = 'gdpl-player';
@@ -107,11 +109,7 @@ const BRIDGE = `(function(){
     var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
   });
   var frames=0,paused=false,overlay=null,lastAlive=0;
-  // Hold rAF / AudioContext here — GameKit's gdpl-pause only skips update() and
-  // still calls draw(), and many playtest docs were assembled before those listeners
-  // existed. Overlay alone left motion visible through the veil (Studio felt broken).
-  // Patch early (inject in <head>) so games that look up requestAnimationFrame each
-  // frame are held; already-scheduled native callbacks may run once more, then re-enter.
+  // Host pause holds scheduling and audio, including older kits.
   var _raf=window.requestAnimationFrame&&window.requestAnimationFrame.bind(window);
   var _caf=window.cancelAnimationFrame&&window.cancelAnimationFrame.bind(window);
   var _si=window.setInterval.bind(window);
@@ -231,8 +229,7 @@ const BRIDGE = `(function(){
     if(!_raf)return;
     for(var i=0;i<q.length;i++){(function(cb){_raf(function(t){try{cb(t);}catch(err){}});}(q[i].cb));}
   }
-  if(_raf){(function tick(){frames++;requestAnimationFrame(tick);})();}
-  _si(function(){lastAlive=frames;post({type:'alive',frames:frames});frames=0;},5000);
+  ${FRAME_MONITOR_BRIDGE}
   function largestCanvas(){
     var best=null,area=0,list=document.querySelectorAll('canvas');
     for(var i=0;i<list.length;i++){
@@ -332,6 +329,7 @@ const BRIDGE = `(function(){
     var wantSnapshot=!(options&&options.snapshot===false);
     if(next===paused){if(next&&wantSnapshot)sendSnapshot('pause');return;}
     paused=next;
+    perfInvalidate();
     if(paused){
       // Snapshot first — then veil — so the overlay never lands in the PNG.
       var png=wantSnapshot?capturePng():null;
