@@ -2501,11 +2501,12 @@ body.player-open {
     display: block;
   }
 
-  /* Align the menu with the right edge of the action cluster (exit sits past the
-     hamburger: 44px thumb target + 6px gap). Flush with the trigger alone left a
-     gap under the close control that read as misaligned on phones. */
+  /* Align the menu with the right edge of the action cluster. Past the
+     hamburger sit Close, then Hide — Hide owns the corner the reveal chevron
+     uses, so Exit is not under that thumb. Two targets plus the gaps between
+     them: flushing to the hamburger alone left a gap under the corner control. */
   .theater-more-panel {
-    right: calc(-1 * (44px + 6px));
+    right: calc(-2 * (44px + 6px));
     min-width: 240px;
     max-width: min(300px, calc(100vw - 24px));
     max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 57px - 8px - 12px);

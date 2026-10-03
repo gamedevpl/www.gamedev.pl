@@ -588,9 +588,7 @@ export function GameTheater({
           className="theater-reveal-btn"
           aria-label={t('player.showControls')}
           title={t('player.showControls')}
-          // Pointerdown makes the control immediate on touch. Click keeps the same
-          // route available to Enter/Space, which do not emit pointer events.
-          onPointerDown={revealChrome}
+          // Click, not pointerdown: press used to land on Exit.
           onClick={revealChrome}
         >
           <PixelIcon name="chevronDown" size={15} />
@@ -751,15 +749,6 @@ export function GameTheater({
               </div>
             )}
             <button
-              type="button"
-              className="secondary-btn theater-hide-btn"
-              onClick={hideChrome}
-              aria-label={t('player.hideControls')}
-              title={t('player.hideControls')}
-            >
-              <PixelIcon name="chevronUp" size={15} />
-            </button>
-            <button
               className="secondary-btn exit-btn"
               onClick={onExit}
               ref={exitRef}
@@ -767,6 +756,15 @@ export function GameTheater({
               title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
             >
               <PixelIcon name="close" size={14} />
+            </button>
+            <button
+              type="button"
+              className="secondary-btn theater-hide-btn"
+              onClick={hideChrome}
+              aria-label={t('player.hideControls')}
+              title={t('player.hideControls')}
+            >
+              <PixelIcon name="chevronUp" size={15} />
             </button>
           </div>
         </div>
