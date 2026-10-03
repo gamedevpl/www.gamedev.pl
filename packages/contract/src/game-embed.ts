@@ -133,12 +133,90 @@ const BRIDGE = `(function(){
       if(_caf)_caf(id);
     };
   }
+  // iOS Safari and iOS Chrome are both WebKit. Web Audio defaults to the ringer
+  // channel, so the hardware silent switch mutes every game while <audio>/<video>
+  // still play. playback is the media channel. Set it before any game script
+  // constructs an AudioContext. A tap inside this frame must also resume the
+  // context and start a buffer in that same turn: resume() alone stays silent in
+  // a sandboxed iframe, and the game's own unlock runs after a touch control has
+  // already called preventDefault on pointerdown.
+  function setPlaybackSession(){
+    try{
+      var s=navigator.audioSession;
+      if(s&&s.type!=='playback')s.type='playback';
+    }catch(err){}
+  }
+  setPlaybackSession();
+  var primed=typeof WeakSet==='function'?new WeakSet():null;
+  // 0.1s of 8-bit silence. media-src allows data:; a looping media element is what
+  // pulls Web Audio onto the media channel on iOS that have no audioSession.
+  var SILENT_WAV='data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+  var iosMedia=null,pendingMedia=null;
+  function primeMediaElement(){
+    if(iosMedia||pendingMedia||paused)return;
+    try{
+      var a=document.createElement('audio');
+      a.setAttribute('playsinline','');
+      a.setAttribute('aria-hidden','true');
+      a.loop=true;
+      try{a.disableRemotePlayback=true;}catch(err){}
+      a.style.cssText='position:fixed;width:0;height:0;opacity:0;pointer-events:none;';
+      a.src=SILENT_WAV;
+      if(typeof a.play!=='function')return;
+      // Keep the element alive across the play() promise; dropping it here lets
+      // iOS collect the element before the media channel opens.
+      (document.documentElement||document.body).appendChild(a);
+      pendingMedia=a;
+      var p=a.play();
+      if(p&&typeof p.then==='function'){
+        p.then(function(){iosMedia=a;pendingMedia=null;},function(){
+          pendingMedia=null;
+          try{a.remove();}catch(err){}
+        });
+      }else{iosMedia=a;pendingMedia=null;}
+    }catch(err){pendingMedia=null;}
+  }
+  function primeAudio(c){
+    if(!c||paused)return;
+    try{
+      if(c.state==='interrupted'&&c.suspend)c.suspend();
+      if(c.state!=='running'&&c.state!=='closed'&&c.resume)c.resume();
+    }catch(err){}
+    if(primed&&primed.has(c))return;
+    try{
+      if(c.state==='suspended'||c.state==='interrupted'||c.state==='closed')return;
+      var buf=c.createBuffer(1,1,22050);
+      var src=c.createBufferSource();
+      src.buffer=buf;
+      src.connect(c.destination);
+      if(src.start)src.start(0);else if(src.noteOn)src.noteOn(0);
+      if(primed)primed.add(c);
+    }catch(err){}
+  }
+  function onAudioGesture(){
+    setPlaybackSession();
+    if(paused)return;
+    primeMediaElement();
+    for(var i=0;i<audioCtxs.length;i++)primeAudio(audioCtxs[i]);
+  }
+  // Capture runs before a touch control's preventDefault, while the gesture is
+  // still valid. touchend covers iOS versions that only unlock on touchend.
+  addEventListener('pointerdown',onAudioGesture,true);
+  addEventListener('touchend',onAudioGesture,true);
+  addEventListener('keydown',onAudioGesture,true);
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState!=='visible')return;
+    setPlaybackSession();
+    for(var i=0;i<audioCtxs.length;i++)primeAudio(audioCtxs[i]);
+  });
   var OrigAC=window.AudioContext||window.webkitAudioContext;
   if(OrigAC){
     var WrapAC=function(){
-      var ctx=new OrigAC();
+      setPlaybackSession();
+      var ctx=arguments.length?new OrigAC(arguments[0]):new OrigAC();
       try{audioCtxs.push(ctx);}catch(err){}
       if(paused&&ctx.suspend)try{ctx.suspend();}catch(err){}
+      else primeAudio(ctx);
       return ctx;
     };
     WrapAC.prototype=OrigAC.prototype;
@@ -148,7 +226,10 @@ const BRIDGE = `(function(){
   function suspendAudio(yes){
     for(var i=0;i<audioCtxs.length;i++){
       var c=audioCtxs[i];
-      try{if(yes){if(c.suspend)c.suspend();}else if(c.resume)c.resume();}catch(err){}
+      try{
+        if(yes){if(c.suspend)c.suspend();}
+        else primeAudio(c);
+      }catch(err){}
     }
   }
   function flushHeldRaf(){

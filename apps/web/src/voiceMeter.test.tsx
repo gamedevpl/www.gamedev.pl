@@ -132,6 +132,8 @@ describe('useVoiceMeterBridge', () => {
   });
 
   it('toggle starts the mic after hello and relays live state', async () => {
+    const session = { type: 'playback' };
+    Object.defineProperty(navigator, 'audioSession', { configurable: true, value: session });
     const { fromGame } = mount();
     act(() => fromGame({ t: 'voice:hello' }));
     toGame.length = 0;
@@ -142,6 +144,8 @@ describe('useVoiceMeterBridge', () => {
       await Promise.resolve();
     });
 
+    // Game audio uses playback; capture has to switch the session or iOS rejects the mic.
+    expect(session.type).toBe('play-and-record');
     expect(latest?.status).toBe('live');
     expect(toGame.some((m) => m.t === 'voice:state' && m.status === 'live')).toBe(true);
   });

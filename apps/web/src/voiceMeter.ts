@@ -121,6 +121,16 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
     const AC =
       window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    // The game frame asks for the media channel so the ringer switch does not mute
+    // it. Capture needs play-and-record, and it has to be set inside this gesture.
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) {
+      try {
+        session.type = 'play-and-record';
+      } catch {
+        /* leave the category the game frame set */
+      }
+    }
     // Unlock inside the theater Mic gesture before awaiting permission.
     if (!contextRef.current) contextRef.current = new AC();
     if (contextRef.current.state === 'suspended') void contextRef.current.resume();
