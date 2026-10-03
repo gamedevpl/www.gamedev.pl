@@ -170,6 +170,60 @@ describe('GameTheater more menu', () => {
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
+  it('opens the in-game menu once the game reports a shell menu', async () => {
+    const player = await import('./gamePlayer.js');
+    const post = vi.spyOn(player, 'postGameHostMessage').mockImplementation(() => undefined);
+    const onExit = vi.fn();
+    try {
+      await draw({ onExit });
+      expect(container.querySelector('.theater-game-menu')).toBeNull();
+      await act(async () => {
+        window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }));
+      });
+      expect(container.querySelector('.theater-more-btn')?.getAttribute('aria-label')).toBe('More actions');
+      await click(container.querySelector('.theater-more-btn'));
+      const menu = container.querySelector('.theater-game-menu') as HTMLButtonElement;
+      expect(menu.textContent).toContain('Menu');
+      await click(menu);
+      expect(container.querySelector('.theater-more.is-open')).toBeNull();
+      expect(onExit).not.toHaveBeenCalled();
+      expect(post).toHaveBeenCalledWith(expect.anything(), { type: 'pressEscape' });
+    } finally {
+      post.mockRestore();
+    }
+  });
+
+  it('keeps that Menu after the bar fades, and a separate control brings the bar back', async () => {
+    vi.useFakeTimers();
+    const player = await import('./gamePlayer.js');
+    const post = vi.spyOn(player, 'postGameHostMessage').mockImplementation(() => undefined);
+    try {
+      await draw();
+      await act(async () => {
+        window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }));
+        (container.querySelector('iframe') as HTMLIFrameElement).focus();
+        window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'pointer' }, origin: 'null' }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      const menu = container.querySelector('.theater-reveal-btn:not(.theater-chrome-reveal)') as HTMLButtonElement;
+      expect(menu.textContent).toContain('Menu');
+      await click(menu);
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      expect(container.querySelector('.theater-more.is-open')).toBeNull();
+      expect(post).toHaveBeenCalledWith(expect.anything(), { type: 'pressEscape' });
+      await click(container.querySelector('.theater-chrome-reveal'));
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      expect(container.querySelector('.theater-chrome-reveal')).toBeNull();
+    } finally {
+      post.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps menu-row icons the same size so labels share one left edge', async () => {
     await draw();
     const panel = container.querySelector('.theater-more-panel') as HTMLElement;

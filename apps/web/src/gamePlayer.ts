@@ -268,6 +268,7 @@ export function useGamePlayer(
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
   const [muted, setMuted] = useState(false);
+  const [shellMenu, setShellMenu] = useState(false);
 
   // Held in refs so a caller's inline closures can't resubscribe the listener below.
   const onEscapeRef = useRef(onEscape);
@@ -288,6 +289,7 @@ export function useGamePlayer(
       setMeta(null);
       setControls(null);
       setMuted(false);
+      setShellMenu(false);
       return;
     }
     let hasShellMenu = false;
@@ -309,6 +311,7 @@ export function useGamePlayer(
       if (data.loadId !== lastLoadId) {
         lastLoadId = data.loadId;
         hasShellMenu = false;
+        setShellMenu(false);
       }
       if (data.type === 'meta') {
         setMeta({ title: String(data.title ?? ''), desc: String(data.desc ?? '') });
@@ -324,6 +327,7 @@ export function useGamePlayer(
         setMuted(Boolean(data.muted));
       } else if (data.type === 'shell-menu') {
         hasShellMenu = true;
+        setShellMenu(true);
       } else if (data.type === 'exit-game') {
         onExitGameRef.current?.();
       } else if (data.type === 'key' && data.key === 'Escape') {
@@ -361,7 +365,7 @@ export function useGamePlayer(
     });
   }, [frameRef]);
 
-  return { meta, controls, muted, toggleSound };
+  return { meta, controls, muted, toggleSound, shellMenu };
 }
 
 /** Instrumentation gathered while a creator playtests inside Studio. */

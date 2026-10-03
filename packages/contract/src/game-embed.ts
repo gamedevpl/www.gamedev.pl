@@ -285,6 +285,19 @@ const BRIDGE = `(function(){
     var ok=(h&&typeof h.restoreState==='function')?!!h.restoreState(data):false;
     post({type:'stateRestored',ok:ok});
   }
+  // Phones have no Escape. The host asks; the game's own listener still owns the menu.
+  function pressEscape(){
+    var target=el('game')||document.body,i,types=['keydown','keyup'];
+    for(i=0;i<types.length;i++){
+      var ev;
+      try{ev=new KeyboardEvent(types[i],{key:'Escape',code:'Escape',bubbles:true,cancelable:true});}
+      catch(err){
+        try{ev=document.createEvent('Event');ev.initEvent(types[i],true,true);ev.key='Escape';ev.code='Escape';}
+        catch(err2){return;}
+      }
+      try{target.dispatchEvent(ev);}catch(err){}
+    }
+  }
   addEventListener('message',function(e){
     var m=e.data||{};
     if(m.source!=='${HOST}')return;
@@ -295,6 +308,7 @@ const BRIDGE = `(function(){
     else if(m.type==='capture'){sendSnapshot('capture');}
     else if(m.type==='snapshotState'){sendStateSnapshot();}
     else if(m.type==='restoreState'){applyStateRestore(m.data);}
+    else if(m.type==='pressEscape'){pressEscape();}
   });
   var lastActivity=0;
   function reportActivity(){

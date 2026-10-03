@@ -216,4 +216,22 @@ describe('the injected bridge reports health', () => {
     expect(ticks).toBeGreaterThan(afterScheduled);
     bridge.stop();
   });
+
+  it('turns a host pressEscape into Escape on the canvas, which the game menu listens for', async () => {
+    const bridge = runBridge('<canvas id="game"></canvas>');
+    const keys: string[] = [];
+    bridge.frameWindow.addEventListener('keydown', (event) => keys.push(event.key));
+    bridge.frameWindow.addEventListener('keyup', (event) => keys.push(`up:${event.key}`));
+    bridge.frameWindow.dispatchEvent(
+      new bridge.frameWindow.MessageEvent('message', {
+        data: { source: 'gdpl-host', type: 'pressEscape' },
+      }),
+    );
+    await delivered();
+    expect(keys).toEqual(['Escape', 'up:Escape']);
+    expect(bridge.received.some((message) => message.type === 'key' && message.message === undefined)).toBe(true);
+    const echoed = bridge.received.find((message) => message.type === 'key') as { key?: string } | undefined;
+    expect(echoed?.key).toBe('Escape');
+    bridge.stop();
+  });
 });

@@ -54,6 +54,9 @@ describe('game theater floating bar', () => {
     expect(reveal).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.9\)/);
     expect(ruleBody('.theater-reveal-btn .menu-label')).toMatch(/font-weight:\s*700/);
     expect(ruleBody('.game-theater-bar:has(.theater-more.is-open)')).toMatch(/transition:\s*none/);
+    expect(ruleBody('.theater-reveal-btn.theater-chrome-reveal')).toMatch(
+      /left:\s*max\(12px,\s*env\(safe-area-inset-left\)\)/,
+    );
   });
 
   it('keeps the native fullscreen exit away from top-edge game HUDs', () => {

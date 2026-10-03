@@ -15,7 +15,7 @@ import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
-import { useGamePlayer } from './gamePlayer.js';
+import { postGameHostMessage, useGamePlayer } from './gamePlayer.js';
 import { useGamepadSpike } from './gamepadSpike.js';
 import { recordRemixStep, recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
@@ -211,6 +211,7 @@ export function GameTheater({
   howToOpenRef.current = howToOpen;
   const moreOpenRef = useRef(moreOpen);
   moreOpenRef.current = moreOpen;
+  const menuFromPointer = useRef(false);
 
   // Play input starts the hide clock but never brings faded chrome back.
   const notePlayerActivity = useCallback(() => {
@@ -444,10 +445,29 @@ export function GameTheater({
     isNarrow ||
     (hasControls && isMidWidth) ||
     (voiceMeter.available && isMidWidth);
+  const shellMenu = player.shellMenu;
   const openPlayerMenu = useCallback(() => {
+    if (shellMenu) {
+      setMoreOpen(false);
+      postGameHostMessage(frameRef.current, { type: 'pressEscape' });
+      return;
+    }
     revealChrome();
     if (showMoreMenu) setMoreOpen(true);
-  }, [revealChrome, showMoreMenu]);
+  }, [frameRef, revealChrome, shellMenu, showMoreMenu]);
+  const onMenuPointerDown = (event: { button: number }) => {
+    if (event.button !== 0) return;
+    menuFromPointer.current = true;
+    openPlayerMenu();
+  };
+  const onMenuClick = () => {
+    if (menuFromPointer.current) {
+      menuFromPointer.current = false;
+      return;
+    }
+    openPlayerMenu();
+  };
+  const showCornerMenu = shellMenu ? fullscreen || chromeIdle : !fullscreen && chromeIdle;
   const canRemix = remixable && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
@@ -578,7 +598,7 @@ export function GameTheater({
 
   return (
     <section
-      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${agentOpen ? ' has-agent-panel' : ''}${tracksViewport ? ' is-viewport-tracked' : ''}`}
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${shellMenu ? ' has-shell-menu' : ''}${agentOpen ? ' has-agent-panel' : ''}${tracksViewport ? ' is-viewport-tracked' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}
@@ -586,19 +606,28 @@ export function GameTheater({
     >
       {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
           mounted in a stable location and fades it only after demonstrated activity. */}
-      {!fullscreen && chromeIdle && (
+      {showCornerMenu && (
         <button
           type="button"
           className="theater-reveal-btn"
           aria-label={t('player.menu')}
           title={t('player.menu')}
-          // Pointerdown makes the control immediate on touch. Click keeps the same
-          // route available to Enter/Space, which do not emit pointer events.
-          onPointerDown={openPlayerMenu}
-          onClick={openPlayerMenu}
+          onPointerDown={onMenuPointerDown}
+          onClick={onMenuClick}
         >
           <PixelIcon name="menu" size={15} />
           <span className="menu-label">{t('player.menu')}</span>
+        </button>
+      )}
+      {shellMenu && !fullscreen && chromeIdle && (
+        <button
+          type="button"
+          className="theater-reveal-btn theater-chrome-reveal"
+          aria-label={t('player.showControls')}
+          title={t('player.showControls')}
+          onClick={revealChrome}
+        >
+          <PixelIcon name="chevronDown" size={15} />
         </button>
       )}
       {!fullscreen && (
@@ -690,7 +719,7 @@ export function GameTheater({
                   className="secondary-btn theater-more-btn"
                   aria-expanded={moreOpen}
                   aria-haspopup="menu"
-                  aria-label={t('player.menu')}
+                  aria-label={shellMenu ? t('player.moreActions') : t('player.menu')}
                   onClick={() => setMoreOpen((open) => !open)}
                 >
                   {/* Stay a hamburger when open — swapping to X sat next to Exit and
@@ -698,6 +727,18 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
+                  {shellMenu && (
+                    <button
+                      type="button"
+                      className="theater-menu-item theater-game-menu"
+                      role="menuitem"
+                      onPointerDown={onMenuPointerDown}
+                      onClick={onMenuClick}
+                    >
+                      <PixelIcon name="menu" size={13} />
+                      <span className="btn-label">{t('player.menu')}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="theater-menu-item theater-leave"
