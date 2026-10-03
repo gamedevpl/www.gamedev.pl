@@ -31,7 +31,7 @@ afterEach(() => {
 });
 
 describe('iOS audio unlock in the player bridge', () => {
-  it('selects playback and starts a buffer for a suspended context', () => {
+  it('selects playback and starts a buffer without a media element', () => {
     const session = { type: 'auto' };
     const started: number[] = [];
     class FakeAudioContext {
@@ -84,22 +84,23 @@ describe('iOS audio unlock in the player bridge', () => {
     expect(ctx.state).toBe('running');
     expect(started).toHaveLength(1);
     bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointerdown', { bubbles: true }));
-    const audio = bridge.frameWindow.document.querySelector('audio');
-    expect(audio?.getAttribute('src')?.startsWith('data:audio/wav;base64,')).toBe(true);
-    expect(audio?.loop).toBe(true);
+    expect(bridge.frameWindow.document.querySelector('audio')).toBeNull();
     bridge.stop();
   });
 
-  it('retries the silent buffer once resume actually flips the context', () => {
-    let flips = 0;
+  it('starts the silent buffer when resume settles, without a second gesture', async () => {
     const started: number[] = [];
     class SlowContext {
       state = 'suspended';
       destination = {};
+      release: (() => void) | null = null;
       resume() {
-        flips += 1;
-        if (flips > 1) this.state = 'running';
-        return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          this.release = () => {
+            this.state = 'running';
+            resolve();
+          };
+        });
       }
       createBuffer() {
         return {};
@@ -117,15 +118,47 @@ describe('iOS audio unlock in the player bridge', () => {
       }
     }
     const bridge = runBridge((frameWindow) => {
+      Object.defineProperty(frameWindow.navigator, 'audioSession', {
+        configurable: true,
+        value: { type: 'playback' },
+      });
       Object.defineProperty(frameWindow, 'AudioContext', { configurable: true, writable: true, value: SlowContext });
     });
     const Ctx = bridge.frameWindow.AudioContext as unknown as typeof SlowContext;
-    new Ctx();
+    const ctx = new Ctx();
     expect(started).toHaveLength(0);
-    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.Event('touchend'));
+    ctx.release?.();
+    await Promise.resolve();
     expect(started).toHaveLength(1);
     bridge.frameWindow.dispatchEvent(new bridge.frameWindow.Event('touchend'));
     expect(started).toHaveLength(1);
+    expect(bridge.frameWindow.document.querySelector('audio')).toBeNull();
+    bridge.stop();
+  });
+
+  it('loops silent media only without audioSession and drops it on pause or hide', () => {
+    const bridge = runBridge(() => undefined);
+    const frameWindow = bridge.frameWindow;
+    frameWindow.dispatchEvent(new frameWindow.PointerEvent('pointerdown', { bubbles: true }));
+    const audio = frameWindow.document.querySelector('audio');
+    expect(audio?.getAttribute('src')?.startsWith('data:audio/wav;base64,')).toBe(true);
+    expect(audio?.loop).toBe(true);
+    frameWindow.dispatchEvent(
+      new frameWindow.MessageEvent('message', { data: { source: 'gdpl-host', type: 'pause' } }),
+    );
+    expect(frameWindow.document.querySelector('audio')).toBeNull();
+    frameWindow.dispatchEvent(
+      new frameWindow.MessageEvent('message', { data: { source: 'gdpl-host', type: 'resume' } }),
+    );
+    expect(frameWindow.document.querySelector('audio')).toBeNull();
+    frameWindow.dispatchEvent(new frameWindow.PointerEvent('pointerdown', { bubbles: true }));
+    expect(frameWindow.document.querySelector('audio')).not.toBeNull();
+    Object.defineProperty(frameWindow.document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    frameWindow.document.dispatchEvent(new frameWindow.Event('visibilitychange'));
+    expect(frameWindow.document.querySelector('audio')).toBeNull();
     bridge.stop();
   });
 });
