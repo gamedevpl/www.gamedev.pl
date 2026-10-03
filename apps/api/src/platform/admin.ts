@@ -65,7 +65,6 @@ import {
   type WaitlistEntry,
 } from './store.js';
 
-
 /** Widest window one request may ask for. Each day is a separate Firestore query. */
 const MAX_DAYS = 30;
 const DEFAULT_DAYS = 7;

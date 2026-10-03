@@ -47,15 +47,20 @@ describe('game theater floating bar', () => {
     expect(css).toMatch(/right:\s*calc\(-1 \* \(44px \+ 6px\)\)/);
   });
 
-  it('leaves a quiet thumb-sized route back to the complete bar', () => {
+  it('leaves a labeled Menu in the corner that stays a thumb target', () => {
     const reveal = ruleBody('.theater-reveal-btn');
 
     expect(reveal).toMatch(/position:\s*absolute/);
     expect(reveal).toMatch(/top:\s*max\(12px,\s*env\(safe-area-inset-top\)\)/);
     expect(reveal).toMatch(/right:\s*max\(12px,\s*env\(safe-area-inset-right\)\)/);
-    expect(reveal).toMatch(/width:\s*44px/);
+    expect(reveal).toMatch(/min-width:\s*44px/);
     expect(reveal).toMatch(/height:\s*44px/);
-    expect(reveal).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.62\)/);
+    expect(reveal).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.9\)/);
+    expect(ruleBody('.theater-reveal-btn .menu-label')).toMatch(/font-weight:\s*700/);
+    expect(ruleBody('.game-theater-bar:has(.theater-more.is-open)')).toMatch(/transition:\s*none/);
+    expect(ruleBody('.theater-reveal-btn.theater-chrome-reveal')).toMatch(
+      /left:\s*max\(12px,\s*env\(safe-area-inset-left\)\)/,
+    );
   });
 
   it('keeps the native fullscreen exit away from top-edge game HUDs', () => {

@@ -2,7 +2,6 @@ import type { GameHealth } from '@gamedevpl/contract';
 export type { GameHealth };
 import type { TelemetryEvent } from './store.js';
 
-
 /** Nominal heartbeat spacing. `alive` and `play_time` are emitted against this. */
 const HEARTBEAT_MS = 5_000;
 /**

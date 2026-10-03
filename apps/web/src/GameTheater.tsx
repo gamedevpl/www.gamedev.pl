@@ -14,7 +14,7 @@ import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 import { PlayerGameReport } from './PlayerGameReport.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
-import { useGamePlayer } from './gamePlayer.js';
+import { postGameHostMessage, useGamePlayer } from './gamePlayer.js';
 import { useGamepadSpike } from './gamepadSpike.js';
 import { recordRemixStep, recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
@@ -443,6 +443,11 @@ export function GameTheater({
     isNarrow ||
     (hasControls && isMidWidth) ||
     (voiceMeter.available && isMidWidth);
+  const shellMenu = player.shellMenu;
+  const openGameMenu = useCallback(() => {
+    setMoreOpen(false);
+    postGameHostMessage(frameRef.current, { type: 'pressEscape' });
+  }, [frameRef]);
   const canRemix = remixable && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
@@ -573,7 +578,7 @@ export function GameTheater({
 
   return (
     <section
-      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${agentOpen ? ' has-agent-panel' : ''}${tracksViewport ? ' is-viewport-tracked' : ''}`}
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}${shellMenu ? ' has-shell-menu' : ''}${agentOpen ? ' has-agent-panel' : ''}${tracksViewport ? ' is-viewport-tracked' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}
@@ -581,10 +586,22 @@ export function GameTheater({
     >
       {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
           mounted in a stable location and fades it only after demonstrated activity. */}
-      {!fullscreen && chromeIdle && (
+      {shellMenu && (fullscreen || chromeIdle) && (
         <button
           type="button"
           className="theater-reveal-btn"
+          aria-label={t('player.menu')}
+          title={t('player.menu')}
+          onClick={openGameMenu}
+        >
+          <PixelIcon name="menu" size={15} />
+          <span className="menu-label">{t('player.menu')}</span>
+        </button>
+      )}
+      {!fullscreen && chromeIdle && (
+        <button
+          type="button"
+          className={`theater-reveal-btn${shellMenu ? ' theater-chrome-reveal' : ''}`}
           aria-label={t('player.showControls')}
           title={t('player.showControls')}
           // Click, not pointerdown: press used to land on Exit.
@@ -682,7 +699,7 @@ export function GameTheater({
                   className="secondary-btn theater-more-btn"
                   aria-expanded={moreOpen}
                   aria-haspopup="menu"
-                  aria-label={t('player.moreActions')}
+                  aria-label={shellMenu ? t('player.moreActions') : t('player.menu')}
                   onClick={() => setMoreOpen((open) => !open)}
                 >
                   {/* Stay a hamburger when open — swapping to X sat next to Exit and
@@ -690,6 +707,20 @@ export function GameTheater({
                   <PixelIcon name="menu" size={14} />
                 </button>
                 <div className="theater-more-panel" role="menu">
+                  {shellMenu && (
+                    <>
+                      <button
+                        type="button"
+                        className="theater-menu-item theater-game-menu"
+                        role="menuitem"
+                        onClick={openGameMenu}
+                      >
+                        <PixelIcon name="menu" size={13} />
+                        <span className="btn-label">{t('player.menu')}</span>
+                      </button>
+                      <div className="theater-menu-divider" role="separator" />
+                    </>
+                  )}
                   {howToPlayControl('theater-menu-item howto-menu', 'more')}
                   {agentAvailable ? (
                     <button

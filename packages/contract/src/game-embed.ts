@@ -368,6 +368,7 @@ const BRIDGE = `(function(){
     else if(m.type==='capture'){sendSnapshot('capture');}
     else if(m.type==='snapshotState'){sendStateSnapshot();}
     else if(m.type==='restoreState'){applyStateRestore(m.data);}
+    else if(m.type==='pressEscape'){var target=el('game')||document.body,n;for(n=0;n<2;n++){try{target.dispatchEvent(new KeyboardEvent(n?'keyup':'keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));}catch(err){}}}
   });
   var lastActivity=0;
   function reportActivity(){

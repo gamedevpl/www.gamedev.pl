@@ -380,7 +380,7 @@ Two concrete instances of that (observed 2026-07-23):
   absent) and 2.68 for one-more-descent (torch-lit brick in the concept, shipped floor
   barely moved). An author luminance ROI can clear a self-set ">4" while the frame
   still reads as the old game; realm-of-shards checked "stronger grass/forest
-  separation" for 15.33 → 15.95.   `after-mobile-*.png` was the same git blob as
+  separation" for 15.33 → 15.95. `after-mobile-*.png` was the same git blob as
   `after-*.png` on all 11 sampled opening frames, so a touch-viewport checkbox can be
   a copied desktop canvas. Open the native pair or the source|concept|actual triptych
   and measure the frame. Do not accept the ROI table or the mobile filename as the

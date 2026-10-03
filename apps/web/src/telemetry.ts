@@ -12,7 +12,6 @@ export { ZONE_LINK_STEPS };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-
 export type TelemetryEvent =
   | { type: 'game_opened'; slots?: number; device?: PlayDevice; artifactVersion?: string }
   | { type: 'play_time'; seconds: number }

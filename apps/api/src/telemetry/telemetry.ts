@@ -11,7 +11,6 @@ import { rememberBounded } from '../platform/bounded-map.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 
-
 /** Bounds one flush; the shell batches ~4 events per 15s, so this is generous. */
 const MAX_EVENTS_PER_REQUEST = 50;
 /** Ceiling per play session. A session that exceeds it is buggy or hostile. */
