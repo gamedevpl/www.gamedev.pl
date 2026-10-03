@@ -12,6 +12,7 @@ import {
 } from './healthApi.js';
 import { VisitFunnelPanel } from './VisitFunnelPanel.js';
 import { CreatorMetricsPanel } from './CreatorMetricsPanel.js';
+import { FramePerformancePanel } from './FramePerformancePanel.js';
 import { GrowthPanel } from './GrowthPanel.js';
 import { ScorecardPanel } from './ScorecardPanel.js';
 import { TelemetryOverview } from './TelemetryOverview.js';
@@ -139,6 +140,7 @@ export function GameHealthView() {
         </div>
       </header>
 
+      {state === 'ready' && data && <FramePerformancePanel report={data.performance} />}
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}
 

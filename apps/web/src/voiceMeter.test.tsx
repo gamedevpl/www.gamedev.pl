@@ -132,17 +132,17 @@ describe('useVoiceMeterBridge', () => {
   });
 
   it('toggle starts the mic after hello and relays live state', async () => {
+    const session = { type: 'playback' };
+    Object.defineProperty(navigator, 'audioSession', { configurable: true, value: session });
     const { fromGame } = mount();
     act(() => fromGame({ t: 'voice:hello' }));
     toGame.length = 0;
-
     await act(async () => {
       latest!.toggle();
       await Promise.resolve();
       await Promise.resolve();
     });
-
-    expect(latest?.status).toBe('live');
+    expect(session.type === 'play-and-record' && latest?.status === 'live').toBe(true);
     expect(toGame.some((m) => m.t === 'voice:state' && m.status === 'live')).toBe(true);
   });
 

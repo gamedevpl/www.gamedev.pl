@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { GameProject } from '@gamedevpl/contract';
@@ -50,11 +51,14 @@ export async function registerGamePlayRoute(
   // Byte+entry LRU so 24 MiB documents cannot fill RAM.
   const gameCache = createAssembledGameCache();
   const gamesByIp = new Map<string, number[]>();
+  const artifactVersions = new WeakMap<CachedAssembledGame, string>();
 
   // Drafts never pass here; only published games get widened.
   async function sendPublished(reply: FastifyReply, value: CachedAssembledGame) {
     if (await playableWithoutSession(value.slug)) reply.header('cache-control', PUBLISHED_GAME_CACHE_CONTROL);
-    return reply.send(value);
+    const artifactVersion = artifactVersions.get(value) ?? createHash('sha256').update(value.html).digest('hex');
+    artifactVersions.set(value, artifactVersion);
+    return reply.send({ ...value, artifactVersion });
   }
 
   // Snapshot baked build preferred; falls back to assembling GitHub sources.

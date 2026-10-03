@@ -10,9 +10,8 @@ import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { resolveControlRows } from './howToPlay.js';
-import { InAppGameReport } from './InAppGameReport.js';
 import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
-import { ReportGameButton } from './ReportGameButton.js';
+import { PlayerGameReport } from './PlayerGameReport.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { postGameHostMessage, useGamePlayer } from './gamePlayer.js';
@@ -211,7 +210,6 @@ export function GameTheater({
   howToOpenRef.current = howToOpen;
   const moreOpenRef = useRef(moreOpen);
   moreOpenRef.current = moreOpen;
-  const menuFromPointer = useRef(false);
 
   // Play input starts the hide clock but never brings faded chrome back.
   const notePlayerActivity = useCallback(() => {
@@ -446,28 +444,10 @@ export function GameTheater({
     (hasControls && isMidWidth) ||
     (voiceMeter.available && isMidWidth);
   const shellMenu = player.shellMenu;
-  const openPlayerMenu = useCallback(() => {
-    if (shellMenu) {
-      setMoreOpen(false);
-      postGameHostMessage(frameRef.current, { type: 'pressEscape' });
-      return;
-    }
-    revealChrome();
-    if (showMoreMenu) setMoreOpen(true);
-  }, [frameRef, revealChrome, shellMenu, showMoreMenu]);
-  const onMenuPointerDown = (event: { button: number }) => {
-    if (event.button !== 0) return;
-    menuFromPointer.current = true;
-    openPlayerMenu();
-  };
-  const onMenuClick = () => {
-    if (menuFromPointer.current) {
-      menuFromPointer.current = false;
-      return;
-    }
-    openPlayerMenu();
-  };
-  const showCornerMenu = shellMenu ? fullscreen || chromeIdle : !fullscreen && chromeIdle;
+  const openGameMenu = useCallback(() => {
+    setMoreOpen(false);
+    postGameHostMessage(frameRef.current, { type: 'pressEscape' });
+  }, [frameRef]);
   const canRemix = remixable && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
@@ -606,25 +586,25 @@ export function GameTheater({
     >
       {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
           mounted in a stable location and fades it only after demonstrated activity. */}
-      {showCornerMenu && (
+      {shellMenu && (fullscreen || chromeIdle) && (
         <button
           type="button"
           className="theater-reveal-btn"
           aria-label={t('player.menu')}
           title={t('player.menu')}
-          onPointerDown={onMenuPointerDown}
-          onClick={onMenuClick}
+          onClick={openGameMenu}
         >
           <PixelIcon name="menu" size={15} />
           <span className="menu-label">{t('player.menu')}</span>
         </button>
       )}
-      {shellMenu && !fullscreen && chromeIdle && (
+      {!fullscreen && chromeIdle && (
         <button
           type="button"
-          className="theater-reveal-btn theater-chrome-reveal"
+          className={`theater-reveal-btn${shellMenu ? ' theater-chrome-reveal' : ''}`}
           aria-label={t('player.showControls')}
           title={t('player.showControls')}
+          // Click, not pointerdown: press used to land on Exit.
           onClick={revealChrome}
         >
           <PixelIcon name="chevronDown" size={15} />
@@ -728,30 +708,19 @@ export function GameTheater({
                 </button>
                 <div className="theater-more-panel" role="menu">
                   {shellMenu && (
-                    <button
-                      type="button"
-                      className="theater-menu-item theater-game-menu"
-                      role="menuitem"
-                      onPointerDown={onMenuPointerDown}
-                      onClick={onMenuClick}
-                    >
-                      <PixelIcon name="menu" size={13} />
-                      <span className="btn-label">{t('player.menu')}</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="theater-menu-item theater-game-menu"
+                        role="menuitem"
+                        onClick={openGameMenu}
+                      >
+                        <PixelIcon name="menu" size={13} />
+                        <span className="btn-label">{t('player.menu')}</span>
+                      </button>
+                      <div className="theater-menu-divider" role="separator" />
+                    </>
                   )}
-                  <button
-                    type="button"
-                    className="theater-menu-item theater-leave"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreOpen(false);
-                      quitGame();
-                    }}
-                  >
-                    <PixelIcon name="arrowLeft" size={13} />
-                    <span className="btn-label">{t('player.leaveGame')}</span>
-                  </button>
-                  <div className="theater-menu-divider" role="separator" />
                   {howToPlayControl('theater-menu-item howto-menu', 'more')}
                   {agentAvailable ? (
                     <button
@@ -802,13 +771,31 @@ export function GameTheater({
                       {/* Shares the play permalink: someone handed a game link expects
                           to land in the game. The game page shares itself instead. */}
                       <ShareGameButton slug={reportSlug} title={displayTitle} />
-                      <InAppGameReport slug={reportSlug} />
-                      <ReportGameButton slug={reportSlug} title={displayTitle} />
+                      <PlayerGameReport slug={reportSlug} title={displayTitle} />
                     </>
                   )}
+                  <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
+                  <button
+                    type="button"
+                    className="theater-menu-item theater-exit-item theater-mobile-chrome"
+                    role="menuitem"
+                    onClick={onExit}
+                  >
+                    <PixelIcon name="close" size={13} />
+                    <span className="btn-label">{t('player.exitGame')}</span>
+                  </button>
                 </div>
               </div>
             )}
+            <button
+              className="secondary-btn exit-btn theater-desktop-chrome"
+              onClick={onExit}
+              ref={exitRef}
+              aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+            >
+              <PixelIcon name="close" size={14} />
+            </button>
             <button
               type="button"
               className="secondary-btn theater-hide-btn"
@@ -817,15 +804,6 @@ export function GameTheater({
               title={t('player.hideControls')}
             >
               <PixelIcon name="chevronUp" size={15} />
-            </button>
-            <button
-              className="secondary-btn exit-btn"
-              onClick={onExit}
-              ref={exitRef}
-              aria-label={t('player.leaveGame')}
-              title={t('player.leaveGame')}
-            >
-              <PixelIcon name="close" size={14} />
             </button>
           </div>
         </div>

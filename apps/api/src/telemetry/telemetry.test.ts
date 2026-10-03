@@ -3,19 +3,11 @@ import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { createPublishedSlugGate } from '../catalog/published-slugs.js';
 import { InMemoryStore } from '../platform/store.js';
-
 const sessionSecret = 'dev-session-secret-change-me';
 const sessionId = '00000000-0000-4000-8000-000000000000';
-
 function authHeaders(uid = 'g:me') {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
-
-/**
- * A catalog gate over a fixed set of slugs. The published catalog is built from the
- * games repo, so this — not a Firestore submission — is what decides whether a game
- * is real; see the regression test at the bottom for why that distinction matters.
- */
 function gateOver(published: string[], drafts: string[] = []) {
   const entries = [
     ...published.map((slug) => ({ slug, status: 'published' as const })),
@@ -23,7 +15,6 @@ function gateOver(published: string[], drafts: string[] = []) {
   ];
   return createPublishedSlugGate({ client: { getCatalog: async () => entries as never } });
 }
-
 function appWith(store: InMemoryStore, published = ['space-hop'], drafts: string[] = []) {
   return buildApp({
     store,
@@ -31,23 +22,10 @@ function appWith(store: InMemoryStore, published = ['space-hop'], drafts: string
     telemetryRoutes: { publishedSlugs: gateOver(published, drafts) },
   });
 }
-
 function post(app: Awaited<ReturnType<typeof buildApp>>, payload: unknown, headers = authHeaders()) {
   return app.inject({ method: 'POST', url: '/api/telemetry', payload: payload as object, headers });
 }
-
 const today = () => new Date().toISOString().slice(0, 10);
-
-/**
- * Every partition a backdated write could have landed in, oldest first.
- *
- * The handler files each event under the partition of *its own* timestamp, not the
- * flush's, so a deliberately backdated event does not necessarily land in today's.
- * Asserting on `today()` alone made the backdating tests below fail every night
- * between 00:00 and 06:00 UTC: clamped six hours into the past, the event is filed
- * under *yesterday* and the read came back empty. The store is fresh per test, so
- * reading both partitions is exact rather than merely tolerant.
- */
 async function listBackdated(store: InMemoryStore) {
   const todayStr = today();
   const yesterdayStr = new Date(Date.parse(`${todayStr}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
@@ -57,14 +35,12 @@ async function listBackdated(store: InMemoryStore) {
   ]);
   return [...earlier, ...current];
 }
-
 describe('POST /api/telemetry', () => {
   let store: InMemoryStore;
   beforeEach(async () => {
     store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:me' });
   });
-
   it('records a batch against the slug that reported it', async () => {
     const app = await appWith(store);
     const res = await post(app, {
@@ -72,26 +48,21 @@ describe('POST /api/telemetry', () => {
       sessionId,
       events: [{ type: 'game_opened', slots: 3 }, { type: 'play_time', seconds: 15 }, { type: 'game_closed' }],
     });
-
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ accepted: 3 });
-
     const stored = await store.listTelemetryEvents(today(), { slug: 'space-hop' });
     expect(stored.map((event) => event.type)).toEqual(['game_opened', 'play_time', 'game_closed']);
     expect(stored[0]).toMatchObject({ slug: 'space-hop', sessionId, slots: 3 });
     await app.close();
   });
-
   it('stores no player identity — not the uid, not the ip', async () => {
     const app = await appWith(store);
     await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] });
-
     const [event] = await store.listTelemetryEvents(today());
     expect(Object.keys(event).sort()).toEqual(['at', 'sessionId', 'slug', 'type']);
     expect(JSON.stringify(event)).not.toContain('g:me');
     await app.close();
   });
-
   it('timestamps server-side, ignoring any client-sent time', async () => {
     const app = await appWith(store);
     await post(app, {
@@ -100,7 +71,6 @@ describe('POST /api/telemetry', () => {
       // A client claiming its own `at` gets it ignored: the schema has no such field.
       events: [{ type: 'game_opened', at: '1999-01-01T00:00:00.000Z' }],
     });
-
     const [event] = await store.listTelemetryEvents(today());
     expect(Date.parse(event.at)).toBeGreaterThan(Date.parse('2026-01-01T00:00:00.000Z'));
     await app.close();
@@ -246,12 +216,6 @@ describe('POST /api/telemetry', () => {
   });
 
   describe('event timing', () => {
-    /**
-     * The production session that motivated offsets: `game_opened` flushed at once, then
-     * three events generated within the first 15 seconds but not flushed until 5.5
-     * minutes later, when the tab was hidden. Every one of them was stored as having
-     * happened at the flush instant.
-     */
     it('dates events from their own offset rather than from the flush', async () => {
       const app = await appWith(store);
       await post(app, {
@@ -366,15 +330,6 @@ describe('POST /api/telemetry', () => {
     });
   });
 
-  /**
-   * The regression that made this whole path a no-op in production for a day.
-   *
-   * Intake used to resolve the slug to `submissions/{jobId}` and require
-   * `publishedAt`. Of 42 playable games, 8 had a submission document and 2 had
-   * `publishedAt` — so ~95% of real play was accepted with 202 and silently thrown
-   * away. A game in the published catalog must record whether or not this platform
-   * has any memory of it having been commissioned.
-   */
   it('records a published catalog game that has no submission document at all', async () => {
     const app = await appWith(store, ['arena-tag']);
     expect(await store.getSubmissionBySlug('arena-tag')).toBeNull();
@@ -428,4 +383,48 @@ describe('zone_link', () => {
     expect(await store.listTelemetryEvents(today())).toHaveLength(0);
     await app.close();
   });
+});
+
+it('stores bounded device and frame context through the existing telemetry route', async () => {
+  const store = new InMemoryStore();
+  const app = await appWith(store);
+  const performance = {
+    version: 1,
+    source: 'raf',
+    valid: true,
+    elapsedMs: 5000,
+    intervals: [298, 0, 0, 0, 0, 1, 0, 0],
+    maxGapMs: 150,
+    viewportWidth: 390,
+    viewportHeight: 844,
+    canvasWidth: 1170,
+    canvasHeight: 2532,
+    canvasCssWidth: 390,
+    canvasCssHeight: 844,
+    dpr: 3,
+    orientation: 'portrait',
+    state: 'playing',
+    uid: 'secret',
+  };
+  const res = await post(app, {
+    slug: 'space-hop',
+    sessionId,
+    events: [
+      {
+        type: 'game_opened',
+        device: { deviceClass: 'phone', system: 'ios', browser: 'safari', userAgent: 'secret' },
+        artifactVersion: 'a'.repeat(64),
+      },
+      { type: 'alive', frames: 300, performance },
+      { type: 'alive', frames: 300, performance: { ...performance, intervals: [999999] } },
+    ],
+  });
+  expect(res.statusCode).toBe(202);
+  const rows = await store.listTelemetryEvents(today());
+  expect(rows[0].device).toEqual({ deviceClass: 'phone', system: 'ios', browser: 'safari' });
+  expect(rows[0].artifactVersion).toBe('a'.repeat(64));
+  expect(rows[1].performance?.dpr).toBe(3);
+  expect(rows[2].performance).toBeUndefined();
+  expect(JSON.stringify(rows)).not.toContain('secret');
+  await app.close();
 });

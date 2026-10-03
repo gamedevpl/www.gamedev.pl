@@ -1463,6 +1463,7 @@ button:disabled {
 .featured-game-title-link {
   color: inherit;
   text-decoration: none;
+  overflow-wrap: anywhere;
   transition: color 0.15s ease;
 }
 
@@ -1558,16 +1559,56 @@ button:disabled {
 @media (max-width: 768px) {
   .featured-game {
     grid-template-columns: 1fr;
-    margin-top: 16px;
-    margin-bottom: 28px;
+    margin-top: 8px;
+    margin-bottom: 20px;
+  }
+
+  /* 16/10 plus the full controls essay filled a phone. */
+  .featured-game-media {
+    aspect-ratio: 16 / 9;
+  }
+
+  /* Kicker, controls, and author each ate a row under the title. */
+  .featured-game-kicker,
+  .featured-game-meta,
+  .featured-game-author {
+    display: none;
   }
 
   .featured-game-body {
-    padding: 18px 18px 22px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px 14px;
   }
 
   .featured-game-title {
-    font-size: 1.3rem;
+    flex: 1 1 40%;
+    /* 40% keeps play beside the title; a wide pair wraps. */
+    min-width: 40%;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 1.2rem;
+  }
+
+  .featured-game-title-link {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .featured-game-actions {
+    flex: 0 0 auto;
+    margin-top: 0;
+  }
+
+  .more-like-this {
+    flex: 1 0 100%;
+    min-width: 0;
+    margin-top: 2px;
+    padding-top: 8px;
   }
 }
 
@@ -2529,9 +2570,8 @@ body.player-open {
     display: block;
   }
 
-  /* Align the menu with the right edge of the action cluster (exit sits past the
-     hamburger: 44px thumb target + 6px gap). Flush with the trigger alone left a
-     gap under the close control that read as misaligned on phones. */
+  /* Hide is the only thumb past the hamburger. Close is a menu row on a
+     phone, so the panel flushes to that one corner control. */
   .theater-more-panel {
     right: calc(-1 * (44px + 6px));
     min-width: 240px;
@@ -2933,6 +2973,11 @@ body.player-open {
 
   .hero-subheadline {
     font-size: 1rem;
+  }
+
+  /* 48px under the composer was a blank band before the featured card. */
+  .hero-prompt-section {
+    margin-bottom: 12px;
   }
 
   .hero-prompt-card {
@@ -5953,6 +5998,11 @@ button.builder-mode-selector:disabled {
    that players read as disabled. Still not a primary CTA; just clearly tappable. */
 .report-btn {
   text-decoration: none;
+}
+.report-email {
+  color: var(--turquoise);
+  display: block;
+  text-decoration: underline;
 }
 
 .report-btn:hover,

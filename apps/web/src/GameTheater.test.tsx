@@ -158,18 +158,6 @@ describe('GameTheater more menu', () => {
     expect(container.querySelector('.theater-more.is-open')).toBeNull();
   });
 
-  it('leaves the game from the menu, which is the phone path without Escape', async () => {
-    const onExit = vi.fn();
-    await draw({ onExit });
-    const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;
-    expect(more.getAttribute('aria-label')).toBe('Menu');
-    await click(more);
-    const leave = container.querySelector('.theater-leave');
-    expect(leave?.textContent).toContain('Leave game');
-    await click(leave);
-    expect(onExit).toHaveBeenCalledTimes(1);
-  });
-
   it('opens the in-game menu once the game reports a shell menu', async () => {
     const player = await import('./gamePlayer.js');
     const post = vi.spyOn(player, 'postGameHostMessage').mockImplementation(() => undefined);
@@ -596,16 +584,13 @@ describe('GameTheater how-to-play visit telemetry', () => {
       expect(bar.getAttribute('aria-hidden')).toBe('true');
       const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement | null;
       expect(reveal).not.toBeNull();
-      expect(reveal!.getAttribute('aria-label')).toBe('Menu');
-      expect(reveal!.textContent).toContain('Menu');
+      expect(reveal!.getAttribute('aria-label')).toBe('Show controls');
 
       await act(async () => {
         reveal!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
       expect(bar.classList.contains('is-idle')).toBe(false);
       expect(container.querySelector('.theater-reveal-btn')).toBeNull();
-      expect(container.querySelector('.theater-more.is-open')).not.toBeNull();
-      await pressEscape();
       expect(container.querySelector('.theater-more.is-open')).toBeNull();
       await act(async () => {
         vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
@@ -683,6 +668,49 @@ describe('GameTheater how-to-play visit telemetry', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('leaves the game from the phone menu instead of a bar button', async () => {
+    const onExit = vi.fn();
+    await draw({ onExit });
+    const item = container.querySelector('.theater-exit-item') as HTMLButtonElement;
+    expect(item.textContent).toContain('Exit game');
+    expect(item.classList.contains('theater-mobile-chrome')).toBe(true);
+    expect(
+      container.querySelector('.game-theater-actions > .exit-btn')?.classList.contains('theater-desktop-chrome'),
+    ).toBe(true);
+
+    await click(container.querySelector('.theater-more-btn'));
+    await click(item);
+    expect(onExit).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Close off the corner the reveal thumb occupies', async () => {
+    const onExit = vi.fn();
+    await draw({ onExit });
+    const actions = container.querySelector('.game-theater-actions') as HTMLElement;
+    const hide = actions.querySelector('.theater-hide-btn') as HTMLButtonElement;
+    const exit = actions.querySelector(':scope > .exit-btn') as HTMLButtonElement;
+
+    // Hide is the last control, in the same top-right slot as the reveal chevron.
+    expect(actions.lastElementChild).toBe(hide);
+    expect(exit.nextElementSibling).toBe(hide);
+
+    await click(hide);
+    const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement;
+    expect(reveal).not.toBeNull();
+
+    // A press must not swap the corner for Close before the finger lifts.
+    await act(async () => {
+      reveal.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    });
+    expect(container.querySelector('.theater-reveal-btn')).toBe(reveal);
+    expect(onExit).not.toHaveBeenCalled();
+
+    await click(reveal);
+    expect(container.querySelector('.theater-reveal-btn')).toBeNull();
+    expect(container.querySelector('.game-theater-bar')?.classList.contains('is-idle')).toBe(false);
+    expect(onExit).not.toHaveBeenCalled();
   });
 
   it('keeps controls hidden after an explicit hide until the player reveals them', async () => {

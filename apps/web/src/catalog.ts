@@ -67,6 +67,7 @@ export function gamePageHandle(entry: Pick<CatalogEntry, 'creatorHandle'>): stri
 
 /** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */
 export interface PublishedGame {
+  artifactVersion?: string;
   slug: string;
   title: string;
   html: string;

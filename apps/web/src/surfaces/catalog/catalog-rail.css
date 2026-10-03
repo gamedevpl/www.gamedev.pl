@@ -230,6 +230,10 @@
 }
 
 @media (max-width: 768px) {
+  .catalog-rail-section {
+    margin-bottom: 20px;
+  }
+
   .rail-card {
     flex-basis: 156px;
   }

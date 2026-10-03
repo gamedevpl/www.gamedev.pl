@@ -1,3 +1,5 @@
+import { FRAME_MONITOR_BRIDGE } from './frame-monitor-bridge.js';
+
 // Envelope tags distinguish the trusted host from sandbox messages.
 const HOST = 'gdpl-host';
 const PLAYER = 'gdpl-player';
@@ -107,11 +109,7 @@ const BRIDGE = `(function(){
     var r=e&&e.reason;post({type:'error',message:String((r&&r.message)||r||'unhandled rejection').slice(0,200)});
   });
   var frames=0,paused=false,overlay=null,lastAlive=0;
-  // Hold rAF / AudioContext here — GameKit's gdpl-pause only skips update() and
-  // still calls draw(), and many playtest docs were assembled before those listeners
-  // existed. Overlay alone left motion visible through the veil (Studio felt broken).
-  // Patch early (inject in <head>) so games that look up requestAnimationFrame each
-  // frame are held; already-scheduled native callbacks may run once more, then re-enter.
+  // Host pause holds scheduling and audio, including older kits.
   var _raf=window.requestAnimationFrame&&window.requestAnimationFrame.bind(window);
   var _caf=window.cancelAnimationFrame&&window.cancelAnimationFrame.bind(window);
   var _si=window.setInterval.bind(window);
@@ -133,12 +131,86 @@ const BRIDGE = `(function(){
       if(_caf)_caf(id);
     };
   }
+  // iOS WebKit (Safari and Chrome) mutes Web Audio on the ringer channel. playback
+  // is the media channel, and a tap must start a buffer before preventDefault.
+  function setPlaybackSession(){
+    try{
+      var s=navigator.audioSession;
+      if(s&&s.type!=='playback')s.type='playback';
+    }catch(err){}
+  }
+  setPlaybackSession();
+  var primed=typeof WeakSet==='function'?new WeakSet():null;
+  // 0.1s of 8-bit silence. A looping data: WAV opens the media channel without audioSession.
+  var SILENT_WAV='data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+  var iosMedia=null;
+  function stopMedia(){
+    var a=iosMedia;iosMedia=null;
+    if(!a)return;
+    try{a.pause();}catch(err){}
+    try{a.remove();}catch(err){}
+  }
+  function primeMediaElement(){
+    var hasSession=true;
+    try{hasSession=!!navigator.audioSession;}catch(err){hasSession=false;}
+    if(hasSession||iosMedia||paused)return;
+    try{
+      var a=document.createElement('audio');
+      a.setAttribute('playsinline','');
+      a.loop=true;
+      try{a.disableRemotePlayback=true;}catch(err){}
+      a.src=SILENT_WAV;
+      if(typeof a.play!=='function')return;
+      (document.documentElement||document.body).appendChild(a);
+      iosMedia=a;
+      var playP=a.play();
+      if(playP&&typeof playP.then==='function')playP.then(function(){},function(){if(iosMedia===a)stopMedia();});
+    }catch(err){stopMedia();}
+  }
+  function startSilence(c){
+    if(!c||(primed&&primed.has(c))||c.state!=='running')return false;
+    try{
+      var src=c.createBufferSource();
+      src.buffer=c.createBuffer(1,1,22050);
+      src.connect(c.destination);
+      if(src.start)src.start(0);else if(src.noteOn)src.noteOn(0);
+      if(primed)primed.add(c);
+      return true;
+    }catch(err){return false;}
+  }
+  function primeAudio(c){
+    if(!c||paused||c.state==='closed')return;
+    var resumeP=null;
+    try{
+      if(c.state==='interrupted'&&c.suspend)c.suspend();
+      if(c.state!=='running'&&c.resume)resumeP=c.resume();
+    }catch(err){}
+    if(startSilence(c)||!resumeP||typeof resumeP.then!=='function')return;
+    resumeP.then(function(){if(!paused)startSilence(c);},function(){});
+  }
+  function onAudioGesture(){
+    setPlaybackSession();
+    if(paused)return;
+    primeMediaElement();
+    for(var i=0;i<audioCtxs.length;i++)primeAudio(audioCtxs[i]);
+  }
+  // Capture beats a touch control's preventDefault. touchend covers older iOS.
+  addEventListener('pointerdown',onAudioGesture,true);
+  addEventListener('touchend',onAudioGesture,true);
+  addEventListener('keydown',onAudioGesture,true);
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='hidden'){stopMedia();return;}
+    setPlaybackSession();
+    for(var i=0;i<audioCtxs.length;i++)primeAudio(audioCtxs[i]);
+  });
   var OrigAC=window.AudioContext||window.webkitAudioContext;
   if(OrigAC){
     var WrapAC=function(){
-      var ctx=new OrigAC();
+      setPlaybackSession();
+      var ctx=arguments.length?new OrigAC(arguments[0]):new OrigAC();
       try{audioCtxs.push(ctx);}catch(err){}
       if(paused&&ctx.suspend)try{ctx.suspend();}catch(err){}
+      else primeAudio(ctx);
       return ctx;
     };
     WrapAC.prototype=OrigAC.prototype;
@@ -146,9 +218,10 @@ const BRIDGE = `(function(){
     if('webkitAudioContext'in window)window.webkitAudioContext=WrapAC;
   }
   function suspendAudio(yes){
+    if(yes)stopMedia();
     for(var i=0;i<audioCtxs.length;i++){
       var c=audioCtxs[i];
-      try{if(yes){if(c.suspend)c.suspend();}else if(c.resume)c.resume();}catch(err){}
+      try{if(yes){if(c.suspend)c.suspend();}else primeAudio(c);}catch(err){}
     }
   }
   function flushHeldRaf(){
@@ -156,8 +229,7 @@ const BRIDGE = `(function(){
     if(!_raf)return;
     for(var i=0;i<q.length;i++){(function(cb){_raf(function(t){try{cb(t);}catch(err){}});}(q[i].cb));}
   }
-  if(_raf){(function tick(){frames++;requestAnimationFrame(tick);})();}
-  _si(function(){lastAlive=frames;post({type:'alive',frames:frames});frames=0;},5000);
+  ${FRAME_MONITOR_BRIDGE}
   function largestCanvas(){
     var best=null,area=0,list=document.querySelectorAll('canvas');
     for(var i=0;i<list.length;i++){
@@ -257,6 +329,7 @@ const BRIDGE = `(function(){
     var wantSnapshot=!(options&&options.snapshot===false);
     if(next===paused){if(next&&wantSnapshot)sendSnapshot('pause');return;}
     paused=next;
+    perfInvalidate();
     if(paused){
       // Snapshot first — then veil — so the overlay never lands in the PNG.
       var png=wantSnapshot?capturePng():null;
@@ -285,19 +358,6 @@ const BRIDGE = `(function(){
     var ok=(h&&typeof h.restoreState==='function')?!!h.restoreState(data):false;
     post({type:'stateRestored',ok:ok});
   }
-  // Phones have no Escape. The host asks; the game's own listener still owns the menu.
-  function pressEscape(){
-    var target=el('game')||document.body,i,types=['keydown','keyup'];
-    for(i=0;i<types.length;i++){
-      var ev;
-      try{ev=new KeyboardEvent(types[i],{key:'Escape',code:'Escape',bubbles:true,cancelable:true});}
-      catch(err){
-        try{ev=document.createEvent('Event');ev.initEvent(types[i],true,true);ev.key='Escape';ev.code='Escape';}
-        catch(err2){return;}
-      }
-      try{target.dispatchEvent(ev);}catch(err){}
-    }
-  }
   addEventListener('message',function(e){
     var m=e.data||{};
     if(m.source!=='${HOST}')return;
@@ -308,7 +368,7 @@ const BRIDGE = `(function(){
     else if(m.type==='capture'){sendSnapshot('capture');}
     else if(m.type==='snapshotState'){sendStateSnapshot();}
     else if(m.type==='restoreState'){applyStateRestore(m.data);}
-    else if(m.type==='pressEscape'){pressEscape();}
+    else if(m.type==='pressEscape'){var target=el('game')||document.body,n;for(n=0;n<2;n++){try{target.dispatchEvent(new KeyboardEvent(n?'keyup':'keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));}catch(err){}}}
   });
   var lastActivity=0;
   function reportActivity(){

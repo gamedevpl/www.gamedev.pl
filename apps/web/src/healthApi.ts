@@ -2,7 +2,7 @@
 // session cookie authenticates; the API answers 404 rather than 403 to anyone who is
 // not an admin, so `null` here means "not for you" and is not an error worth showing.
 
-import type { GameHealth } from '@gamedevpl/contract';
+import type { GameHealth, FramePerformanceGroup } from '@gamedevpl/contract';
 
 export type { GameHealth };
 
@@ -12,6 +12,12 @@ export interface HealthResponse {
   days: string[];
   truncated: boolean;
   games: GameHealth[];
+  performance?: {
+    groups: FramePerformanceGroup[];
+    truncated: boolean;
+    measuredSessions: number;
+    unmeasuredSessions: number;
+  };
 }
 
 /** Returns null when the caller is not an admin; throws only on a real failure. */
@@ -227,13 +233,6 @@ export async function fetchTelemetryTrends(days: number): Promise<TrendsResponse
   return (await res.json()) as TrendsResponse;
 }
 
-/**
- * The stored output of the nightly scorecard sweep, as written for IL-3.
- *
- * `untrusted` mirrors the server's shape deliberately: the field name is the thing that
- * makes it hard to paste game-authored text into an agent prompt by accident, so the
- * client keeps the same shape rather than flattening it for convenience.
- */
 export interface Scorecard {
   slug: string;
   computedAt: string;

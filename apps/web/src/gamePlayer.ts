@@ -6,6 +6,9 @@ import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { isFromGameFrame, postToGameFrame } from './frameMessage.js';
 import { bindFrameDocumentMessage } from './frameDocument.js';
 
+import { readPlayDevice } from './playDevice.js';
+import { normalizeFramePerformance } from '@gamedevpl/contract';
+
 export { embedGameHtml } from '@gamedevpl/contract';
 const HOST = 'gdpl-host';
 const PLAYER = 'gdpl-player';
@@ -139,18 +142,29 @@ export function useGameTelemetry(
   slots?: number,
   active = true,
   via?: PlayVia,
+  artifactVersion?: string,
 ) {
   const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
-  }, [active]);
+    postToGameFrame(frameRef.current, {
+      source: HOST,
+      type: 'telemetry',
+      active: active && isPlayTimeAccruing(document),
+    });
+  }, [active, frameRef]);
 
   useEffect(() => {
     if (!enabled) return;
 
     const session = new TelemetrySession(slug, crypto.randomUUID());
     openSession = session;
-    session.record({ type: 'game_opened', ...(slots === undefined ? {} : { slots }) });
+    session.record({
+      type: 'game_opened',
+      device: readPlayDevice(navigator, screen, devicePixelRatio),
+      artifactVersion,
+      ...(slots === undefined ? {} : { slots }),
+    });
     // The same moment, counted in the visit stream — deliberately without the slug, so
     // depth ("did this sitting play a second game") is answerable while "which games did
     // this tab play" stays unanswerable.
@@ -164,6 +178,16 @@ export function useGameTelemetry(
     // discarded without ever running cleanup, and a session that ends that way should
     // still have its play time up to the last tick. Each beat is only claimed after
     // the interval has actually elapsed with the page focused.
+    function syncPerformance() {
+      postToGameFrame(frameRef.current, {
+        source: HOST,
+        type: 'telemetry',
+        active: activeRef.current && isPlayTimeAccruing(document),
+      });
+    }
+    window.addEventListener('focus', syncPerformance);
+    window.addEventListener('blur', syncPerformance);
+    document.addEventListener('visibilitychange', syncPerformance);
     const heartbeatSec = 15;
     const timer = window.setInterval(() => {
       if (activeRef.current && isPlayTimeAccruing(document)) {
@@ -181,12 +205,14 @@ export function useGameTelemetry(
         type?: string;
         message?: string;
         frames?: number;
+        performance?: unknown;
         label?: string;
         value?: number;
         outcome?: 'won' | 'lost' | 'quit';
         gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d';
       };
       if (!data || data.source !== PLAYER) return;
+      if (data.type === 'meta' || data.type === 'controls') syncPerformance();
       switch (data.type) {
         case 'error':
           session.record({ type: 'error', message: String(data.message ?? '') });
@@ -194,7 +220,12 @@ export function useGameTelemetry(
         case 'alive':
           // Only while the player is actually watching — frames reported by a
           // backgrounded tab say nothing about whether the game works.
-          if (isPlayTimeAccruing(document)) session.record({ type: 'alive', frames: Number(data.frames ?? 0) });
+          if (activeRef.current && isPlayTimeAccruing(document))
+            session.record({
+              type: 'alive',
+              frames: Number(data.frames ?? 0),
+              performance: normalizeFramePerformance(data.performance),
+            });
           break;
         case 'progress':
           session.record({
@@ -232,6 +263,9 @@ export function useGameTelemetry(
 
     return () => {
       window.clearInterval(timer);
+      window.removeEventListener('focus', syncPerformance);
+      window.removeEventListener('blur', syncPerformance);
+      document.removeEventListener('visibilitychange', syncPerformance);
       window.removeEventListener('message', onMessage);
       document.removeEventListener('visibilitychange', onHide);
       session.record({ type: 'game_closed' });
@@ -239,7 +273,7 @@ export function useGameTelemetry(
       if (openSession === session) openSession = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- via read via closure
-  }, [slug, enabled, slots]);
+  }, [slug, enabled, slots, artifactVersion]);
 }
 
 export type GamePlayerMeta = { title: string; desc: string };
@@ -420,6 +454,7 @@ export function useCreatorPlaytest(frameRef: MutableRefObject<HTMLIFrameElement 
         type?: string;
         message?: string;
         frames?: number;
+        performance?: unknown;
         label?: string;
         png?: string | null;
         paused?: boolean;

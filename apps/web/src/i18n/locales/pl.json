@@ -223,7 +223,7 @@
     "shareCopied": "Skopiowano link",
     "moreActions": "Więcej działań",
     "menu": "Menu",
-    "leaveGame": "Wyjdź z gry",
+    "exitGame": "Wyjdź z gry",
     "hideControls": "Ukryj sterowanie",
     "showControls": "Pokaż sterowanie",
     "byAuthor": "autor: {{author}}",

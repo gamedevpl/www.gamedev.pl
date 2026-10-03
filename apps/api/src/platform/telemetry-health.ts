@@ -2,19 +2,6 @@ import type { GameHealth } from '@gamedevpl/contract';
 export type { GameHealth };
 import type { TelemetryEvent } from './store.js';
 
-/**
- * Turns raw play events into a per-game health picture (docs/improvement-loop-plan.md IL-2).
- *
- * This is the read half of IL-1's capture: until it existed the data was write-only and
- * answering "is this published game broken" meant querying Firestore by hand. It is a
- * pure function over events on purpose — the interesting logic is all in what counts as
- * evidence, and that has to be testable without a database or a clock.
- *
- * Keyed by slug, across all published games rather than per creator: attribution runs
- * through `submissions.ownerUid`, and most catalog games have no submission document at
- * all, so a per-creator view would silently cover a fraction of the catalog.
- */
-
 /** Nominal heartbeat spacing. `alive` and `play_time` are emitted against this. */
 const HEARTBEAT_MS = 5_000;
 /**
@@ -61,6 +48,8 @@ interface SessionState {
   /** Previous event's position, for deciding whether the next tick is continuous. */
   lastOffsetMs: number | undefined;
   lastAtMs: number;
+  lastAliveOffsetMs: number | undefined;
+  lastAliveAtMs: number;
   /** Did any round in this session reach a conclusion? */
   reachedEnd: boolean;
   /** Was a seat issued for a shared world this session? */
@@ -180,6 +169,8 @@ export function summarizeGameHealthDetailed(
         closed: false,
         lastOffsetMs: undefined,
         lastAtMs: Date.parse(ordered[0].at),
+        lastAliveOffsetMs: ordered.find((e) => e.type === 'game_opened')?.msSinceOpen,
+        lastAliveAtMs: Date.parse(ordered[0].at),
         reachedEnd: false,
         zoneAdmitted: false,
         zoneJoined: false,
@@ -204,19 +195,25 @@ export function summarizeGameHealthDetailed(
             break;
           }
           case 'alive': {
-            if (!isContinuous(state, event)) {
+            const gapMs =
+              event.performance?.elapsedMs ??
+              (state.lastAliveOffsetMs !== undefined && event.msSinceOpen !== undefined
+                ? event.msSinceOpen - state.lastAliveOffsetMs
+                : HEARTBEAT_MS);
+            const wallGap = Date.parse(event.at) - state.lastAliveAtMs;
+            state.lastAliveOffsetMs = event.msSinceOpen;
+            state.lastAliveAtMs = Date.parse(event.at);
+            if (
+              event.performance
+                ? !event.performance.valid
+                : !isContinuous(state, event) || wallGap > CONTINUITY_MS || gapMs > CONTINUITY_MS
+            ) {
               resumeTicksIgnored += 1;
               break;
             }
             aliveTicks += 1;
             const frames = event.frames ?? 0;
             if (frames === 0) stalledTicks += 1;
-            // Measure fps against the gap actually observed rather than the nominal
-            // heartbeat, so a slow tick is not mistaken for a slow game.
-            const gapMs =
-              state.lastOffsetMs !== undefined && event.msSinceOpen !== undefined
-                ? event.msSinceOpen - state.lastOffsetMs
-                : HEARTBEAT_MS;
             if (gapMs > 0) fpsSamples.push(frames / (gapMs / 1000));
             break;
           }

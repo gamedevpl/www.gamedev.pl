@@ -1,44 +1,26 @@
-import { ZONE_LINK_STEPS, type ZoneLinkStep } from '@gamedevpl/contract';
+import {
+  normalizePlayDevice,
+  normalizeFramePerformance,
+  normalizeArtifactVersion,
+  type PlayDevice,
+  type FramePerformance,
+  ZONE_LINK_STEPS,
+  type ZoneLinkStep,
+} from '@gamedevpl/contract';
 
 export { ZONE_LINK_STEPS };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-/**
- * Play-session telemetry, browser half (docs/improvement-loop-plan.md IL-1).
- *
- * The funnel events here are emitted by the *app*, not by the game, which is the
- * whole point: a game that reports nothing — or lies — still yields open, duration
- * and error data. Games only get to add depth (`progress`, `score`, `end`), and only
- * once the games-repo telemetry module exists.
- *
- * The session id is a per-open uuid held in memory and never written to a cookie or
- * to localStorage. Two opens of the same game by the same person are two unrelated
- * sessions, by design: this measures games, not people.
- */
-
 export type TelemetryEvent =
-  | { type: 'game_opened'; slots?: number }
+  | { type: 'game_opened'; slots?: number; device?: PlayDevice; artifactVersion?: string }
   | { type: 'play_time'; seconds: number }
   | { type: 'game_closed' }
   | { type: 'error'; message: string }
-  | { type: 'alive'; frames: number }
+  | { type: 'alive'; frames: number; performance?: FramePerformance }
   | { type: 'progress'; label: string; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' }
   | { type: 'score'; value: number }
   | { type: 'end'; outcome: 'won' | 'lost' | 'quit'; gfxBackend?: 'canvas2d' | 'webgl' | 'webgl3d' }
-  /**
-   * How far this open got towards an actually shared world (P3 zones).
-   *
-   * A rung, in the shape `create_step` established: it means "this session reached
-   * here", so each is recorded once and the read side is a funnel. `joined` over
-   * `admitted` is the number worth having — anything below 1 is players who were issued
-   * a seat and ended up alone anyway, which is the one zone failure with no symptom.
-   * The shell falls back to solo play in silence by design, so without this the
-   * difference between a working host and a dead one is invisible in aggregate.
-   *
-   * Emitted by the shell, never accepted from inside the frame. A game that could send
-   * `joined` could report itself multiplayer while sitting alone.
-   */
   | { type: 'zone_link'; step: ZoneLinkStep };
 
 /** Flush when this many events are queued, so a busy session does not sit on data. */
@@ -198,7 +180,14 @@ export class TelemetrySession {
         // A nonsense slot count loses the field, not the open event — the funnel's
         // first step must never depend on an optional detail being well formed.
         const slots = event.slots === undefined ? null : clampInt(event.slots, 1, 8);
-        return slots === null ? { type: 'game_opened' } : { type: 'game_opened', slots };
+        const device = normalizePlayDevice(event.device);
+        const artifactVersion = normalizeArtifactVersion(event.artifactVersion);
+        return {
+          type: 'game_opened',
+          ...(slots === null ? {} : { slots }),
+          ...(device ? { device } : {}),
+          ...(artifactVersion ? { artifactVersion } : {}),
+        };
       }
       case 'play_time': {
         const seconds = clampInt(event.seconds, 1, 3600);
@@ -208,7 +197,8 @@ export class TelemetrySession {
         return { type: 'game_closed' };
       case 'alive': {
         const frames = clampInt(event.frames, 0, 100_000);
-        return frames === null ? null : { type: 'alive', frames };
+        const performance = normalizeFramePerformance(event.performance);
+        return frames === null ? null : { type: 'alive', frames, ...(performance ? { performance } : {}) };
       }
       case 'error': {
         const message = String(event.message ?? '')

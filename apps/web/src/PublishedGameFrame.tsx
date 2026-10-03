@@ -94,15 +94,6 @@ export function PublishedGameFrame({
    * the remix returns the player to the published game rather than to a reload.
    */
   const [remixHtml, setRemixHtml] = useState<string | null>(null);
-  /**
-   * The remix session, held above the panel so closing the sheet does not end it.
-   *
-   * The panel unmounts on Close while the remixed document keeps running, so a
-   * session owned by the panel meant the most natural sequence there is — change
-   * something, close the sheet to play it, find it broken, reopen — came back to
-   * a fresh session with no history and no way back. The session outlives the
-   * sheet because the *change* does.
-   */
   const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
   const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
@@ -125,7 +116,15 @@ export function PublishedGameFrame({
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
   // catalog problem, and this is not the place that would report it.
-  useGameTelemetry(slug, activeFrameRef, trackPlay && html !== null, slots, active, via);
+  useGameTelemetry(
+    slug,
+    activeFrameRef,
+    trackPlay && html !== null && remixHtml === null,
+    slots,
+    active,
+    via,
+    game?.artifactVersion,
+  );
 
   // Account play affinity (signed-in) + device-local recent list (everyone). Both are
   // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.

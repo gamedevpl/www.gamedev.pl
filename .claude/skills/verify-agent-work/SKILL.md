@@ -372,6 +372,26 @@ Two concrete instances of that (observed 2026-07-23):
   and paste the new `gate-attest` SHA. The owner merged within seconds of validate
   flipping green.
 
+- **A green games-repo visual-uplift gate does not prove the picture changed.**
+  Observed (www.gamedev.pl-games #1949–#1963 and #1930, 2026-10-02): every PR had
+  `validate` success, a matching `gate-attest`, and a committed trace classification of
+  RENDER with 0 SNAPSHOT. Native mean absolute RGB delta against the pre-uplift frame
+  was 0.42 for neon-strike-cell (the accepted concept's rain and wet asphalt were
+  absent) and 2.68 for one-more-descent (torch-lit brick in the concept, shipped floor
+  barely moved). An author luminance ROI can clear a self-set ">4" while the frame
+  still reads as the old game; realm-of-shards checked "stronger grass/forest
+  separation" for 15.33 → 15.95. `after-mobile-*.png` was the same git blob as
+  `after-*.png` on all 11 sampled opening frames, so a touch-viewport checkbox can be
+  a copied desktop canvas. Open the native pair or the source|concept|actual triptych
+  and measure the frame. Do not accept the ROI table or the mobile filename as the
+  visual verdict. A later batch (#1969–#1979, 2026-10-03) kept that trap and added a
+  second folder: root `after-mobile-*.png` was still a 640×400 canvas copy (pixel
+  delta 0), while `docs/visual-uplift-review/.../touch-viewport/*-390x844-*.png` was
+  a real page screenshot. Judge the viewport files by size, not by the word "mobile"
+  in the name. Evidence for that batch lives outside `games/<slug>/`. An author can
+  also miss their own +3 (lost-terminal full-pane 33.90→34.47) or ship one mark
+  pixel-identical on purpose (hero opening was ACCEPT, the battle frame moved).
+
 - **Mocked tool calls can hide a schema/parser mismatch.** Observed in CLI chat
   (#1187): one model tool advertised optional `slug` and `request` fields together,
   while the runtime accepted only one per action. Play passed; real edit requests

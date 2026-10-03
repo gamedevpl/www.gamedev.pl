@@ -43,6 +43,10 @@ describe('game theater floating bar', () => {
     expect(idle).toMatch(/transition-delay:\s*0s,\s*0s,\s*700ms/);
   });
 
+  it('lines the phone overflow menu up with the corner hide control', () => {
+    expect(css).toMatch(/right:\s*calc\(-1 \* \(44px \+ 6px\)\)/);
+  });
+
   it('leaves a labeled Menu in the corner that stays a thumb target', () => {
     const reveal = ruleBody('.theater-reveal-btn');
 
