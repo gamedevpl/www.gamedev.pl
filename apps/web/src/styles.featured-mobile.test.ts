@@ -21,24 +21,20 @@ describe('mobile featured slot', () => {
     expect(ruleBody('.hero-prompt-section', 'first')).toMatch(/margin-bottom:\s*48px/);
   });
 
-  it('fits play and a two-line teaser on a phone', () => {
+  it('keeps a phone card to the poster, the title, and play', () => {
     expect(ruleBody('.featured-game-media', 'last')).toMatch(/aspect-ratio:\s*16\s*\/\s*9/);
 
-    const body = ruleBody('.featured-game-body', 'last');
-    expect(body).toMatch(/flex-wrap:\s*wrap/);
+    const hiddenStart = css.lastIndexOf('.featured-game-kicker,');
+    expect(hiddenStart).toBeGreaterThan(-1);
+    const hidden = css.slice(hiddenStart, css.indexOf('}', hiddenStart));
+    expect(hidden).toMatch(/\.featured-game-meta,/);
+    expect(hidden).toMatch(/\.featured-game-author/);
+    expect(hidden).toMatch(/display:\s*none/);
+    expect(ruleBody('.featured-game-kicker', 'first')).toMatch(/display:\s*inline-flex/);
 
-    const title = ruleBody('.featured-game-title', 'last');
-    expect(title).toMatch(/order:\s*2/);
-    expect(title).toMatch(/flex:\s*1\s+1\s+10rem/);
-
-    const actions = ruleBody('.featured-game-actions', 'last');
-    expect(actions).toMatch(/order:\s*3/);
-    expect(actions).toMatch(/margin-top:\s*0/);
-
-    const meta = ruleBody('.featured-game-meta', 'last');
-    expect(meta).toMatch(/order:\s*4/);
-    expect(meta).toMatch(/-webkit-line-clamp:\s*2/);
-
+    expect(ruleBody('.featured-game-body', 'last')).toMatch(/flex-wrap:\s*wrap/);
+    expect(ruleBody('.featured-game-title', 'last')).toMatch(/flex:\s*1\s+1\s+10rem/);
+    expect(ruleBody('.featured-game-actions', 'last')).toMatch(/margin-top:\s*0/);
     expect(ruleBody('.hero-prompt-section', 'last')).toMatch(/margin-bottom:\s*12px/);
   });
 });

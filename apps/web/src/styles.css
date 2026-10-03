@@ -1567,54 +1567,35 @@ button:disabled {
     aspect-ratio: 16 / 9;
   }
 
+  /* Kicker, controls, and author each ate a row under the title. */
+  .featured-game-kicker,
+  .featured-game-meta,
+  .featured-game-author {
+    display: none;
+  }
+
   .featured-game-body {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 10px;
-    padding: 12px 14px 14px;
-  }
-
-  .featured-game-kicker,
-  .featured-game-meta,
-  .featured-game-author,
-  .more-like-this {
-    flex: 1 0 100%;
-    min-width: 0;
-  }
-
-  .featured-game-kicker {
-    order: 1;
+    gap: 8px 10px;
+    padding: 12px 14px;
   }
 
   .featured-game-title {
-    order: 2;
     flex: 1 1 10rem;
     min-width: min(100%, 10rem);
     font-size: 1.2rem;
   }
 
   .featured-game-actions {
-    order: 3;
     flex: 0 0 auto;
     margin-top: 0;
   }
 
-  .featured-game-meta {
-    order: 4;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-  }
-
-  .featured-game-author {
-    order: 5;
-    margin: 0;
-  }
-
   .more-like-this {
-    order: 6;
+    flex: 1 0 100%;
+    min-width: 0;
     margin-top: 2px;
     padding-top: 8px;
   }
