@@ -4,6 +4,7 @@ import { MODERATION_FLAG_REASONS, type ModerationFlagReason } from '@gamedevpl/c
 import { AuthModal } from './AuthModal.js';
 import { useAuth } from './AuthContext.js';
 import { PixelIcon } from './PixelIcon.js';
+import { ReportGameButton } from './ReportGameButton.js';
 import { submitGameReport, type ReportGameError } from './reportGameApi.js';
 
 const REASON_KEYS: Record<ModerationFlagReason, string> = {
@@ -15,7 +16,7 @@ const REASON_KEYS: Record<ModerationFlagReason, string> = {
   other: 'report.inApp.reasonOther',
 };
 
-export function InAppGameReport({ slug }: { slug: string }) {
+export function InAppGameReport({ slug, title }: { slug: string; title: string }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -36,12 +37,8 @@ export function InAppGameReport({ slug }: { slug: string }) {
       setState('sent');
       setNote('');
     } catch (err) {
-      const reportError = err as ReportGameError;
-      if (reportError.status === 429) {
-        setError(t('report.inApp.rateLimited'));
-      } else {
-        setError(t('report.inApp.error'));
-      }
+      const status = (err as ReportGameError).status;
+      setError(t(status === 429 ? 'report.inApp.rateLimited' : 'report.inApp.error'));
       setState('idle');
     }
   };
@@ -62,14 +59,14 @@ export function InAppGameReport({ slug }: { slug: string }) {
           className="secondary-btn report-btn"
           onClick={onToggle}
           aria-expanded={open}
-          aria-label={t('report.inApp.action')}
-          title={user ? t('report.inApp.action') : t('report.inApp.signInToReport')}
+          aria-label={t('report.action')}
+          title={user ? t('report.action') : t('report.inApp.signInToReport')}
         >
           <PixelIcon name="flag" size={13} />
-          <span className="btn-label">{t('report.inApp.action')}</span>
+          <span className="btn-label">{t('report.action')}</span>
         </button>
         {open && user && (
-          <div className="report-popover" role="dialog" aria-label={t('report.inApp.action')}>
+          <div className="report-popover" role="dialog" aria-label={t('report.action')}>
             {state === 'sent' ? (
               <p className="feedback-sent">
                 <PixelIcon name="check" size={13} /> {t('report.inApp.sent')}
@@ -113,6 +110,7 @@ export function InAppGameReport({ slug }: { slug: string }) {
                 {error ? <p className="error">{error}</p> : null}
               </>
             )}
+            <ReportGameButton slug={slug} title={title} labelKey="footer.reportIllegal" plain />
           </div>
         )}
       </div>

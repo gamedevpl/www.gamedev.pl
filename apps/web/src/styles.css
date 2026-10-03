@@ -5926,6 +5926,11 @@ button.builder-mode-selector:disabled {
 .report-btn {
   text-decoration: none;
 }
+.report-email {
+  color: var(--turquoise);
+  display: block;
+  text-decoration: underline;
+}
 
 .report-btn:hover,
 .report-btn:focus-visible {

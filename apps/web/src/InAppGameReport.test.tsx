@@ -40,7 +40,7 @@ afterEach(() => {
 async function draw() {
   root = createRoot(container);
   await act(async () => {
-    root!.render(<InAppGameReport slug="brick-storm" />);
+    root!.render(<InAppGameReport slug="brick-storm" title="Brick Storm" />);
   });
 }
 
@@ -72,13 +72,13 @@ describe('InAppGameReport', () => {
   it('signed in, clicking the control opens the report form with a reason picker', async () => {
     authState.user = { uid: 'g:me' };
     await draw();
-
     await act(async () => {
       toggleButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(container.querySelector('.report-reason-select')).not.toBeNull();
     expect(container.querySelector('.feedback-input')).not.toBeNull();
+    expect(container.querySelector('a.report-email')?.getAttribute('href') ?? '').toMatch(/^mailto:/);
   });
 
   it('submits the chosen reason and trimmed note, then shows confirmation', async () => {

@@ -2,23 +2,20 @@ import { useTranslation } from 'react-i18next';
 import { CONTACT_EMAIL, SERVICE_URL } from './legal/operator.js';
 import { PixelIcon } from './PixelIcon.js';
 
-/**
- * Notice-and-action, minimum viable (DSA art. 16).
- *
- * Every hosting provider must let anyone — account or not — flag content they believe
- * is illegal, and a notice only obliges us to act if it is precise enough to act on:
- * why it is illegal, where it is, who is reporting, and a good-faith statement. So the
- * mail is pre-filled with those four headings rather than opening an empty message and
- * hoping. Article 16 applies regardless of company size; the micro-enterprise
- * exemption in art. 19 covers the platform tier above this, not this.
- *
- * A mailto is the honest MVP: it genuinely reaches a human, and it needs no mailbox we
- * do not already have to run. Its weakness is that receipt confirmation and the
- * statement of reasons are manual — the in-product form that fixes this is Phase 2 of
- * legal-compliance-plan.md in the private www.gamedev.pl-ops repo.
- */
-export function ReportGameButton({ slug, title }: { slug: string; title: string }) {
+// DSA art. 16 notice, prefilled so a report can be acted on.
+export function ReportGameButton({
+  slug,
+  title,
+  labelKey = 'report.action',
+  plain = false,
+}: {
+  slug: string;
+  title: string;
+  labelKey?: 'report.action' | 'footer.reportIllegal';
+  plain?: boolean;
+}) {
   const { t } = useTranslation();
+  const label = t(labelKey);
 
   const gameUrl = `${SERVICE_URL}/play/${slug}`;
   const subject = t('report.mailSubject', { title, slug });
@@ -36,18 +33,21 @@ export function ReportGameButton({ slug, title }: { slug: string; title: string 
     '',
     t('report.goodFaith'),
   ].join('\n');
+  const href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  if (plain)
+    return (
+      <a className="report-email" href={href}>
+        {label}
+      </a>
+    );
 
   // Styled as a real secondary control (not a muted ghost link): players kept reading
   // the old quiet colour as "disabled", which made the DSA path look broken.
   return (
-    <a
-      className="secondary-btn report-btn"
-      href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
-      aria-label={t('report.action')}
-      title={t('report.action')}
-    >
+    <a className="secondary-btn report-btn" href={href} aria-label={label} title={label}>
       <PixelIcon name="flag" size={13} />
-      <span className="btn-label">{t('report.action')}</span>
+      <span className="btn-label">{label}</span>
     </a>
   );
 }
