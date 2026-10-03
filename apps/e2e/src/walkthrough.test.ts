@@ -212,24 +212,18 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
 
   it('offers a reportable path for illegal content (DSA art. 16)', async () => {
     const { slug } = singlePlayer();
-    // Report lives on the theater chrome (More menu), not the preview page.
     await openPlayTheater(page, slug, 5_000);
-
-    // The theater bar stays visible throughout play, so the report path in More
-    // never requires recovering hidden chrome first.
     await page.locator('.game-theater-bar').waitFor({ state: 'visible' });
-
-    // A mailto, not a button — the honest MVP per ReportGameButton.tsx. The four
-    // headings are what makes a notice actionable under art. 16, so an empty mail
-    // body would technically "have a report path" and still fail the obligation.
-    const href = await page.locator('a.report-btn').getAttribute('href');
+    // Signed-in players open the one report row; the notice is inside it.
+    await page.locator('.theater-more-btn').click();
+    await page.locator('.report-widget .report-btn').click();
+    const href = await page.locator('a.report-email').getAttribute('href');
     expect(href).toMatch(/^mailto:/);
     const decoded = decodeURIComponent(href ?? '');
     expect(decoded).toContain(`/play/${slug}`); // where
     expect(decoded).toMatch(/illegal/i); // why
     expect(decoded).toMatch(/name and email/i); // who
     expect(decoded).toMatch(/good faith/i); // good-faith statement
-
     watcher.drain();
   });
 });
