@@ -1,16 +1,20 @@
 #panel-resize {
-  position: absolute;
-  z-index: 2;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  position: fixed;
+  z-index: 5;
+  top: 84px;
+  right: calc(12px + min(var(--panel-width, 390px), calc(100vw - 24px)));
   width: 10px;
+  height: calc(var(--height) - 98px - var(--notice-space, 0px));
   cursor: ew-resize;
   touch-action: none;
 }
 body[data-dock='left'] #panel-resize {
-  left: auto;
-  right: 0;
+  right: auto;
+  left: calc(12px + min(var(--panel-width, 390px), calc(100vw - 24px)));
+}
+#panel[hidden] + #panel-resize,
+body[data-intake='true'] #panel-resize {
+  display: none;
 }
 #panel-resize::after {
   content: '';
@@ -21,7 +25,7 @@ body[data-dock='left'] #panel-resize {
   height: 48px;
   margin-top: -24px;
   border-radius: 2px;
-  background: var(--panel-border);
+  background: #7d8d98;
   opacity: 0;
   transition: opacity 0.15s;
 }
