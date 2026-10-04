@@ -85,6 +85,13 @@ window; access revision participates in the cache key. Credentials are
 verified on every call. Narrowing a filter cannot restore rows dropped by a bounded
 scan. Use shorter periods if `scanTruncated` is true.
 
+Store-lane liveness comes from the publication registry. Repo-lane liveness comes
+from the same catalog gate used by telemetry intake, never a historical submission's
+`publishedAt`. A missing repo catalog gate refuses the read. Catalog changes retain
+the gate's propagation delay (60 seconds with the snapshot source, 10 minutes with
+the GitHub fallback) and its stale-on-error behavior; this is separate from the
+10-minute aggregate cache.
+
 FPS measures iframe rAF cadence, with an optional GameKit presented-frame counter.
 It is not GPU time or proof that pixels changed. Percentiles are upper bounds from
 histograms. Devices are coarse browser classifications; physical phone performance

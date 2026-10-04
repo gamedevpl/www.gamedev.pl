@@ -507,14 +507,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // The agent's wire and the MCP tools over it, mounted where the route table lives.
-
   const { agentSurface } = submissionSeams;
 
   await registerAgentChannelRoutes(app, { ...agentChannelOptions, ...agentSurface.channel, store });
 
   // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret
   // and store — sessionKey is derived from the round key, never a new creator credential.
-  const readGamePerformance = createCreatorPerformanceReader(store);
+  const repoPublishedSlugs = await createPublishedSlugGateFromEnv(undefined, snapshotReader);
+  const readGamePerformance = createCreatorPerformanceReader(store, Date.now, repoPublishedSlugs);
   registerCreatorPerformanceRoute(app, readGamePerformance);
   await registerMcpServerRoutes(app, {
     readGamePerformance,
@@ -578,7 +578,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // self-build games (never in catalog.json) are visible to the same callers the
   // /play route already serves. Call-site overrides still win via the spreads below.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
-    repoGate: await createPublishedSlugGateFromEnv(undefined, snapshotReader),
+    repoGate: repoPublishedSlugs,
     store,
   });
   await registerTelemetryRoutes(app, {

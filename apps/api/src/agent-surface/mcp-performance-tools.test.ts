@@ -32,6 +32,7 @@ it('advertises and reads production aggregates with creator/OAuth credentials wi
   await store.createSubmission(1, 'g:owner', 'Published');
   await store.setSubmissionSlug(1, 'space-hop');
   await store.setSubmissionPublishedAt(1, new Date().toISOString());
+  await store.setPublication({ slug: 'space-hop', state: 'published', currentVersion: 'v1' });
   const app = await buildApp({
     store,
     sessionSecret: SESSION_SECRET,

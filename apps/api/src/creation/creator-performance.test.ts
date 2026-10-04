@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '../store/in-memory.js';
 import { createCreatorPerformanceReader, PERFORMANCE_CACHE_MS } from './creator-performance.js';
 import type { TelemetryEvent } from '../platform/store.js';
-import type { GamePerformanceQuery } from '@gamedevpl/contract';
+import type { CatalogEntry, GamePerformanceQuery } from '@gamedevpl/contract';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 
@@ -35,18 +35,113 @@ const row = (sessionId: string, extras: Partial<TelemetryEvent> = {}): Telemetry
   performance,
   ...extras,
 });
-async function fixture() {
+async function fixture(lane: 'store' | 'repo' = 'store') {
   const store = new InMemoryStore();
   await store.upsertUser({ uid });
   await store.upsertUser({ uid: 'g:other' });
   await store.createSubmission(1, uid, 'Space Hop');
   await store.setSubmissionSlug(1, query.slug);
   await store.setSubmissionPublishedAt(1, `${date}T00:00:00Z`);
+  if (lane === 'store')
+    await store.setPublication({
+      slug: query.slug,
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: `${date}T00:00:00Z`,
+    });
   await store.ensureGameAccess(query.slug, uid, `${date}T00:00:00Z`, `${date}T00:00:00Z`);
   return store;
 }
 
 describe('creator performance service', () => {
+  it.each(['published', 'archived', 'disabled'])(
+    'uses the live snapshot gate for a %s repo game over HTTP',
+    async (status) => {
+      const store = await fixture('repo');
+      const catalog: CatalogEntry[] = [
+        {
+          slug: query.slug,
+          title: 'Space Hop',
+          status,
+          genre: 'arcade',
+          controls: 'keyboard',
+          media: null,
+          multiplayer: null,
+          saves: null,
+          world: null,
+          sensing: null,
+          editor: null,
+          orientation: 'any',
+          submittedBy: null,
+        },
+      ];
+      const secret = 'session-secret-for-performance-test';
+      const app = await buildApp({
+        store,
+        sessionSecret: secret,
+        submissionRoutes: {
+          snapshotReader: {
+            getPointer: async () => null,
+            getCatalog: async () => catalog,
+            getCatalogFresh: async () => catalog,
+            getGame: async () => null,
+            getMedia: async () => null,
+          },
+        },
+      });
+      const scan = vi.spyOn(store, 'listTelemetryEvents');
+      try {
+        const response = await app.inject({
+          url: '/api/me/studio/performance?slug=space-hop',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, secret)}` },
+        });
+        expect(response.statusCode).toBe(status === 'published' ? 200 : 404);
+        if (status !== 'published') expect(scan).not.toHaveBeenCalled();
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it('fails closed for a repo game without a catalog gate despite historical publishedAt', async () => {
+    const store = await fixture('repo');
+    const scan = vi.spyOn(store, 'listTelemetryEvents');
+    const read = createCreatorPerformanceReader(store);
+    expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
+    expect(scan).not.toHaveBeenCalled();
+  });
+
+  it.each(['scan', 'cache'] as const)(
+    'rechecks repo catalog status after a %s and discards withdrawn data',
+    async (mode) => {
+      const store = await fixture('repo');
+      let live = false;
+      const gate = { isPublished: vi.fn(async () => live) };
+      const read = createCreatorPerformanceReader(store, () => Date.parse(`${date}T12:00:00Z`), gate);
+      const scan = vi.spyOn(store, 'listTelemetryEvents');
+      expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
+      expect(scan).not.toHaveBeenCalled();
+      live = true;
+      if (mode === 'cache') {
+        await store.appendTelemetryEvents(date, [row('old')]);
+        expect((await read(uid, query)).ok).toBe(true);
+        gate.isPublished.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      } else {
+        scan.mockImplementationOnce(async () => {
+          live = false;
+          return [row('old')];
+        });
+      }
+      expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
+      expect(scan).toHaveBeenCalledTimes(1);
+      live = true;
+      scan.mockResolvedValue([row('new', { frames: 100 })]);
+      const afterRepublish = await read(uid, query);
+      expect(afterRepublish.ok && afterRepublish.report.groups[0]!.rafFps).toBe(20);
+      expect(scan).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('shares a bounded scan across cohort/build filters and returns only aggregates', async () => {
     const store = await fixture();
     const build = 'a'.repeat(64);

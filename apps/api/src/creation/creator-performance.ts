@@ -8,6 +8,7 @@ import { summarizeFramePerformance } from '../platform/frame-performance.js';
 import { recentPartitions } from '../platform/telemetry-health.js';
 import { ownsGame, resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isPublished } from '../platform/publication-state.js';
+import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 import { scanOwnedSlugs, spendStudioHealthScan, StudioHealthBudgetError } from './studio-health-scan.js';
@@ -66,14 +67,16 @@ function formatReport(window: Window, query: GamePerformanceQuery): GamePerforma
   };
 }
 
-async function isLiveGame(store: Store, slug: string): Promise<boolean> {
+async function isLiveGame(store: Store, slug: string, repoGate: PublishedSlugGate | null): Promise<boolean> {
   const publication = await store.getPublication(slug);
-  return publication
-    ? isPublished(publication)
-    : (await store.listSubmissionsBySlug(slug)).some((record) => record.publishedAt);
+  return publication ? isPublished(publication) : ((await repoGate?.isPublished(slug)) ?? false);
 }
 
-export function createCreatorPerformanceReader(store: Store, now: () => number = Date.now): ReadGamePerformance {
+export function createCreatorPerformanceReader(
+  store: Store,
+  now: () => number = Date.now,
+  repoGate: PublishedSlugGate | null = null,
+): ReadGamePerformance {
   if (!caches.has(store)) caches.set(store, new Map());
   if (!inflight.has(store)) inflight.set(store, new Map());
   return async (uid, query) => {
@@ -81,11 +84,14 @@ export function createCreatorPerformanceReader(store: Store, now: () => number =
     if (!user || user.tier === 'blocked') return { ok: false, code: 'not_owner' };
     const access = await resolveGameAccess(store, query.slug, now);
     if (!ownsGame(access, uid)) return { ok: false, code: 'not_owner' };
-    if (!(await isLiveGame(store, query.slug))) return { ok: false, code: 'not_published' };
     const days = recentPartitions(query.days, now());
     const key = [uid, query.slug, access.accessRevision, days.join(',')].join('|');
     const cache = caches.get(store)!;
     const running = inflight.get(store)!;
+    if (!(await isLiveGame(store, query.slug, repoGate))) {
+      cache.delete(key);
+      return { ok: false, code: 'not_published' };
+    }
     let window = cache.get(key);
     let pending: Promise<Window> | undefined;
     try {
@@ -106,7 +112,7 @@ export function createCreatorPerformanceReader(store: Store, now: () => number =
         cache.delete(key);
         return { ok: false, code: 'not_owner' };
       }
-      if (!(await isLiveGame(store, query.slug))) {
+      if (!(await isLiveGame(store, query.slug, repoGate))) {
         cache.delete(key);
         return { ok: false, code: 'not_published' };
       }
