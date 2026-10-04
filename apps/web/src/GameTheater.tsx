@@ -391,8 +391,18 @@ export function GameTheater({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      notePlayerActivity();
+      const target = event.target;
+      const isEditable =
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (!isEditable) {
+        notePlayerActivity();
+      }
       if (event.key === 'Escape') {
+        if (isEditable) {
+          (target as HTMLElement).blur();
+          return;
+        }
         // Innermost surface first: the card, then the menu, then leaving the game.
         if (howToOpenRef.current) {
           closeHowTo();
@@ -509,6 +519,8 @@ export function GameTheater({
         className={className}
         onClick={() => {
           setMoreOpen(false);
+          setChromeManuallyHidden(false);
+          setChromeIdle(false);
           setRemixOpenNonce((nonce) => nonce + 1);
           // Recorded at the door rather than in the panel, because only the door
           // knows which one it was. The panel still records `opened` for the path
@@ -584,24 +596,10 @@ export function GameTheater({
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
-          mounted in a stable location and fades it only after demonstrated activity. */}
-      {shellMenu && (fullscreen || chromeIdle) && (
-        <button
-          type="button"
-          className="theater-reveal-btn"
-          aria-label={t('player.menu')}
-          title={t('player.menu')}
-          onClick={openGameMenu}
-        >
-          <PixelIcon name="menu" size={15} />
-          <span className="menu-label">{t('player.menu')}</span>
-        </button>
-      )}
       {!fullscreen && chromeIdle && (
         <button
           type="button"
-          className={`theater-reveal-btn${shellMenu ? ' theater-chrome-reveal' : ''}`}
+          className="theater-reveal-btn"
           aria-label={t('player.showControls')}
           title={t('player.showControls')}
           // Click, not pointerdown: press used to land on Exit.
@@ -832,7 +830,7 @@ export function GameTheater({
             initialRemixRequest={initialRemixRequest}
             painterNonce={painterNonce}
             onRemixCapabilities={onRemixCapabilities}
-            theaterChromeHidden={chromeIdle}
+            theaterChromeHidden={chromeManuallyHidden}
             onRevealChrome={revealChrome}
           />
         ) : agentBridge === undefined ? (

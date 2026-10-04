@@ -181,14 +181,11 @@ describe('GameTheater more menu', () => {
     }
   });
 
-  it('keeps that Menu after the bar fades, and a separate control brings the bar back', async () => {
+  it('keeps the reveal control on the right after the bar fades', async () => {
     vi.useFakeTimers();
-    const player = await import('./gamePlayer.js');
-    const post = vi.spyOn(player, 'postGameHostMessage').mockImplementation(() => undefined);
     try {
       await draw();
       await act(async () => {
-        window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }));
         (container.querySelector('iframe') as HTMLIFrameElement).focus();
         window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'pointer' }, origin: 'null' }));
       });
@@ -197,17 +194,12 @@ describe('GameTheater more menu', () => {
       });
       const bar = container.querySelector('.game-theater-bar') as HTMLElement;
       expect(bar.classList.contains('is-idle')).toBe(true);
-      const menu = container.querySelector('.theater-reveal-btn:not(.theater-chrome-reveal)') as HTMLButtonElement;
-      expect(menu.textContent).toContain('Menu');
-      await click(menu);
-      expect(bar.classList.contains('is-idle')).toBe(true);
-      expect(container.querySelector('.theater-more.is-open')).toBeNull();
-      expect(post).toHaveBeenCalledWith(expect.anything(), { type: 'pressEscape' });
-      await click(container.querySelector('.theater-chrome-reveal'));
+      expect(container.querySelectorAll('.theater-reveal-btn').length).toBe(1);
+      const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement;
+      expect(reveal.classList.contains('theater-chrome-reveal')).toBe(false);
+      await click(reveal);
       expect(bar.classList.contains('is-idle')).toBe(false);
-      expect(container.querySelector('.theater-chrome-reveal')).toBeNull();
     } finally {
-      post.mockRestore();
       vi.useRealTimers();
     }
   });
