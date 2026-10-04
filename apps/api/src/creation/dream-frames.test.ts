@@ -25,10 +25,12 @@ describe('buildDreamPrompt', () => {
     expect(prompt).toContain('- HUD element 2: the rectangle from x=700, y=16 to x=884, y=56');
   });
 
-  it('drops the lock rule for a declared-empty HUD but still forbids new text', () => {
+  it('asks the model to find and lock the UI itself when no HUD is declared', () => {
     const prompt = buildDreamPrompt({ ...base, hudRegions: [] });
     expect(prompt).not.toContain('HUD LOCK RULE');
-    expect(prompt).toContain('Do not add any text');
+    expect(prompt).toContain('UI LOCK RULE');
+    expect(prompt).toContain('find every piece of the game');
+    expect(prompt).toContain('must not add any new text');
     expect(prompt).toContain('same size as the input');
   });
 });

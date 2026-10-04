@@ -56,13 +56,60 @@ describe('createDreamJob', () => {
   });
 
   it('runs once per version, even when the first run produced nothing', async () => {
-    const { store, run } = await harness({ hud: undefined });
-    expect(await run()).toBe('no_hud');
+    const { store, run } = await harness({ hud: [], frame: null });
+    expect(await run()).toBe('no_frames');
     expect(await run()).toBe('already_ran');
     const refreshed = await store.getSubmission(7);
     expect(refreshed?.dreamRun?.version).toBe('v1');
     await store.setSubmissionPreviewVersion(7, 'v2');
-    expect(await run({ version: 'v2' })).toBe('no_hud');
+    expect(await run({ version: 'v2', screenshotPath: undefined })).toBe('no_screenshot');
+  });
+
+  it('dreams a game that declares no HUD, letting the model find the UI', async () => {
+    const { store, frames, run } = await harness({ hud: undefined });
+    expect(await run()).toBe('posted');
+    expect(frames.requests.map((request) => request.hudRegions)).toEqual([[], []]);
+    expect(await store.listCreatorMessages(7)).toHaveLength(1);
+  });
+
+  it('waits out image-model throttling and still posts', async () => {
+    let calls = 0;
+    const { run, waits } = await harness({
+      hud: [],
+      frame: () => {
+        calls += 1;
+        // Two refusals per frame, as production sees.
+        if (calls % 3 !== 0) throw Object.assign(new Error('RESOURCE_EXHAUSTED'), { status: 429 });
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    expect(await run()).toBe('posted');
+    expect(calls).toBe(6);
+    expect(waits).toEqual([15_000, 30_000, 15_000, 30_000]);
+  });
+
+  it('gives up on a frame after the last throttled attempt', async () => {
+    const { frames, run, waits } = await harness({
+      hud: [],
+      frame: () => {
+        throw new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}');
+      },
+    });
+    expect(await run()).toBe('no_frames');
+    expect(frames.requests).toHaveLength(8);
+    expect(waits).toEqual([15_000, 30_000, 45_000, 15_000, 30_000, 45_000]);
+  });
+
+  it('does not retry a frame that failed for a reason other than throttling', async () => {
+    const { frames, run, waits } = await harness({
+      hud: [],
+      frame: () => {
+        throw new Error('safety block');
+      },
+    });
+    expect(await run()).toBe('no_frames');
+    expect(frames.requests).toHaveLength(2);
+    expect(waits).toEqual([]);
   });
 
   it('skips a delivery whose card was already posted, without touching the store', async () => {

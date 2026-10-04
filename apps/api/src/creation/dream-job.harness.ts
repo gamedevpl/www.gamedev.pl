@@ -53,6 +53,7 @@ export async function harness(params: {
       : params.frame,
   );
   const posted: number[] = [];
+  const waits: number[] = [];
   const deps: DreamJobDeps = {
     store,
     gamesStore: { getDerivedArtifact: async (_slug, _version, name) => artifacts[name] ?? null },
@@ -74,11 +75,13 @@ export async function harness(params: {
     log: params.log ?? log,
     now: () => Date.parse('2026-09-07T12:00:00.000Z'),
     // Never a real timer: the cleanup backoff would hold the suite.
-    wait: async () => {},
+    wait: async (ms) => {
+      waits.push(ms);
+    },
     onPosted: (jobId) => posted.push(jobId),
   };
   const job = createDreamJob(deps);
   const run = (overrides: Partial<{ version: string; screenshotPath?: string }> = {}): Promise<DreamOutcome> =>
     job.runForVersion({ record, version: 'v1', screenshotPath: 'media/opening.png', ...overrides });
-  return { store, record, job, frames, ideas: ideaGenerator, posted, run };
+  return { store, record, job, frames, ideas: ideaGenerator, posted, waits, run };
 }

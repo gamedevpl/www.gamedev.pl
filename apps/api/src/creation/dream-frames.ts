@@ -48,9 +48,10 @@ export function buildDreamPrompt(request: DreamFrameRequest): string {
 
 CHANGE: ${request.direction}
 `;
+  // Builders rarely declare a HUD; the model locates it instead.
   if (request.hudRegions.length === 0) {
     return `${intro}
-Do not add any text, labels, numbers or UI of your own. Keep the exact art style, camera, proportions and aspect ratio of the original, and keep the output the same size as the input.`;
+UI LOCK RULE. Before changing anything, find every piece of the game's own user interface in this screenshot yourself: all on-screen text, numbers, scores, timers, labels, buttons, cards in hand, panels, bars, icons, menus and their backgrounds. Treat every one of them as a locked, fully opaque top layer: reproduce it exactly — same text, same numbers, same position, same size, same colours — drawn ON TOP of everything else. Nothing you add or change may overlap, tint, blur, dim, or show through any UI element, and you must not add any new text, labels, numbers or UI of your own. Change only the game world beneath the UI. Keep the exact art style, camera, proportions and aspect ratio of the original, and keep the output the same size as the input.`;
   }
   const regions = request.hudRegions.map(describeRegion).join('\n');
   return `${intro}
