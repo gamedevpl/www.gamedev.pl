@@ -873,10 +873,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   if (submissionTokenSecret) await registerLocalActivityRoutes(app, store, submissionTokenSecret);
   await registerCreatorStudioRoutes(app, {
     store,
+    repoPublishedSlugs,
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
-    // N1: inject cross-bucket build-rail reads.
     isPresenceEventText: isMcpPresenceEventText,
     toRecentBuilds,
   });

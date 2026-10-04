@@ -47,6 +47,7 @@ const DEFAULT_BUCKET = 'platform';
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
   'creator-performance': 'creation',
+  'game-liveness': 'creation',
   'creator-performance-route': 'creation',
   'game-performance-query': 'platform',
   'mcp-performance-tools': 'agent-surface',

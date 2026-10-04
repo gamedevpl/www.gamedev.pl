@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
+import { isLiveGame, type RepoPublishedSlugs } from './game-liveness.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
@@ -65,6 +66,7 @@ const ShelfQuerySchema = z.object({
 
 export interface CreatorStudioRoutesOptions {
   store: Store;
+  repoPublishedSlugs?: RepoPublishedSlugs | null;
   /** Read manifests to learn which games ship an editor definition (EditorKit). */
   gamesStore?: GamesStore;
   /** Mints status tokens so the studio can deep-link into the build page. */
@@ -169,14 +171,14 @@ export async function registerCreatorStudioRoutes(
       );
     }
 
-    // publishedAt/catalogPublishedAt are history and stay; liveness is getPublication's call.
+    // Keep publication history; resolve liveness through the current lane.
     const notLiveSlugs = new Set<string>();
     await Promise.all(
       shelf
         .filter(({ tip, catalogPublishedAt }) => tip.slug && (tip.publishedAt || catalogPublishedAt))
         .map(async ({ tip }) => {
-          const publication = await store.getPublication(tip.slug as string);
-          if (publication && !isPublished(publication)) notLiveSlugs.add(tip.slug as string);
+          if (!(await isLiveGame(store, tip.slug as string, options.repoPublishedSlugs ?? null)))
+            notLiveSlugs.add(tip.slug as string);
         }),
     );
 

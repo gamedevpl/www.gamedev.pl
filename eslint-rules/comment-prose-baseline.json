@@ -129,7 +129,7 @@
     "apps/api/src/creation/creator-profile-routes.test.ts": 42,
     "apps/api/src/creation/creator-profile-routes.ts": 284,
     "apps/api/src/creation/creator-studio.test.ts": 141,
-    "apps/api/src/creation/creator-studio.ts": 1101,
+    "apps/api/src/creation/creator-studio.ts": 936,
     "apps/api/src/creation/editor-assist.test.ts": 81,
     "apps/api/src/creation/editor-assist.ts": 561,
     "apps/api/src/creation/editor-contract.test.ts": 126,

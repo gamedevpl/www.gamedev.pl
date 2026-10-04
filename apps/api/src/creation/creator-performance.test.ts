@@ -80,6 +80,7 @@ describe('creator performance service', () => {
         store,
         sessionSecret: secret,
         submissionRoutes: {
+          submissionTokenSecret: 'performance-test-submission-secret',
           snapshotReader: {
             getPointer: async () => null,
             getCatalog: async () => catalog,
@@ -97,6 +98,12 @@ describe('creator performance service', () => {
         });
         expect(response.statusCode).toBe(status === 'published' ? 200 : 404);
         if (status !== 'published') expect(scan).not.toHaveBeenCalled();
+        const shelf = await app.inject({
+          url: '/api/me/studio',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, secret)}` },
+        });
+        expect(shelf.statusCode).toBe(200);
+        expect(shelf.json().games[0].live).toBe(status === 'published' ? undefined : false);
       } finally {
         await app.close();
       }
