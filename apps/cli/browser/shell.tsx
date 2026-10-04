@@ -61,6 +61,7 @@ export function PlayShell() {
           aria-label="Resize conversation"
           aria-valuemin={300}
           aria-valuemax={900}
+          aria-valuenow={390}
           tabIndex={0}
           title="Drag to resize · double-click to reset"
         />
