@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- A local Claude Code task can read the Creator Kit at the checkout root, and no longer reaches for your claude.ai gamedev.pl connector or other ambient MCP servers mid-task.
+- A local Claude Code task can read the Creator Kit at the checkout root, and no longer reaches for your claude.ai gamedev.pl connector or other ambient MCP servers mid-task (#1629).
 
 ## 0.23.1 — 2026-10-02
 
