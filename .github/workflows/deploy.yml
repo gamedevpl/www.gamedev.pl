@@ -227,6 +227,7 @@ jobs:
           CODE_SURFACE: ${{ vars.CODE_SURFACE }}
           CLI_CHAT_MODEL: ${{ vars.CLI_CHAT_MODEL }}
           CLI_SURFACE: ${{ vars.CLI_SURFACE }}
+          CREATOR_PERFORMANCE_MCP: ${{ vars.CREATOR_PERFORMANCE_MCP }}
           DIGEST_SWEEP_AUDIENCE: ${{ vars.DIGEST_SWEEP_AUDIENCE }}
           DISPATCH_REAPER_AUDIENCE: ${{ vars.DISPATCH_REAPER_AUDIENCE }}
           EDITORKIT_V2: ${{ vars.EDITORKIT_V2 }}
@@ -536,6 +537,11 @@ jobs:
           CLI_SURFACE_VAL="${CLI_SURFACE}"
           if [ -n "$CLI_SURFACE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|CLI_SURFACE=${CLI_SURFACE_VAL}"
+          fi
+
+          CREATOR_PERFORMANCE_MCP_VAL="${CREATOR_PERFORMANCE_MCP}"
+          if [ -n "$CREATOR_PERFORMANCE_MCP_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|CREATOR_PERFORMANCE_MCP=${CREATOR_PERFORMANCE_MCP_VAL}"
           fi
 
           # MCP Apps views (SEP-1865) on /api/mcp: a ui:// resource registry and _meta.ui

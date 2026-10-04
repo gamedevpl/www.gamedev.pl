@@ -95,5 +95,6 @@ including rows captured before sign-in. Bounded reads and UTC-day rollups may mi
 flags outside their slice; truncation and legacy/unflagged status remain caveats.
 Role filtering uses the existing reads and existing per-request authentication.
 
-Creator owners can read these aggregates in Studio and through MCP. See
+Creator owners can read these aggregates in Studio. The MCP read is implemented
+but disabled by default pending its disclosure rollout. See
 [creator performance access](creator-game-performance.md) for auth, filters and limits.

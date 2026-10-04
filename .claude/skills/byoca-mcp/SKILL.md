@@ -1344,7 +1344,11 @@ Takeover authorization follows canonical `GameAccess` ownership, not the roundâ€
 
 `get_game_performance({ slug, days?, performanceReviewers?, artifactVersion? })`
 uses creator-key or OAuth Bearer (`mcp` scope), without `start` or an active round.
+It requires `CREATOR_PERFORMANCE_MCP=true`; otherwise authenticated calls return
+`feature_unavailable` without scanning telemetry. Activation awaits the disclosure
+rollout described in the linked guide; Studio access is independent.
 It is current-owner-only and returns anonymous FPS/device/build aggregates.
+Live publication and ownership are rechecked before returning scanned or cached data.
 Inspect coverage, freshness, truncation and sample size before drawing conclusions.
 `no_traffic` and `no_valid_windows` do not mean zero FPS. Active-agent events are
 excluded. This read does not grant permission to change a game.

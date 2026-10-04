@@ -24,7 +24,7 @@ export function createPerformanceTools(deps: {
         openWorldHint: false,
       },
       description:
-        'Read production FPS for a published game owned by the authenticated creator. Works without start() or an active build round. Returns anonymous aggregates by build, device, resolution and reviewer cohort, measured/unmeasured coverage, gaps and truncation. No valid samples is not zero FPS. Agent-mode events and invalid windows are excluded. Read measuredAt/freshUntil: results may be cached for 10 minutes. Requires a creator key or OAuth with mcp scope in Authorization Bearer. Use list_account_games to discover slugs. This read does not authorize automatic game changes.',
+        'Read production FPS for a published game owned by the authenticated creator. Works without start() or an active build round. Returns anonymous aggregates by build, device, resolution and reviewer cohort, measured/unmeasured coverage, gaps and truncation. No valid samples is not zero FPS. Agent-mode events and invalid windows are excluded. Read measuredAt/freshUntil: results may be cached for 10 minutes. Requires a creator key or OAuth with mcp scope in Authorization Bearer. Use list_account_games to discover slugs. Returns feature_unavailable until the MCP rollout is enabled. This read does not authorize automatic game changes.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -56,6 +56,8 @@ export function createPerformanceTools(deps: {
           return toolErr('get_game_performance requires a creator key or OAuth with mcp scope', {
             code: 'opener_required',
           });
+        if (process.env.CREATOR_PERFORMANCE_MCP !== 'true')
+          return toolErr('production performance MCP access is not enabled', { code: 'feature_unavailable' });
         const parsed = GamePerformanceQuerySchema.safeParse(args);
         if (!parsed.success) return toolErr('invalid performance query', { code: 'invalid_arguments' });
         const result = await readGamePerformance(uid, parsed.data);

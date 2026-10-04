@@ -61,6 +61,12 @@ it('advertises and reads production aggregates with creator/OAuth credentials wi
   const scan = vi.spyOn(store, 'listTelemetryEvents');
   const restoreCli = enableCliSurface();
   try {
+    for (const disabled of [undefined, 'false', 'TRUE']) {
+      vi.stubEnv('CREATOR_PERFORMANCE_MCP', disabled);
+      expect((await call(key)).structuredContent.code).toBe('feature_unavailable');
+      expect(scan).not.toHaveBeenCalled();
+    }
+    vi.stubEnv('CREATOR_PERFORMANCE_MCP', 'true');
     const listed = await app.inject({
       method: 'POST',
       url: '/api/mcp',
@@ -100,6 +106,7 @@ it('advertises and reads production aggregates with creator/OAuth credentials wi
     await store.rotateCreatorAgentKey('g:owner', new Date().toISOString());
     expect((await call(key)).isError).toBe(true);
   } finally {
+    vi.unstubAllEnvs();
     restoreCli();
     await app.close();
   }

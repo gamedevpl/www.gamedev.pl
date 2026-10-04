@@ -1,7 +1,13 @@
 import type { LegalDocument } from './types.js';
 import { CONTACT_EMAIL, LEGAL_EFFECTIVE_DATE, OPERATOR_LEGAL_NAME, SERVICE_DOMAIN } from './operator.js';
 
-// Binding Polish policy; keep it aligned with actual data flows.
+/**
+ * Polityka prywatności — wersja polska (wiążąca).
+ *
+ * Treść odpowiada temu, co serwis faktycznie robi z danymi (audyt kodu z 2026-07-25),
+ * a nie temu, co robi typowy serwis. Zmieniając przepływ danych, zmień też ten plik —
+ * rozjazd między kodem a tym dokumentem jest naruszeniem, nie literówką.
+ */
 export const privacyPl: LegalDocument = {
   id: 'privacy',
   title: 'Polityka prywatności',
@@ -254,8 +260,6 @@ export const privacyPl: LegalDocument = {
               'platformy (Creator Kit);',
             'zapisy budowy Twojej gry: notatki o postępie, zrzuty ekranu, werdykty automatycznej bramki jakości ' +
               'oraz wytworzone przez nią zrzuty i nagrania rozgrywki;',
-            'anonimowe agregaty wydajności Twoich opublikowanych gier: FPS, przerwy między klatkami, wielkość próbek ' +
-              'i grupy urządzeń, przeglądarek, rozdzielczości i wersji; bez identyfikatorów sesji i tożsamości graczy;',
             'techniczne metadane statusu towarzyszące tym odpowiedziom: identyfikatory rundy i dostawy, ' +
               'znaczniki czasu, stan przepływu pracy i doradcze kody ostrzeżeń.',
           ],

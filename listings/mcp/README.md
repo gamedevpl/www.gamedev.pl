@@ -224,4 +224,6 @@ keep the hand-copy config block (Claude Code, Codex, Kimi, CLI).
 
 Production performance reads use a creator key or OAuth `mcp` access and require
 current ownership of a published game. `get_game_performance` works without
-`start` or an active round. See [query, coverage and limits](../../docs/creator-game-performance.md).
+`start` or an active round. It is disabled by default pending its disclosure rollout
+and returns `feature_unavailable` until enabled. See
+[query, coverage, rollout and limits](../../docs/creator-game-performance.md).

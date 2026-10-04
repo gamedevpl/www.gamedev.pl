@@ -11,6 +11,7 @@ const date = '2026-10-04';
 const query: GamePerformanceQuery = { slug: 'space-hop', days: 1, performanceReviewers: 'include' };
 const performance = {
   version: 1 as const,
+  source: 'raf' as const,
   valid: true,
   elapsedMs: 5000,
   intervals: [299, 0, 0, 0, 0, 0, 0, 0],
@@ -95,6 +96,57 @@ describe('creator performance service', () => {
     expect(await read(uid, query)).toEqual({ ok: false, code: 'not_owner' });
   });
 
+  it.each(['disabled', 'archived'] as const)(
+    'refuses a game %s during a cold scan and never caches that window',
+    async (state) => {
+      const store = await fixture();
+      const publication = {
+        slug: query.slug,
+        state: 'published' as const,
+        currentVersion: 'v1',
+        publishedAt: `${date}T00:00:00Z`,
+      };
+      await store.setPublication(publication);
+      const read = createCreatorPerformanceReader(store, () => Date.parse(`${date}T12:00:00Z`));
+      const scan = vi.spyOn(store, 'listTelemetryEvents').mockImplementationOnce(async () => {
+        await store.setPublication({ ...publication, state });
+        return [row('old')];
+      });
+      expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
+      expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
+      expect(scan).toHaveBeenCalledTimes(1);
+      await store.setPublication(publication);
+      await store.appendTelemetryEvents(date, [row('new', { frames: 100 })]);
+      const afterRepublish = await read(uid, query);
+      expect(afterRepublish.ok && afterRepublish.report.groups[0]!.rafFps).toBe(20);
+      expect(scan).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('rechecks publication on cache hits and invalidates a withdrawn window', async () => {
+    const store = await fixture();
+    const publication = {
+      slug: query.slug,
+      state: 'published' as const,
+      currentVersion: 'v1',
+      publishedAt: `${date}T00:00:00Z`,
+    };
+    await store.setPublication(publication);
+    await store.appendTelemetryEvents(date, [row('p')]);
+    const read = createCreatorPerformanceReader(store, () => Date.parse(`${date}T12:00:00Z`));
+    const scan = vi.spyOn(store, 'listTelemetryEvents');
+    expect((await read(uid, query)).ok).toBe(true);
+    const status = vi
+      .spyOn(store, 'getPublication')
+      .mockResolvedValueOnce(publication)
+      .mockResolvedValueOnce({ ...publication, state: 'archived' });
+    expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
+    expect(scan).toHaveBeenCalledTimes(1);
+    status.mockRestore();
+    expect((await read(uid, query)).ok).toBe(true);
+    expect(scan).toHaveBeenCalledTimes(2);
+  });
+
   it('distinguishes missing traffic, invalid/agent windows and capped reads', async () => {
     const store = await fixture();
     const read = createCreatorPerformanceReader(store, () => Date.parse(`${date}T12:00:00Z`));
@@ -121,7 +173,7 @@ describe('creator performance service', () => {
     await store.upsertUser({ uid, tier: 'blocked' });
     expect(await read(uid, query)).toEqual({ ok: false, code: 'not_owner' });
     await store.upsertUser({ uid, tier: 'free' });
-    vi.spyOn(store, 'getPublication').mockResolvedValue({ slug: query.slug, state: 'unpublished' } as never);
+    vi.spyOn(store, 'getPublication').mockResolvedValue({ slug: query.slug, state: 'archived' } as never);
     expect(await read(uid, query)).toEqual({ ok: false, code: 'not_published' });
     expect(scan).not.toHaveBeenCalled();
   });

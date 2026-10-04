@@ -1,7 +1,10 @@
 import type { LegalDocument } from './types.js';
 import { CONTACT_EMAIL, LEGAL_EFFECTIVE_DATE, OPERATOR_LEGAL_NAME, SERVICE_DOMAIN } from './operator.js';
 
-// Keep the English and binding Polish policies aligned.
+/**
+ * Privacy policy — English translation. The Polish text in `privacy.pl.ts` is the
+ * binding one; keep the two in lockstep, section id for section id.
+ */
 export const privacyEn: LegalDocument = {
   id: 'privacy',
   title: 'Privacy Policy',
@@ -251,8 +254,6 @@ export const privacyEn: LegalDocument = {
               'material (the Creator Kit);',
             'build records for your game: progress notes, screenshots, automated quality-gate verdicts, and the ' +
               'screenshots and gameplay recordings the gate produced;',
-            'anonymous production performance aggregates for your published games: FPS, frame gaps, sample counts ' +
-              'and coarse device, browser, resolution and build groups; no session identifiers or player identity;',
             'technical status metadata that travels with those replies: round and delivery identifiers, ' +
               'timestamps, workflow state, and advisory warning codes.',
           ],

@@ -1,8 +1,25 @@
 # Production performance for creators
 
 Published-game owners can read device-specific performance in Studio's Statistics
-section and through the `get_game_performance` MCP tool. Both use one bounded,
-cache-backed service. Existing transport and telemetry partitions remain the source.
+section. The implemented `get_game_performance` MCP tool uses the same bounded,
+cache-backed service, but is disabled by default pending its disclosure rollout.
+Existing transport and telemetry partitions remain the source.
+
+## MCP rollout
+
+`CREATOR_PERFORMANCE_MCP=true` enables the account MCP read. Missing, `false` and
+other values keep it disabled; an authenticated call returns `feature_unavailable`
+without scanning telemetry or consuming the Studio scan budget. Studio and its owner
+HTTP endpoint remain available independently. Both supported deployment paths thread
+this variable through `infra/env-manifest.json`; no production value is set by this PR.
+
+The current binding privacy policy and its effective date are unchanged. The proposed
+assistant-access disclosure and advance notice are prepared in
+[the rollout draft](creator-performance-mcp-rollout.md). Publish the notice in the
+Service and record its actual publication time before scheduling activation. For a
+substantive policy change, allow at least the promised 14 days, publish the updated
+PL/EN policy with its correct effective date, and only then enable MCP. A code merge
+or this documentation does not constitute that notice or activate the tool.
 
 ## MCP
 
@@ -38,7 +55,7 @@ Reviewer groups remain separate; the performance filter does not change engageme
 metrics. Unknown devices/builds remain unknown.
 
 Tool refusals use `isError` and `structuredContent.code`: `opener_required`,
-`invalid_arguments`, `not_owner`, `not_published`, or `rate_limited`. A limited read
+`invalid_arguments`, `feature_unavailable`, `not_owner`, `not_published`, or `rate_limited`. A limited read
 includes `retryAfterSeconds`. A successful read does not authorize game optimization.
 
 ## Studio and HTTP
@@ -62,8 +79,9 @@ Each cold window scans only one authorized slug: at most 30 daily queries,
 Studio scan budget is shared with this feature: 30 cache misses per account/hour.
 The 10-minute cache is shared across MCP/HTTP and across reviewer/build filters;
 in-flight identical scans coalesce. At most 50 raw windows stay in process memory.
-Ownership is checked before cache access and again after a scan, independent of
-cached aggregates; access revision participates in the cache key. Credentials are
+Ownership and live publication are checked before cache access and again before
+returning either a scanned or cached result. A revoked read cannot cache the scanned
+window; access revision participates in the cache key. Credentials are
 verified on every call. Narrowing a filter cannot restore rows dropped by a bounded
 scan. Use shorter periods if `scanTruncated` is true.
 

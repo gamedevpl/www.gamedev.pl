@@ -66,49 +66,58 @@ function formatReport(window: Window, query: GamePerformanceQuery): GamePerforma
   };
 }
 
+async function isLiveGame(store: Store, slug: string): Promise<boolean> {
+  const publication = await store.getPublication(slug);
+  return publication
+    ? isPublished(publication)
+    : (await store.listSubmissionsBySlug(slug)).some((record) => record.publishedAt);
+}
+
 export function createCreatorPerformanceReader(store: Store, now: () => number = Date.now): ReadGamePerformance {
   if (!caches.has(store)) caches.set(store, new Map());
   if (!inflight.has(store)) inflight.set(store, new Map());
   return async (uid, query) => {
     const user = await store.getUser(uid);
+    if (!user || user.tier === 'blocked') return { ok: false, code: 'not_owner' };
     const access = await resolveGameAccess(store, query.slug, now);
-    if (!user || user.tier === 'blocked' || !ownsGame(access, uid)) return { ok: false, code: 'not_owner' };
-    const publication = await store.getPublication(query.slug);
-    if (
-      publication
-        ? !isPublished(publication)
-        : !(await store.listSubmissionsBySlug(query.slug)).some((r) => r.publishedAt)
-    ) {
-      return { ok: false, code: 'not_published' };
-    }
+    if (!ownsGame(access, uid)) return { ok: false, code: 'not_owner' };
+    if (!(await isLiveGame(store, query.slug))) return { ok: false, code: 'not_published' };
     const days = recentPartitions(query.days, now());
     const key = [uid, query.slug, access.accessRevision, days.join(',')].join('|');
     const cache = caches.get(store)!;
     const running = inflight.get(store)!;
     let window = cache.get(key);
-    if (!window || window.at + PERFORMANCE_CACHE_MS <= now()) {
-      try {
-        let pending = running.get(key);
+    let pending: Promise<Window> | undefined;
+    try {
+      if (!window || window.at + PERFORMANCE_CACHE_MS <= now()) {
+        pending = running.get(key);
         if (!pending) {
           pending = (async () => {
             await spendStudioHealthScan(store, uid, now());
             const scanned = await scanOwnedSlugs(store, [query.slug], days);
-            const result = { events: scanned.events, days: scanned.scanned, truncated: scanned.truncated, at: now() };
-            rememberBounded(cache, key, result, MAX_CACHED_WINDOWS);
-            return result;
-          })().finally(() => running.delete(key));
+            return { events: scanned.events, days: scanned.scanned, truncated: scanned.truncated, at: now() };
+          })();
           running.set(key, pending);
         }
         window = await pending;
-      } catch (error) {
-        if (error instanceof StudioHealthBudgetError)
-          return { ok: false, code: 'rate_limited', retryAfterSeconds: error.retryAfterSeconds };
-        throw error;
       }
+      const latest = await resolveGameAccess(store, query.slug, now);
+      if (!ownsGame(latest, uid) || latest.accessRevision !== access.accessRevision) {
+        cache.delete(key);
+        return { ok: false, code: 'not_owner' };
+      }
+      if (!(await isLiveGame(store, query.slug))) {
+        cache.delete(key);
+        return { ok: false, code: 'not_published' };
+      }
+      rememberBounded(cache, key, window, MAX_CACHED_WINDOWS);
+      return { ok: true, report: formatReport(window, query) };
+    } catch (error) {
+      if (error instanceof StudioHealthBudgetError)
+        return { ok: false, code: 'rate_limited', retryAfterSeconds: error.retryAfterSeconds };
+      throw error;
+    } finally {
+      if (pending && running.get(key) === pending) running.delete(key);
     }
-    const latest = await resolveGameAccess(store, query.slug, now);
-    if (!ownsGame(latest, uid) || latest.accessRevision !== access.accessRevision)
-      return { ok: false, code: 'not_owner' };
-    return { ok: true, report: formatReport(window, query) };
   };
 }

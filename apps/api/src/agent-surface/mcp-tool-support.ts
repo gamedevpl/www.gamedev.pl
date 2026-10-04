@@ -35,11 +35,11 @@ export function toolErr(message: string, data?: unknown): ToolResult {
   };
 }
 
-// Stable refusal codes for clients.
 export const MCP_ERROR_CODES = [
   'not_owner',
   'not_published',
   'invalid_arguments',
+  'feature_unavailable',
   'opener_required',
   'quota_blocked',
   'quota_exhausted',

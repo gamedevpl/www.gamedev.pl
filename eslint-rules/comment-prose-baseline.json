@@ -466,6 +466,8 @@
     "apps/web/src/legal/inline.tsx": 108,
     "apps/web/src/legal/legal.test.ts": 118,
     "apps/web/src/legal/operator.ts": 486,
+    "apps/web/src/legal/privacy.en.ts": 25,
+    "apps/web/src/legal/privacy.pl.ts": 50,
     "apps/web/src/legal/terms.en.ts": 26,
     "apps/web/src/legal/terms.pl.ts": 87,
     "apps/web/src/legal/types.ts": 128,
