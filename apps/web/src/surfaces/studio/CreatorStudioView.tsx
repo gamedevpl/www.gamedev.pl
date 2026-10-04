@@ -35,6 +35,7 @@ import {
   type StudioShelfFilter,
   type StudioShelfGame,
 } from '../../studioShelf.js';
+import { StudioDetailsRail } from './StudioDetailsRail.js';
 import { DetailsPanel, type DetailsPaneId } from './StudioDetailsPanel.js';
 import { DraftShareControl } from './DraftShareControl.js';
 import { StudioTransferInbox } from './StudioTransferInbox.js';
@@ -1123,11 +1124,7 @@ export function CreatorStudioView({
                                 onClick={() => openTab('thread')}
                               />
                             ) : null}
-                            <aside
-                              className="studio-rail"
-                              aria-label={t('studioPanel.tabs.details')}
-                              {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
-                            >
+                            <StudioDetailsRail isSheet={detailsIsSheet}>
                               <DetailsPanel
                                 // Keyed on the game, so switching to another one gives a
                                 // fresh panel rather than reusing this one's state.
@@ -1222,7 +1219,7 @@ export function CreatorStudioView({
                                     });
                                 }}
                               />
-                            </aside>
+                            </StudioDetailsRail>
                           </>
                         ) : null}
 

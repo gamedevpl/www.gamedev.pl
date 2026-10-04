@@ -185,3 +185,62 @@
   margin: 0.4rem 0 0;
   opacity: 0.75;
 }
+
+.studio-stats [hidden] {
+  display: none;
+}
+.studio-stats-views {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  padding-block: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.studio-stats-views button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.studio-stats-views button[aria-pressed='true'] {
+  color: var(--turquoise);
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+.studio-stats-badge {
+  font-size: 0.7rem;
+  min-width: 1.2rem;
+  padding: 2px 4px;
+  border-radius: 10px;
+  background: var(--panel-card);
+  color: var(--text);
+}
+.studio-stats .studio-empty {
+  padding: 12px 0;
+  margin: 0;
+}
+.studio-stats .funnel-stats {
+  gap: 12px;
+  margin-block: 12px;
+}
+.studio-stats .studio-reactions {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.studio-stats .health-section-title {
+  margin-top: 12px;
+}
