@@ -78,6 +78,7 @@ const FILE_BUCKET = {
   'internal-auth': 'platform',
   admin: 'platform',
   'admin-session': 'platform',
+  'reviewer-role': 'platform',
   'rate-limit': 'platform',
   moderation: 'platform',
   'moderation-terms': 'platform',

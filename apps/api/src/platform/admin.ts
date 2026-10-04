@@ -7,6 +7,7 @@ import {
 import { RECHECK_HOURLY_MS } from './sweep-cadence.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { REVIEWER_COHORTS } from '@gamedevpl/contract';
 import { summarizeFramePerformance, type PerformanceReport } from './frame-performance.js';
 import { isAdminSession } from './admin-session.js';
 import { MANAGED_AGENT_VENDORS } from '../agent-surface/agent-backend-env.js';
@@ -90,6 +91,7 @@ const MAX_COMPLETION_EVENTS_PER_REQUEST = 2_000;
 const MAX_TREND_EVENTS_PER_REQUEST = 20_000;
 
 const QuerySchema = z.object({
+  performanceReviewers: z.enum(REVIEWER_COHORTS).optional(),
   days: z.coerce.number().int().min(1).max(MAX_DAYS).optional(),
 });
 
@@ -889,7 +891,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       days: scanned,
       truncated,
       games: summarizeGameHealth(events),
-      performance: summarizeFramePerformance(events),
+      performance: summarizeFramePerformance(events, parsed.data.performanceReviewers ?? 'include'),
     };
     return reply.status(200).send(body);
   });

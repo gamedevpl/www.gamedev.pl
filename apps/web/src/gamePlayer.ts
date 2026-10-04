@@ -143,21 +143,26 @@ export function useGameTelemetry(
   active = true,
   via?: PlayVia,
   artifactVersion?: string,
+  agentMode = false,
 ) {
+  const agentModeRef = useRef(agentMode);
+  useEffect(() => {
+    agentModeRef.current = agentMode;
+  }, [agentMode]);
   const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
     postToGameFrame(frameRef.current, {
       source: HOST,
       type: 'telemetry',
-      active: active && isPlayTimeAccruing(document),
+      active: active && !agentMode && isPlayTimeAccruing(document),
     });
-  }, [active, frameRef]);
+  }, [active, agentMode, frameRef]);
 
   useEffect(() => {
     if (!enabled) return;
 
-    const session = new TelemetrySession(slug, crypto.randomUUID());
+    const session = new TelemetrySession(slug, crypto.randomUUID(), undefined, undefined, () => agentModeRef.current);
     openSession = session;
     session.record({
       type: 'game_opened',
@@ -182,7 +187,7 @@ export function useGameTelemetry(
       postToGameFrame(frameRef.current, {
         source: HOST,
         type: 'telemetry',
-        active: activeRef.current && isPlayTimeAccruing(document),
+        active: activeRef.current && !agentModeRef.current && isPlayTimeAccruing(document),
       });
     }
     window.addEventListener('focus', syncPerformance);

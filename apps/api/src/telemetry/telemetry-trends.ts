@@ -1,22 +1,8 @@
+import { selectTelemetryCohort } from '@gamedevpl/contract';
 import type { TrendGrain } from '@gamedevpl/contract';
 import type { SubmissionRecord, User, VisitEvent } from '../platform/store.js';
 import { BOT_UID_PREFIX } from '../platform/store.js';
 import { returnedAfterPublish } from './creator-metrics.js';
-
-/**
- * Time series for the operator telemetry tab — the glance that answers "is this
- * getting better or worse?" rather than "what happened in this window".
- *
- * Daily points are the source of truth. Weekly / monthly grains and rolling
- * averages are pure rollups over those points (same module, same tests), so the
- * three timescales cannot drift from each other.
- *
- * Visits / plays / creations and MCP (studio_step) adoption come from the
- * anonymous visit stream, partitioned by UTC day. Retention is the Stage 0 D7
- * return rate, plotted on the day a creator's 7-day window closes (the first
- * day the outcome is knowable) — not on the publish day, which would be a
- * prediction.
- */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -88,6 +74,7 @@ export function summarizeVisitDay(
   events: VisitEvent[],
   truncated = false,
 ): { activity: DailyActivityPoint; mcp: DailyMcpPoint } {
+  events = selectTelemetryCohort(events, (event) => event.visitId);
   const started = new Set<string>();
   const created = new Set<string>();
   let plays = 0;

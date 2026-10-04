@@ -1,3 +1,4 @@
+import type { ReviewerCohort } from '@gamedevpl/contract';
 import { useEffect, useMemo, useState } from 'react';
 import {
   fetchGameHealth,
@@ -18,21 +19,6 @@ import { ScorecardPanel } from './ScorecardPanel.js';
 import { TelemetryOverview } from './TelemetryOverview.js';
 import { TelemetryTrendsPanel } from './TelemetryTrendsPanel.js';
 import { formatSeconds } from './relativeTime.js';
-
-/**
- * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
- *
- * The telemetry section of the console (see AdminConsole) — it was the whole operator
- * page before there was a console, which is why `/health` still resolves to it.
- *
- * Deliberately not translated: this is a single-operator surface, not a product one,
- * and adding a dozen keys to every locale for a page no player can reach would cost
- * more than it explains.
- *
- * The table's job is to answer one question at a glance — which published game is
- * broken or ignored — so games that error or stall sort to the top and everything
- * else is context for those rows.
- */
 
 const WINDOWS = [1, 7, 30];
 
@@ -72,6 +58,7 @@ function verdict(game: GameHealth): { label: string; tone: 'bad' | 'warn' | 'ok'
 
 export function GameHealthView() {
   const [days, setDays] = useState(7);
+  const [performanceReviewers, setPerformanceReviewers] = useState<ReviewerCohort>('include');
   const [data, setData] = useState<HealthResponse | null>(null);
   const [visits, setVisits] = useState<VisitsResponse | null>(null);
   const [creators, setCreators] = useState<CreatorsResponse | null>(null);
@@ -83,7 +70,12 @@ export function GameHealthView() {
     setState('loading');
     // Both panels share one window, so they are fetched together and fail together:
     // showing a 30-day funnel above a 7-day table would be worse than showing neither.
-    Promise.all([fetchGameHealth(days), fetchVisitFunnel(days), fetchCreatorMetrics(), fetchScorecards()])
+    Promise.all([
+      fetchGameHealth(days, performanceReviewers),
+      fetchVisitFunnel(days),
+      fetchCreatorMetrics(),
+      fetchScorecards(),
+    ])
       .then(([health, funnel, creatorMetrics, sweptScorecards]) => {
         if (cancelled) return;
         if (!health) {
@@ -102,7 +94,7 @@ export function GameHealthView() {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [days, performanceReviewers]);
 
   const totals = useMemo(() => {
     const games = data?.games ?? [];
@@ -140,7 +132,13 @@ export function GameHealthView() {
         </div>
       </header>
 
-      {state === 'ready' && data && <FramePerformancePanel report={data.performance} />}
+      {state === 'ready' && data && (
+        <FramePerformancePanel
+          report={data.performance}
+          reviewers={performanceReviewers}
+          onReviewersChange={setPerformanceReviewers}
+        />
+      )}
       {state === 'loading' && <p className="health-empty">Reading telemetry…</p>}
       {state === 'error' && <p className="health-empty">Could not read telemetry.</p>}
 

@@ -1,4 +1,4 @@
-import type { FramePerformanceGroup } from '@gamedevpl/contract';
+import { REVIEWER_COHORTS, type ReviewerCohort, type FramePerformanceGroup } from '@gamedevpl/contract';
 
 type Report = {
   groups: FramePerformanceGroup[];
@@ -11,11 +11,32 @@ function gap(value: number | null, row: FramePerformanceGroup): string {
   return value === null ? (row.intervals.some((n) => n > 0) ? '>1000 ms' : '—') : `${value} ms`;
 }
 
-export function FramePerformancePanel({ report }: { report?: Report }) {
+export function FramePerformancePanel({
+  report,
+  reviewers,
+  onReviewersChange,
+}: {
+  report?: Report;
+  reviewers?: ReviewerCohort;
+  onReviewersChange?: (cohort: ReviewerCohort) => void;
+}) {
   if (!report) return null;
   return (
     <section className="health-section">
       <h2>Frame performance by device</h2>
+      {onReviewersChange && (
+        <label>
+          Performance sessions:{' '}
+          <select value={reviewers} onChange={(e) => onReviewersChange(e.target.value as ReviewerCohort)}>
+            {REVIEWER_COHORTS.map((value) => (
+              <option key={value} value={value}>
+                {value === 'include' ? 'Players and reviewers' : value === 'only' ? 'Reviewers only' : 'Players only'}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <p>Active agent windows are excluded. Game health and engagement below always exclude reviewer sessions.</p>
       <p>
         {report.measuredSessions} measured sessions; {report.unmeasuredSessions} without a valid window. Background,
         pause and resize transitions are excluded. FPS measures iframe animation cadence; rendered FPS uses the GameKit
@@ -30,6 +51,7 @@ export function FramePerformancePanel({ report }: { report?: Report }) {
             <thead>
               <tr>
                 <th>Game / build</th>
+                <th>Session cohort</th>
                 <th>Device / browser</th>
                 <th>Viewport</th>
                 <th>Canvas CSS / buffer</th>
@@ -54,6 +76,7 @@ export function FramePerformancePanel({ report }: { report?: Report }) {
                       {row.artifactVersion?.slice(0, 12) ?? 'unknown build'}
                     </span>
                   </td>
+                  <td>{row.reviewer ? 'Reviewer' : 'Player / legacy'}</td>
                   <td>
                     {row.device
                       ? `${row.device.deviceClass} / ${row.device.system} / ${row.device.browser} ${row.device.browserMajor ?? ''}`

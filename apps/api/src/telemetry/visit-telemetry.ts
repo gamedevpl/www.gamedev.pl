@@ -26,28 +26,11 @@ import {
 } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isReviewer } from '../platform/reviewer-role.js';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { Store, VisitEvent } from '../platform/store.js';
 import { cliStepEventSchema, toCliVisitEvent } from './visit-cli-event.js';
 import { isVisitTelemetryRateLimited } from './visit-telemetry-limit.js';
-/**
- * Visit telemetry intake — the write half of the funnel that play telemetry cannot see.
- *
- * [telemetry.ts](./telemetry.ts) records what happened *inside* a game once one is
- * open. Everything before that — the landing, the browse, whether a second game got
- * played, where the visitor came from — produced no rows at all, so the first minute of
- * every visit and the depth of every sitting were unmeasurable.
- *
- * The privacy posture is the stricter one, deliberately: a visit id is a per-tab uuid
- * from `sessionStorage`, no game slug is accepted (so this stream cannot be joined with
- * play telemetry into one tab's browsing history), acquisition is a bare hostname plus
- * filtered UTM values, and — as with play events — no uid, IP, or user agent is ever
- * recorded. These rows answer "how do visits go", and cannot answer "what did this
- * person do".
- *
- * Input is treated as hostile even though the app is the only intended sender: the
- * endpoint is reachable by anyone who can reach the site.
- */
 
 const MAX_EVENTS_PER_REQUEST = 25;
 const MAX_EVENTS_PER_VISIT = 200;
@@ -175,6 +158,8 @@ const RequestSchema = z.object({
 
 export interface VisitTelemetryRoutesOptions {
   store: Store;
+  reviewerUids?: Set<string>;
+  adminUids?: Set<string>;
   now?: () => number;
   // Rung 2: drops a sampled-out visit's writes before they reach Firestore.
   keepsVisit?: (visitId: string) => Promise<boolean>;
@@ -244,6 +229,7 @@ export async function registerVisitTelemetryRoutes(
 
     const events: VisitEvent[] = acceptedInput.map((event) => {
       const base = {
+        ...(isReviewer(request.user?.uid, options.reviewerUids, options.adminUids) ? { reviewer: true } : {}),
         visitId: parsed.data.visitId,
         at: eventTimeIso(event.msSinceStart),
         msSinceStart: event.msSinceStart,

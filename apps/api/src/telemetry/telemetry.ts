@@ -7,6 +7,7 @@ import {
   MAX_MULTIPLAYER_SLOTS,
   ZONE_LINK_STEPS,
 } from '@gamedevpl/contract';
+import { isReviewer } from '../platform/reviewer-role.js';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
@@ -44,7 +45,10 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
  * running the previous build keeps reporting instead of getting a 400 — its events
  * simply fall back to receipt time, which is what every event used to get.
  */
-const offsetField = { msSinceOpen: z.number().int().min(0).max(MAX_SESSION_MS).optional() };
+const offsetField = {
+  agentMode: z.boolean().optional(),
+  msSinceOpen: z.number().int().min(0).max(MAX_SESSION_MS).optional(),
+};
 /** Scene3D / gfx soft vs WebGL — optional on progress/end (games snapshot). */
 const gfxBackendField = {
   gfxBackend: z.enum(['canvas2d', 'webgl', 'webgl3d']).optional(),
@@ -118,6 +122,8 @@ const RequestSchema = z.object({
 
 export interface TelemetryRoutesOptions {
   store: Store;
+  reviewerUids?: Set<string>;
+  adminUids?: Set<string>;
   /**
    * Decides whether a slug is a published game. Absent (no games repo configured),
    * every flush is accepted and dropped — the same answer an unknown slug gets.
@@ -204,6 +210,8 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
 
     const events: TelemetryEvent[] = parsed.data.events.slice(0, room).map((event) => {
       const base = {
+        ...(isReviewer(request.user?.uid, options.reviewerUids, options.adminUids) ? { reviewer: true } : {}),
+        ...(event.agentMode === undefined ? {} : { agentMode: event.agentMode }),
         slug: parsed.data.slug,
         sessionId: parsed.data.sessionId,
         at: eventTimeIso(event.msSinceOpen),

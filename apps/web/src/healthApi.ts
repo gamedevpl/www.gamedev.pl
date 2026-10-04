@@ -1,8 +1,6 @@
-// Client for the operator telemetry view (docs/improvement-loop-plan.md IL-2). The
-// session cookie authenticates; the API answers 404 rather than 403 to anyone who is
-// not an admin, so `null` here means "not for you" and is not an error worth showing.
+// Admin-only telemetry reads authenticate with the session cookie.
 
-import type { GameHealth, FramePerformanceGroup } from '@gamedevpl/contract';
+import type { ReviewerCohort, GameHealth, FramePerformanceGroup } from '@gamedevpl/contract';
 
 export type { GameHealth };
 
@@ -20,11 +18,17 @@ export interface HealthResponse {
   };
 }
 
-/** Returns null when the caller is not an admin; throws only on a real failure. */
-export async function fetchGameHealth(days: number): Promise<HealthResponse | null> {
-  const res = await fetch(`${API_BASE}/api/admin/telemetry/health?days=${days}`, {
-    credentials: 'include',
-  });
+// Non-admins receive null; real failures throw.
+export async function fetchGameHealth(
+  days: number,
+  performanceReviewers: ReviewerCohort = 'include',
+): Promise<HealthResponse | null> {
+  const res = await fetch(
+    `${API_BASE}/api/admin/telemetry/health?days=${days}&performanceReviewers=${performanceReviewers}`,
+    {
+      credentials: 'include',
+    },
+  );
   if (res.status === 404 || res.status === 401) return null;
   if (!res.ok) {
     throw new Error(`Health request failed (${res.status})`);
@@ -149,7 +153,6 @@ export interface VisitsResponse {
   funnel: VisitFunnel;
 }
 
-/** Same 404-means-not-for-you contract as `fetchGameHealth`. */
 export async function fetchVisitFunnel(days: number): Promise<VisitsResponse | null> {
   const res = await fetch(`${API_BASE}/api/admin/telemetry/visits?days=${days}`, {
     credentials: 'include',

@@ -32,24 +32,13 @@ import {
   type ShareStep,
   type WaitlistStep,
 } from '@gamedevpl/contract';
+import { selectTelemetryCohort } from '@gamedevpl/contract';
 import type { VisitEvent } from '../platform/store.js';
 import { summarizeCliFunnel } from './visit-cli-funnel.js';
 import { summarizeCliPilot, type CliPilotRead } from './visit-cli-pilot.js';
 import { summarizeProposals, type ProposalRead } from './visit-proposals.js';
 import { summarizeTransfers, type TransferRead } from './visit-transfers.js';
 import { summarizeImageExport, type ImageExportRead } from './visit-image-export.js';
-/**
- * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.
- *
- * The write half has been capturing since 2026-07-25 and nothing could read it. This is
- * the read half, and it answers exactly the three questions the visit stream exists for:
- * how the first minute goes, how deep a sitting gets, and where visitors came from.
- *
- * Aggregates only — never raw rows. Referrer and UTM values are the one attacker- and
- * marketer-influenced input here (anyone can link in with `?utm_source=…`), so they are
- * grouped and counted but never echoed as anything but the bounded, character-filtered
- * strings the intake already validated.
- */
 
 const TIME_TO_PLAY_BUCKETS = [10, 30, 60, 180, 600] as const;
 export interface VisitFunnel {
@@ -283,6 +272,7 @@ function rank<T, R extends { visits: number }>(entries: Map<string, T>, toRow: (
 }
 
 export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
+  events = selectTelemetryCohort(events, (event) => event.visitId);
   const visits = new Map<string, VisitRollup>();
   const completion = new Map<
     CodeCompletionKind,

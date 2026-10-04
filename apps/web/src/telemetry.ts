@@ -69,7 +69,7 @@ const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
  * skew, DST and a wrong system date cannot touch it, and the server still anchors it
  * to a real instant using the flush's own offset.
  */
-export type WireEvent = TelemetryEvent & { msSinceOpen: number };
+export type WireEvent = TelemetryEvent & { msSinceOpen: number; agentMode?: boolean };
 
 export type TelemetrySend = (body: {
   slug: string;
@@ -123,6 +123,7 @@ export class TelemetrySession {
      * from sleep, so an offset stays a real duration.
      */
     private readonly clock: () => number = () => performance.now(),
+    private readonly agentMode: () => boolean = () => false,
   ) {
     this.openedAt = clock();
   }
@@ -154,7 +155,7 @@ export class TelemetrySession {
 
     // Stamped at record time, not at flush time — the whole point is that the two are
     // not the same instant.
-    this.queue.push({ ...normalized, msSinceOpen: this.elapsed() });
+    this.queue.push({ ...normalized, ...(this.agentMode() ? { agentMode: true } : {}), msSinceOpen: this.elapsed() });
     if (shellOwned) this.shellAccepted += 1;
     else this.accepted += 1;
     if (this.queue.length >= FLUSH_AT) this.flush();
