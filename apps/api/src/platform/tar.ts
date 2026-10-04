@@ -1,28 +1,3 @@
-/**
- * Just enough tar to read a GitHub source archive, and to write a small one.
- *
- * `GET /repos/<repo>/tarball/<ref>` answers the whole games repo in one request,
- * which is the difference between a bake that costs ~1,000 GitHub reads and one
- * that costs 1 (see `games-repo-archive.ts`). Reading it needs a tar parser, and
- * this is that parser rather than a dependency: the format is a fixed 512-byte
- * header we only read four fields of, and `git archive` emits a narrow, well-known
- * subset of it.
- *
- * Handled, because GitHub's archives contain all of them:
- *   - ustar `prefix` — paths over 100 chars split across two header fields
- *   - pax extended headers (`x`) — a `path=` record overriding the next entry
- *   - GNU long names (`L`) — the older long-path convention
- *
- * Not handled, because a source archive never contains them: sparse files, device
- * nodes, hard links. They are skipped rather than guessed at.
- *
- * The writer ({@link writeTarGz}) is here for the same reason the reader is: the
- * one archive we emit — a creator's workspace, a few dozen small text files — needs
- * plain ustar and nothing else, and a dependency that can express symlinks, sparse
- * files and long-name extensions is a larger surface than the format we actually
- * want to produce.
- */
-
 import { gzipSync } from 'node:zlib';
 
 const BLOCK_SIZE = 512;
@@ -58,9 +33,12 @@ export interface ReadTarOptions {
   include?: (path: string) => boolean;
   /** Ceiling on retained bytes. Exceeding it throws rather than exhausting the heap. */
   maxTotalBytes?: number;
+  maxEntryBytes?: number;
 }
 
 const DEFAULT_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
+
+export class ArchiveLimitError extends Error {}
 
 function readString(block: Uint8Array, offset: number, length: number): string {
   const slice = block.subarray(offset, offset + length);
@@ -75,7 +53,7 @@ function readSize(block: Uint8Array): number {
     return 0;
   }
   const size = Number.parseInt(raw, 8);
-  if (!Number.isFinite(size) || size < 0) {
+  if (!Number.isSafeInteger(size) || size < 0) {
     throw new Error(`tar: unreadable entry size "${raw}"`);
   }
   return size;
@@ -108,12 +86,6 @@ function isZeroBlock(block: Uint8Array): boolean {
   return block.every((byte) => byte === 0);
 }
 
-/**
- * Yields the regular files in a (already decompressed) tar stream.
- *
- * Buffers only the entry being read plus whatever `include` keeps, so a 100MB
- * archive does not become 100MB of retained chunks.
- */
 export async function* readTarEntries(
   source: AsyncIterable<Uint8Array>,
   options: ReadTarOptions = {},
@@ -126,107 +98,90 @@ export async function* readTarEntries(
   const queue: Buffer[] = [];
   let queued = 0;
 
-  /** Removes and returns the first `n` bytes; callers check `queued` first. */
-  function consume(n: number): Buffer {
+  function consume(n: number, keep = true): Buffer {
     const parts: Buffer[] = [];
     let taken = 0;
     while (taken < n) {
       const head = queue[0];
       const want = n - taken;
       if (head.length <= want) {
-        parts.push(queue.shift() as Buffer);
+        const part = queue.shift() as Buffer;
+        if (keep) parts.push(part);
         taken += head.length;
       } else {
-        parts.push(head.subarray(0, want));
+        if (keep) parts.push(head.subarray(0, want));
         queue[0] = head.subarray(want);
         taken = n;
       }
     }
     queued -= n;
-    return parts.length === 1 ? parts[0] : Buffer.concat(parts, n);
+    return !keep ? Buffer.alloc(0) : parts.length === 1 ? parts[0] : Buffer.concat(parts, n);
   }
 
   let retained = 0;
   /** Set by a pax `x` or GNU `L` header — overrides the next entry's own name. */
   let overrideName: string | null = null;
   let sawEmptyBlock = false;
-  /** The header of an entry whose body has not fully arrived yet. */
-  let heldHeader: Buffer | null = null;
+  let pending: { size: number; remaining: number; type: string; path: string; keep: boolean } | null = null;
 
   for await (const chunk of source) {
     const buffer = Buffer.from(chunk);
-    if (buffer.length === 0) {
-      continue;
-    }
+    if (!buffer.length) continue;
     queue.push(buffer);
     queued += buffer.length;
 
     for (;;) {
-      if (!heldHeader) {
-        if (queued < BLOCK_SIZE) {
-          break;
+      if (!pending) {
+        if (queued < BLOCK_SIZE) break;
+        const header = consume(BLOCK_SIZE);
+        if (isZeroBlock(header)) {
+          if (sawEmptyBlock) return;
+          sawEmptyBlock = true;
+          continue;
         }
-        heldHeader = consume(BLOCK_SIZE);
+        sawEmptyBlock = false;
+        const size = readSize(header);
+        const type = String.fromCharCode(header[TYPE_OFFSET]);
+        const name = readString(header, NAME_OFFSET, NAME_LENGTH);
+        const prefix =
+          readString(header, MAGIC_OFFSET, 5) === 'ustar' ? readString(header, PREFIX_OFFSET, PREFIX_LENGTH) : '';
+        const path: string = overrideName ?? (prefix ? `${prefix}/${name}` : name);
+        const metadata = type === TYPE_GNU_LONGNAME || type === TYPE_PAX_NEXT;
+        const keep = metadata || ((type === TYPE_FILE || type === TYPE_FILE_ALT) && include(path));
+        if (!metadata && type !== TYPE_PAX_GLOBAL) overrideName = null;
+        if (keep && size > (options.maxEntryBytes ?? DEFAULT_MAX_TOTAL_BYTES)) {
+          throw new ArchiveLimitError(
+            `tar: entry ${path} exceeds ${options.maxEntryBytes ?? DEFAULT_MAX_TOTAL_BYTES} bytes`,
+          );
+        }
+        if (keep && !metadata) {
+          retained += size;
+          if (retained > maxTotalBytes) {
+            throw new ArchiveLimitError(`tar: archive exceeds ${maxTotalBytes} retained bytes`);
+          }
+        }
+        pending = { size, remaining: Math.ceil(size / BLOCK_SIZE) * BLOCK_SIZE, type, path, keep };
       }
-      const header = heldHeader;
-
-      if (isZeroBlock(header)) {
-        // Two consecutive zero blocks end the archive; one alone is padding.
-        heldHeader = null;
-        if (sawEmptyBlock) {
-          return;
-        }
-        sawEmptyBlock = true;
+      if (!pending.keep) {
+        const drop = Math.min(queued, pending.remaining);
+        consume(drop, false);
+        pending.remaining -= drop;
+        if (pending.remaining) break;
+        pending = null;
         continue;
       }
-      sawEmptyBlock = false;
-
-      const size = readSize(header);
-      const padded = Math.ceil(size / BLOCK_SIZE) * BLOCK_SIZE;
-      if (queued < padded) {
-        break; // Entry body has not fully arrived yet; the header stays held.
-      }
-      heldHeader = null;
-
-      const block = consume(padded);
-      const body = block.subarray(0, size);
-
-      const type = String.fromCharCode(header[TYPE_OFFSET]);
-
+      if (queued < pending.remaining) break;
+      const body: Buffer = consume(pending.remaining).subarray(0, pending.size);
+      const { type, path } = pending;
+      pending = null;
       if (type === TYPE_GNU_LONGNAME) {
         overrideName = Buffer.from(body).toString('utf8').replace(/\0+$/, '');
-        continue;
-      }
-      if (type === TYPE_PAX_NEXT) {
+      } else if (type === TYPE_PAX_NEXT) {
         overrideName = readPaxPath(body) ?? overrideName;
-        continue;
+      } else {
+        // Copying prevents small retained entries from pinning whole stream chunks.
+        yield { path, bytes: Uint8Array.from(body) };
       }
-      if (type === TYPE_PAX_GLOBAL) {
-        continue; // Global defaults carry nothing we read.
-      }
-
-      const name = readString(header, NAME_OFFSET, NAME_LENGTH);
-      const isUstar = readString(header, MAGIC_OFFSET, 5) === 'ustar';
-      const prefix = isUstar ? readString(header, PREFIX_OFFSET, PREFIX_LENGTH) : '';
-      const path = overrideName ?? (prefix ? `${prefix}/${name}` : name);
-      overrideName = null;
-
-      if (type !== TYPE_FILE && type !== TYPE_FILE_ALT) {
-        continue; // Directories, symlinks, everything else.
-      }
-      if (!include(path)) {
-        continue;
-      }
-
-      retained += size;
-      if (retained > maxTotalBytes) {
-        throw new Error(`tar: archive exceeds ${maxTotalBytes} retained bytes`);
-      }
-      // Copy rather than view: `body` sits inside a padded block that is itself a
-      // slice of an arriving chunk, so a view would pin that whole chunk for as
-      // long as the caller holds one small file — and `retained` would be
-      // counting something other than what is actually held.
-      yield { path, bytes: Uint8Array.from(body) };
     }
   }
 }
@@ -298,15 +253,6 @@ function buildHeader(path: string, size: number, mode: number, mtime: number): B
   return header;
 }
 
-/**
- * A gzipped ustar archive of small files, held in memory.
- *
- * In memory because the caller is an HTTP response of a few dozen text files, and a
- * stream would buy nothing but a Content-Length we would then have to give up. Byte
- * output is a pure function of the inputs: `mtime` defaults to 0 rather than "now",
- * so the same workspace requested twice is the same archive and can be compared,
- * cached, or ETagged without a timestamp making every response unique.
- */
 export function writeTarGz(files: TarInput[], options: { mtime?: number } = {}): Buffer {
   const mtime = options.mtime ?? 0;
   const seen = new Set<string>();

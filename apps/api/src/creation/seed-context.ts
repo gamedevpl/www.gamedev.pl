@@ -1,26 +1,21 @@
 import { fetchGamesRepoArchive, type GamesRepoArchive } from '../platform/games-repo-archive.js';
-
-/** Text-only: sources, specs, manifests, and the catalog. No media. */
-const TEXT_EXTENSIONS = ['.ts', '.json', '.md', '.css', '.html'];
+import { ArchiveLimitError } from '../platform/tar.js';
 
 export const SEED_SCAFFOLD_SLUG = 'block-cascade';
 
-/**
- * Which archive paths the seeder keeps.
- *
- * Media is the whole reason the games repo is large and none of it can enter a text
- * prompt, so it is dropped at the tar boundary rather than downloaded into memory and
- * ignored. `shared/` stays excluded for prompt budget, except `shared/game-kit.d.ts`,
- * which the checker reads without rendering.
- */
+export const MAX_SEED_CONTEXT_BYTES = 32 * 1024 * 1024;
+export const MAX_SEED_CONTEXT_FILE_BYTES = 2 * 1024 * 1024;
+export const SEED_CONTEXT_BREAKER_COOLDOWN_MS = 5 * 60_000;
+const SEED_CONTEXT_BREAKER_THRESHOLD = 3;
+
 function seedInclude(relativePath: string): boolean {
-  if (relativePath === 'catalog.json') return true;
-  if (relativePath === 'shared/game-kit.d.ts') return true;
-  const inScope = relativePath.startsWith('games/');
-  return inScope && TEXT_EXTENSIONS.some((extension) => relativePath.endsWith(extension));
+  if (relativePath === 'catalog.json' || relativePath === 'shared/game-kit.d.ts') return true;
+  const match = /^games\/[^/]+\/(.+)$/.exec(relativePath);
+  if (!match) return false;
+  const path = match[1];
+  return GAME_TOP_LEVEL_FILES.includes(path) || (path.startsWith('game/') && path.endsWith('.ts'));
 }
 
-/** Order matters: this is the shape a game has, and the order the model sees it in. */
 const GAME_TOP_LEVEL_FILES = [
   'SPEC.md',
   'GAME.json',
@@ -32,25 +27,19 @@ const GAME_TOP_LEVEL_FILES = [
   'ACCEPTANCE.json',
 ];
 
-/** One reference file this big is a generated blob, not something to learn a style from. */
 const MAX_REFERENCE_FILE_BYTES = 80_000;
 
-/** One game is small; this only stops a pathological repo state from filling context. */
 const CONTEXT_SCAFFOLD_BUDGET = 60_000;
 
 export interface SeedContext {
-  /** `slug — title — genre` per published game, the picker's whole world. */
   catalogIndex: string;
   scaffold: string;
-  /** GameKit declarations for validation, never rendered into a prompt. */
   kitDeclaration: string | null;
   hasGame(slug: string): boolean;
-  /** Full source of the picked games, in fence format, truncated to a byte budget. */
   renderReferences(slugs: string[], byteBudget: number): string;
 }
 
 export interface SeedContextSource {
-  /** Null when context cannot be assembled — the caller then dispatches unseeded. */
   load(): Promise<SeedContext | null>;
 }
 
@@ -61,10 +50,6 @@ interface CatalogEntry {
   status?: unknown;
 }
 
-/**
- * A file index over the archive, since `RepoFileSource` can read a path but not list one
- * — and the seeder has to enumerate a game's modules without knowing their names.
- */
 export interface SeedFileIndex {
   paths: string[];
   read(path: string): string | null;
@@ -144,7 +129,6 @@ export interface ArchiveSeedContextOptions {
   repo: string;
   ref: string;
   token: string;
-  /** How long a downloaded archive is reused. The harness moves on merges, not minutes. */
   ttlMs?: number;
   fetchImpl?: typeof fetch;
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
@@ -154,19 +138,24 @@ export interface ArchiveSeedContextOptions {
 
 export const DEFAULT_SEED_CONTEXT_TTL_MS = 10 * 60_000;
 
-/**
- * Archive-backed context with a single-flight cache.
- *
- * Single-flight matters more than the TTL does: two creators submitting at once would
- * otherwise each download the repository, and the second download is pure waste on the
- * one credential that also serves the catalog. Concurrent callers share the in-flight
- * promise; a failure is not cached, so the next dispatch retries rather than inheriting
- * someone else's bad minute.
- */
 export function createArchiveSeedContextSource(options: ArchiveSeedContextOptions): SeedContextSource {
   const ttlMs = options.ttlMs ?? DEFAULT_SEED_CONTEXT_TTL_MS;
   let cached: { context: SeedContext; expiresAt: number } | null = null;
   let inFlight: Promise<SeedContext | null> | null = null;
+  let failures = 0;
+  let blockedUntil = 0;
+
+  function failed(error?: unknown): null {
+    failures += 1;
+    if (error instanceof ArchiveLimitError || failures >= SEED_CONTEXT_BREAKER_THRESHOLD) {
+      blockedUntil = Date.now() + SEED_CONTEXT_BREAKER_COOLDOWN_MS;
+      options.log?.warn(
+        { repo: options.repo, ref: options.ref, failures, blockedUntil },
+        'seed context circuit opened',
+      );
+    }
+    return null;
+  }
 
   async function download(): Promise<SeedContext | null> {
     const archive: GamesRepoArchive = await fetchGamesRepoArchive({
@@ -174,6 +163,8 @@ export function createArchiveSeedContextSource(options: ArchiveSeedContextOption
       ref: options.ref,
       token: options.token,
       include: seedInclude,
+      maxTotalBytes: MAX_SEED_CONTEXT_BYTES,
+      maxEntryBytes: MAX_SEED_CONTEXT_FILE_BYTES,
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     });
 
@@ -193,7 +184,10 @@ export function createArchiveSeedContextSource(options: ArchiveSeedContextOption
       options.log?.warn({ repo: options.repo, ref: options.ref }, 'seed context unusable: no catalog in archive');
       return null;
     }
-    options.log?.info({ repo: options.repo, ref: options.ref, files: paths.length }, 'seed context loaded');
+    options.log?.info(
+      { repo: options.repo, ref: options.ref, files: paths.length, bytes: archive.byteCount },
+      'seed context loaded',
+    );
     return context;
   }
 
@@ -202,17 +196,24 @@ export function createArchiveSeedContextSource(options: ArchiveSeedContextOption
       const now = Date.now();
       if (cached && cached.expiresAt > now) return cached.context;
       if (inFlight) return inFlight;
+      if (blockedUntil > now) return null;
+      if (blockedUntil) {
+        blockedUntil = 0;
+        failures = 0;
+      }
 
       inFlight = download()
         .then((context) => {
           // Only a usable context is cached. Caching a null would turn one bad fetch into
           // ten minutes of unseeded builds for no reason.
-          if (context) cached = { context, expiresAt: Date.now() + ttlMs };
+          if (!context) return failed();
+          failures = 0;
+          cached = { context, expiresAt: Date.now() + ttlMs };
           return context;
         })
         .catch((error: unknown) => {
           options.log?.warn({ err: error, repo: options.repo, ref: options.ref }, 'seed context fetch failed');
-          return null;
+          return failed(error);
         })
         .finally(() => {
           inFlight = null;
