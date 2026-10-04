@@ -38,7 +38,7 @@ export interface NextIdeaGenerator {
 export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 8_000;
 export const MAX_NEXT_IDEAS = 3;
 // Owner policy: 3.x only.
-export const DEFAULT_NEXT_IDEAS_MODEL = 'gemini-3.7-flash';
+export const DEFAULT_NEXT_IDEAS_MODEL = 'gemini-3.8-flash';
 
 const NextIdeaResultSchema = z.object({
   ideas: z
