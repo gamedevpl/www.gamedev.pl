@@ -73,6 +73,10 @@ import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
 import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
 import { createProposalLifecycle } from '../community/proposal-lifecycle.js';
+import { createProposalRoundStarter, loadProposalChange } from '../community/proposal-round-start.js';
+import { proposalDiffPage } from '../community/proposal-diff-pages.js';
+import { contentDelivery } from '../creation/content-candidate.js';
+import { bakeRemixEditorDefaults, collectEditorTextFields } from '../creation/remix-bake.js';
 import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
 import { createEditingGate, createGateRunGate, createTabCompleteGate } from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -110,7 +114,7 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { registerOptionImageRoutes } from '../creation/option-image-routes.js';
 import type { OptionImageGenerator } from '../creation/option-images.js';
-import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
+import { InMemoryStore, type Store } from './store.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
@@ -539,6 +543,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       transitionProposal,
       isProposerTurn,
       toPublicProposalState,
+      loadProposalChange,
+      proposalDiffPage,
     },
     assertDeliverableSourcePath,
   });
@@ -970,47 +976,31 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     notifyProposal,
   });
 
-  /**
-   * Proposals — the contribute-back exit. A change to a game somebody else owns,
-   * carried as a candidate version the proposer cannot publish.
-   *
-   * `adoptIntoJob` is the accept step's only side effect on the job world: it creates a
-   * job owned by the *target's* owner that already carries the gate-green version, so the
-   * owner publishes it through the ordinary route. Deliberately no dispatch — the change
-   * is already built, and handing it to an agent would rebuild what a human just approved.
-   */
+  // Proposals: accepting a creator-game proposal starts the owner's own rebuild round.
   await registerProposalRoutes(app, {
     store,
     gamesStore,
     contentChecker,
     adminUids,
     // Both lanes, so the diff and an agent's proposal round ask one question.
-    // A base we cannot read is not a diff we can compute. The review card degrades to
-    // "play it and read the description", which is still a decision a human can make.
     resolveBase: resolveBaseForProposal,
     notify: notifyProposal,
-    adoptIntoJob: async ({ proposal, ownerUid, admissionNonce }) => {
-      const source = await store.getSubmissionBySlug(proposal.targetSlug);
-      const at = new Date().toISOString();
-      const jobId = await store.allocateJobId();
-      // Owned by whoever holds the game, never by the proposer: this job is the owner's
-      // to publish, and a job on their slug owned by somebody else is a transfer.
-      await store.createSubmission(
-        jobId,
-        ownerUid ?? source?.ownerUid ?? BOT_UID_PREFIX + 'platform',
-        source?.title ?? proposal.targetSlug,
-      );
-      if (source?.locale) await store.setSubmissionLocale(jobId, source.locale);
-      await store.setSubmissionSlug(jobId, proposal.targetSlug, admissionNonce);
-      await store.recordJobTransition(jobId, { to: 'queued', at, by: 'creator', reason: 'proposal_accepted' });
-      await store.recordJobTransition(jobId, { to: 'building', at, by: 'creator', reason: 'proposal_accepted' });
-      await store.setSubmissionDeliveredVersion(jobId, proposal.version!);
-      await store.recordJobTransition(jobId, { to: 'submitted', at, by: 'creator', reason: 'proposal_adopted' });
-      // Straight to review: the gate already ran on this exact version, and re-running it
-      // would ask the same question of the same bytes.
-      await store.recordJobTransition(jobId, { to: 'ready_for_review', at, by: 'gate', reason: 'gate_green' });
-      return { jobId };
-    },
+    startProposalRound:
+      store && gamesStore
+        ? createProposalRoundStarter({
+            store,
+            gamesStore,
+            startImprovementRound: submissionSeams.startImprovementRound,
+            content: {
+              bake: bakeRemixEditorDefaults,
+              textFields: collectEditorTextFields,
+              deliver: contentDelivery({ store, gamesStore, now: Date.now, onSourcesDelivered: gateTrigger }),
+            },
+            contentChecker,
+            dailyImprovementQuota: submissionSeams.agentSurface.mcp.dailyImprovementQuota ?? 2,
+            log: app.log,
+          })
+        : undefined,
   });
 
   // Publish-gated public identity. Building needs none of this; catalog bylines and

@@ -15,10 +15,10 @@ import { DECLINE_REASONS, type DeclineReason, type ProposalPublicState } from '@
 // what a proposal is allowed to do next.
 //
 // The one rule worth stating in prose because no type can carry it: **no transition here
-// publishes anything.** `accepted` means the target's owner adopted the version into a job
-// of their own, which then goes through the same human publish as every other version. A
-// proposal that reaches `merged` did so because that publish happened, not because this
-// machine moved it there.
+// publishes anything.** `accepted` means the target's owner opened a round of their own
+// that rebuilds the change, which then goes through the same human publish as every other
+// version. A proposal that reaches `merged` did so because that round published, not
+// because this machine moved it there.
 
 /**
  * Internal proposal vocabulary.
@@ -47,11 +47,11 @@ export const PROPOSAL_STATES = [
   /** Reviewer asked for something specific. Also back with the proposer. */
   'changes_requested',
   /**
-   * The reviewer adopted the version into a job of their own; **not published**.
+   * The reviewer opened their own round to rebuild it; **not published**.
    * Platform/catalog targets stop here as noted feedback.
    */
   'accepted',
-  /** The adopted version went live. Terminal, and the only state that means "in the game". */
+  /** The linked round went live. Terminal, and the only state that means "in the game". */
   'merged',
   /** Reviewer said no. Terminal. */
   'declined',

@@ -11,9 +11,7 @@ function fakeLog() {
   const warn: Array<{ obj: unknown; msg: unknown }> = [];
   return {
     warn,
-    logger: {
-      warn: (obj: unknown, msg: unknown) => warn.push({ obj, msg }),
-    } as never,
+    logger: { warn: (obj: unknown, msg: unknown) => warn.push({ obj, msg }) } as never,
   };
 }
 
@@ -103,6 +101,7 @@ describe('every moderating module reports its rejections', () => {
     expect(callSites.sort()).toEqual([
       'agent-surface/mcp-round-reopen-tools.ts',
       'community/player-feedback.ts',
+      'community/proposal-round-start.ts',
       'community/proposals.ts',
       'creation/cli-chat-routes.ts',
       'creation/create-game.ts',

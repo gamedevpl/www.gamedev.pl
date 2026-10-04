@@ -20,10 +20,10 @@ export async function reconcileDeliveredProposal(
   await reconcileProposalGate(deps, manifest.proposal.id);
 }
 
-// A version went live: merge the proposal it carried, supersede the rest.
+// A round went live: merge proposals linked to it, supersede the rest.
 export async function settleProposalsOnPublish(
   deps: ProposalDeps,
-  input: { slug: string; version: string },
+  input: { slug: string; version: string; jobId?: number },
 ): Promise<{ merged: number; superseded: number }> {
   const merged = await markProposalsMerged(deps, input);
   const superseded = await supersedeStaleProposals(deps, { slug: input.slug, currentVersion: input.version });
@@ -44,7 +44,7 @@ export async function sweepProposals(deps: ProposalDeps): Promise<{ reconciled: 
 
 export interface ProposalLifecycle {
   onVerdict: (verdict: { slug: string; version: string; kind: string }) => Promise<void>;
-  onPublished: (input: { slug: string; version: string }) => Promise<void>;
+  onPublished: (input: { slug: string; version: string; jobId?: number }) => Promise<void>;
   sweep: () => Promise<{ reconciled: number; expired: number } | undefined>;
 }
 

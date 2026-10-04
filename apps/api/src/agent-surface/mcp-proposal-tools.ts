@@ -4,6 +4,8 @@ import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken }
 import type { OpenProposalInput, OpenProposalResult, ProposalDeps, ProposalRefusal } from '../community/proposals.js';
 import type { ProposalActor, ProposalPublicState, ProposalState } from '../community/proposal-state.js';
 import type { OwnerOfRecord } from '../community/owner-of-record.js';
+import type { ProposalChangeSet } from '../community/proposal-change-set.js';
+import type { ProposalDiffPage } from '../community/proposal-diff-pages.js';
 import { canSubmitProposal, MAX_PROPOSAL_SUBMITS, PROPOSAL_NO_JOB } from '../platform/proposal-limits.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
@@ -50,6 +52,13 @@ export interface ProposalDomain {
   ) => boolean;
   isProposerTurn: (state: ProposalState) => boolean;
   toPublicProposalState: (state: ProposalState) => ProposalPublicState;
+  // Accepted-proposal round reads; absent leaves those tools refusing.
+  loadProposalChange?: (
+    store: Store,
+    gamesStore: GamesStore,
+    proposal: ProposalRecord,
+  ) => Promise<{ change: ProposalChangeSet } | null>;
+  proposalDiffPage?: (path: string, before: string | null, after: string | null, page?: number) => ProposalDiffPage;
 }
 
 export interface ProposalToolsDeps {

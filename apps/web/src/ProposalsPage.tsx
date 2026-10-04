@@ -45,8 +45,7 @@ function StateChip({ state, noted }: { state: ProposalState; noted: boolean }) {
 
 function ProposalRow({ proposal, onWithdraw }: { proposal: Proposal; onWithdraw: (id: string) => void }) {
   const { t } = useTranslation();
-  // Only ever the newest reviewer turn: the thread is a conversation, but the tracker is a
-  // status board, and a row that grew with every exchange would bury the state chip.
+  // Only the newest reviewer turn: the tracker is a status board.
   const latestFromReviewer = [...proposal.thread].reverse().find((message) => message.from === 'reviewer');
   const noted = proposal.platformOwned && proposal.state === 'accepted';
 
@@ -83,6 +82,7 @@ function ProposalRow({ proposal, onWithdraw }: { proposal: Proposal; onWithdraw:
       {proposal.state === 'superseded' ? <p className="proposal-sub">{t('proposals.supersededHelp')}</p> : null}
       {proposal.state === 'expired' ? <p className="proposal-sub">{t('proposals.expiredHelp')}</p> : null}
       {noted ? <p className="proposal-sub">{t('proposals.notedHelp')}</p> : null}
+      {proposal.state === 'accepted' && !noted ? <p className="proposal-sub">{t('proposals.acceptedHelp')}</p> : null}
       {proposal.state === 'merged' ? (
         <p className="proposal-sub">
           {t('proposals.mergedHelp')} {t('proposals.watcher')}

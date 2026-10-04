@@ -1,10 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { draftShapeProblems } from './editor-draft-shape.js';
 import { textFields } from './editor-draft-texts.js';
-import { canActOnGame, canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
-import { resolveGameAccess } from '../platform/game-access-resolve.js';
+import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
+import { deliverContentCandidate, openContentJob } from './content-candidate.js';
 import {
   EDITOR_CONTENT_FILE,
   EDITOR_FILE,
@@ -578,84 +577,39 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         else files.push({ path: generatedPath, content: generatedContent });
       }
 
-      // A content edit gets its own job, exactly as a post-publish improvement
-      // does (`startImprovementRound`), and for the same reason: `published` is a
-      // terminal state, so hanging a new candidate off the original job would
-      // leave its gate verdict somewhere nothing reads. `reconcileGateVerdict`
-      // only walks `submitted`/`gating` records and the operator queue hides
-      // terminal ones, so the edit would have been gated and then silently
-      // stranded — green, unpublishable, and invisible to the person who
-      // approves it. The difference from an improvement is only that no agent is
-      // dispatched: the sources exist already, so the job walks straight to
-      // `submitted`.
-      const source = resolved.submission;
-      // Same admission fence acceptGameTransferInvitation checks against.
-      const nonce = randomUUID();
-      if (!(await store.beginCheckoutRecovery(slug, nonce, Date.now()))) {
-        return reply.status(409).send({
-          error: 'busy',
-          message: 'A round is already opening for this game. Refresh before continuing.',
-        });
-      }
-      let jobId: number;
-      const at = () => new Date(now()).toISOString();
-      try {
-        const access = await resolveGameAccess(store, slug);
-        if (access.source === 'canonical' && !canActOnGame(access, request.user!.uid, 'publish')) {
-          return reply
-            .status(409)
-            .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' });
-        }
-        jobId = await store.allocateJobId();
+      // A content edit gets its own job, like an improvement, but no agent.
+      const opened = await openContentJob({
+        store,
+        slug,
         // The caller, not source.ownerUid, which a transfer leaves stale.
-        await store.createSubmission(jobId, request.user!.uid, source.title);
-        if (source.locale) await store.setSubmissionLocale(jobId, source.locale);
-        await store.setSubmissionSlug(jobId, slug, nonce);
-        // Lease held until the job is itself an active round.
-        await store.recordJobTransition(jobId, { to: 'queued', at: at(), by: 'creator', reason: 'content_edit' });
-        await store.recordJobTransition(jobId, { to: 'building', at: at(), by: 'creator', reason: 'content_edit' });
-      } finally {
-        await store.finishCheckoutRecovery(slug, nonce).catch(() => {});
+        ownerUid: request.user!.uid,
+        title: resolved.submission.title,
+        locale: resolved.submission.locale,
+        reason: 'content_edit',
+        now,
+      });
+      if (!opened.ok) {
+        return opened.error === 'stale_owner'
+          ? reply
+              .status(409)
+              .send({ error: 'stale_owner', message: 'Ownership of this game changed. Refresh before continuing.' })
+          : reply
+              .status(409)
+              .send({ error: 'busy', message: 'A round is already opening for this game. Refresh before continuing.' });
       }
-
-      let version: string;
-      try {
-        ({ version } = await gamesStore.putCandidateSources({
-          slug,
-          jobId,
-          files,
-          backend: 'editor',
-          origin: 'editor',
-          // Pin the engine the previous version was accepted against: a content
-          // edit should be judged on the engine its game is known to work on.
-          ...(previous.engineRef ? { engineRef: previous.engineRef } : {}),
-        }));
-      } catch (error) {
-        // Nothing was stored, so nothing should be debounced: leaving the
-        // cooldown set here would strand the creator for ten minutes over a
-        // transient failure they cannot see or retry past.
-        await store
-          .recordJobTransition(jobId, { to: 'failed', at: at(), by: 'creator', reason: 'delivery_failed' })
-          .catch(() => {});
-        throw error;
-      }
-      // Recorded only once the candidate is really in the store — the publish has
-      // happened at this point, and every write below is bookkeeping.
+      const jobId = opened.jobId;
+      const { version } = await deliverContentCandidate({
+        store,
+        gamesStore,
+        slug,
+        jobId,
+        files,
+        ...(previous.engineRef ? { engineRef: previous.engineRef } : {}),
+        now,
+        onSourcesDelivered: options.onSourcesDelivered,
+      });
+      // Debounce only once the candidate really exists.
       lastPublishAt.set(slug, now());
-      await store.setSubmissionDeliveredVersion(jobId, version);
-      await store.recordJobTransition(jobId, { to: 'submitted', at: at(), by: 'creator', reason: 'content_delivered' });
-
-      const gate = await options.onSourcesDelivered?.({ jobId, slug, version });
-      if (gate?.buildId) {
-        await store
-          .recordJobCost(jobId, {
-            kind: 'gate_run',
-            at: new Date().toISOString(),
-            by: 'cloud-build',
-            ref: gate.buildId,
-          })
-          .catch(() => {});
-      }
 
       return reply.send({ ok: true, version, jobId });
     },

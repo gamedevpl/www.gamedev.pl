@@ -96,6 +96,8 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `read_inbox`                         | Read creator messages                   | read        |
 | `ack_inbox`                          | Acknowledge creator messages            | destructive |
 | `get_transcript`                     | Read the creator conversation           | read        |
+| `get_proposal_summary`               | Summarize the accepted proposal         | read        |
+| `get_proposal_diff`                  | Read one file of the accepted proposal  | read        |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
 `readOnlyHint`, `destructive` is `destructiveHint`. Eleven tools are destructive, and the

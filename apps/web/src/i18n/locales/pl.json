@@ -2188,6 +2188,7 @@
     "expiredHelp": "Gra ucichła, więc propozycja wygasła. To nie jest odmowa.",
     "watcher": "Obserwujesz tę grę — dostaniesz podsumowanie, gdy się zmieni.",
     "mergedHelp": "Twoja zmiana jest na żywo.",
+    "acceptedHelp": "Przyjęta — agent twórcy właśnie ją buduje.",
     "noted": "przyjęta do wiadomości",
     "notedHelp": "Zespół gamedev.pl przeczytał twoją propozycję — dziękujemy. Gry z katalogu zmienia zespół, więc może nie trafić na żywo dokładnie w twojej wersji."
   },
@@ -2205,7 +2206,7 @@
     "blockConfirmAction": "Zablokuj",
     "blockDone": "Zablokowano. Ta osoba nie może już proponować zmian do twoich gier.",
     "blockFailed": "Nie udało się teraz zablokować. Spróbuj za chwilę.",
-    "acceptHelp": "Przyjęcie tworzy dla ciebie nową wersję — nic nie trafia na żywo, dopóki jej nie opublikujesz.",
+    "acceptHelp": "Przyjęcie rozpoczyna rundę, w której twój agent odtwarza tę zmianę w twojej grze — kod autora propozycji nigdy nie jest kopiowany.",
     "markNoted": "Przyjęte do wiadomości",
     "notedHelp": "Zamyka propozycję jako przyjętą do wiadomości. Gra się nie zmienia — ewentualne zmiany zespół wprowadza sam.",
     "expiresIn": "Wygasa za {{days}} dni bez recenzji",

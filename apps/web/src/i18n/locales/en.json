@@ -2174,6 +2174,7 @@
     "expiredHelp": "This game went quiet, so the proposal timed out. It wasn't turned down.",
     "watcher": "You're a watcher on this game — you'll get a digest when it changes.",
     "mergedHelp": "Your change is live.",
+    "acceptedHelp": "Accepted — the creator's agent is building it.",
     "noted": "noted",
     "notedHelp": "The gamedev.pl team read your proposal — thank you. Catalog games are changed by the team, so it may not ship exactly as you built it."
   },
@@ -2191,7 +2192,7 @@
     "blockConfirmAction": "Block",
     "blockDone": "Blocked. They can't propose to your games any more.",
     "blockFailed": "Couldn't block just now. Try again in a moment.",
-    "acceptHelp": "Accepting creates a new version for you — nothing goes live until you publish it.",
+    "acceptHelp": "Accepting starts a round where your agent rebuilds this change in your game — the proposer's code is never copied in.",
     "markNoted": "Mark as noted",
     "notedHelp": "Closes it as noted. Nothing changes in the game — the team makes any change itself.",
     "expiresIn": "Expires in {{days}} days if unreviewed",

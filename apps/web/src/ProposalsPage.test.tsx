@@ -64,6 +64,7 @@ describe('ProposalsPage', () => {
   it('keeps "accepted" for a creator-owned game', async () => {
     await draw([proposal({ platformOwned: false })]);
     expect(container.querySelector('.proposal-chip')?.textContent).toBe('accepted');
+    expect(container.textContent).toContain("the creator's agent is building it");
     expect(container.textContent).not.toContain('Withdraw');
   });
 });

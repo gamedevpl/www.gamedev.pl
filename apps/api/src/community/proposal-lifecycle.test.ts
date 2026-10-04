@@ -45,9 +45,8 @@ function fakeGamesStore() {
       const manifest = manifests.get(key(slug, version));
       if (manifest) manifest.gate = { ...result, ranAt: new Date(NOW).toISOString() } as VersionManifest['gate'];
     },
-    adoptProposalVersion: vi.fn(),
   };
-  return store as unknown as GamesStore & { adoptProposalVersion: ReturnType<typeof vi.fn> };
+  return store as unknown as GamesStore;
 }
 
 const FILES: SourceFile[] = [{ path: 'game.ts', content: 'export const grip = 0.9;' }];
@@ -102,16 +101,15 @@ describe('proposal lifecycle', () => {
     const proposal = await openOn(store, gamesStore, 'orbit');
     await gamesStore.putGateResult('orbit', proposal.version!, { green: true } as never);
     await reconcileProposalGate(deps(), proposal.id);
-    const adoptIntoJob = vi.fn();
+    const startRound = vi.fn();
     const result = await acceptProposal(
-      { ...deps(), adoptIntoJob },
+      { ...deps(), startRound },
       { id: proposal.id, byUid: 'g:admin', reviewer: 'platform' },
     );
     expect(result).toMatchObject({ ok: true, proposal: { state: 'accepted' } });
     if (!result.ok) return;
     expect(result.proposal.transitions.at(-1)).toMatchObject({ to: 'accepted', reason: 'noted', by: 'operator' });
-    expect(adoptIntoJob).not.toHaveBeenCalled();
-    expect(gamesStore.adoptProposalVersion).not.toHaveBeenCalled();
+    expect(startRound).not.toHaveBeenCalled();
     expect(result.proposal.adoptedJobId).toBeUndefined();
     expect(isNotedFeedback(result.proposal)).toBe(true);
 
@@ -124,13 +122,13 @@ describe('proposal lifecycle', () => {
     const proposal = await openOn(store, gamesStore, 'orbit', 'repo');
     await gamesStore.putGateResult('orbit', proposal.version!, { green: true } as never);
     await reconcileProposalGate(deps(), proposal.id);
-    const adoptIntoJob = vi.fn();
+    const startRound = vi.fn();
     const result = await acceptProposal(
-      { ...deps(), adoptIntoJob },
+      { ...deps(), startRound },
       { id: proposal.id, byUid: null, reviewer: 'platform' },
     );
     expect(result.ok).toBe(true);
-    expect(adoptIntoJob).not.toHaveBeenCalled();
+    expect(startRound).not.toHaveBeenCalled();
     expect((await canProposeTo(store, 'orbit', PROPOSER)).ok).toBe(true);
   });
 

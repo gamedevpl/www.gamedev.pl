@@ -1,20 +1,18 @@
-import { withProposalAdmission, type ProposalAdopter } from './proposal-admission.js';
 // Proposals: a change to a game somebody else owns.
 //
 // The shape is deliberately small, because almost everything it needs already exists. A
 // proposal is an immutable candidate version written into the target game's own prefix
 // and marked `deliveryMode: 'proposal'`, plus a record saying who sent it, what it is
 // based on, and what state the review is in. The gate that checks it is the same gate that
-// checks a creator's own delivery. Acceptance is the existing improvement-round machinery
-// pointed at a version that already has a green verdict. Publication is untouched: the
-// game's owner publishes an accepted change the way they publish everything else.
+// checks a creator's own delivery. Acceptance opens an improvement round in which the
+// owner's own agent rebuilds the change on the live game; the proposer's code is never
+// copied in. Publication is untouched: the owner publishes that round as usual.
 //
 // Three rules hold the whole thing up, and each is enforced somewhere a forgetful caller
 // cannot route around:
 //
 // 1. **A proposal never publishes.** `isPublishableMode` refuses proposal-mode versions in
-//    every publish path, and `adoptProposalVersion` — the only way out of that mode —
-//    requires a green gate and an accepting owner.
+//    every publish path, and nothing ever takes a version out of that mode.
 // 2. **A proposer never gains scope.** They read the target's *published* sources and
 //    deliver through the same server-side allowlist as anyone else. There is no path that
 //    names `shared/`, `tools/`, or another game.
@@ -25,6 +23,7 @@ import { withProposalAdmission, type ProposalAdopter } from './proposal-admissio
 // or serve any HTTP (see `proposal-routes.ts`). It is the domain layer both of those call.
 
 import { randomUUID } from 'node:crypto';
+import { isTerminal } from '../creation/job-state.js';
 import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
@@ -380,21 +379,19 @@ export async function reconcileProposalGate(deps: ProposalDeps, id: string): Pro
 export type DecisionResult =
   { ok: true; proposal: ProposalRecord } | { ok: false; status: number; error: string; category?: string };
 
-/**
- * Accept a proposal: adopt its version and hand the owner a job they can publish.
- *
- * This is the step people expect to be "the merge", and the most important thing about it
- * is what it does not do. It does not publish. It flips the stored version out of proposal
- * mode, creates an improvement job owned by the target's owner with that version already
- * delivered and already gate-green, and stops. The owner then publishes it through the
- * same route as any other finished round — which is where the human moderation boundary
- * lives, and it stays exactly where it was.
- */
+export type ProposalRoundOutcome =
+  { ok: true; jobId: number; route: 'round' | 'data' } | { ok: false; status: number; error: string };
+
+// Starts the owner's round; must call `link` before any agent or gate runs.
+export type ProposalRoundStarter = (input: {
+  proposal: ProposalRecord;
+  ownerUid: string;
+  link: (jobId: number) => Promise<boolean>;
+}) => Promise<ProposalRoundOutcome>;
+
+// Accept never adopts proposer code: it opens an owner round that rebuilds it.
 export async function acceptProposal(
-  deps: ProposalDeps & {
-    /** Creates the owner-side improvement job. Injected to keep submissions out of here. */
-    adoptIntoJob: ProposalAdopter;
-  },
+  deps: ProposalDeps & { startRound: ProposalRoundStarter },
   input: { id: string; byUid: string | null; reviewer: 'platform' | 'creator' },
 ): Promise<DecisionResult> {
   const now = deps.now ?? Date.now;
@@ -403,52 +400,75 @@ export async function acceptProposal(
   if (!record.version) return { ok: false, status: 409, error: 'nothing_delivered' };
   if (record.state !== 'in_review') return { ok: false, status: 409, error: 'not_reviewable' };
 
-  const version = record.version;
-  const decide = async (reason: 'accepted' | 'noted'): Promise<DecisionResult> => {
+  const stampAccepted = (target: ProposalRecord, reason: 'accepted' | 'noted') => {
     const at = new Date(now()).toISOString();
-    record.decision = { at, byUid: input.byUid, reviewer: input.reviewer };
-    transitionProposal(record, 'accepted', input.reviewer === 'platform' ? 'operator' : 'reviewer', at, reason);
-    await deps.store.putProposal(record);
+    target.decision = { at, byUid: input.byUid, reviewer: input.reviewer };
+    return transitionProposal(target, 'accepted', input.reviewer === 'platform' ? 'operator' : 'reviewer', at, reason);
+  };
+  const told = async (target: ProposalRecord): Promise<DecisionResult> => {
     await tell(deps, {
-      uid: record.proposerUid,
+      uid: target.proposerUid,
       type: 'proposal.decided',
-      proposalId: record.id,
-      gameTitle: record.targetSlug,
+      proposalId: target.id,
+      gameTitle: target.targetSlug,
     });
-    return { ok: true, proposal: record };
+    return { ok: true, proposal: target };
   };
   // Platform/catalog targets are loose feedback: decision only, no job, no PR.
-  if (isFeedbackOnly(record)) return decide('noted');
+  if (isFeedbackOnly(record)) {
+    stampAccepted(record, 'noted');
+    await deps.store.putProposal(record);
+    return told(record);
+  }
 
-  const adopt = async (admissionNonce?: string): Promise<DecisionResult> => {
-    // Ownership can move between resolveReviewer's check and this lease's acquisition.
-    if (input.reviewer === 'creator') {
-      const owner = await resolveOwnerOfRecord(deps.store, record.targetSlug);
-      if (owner.kind !== 'creator' || owner.uid !== input.byUid) {
-        return { ok: false, status: 409, error: 'stale_owner' };
-      }
-    }
-    // Recheck the live base after admission and before adopting the manifest.
-    const publication = await deps.store.getPublication(record.targetSlug);
-    if (record.base.kind === 'store' && isBaseStale(record.base.version, publication?.currentVersion)) {
-      const at = new Date(now()).toISOString();
-      transitionProposal(record, 'superseded', 'system', at, 'stale_base');
-      await deps.store.putProposal(record);
-      return { ok: false, status: 409, error: 'superseded' };
-    }
+  const ownerUid = input.byUid;
+  const owner = await resolveOwnerOfRecord(deps.store, record.targetSlug);
+  if (input.reviewer !== 'creator' || !ownerUid || owner.kind !== 'creator' || owner.uid !== ownerUid) {
+    return { ok: false, status: 409, error: 'stale_owner' };
+  }
+  const publication = await deps.store.getPublication(record.targetSlug);
+  // A taken-down game takes no new rounds.
+  if (publication && !isPublished(publication)) return { ok: false, status: 409, error: 'not_published' };
+  if (record.base.kind === 'store' && isBaseStale(record.base.version, publication?.currentVersion)) {
+    transitionProposal(record, 'superseded', 'system', new Date(now()).toISOString(), 'stale_base');
+    await deps.store.putProposal(record);
+    return { ok: false, status: 409, error: 'superseded' };
+  }
 
-    // Acceptance makes this version publishable in its existing lane.
-    await deps.gamesStore.adoptProposalVersion({
-      slug: record.targetSlug,
-      version,
-      proposalId: record.id,
-      byUid: input.byUid,
-    });
-    const job = await deps.adoptIntoJob({ proposal: record, ownerUid: input.byUid, admissionNonce });
-    if (job) record.adoptedJobId = job.jobId;
-    return decide('accepted');
+  let linked: ProposalRecord | null = null;
+  let linkError: string | null = null;
+  // Runs under the starter's admission lease, before anything is dispatched.
+  const link = async (jobId: number): Promise<boolean> => {
+    const fresh = await deps.store.getProposal(record.id);
+    const holder = await resolveOwnerOfRecord(deps.store, record.targetSlug);
+    if (holder.kind !== 'creator' || holder.uid !== ownerUid) linkError = 'stale_owner';
+    else if (!fresh || !stampAccepted(fresh, 'accepted')) linkError = 'not_reviewable';
+    if (linkError || !fresh) return false;
+    fresh.adoptedJobId = jobId;
+    await deps.store.putProposal(fresh);
+    linked = fresh;
+    return true;
   };
-  return withProposalAdmission(deps.store, record.targetSlug, adopt);
+
+  let outcome: ProposalRoundOutcome;
+  try {
+    outcome = await deps.startRound({ proposal: record, ownerUid, link });
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode;
+    outcome = { ok: false, status: status ?? 500, error: status === 409 ? 'round_in_progress' : 'round_failed' };
+  }
+  const settled = linked as ProposalRecord | null;
+  if (outcome.ok && settled) return told(settled);
+  if (settled) {
+    // The round never started; the owner has not really decided yet.
+    transitionProposal(settled, 'in_review', 'system', new Date(now()).toISOString(), 'round_not_started');
+    delete settled.adoptedJobId;
+    delete settled.decision;
+    await deps.store.putProposal(settled);
+  }
+  const failure = linkError as string | null;
+  if (failure) return { ok: false, status: 409, error: failure };
+  return outcome.ok ? { ok: false, status: 500, error: 'round_unlinked' } : outcome;
 }
 
 /** Decline a proposal, recording whether the refusal is reportable. */
@@ -566,6 +586,13 @@ export async function withdrawProposal(
   return { ok: true, proposal: record };
 }
 
+// A linked round rebuilds on whatever is live, so a publish cannot stale it.
+async function roundStillBuilding(deps: ProposalDeps, record: ProposalRecord): Promise<boolean> {
+  if (record.state !== 'accepted' || record.adoptedJobId === undefined) return false;
+  const job = await deps.store.getSubmission(record.adoptedJobId);
+  return Boolean(job && !job.abandonedAt && !(job.state && isTerminal(job.state)));
+}
+
 /**
  * Mark every live proposal against `slug` superseded, because the game just published
  * something else.
@@ -589,6 +616,7 @@ export async function supersedeStaleProposals(
   for (const record of open) {
     if (!countsAsOpen(record.state)) continue;
     if (record.id === input.exceptProposalId || isNotedFeedback(record)) continue;
+    if (await roundStillBuilding(deps, record)) continue;
     if (record.base.kind === 'store' && !isBaseStale(record.base.version, input.currentVersion)) continue;
     if (!transitionProposal(record, 'superseded', 'system', at, 'target_published')) continue;
     await deps.store.putProposal(record);
@@ -597,17 +625,17 @@ export async function supersedeStaleProposals(
   return superseded;
 }
 
-/** Move accepted proposals to `merged` once the version they were adopted into went live. */
+// Accepted proposals merge when the round they were linked to publishes.
 export async function markProposalsMerged(
   deps: ProposalDeps,
-  input: { slug: string; version: string },
+  input: { slug: string; version: string; jobId?: number },
 ): Promise<ProposalRecord[]> {
   const now = deps.now ?? Date.now;
   const at = new Date(now()).toISOString();
   const candidates = await deps.store.listProposals({ targetSlug: input.slug, state: ['accepted'] });
   const merged: ProposalRecord[] = [];
   for (const record of candidates) {
-    if (record.version !== input.version) continue;
+    if (record.adoptedJobId === undefined || record.adoptedJobId !== input.jobId) continue;
     if (!transitionProposal(record, 'merged', 'system', at, 'published')) continue;
     await deps.store.putProposal(record);
     // The watcher relationship starts here: a merged contributor gets digest visibility,

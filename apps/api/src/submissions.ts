@@ -382,7 +382,7 @@ export interface SubmissionRoutesHandle {
     requestedBy?: CreatorMessageOrigin;
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
-    beforeDispatch?: () => Promise<boolean>;
+    beforeDispatch?: (jobId: number) => Promise<boolean>;
   }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
   /**
    * Drops the cached status response for a job, so the next poll reflects a write that
@@ -793,7 +793,7 @@ export async function registerSubmissionRoutes(
      * authorized creator after a slug transfer so quota and Studio stay aligned.
      */
     ownerUid?: string;
-    beforeDispatch?: () => Promise<boolean>;
+    beforeDispatch?: (jobId: number) => Promise<boolean>;
   }): Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.jobId);
@@ -853,7 +853,7 @@ export async function registerSubmissionRoutes(
       try {
         if (
           !(await store.claimManualRoundSlug(jobId, slug, holder.jobId, admissionNonce)) ||
-          (input.beforeDispatch && !(await input.beforeDispatch()))
+          (input.beforeDispatch && !(await input.beforeDispatch(jobId)))
         ) {
           await abandonImprovement(store, jobId, now);
           return null;

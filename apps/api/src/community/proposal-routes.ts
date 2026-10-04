@@ -1,4 +1,3 @@
-import type { ProposalAdopter } from './proposal-admission.js';
 // HTTP for proposals.
 //
 // Three audiences share one collection, and the routes are grouped by which of them is
@@ -39,6 +38,7 @@ import {
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
+  type ProposalRoundStarter,
 } from './proposals.js';
 import type { ProposalRecord, Store } from '../platform/store.js';
 
@@ -78,15 +78,8 @@ export interface ProposalRoutesOptions {
   notify?: ProposalDeps['notify'];
   contentChecker?: ContentChecker;
   adminUids?: Set<string>;
-  /**
-   * Creates the owner-side job that carries an accepted proposal's version.
-   *
-   * Injected rather than imported so this module does not depend on the submissions
-   * registrar, which is where job creation and dispatch live. Returns null when the job
-   * could not be created, which the caller reports rather than swallowing — an accepted
-   * proposal with no job is a change the owner cannot publish.
-   */
-  adoptIntoJob?: ProposalAdopter;
+  // Opens the owner's rebuild round for an accepted creator-game proposal.
+  startProposalRound?: ProposalRoundStarter;
   now?: () => number;
 }
 
@@ -322,11 +315,11 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     const reviewer = await resolveReviewer(request, record);
     if (!reviewer.ok) return reply.status(404).send({ error: 'not_found' });
 
-    const adoptIntoJob = options.adoptIntoJob;
-    if (!adoptIntoJob) return reply.status(503).send({ error: 'store_unavailable' });
+    const startRound = options.startProposalRound;
+    if (!startRound) return reply.status(503).send({ error: 'store_unavailable' });
 
     const result = await acceptProposal(
-      { ...scope, adoptIntoJob },
+      { ...scope, startRound },
       { id: record.id, byUid: reviewer.byUid, reviewer: reviewer.reviewer },
     );
     if (!result.ok) return reply.status(result.status).send({ error: result.error });
