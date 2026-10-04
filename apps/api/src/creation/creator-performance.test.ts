@@ -54,6 +54,34 @@ async function fixture(lane: 'store' | 'repo' = 'store') {
 }
 
 describe('creator performance service', () => {
+  it.each(['scan', 'cache'] as const)(
+    'refuses an owner blocked during a %s without retaining the window',
+    async (mode) => {
+      const store = await fixture();
+      const read = createCreatorPerformanceReader(store, () => Date.parse(`${date}T12:00:00Z`));
+      const scan = vi.spyOn(store, 'listTelemetryEvents');
+      if (mode === 'cache') {
+        await store.appendTelemetryEvents(date, [row('old')]);
+        expect((await read(uid, query)).ok).toBe(true);
+        const user = await store.getUser(uid);
+        vi.spyOn(store, 'getUser').mockResolvedValueOnce(user);
+        await store.upsertUser({ uid, tier: 'blocked' });
+      } else {
+        scan.mockImplementationOnce(async () => {
+          await store.upsertUser({ uid, tier: 'blocked' });
+          return [row('old')];
+        });
+      }
+      expect(await read(uid, query)).toEqual({ ok: false, code: 'not_owner' });
+      expect(scan).toHaveBeenCalledTimes(1);
+      await store.upsertUser({ uid, tier: 'free' });
+      scan.mockResolvedValue([row('new', { frames: 100 })]);
+      const afterUnblock = await read(uid, query);
+      expect(afterUnblock.ok && afterUnblock.report.groups[0]!.rafFps).toBe(20);
+      expect(scan).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it.each(['published', 'archived', 'disabled'])(
     'uses the live snapshot gate for a %s repo game over HTTP',
     async (status) => {

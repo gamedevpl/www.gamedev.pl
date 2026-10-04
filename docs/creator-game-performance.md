@@ -79,7 +79,7 @@ Each cold window scans only one authorized slug: at most 30 daily queries,
 Studio scan budget is shared with this feature: 30 cache misses per account/hour.
 The 10-minute cache is shared across MCP/HTTP and across reviewer/build filters;
 in-flight identical scans coalesce. At most 50 raw windows stay in process memory.
-Ownership and live publication are checked before cache access and again before
+Account blocking, ownership and live publication are checked before cache access and again before
 returning either a scanned or cached result. A revoked read cannot cache the scanned
 window; access revision participates in the cache key. Credentials are
 verified on every call. Narrowing a filter cannot restore rows dropped by a bounded

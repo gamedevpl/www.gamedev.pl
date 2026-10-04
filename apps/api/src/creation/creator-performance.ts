@@ -101,8 +101,14 @@ export function createCreatorPerformanceReader(
         }
         window = await pending;
       }
+      const latestUser = await store.getUser(uid);
       const latest = await resolveGameAccess(store, query.slug, now);
-      if (!ownsGame(latest, uid) || latest.accessRevision !== access.accessRevision) {
+      if (
+        !latestUser ||
+        latestUser.tier === 'blocked' ||
+        !ownsGame(latest, uid) ||
+        latest.accessRevision !== access.accessRevision
+      ) {
         cache.delete(key);
         return { ok: false, code: 'not_owner' };
       }
