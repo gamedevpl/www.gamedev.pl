@@ -1542,7 +1542,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   getRemixSettings: Store['getRemixSettings'] = (slug) => this.contributionStore.getRemixSettings(slug);
   putRemixSettings: Store['putRemixSettings'] = (record) => this.contributionStore.putRemixSettings(record);
-  listRemixOffSlugs: Store['listRemixOffSlugs'] = () => this.contributionStore.listRemixOffSlugs();
+  listRemixOnSlugs: Store['listRemixOnSlugs'] = () => this.contributionStore.listRemixOnSlugs();
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
     return this.contributionStore.isContributorBlocked(ownerUid, blockedUid);
   }

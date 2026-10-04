@@ -7,7 +7,7 @@ import { ContributionsSetting } from './ContributionsSetting.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
-let remixMode: 'on' | 'off' | null = 'on';
+let remixMode: 'on' | 'off' | 'unset' | null = 'unset';
 let putStatus = 200;
 const puts: Array<{ url: string; body: unknown }> = [];
 
@@ -20,7 +20,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
-  remixMode = 'on';
+  remixMode = 'unset';
   putStatus = 200;
   puts.length = 0;
   vi.stubGlobal(
@@ -30,7 +30,10 @@ beforeEach(async () => {
         puts.push({ url, body: JSON.parse(String(init.body)) });
         return json({ ok: true }, putStatus);
       }
-      if (url.endsWith('/remix')) return remixMode ? json({ mode: remixMode }) : json({ error: 'not_found' }, 404);
+      if (url.endsWith('/remix')) {
+        if (!remixMode) return json({ error: 'not_found' }, 404);
+        return json(remixMode === 'unset' ? {} : { mode: remixMode });
+      }
       if (url.endsWith('/contributions')) return json({ mode: 'off' });
       if (url.endsWith('/contributor-blocks')) return json({ blocks: [] });
       return json({}, 404);
@@ -63,34 +66,45 @@ function radio(name: string): HTMLButtonElement {
 }
 
 describe('ContributionsSetting', () => {
-  it('shows the remix switch, on by default, beside contributions', async () => {
+  it('shows the remix switch, off by default, beside contributions', async () => {
     await draw();
     expect(container.querySelector('[aria-label="Remixing"]')).not.toBeNull();
-    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('true');
+    expect(radio('Off (default)').getAttribute('aria-checked')).toBe('true');
+    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('false');
     expect(radio('Allow remixing').textContent).toContain('never changes your game');
+    expect(radio('Allow remixing').textContent).toContain("can't be saved or copied");
     expect(container.textContent).toContain("agents can read your game's sources");
   });
 
-  it('turns remix off for this game with one tap', async () => {
+  it('turns remix on for this game with one tap', async () => {
     await draw();
     await act(async () => {
-      radio('Off').click();
+      radio('Allow remixing').click();
     });
-    // Remix's Off radio renders first.
+    expect(puts).toEqual([{ url: '/api/me/games/dog-dash/remix', body: { mode: 'on' } }]);
+    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('reads a stored on and turns it back off', async () => {
+    remixMode = 'on';
+    await draw();
+    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('true');
+    await act(async () => {
+      radio('Off (default)').click();
+    });
     expect(puts).toEqual([{ url: '/api/me/games/dog-dash/remix', body: { mode: 'off' } }]);
-    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('false');
   });
 
   it('puts the switch back when saving fails', async () => {
     putStatus = 500;
     await draw();
     await act(async () => {
-      radio('Off').click();
+      radio('Allow remixing').click();
     });
     await act(async () => {
       await Promise.resolve();
     });
-    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('true');
+    expect(radio('Allow remixing').getAttribute('aria-checked')).toBe('false');
   });
 
   it('renders no remix switch when the game is not the caller’s', async () => {

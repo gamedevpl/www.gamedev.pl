@@ -84,7 +84,7 @@ async function draw(
     onExit?: () => void;
     initialRemixOpen?: boolean;
     initialRemixRequest?: string;
-    remixOff?: boolean;
+    remixOn?: boolean;
   } = {},
 ) {
   root = createRoot(container);
@@ -96,7 +96,7 @@ async function draw(
         source={{ slug: 'brick-storm' }}
         reportSlug="brick-storm"
         editor="content"
-        remixOff={props.remixOff}
+        remixOn={props.remixOn ?? true}
         onExit={props.onExit ?? (() => undefined)}
         controls={props.controls}
         initialRemixOpen={props.initialRemixOpen}
@@ -866,8 +866,8 @@ describe('GameTheater how-to-play visit telemetry', () => {
     expect(steps).toContainEqual(expect.objectContaining({ type: 'remix_step', step: 'opened', control: 'bar' }));
   });
 
-  it('hides the remix entry, unrecorded, when the author switched remix off', async () => {
-    await draw({ remixOff: true });
+  it('hides the remix entry, unrecorded, until remix is switched on', async () => {
+    await draw({ remixOn: false });
     session.flush();
     expect(container.querySelector('.remix-btn')).toBeNull();
     const steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');

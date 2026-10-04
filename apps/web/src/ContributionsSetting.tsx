@@ -16,8 +16,8 @@ import './propose-composer.css';
  *
  * Two questions, two switches: remix lets a player bend the game for themselves
  * and changes nothing, while contributions let others propose real changes — and
- * their agents read the game's sources to build them. `off` is the default for
- * contributions and is written first; remix defaults on.
+ * their agents read the game's sources to build them. Both default to `off`,
+ * which is written first; the author has to turn either one on.
  *
  * The blocked list lives here because blocking happens in response to a specific
  * proposal on a specific game, and that game is where someone looks for "make that stop".

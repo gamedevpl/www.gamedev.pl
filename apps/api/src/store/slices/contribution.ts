@@ -64,13 +64,13 @@ export interface ContributionStore {
 
   putContributionSettings(record: GameContributionSettings): Promise<void>;
 
-  // A game's remix switch, or null if never set (means on).
+  // A game's remix switch, or null if never set (means off).
   getRemixSettings(slug: string): Promise<GameRemixSettings | null>;
 
   putRemixSettings(record: GameRemixSettings): Promise<void>;
 
-  // Slugs whose remix switch is explicitly off.
-  listRemixOffSlugs(): Promise<string[]>;
+  // Slugs whose remix switch is explicitly on.
+  listRemixOnSlugs(): Promise<string[]>;
 
   // Whether `ownerUid` has blocked `blockedUid` from proposing to their games.
   isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean>;
@@ -187,8 +187,8 @@ export class InMemoryContributionStore implements ContributionStore {
     this.remixSettings.set(record.slug, { ...record });
   }
 
-  async listRemixOffSlugs(): Promise<string[]> {
-    return [...this.remixSettings.values()].filter((record) => record.mode === 'off').map((record) => record.slug);
+  async listRemixOnSlugs(): Promise<string[]> {
+    return [...this.remixSettings.values()].filter((record) => record.mode === 'on').map((record) => record.slug);
   }
 
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
@@ -376,10 +376,10 @@ export class FirestoreContributionStore implements ContributionStore {
     const snap = await this.gameRef(slug).get();
     const data = (snap.data() as { remix?: { mode?: string; updatedAt?: string; updatedByUid?: string } })?.remix;
     if (!data) return null;
-    // Only an explicit 'off' disables; anything else reads as on.
+    // Only an explicit 'on' enables; anything else reads as off.
     return {
       slug,
-      mode: data.mode === 'off' ? 'off' : 'on',
+      mode: data.mode === 'on' ? 'on' : 'off',
       updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
       ...(typeof data.updatedByUid === 'string' ? { updatedByUid: data.updatedByUid } : {}),
     };
@@ -390,8 +390,8 @@ export class FirestoreContributionStore implements ContributionStore {
     await this.gameRef(record.slug).set({ remix }, { merge: true });
   }
 
-  async listRemixOffSlugs(): Promise<string[]> {
-    const snap = await this.db.collection('games').where('remix.mode', '==', 'off').select().get();
+  async listRemixOnSlugs(): Promise<string[]> {
+    const snap = await this.db.collection('games').where('remix.mode', '==', 'on').select().get();
     return snap.docs.map((doc) => doc.id);
   }
 

@@ -86,10 +86,12 @@ interface Built {
 
 async function build(
   store = new InMemoryStore(),
-  extra: { codeLane?: unknown; contentChecker?: ContentChecker } = {},
+  extra: { codeLane?: unknown; contentChecker?: ContentChecker; remixUnset?: boolean } = {},
 ): Promise<Built> {
   await store.upsertUser({ uid: 'g:alice' });
   for (const slug of Object.keys(GAMES)) {
+    // Remix is an allowlist; tests opt every game in by default.
+    if (!extra.remixUnset && !(await store.getRemixSettings(slug))) await setRemix(store, slug, 'on');
     await store.setPublication({
       slug,
       state: 'published',
@@ -164,6 +166,15 @@ describe('remix guards', () => {
     apps.push(ready.app);
     return ready;
   }
+
+  it('refuses to start a game whose remix switch was never set', async () => {
+    const { app, store } = await track(build(undefined, { remixUnset: true }));
+    const refused = await start(app);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toEqual({ error: 'remix_off' });
+    await setRemix(store, 'tuned', 'on');
+    expect((await start(app)).statusCode).toBe(200);
+  });
 
   it('refuses to start when the author switched remix off', async () => {
     const { app, store } = await track(build());

@@ -19,12 +19,12 @@ const RemixSettingSchema = z.object({ mode: z.enum(REMIX_MODES) });
 export interface RemixSettingRoutesOptions {
   store: Store;
   adminUids?: Set<string>;
-  // Drops caches that carry `remixOff` for this slug.
+  // Drops caches that carry `remixOn` for this slug.
   onChanged?: (slug: string) => void;
   now?: () => number;
 }
 
-// Owner (or admin) toggles whether players may remix a game; default on.
+// Owner (or admin) toggles whether players may remix a game; default off.
 export async function registerRemixSettingRoutes(
   app: FastifyInstance,
   options: RemixSettingRoutesOptions,
@@ -33,7 +33,7 @@ export async function registerRemixSettingRoutes(
   const now = options.now ?? Date.now;
 
   async function readMode(slug: string): Promise<RemixMode> {
-    return (await store.getRemixSettings(slug))?.mode === 'off' ? 'off' : 'on';
+    return (await store.getRemixSettings(slug))?.mode === 'on' ? 'on' : 'off';
   }
 
   async function writeMode(slug: string, mode: RemixMode, uid: string): Promise<void> {

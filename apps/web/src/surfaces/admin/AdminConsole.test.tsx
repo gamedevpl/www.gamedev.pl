@@ -71,7 +71,7 @@ describe('AdminConsole', () => {
 
     const { container, root } = await render('limits');
 
-    expect(container.textContent).toContain('limits-panel');
+    expect(container.textContent).toMatch(/limits-panel[\s\S]*Allow remixing/);
     expect(container.textContent).not.toContain('queue-panel');
     expect(container.querySelector('.admin-tab.is-active')?.textContent).toBe('Limits');
 

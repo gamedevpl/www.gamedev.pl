@@ -39,21 +39,22 @@ describe('remix switch routes', () => {
     return { app, store, changed };
   }
 
-  it('defaults to on and lets the owner turn it off', async () => {
+  it('defaults to off and lets the owner turn it on', async () => {
     const { app, store, changed } = await setup();
     const owner = { 'x-test-uid': 'g:owner' };
     expect((await app.inject({ method: 'GET', url: '/api/me/games/neon/remix', headers: owner })).json()).toEqual({
-      mode: 'on',
+      mode: 'off',
     });
+    expect(await store.listRemixOnSlugs()).toEqual([]);
     const put = await app.inject({
       method: 'PUT',
       url: '/api/me/games/neon/remix',
       headers: owner,
-      payload: { mode: 'off' },
+      payload: { mode: 'on' },
     });
-    expect(put.json()).toEqual({ mode: 'off' });
-    expect((await store.getRemixSettings('neon'))?.mode).toBe('off');
-    expect(await store.listRemixOffSlugs()).toEqual(['neon']);
+    expect(put.json()).toEqual({ mode: 'on' });
+    expect((await store.getRemixSettings('neon'))?.mode).toBe('on');
+    expect(await store.listRemixOnSlugs()).toEqual(['neon']);
     expect(changed).toEqual(['neon']);
   });
 
@@ -82,22 +83,24 @@ describe('remix switch routes', () => {
     expect(put.statusCode).toBe(400);
   });
 
-  it('lets an admin toggle a platform game', async () => {
+  it('lets an admin turn on a platform game', async () => {
     const { app, store } = await setup();
     const admin = { 'x-test-uid': 'g:admin' };
+    const read = await app.inject({ method: 'GET', url: '/api/admin/games/orbit/remix', headers: admin });
+    expect(read.json()).toEqual({ mode: 'off' });
     const put = await app.inject({
       method: 'PUT',
       url: '/api/admin/games/orbit/remix',
       headers: admin,
-      payload: { mode: 'off' },
+      payload: { mode: 'on' },
     });
-    expect(put.json()).toEqual({ mode: 'off' });
-    expect((await store.getRemixSettings('orbit'))?.mode).toBe('off');
+    expect(put.json()).toEqual({ mode: 'on' });
+    expect((await store.getRemixSettings('orbit'))?.mode).toBe('on');
     const denied = await app.inject({
       method: 'PUT',
       url: '/api/admin/games/orbit/remix',
       headers: { 'x-test-uid': 'g:owner' },
-      payload: { mode: 'on' },
+      payload: { mode: 'off' },
     });
     expect(denied.statusCode).toBe(404);
   });

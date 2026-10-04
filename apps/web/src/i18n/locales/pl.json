@@ -2074,7 +2074,7 @@
     "tookTooLong": "To trwało za długo — oddaję Ci grę bez zmian.",
     "napping": "Edytowanie teraz odpoczywa — gra nadal działa.",
     "notHere": "Tej gry nie można jeszcze remiksować — ale nadal działa.",
-    "off": "Twórca wyłączył remiksowanie tej gry — ale nadal można w nią grać.",
+    "off": "Remiksowanie tej gry nie jest włączone — ale nadal można w nią grać.",
     "placeholderAgain": "Zmień jeszcze coś…",
     "buildingWait": "Chwilę to potrwa. Gra wróci sama.",
     "try": {
@@ -2236,9 +2236,9 @@
       "unblock": "Odblokuj",
       "remixTitle": "Remiksowanie",
       "remixOn": "Pozwól remiksować",
-      "remixOnHelp": "Gracze mogą przerabiać twoją grę dla siebie w trakcie gry. To tymczasowe, nigdy nie zmienia twojej gry i nie da się jej skopiować.",
-      "remixOff": "Wyłączone",
-      "remixOffHelp": "Twoja gra nie ma przycisku Remiks."
+      "remixOnHelp": "Gracze mogą przerabiać tymczasową kopię twojej gry dla siebie w trakcie gry. To nigdy nie zmienia twojej gry, a kopii nie da się zapisać ani skopiować.",
+      "remixOff": "Wyłączone (domyślnie)",
+      "remixOffHelp": "Remiksowanie pozostaje wyłączone, dopóki go nie włączysz. Twoja gra nie ma przycisku Remiks."
     },
     "diffSummary": "Zmienione pliki: {{files}} · +{{additions}} −{{deletions}}",
     "diffEmpty": "Brak zmian w plikach do pokazania.",

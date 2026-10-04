@@ -24,9 +24,9 @@ export function declaresContentEditor(entry: object | null, specMd: string | und
   return specMd !== undefined && parseSpecFrontmatter(specMd).editor === 'content';
 }
 
-// Unset means on; only an explicit author/admin choice turns it off.
+// Allowlist: only an explicit author/admin 'on' enables remix.
 export async function remixModeFor(store: Store | undefined, slug: string): Promise<RemixMode> {
-  if (!store) return 'on';
+  if (!store) return 'off';
   const settings = await store.getRemixSettings(slug);
-  return settings?.mode === 'off' ? 'off' : 'on';
+  return settings?.mode === 'on' ? 'on' : 'off';
 }

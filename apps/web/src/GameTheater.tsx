@@ -99,8 +99,8 @@ type GameTheaterProps = {
   /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
   touch?: CatalogTouch | null;
   editor?: CatalogEditor | null;
-  // The author switched remix off for this game.
-  remixOff?: boolean;
+  // The author or an admin switched remix on; off by default.
+  remixOn?: boolean;
   // Which home page surface launched this play, if it did.
   via?: PlayVia;
   /** Open the remix sheet on the first frame (the game-page Remix entry). */
@@ -135,7 +135,7 @@ export function GameTheater({
   controls,
   touch = null,
   editor = null,
-  remixOff = false,
+  remixOn = false,
   via,
   initialRemixOpen = false,
   initialRemixRequest,
@@ -451,7 +451,7 @@ export function GameTheater({
     setMoreOpen(false);
     postGameHostMessage(frameRef.current, { type: 'pressEscape' });
   }, [frameRef]);
-  const canRemix = remixable && !remixOff && editor === 'content' && 'slug' in source;
+  const canRemix = remixable && remixOn && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
     <button
@@ -529,9 +529,10 @@ export function GameTheater({
   // `opened` is read against. Fires on render, since being shown is the most the
   // client can honestly claim to know.
   useEffect(() => {
-    if (!remixable || remixOff || !('slug' in source)) return;
-    recordRemixStep(editor === 'content' ? 'offered' : 'no_lane');
-  }, [editor, remixable, remixOff, source]);
+    if (!remixable || !('slug' in source)) return;
+    if (editor !== 'content') recordRemixStep('no_lane');
+    else if (remixOn) recordRemixStep('offered');
+  }, [editor, remixable, remixOn, source]);
 
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the

@@ -2060,7 +2060,7 @@
     "tookTooLong": "That took too long — here's your game back, unchanged.",
     "napping": "Editing is napping right now — the game still plays.",
     "notHere": "This game can't be remixed yet — but it still plays.",
-    "off": "The creator has switched off remixing for this game — but it still plays.",
+    "off": "Remixing isn't turned on for this game — but it still plays.",
     "placeholderAgain": "Change something else…",
     "buildingWait": "This takes a moment. The game comes back on its own.",
     "try": {
@@ -2222,9 +2222,9 @@
       "unblock": "Unblock",
       "remixTitle": "Remixing",
       "remixOn": "Allow remixing",
-      "remixOnHelp": "Players can tweak your game for themselves while they play. It's temporary, never changes your game, and they can't copy it.",
-      "remixOff": "Off",
-      "remixOffHelp": "Your game has no Remix button."
+      "remixOnHelp": "Players can tweak a temporary copy of your game for themselves while they play. It never changes your game, and it can't be saved or copied.",
+      "remixOff": "Off (default)",
+      "remixOffHelp": "Remixing stays off until you turn it on. Your game shows no Remix button."
     },
     "diffSummary": "{{files}} files changed · +{{additions}} −{{deletions}}",
     "diffEmpty": "No file changes to show.",

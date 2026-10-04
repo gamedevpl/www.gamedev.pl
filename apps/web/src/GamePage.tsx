@@ -87,9 +87,9 @@ export function GamePage({
   useEffect(() => {
     if (!page) return;
     onGameLoaded?.(page.entry.title);
-    // Switched off by its author: neither offered nor lane-less.
-    if (!page.entry.remixOff)
-      recordRemixStep(page.entry.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
+    // Has a lane but not switched on: neither offered nor lane-less.
+    if (page.entry.editor !== 'content') recordRemixStep('no_lane', { control: 'page' });
+    else if (page.entry.remixOn === true) recordRemixStep('offered', { control: 'page' });
   }, [page, onGameLoaded]);
 
   const canonicalHandle = page?.entry.creatorHandle ?? null;

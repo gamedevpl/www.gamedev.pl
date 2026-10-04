@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getRemixMode, setRemixMode, type RemixMode } from './remixSettingsApi.js';
+import { getRemixMode, setRemixMode, type RemixMode, type RemixScope } from './remixSettingsApi.js';
+import './propose-composer.css';
 
-// Author's switch: may players bend this game for themselves? Default on.
-export function RemixSetting(props: { slug: string }) {
+// Owner or admin switch: may players bend this game? Default off.
+export function RemixSetting(props: { slug: string; scope?: RemixScope }) {
+  const scope = props.scope ?? 'owner';
   const { t } = useTranslation();
   const [mode, setMode] = useState<RemixMode | null>(null);
   const [saving, setSaving] = useState(false);
@@ -11,13 +13,13 @@ export function RemixSetting(props: { slug: string }) {
   useEffect(() => {
     let cancelled = false;
     // Not the owner, or an older server: show no switch.
-    getRemixMode(props.slug)
+    getRemixMode(props.slug, scope)
       .then((next) => !cancelled && setMode(next))
       .catch(() => !cancelled && setMode(null));
     return () => {
       cancelled = true;
     };
-  }, [props.slug]);
+  }, [props.slug, scope]);
 
   const choose = useCallback(
     (next: RemixMode) => {
@@ -26,11 +28,11 @@ export function RemixSetting(props: { slug: string }) {
       // Optimistic, like the contributions switch: a failure puts it back.
       const previous = mode;
       setMode(next);
-      void setRemixMode(props.slug, next)
+      void setRemixMode(props.slug, next, scope)
         .catch(() => setMode(previous))
         .finally(() => setSaving(false));
     },
-    [mode, props.slug, saving],
+    [mode, props.slug, saving, scope],
   );
 
   if (mode === null) return null;
@@ -39,7 +41,7 @@ export function RemixSetting(props: { slug: string }) {
     <section className="contributions-setting" aria-label={t('reviews.contributions.remixTitle')}>
       <h3>{t('reviews.contributions.remixTitle')}</h3>
       <div className="contributions-options" role="radiogroup" aria-label={t('reviews.contributions.remixTitle')}>
-        {(['on', 'off'] as const).map((value) => {
+        {(['off', 'on'] as const).map((value) => {
           const key = value === 'on' ? 'remixOn' : 'remixOff';
           return (
             <button

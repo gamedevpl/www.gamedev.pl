@@ -47,7 +47,7 @@ import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
 import { registerRemixSettingRoutes } from '../community/remix-setting-routes.js';
-import { invalidateRemixOffSlugs } from '../catalog/remix-off.js';
+import { invalidateRemixOnSlugs } from '../catalog/remix-on.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes } from './spend-brake.js';
@@ -1042,7 +1042,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     onChanged: (slug) => {
       gamePageRoute.invalidateGameCache(slug);
-      invalidateRemixOffSlugs(store);
+      invalidateRemixOnSlugs(store);
     },
   });
 

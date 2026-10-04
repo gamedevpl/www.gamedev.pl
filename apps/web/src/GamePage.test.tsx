@@ -51,6 +51,7 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       world: null,
       sensing: null,
       editor: 'content',
+      remixOn: true,
       orientation: 'any',
       touch: null,
       submittedBy: 'nightshift',
@@ -261,8 +262,8 @@ describe('GamePage', () => {
     expect(container.querySelector('iframe')).toBeNull();
   });
 
-  it('does not offer Remix when the author switched it off', async () => {
-    fetchGamePage.mockResolvedValue(pageData({ entry: { ...pageData().entry, remixOff: true } }));
+  it('does not offer Remix until remix is switched on', async () => {
+    fetchGamePage.mockResolvedValue(pageData({ entry: { ...pageData().entry, remixOn: undefined } }));
     await renderPage();
 
     expect(container.querySelector('.game-page-remix')).toBeNull();
@@ -270,11 +271,7 @@ describe('GamePage', () => {
   });
 
   it('does not offer Remix when the catalog has no editor lane', async () => {
-    fetchGamePage.mockResolvedValue(
-      pageData({
-        entry: { ...pageData().entry, editor: null },
-      }),
-    );
+    fetchGamePage.mockResolvedValue(pageData({ entry: { ...pageData().entry, editor: null } }));
     await renderPage();
 
     expect(container.querySelector('.game-page-remix')).toBeNull();

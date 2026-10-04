@@ -39,6 +39,7 @@ const game: CatalogEntry = {
   world: null,
   sensing: null,
   editor: 'content',
+  remixOn: true,
   orientation: 'any',
   touch: 'gamekit',
   submittedBy: 'Grzegorz',
@@ -144,11 +145,10 @@ describe('GameDetailPage', () => {
     expect(onRemix).not.toHaveBeenCalled();
   });
 
-  it('hides Remix, recording nothing, when the author switched it off', () => {
-    const { onRemix } = render({ game: { ...game, remixOff: true } });
+  it('hides Remix, recording nothing, until remix is switched on', () => {
+    const { onRemix } = render({ game: { ...game, remixOn: undefined } });
 
-    expect(recordRemixStep).not.toHaveBeenCalledWith('offered', { control: 'page' });
-    expect(recordRemixStep).not.toHaveBeenCalledWith('no_lane', { control: 'page' });
+    expect(recordRemixStep).not.toHaveBeenCalled();
     expect(container.querySelector('.game-page-remix')).toBeNull();
     expect(onRemix).not.toHaveBeenCalled();
   });

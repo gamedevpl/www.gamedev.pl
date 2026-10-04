@@ -37,7 +37,8 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
 
   useEffect(() => {
     if (!game) return;
-    if (!game.remixOff) recordRemixStep(game.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
+    if (game.editor !== 'content') recordRemixStep('no_lane', { control: 'page' });
+    else if (game.remixOn === true) recordRemixStep('offered', { control: 'page' });
   }, [game]);
 
   if (state === 'loading') {

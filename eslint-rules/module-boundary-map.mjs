@@ -575,7 +575,7 @@ const FILE_BUCKET = {
   'published-slugs': 'catalog',
   'published-slugs-source': 'catalog',
   'game-page-routes': 'catalog',
-  'remix-off': 'catalog',
+  'remix-on': 'catalog',
   'game-health': 'catalog',
   'games-repo-client': 'catalog',
   'games-repo-contract-check': 'catalog',

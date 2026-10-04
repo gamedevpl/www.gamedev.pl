@@ -962,10 +962,10 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-bubble-undo')).toBeNull();
   });
 
-  it('tells the player when the author switched remix off, and offers only Close', async () => {
+  it('tells the player when remix is not switched on, and offers only Close', async () => {
     remixApi.startRemix.mockRejectedValue(Object.assign(new Error('remix_off'), { status: 403, code: 'remix_off' }));
     await draw();
-    expect(container.querySelector('.remix-panel-note')?.textContent).toContain('switched off remixing');
+    expect(container.querySelector('.remix-panel-note')?.textContent).toContain("isn't turned on");
     expect(buttonNamed(container, 'Close')).not.toBeNull();
     expect(container.querySelector('.remix-ask')).toBeNull();
   });
@@ -985,7 +985,7 @@ describe('RemixPanel', () => {
     );
     await draw();
     await send('bigger dog');
-    expect(container.querySelector('.remix-panel-note')?.textContent).toContain('switched off remixing');
+    expect(container.querySelector('.remix-panel-note')?.textContent).toContain("isn't turned on");
   });
 
   it('shares the server-signed code as-is under this game', async () => {

@@ -12,7 +12,7 @@ import {
   type MintBudgetLimits,
 } from '../platform/media-mint-budget.js';
 import { attachCatalogEnrichments } from './catalog-enricher.js';
-import { attachRemixOff } from './remix-off.js';
+import { attachRemixOn } from './remix-on.js';
 import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-profile.js';
 import { isVariantWidth } from '../platform/image-variants.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -381,7 +381,7 @@ export async function registerCatalogRoutes(
     try {
       const published = (await getCatalogEntries()).filter(isPublishedEntry);
       const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
-      const deattributed = await attachRemixOff(await deattributeDeletedOwners(combined), store, now());
+      const deattributed = await attachRemixOn(await deattributeDeletedOwners(combined), store, now());
       return reply.send(await attachCatalogEnrichments(deattributed, store, now()));
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {

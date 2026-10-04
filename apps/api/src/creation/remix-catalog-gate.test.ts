@@ -5,6 +5,13 @@ import { InMemoryStore } from '../platform/store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { openProposal } from '../community/proposals.js';
 
+// Remix is an allowlist; these tests opt every unset game in.
+function remixAllowed(store: InMemoryStore): InMemoryStore {
+  const read = store.getRemixSettings;
+  store.getRemixSettings = async (slug) => (await read(slug)) ?? { slug, mode: 'on', updatedAt: '' };
+  return store;
+}
+
 // Repo-lane remix is gated on live catalog membership, before repo reads.
 
 const alice = { 'x-test-uid': 'g:alice' };
@@ -41,7 +48,7 @@ describe('remix catalog gate', () => {
   });
 
   async function build(lookup: ((slug: string) => Promise<object | null>) | undefined, calls: string[]) {
-    const store = new InMemoryStore();
+    const store = remixAllowed(new InMemoryStore());
     await store.upsertUser({ uid: 'g:alice' });
     const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
     instance.decorateRequest('user', null);

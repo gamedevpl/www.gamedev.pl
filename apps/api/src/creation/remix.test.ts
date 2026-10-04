@@ -8,6 +8,13 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
 import { openProposal } from '../community/proposals.js';
 
+// Remix is an allowlist; these tests opt every unset game in.
+function remixAllowed(store: InMemoryStore): InMemoryStore {
+  const read = store.getRemixSettings;
+  store.getRemixSettings = async (slug) => (await read(slug)) ?? { slug, mode: 'on', updatedAt: '' };
+  return store;
+}
+
 const EDITOR_JSON = JSON.stringify({
   version: 1,
   params: {
@@ -133,7 +140,7 @@ async function buildTestApp(
     onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void;
   } = {},
 ) {
-  const store = new InMemoryStore();
+  const store = remixAllowed(new InMemoryStore());
   await store.upsertUser({ uid: 'g:alice' });
   await store.setPublication({
     slug: 'dog-dash',
@@ -577,7 +584,7 @@ describe('remix routes', () => {
     // Clearing the repository variable changes nothing on a revision already
     // running, and the wait for the next deploy would be spent logging players'
     // own words. So closing it is a runtime read, not a release.
-    const store = new InMemoryStore();
+    const store = remixAllowed(new InMemoryStore());
     await store.setPublication({
       slug: 'dog-dash',
       state: 'published',
@@ -747,7 +754,7 @@ describe('remix across the two catalog eras', () => {
       onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void;
     } = {},
   ) {
-    const store = overrides.store ?? new InMemoryStore();
+    const store = remixAllowed(overrides.store ?? new InMemoryStore());
     await store.upsertUser({ uid: 'g:alice' });
     const seen: Array<Record<string, string> | undefined> = [];
     const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
@@ -829,7 +836,7 @@ describe('remix across the two catalog eras', () => {
     // The two used to arrive as the same sentence, and that is how a working
     // feature reads as a missing one: a game with an entry point and a failing
     // bundle looked exactly like a game we had chosen not to support.
-    const store = new InMemoryStore();
+    const store = remixAllowed(new InMemoryStore());
     const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
     instance.decorateRequest('user', null);
     instance.addHook('onRequest', async (request) => {
