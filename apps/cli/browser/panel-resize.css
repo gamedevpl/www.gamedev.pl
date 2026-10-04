@@ -1,0 +1,43 @@
+#panel-resize {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+body[data-dock='left'] #panel-resize {
+  left: auto;
+  right: 0;
+}
+#panel-resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 4px;
+  height: 48px;
+  margin-top: -24px;
+  border-radius: 2px;
+  background: var(--panel-border);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#panel-resize:is(:hover, :focus-visible)::after,
+body[data-resizing='true'] #panel-resize::after {
+  opacity: 1;
+}
+body[data-resizing='true'] {
+  cursor: ew-resize;
+  user-select: none;
+}
+body[data-resizing='true'] iframe {
+  pointer-events: none;
+}
+@media (max-width: 600px) {
+  #panel-resize {
+    display: none;
+  }
+}
