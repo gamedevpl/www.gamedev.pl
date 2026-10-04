@@ -6,6 +6,7 @@ import { lastRoundActivityAt } from '../../platform/quiet-round.js';
 export interface TransitionGuard {
   // The round's newest activity stamp.
   state?: JobState;
+  undispatched?: boolean;
   activityAt?: number;
   roundGeneration?: number;
   // The latest dispatch ref, so a replacement round is never closed.
@@ -15,6 +16,11 @@ export interface TransitionGuard {
 }
 
 export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boolean {
+  if (
+    guard.undispatched &&
+    (sub.dispatch?.refs.length || sub.deliveredVersion || sub.previewVersion || sub.builderHandoff || sub.abandonedAt)
+  )
+    return false;
   if (guard.state !== undefined && (resolveJobState(sub) ?? 'queued') !== guard.state) return false;
   if (guard.activityAt !== undefined && lastRoundActivityAt(sub) !== guard.activityAt) return false;
   if (guard.roundGeneration !== undefined && (sub.roundGeneration ?? 1) !== guard.roundGeneration) return false;
