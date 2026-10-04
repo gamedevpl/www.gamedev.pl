@@ -55,7 +55,8 @@ export function taskOutput(write: (text: string) => void, activity?: (text: stri
       const tool = /^[\w-]+ · (?:Running a shell command|Tool:)/.test(shown);
       const waiting = /^[\w-]+ ▸ (?:Waiting for model response|Task started)$/.test(shown);
       const completedTool = /^[\w-]+ ▸ (?:✓ (?:\S+ \/ \S+|MCP tool)|Edited: .+)$/.test(shown);
-      if (tool || waiting || completedTool) {
+      const capture = /^Local capture(?:: | ready )/.test(shown);
+      if (tool || waiting || completedTool || capture) {
         currentActivity = shown.replace(' ▸ ', ' · ');
         activity?.(progress || currentActivity);
         return;

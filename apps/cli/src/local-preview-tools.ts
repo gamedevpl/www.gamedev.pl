@@ -1,11 +1,10 @@
 import { startLocalPlay } from './play.js';
 import type { AdapterSpec } from './adapters.js';
 import { localPreviewAdapter, localPreviewSupported } from './local-preview-adapter.js';
-import { startLocalPreviewMcp } from './local-preview-mcp.js';
+import { MAX_CAPTURES_PER_TASK, startLocalPreviewMcp } from './local-preview-mcp.js';
 import { formatError } from './errors.js';
 
-export const LOCAL_PREVIEW_INSTRUCTIONS =
-  'Use gamedevpl_local MCP tools for visual verification: preview_status, then capture, then capture_status for its returned jobId. The completed result contains a PNG: inspect it. Tools run on the local CLI, need no shell browser setup, and never publish. They capture the initial rendered state, not an interactive playtest. Do not claim visual verification if they report an error.';
+export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for visual verification: preview_status, then capture, then capture_status for its returned jobId. The completed result contains a PNG: inspect it. Tools run on the local CLI, need no shell browser setup, and never publish. They capture the initial rendered state, not an interactive playtest. Do not claim visual verification if they report an error. Capture after a meaningful visual change, not after every edit; each task has a budget of ${MAX_CAPTURES_PER_TASK} captures. A browser timeout is transient: retry once, then continue.`;
 
 export async function localPreviewTools(input: {
   spec: AdapterSpec;

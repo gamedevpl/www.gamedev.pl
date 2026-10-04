@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { completeSlash, parseArgv } from './argv.js';
+import { completeSlash, parseArgv, suggestSlash } from './argv.js';
 import { authorizeUrl, GAMEDEV_CLI_CLIENT_ID } from './oauth.js';
 
 describe('argv and slash completion', () => {
@@ -45,4 +45,10 @@ it('parses explicit boolean false and preserves valued flags', () => {
     args: ['./game'],
     flags: { force: false, agent: 'codex' },
   });
+});
+
+it('suggests the nearest slash verb for a typo and nothing for noise', () => {
+  expect(suggestSlash('delagate')).toBe('delegate');
+  expect(suggestSlash('/stauts')).toBe('status');
+  expect(suggestSlash('xyzzyq')).toBeUndefined();
 });
