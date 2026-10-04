@@ -198,7 +198,7 @@ export async function runLocalBuild(input: {
         command: spec.command,
         cwd,
         env: subscriptionEnv(childEnv(ws.env, '')),
-        args: spec.headless,
+        args: [...claudeLocalFlags(ws.root, cwd), ...spec.headless],
         abort: controller.signal,
       });
       await authCheck;
