@@ -164,7 +164,7 @@ export async function settleBuilder(input: {
 }
 
 export function claudeLocalFlags(root: string, cwd: string): string[] {
-  return [...(cwd === root ? [] : ['--add-dir', root]), '--strict-mcp-config'];
+  return [...(cwd === root ? [] : ['--add-dir', root]), '--strict-mcp-config', '--setting-sources', 'project,local'];
 }
 
 export async function runLocalBuild(input: {
