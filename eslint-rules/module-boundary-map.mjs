@@ -352,6 +352,7 @@ const FILE_BUCKET = {
   'creator-feedback-handler': 'creation',
   'creator-takeover': 'creation',
   'creator-code': 'creation',
+  'spec-stub': 'creation',
   'creator-studio': 'creation',
   'creator-versions': 'creation',
   'creator-profile-routes': 'creation',

@@ -36,6 +36,7 @@ import type { SourceDeliveryService } from '../delivery/source-delivery.js';
 import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { buildSpecStub } from './spec-stub.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { studioKitFromTree } from './language-kit-sources.js';
 import { typeCheckGame } from './type-check.js';
@@ -145,32 +146,6 @@ async function resolveOwnedRecord(store: Store, uid: string, slug: string): Prom
 // The delivery this round builds on — see round-base-version.ts.
 async function resolveVersion(store: Store, record: SubmissionRecord, slug: string): Promise<string | null> {
   return resolveRoundBaseVersion(store, record, slug);
-}
-
-// A SPEC.md from what the record knows: title, slug, brief, answers.
-
-// genre/controls/submitted_by stay for the creator, never guessed.
-export function buildSpecStub(record: Pick<SubmissionRecord, 'title' | 'slug' | 'spec' | 'qa'>): string {
-  // Frontmatter is line-based; a title is one line.
-  const title = record.title?.replace(/\s+/g, ' ').trim() || record.slug || 'Untitled game';
-  // YAML-safe without a serializer.
-  const quote = (value: string) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
-  const brief = record.spec?.trim();
-  const answers = (record.qa ?? []).map((line) => line.trim()).filter(Boolean);
-  return [
-    '---',
-    `title: ${quote(title)}`,
-    ...(record.slug ? [`slug: ${quote(record.slug)}`] : []),
-    '---',
-    '',
-    `# ${title}`,
-    '',
-    brief || 'Describe the game here — what the player does, how a round starts and ends.',
-    '',
-    ...(answers.length ? ['## Creator clarifications', '', ...answers.map((line) => `- ${line}`), ''] : []),
-    '<!-- Add genre, controls and submitted_by to the frontmatter above before publishing. -->',
-    '',
-  ].join('\n');
 }
 
 function budgetFor(path: string, content: string): CreatorCodeFile['budget'] {
