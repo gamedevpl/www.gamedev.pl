@@ -54,6 +54,16 @@ export function PlayShell() {
       </button>
       <pre id="notice" role="status" />
       <aside id="panel" hidden aria-labelledby="panel-title">
+        <div
+          id="panel-resize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize conversation"
+          aria-valuemin={300}
+          aria-valuemax={900}
+          tabIndex={0}
+          title="Drag to resize · double-click to reset"
+        />
         <header className="panel-head">
           <div>
             <span className="eyebrow">YOUR WORKSPACE</span>
