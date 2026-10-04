@@ -128,3 +128,6 @@ self-improvement clause at the end of each.
 ## Status legend
 
 ✅ Done / in place &nbsp;&nbsp; 🚧 In progress &nbsp;&nbsp; 📋 Planned / not built &nbsp;&nbsp; ⚠️ Risk or open question
+
+Creator performance access (Studio, HTTP and MCP):
+[creator-game-performance.md](creator-game-performance.md).

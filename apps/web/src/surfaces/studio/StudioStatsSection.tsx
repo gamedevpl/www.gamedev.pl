@@ -1,3 +1,4 @@
+import { StudioPerformance } from './StudioPerformance.js';
 import { useTranslation } from 'react-i18next';
 import type { GameHealth } from '../../healthApi.js';
 import type { StudioGame, StudioScorecard } from '../../studioApi.js';
@@ -93,6 +94,10 @@ export function StatsSection({
             <span className="funnel-stat-label">{t('studioPanel.stats.medianFps')}</span>
           </li>
         </ul>
+      )}
+
+      {(game.publishedAt || game.livePublishedAt) && game.live !== false && game.viewerRole !== 'editor' && (
+        <StudioPerformance key={game.slug} slug={game.slug} days={days} />
       )}
 
       <PlayerReactions scorecard={scorecard} />

@@ -1,3 +1,5 @@
+import { createPerformanceTools } from './mcp-performance-tools.js';
+import type { ReadGamePerformance } from '@gamedevpl/contract';
 import { livePresencePulseJob, resolvePresenceClaims, touchStartedRoundPresence } from './mcp-presence-capability.js';
 import { memberCapabilityCurrent } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -122,18 +124,7 @@ import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
-/**
- * Streamable-HTTP MCP endpoint (BY-05 / BY-23).
- *
- * Job binding is prompt-first: install configures the URL plus an account-level opener;
- * `start({ slug })` validates the creator key or OAuth identity and returns a short-lived
- * `sessionKey`. Legacy round-scoped keys remain valid for in-flight internal handoffs.
- * Every later tool authenticates on the session argument (or on a round key). The transport
- * `Mcp-Session-Id` correlator authorizes nothing — MCP spec forbids it.
- *
- * Tools wrap the existing `/api/agent/build/*` channel. Mutating replies always
- * include `{ stop, pendingMessages }`.
- */
+// Round tools require session capabilities; account reads verify account credentials.
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
@@ -244,6 +235,7 @@ export interface McpServerOptions {
   dailyImprovementQuota?: number;
   dailyFeedbackQuota?: number;
   loadOwnerGames?: LoadOwnerGamesFn;
+  readGamePerformance?: ReadGamePerformance;
   // N1: community's proposal state machine, wired at the composition root.
   proposals: ProposalDomain;
   // N1: delivery's deliverable-path vocabulary, applied without importing it.
@@ -1348,6 +1340,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       now,
       loadOwnerGames: options.loadOwnerGames,
     }),
+    ...createPerformanceTools({ store, agentTokenSecret, readGamePerformance: options.readGamePerformance, now }),
     ...createOwnershipTools({ store, platformConnectorSecret, now }),
 
     ...createProposalTools({
