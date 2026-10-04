@@ -1,3 +1,4 @@
+import { isReviewer } from '../platform/reviewer-role.js';
 import { registerReviewPlay, type CreatorReviewPreviewLoader } from './review-play.js';
 import { loadReviewCandidate, refreshReviewCandidates } from './review-candidate.js';
 import {
@@ -15,7 +16,7 @@ import {
 } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isAdmin, isAdminSession } from '../platform/admin-session.js';
+import { isAdminSession } from '../platform/admin-session.js';
 import { paginateAssessments, parseAssessmentPageQuery, QueueQuerySchema } from './assessment-pagination.js';
 import {
   matchesResolutionFilter,
@@ -120,15 +121,7 @@ function normalizeClientContext(raw: z.infer<typeof ClientContextSchema> | undef
   };
 }
 
-export function isReviewer(
-  uid: string | undefined,
-  reviewerUids: Set<string> | undefined,
-  adminUids: Set<string> | undefined,
-): boolean {
-  if (!uid) return false;
-  if (isAdmin(uid, adminUids)) return true;
-  return reviewerUids !== undefined && reviewerUids.has(uid);
-}
+export { isReviewer } from '../platform/reviewer-role.js';
 
 export function isReviewerSession(
   request: FastifyRequest,

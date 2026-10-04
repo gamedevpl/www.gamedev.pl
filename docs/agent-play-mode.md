@@ -159,9 +159,12 @@ twice would read as a sound heard twice.
   what crosses the bridge.
 - **Synthesized input is released when the mode closes.** A `keyDown` with no `keyUp`, or a
   policy that threw mid-`press`, would otherwise hand the next human a stuck key.
-- **An agent-capable session stays out of the play funnel.** `trackPlay` is off wherever
-  the mode is available, so stepped time and synthesized input never land as progress,
-  scores, endings or play time.
+- **Reviewer telemetry is retained and filtered on read.** The API derives the
+  `reviewer` flag from account permissions; published play stays instrumented even
+  when the account can open agent mode. Events recorded while its panel is open
+  carry `agentMode: true`. Performance queries exclude those events; engagement
+  queries exclude reviewer sessions and sessions containing active-agent events.
+  Drafts, remixes and the editorial review desk remain outside published play.
 
 ## The reviewer gate
 

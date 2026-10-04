@@ -127,6 +127,7 @@ export function normalizeArtifactVersion(value: unknown): string | undefined {
 }
 
 export interface FramePerformanceGroup {
+  reviewer: boolean;
   slug: string;
   artifactVersion: string | null;
   device: PlayDevice | null;

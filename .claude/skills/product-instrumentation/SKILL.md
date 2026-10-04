@@ -412,3 +412,14 @@ Device families are derived locally; raw user-agent and exact model/GPU strings 
 out of the stream. `alive.performance` measures iframe cadence and optionally the
 existing GameKit presented-frame counter. The health read exposes aggregate device,
 resolution and content-version groups. No new event type or network path is involved.
+
+## Reviewer telemetry
+
+Collect ordinary published play from reviewer/admin accounts. The API stamps a
+coarse `reviewer` flag from resolved permissions, never from client claims; retain
+no account identifiers. Read-side engagement/funnel aggregates exclude flagged
+sessions/visits. Performance queries offer `performanceReviewers=include|exclude|only`
+and group reviewers separately, with `include` as the default. Host-captured
+`agentMode` marks events while the agent panel is open; exclude those windows from
+performance and their entire sessions from play health. Legacy unflagged events
+remain unknown. See [frame performance](../../../docs/frame-performance-telemetry.md).

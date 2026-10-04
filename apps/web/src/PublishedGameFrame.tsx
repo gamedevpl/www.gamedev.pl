@@ -27,14 +27,11 @@ type PublishedGameFrameProps = {
   slots?: number;
   // Which home page surface launched this play, if it did.
   via?: PlayVia;
-  /**
-   * Whether this frame is currently on screen. The game page keeps it mounted behind
-   * another tab so a run is not restarted; play time must not accrue while it is
-   * hidden. Defaults true — every other caller shows the frame it mounts.
-   */
+  // Hidden mounted frames must not accrue play time.
   active?: boolean;
   // Off on review desk so editorial play does not skew telemetry.
   trackPlay?: boolean;
+  agentMode?: boolean;
   /**
    * Whether this surface offers Remix. Off for party mode and embeds, where the
    * frame is not the player's alone to bend.
@@ -73,6 +70,7 @@ export function PublishedGameFrame({
   via,
   active = true,
   trackPlay = true,
+  agentMode = false,
   remixable,
   remixOpenNonce,
   initialRemixRequest,
@@ -124,6 +122,7 @@ export function PublishedGameFrame({
     active,
     via,
     game?.artifactVersion,
+    agentMode,
   );
 
   // Account play affinity (signed-in) + device-local recent list (everyone). Both are

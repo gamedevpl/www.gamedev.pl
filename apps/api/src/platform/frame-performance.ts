@@ -1,4 +1,9 @@
-import { FRAME_BOUNDS_MS, type FramePerformanceGroup } from '@gamedevpl/contract';
+import {
+  selectTelemetryCohort,
+  type ReviewerCohort,
+  FRAME_BOUNDS_MS,
+  type FramePerformanceGroup,
+} from '@gamedevpl/contract';
 import type { TelemetryEvent } from './store.js';
 
 export interface PerformanceReport {
@@ -20,10 +25,15 @@ function percentileUpper(bins: number[], fraction: number): number | null {
   return null;
 }
 
-export function summarizeFramePerformance(events: TelemetryEvent[]): PerformanceReport {
-  const opens = new Map<string, TelemetryEvent>();
+export function summarizeFramePerformance(
+  events: TelemetryEvent[],
+  cohort: ReviewerCohort = 'include',
+): PerformanceReport {
   const sessionKey = (e: TelemetryEvent) => `${e.slug}/${e.sessionId}`;
+  const reviewerSessions = new Set(events.filter((event) => event.reviewer === true).map(sessionKey));
+  const opens = new Map<string, TelemetryEvent>();
   for (const event of events) if (event.type === 'game_opened') opens.set(sessionKey(event), event);
+  events = selectTelemetryCohort(events, sessionKey, cohort, 'event');
   const allSessions = new Set(events.map(sessionKey));
   const measured = new Set<string>();
   const groups = new Map<
@@ -38,6 +48,7 @@ export function summarizeFramePerformance(events: TelemetryEvent[]): Performance
     measured.add(id);
     const open = opens.get(id);
     const context = {
+      reviewer: reviewerSessions.has(id),
       slug: event.slug,
       artifactVersion: open?.artifactVersion ?? null,
       device: open?.device ?? null,

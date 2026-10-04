@@ -1,3 +1,4 @@
+import { selectTelemetryCohort } from '@gamedevpl/contract';
 import type { GameHealth } from '@gamedevpl/contract';
 export type { GameHealth };
 import type { TelemetryEvent } from './store.js';
@@ -124,10 +125,12 @@ export function summarizeGameHealth(events: TelemetryEvent[]): GameHealth[] {
 }
 
 // Same pass, one row wider.
+
 export function summarizeGameHealthDetailed(
   events: TelemetryEvent[],
   options: SummarizeOptions = {},
 ): GameHealthDetail[] {
+  events = selectTelemetryCohort(events, (event) => `${event.slug}/${event.sessionId}`);
   const bySlug = new Map<string, TelemetryEvent[]>();
   for (const event of events) {
     const bucket = bySlug.get(event.slug);

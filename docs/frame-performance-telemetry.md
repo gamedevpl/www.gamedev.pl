@@ -50,8 +50,8 @@ were no intervals or the requested percentile is above the final finite bin; the
 panel distinguishes these. FPS is duration-weighted, and histograms are summed,
 not averages of per-window percentiles. Groups cap at 2000 and report truncation;
 existing partition-scan truncation still applies. Coverage counts concern observed
-sessions, not games with no traffic. Daily legacy-health rollups advance to version 2
-because the FPS denominator changed; device breakdowns use the existing bounded raw
+sessions, not games with no traffic. Daily legacy-health rollups advance to version 3
+because reviewer and active-agent sessions must be excluded; device breakdowns use the existing bounded raw
 scan, not a new storage collection or daily-rollup shape.
 
 Events already carry server-anchored timestamps and `msSinceOpen`. Existing progress
@@ -64,3 +64,33 @@ backend and buffer size are observed now, with unknown values kept unknown.
 Validation covers the executable bridge, hostile optional inputs, legacy compatibility,
 interleaved progress/FPS calculation, device classification, grouped aggregation,
 publication-lane content identity and the existing platform gate.
+
+## Reviewer cohorts
+
+The API stamps `reviewer: true` on play and visit events from authenticated reviewer
+or admin accounts, using existing resolved request identity. Clients cannot set this
+flag. No UID, token, IP or cross-stream identifier is stored. Unflagged events include
+ordinary players, anonymous sessions and legacy data; historical reviewer status
+cannot be reconstructed.
+
+Published play remains instrumented when agent tools are available. Host events
+recorded while the agent panel is open carry `agentMode: true`, evaluated at capture
+rather than batch-flush time. Performance excludes those events, while retaining
+ordinary play before/after agent mode. Transition windows remain invalid.
+
+`GET /api/admin/telemetry/health?days=7&performanceReviewers=include` accepts:
+
+- `include` (default): players and reviewers, in separate device/render groups.
+- `exclude`: only unflagged player/legacy sessions.
+- `only`: reviewer sessions.
+
+Each performance group includes `reviewer: boolean`. Coverage counts use the selected
+cohort after active-agent events are removed. The operator panel offers the same
+filter. Health, play engagement, visit funnels and activity trends always exclude
+reviewer sessions/visits; play health also excludes entire sessions containing
+active-agent events. The performance filter does not change those business metrics.
+
+Any flagged event classifies its whole session/visit within the scanned input,
+including rows captured before sign-in. Bounded reads and UTC-day rollups may miss
+flags outside their slice; truncation and legacy/unflagged status remain caveats.
+Role filtering uses the existing reads and existing per-request authentication.

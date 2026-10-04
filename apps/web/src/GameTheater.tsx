@@ -824,7 +824,8 @@ export function GameTheater({
             embed
             via={via}
             remixable={canRemix}
-            trackPlay={trackPlay && !agentAvailable}
+            trackPlay={trackPlay}
+            agentMode={agentOpen}
             agentBridge={agentBridge ?? null}
             agentBridgePending={agentBridge === undefined}
             remixOpenNonce={remixOpenNonce}

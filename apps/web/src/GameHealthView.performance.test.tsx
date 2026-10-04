@@ -52,6 +52,13 @@ it('hides stale performance during loading and failure, then shows the replaceme
     await selectWindow('1d');
     expect(container.textContent).toContain('1 measured sessions');
     expect(container.textContent).not.toContain('7 measured sessions');
+    const cohort = container.querySelector('select');
+    expect(cohort).not.toBeNull();
+    await act(async () => {
+      cohort!.value = 'only';
+      cohort!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(health).toHaveBeenLastCalledWith(1, 'only');
   } finally {
     await act(async () => root.unmount());
     vi.restoreAllMocks();

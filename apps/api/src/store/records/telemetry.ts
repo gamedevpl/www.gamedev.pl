@@ -27,6 +27,8 @@ export type TelemetryEventType =
   | 'zone_link';
 
 export interface TelemetryEvent {
+  reviewer?: boolean;
+  agentMode?: boolean;
   /**
    * Game identity: the games-repo slug.
    *
@@ -90,6 +92,7 @@ export interface TelemetryEvent {
  * innocuous-looking field.
  */
 export interface VisitEvent {
+  reviewer?: boolean;
   /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
   visitId: string;
   type:

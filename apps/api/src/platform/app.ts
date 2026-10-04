@@ -583,6 +583,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
   await registerTelemetryRoutes(app, {
     store,
+    reviewerUids,
+    adminUids,
     publishedSlugs: envPublishedSlugs,
     // Rung 2 sheds both streams or the runbook's promise is only half true.
     keepsSession: (id) => loadShed.keepsVisitTelemetry(id),
@@ -590,7 +592,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Exempt from the beta wall: first-minute arrivals. keepsVisit is ladder rung 2.
-  await registerVisitTelemetryRoutes(app, { store, keepsVisit: (id) => loadShed.keepsVisitTelemetry(id) });
+  await registerVisitTelemetryRoutes(app, {
+    store,
+    reviewerUids,
+    adminUids,
+    keepsVisit: (id) => loadShed.keepsVisitTelemetry(id),
+  });
   await registerCliSurfaceRoutes(app);
   // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
   // clearing a vote needs a session (request.user), same as push subscriptions; the
@@ -1175,10 +1182,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // room token (verified in the first frame, not here), and the room it opens
     // was created by an allowlisted host. Everything else stays walled.
     if (request.url.startsWith('/api/mp/ws')) return;
-    // Visit telemetry measures the arrival itself, which for most visitors during
-    // closed beta happens *before* sign-in — walling it would silently zero out the
-    // one funnel this stream exists to capture. It never reads request.user and
-    // records no identifying data, so admitting it from the open internet is free.
+    // Pre-login arrivals stay public; role flags contain no account identifiers.
     if (request.url.startsWith('/api/telemetry/visit')) return;
     if (request.url === '/api/csp-report') return; // browser-posted, mostly before sign-in
     if (!closedByRung && isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
@@ -1187,9 +1191,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   });
 
-  // In production (single Cloud Run service) the API also serves the built web app from the
-  // same origin, so the browser makes only same-origin requests and no CORS is involved.
-  // WEB_DIST_DIR points at apps/web/dist; unset in local dev, where Vite serves the app.
+  // Production serves the SPA from WEB_DIST_DIR on the API origin.
   const webDistDir = process.env.WEB_DIST_DIR?.trim();
   if (webDistDir && existsSync(webDistDir)) {
     await app.register(fastifyStatic, {

@@ -36,3 +36,4 @@ export interface GameHealth {
   gfxBackends: { canvas2d: number; webgl: number; webgl3d: number };
 }
 export * from './frame-telemetry.js';
+export * from './telemetry-cohort.js';
