@@ -163,6 +163,10 @@ export async function settleBuilder(input: {
   }
 }
 
+export function claudeLocalFlags(root: string, cwd: string): string[] {
+  return [...(cwd === root ? [] : ['--add-dir', root]), '--strict-mcp-config'];
+}
+
 export async function runLocalBuild(input: {
   ws: Workshop;
   spec: AdapterSpec;
@@ -235,6 +239,7 @@ export async function runLocalBuild(input: {
       progress: output.progress,
     });
     if (localTools) spec = localTools.spec;
+    if (spec.name === 'claude') spec = { ...spec, headless: [...claudeLocalFlags(ws.root, cwd), ...spec.headless] };
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
     input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);

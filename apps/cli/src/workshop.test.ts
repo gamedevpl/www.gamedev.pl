@@ -109,6 +109,7 @@ describe('workshopTurn', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.cwd).toBe(join(root, 'games', SLUG));
     expect(calls[0]!.spec.name).toBe('claude');
+    expect(calls[0]!.spec.headless.slice(0, 3)).toEqual(['--add-dir', root, '--strict-mcp-config']);
     expect(calls[0]!.prompt).toContain('make the jump floatier');
     expect(calls[0]!.prompt).toContain('Floatier jump.');
     expect(calls[0]!.prompt).toContain('gamedevpl push');

@@ -1059,6 +1059,29 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(staged).toContain('title: "Sky Dodge"');
         expect(staged).toContain('slug: "sky-dodge"');
         expect(staged).toContain('Dodge falling rocks for as long as you can.');
+        expect(staged).not.toContain('Creator clarifications');
+      }));
+
+    it('keeps the creator QA answers in the SPEC.md stub', async () =>
+      withApp(async (app) => {
+        await store.setSubmissionBrief(10, {
+          spec: 'Dodge falling rocks for as long as you can.',
+          qa: ['Controls: arrow keys', 'Art style: pixel art'],
+        });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/restore',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'SPEC.md' },
+        });
+        expect(res.statusCode).toBe(200);
+        const staged = await games.getStagedSourceFile({
+          slug: 'sky-dodge',
+          jobId: 10,
+          roundGeneration: 1,
+          path: 'SPEC.md',
+        });
+        expect(staged).toContain('## Creator clarifications\n\n- Controls: arrow keys\n- Art style: pixel art\n');
       }));
 
     it('refuses to invent a game.ts nobody has written', async () =>

@@ -147,15 +147,16 @@ async function resolveVersion(store: Store, record: SubmissionRecord, slug: stri
   return resolveRoundBaseVersion(store, record, slug);
 }
 
-// A SPEC.md from what the record knows: title, slug, the brief.
+// A SPEC.md from what the record knows: title, slug, brief, answers.
 
 // genre/controls/submitted_by stay for the creator, never guessed.
-export function buildSpecStub(record: Pick<SubmissionRecord, 'title' | 'slug' | 'spec'>): string {
+export function buildSpecStub(record: Pick<SubmissionRecord, 'title' | 'slug' | 'spec' | 'qa'>): string {
   // Frontmatter is line-based; a title is one line.
   const title = record.title?.replace(/\s+/g, ' ').trim() || record.slug || 'Untitled game';
   // YAML-safe without a serializer.
   const quote = (value: string) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
   const brief = record.spec?.trim();
+  const answers = (record.qa ?? []).map((line) => line.trim()).filter(Boolean);
   return [
     '---',
     `title: ${quote(title)}`,
@@ -166,6 +167,7 @@ export function buildSpecStub(record: Pick<SubmissionRecord, 'title' | 'slug' | 
     '',
     brief || 'Describe the game here — what the player does, how a round starts and ends.',
     '',
+    ...(answers.length ? ['## Creator clarifications', '', ...answers.map((line) => `- ${line}`), ''] : []),
     '<!-- Add genre, controls and submitted_by to the frontmatter above before publishing. -->',
     '',
   ].join('\n');
