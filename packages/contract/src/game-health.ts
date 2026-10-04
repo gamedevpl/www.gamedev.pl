@@ -37,3 +37,4 @@ export interface GameHealth {
 }
 export * from './frame-telemetry.js';
 export * from './telemetry-cohort.js';
+export * from './game-performance.js';

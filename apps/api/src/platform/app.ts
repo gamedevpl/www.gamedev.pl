@@ -1,3 +1,5 @@
+import { createCreatorPerformanceReader } from '../creation/creator-performance.js';
+import { registerCreatorPerformanceRoute } from '../creation/creator-performance-route.js';
 import { createReviewPreviewLoader } from './review-preview-loader.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerLocalActivityRoutes } from '../creation/local-activity-routes.js';
@@ -505,14 +507,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // The agent's wire and the MCP tools over it, mounted where the route table lives.
-
   const { agentSurface } = submissionSeams;
 
   await registerAgentChannelRoutes(app, { ...agentChannelOptions, ...agentSurface.channel, store });
 
   // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret
   // and store — sessionKey is derived from the round key, never a new creator credential.
+  const repoPublishedSlugs = await createPublishedSlugGateFromEnv(undefined, snapshotReader);
+  const readGamePerformance = createCreatorPerformanceReader(store, Date.now, repoPublishedSlugs);
+  registerCreatorPerformanceRoute(app, readGamePerformance);
   await registerMcpServerRoutes(app, {
+    readGamePerformance,
     ...agentSurface.mcp,
     store,
     platformConnectorSecret,
@@ -566,19 +571,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // not a published contact point. Rate-limited and moderated in the handler.
   await registerContactRoutes(app, options.contactRoutes);
 
-  // Play-session telemetry (docs/improvement-loop-plan.md IL-1). Deliberately *not*
-  // exempted from the private-beta wall below: during closed beta every player is a
-  // signed-in member, so the wall costs nothing and keeps the intake shut to the
-  // open internet. Revisit when the site opens — the handler itself never reads
-  // request.user and records nothing that identifies a player.
-  //
+  // Published-play telemetry shares the catalog/publication gate below.
   // One env-derived gate is shared by telemetry, votes, and written feedback: all
   // three ask the same question ("is this a published slug?") and must not drift.
   // The combined gate OR's the games-repo catalog with store publications so
   // self-build games (never in catalog.json) are visible to the same callers the
   // /play route already serves. Call-site overrides still win via the spreads below.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
-    repoGate: await createPublishedSlugGateFromEnv(undefined, snapshotReader),
+    repoGate: repoPublishedSlugs,
     store,
   });
   await registerTelemetryRoutes(app, {
@@ -873,10 +873,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   if (submissionTokenSecret) await registerLocalActivityRoutes(app, store, submissionTokenSecret);
   await registerCreatorStudioRoutes(app, {
     store,
+    repoPublishedSlugs,
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
-    // N1: inject cross-bucket build-rail reads.
     isPresenceEventText: isMcpPresenceEventText,
     toRecentBuilds,
   });

@@ -1,0 +1,47 @@
+.studio-performance {
+  margin-block: 1.5rem;
+  min-width: 0;
+}
+.studio-performance-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+.studio-performance-filters label {
+  display: grid;
+  gap: 0.3rem;
+  max-width: 100%;
+}
+.studio-performance-filters select,
+.studio-performance button {
+  max-width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.4rem;
+  padding: 0.4rem;
+}
+.studio-performance-group {
+  margin-block: 0.7rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.5rem;
+  padding: 0.7rem;
+}
+.studio-performance-group summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.studio-performance-group dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+}
+.studio-performance-group dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.studio-performance-group dt {
+  opacity: 0.75;
+}

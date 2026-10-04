@@ -92,7 +92,7 @@ describe('GET /api/me/studio', () => {
     await app.close();
   });
 
-  it('reads a game with no publication record as live (games-repo entries, legacy slugs)', async () => {
+  it('does not infer repo liveness from publish history without a catalog gate', async () => {
     await store.createSubmission(21, 'g:creator', 'Legacy Game');
     await store.setSubmissionSlug(21, 'legacy-game');
     await store.setSubmissionPublishedAt(21, `${today}T12:00:00.000Z`);
@@ -101,7 +101,7 @@ describe('GET /api/me/studio', () => {
     const res = await app.inject({ method: 'GET', url: '/api/me/studio', headers: authHeaders('g:creator') });
 
     const games = (res.json() as { games: CreatorStudioGame[] }).games;
-    expect(games[0]?.live).toBeUndefined();
+    expect(games[0]?.live).toBe(false);
 
     await app.close();
   });

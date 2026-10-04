@@ -56,6 +56,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | ------------------------------------ | --------------------------------------- | ----------- |
 | `create_game`                        | Create a game                           | destructive |
 | `list_account_games`                 | List games on this account              | read        |
+| `get_game_performance`               | Read owned-game production FPS/devices  | read        |
 | `get_game_access`                    | Read current role and members           | read        |
 | `propose_game_transfer`              | Propose a transfer for Studio confirm   | write       |
 | `get_game_transfer_proposal_receipt` | Read a transfer proposal receipt        | read        |
@@ -220,3 +221,9 @@ connect card, credential-free deep links install the **server URL only**:
 A one-click install link must never carry a credential. Auth is OAuth discovery or a
 header the creator fills in afterwards. Clients without a credential-free deep-link format
 keep the hand-copy config block (Claude Code, Codex, Kimi, CLI).
+
+Production performance reads use a creator key or OAuth `mcp` access and require
+current ownership of a published game. `get_game_performance` works without
+`start` or an active round. It is disabled by default pending its disclosure rollout
+and returns `feature_unavailable` until enabled. See
+[query, coverage, rollout and limits](../../docs/creator-game-performance.md).

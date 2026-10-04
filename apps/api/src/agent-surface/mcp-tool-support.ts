@@ -1,5 +1,3 @@
-// Pure MCP tool-result shaping shared across the tool clusters.
-
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { BUILDERS, type BuilderKind } from '@gamedevpl/contract';
 import { NO_OPEN_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
@@ -37,10 +35,11 @@ export function toolErr(message: string, data?: unknown): ToolResult {
   };
 }
 
-// Codes a client can branch on. The operator reading "schema broken" instead of
-// "not the owner" is the cost of a refusal that says nothing machine-readable.
 export const MCP_ERROR_CODES = [
   'not_owner',
+  'not_published',
+  'invalid_arguments',
+  'feature_unavailable',
   'opener_required',
   'quota_blocked',
   'quota_exhausted',
@@ -121,6 +120,7 @@ export const KIT_ENGINE_REF_PROP = {
 export const MCP_VISIBLE_TOOLS = new Set([
   'create_game',
   'list_account_games',
+  'get_game_performance',
   'get_game_access',
   'propose_game_transfer',
   'get_game_transfer_proposal_receipt',
