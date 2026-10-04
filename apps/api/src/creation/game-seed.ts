@@ -1,22 +1,6 @@
-// Round 0 of a game, written by a model instead of by the coding agent.
-//
-// A direct model call picks the closest published games, puts their full source in
-// context, and generates a first draft the agent starts from instead of an empty
-// directory. Measured over three specs (ops: llm-seed-spike.md): builds 3.2-3.8x
-// faster, no quality regression, agent kept 96-99% of the seed.
-//
-// Three properties this module must keep, in order of importance:
-//
-//  1. Fail-open, always. Every failure path returns null and the build dispatches
-//     unseeded. A seed must never be why a creator's game does not get built.
-//  2. Bounded. One pick call, one generate call, hard timeouts on both.
-//  3. Backend-agnostic. Produces files, not a branch, so the seed travels on the brief.
-//
-// The spec reaching the model is the creator's own, untrusted and already moderated:
-// same exposure refine.ts has carried in production, same containment — output lands
-// in a workspace whose only exits are our gate and human review, and the path guard
-// below refuses anything outside one game directory.
+// A bounded first draft; failures dispatch the build unseeded.
 import { z } from 'zod';
+import { SeedBudget, SEED_CONTEXT_TIMEOUT_MS, SEED_TOTAL_TIMEOUT_MS, SEED_TOTAL_OUTPUT_TOKENS } from './seed-budget.js';
 import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
@@ -31,20 +15,11 @@ import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
 
 export { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
-/** The fence label carrying the hand-off note rather than a file. */
 const NOTES_FENCE = 'NOTES';
 
-/**
- * How many published games are put in front of the model as references.
- *
- * Three, measured: five reached exactly the same gate stage on the same specs for ~21%
- * more input tokens and twice the wall-clock. The catalog is a curated one-per-genre
- * collection rather than a long tail, so the third-closest game is already a weak match.
- */
-export const DEFAULT_SEED_REFERENCES = 3;
+export const DEFAULT_SEED_REFERENCES = 1;
 
-/** Total reference source put in context. Games run 8-31 KB, so this fits several. */
-const CONTEXT_BYTE_BUDGET = 240_000;
+const CONTEXT_BYTE_BUDGET = 20_000;
 
 // Chunks mode crowds out the reference budget rather than expanding the total.
 const KNOWLEDGE_CONTEXT_BUDGET_FRACTION = 0.18;
@@ -53,33 +28,28 @@ const KNOWLEDGE_CONTEXT_BYTE_BUDGET = Math.floor(CONTEXT_BYTE_BUDGET * KNOWLEDGE
 // Bounds how long knowledge context is worth waiting for.
 const DEFAULT_SEED_KNOWLEDGE_TIMEOUT_MS = 8_000;
 
-/** Refuse a single generated file larger than this. Nothing legitimate approaches it. */
 const MAX_SEED_FILE_BYTES = 120_000;
 
-/** Refuse a draft larger than this in total. A game is tens of KB, not hundreds. */
 const MAX_SEED_TOTAL_BYTES = 400_000;
 
-/** A seed that has not arrived by now has stopped being an optimization. */
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
-// Raised further — reproduced needing 391s on a complex anthropic-ceiling spec.
-export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 600_000;
+// Generation and repair share the outer deadline.
+export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = SEED_TOTAL_TIMEOUT_MS;
 
 // 'low' thinking shares this budget; 512 could starve the JSON answer empty.
 const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
-// Vertex's own ceiling. A vendor/model with a lower one needs its own provider config.
-const GENERATE_MAX_OUTPUT_TOKENS = 65_536;
+// Provider ceilings can narrow the shared output allowance.
+const GENERATE_MAX_OUTPUT_TOKENS = SEED_TOTAL_OUTPUT_TOKENS;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
 // Provider that answers when a request names none, or an unregistered one.
 export const DEFAULT_SEED_PROVIDER = 'vertex';
 
-/** Bound the untrusted spec the same way the dispatch prompt does. */
 const MAX_SPEC_CHARS = 8000;
 // Longer than this is a rewritten spec, not a correction.
 const MAX_STEER_CHARS = 600;
 
 export interface SeedFile {
-  /** Relative to `games/<slug>/`, already validated against the fixed game shape. */
   path: string;
   content: string;
 }
@@ -93,44 +63,21 @@ export interface SeedUsage {
 }
 
 export interface SeedDraft {
-  /** The game directory these files belong in. */
   slug: string;
   files: SeedFile[];
-  /** Which published games were put in front of the model, for provenance. */
   references: string[];
-  /** One paragraph the model wrote for the agent taking over. May be absent. */
   notes?: string;
-  /** What generating this cost, for the job's cost ledger. */
   usage: SeedUsage;
-  /** Wall-clock, so a slow seed is visible as a number rather than a feeling. */
   elapsedMs: number;
-  /**
-   * Whether the draft's TypeScript bundles, as far as an in-process esbuild pass can
-   * tell (see `seed-bundle.ts`). This is what decides the round-0 preview: a draft that
-   * bundles can be assembled and shown to the creator minutes after submission; one
-   * that does not is still a perfectly good head start for the agent — it just is not
-   * shown to anyone first.
-   */
   compiles: boolean;
-  /** Whether a repair round ran, so the rate of first-try-correct drafts is measurable. */
   repaired: boolean;
   typeChecked: boolean;
   typeErrors: number;
 }
 
 export interface SeedRequest {
-  /**
-   * The game directory to write into.
-   *
-   * Given rather than derived: a submission mints and race-confirms its slug before
-   * dispatch (see `mintGameSlug` / `confirmSlugClaim`), so the game already has the
-   * address it will keep for life by the time a seed is generated. The seeder deriving
-   * a second one would be a different answer to a settled question.
-   */
   slug: string;
-  /** Human-readable title, for SPEC.md frontmatter. */
   title: string;
-  /** The creator's moderated spec. Untrusted text: data, never instructions. */
   spec: string;
   // What the last draft got wrong. Data, never instructions.
   steer?: string;
@@ -139,7 +86,6 @@ export interface SeedRequest {
 }
 
 export interface GameSeeder {
-  /** Returns a draft, or null when seeding did not work out. Never throws. */
   seed(request: SeedRequest): Promise<SeedDraft | null>;
 }
 
@@ -150,22 +96,6 @@ export interface ParsedSeedResponse {
   notes?: string;
 }
 
-/**
- * Parses the generator's `--- path ---` fence format.
- *
- * Deliberately not JSON, and this is the single most load-bearing decision in the
- * module. A whole source file inside a JSON string value has to survive escaping, and in
- * the spike it did not: raw newlines, backslash line-continuations and unescaped quotes
- * (`aria-live="polite"`) each broke the payload, and because a parse failure is
- * all-or-nothing, one slip in 30 KB discarded the entire paid response — 6 runs out of 6.
- * A fence has no escaping layer to get wrong, and a malformed one costs at most the file
- * it labels. The format is also identical to how the reference sources are presented in
- * the prompt, so the model is copying a shape it has just been shown.
- *
- * Content is preserved exactly, with one deliberate exception: trailing whitespace is
- * normalized to a single newline, because the blank line before the next fence is
- * separator rather than content and every file in this repository ends that way.
- */
 export function parseSeedResponse(text: string): ParsedSeedResponse {
   const unwrapped = text.replace(/^\s*```[a-z]*\r?\n/i, '').replace(/\r?\n```\s*$/, '');
   // Anchored to line starts with a trailing newline, so SPEC.md's own `---` frontmatter
@@ -198,12 +128,6 @@ export function parseSeedResponse(text: string): ParsedSeedResponse {
   return { files, ...(notes ? { notes } : {}) };
 }
 
-/**
- * Turns a parsed response into the files that may actually be written.
- *
- * Exported for the tests that matter most: this is where a hostile or careless draft is
- * stopped, and it is the only place that decides what a seed is allowed to be.
- */
 export function collectSeedFiles(parsed: ParsedSeedResponse, slug: string): SeedFile[] {
   const files: SeedFile[] = [];
   const seen = new Set<string>();
@@ -225,14 +149,6 @@ export function collectSeedFiles(parsed: ParsedSeedResponse, slug: string): Seed
   return files;
 }
 
-/**
- * A seed worth dispatching on.
- *
- * A draft that is only a SPEC.md is not a head start — the agent would write every line
- * of the game anyway, and the branch it starts from would claim a scaffold exists when
- * one does not. Requiring the entry point plus one real module is the cheapest honest
- * test of "there is something here to continue".
- */
 export function isUsableSeed(files: SeedFile[]): boolean {
   const paths = new Set(files.map((file) => file.path));
   const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts'));
@@ -298,7 +214,7 @@ export function buildGeneratePrompt(input: {
 }): string {
   return [
     'You write a first draft of a browser game for this repository. A coding agent will finish it;',
-    'your draft is its starting point, so completeness and idiomatic engine use matter more than polish.',
+    'Keep the draft small: one core mechanic, a simple renderer, and only essential modules; the agent adds depth.',
     '',
     'Rules:',
     `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, ACCEPTANCE.json,`,
@@ -377,14 +293,6 @@ export function renderKnowledgeContext(
   return parts.join('\n');
 }
 
-/**
- * One round of "here is the compiler's objection, fix your draft".
- *
- * The whole draft is included and whole corrected files are required back — a diff
- * format would reintroduce exactly the fragile-payload problem the fence format
- * removed. Files the model does not return are kept as they are, so the minimal
- * correct answer is also the cheapest one.
- */
 export function buildRepairPrompt(input: { slug: string; errors: string[]; files: SeedFile[] }): string {
   return [
     'The game draft below fails validation. Fix it.',
@@ -403,15 +311,6 @@ export function buildRepairPrompt(input: { slug: string; errors: string[]; files
   ].join('\n');
 }
 
-/**
- * A tunable that is a real number, or the default.
- *
- * `Number('foo')` is NaN, and NaN spends money here rather than failing loudly: a NaN
- * reference count still runs the (paid) picker before `slice(0, NaN)` throws the result
- * away, and a NaN timeout is not a long deadline but an immediate abort. Both would read
- * in production as "seeding mysteriously stopped working", with a bill. A typo in an env
- * var should fall back to the measured default instead.
- */
 function positiveNumber(value: string | number | undefined, fallback: number): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -434,10 +333,6 @@ export interface ModelGameSeederOptions {
   knowledgeSearch?: QueryKnowledgeFn;
   knowledgeTimeoutMs?: number;
   typeCheck?: (sources: Record<string, string>, kitDeclaration: string | null) => TypeCheckResult;
-  /**
-   * Test seam for the bundle check. Defaults to the real esbuild pass; tests substitute
-   * verdicts so the repair flow is exercised without esbuild's opinion in the loop.
-   */
   bundleCheck?: (slug: string, files: SeedFile[]) => Promise<SeedBundleResult>;
 }
 
@@ -483,7 +378,7 @@ export class ModelGameSeeder implements GameSeeder {
     return this.providers.get(providerId)?.model ?? providerId;
   }
 
-  // Vertex's own ceiling by default; a narrower vendor/model overrides via provider config.
+  // A provider may narrow the shared output allowance.
   private maxOutputTokensFor(providerId: string): number {
     return this.providers.get(providerId)?.maxOutputTokens ?? GENERATE_MAX_OUTPUT_TOKENS;
   }
@@ -525,15 +420,24 @@ export class ModelGameSeeder implements GameSeeder {
     context: SeedContext,
     spec: string,
     providerId: string,
+    budget: SeedBudget,
   ): Promise<{ picks: string[]; usage: SeedUsage }> {
     // Raw thinkingBudget:0 also 400s on gemini-3.8-flash; 'low' is the floor.
     // Reasoning-locked models reject temperature overrides; schema constraints suffice.
-    const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
-      .responseFormat(this.pickResponseFormat())
-      .thinking({ level: 'low' })
-      .maxOutputTokens(this.pickMaxOutputTokensFor(providerId))
-      .signal(AbortSignal.timeout(this.pickTimeoutMs))
-      .run();
+    const prompt = buildPickPrompt(context, spec, this.references);
+    const result = await budget.call(
+      'pick',
+      prompt,
+      this.pickMaxOutputTokensFor(providerId),
+      this.pickTimeoutMs,
+      (signal, tokens) =>
+        this.client(providerId)(prompt)
+          .responseFormat(this.pickResponseFormat())
+          .thinking({ level: 'low' })
+          .maxOutputTokens(tokens)
+          .signal(signal)
+          .run(),
+    );
 
     const usage = usageOf(result, providerId, this.modelFor(providerId));
     // An empty or malformed reply must fail open, not crash the seed.
@@ -588,29 +492,48 @@ export class ModelGameSeeder implements GameSeeder {
     }
   }
 
-  private generate(prompt: string, providerId: string, slug: string, event: string) {
-    const builder = this.client(providerId)(prompt).maxOutputTokens(this.maxOutputTokensFor(providerId));
-    return streamCollect(builder.signal(AbortSignal.timeout(this.generateTimeoutMs)).stream(), (file) =>
-      this.options.log?.info({ slug, file }, event),
+  private generate(prompt: string, providerId: string, slug: string, event: string, budget: SeedBudget) {
+    return budget.call(event, prompt, this.maxOutputTokensFor(providerId), this.generateTimeoutMs, (signal, tokens) =>
+      streamCollect(
+        this.client(providerId)(prompt).thinking({ level: 'low' }).maxOutputTokens(tokens).signal(signal).stream(),
+        (file) => this.options.log?.info({ slug, file }, event),
+      ),
     );
   }
 
   async seed(request: SeedRequest): Promise<SeedDraft | null> {
+    try {
+      const providerId = this.resolveProvider(request.provider);
+      const model = this.options.client ? 'gemini-3.8-flash' : this.modelFor(providerId);
+      const budget = new SeedBudget(model, {
+        info: (context, message) => this.options.log?.info({ ...context, slug: request.slug, model }, message),
+      });
+      return await budget.wait(this.seedWithinBudget(request, providerId, budget));
+    } catch (error) {
+      this.options.log?.warn({ err: error, slug: request.slug }, 'seed generation failed, dispatching unseeded');
+      return null;
+    }
+  }
+
+  private async seedWithinBudget(
+    request: SeedRequest,
+    providerId: string,
+    budget: SeedBudget,
+  ): Promise<SeedDraft | null> {
     const startedAt = Date.now();
     try {
-      const context = await this.options.context.load();
+      const context = await budget.wait(this.options.context.load(), SEED_CONTEXT_TIMEOUT_MS);
       if (!context) return null;
 
       const slug = request.slug;
       const spec = request.spec.slice(0, MAX_SPEC_CHARS);
       const steer = request.steer?.trim().slice(0, MAX_STEER_CHARS) || undefined;
-      // Resolved once: pick, generate and repair all answer from the same vendor.
-      const providerId = this.resolveProvider(request.provider);
       // The steer rides the picker, or wrong references return.
       const { picks, usage: pickUsage } = await this.pickReferences(
         context,
         steer ? `${spec}\n\n${steer}` : spec,
         providerId,
+        budget,
       );
       // No references means no style guide and no API documentation in context; the draft
       // that would come back is a guess at an engine it has never seen.
@@ -619,7 +542,7 @@ export class ModelGameSeeder implements GameSeeder {
         return null;
       }
 
-      const knowledgeContext = await this.fetchKnowledgeContext(slug, spec);
+      const knowledgeContext = await budget.wait(this.fetchKnowledgeContext(slug, spec));
       const referenceBudget = knowledgeContext
         ? CONTEXT_BYTE_BUDGET - KNOWLEDGE_CONTEXT_BYTE_BUDGET
         : CONTEXT_BYTE_BUDGET;
@@ -638,7 +561,7 @@ export class ModelGameSeeder implements GameSeeder {
         ...(knowledgeContext ? { knowledgeContext } : {}),
         ...(steer ? { steer } : {}),
       });
-      const result = await this.generate(generatePrompt, providerId, slug, 'seed file generated');
+      const result = await this.generate(generatePrompt, providerId, slug, 'seed file generated', budget);
 
       const generateUsage = usageOf(result, providerId, this.modelFor(providerId));
       const parsed = parseSeedResponse(resultTextOf(result));
@@ -669,7 +592,7 @@ export class ModelGameSeeder implements GameSeeder {
         return { bundleVerdict, typeCheckResult, manifestError: seedManifestError(candidate) };
       };
 
-      let checks = await checkDraft(files);
+      let checks = await budget.wait(checkDraft(files));
       let repaired = false;
       const validationErrors = () => [
         ...(checks.bundleVerdict.ok ? [] : checks.bundleVerdict.errors),
@@ -680,7 +603,7 @@ export class ModelGameSeeder implements GameSeeder {
       if (validationErrors().length > 0) {
         repaired = true;
         const repairPrompt = buildRepairPrompt({ slug, errors: validationErrors(), files });
-        const repairResult = await this.generate(repairPrompt, providerId, slug, 'seed repair file generated');
+        const repairResult = await this.generate(repairPrompt, providerId, slug, 'seed repair file generated', budget);
         const repairUsage = usageOf(repairResult, providerId, this.modelFor(providerId));
         usage.inputTokens += repairUsage.inputTokens;
         usage.outputTokens += repairUsage.outputTokens;
@@ -696,10 +619,11 @@ export class ModelGameSeeder implements GameSeeder {
           // still exists and is still a usable head start for the agent.
           if (isUsableSeed(candidate)) files = candidate;
         }
-        checks = await checkDraft(files);
+        checks = await budget.wait(checkDraft(files));
       }
       const typeErrors = checks.typeCheckResult.verdict.ok ? 0 : checks.typeCheckResult.verdict.errors.length;
 
+      budget.assertAvailable();
       const draft: SeedDraft = {
         slug,
         files,
@@ -736,7 +660,6 @@ export class ModelGameSeeder implements GameSeeder {
   }
 }
 
-/** genaicode's result parts, flattened to the text the fence parser reads. */
 function resultTextOf(result: GenerationResult): string {
   return result.parts
     .map((part) => (part.type === 'text' ? part.text : ''))
@@ -744,7 +667,6 @@ function resultTextOf(result: GenerationResult): string {
     .trim();
 }
 
-/** The picker asks for JSON, but a stray code fence must not cost the whole call. */
 function extractJson(result: GenerationResult): string {
   const text = resultTextOf(result);
   return text.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
