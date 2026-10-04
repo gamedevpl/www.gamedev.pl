@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { writeTarGz } from '../platform/tar.js';
 import {
   SEED_SCAFFOLD_SLUG,
   buildSeedContext,
@@ -23,7 +24,10 @@ const FILES: Record<string, string> = {
   [`games/${SEED_SCAFFOLD_SLUG}/SPEC.md`]: '---\ntitle: Block Cascade\n---\n',
   [`games/${SEED_SCAFFOLD_SLUG}/game.ts`]: "import { startGame } from './game/runtime.ts';\n",
   [`games/${SEED_SCAFFOLD_SLUG}/game/runtime.ts`]: 'export function startGame() {}\n',
-  'games/apex-sprint/SPEC.md': '---\ntitle: Apex Sprint\n---\n', 'games/apex-sprint/EDITOR.ts': 'export default {};\n', 'games/apex-sprint/EDITOR.json': '{"version":2}\n', 'games/apex-sprint/EDITOR.content.json': '{"params":{}}\n',
+  'games/apex-sprint/SPEC.md': '---\ntitle: Apex Sprint\n---\n',
+  'games/apex-sprint/EDITOR.ts': 'export default {};\n',
+  'games/apex-sprint/EDITOR.json': '{"version":2}\n',
+  'games/apex-sprint/EDITOR.content.json': '{"params":{}}\n',
   'games/apex-sprint/game.ts': 'export {};\n',
   'games/apex-sprint/game/model.ts': 'export const SPEED = 1;\n',
   'games/apex-sprint/game/render.ts': 'export function paint() {}\n',
@@ -57,7 +61,8 @@ describe('buildSeedContext', () => {
     const rendered = buildSeedContext(indexOf(FILES))!.renderReferences(['apex-sprint'], 100_000);
 
     expect(rendered).toContain('--- games/apex-sprint/SPEC.md ---');
-    expect(rendered).toContain('--- games/apex-sprint/game.ts ---'); expect(rendered).toContain('--- games/apex-sprint/EDITOR.json ---');
+    expect(rendered).toContain('--- games/apex-sprint/game.ts ---');
+    expect(rendered).toContain('--- games/apex-sprint/EDITOR.json ---');
     // Sorted so the same picks always produce the same prompt; a prompt that varies run
     // to run makes any comparison between runs meaningless.
     expect(rendered.indexOf('game/model.ts')).toBeLessThan(rendered.indexOf('game/render.ts'));
@@ -97,54 +102,10 @@ describe('buildSeedContext', () => {
   });
 });
 
-/** A tarball of `files`, so the archive path can be exercised without GitHub. */
 async function tarballResponse(files: Record<string, string> = FILES): Promise<Response> {
-  const { createGzip } = await import('node:zlib');
-  const chunks: Buffer[] = [];
-
-  function header(name: string, size: number): Buffer {
-    const block = Buffer.alloc(512);
-    block.write(`repo-root/${name}`, 0, 100, 'utf8');
-    block.write('0000644\0', 100, 8, 'utf8');
-    block.write('0000000\0', 108, 8, 'utf8');
-    block.write('0000000\0', 116, 8, 'utf8');
-    block.write(`${size.toString(8).padStart(11, '0')}\0`, 124, 12, 'utf8');
-    block.write(
-      `${Math.floor(Date.now() / 1000)
-        .toString(8)
-        .padStart(11, '0')}\0`,
-      136,
-      12,
-      'utf8',
-    );
-    block.write('        ', 148, 8, 'utf8');
-    block.write('0', 156, 1, 'utf8');
-    block.write('ustar\0', 257, 6, 'utf8');
-    block.write('00', 263, 2, 'utf8');
-    // Checksum over the header with the checksum field blank-filled, per the format.
-    let sum = 0;
-    for (const byte of block) sum += byte;
-    block.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'utf8');
-    return block;
-  }
-
-  for (const [name, content] of Object.entries(files)) {
-    const body = Buffer.from(content, 'utf8');
-    chunks.push(header(name, body.byteLength), body);
-    const padding = (512 - (body.byteLength % 512)) % 512;
-    if (padding > 0) chunks.push(Buffer.alloc(padding));
-  }
-  chunks.push(Buffer.alloc(1024));
-
-  const gzip = createGzip();
-  const output: Buffer[] = [];
-  gzip.on('data', (chunk: Buffer) => output.push(chunk));
-  const done = new Promise<void>((resolve) => gzip.on('end', () => resolve()));
-  gzip.end(Buffer.concat(chunks));
-  gzip.resume();
-  await done;
-
-  return new Response(Buffer.concat(output), { status: 200 });
+  return new Response(
+    writeTarGz(Object.entries(files).map(([path, content]) => ({ path: `repo-root/${path}`, content }))),
+  );
 }
 
 const { 'catalog.json': _catalogFile, ...FILES_WITHOUT_CATALOG } = FILES;

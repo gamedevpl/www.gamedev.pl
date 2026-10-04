@@ -330,3 +330,17 @@
   filter: brightness(1.1);
   box-shadow: 0 0 16px var(--turquoise-glow);
 }
+
+.studio-rail-icon:has(.studio-rail-stats-label) {
+  width: auto;
+  min-width: 44px;
+  height: auto;
+  min-height: 44px;
+  padding: 6px 4px;
+  flex-direction: column;
+  gap: 4px;
+}
+.studio-rail-stats-label {
+  font-size: 0.7rem;
+  line-height: 1.2;
+}

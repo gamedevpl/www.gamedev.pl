@@ -1,19 +1,3 @@
-/**
- * The games repo as one download instead of a thousand reads.
- *
- * The snapshot bake needs nearly every file in the games repo — sources and media
- * for all ~84 published games — and used to ask GitHub for them one at a time
- * through the contents API. At roughly a thousand requests per bake, and a bake per
- * push to the games repo, that is what drained `GAMES_REPO_TOKEN`'s hourly budget
- * and 403'd everything else holding the same token, CI included.
- *
- * `GET /repos/<repo>/tarball/<ref>` answers the same question in **one** request.
- * What comes back is a file source with the same shape the contents API path
- * exposes, so `createGitHubClient` can be handed either one and every line of
- * assembly logic downstream stays identical (`RepoFileSource` in
- * `github-client.ts`).
- */
-
 import { createGunzip } from 'node:zlib';
 import { Readable } from 'node:stream';
 import type { RepoFileSource } from '../catalog/github-client.js';
@@ -31,6 +15,7 @@ export interface FetchGamesRepoArchiveOptions {
    */
   include?: (path: string) => boolean;
   maxTotalBytes?: number;
+  maxEntryBytes?: number;
 }
 
 export interface GamesRepoArchive extends RepoFileSource {
@@ -99,21 +84,27 @@ export async function fetchGamesRepoArchive(options: FetchGamesRepoArchiveOption
 
   // The archive is gzipped; gunzip it as it arrives rather than buffering the
   // compressed copy and the decompressed one at once.
-  const gunzipped = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]).pipe(createGunzip());
-
-  for await (const entry of readTarEntries(gunzipped, {
-    include: (path) => {
-      const relative = stripRoot(path);
-      return relative !== null && include(relative);
-    },
-    maxTotalBytes: options.maxTotalBytes,
-  })) {
-    const relative = stripRoot(entry.path);
-    if (relative === null) {
-      continue;
+  const compressed = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
+  const gunzipped = compressed.pipe(createGunzip());
+  try {
+    for await (const entry of readTarEntries(gunzipped, {
+      include: (path) => {
+        const relative = stripRoot(path);
+        return relative !== null && include(relative);
+      },
+      maxTotalBytes: options.maxTotalBytes,
+      maxEntryBytes: options.maxEntryBytes,
+    })) {
+      const relative = stripRoot(entry.path);
+      if (relative === null) {
+        continue;
+      }
+      files.set(relative, entry.bytes);
+      byteCount += entry.bytes.byteLength;
     }
-    files.set(relative, entry.bytes);
-    byteCount += entry.bytes.byteLength;
+  } finally {
+    gunzipped.destroy();
+    compressed.destroy();
   }
 
   function assertRef(requested: string): void {

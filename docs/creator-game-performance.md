@@ -60,8 +60,19 @@ includes `retryAfterSeconds`. A successful read does not authorize game optimiza
 
 ## Studio and HTTP
 
-Open Statistics on an owned, live published game. The existing 1d/7d/30d selector
-also selects the performance window. Cohort/build filters and expandable groups
+In Studio, select an owned, live published game, open **Details** (inside `…` on
+compact screens), then choose the labelled **Stats** button below Overview.
+**Performance**, **Traffic**, **Player feedback**, and **Suggestions & settings**
+are separate views. The feedback badge counts votes and written notes from the
+nightly roll-up, whose fixed window is independent of the 1d/7d/30d selector.
+Traffic excludes reviewer and agent sessions; Performance has its own cohort filter.
+
+On desktop (1100px and wider), drag the left edge of Details to resize it. The
+focused edge also accepts left/right arrows, Home and End; double-click resets its
+width. The browser remembers the chosen width, bounded by the available stage.
+Compact screens retain the sheet layout.
+
+The existing 1d/7d/30d selector also selects the performance window. Cohort/build filters and expandable groups
 show the same measurements as MCP, in Polish or English. Loading, read failures,
 missing samples and incomplete scans are explicit. Errors do not display stale data.
 

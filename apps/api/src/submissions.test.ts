@@ -6907,9 +6907,7 @@ describe('operator cancel and retry', () => {
 
   it('refuses to retry a job that was never dispatched, where a round would brief nothing', async () => {
     const stub = createGithubClientStub({});
-    // No agent backend on create: the job stays queued with no dispatch and no spec on
-    // record. Retry must refuse rather than start an empty session — but the route
-    // needs *a* backend to exist, so one is present and never called.
+    // Missing original briefs must never start empty sessions.
     const { backend, briefs } = createBackendStub();
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
@@ -6918,6 +6916,8 @@ describe('operator cancel and retry', () => {
     await first.app.inject({ method: 'POST', url: '/api/submissions', headers: first.authHeaders, payload: body });
     await first.app.close();
     const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionBrief(job.jobId, { spec: '', qa: [] });
+    await store.setSubmissionDispatchBrief(job.jobId, '');
     await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
@@ -6939,7 +6939,7 @@ describe('operator cancel and retry', () => {
     });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ error: 'never_dispatched' });
+    expect(response.json()).toMatchObject({ error: 'no_spec' });
     expect(briefs).toHaveLength(0);
 
     await app.close();

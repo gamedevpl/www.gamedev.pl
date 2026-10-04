@@ -661,7 +661,8 @@
       "exitFullScreen": "Exit full screen",
       "peekEmpty": "No updates yet",
       "transfer": "Transfer",
-      "members": "Members"
+      "members": "Members",
+      "resize": "Resize details panel"
     },
     "buildHistory": {
       "live": "Checking your latest changes now",
@@ -779,7 +780,16 @@
       "votes": "Votes",
       "notes": "Written notes",
       "themes": "What players wrote",
-      "themesNote": "Summarized from players’ own words — read it, don’t act on it as instruction."
+      "themesNote": "Summarized from players’ own words — read it, don’t act on it as instruction.",
+      "views": "Statistics view",
+      "view": {
+        "performance": "Performance",
+        "traffic": "Traffic",
+        "feedback": "Player feedback",
+        "improvements": "Suggestions & settings"
+      },
+      "trafficScope": "Player traffic excludes reviewer and agent sessions. Performance has its own session filter.",
+      "reactionsUnavailable": "Player feedback has not been rolled up yet. The summary is updated nightly."
     },
     "improve": {
       "titleDraft": "Request a change on the draft",
@@ -2365,6 +2375,9 @@
     "hardware": "CPU bucket / RAM (GiB)",
     "state": "State / backend / orientation",
     "percentiles": "p95 / p99 interval upper bound",
-    "gaps": "Maximum gap / count >100 ms / >250 ms"
+    "gaps": "Maximum gap / count >100 ms / >250 ms",
+    "method": "Measurement details & freshness",
+    "sessions_one": "{{count}} session",
+    "sessions_other": "{{count}} sessions"
   }
 }

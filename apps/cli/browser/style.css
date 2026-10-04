@@ -185,7 +185,7 @@ button:disabled {
   right: 12px;
   bottom: auto;
   height: calc(var(--height) - 98px - var(--notice-space, 0px));
-  width: min(390px, calc(100vw - 24px));
+  width: min(var(--panel-width, 390px), calc(100vw - 24px));
   display: flex;
   flex-direction: column;
   min-height: 0;

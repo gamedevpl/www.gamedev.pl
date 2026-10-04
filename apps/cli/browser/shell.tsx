@@ -119,6 +119,18 @@ export function PlayShell() {
           </p>
         </form>
       </aside>
+      <div
+        id="panel-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize conversation"
+        aria-controls="panel"
+        aria-valuemin={300}
+        aria-valuemax={900}
+        aria-valuenow={390}
+        tabIndex={0}
+        title="Drag to resize · double-click to reset"
+      />
       <aside id="workbench-tools" hidden aria-labelledby="drawer-title">
         <header className="panel-head">
           <h2 id="drawer-title">Commands</h2>
