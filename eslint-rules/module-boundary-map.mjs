@@ -299,6 +299,7 @@ const FILE_BUCKET = {
   'preview-round-close': 'creation',
   'gate-repair': 'creation',
   'dispatch-build': 'creation',
+  'retry-undispatched': 'creation',
   'resume-build': 'creation',
   'seed-pipeline': 'creation',
   'seed-regeneration': 'creation',

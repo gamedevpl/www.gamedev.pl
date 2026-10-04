@@ -57,6 +57,7 @@ import {
 } from './creation/seed-dispatch.js';
 import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
+import { retryUndispatchedBuild } from './creation/retry-undispatched.js';
 import { createResumeBuild } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
 import { createGateRepairHandler } from './creation/gate-repair.js';
@@ -1676,12 +1677,7 @@ export async function registerSubmissionRoutes(
     return reply.send({ ok: true, state: 'canceled', stopEnforced });
   });
 
-  /**
-   * What the operator's retry tells the agent. Deliberately thin: the channel already
-   * carries the substantive brief — the gate verdict with its report, pending creator
-   * messages, the must-deliver reminder — on every call, derived from what we stored.
-   * Repeating any of it here would be a second copy that drifts.
-   */
+  // The build channel carries the original brief and current gate feedback.
   const OPERATOR_RETRY_BRIEF =
     'The operator restarted this build after it stopped making progress. Read the gate verdict and any ' +
     'pending creator messages on the build channel, fix what ended the last round, and deliver again.';
@@ -1717,13 +1713,19 @@ export async function registerSubmissionRoutes(
     if (!state || !OPERATOR_RETRY_STATES.has(state)) {
       return reply.status(409).send({ error: 'not_retryable', ...(state ? { state } : {}) });
     }
-    // Nothing delivered and nothing dispatched: there is no branch to recover, no stored
-    // version to restore, and the spec is not on the record — a round started from here
-    // would brief the agent with nothing. `queued` jobs land here, which is deliberate:
-    // their fix is dispatch coming back, not an empty session.
     const undelivered = !record.deliveredVersion;
     if (undelivered && !record.dispatch?.refs?.length) {
-      return reply.status(409).send({ error: 'never_dispatched' });
+      if (state !== 'failed') return reply.status(409).send({ error: 'never_dispatched' });
+      const outcome = await retryUndispatchedBuild({ store, record, dispatchBuild, now, log: request.log });
+      if (outcome !== 'started') {
+        return reply.status(outcome === 'dispatch_failed' ? 502 : 409).send({ error: outcome });
+      }
+      invalidateStatusCache(record.jobId);
+      return reply.send({
+        ok: true,
+        state: (await store.getSubmission(jobId))?.state,
+        creditsSpent: builderOf(record) === 'self' ? 0 : 1,
+      });
     }
 
     const refsBefore = record.dispatch?.refs?.length ?? 0;
