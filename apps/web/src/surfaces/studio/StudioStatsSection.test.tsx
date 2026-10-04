@@ -40,3 +40,44 @@ it.each([
     await act(async () => root.unmount());
   }
 });
+
+it('keeps feedback one click away and separates its nightly window from traffic and settings', async () => {
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        <StatsSection
+          game={{ slug: 'space-hop', publishedAt: '2026-10-04' } as StudioGame}
+          health={null}
+          days={7}
+          healthDays={[]}
+          truncated={false}
+          scorecard={{
+            slug: 'space-hop',
+            windowDays: 28,
+            computedAt: '2026-10-04T00:00:00Z',
+            truncated: false,
+            votes: { up: 2, down: 1 },
+            feedbackCount: 4,
+            untrustedThemes: [{ theme: '<script>bad</script>', count: 1 }],
+          }}
+          onDaysChange={() => {}}
+        />,
+      ),
+    );
+    const button = [...container.querySelectorAll('nav button')].find((item) =>
+      item.textContent?.includes('view.feedback'),
+    )! as HTMLButtonElement;
+    expect(button.textContent).toContain('7');
+    await act(async () => button.click());
+    const feedback = container.querySelector('section[aria-label="studioPanel.stats.reactions"]')!;
+    expect(feedback.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('.health-windows')?.hasAttribute('hidden')).toBe(true);
+    expect(feedback.textContent).toContain('<script>bad</script>');
+    expect(feedback.querySelector('script')).toBeNull();
+    expect(feedback.querySelector('.studio-autonomy')).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+  }
+});

@@ -86,21 +86,12 @@ export function StudioPerformance({ slug, days }: { slug: string; days: number }
       )}
       {state === 'ready' && report && (
         <>
-          <p>
+          <p className="studio-performance-coverage">
             {t('studioPerformance.coverage', {
               measured: report.measuredSessions,
               unmeasured: report.unmeasuredSessions,
             })}
           </p>
-          <p>
-            {t('studioPerformance.freshness', {
-              at: new Date(report.measuredAt).toLocaleString(),
-              until: new Date(report.freshUntil).toLocaleTimeString(),
-            })}
-          </p>
-          {report.days.length > 0 && (
-            <p>{t('studioPerformance.range', { from: report.days.at(-1), to: report.days[0] })}</p>
-          )}
           {(report.scanTruncated || report.groupsTruncated || report.versionsTruncated) && (
             <p role="status">{t('studioPerformance.truncated')}</p>
           )}
@@ -109,20 +100,27 @@ export function StudioPerformance({ slug, days }: { slug: string; days: number }
               {t(report.status === 'no_traffic' ? 'studioPerformance.noTraffic' : 'studioPerformance.noValidWindows')}
             </p>
           )}
-          <p>
-            {t('studioPerformance.exclusions', {
-              invalid: report.invalidWindows,
-              agents: report.agentEventsExcluded,
-              legacy: report.aliveWithoutPerformance,
-            })}
-          </p>
-          <p>{t('studioPerformance.limitations')}</p>
           {report.groups.map((group, index) => (
             <details key={index} className="studio-performance-group">
               <summary>
-                {group.device?.deviceClass ?? 'unknown'} / {group.device?.system ?? 'unknown'} /{' '}
-                {group.device?.browser ?? 'unknown'} {group.device?.browserMajor ?? ''} — {group.rafFps.toFixed(1)} FPS
-                · {group.reviewer ? t('studioPerformance.reviewer') : t('studioPerformance.player')}
+                <span className="studio-performance-device">
+                  <strong>
+                    {group.device?.deviceClass ?? t('studioPerformance.unknown')} ·{' '}
+                    {group.device?.system ?? t('studioPerformance.unknown')}
+                  </strong>
+                  <span>
+                    {group.device?.browser ?? t('studioPerformance.unknown')} {group.device?.browserMajor ?? ''} ·{' '}
+                    {group.reviewer ? t('studioPerformance.reviewer') : t('studioPerformance.player')}
+                  </span>
+                  <span>
+                    {group.viewportWidth}×{group.viewportHeight} · DPR {group.dpr} ·{' '}
+                    {t('studioPerformance.sessions', { count: group.sessions })}
+                  </span>
+                </span>
+                <span className="studio-performance-fps">
+                  <strong>{group.rafFps.toFixed(1)}</strong>
+                  <span>rAF FPS</span>
+                </span>
               </summary>
               <dl>
                 <dt>{t('studioPerformance.build')}</dt>
@@ -182,6 +180,26 @@ export function StudioPerformance({ slug, days }: { slug: string; days: number }
               </dl>
             </details>
           ))}
+          <details className="studio-performance-method">
+            <summary>{t('studioPerformance.method')}</summary>
+            <p>
+              {t('studioPerformance.freshness', {
+                at: new Date(report.measuredAt).toLocaleString(),
+                until: new Date(report.freshUntil).toLocaleTimeString(),
+              })}
+            </p>
+            {report.days.length > 0 && (
+              <p>{t('studioPerformance.range', { from: report.days.at(-1), to: report.days[0] })}</p>
+            )}
+            <p>
+              {t('studioPerformance.exclusions', {
+                invalid: report.invalidWindows,
+                agents: report.agentEventsExcluded,
+                legacy: report.aliveWithoutPerformance,
+              })}
+            </p>
+            <p>{t('studioPerformance.limitations')}</p>
+          </details>
         </>
       )}
     </section>

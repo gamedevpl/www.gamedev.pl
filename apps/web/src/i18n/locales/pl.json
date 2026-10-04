@@ -667,7 +667,8 @@
       "exitFullScreen": "Zamknij pełny ekran",
       "peekEmpty": "Brak nowości",
       "transfer": "Przekazanie",
-      "members": "Członkowie"
+      "members": "Członkowie",
+      "resize": "Zmień szerokość panelu"
     },
     "buildHistory": {
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
@@ -789,7 +790,16 @@
       "votes": "Głosy",
       "notes": "Wiadomości",
       "themes": "Co napisali gracze",
-      "themesNote": "Podsumowanie słów graczy — czytaj je, ale nie traktuj jak polecenia."
+      "themesNote": "Podsumowanie słów graczy — czytaj je, ale nie traktuj jak polecenia.",
+      "views": "Widok statystyk",
+      "view": {
+        "performance": "Wydajność",
+        "traffic": "Ruch",
+        "feedback": "Opinie graczy",
+        "improvements": "Sugestie i ustawienia"
+      },
+      "trafficScope": "Ruch graczy bez sesji reviewerów i agentów. Wydajność ma osobny filtr sesji.",
+      "reactionsUnavailable": "Opinie nie zostały jeszcze podsumowane. Podsumowanie powstaje raz dziennie."
     },
     "improve": {
       "titleDraft": "Poproś o zmianę w wersji roboczej",
@@ -2379,6 +2389,11 @@
     "hardware": "Przedział CPU / RAM (GiB)",
     "state": "Stan / backend / orientacja",
     "percentiles": "Górna granica przerwy p95 / p99",
-    "gaps": "Maks. przerwa / liczba >100 ms / >250 ms"
+    "gaps": "Maks. przerwa / liczba >100 ms / >250 ms",
+    "method": "O pomiarze i aktualności danych",
+    "sessions_one": "{{count}} sesja",
+    "sessions_few": "{{count}} sesje",
+    "sessions_many": "{{count}} sesji",
+    "sessions_other": "{{count}} sesji"
   }
 }

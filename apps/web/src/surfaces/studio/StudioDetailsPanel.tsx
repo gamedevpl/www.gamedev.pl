@@ -128,6 +128,7 @@ export function DetailsPanel({
   // Workspace gets its own pane: behind the keys icon it was undiscoverable.
   const panes: DetailsPaneDef[] = [
     { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
+    ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
     ...(showProgress ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
     { id: 'media', icon: 'image', labelKey: 'studioPanel.rail.media' },
@@ -142,7 +143,6 @@ export function DetailsPanel({
     ...(isOwner && game.slug && game.lastKnownStatus !== 'abandoned'
       ? [{ id: 'transfer' as const, icon: 'handover' as const, labelKey: 'studioPanel.rail.transfer' }]
       : []),
-    ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
   ];
 
   // Fall back when the open pane disappears mid-session.
@@ -333,6 +333,7 @@ export function DetailsPanel({
             onClick={() => onPaneChange(entry.id)}
           >
             <PixelIcon name={entry.icon} size={14} />
+            {entry.id === 'stats' && <span className="studio-rail-stats-label">{t(entry.labelKey)}</span>}
           </button>
         ))}
       </nav>
