@@ -72,6 +72,7 @@ export function StageOverlay({
           controls={stageContent.game.controls}
           touch={stageContent.game.touch}
           editor={stageContent.game.editor}
+          remixOff={stageContent.game.remixOff === true}
           via={stageContent.via}
           initialRemixOpen={stageContent.initialRemixOpen}
           initialRemixRequest={stageContent.initialRemixRequest}

@@ -261,6 +261,14 @@ describe('GamePage', () => {
     expect(container.querySelector('iframe')).toBeNull();
   });
 
+  it('does not offer Remix when the author switched it off', async () => {
+    fetchGamePage.mockResolvedValue(pageData({ entry: { ...pageData().entry, remixOff: true } }));
+    await renderPage();
+
+    expect(container.querySelector('.game-page-remix')).toBeNull();
+    expect(remixAction).not.toHaveBeenCalled();
+  });
+
   it('does not offer Remix when the catalog has no editor lane', async () => {
     fetchGamePage.mockResolvedValue(
       pageData({

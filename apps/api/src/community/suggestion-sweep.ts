@@ -480,6 +480,8 @@ export interface SuggestionSweepRoutesOptions {
   internalAuthVerifier: InternalAuthVerifier;
   now?: () => number;
   scorecardSampleLimit?: number;
+  // Same nightly run reconciles stuck proposal gates and expires silent reviews.
+  sweepProposals?: () => Promise<{ reconciled: number; expired: number } | undefined>;
 }
 
 export async function registerSuggestionSweepRoutes(
@@ -488,9 +490,8 @@ export async function registerSuggestionSweepRoutes(
 ): Promise<void> {
   const { store, internalAuthVerifier } = options;
 
-  // Cloud Scheduler POSTs here after the nightly scorecard sweep, with an OIDC token,
-  // exactly as the scorecard and digest sweeps do. The rate ceiling is a runaway guard;
-  // OIDC is the access control.
+  // Cloud Scheduler POSTs here nightly with an OIDC token, like the scorecard and digest
+  // sweeps. OIDC is the access control; the rate ceiling is only a runaway guard.
   app.post(
     '/api/internal/suggestion-sweep',
     { config: { rateLimit: { max: 24, timeWindow: '1 hour' } } },
@@ -509,9 +510,8 @@ export async function registerSuggestionSweepRoutes(
           buildBrief: options.buildBrief,
           log: request.log,
         });
-        // Same run, same schedule: proposing new work and following up on work already
-        // approved are both "what does the evidence say this morning", and splitting them
-        // would buy a fifth scheduler job and a fifth audience for nothing.
+        // Same run, same schedule: proposing new work and following up on approved work are
+        // both "what does the evidence say this morning"; a fifth scheduler job buys nothing.
         const outcomes = await advanceSuggestionOutcomes({
           store,
           now: options.now,
@@ -524,12 +524,12 @@ export async function registerSuggestionSweepRoutes(
             ),
           onError: (id, error) => request.log.error({ err: error, suggestionId: id }, 'suggestion outcome failed'),
         });
-        // Error level when anything failed, matching the other sweeps: a scheduled job
-        // nobody watches is the kind that fails quietly for weeks.
+        const proposals = options.sweepProposals ? await options.sweepProposals() : undefined;
+        // Error level on any failure: a scheduled job nobody watches fails quietly.
         const anyFailure = result.failed > 0 || outcomes.failed > 0;
         const log = anyFailure ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
-        log({ ...result, outcomes }, 'suggestion sweep complete');
-        return reply.send({ ...result, outcomes });
+        log({ ...result, outcomes, proposals }, 'suggestion sweep complete');
+        return reply.send({ ...result, outcomes, ...(proposals ? { proposals } : {}) });
       } catch (error) {
         request.log.error({ err: error }, 'suggestion sweep failed');
         return reply.status(500).send({ error: 'suggestion sweep failed' });

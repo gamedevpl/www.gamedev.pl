@@ -47,8 +47,8 @@ export const PROPOSAL_STATES = [
   /** Reviewer asked for something specific. Also back with the proposer. */
   'changes_requested',
   /**
-   * The reviewer adopted the version into a job of their own. **Not published** — the
-   * owner still publishes it the ordinary way.
+   * The reviewer adopted the version into a job of their own; **not published**.
+   * Platform/catalog targets stop here as noted feedback.
    */
   'accepted',
   /** The adopted version went live. Terminal, and the only state that means "in the game". */
@@ -212,7 +212,6 @@ export const MAX_OPEN_PROPOSALS_PER_TARGET = 3;
 
 /** Open proposals one person may hold across the whole platform. */
 export const MAX_OPEN_PROPOSALS_PER_PROPOSER = 10;
-
 
 /**
  * States that count against those caps: everything not yet decided.

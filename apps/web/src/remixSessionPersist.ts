@@ -145,7 +145,6 @@ export function sessionFromResume(live: RemixResume): RemixSession {
     contentDefaults: live.contentDefaults,
     canAssist: live.canAssist,
     canCode: live.canCode,
-    canSave: live.canSave,
     suggestions: live.suggestions,
     expiresInMs: live.expiresInMs,
     turns: live.turns,

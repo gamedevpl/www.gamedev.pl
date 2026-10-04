@@ -4,7 +4,6 @@ import {
   brandedPageTitle,
   humanizeSlug,
   resolveDocumentTitle,
-  suggestedKeepTitle,
   type DocumentTitleCopy,
 } from './pageTitle.js';
 
@@ -55,13 +54,6 @@ describe('humanizeSlug', () => {
   it('title-cases kebab segments', () => {
     expect(humanizeSlug('sky-dodge')).toBe('Sky Dodge');
     expect(humanizeSlug('dodge')).toBe('Dodge');
-  });
-});
-
-describe('suggestedKeepTitle', () => {
-  it('prefers an edit-by handle when claimed', () => {
-    expect(suggestedKeepTitle('dog-dash')).toBe('Remix of Dog Dash');
-    expect(suggestedKeepTitle('dog-dash', 'alice')).toBe('Dog Dash (edit by @alice)');
   });
 });
 

@@ -9,7 +9,7 @@ import { rememberRecentPlay } from './recentPlays.js';
 import { recordGamePlayed } from './recommendationsApi.js';
 import { RemixPanel, type RemixEditorStage } from './RemixPanel.js';
 import type { RemixSession } from './remixApi.js';
-import { readSharedParams } from './remixApi.js';
+import { useSharedTune } from './useSharedTune.js';
 import { resumeRemixForSlug, sessionFromResume } from './remixSessionPersist.js';
 import type { PlayVia } from './visitTelemetry.js';
 import './remix-host.css';
@@ -95,9 +95,8 @@ export function PublishedGameFrame({
   const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
   const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
-  // The landing-page request is a one-shot handoff. Keep consumption above the
-  // panel because closing the sheet unmounts it; leaving the request on props
-  // would replay the same (potentially paid) change when the player reopened it.
+  // One-shot landing-page request, consumed above the panel so a reopen never
+  // replays the same (potentially paid) change.
   const [pendingInitialRemixRequest, setPendingInitialRemixRequest] = useState(initialRemixRequest ?? null);
   /**
    * Level-editor stage: the painter leaves the remix sheet and owns the theater.
@@ -108,8 +107,8 @@ export function PublishedGameFrame({
   const [restoreReady, setRestoreReady] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
-  // Present only when the player arrived on a shared link; read once.
-  const [sharedParams] = useState(() => readSharedParams(window.location.search));
+  // Present only when the player arrived on a link the server vouched for.
+  const [sharedParams, clearSharedParams] = useSharedTune(slug, Boolean(remixable) && slots === undefined);
 
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
@@ -230,7 +229,10 @@ export function PublishedGameFrame({
           onSession={setRemixSession}
           undoable={remixUndoable}
           onUndoable={setRemixUndoable}
-          onClose={() => setRemixOpen(false)}
+          onClose={() => {
+            setRemixOpen(false);
+            clearSharedParams();
+          }}
           painterRequest={painterNonce}
           onCapabilities={onRemixCapabilities}
           onEditorStage={setEditorStage}

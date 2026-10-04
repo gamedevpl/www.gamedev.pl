@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { useAuth } from './AuthContext.js';
-import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, isPlatformAuthor, offersRemix, type CatalogEntry } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
@@ -37,7 +37,7 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
 
   useEffect(() => {
     if (!game) return;
-    recordRemixStep(game.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
+    if (!game.remixOff) recordRemixStep(game.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
   }, [game]);
 
   if (state === 'loading') {
@@ -103,7 +103,7 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
           ) : null}
-          {game.editor === 'content' ? (
+          {offersRemix(game) ? (
             <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
               <PixelIcon name="wrench" size={13} /> {t('catalog.remix')}
             </button>

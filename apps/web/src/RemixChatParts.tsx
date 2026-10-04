@@ -12,7 +12,6 @@ export function RemixTranscript({
   chatTurns,
   lane,
   slow,
-  saving,
   undo,
   changed,
   onUndo,
@@ -23,7 +22,6 @@ export function RemixTranscript({
   chatTurns: RemixChatTurn[];
   lane: Lane;
   slow: boolean;
-  saving: boolean;
   undo: Record<string, EditorParamValue> | null;
   changed: RemixChanged | null;
   onUndo: () => void;
@@ -41,7 +39,7 @@ export function RemixTranscript({
             <button
               type="button"
               className={`remix-bubble-undo${changed?.broke ? ' is-urgent' : ''}`}
-              disabled={lane !== 'idle' || saving}
+              disabled={lane !== 'idle'}
               onClick={() => (changed?.undoCode ? onUndoCode() : onUndo())}
             >
               {t('remix.undo')}
@@ -69,7 +67,6 @@ export function RemixTranscript({
 export function RemixActionRow({
   chatMode,
   lane,
-  saving,
   undo,
   changed,
   canPropose,
@@ -82,7 +79,6 @@ export function RemixActionRow({
 }: {
   chatMode: boolean;
   lane: Lane;
-  saving: boolean;
   undo: Record<string, EditorParamValue> | null;
   changed: RemixChanged | null;
   canPropose: boolean | null;
@@ -113,63 +109,12 @@ export function RemixActionRow({
         <button
           type="button"
           className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
-          disabled={lane !== 'idle' || saving}
+          disabled={lane !== 'idle'}
           onClick={() => (changed.undoCode ? onUndoCode() : onUndo())}
         >
           {t('remix.undo')}
         </button>
       ) : null}
     </div>
-  );
-}
-
-// Offered after a few landings: keep this remix as yours.
-export function RemixKeepOffer({
-  keepTitle,
-  saving,
-  lane,
-  onTitleChange,
-  onConfirm,
-  onDismiss,
-}: {
-  keepTitle: string;
-  saving: boolean;
-  lane: Lane;
-  onTitleChange: (next: string) => void;
-  onConfirm: () => void;
-  onDismiss: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <section className="remix-keep-offer" aria-labelledby="remix-keep-heading">
-      <h3 id="remix-keep-heading" className="remix-keep-heading">
-        {t('remix.keepOfferTitle')}
-      </h3>
-      <p className="remix-keep-body">{t('remix.keepOfferBody')}</p>
-      <label className="remix-keep-field">
-        <span>{t('remix.keepOfferName')}</span>
-        <input
-          type="text"
-          value={keepTitle}
-          maxLength={80}
-          placeholder={t('remix.keepOfferNamePlaceholder')}
-          disabled={saving}
-          onChange={(event) => onTitleChange(event.target.value)}
-        />
-      </label>
-      <div className="remix-actions-row">
-        <button
-          type="button"
-          className="remix-btn is-primary"
-          disabled={saving || keepTitle.trim().length < 2 || lane !== 'idle'}
-          onClick={onConfirm}
-        >
-          {saving ? t('remix.saving') : t('remix.keepOfferConfirm')}
-        </button>
-        <button type="button" className="remix-btn is-quiet" disabled={saving} onClick={onDismiss}>
-          {t('remix.keepOfferDismiss')}
-        </button>
-      </div>
-    </section>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bakeRemixEditorDefaults, remixHasSavableChange } from './remix-save.js';
+import { bakeRemixEditorDefaults, remixHasSavableChange } from './remix-bake.js';
 import { parseEditorDefinition } from './editor-contract.js';
 
 const EDITOR_JSON = JSON.stringify({

@@ -6,6 +6,7 @@ import type {
   SuggestionRecord,
   ProposalRecord,
   GameContributionSettings,
+  GameRemixSettings,
   ContributorBlockRecord,
 } from '../records/contribution.js';
 import { compareProposals } from '../records/contribution.js';
@@ -63,6 +64,14 @@ export interface ContributionStore {
 
   putContributionSettings(record: GameContributionSettings): Promise<void>;
 
+  // A game's remix switch, or null if never set (means on).
+  getRemixSettings(slug: string): Promise<GameRemixSettings | null>;
+
+  putRemixSettings(record: GameRemixSettings): Promise<void>;
+
+  // Slugs whose remix switch is explicitly off.
+  listRemixOffSlugs(): Promise<string[]>;
+
   // Whether `ownerUid` has blocked `blockedUid` from proposing to their games.
   isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean>;
 
@@ -80,6 +89,7 @@ export class InMemoryContributionStore implements ContributionStore {
   gameAutonomy = new Map<string, string>(); // slug -> mode
   proposals = new Map<string, ProposalRecord>(); // id -> proposal
   private contributionSettings = new Map<string, GameContributionSettings>(); // slug -> setting
+  private remixSettings = new Map<string, GameRemixSettings>(); // slug -> setting
   private contributorBlocks = new Map<string, Map<string, ContributorBlockRecord>>(); // ownerUid -> blockedUid -> row
   private legacyGameSuggestions = new Set<string>();
 
@@ -166,6 +176,19 @@ export class InMemoryContributionStore implements ContributionStore {
 
   async putContributionSettings(record: GameContributionSettings): Promise<void> {
     this.contributionSettings.set(record.slug, { ...record });
+  }
+
+  async getRemixSettings(slug: string): Promise<GameRemixSettings | null> {
+    const found = this.remixSettings.get(slug);
+    return found ? { ...found } : null;
+  }
+
+  async putRemixSettings(record: GameRemixSettings): Promise<void> {
+    this.remixSettings.set(record.slug, { ...record });
+  }
+
+  async listRemixOffSlugs(): Promise<string[]> {
+    return [...this.remixSettings.values()].filter((record) => record.mode === 'off').map((record) => record.slug);
   }
 
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
@@ -347,6 +370,29 @@ export class FirestoreContributionStore implements ContributionStore {
       },
       { merge: true },
     );
+  }
+
+  async getRemixSettings(slug: string): Promise<GameRemixSettings | null> {
+    const snap = await this.gameRef(slug).get();
+    const data = (snap.data() as { remix?: { mode?: string; updatedAt?: string; updatedByUid?: string } })?.remix;
+    if (!data) return null;
+    // Only an explicit 'off' disables; anything else reads as on.
+    return {
+      slug,
+      mode: data.mode === 'off' ? 'off' : 'on',
+      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
+      ...(typeof data.updatedByUid === 'string' ? { updatedByUid: data.updatedByUid } : {}),
+    };
+  }
+
+  async putRemixSettings(record: GameRemixSettings): Promise<void> {
+    const remix = stripUndefined({ mode: record.mode, updatedAt: record.updatedAt, updatedByUid: record.updatedByUid });
+    await this.gameRef(record.slug).set({ remix }, { merge: true });
+  }
+
+  async listRemixOffSlugs(): Promise<string[]> {
+    const snap = await this.db.collection('games').where('remix.mode', '==', 'off').select().get();
+    return snap.docs.map((doc) => doc.id);
   }
 
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {

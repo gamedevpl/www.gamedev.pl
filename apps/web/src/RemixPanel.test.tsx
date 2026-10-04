@@ -20,13 +20,13 @@ const remixApi = vi.hoisted(() => ({
   remixAssist: vi.fn(),
   remixCode: vi.fn(),
   remixShare: vi.fn(),
-  remixSave: vi.fn(),
   remixUndo: vi.fn(),
-  coerceSharedParams: (_specs: unknown, values: unknown) => values,
+  isRemixClosed: (error: { status?: number; code?: string } | null) =>
+    error?.status === 403 && (error.code === 'remix_off' || error.code === 'not_remixable'),
 }));
 vi.mock('./remixApi', () => remixApi);
 
-/** Button text is the stable handle — quiet/primary classes are shared by Keep and Undo. */
+/** Button text is the stable handle — quiet/primary classes are shared by Share and Undo. */
 function buttonNamed(root: ParentNode, name: string): HTMLButtonElement | null {
   return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent === name) ?? null;
 }
@@ -261,12 +261,12 @@ describe('RemixPanel', () => {
       container.querySelector('.remix-ask')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
 
-    // Earned: share is the loudest thing; Undo sits quiet beside it. Keep is
-    // not on the row — it waits for a few landings, with a header escape hatch.
+    // Earned: share is the loudest thing; Undo sits quiet beside it. There is
+    // no save-as-yours: a remix is the player's, temporary, and never a copy.
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Share my version');
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
     expect(buttonNamed(container, 'Keep in Studio')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
     expect(buttonNamed(container, 'Undo')?.classList.contains('is-quiet')).toBe(true);
     // And the way to a second change is still there, shrunk to a line.
     expect(container.querySelector('.remix-ask.is-compact')).not.toBeNull();
@@ -294,9 +294,7 @@ describe('RemixPanel', () => {
 
     expect(container.querySelector('.remix-note.is-error')).not.toBeNull();
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
-    // Keep stays off the row; the header hatch is enough after one landing.
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
   });
 
   it('proposes the painter for a content-shaped request instead of falling through to code', async () => {
@@ -654,11 +652,9 @@ describe('RemixPanel', () => {
     // The change landed and says so...
     expect(container.querySelector('.remix-result')?.textContent).toContain('carrots');
     // ...and there is nothing to share (code moves no declared value), so Share
-    // stays off. Keep is not a row CTA — after one landing only the header hatch.
+    // stays off.
     expect(buttonNamed(container, 'Share my version')).toBeNull();
     expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
-    expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
 
     // But there is always a way back. A rebuild that compiles is not a rebuild
     // that plays, and the lane cannot tell the difference — so the player must
@@ -711,61 +707,6 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
     expect(container.querySelector('.remix-result')?.textContent).toContain('stopped the game working');
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Undo');
-    // A broken game is not something to keep — hide the Studio fork until they undo.
-    expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-  });
-
-  it('rolls back a Keep offer when the landing that earned it then breaks', async () => {
-    remixApi.startRemix.mockResolvedValue({
-      remixId: 'r1',
-      params: null,
-      values: null,
-      canAssist: false,
-      canCode: true,
-      suggestions: [],
-      expiresInMs: 3_600_000,
-    });
-    remixApi.remixCode
-      .mockResolvedValueOnce({
-        ok: true,
-        html: '<html>one</html>',
-        region: { file: 'game/render.ts', name: 'paintWorld' },
-        summary: { en: 'One.' },
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        html: '<html>two</html>',
-        region: { file: 'game/render.ts', name: 'paintWorld' },
-        summary: { en: 'Two.' },
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        html: '<html>broken</html>',
-        region: { file: 'game/render.ts', name: 'paintWorld' },
-        summary: { en: 'Three.' },
-      });
-    await draw();
-    await send('one');
-    await send('two');
-    await send('three');
-    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
-
-    await act(async () => {
-      const event = documentMessage('message', {
-        source: frameWindow,
-        origin: 'null',
-        data: { source: 'gdpl-player', type: 'error', message: 'boom' },
-      });
-      window.dispatchEvent(event);
-    });
-
-    // The third landing did not stick — close the offer and do not leave the
-    // hatch hidden behind a stuck keepOfferOpen flag.
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
-    expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
   });
 
   it('keeps the way back when the sheet is reopened over a running change', async () => {
@@ -798,11 +739,8 @@ describe('RemixPanel', () => {
 
     // No second session was minted for the reopening...
     expect(remixApi.startRemix).not.toHaveBeenCalled();
-    // ...and the way back is offered. Keep is not on the row for a reopen that
-    // has not yet landed a fresh change in this mount.
+    // ...and the way back is offered.
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
-    expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
   });
 
   it('docks into a mini chat after the second landing', async () => {
@@ -939,135 +877,6 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-note')?.textContent).toMatch(/play|napping|Couldn't/i);
   });
 
-  it('offers to keep the remix after a few successful landings, with a name', async () => {
-    remixApi.startRemix.mockResolvedValue({
-      remixId: 'r1',
-      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
-      values: { dogScale: 1 },
-      canAssist: true,
-      canCode: false,
-      suggestions: [],
-      expiresInMs: 3_600_000,
-    });
-    remixApi.remixAssist
-      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.2 } })
-      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.4 } })
-      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.6 } });
-    remixApi.remixSave.mockResolvedValue({ slug: 'my-dog-dash', openPath: '/play/my-dog-dash' });
-    await draw();
-
-    await send('a bit bigger');
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    await send('a bit bigger still');
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    await send('even bigger');
-
-    // Third landing: the sheet, not a row button.
-    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
-    expect(container.querySelector('.remix-keep-heading')?.textContent).toBe('Keep this remix?');
-    const name = container.querySelector<HTMLInputElement>('.remix-keep-field input');
-    expect(name?.value).toBe('Remix of Dog Dash');
-    expect(buttonNamed(container, 'Keep in Studio')).not.toBeNull();
-    expect(buttonNamed(container, 'Not now')).not.toBeNull();
-    // Composer and Share/Undo wait behind the offer.
-    expect(container.querySelector('.remix-ask')).toBeNull();
-
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-      setter?.call(name!, 'Carrot Dash');
-      name!.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => {
-      buttonNamed(container, 'Keep in Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(remixApi.remixSave).toHaveBeenCalledWith(
-      'r1',
-      expect.objectContaining({ title: 'Carrot Dash', params: { dogScale: 1.6 } }),
-    );
-    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('keep_clicked');
-  });
-
-  it('does not re-offer Keep after dismiss; the header hatch still works', async () => {
-    remixApi.startRemix.mockResolvedValue({
-      remixId: 'r1',
-      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
-      values: { dogScale: 1 },
-      canAssist: true,
-      canCode: false,
-      suggestions: [],
-      expiresInMs: 3_600_000,
-    });
-    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
-    await draw();
-    await send('bigger');
-    await send('bigger');
-    await send('bigger');
-    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
-
-    await act(async () => {
-      buttonNamed(container, 'Not now')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
-
-    // Another landing must not reopen the nag.
-    await send('bigger again');
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-
-    await act(async () => {
-      buttonNamed(container, 'Save to Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
-  });
-
-  it('never offers Keep when the server says the sources are not ours', async () => {
-    remixApi.startRemix.mockResolvedValue({
-      remixId: 'r1',
-      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
-      values: { dogScale: 1 },
-      canAssist: true,
-      canCode: false,
-      canSave: false,
-      suggestions: [],
-      expiresInMs: 3_600_000,
-    });
-    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
-    await draw();
-    await send('bigger');
-    await send('bigger');
-    await send('bigger');
-
-    expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
-  });
-
-  it('explains a source-access refusal instead of a generic failure', async () => {
-    remixApi.startRemix.mockResolvedValue({
-      remixId: 'r1',
-      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
-      values: { dogScale: 1 },
-      canAssist: true,
-      canCode: false,
-      suggestions: [],
-      expiresInMs: 3_600_000,
-    });
-    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
-    remixApi.remixSave.mockRejectedValue(
-      Object.assign(new Error('forbidden'), { status: 403, reason: 'source_access_required' }),
-    );
-    await draw();
-    await send('bigger');
-    await send('bigger');
-    await send('bigger');
-    await act(async () => {
-      buttonNamed(container, 'Keep in Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(container.querySelector('.remix-note.is-error')?.textContent).toBe(
-      "Only this game's creators can save a copy of it to Studio.",
-    );
-  });
-
   it('docks instead of closing when the grip is used before chat mode', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
@@ -1141,7 +950,6 @@ describe('RemixPanel', () => {
       contentEdited: true,
       contentDoc: { maps: [{ properties: {}, rows: ['#'] }] },
     });
-    remixApi.remixSave.mockResolvedValue({ slug: 'my-dog-dash', openPath: '/play/my-dog-dash' });
     await draw({ session });
     expect(remixApi.startRemix).not.toHaveBeenCalled();
     expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
@@ -1152,16 +960,54 @@ describe('RemixPanel', () => {
       container.querySelector('.remix-bubble-undo')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.remix-bubble-undo')).toBeNull();
-    await act(async () => {
-      buttonNamed(container, 'Save to Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+
+  it('tells the player when the author switched remix off, and offers only Close', async () => {
+    remixApi.startRemix.mockRejectedValue(Object.assign(new Error('remix_off'), { status: 403, code: 'remix_off' }));
+    await draw();
+    expect(container.querySelector('.remix-panel-note')?.textContent).toContain('switched off remixing');
+    expect(buttonNamed(container, 'Close')).not.toBeNull();
+    expect(container.querySelector('.remix-ask')).toBeNull();
+  });
+
+  it('closes into the same message when remix is switched off mid-session', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
     });
-    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
-    await act(async () => {
-      buttonNamed(container, 'Keep in Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    remixApi.remixAssist.mockRejectedValue(
+      Object.assign(new Error('not_remixable'), { status: 403, code: 'not_remixable' }),
+    );
+    await draw();
+    await send('bigger dog');
+    expect(container.querySelector('.remix-panel-note')?.textContent).toContain('switched off remixing');
+  });
+
+  it('shares the server-signed code as-is under this game', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
     });
-    expect(remixApi.remixSave).toHaveBeenCalledWith(
-      'r1',
-      expect.objectContaining({ content: { maps: [{ properties: {}, rows: ['#'] }] } }),
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+    remixApi.remixShare.mockResolvedValue({ code: 'v1.abc-def_ghi' });
+    await draw();
+    await send('bigger dog');
+    await act(async () => {
+      buttonNamed(container, 'Share my version')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(remixApi.remixShare).toHaveBeenCalledWith('r1', { dogScale: 2 });
+    expect(container.querySelector('.remix-share-url')?.textContent).toBe(
+      `${window.location.origin}/play/dog-dash?remix=v1.abc-def_ghi`,
     );
   });
 

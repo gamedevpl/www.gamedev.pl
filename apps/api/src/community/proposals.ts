@@ -31,7 +31,6 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from './owner-of-record.js';
-import { isRepoBaseStale } from './proposal-base.js';
 import {
   countsAsOpen,
   isBaseStale,
@@ -168,9 +167,8 @@ export async function canProposeTo(
       return { ok: false, reason: 'contributions_off' };
     }
   }
-  // Platform-owned games have no creator to opt in, so the platform's own switch is the
-  // setting: absent means open. Turning it off for a specific catalog game is how a game
-  // that should not be changed (a tutorial, a benchmark) is taken off the table.
+  // Platform-owned games take proposals as loose feedback for admins: absent means open.
+  // Turning it off takes a specific catalog game off the table.
   else if ((await store.getContributionSettings(slug))?.mode === 'off') {
     return { ok: false, reason: 'contributions_off' };
   }
@@ -183,7 +181,7 @@ export async function canProposeTo(
   }
 
   const mine = await store.listProposals({ proposerUid });
-  const open = mine.filter((record) => countsAsOpen(record.state));
+  const open = mine.filter((record) => countsAsOpen(record.state) && !isNotedFeedback(record));
   if (open.filter((record) => record.targetSlug === slug).length >= MAX_OPEN_PROPOSALS_PER_TARGET) {
     return { ok: false, reason: 'too_many_open_here' };
   }
@@ -222,6 +220,16 @@ export function transitionProposal(
   return true;
 }
 
+// Accepted feedback-only proposal: no job, no PR, nothing pending.
+export function isNotedFeedback(record: ProposalRecord): boolean {
+  return record.state === 'accepted' && record.adoptedJobId === undefined && isFeedbackOnly(record);
+}
+
+// Platform-owned or repo-lane targets: accept records a decision, never adopts code.
+export function isFeedbackOnly(record: Pick<ProposalRecord, 'targetOwnerUid' | 'base'>): boolean {
+  return record.targetOwnerUid === null || record.base.kind === 'repo';
+}
+
 export interface OpenProposalInput {
   targetSlug: string;
   proposerUid: string;
@@ -230,6 +238,8 @@ export interface OpenProposalInput {
   base: ProposalBase;
   /** The complete source set of the proposed game — base files with the change applied. */
   files: SourceFile[];
+  // Opens a draft the proposer still has to submit (the MCP round).
+  draft?: boolean;
 }
 
 export type OpenProposalResult =
@@ -296,9 +306,9 @@ export async function openProposal(deps: ProposalDeps, input: OpenProposalInput)
     proposerUid: input.proposerUid,
     base: input.base,
     version,
-    state: 'submitted',
+    state: input.draft ? 'draft' : 'submitted',
     stateSince: at,
-    transitions: [{ to: 'submitted', at, by: 'proposer', reason: 'opened' }],
+    transitions: [{ to: input.draft ? 'draft' : 'submitted', at, by: 'proposer', reason: 'opened' }],
     title,
     description,
     thread: [],
@@ -384,14 +394,6 @@ export async function acceptProposal(
   deps: ProposalDeps & {
     /** Creates the owner-side improvement job. Injected to keep submissions out of here. */
     adoptIntoJob: ProposalAdopter;
-    /**
-     * Lands an accepted **repo-lane** proposal in the games repo as a pull request.
-     *
-     * Without games-repo credentials, accept now and apply the PR later.
-     */
-    applyToRepo?: (proposal: ProposalRecord) => Promise<{ number: number; url: string } | null>;
-    /** The live snapshot pointer, for re-checking a repo-lane base at decision time. */
-    snapshotPointer?: () => Promise<{ commitSha: string | null } | null>;
   },
   input: { id: string; byUid: string | null; reviewer: 'platform' | 'creator' },
 ): Promise<DecisionResult> {
@@ -402,6 +404,22 @@ export async function acceptProposal(
   if (record.state !== 'in_review') return { ok: false, status: 409, error: 'not_reviewable' };
 
   const version = record.version;
+  const decide = async (reason: 'accepted' | 'noted'): Promise<DecisionResult> => {
+    const at = new Date(now()).toISOString();
+    record.decision = { at, byUid: input.byUid, reviewer: input.reviewer };
+    transitionProposal(record, 'accepted', input.reviewer === 'platform' ? 'operator' : 'reviewer', at, reason);
+    await deps.store.putProposal(record);
+    await tell(deps, {
+      uid: record.proposerUid,
+      type: 'proposal.decided',
+      proposalId: record.id,
+      gameTitle: record.targetSlug,
+    });
+    return { ok: true, proposal: record };
+  };
+  // Platform/catalog targets are loose feedback: decision only, no job, no PR.
+  if (isFeedbackOnly(record)) return decide('noted');
+
   const adopt = async (admissionNonce?: string): Promise<DecisionResult> => {
     // Ownership can move between resolveReviewer's check and this lease's acquisition.
     if (input.reviewer === 'creator') {
@@ -412,14 +430,7 @@ export async function acceptProposal(
     }
     // Recheck the live base after admission and before adopting the manifest.
     const publication = await deps.store.getPublication(record.targetSlug);
-    const stale =
-      record.base.kind === 'store'
-        ? isBaseStale(record.base.version, publication?.currentVersion)
-        : // The repo lane's twin: a bake that landed between the reviewer opening the card
-          // and pressing accept moves the commit the site serves, and a diff built on the
-          // old one no longer describes a change to what anybody is playing.
-          isRepoBaseStale(record.base, deps.snapshotPointer ? await deps.snapshotPointer() : null);
-    if (stale) {
+    if (record.base.kind === 'store' && isBaseStale(record.base.version, publication?.currentVersion)) {
       const at = new Date(now()).toISOString();
       transitionProposal(record, 'superseded', 'system', at, 'stale_base');
       await deps.store.putProposal(record);
@@ -433,77 +444,11 @@ export async function acceptProposal(
       proposalId: record.id,
       byUid: input.byUid,
     });
-
-    const at = new Date(now()).toISOString();
-
-    if (record.base.kind === 'repo') {
-      /*
-       * Repo lane. The games repo is still the system of record for these games and wins
-       * catalog ties, so an accepted change has to become a commit there or the site keeps
-       * serving the old game whatever this record says. The apply bot opens the PR;
-       * `validate.yml`, CODEOWNERS and the bake finish the job exactly as they would for a
-       * maintainer's own commit.
-       *
-       * No job is created: a repo-lane game has no store publication for one to deliver
-       * into, and inventing one would put a job on somebody's shelf for a game they do not
-       * own in the store sense.
-       */
-      const pr = deps.applyToRepo ? await deps.applyToRepo(record) : null;
-      if (pr) record.mergePr = { number: pr.number, url: pr.url, openedAt: at };
-    } else {
-      const job = await deps.adoptIntoJob({ proposal: record, ownerUid: input.byUid, admissionNonce });
-      if (job) record.adoptedJobId = job.jobId;
-    }
-
-    record.decision = { at, byUid: input.byUid, reviewer: input.reviewer };
-    transitionProposal(record, 'accepted', input.reviewer === 'platform' ? 'operator' : 'reviewer', at, 'accepted');
-    await deps.store.putProposal(record);
-    await tell(deps, {
-      uid: record.proposerUid,
-      type: 'proposal.decided',
-      proposalId: record.id,
-      gameTitle: record.targetSlug,
-    });
-    return { ok: true, proposal: record };
+    const job = await deps.adoptIntoJob({ proposal: record, ownerUid: input.byUid, admissionNonce });
+    if (job) record.adoptedJobId = job.jobId;
+    return decide('accepted');
   };
-  return record.base.kind === 'store' ? withProposalAdmission(deps.store, record.targetSlug, adopt) : adopt();
-}
-
-/**
- * Move repo-lane proposals to `merged` once their PR has landed and the bake republished.
- *
- * The store lane learns this from the publication registry (`markProposalsMerged`); the
- * repo lane has to learn it from the repo, because nothing in our own state changes when
- * a games-repo PR merges. Called by the snapshot-publish path, which is the moment the new
- * commit is actually being served — not when the PR merged, which is a promise the site
- * has not yet kept.
- */
-export async function markRepoProposalsMerged(
-  deps: ProposalDeps & { isPullRequestMerged: (number: number) => Promise<boolean> },
-  input: { slug?: string },
-): Promise<ProposalRecord[]> {
-  const now = deps.now ?? Date.now;
-  const at = new Date(now()).toISOString();
-  const accepted = await deps.store.listProposals({
-    state: ['accepted'],
-    ...(input.slug ? { targetSlug: input.slug } : {}),
-  });
-  const merged: ProposalRecord[] = [];
-  for (const record of accepted) {
-    if (record.base.kind !== 'repo' || !record.mergePr || record.mergePr.mergedAt) continue;
-    if (!(await deps.isPullRequestMerged(record.mergePr.number))) continue;
-    record.mergePr = { ...record.mergePr, mergedAt: at };
-    if (!transitionProposal(record, 'merged', 'system', at, 'repo_merged')) continue;
-    await deps.store.putProposal(record);
-    await tell(deps, {
-      uid: record.proposerUid,
-      type: 'proposal.merged',
-      proposalId: record.id,
-      gameTitle: record.targetSlug,
-    });
-    merged.push(record);
-  }
-  return merged;
+  return withProposalAdmission(deps.store, record.targetSlug, adopt);
 }
 
 /** Decline a proposal, recording whether the refusal is reportable. */
@@ -643,7 +588,7 @@ export async function supersedeStaleProposals(
   let superseded = 0;
   for (const record of open) {
     if (!countsAsOpen(record.state)) continue;
-    if (record.id === input.exceptProposalId) continue;
+    if (record.id === input.exceptProposalId || isNotedFeedback(record)) continue;
     if (record.base.kind === 'store' && !isBaseStale(record.base.version, input.currentVersion)) continue;
     if (!transitionProposal(record, 'superseded', 'system', at, 'target_published')) continue;
     await deps.store.putProposal(record);

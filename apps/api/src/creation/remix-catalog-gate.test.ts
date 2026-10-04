@@ -15,7 +15,6 @@ function spyClient(calls: string[]): GitHubClient {
   const answers: Record<string, (...args: string[]) => unknown> = {
     getGameFile: (_ref, _slug, path) => FILES[path] ?? null,
     getGameSourceMap: () => ({ 'game.ts': 'export {};' }),
-    getGameDeliverySources: () => ({ ...FILES }),
     getGameSources: () => null,
     getGameKitDeclaration: () => null,
     getRefSha: () => 'refsha1',
@@ -93,7 +92,7 @@ describe('remix catalog gate', () => {
     process.env.CODE_LANE = 'true';
     const calls: string[] = [];
     let listed = true;
-    app = await build(async () => (listed ? {} : null), calls);
+    app = await build(async () => (listed ? { editor: 'content' } : null), calls);
     const opened = await start(app);
     expect(opened.statusCode).toBe(200);
     const { remixId } = opened.json();

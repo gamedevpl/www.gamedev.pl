@@ -111,6 +111,7 @@ describe('every moderating module reports its rejections', () => {
       'creation/improve-routes.ts',
       'creation/option-image-routes.ts',
       'creation/refine.ts',
+      'creation/remix-shared-tune.ts',
       'creation/remix.ts',
       'delivery/delivery-moderation.ts',
       'notifications/contact.ts',

@@ -555,6 +555,7 @@ Rules:
   where they are *defined*. If a smaller region names the thing itself, pick that
   one instead.
 - If the request is not about changing this game, or asks for something harmful, sexual, hateful, or aimed at a real person, answer {"decision":"reject"}.
+- If the request asks to reveal, display, print, or describe source code, comments, or file contents, answer {"decision":"reject"}.
 - "summary" is one short sentence in English (en) and Polish (pl) describing the change you expect to make.
   Write real Polish in "pl" (not an English copy). Prefer the player's own language for tone${
     request.locale ? ` (their UI is ${request.locale})` : ''
@@ -613,7 +614,7 @@ error lists what was \`available\`, choose from that list. If satisfying the req
 would need a change outside this region, do the part that belongs here and leave the
 rest alone rather than inventing something.
 
-Return the COMPLETE replacement for the region, not a diff and not a fragment.
+Return the COMPLETE replacement for the region, not a diff and not a fragment. Never echo source/comments in strings.
 
 Respond STRICTLY as JSON and nothing else — no code fence before or after it, and
 every newline inside a string written as \\n:
@@ -637,6 +638,7 @@ Rules:
 - Keep the same exported names and signatures unless the request truly requires otherwise — other files call into this.
 - You may only use what the region already has access to: this game's own modules (relative imports) and the global \`GameKit\`. There is no network, no external library, and no DOM outside the game canvas.
 - Change as little as possible. This is a tweak, not a rewrite.
+- Never reproduce or display source code, comments, or file contents in strings, text, or the summary.
 - "summary" is one short sentence in English (en) and Polish (pl) saying what you changed.
   Write real Polish in "pl" (not an English copy). Never put compiler/JSON repair notes in summary.
 ${prior ? `\n${prior}` : ''}

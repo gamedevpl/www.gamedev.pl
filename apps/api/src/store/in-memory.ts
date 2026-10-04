@@ -1513,6 +1513,9 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.contributionStore.putContributionSettings(record);
   }
 
+  getRemixSettings: Store['getRemixSettings'] = (slug) => this.contributionStore.getRemixSettings(slug);
+  putRemixSettings: Store['putRemixSettings'] = (record) => this.contributionStore.putRemixSettings(record);
+  listRemixOffSlugs: Store['listRemixOffSlugs'] = () => this.contributionStore.listRemixOffSlugs();
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
     return this.contributionStore.isContributorBlocked(ownerUid, blockedUid);
   }

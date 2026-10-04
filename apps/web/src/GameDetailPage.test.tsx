@@ -144,6 +144,15 @@ describe('GameDetailPage', () => {
     expect(onRemix).not.toHaveBeenCalled();
   });
 
+  it('hides Remix, recording nothing, when the author switched it off', () => {
+    const { onRemix } = render({ game: { ...game, remixOff: true } });
+
+    expect(recordRemixStep).not.toHaveBeenCalledWith('offered', { control: 'page' });
+    expect(recordRemixStep).not.toHaveBeenCalledWith('no_lane', { control: 'page' });
+    expect(container.querySelector('.game-page-remix')).toBeNull();
+    expect(onRemix).not.toHaveBeenCalled();
+  });
+
   it('hides Open in Studio from visitors', () => {
     render();
     expect(container.querySelector('a[href="/studio/bridge-builder"]')).toBeNull();

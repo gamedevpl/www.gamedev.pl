@@ -16,6 +16,8 @@ export interface GateVerdictRoutesOptions {
   store: GamesStore;
   secret?: string;
   now?: () => number;
+  // Called after a verdict is stored; best effort, never fails the write.
+  onVerdict?: (verdict: { slug: string; version: string; kind: string }) => Promise<unknown> | unknown;
 }
 
 export const GATE_VERDICT_PATH = '/api/internal/gate-verdict';
@@ -81,6 +83,13 @@ export function registerGateVerdictRoutes(app: FastifyInstance, options: GateVer
           result as unknown as Parameters<GamesStore['putGateProgress']>[2],
         );
         break;
+    }
+    if (options.onVerdict) {
+      try {
+        await options.onVerdict({ slug, version, kind });
+      } catch (error) {
+        request.log.error({ err: error, slug, version, kind }, 'gate verdict follow-up failed');
+      }
     }
     return reply.status(204).send();
   });
