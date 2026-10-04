@@ -54,7 +54,7 @@ export function registerSharedTuneRoute(app: FastifyInstance, options: SharedTun
             category: verdict.category,
             unavailable: verdict.unavailable,
           });
-          // A checker outage is ours to report; a refusal reads as a bad link.
+          // Checker outage is ours; a refusal reads as a bad link.
           if (verdict.unavailable) return replyModerationBlock(reply, verdict);
           return reply.status(400).send({ error: 'invalid_share' });
         }
