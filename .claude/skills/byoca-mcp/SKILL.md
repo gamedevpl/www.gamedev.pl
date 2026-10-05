@@ -855,7 +855,12 @@ means "including concept art", which is almost never what a caller wants.
 
 Nothing about the proposal itself is builder-specific: it hangs off the preview-gate
 verdict (`onPreviewGateGreen`), which a BYOCA `mode=preview` delivery reaches the same way
-a managed one does, and the HUD rectangles come from the delivered `CAPTURE.json`.
+a managed one does. HUD rectangles come from the delivered `CAPTURE.json` when the builder
+declares them; builders almost never do, so an undeclared HUD is not a refusal — the prompt
+asks the image model to find and lock the UI itself (12 of 12 frames held it in the
+2026-10-04 spike, where the old no-rectangle prompt wiped one HUD and reshaped one frame).
+The image model also answers 429 most of the time, so each frame waits out throttling
+(`FRAME_ATTEMPTS`, `FRAME_THROTTLE_BACKOFF_MS`) and only then counts as `no_frames`.
 
 ### An agent can draw the proposal itself (`suggest_next_round`)
 

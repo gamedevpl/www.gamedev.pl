@@ -14,12 +14,6 @@ import type {
   ScorecardsResponse,
 } from './healthApi.js';
 
-/**
- * The operator view's job is to make one thing obvious: which published game is broken.
- * These check that the numbers survive the trip to the screen, and — the part worth
- * guarding — that a non-admin is told nothing at all.
- */
-
 function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
   return {
     sessions: 1,
@@ -34,7 +28,6 @@ function game(partial: Partial<GameHealth> & { slug: string }): GameHealth {
     stallRate: 0,
     medianFps: 60,
     resumeTicksIgnored: 0,
-    // Default to a game that reports no depth — the majority of the catalog.
     outcomes: { won: 0, lost: 0, quit: 0 },
     sessionsWithEnding: 0,
     finishRate: 0,
@@ -90,21 +83,10 @@ const EMPTY_CREATORS: CreatorsResponse = {
   },
 };
 
-/**
- * Answers every admin endpoint the view fetches in parallel.
- *
- * Two details this has to get right, both learned by getting them wrong. A `Response`
- * body is single-use, so every call needs a *freshly constructed* one — sharing one
- * instance makes the second `.json()` throw and the whole view fall into its error
- * state. And the two endpoints must be told apart by URL, since `Promise.all` means a
- * funnel payload answering the health request would fail just as silently.
- */
 function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsResponse) {
   const visitsBody: VisitsResponse | null =
     body === null ? null : (funnel ?? { days: body.days, truncated: body.truncated, funnel: EMPTY_FUNNEL });
   const creatorsBody: CreatorsResponse | null = body === null ? null : EMPTY_CREATORS;
-  // The scorecard read shares the page's Promise.all, so it has to answer here too —
-  // an unrouted URL would fall through to the health body and render as a scorecard.
   const scorecardsBody: ScorecardsResponse | null =
     body === null ? null : { scorecards: [], newestComputedAt: null, oldestComputedAt: null };
   const trendsBody =
@@ -145,7 +127,6 @@ function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsR
   }) as MockInstance<typeof globalThis.fetch>;
 }
 
-/** The health-endpoint calls only — the view also fetches the funnel on every window. */
 function healthCalls(fetchSpy: MockInstance<typeof globalThis.fetch>) {
   return fetchSpy.mock.calls.map(([input]) => String(input)).filter((url) => url.includes('/telemetry/health'));
 }
@@ -164,13 +145,43 @@ describe('GameHealthView', () => {
     container.remove();
   });
 
-  async function render() {
+  async function render(view = 'Game health') {
     const root = createRoot(container);
     await act(async () => {
       root.render(<GameHealthView />);
     });
+    if (view && container.querySelector('.operator-telemetry-nav'))
+      await act(async () => {
+        const button = [...container.querySelectorAll('.operator-telemetry-nav button')].find(
+          (node) => node.textContent === view,
+        );
+        button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
     return root;
   }
+
+  it('opens the overview and switches views without rereading or mixing panels', async () => {
+    const fetchSpy = respondWith({ days: ['2026-07-25'], truncated: false, games: [game({ slug: 'g' })] });
+    const root = await render('');
+    const requests = fetchSpy.mock.calls.length;
+    expect(container.querySelector('#telemetry-overview')?.hasAttribute('hidden')).toBe(false);
+    for (const name of ['Performance', 'Game health', 'Funnels', 'Creators', 'Trends', 'Overview']) {
+      await act(async () => {
+        [...container.querySelectorAll('.operator-telemetry-nav button')]
+          .find((node) => node.textContent === name)!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      const selected = container.querySelector('.operator-telemetry-nav [aria-pressed="true"]');
+      expect(selected?.textContent).toBe(name);
+      const visible = [...container.querySelectorAll('[id^="telemetry-"]')].filter(
+        (node) => !node.hasAttribute('hidden'),
+      );
+      expect(visible).toHaveLength(1);
+      expect(visible[0]?.id).toBe(selected?.getAttribute('aria-controls'));
+    }
+    expect(fetchSpy.mock.calls.length).toBe(requests);
+    await act(async () => root.unmount());
+  });
 
   it('shows each game with its play and health numbers', async () => {
     respondWith({
@@ -185,7 +196,6 @@ describe('GameHealthView', () => {
     expect(text).toContain('brick-storm');
     expect(text).toContain('1m 30s');
     expect(text).toContain('ok');
-    // The window actually scanned is stated, so a number is never read out of context.
     expect(text).toContain('2026-07-24 → 2026-07-25');
     await act(async () => root.unmount());
   });
@@ -211,7 +221,6 @@ describe('GameHealthView', () => {
   });
 
   it('says nothing at all to a caller the API does not recognise', async () => {
-    // 404 is what the API answers a non-admin; the view must not hint otherwise.
     respondWith(null, 404);
 
     const root = await render();
@@ -279,11 +288,6 @@ describe('GameHealthView', () => {
     await act(async () => root.unmount());
   });
 
-  /**
-   * The distinction the whole depth column set rests on. A game that emits no endings
-   * must not be rendered as a game nobody finishes — that would libel most of the
-   * catalog, which predates the GameKit change that sends them.
-   */
   it('renders a game that reports no endings as unknown, not as unfinished', async () => {
     respondWith({
       days: ['2026-07-26'],
@@ -293,8 +297,6 @@ describe('GameHealthView', () => {
 
     const root = await render();
 
-    // Read the depth cells directly rather than scanning the page text: `0%` appears
-    // legitimately in the Stalled column, so a text search would pass for the wrong reason.
     const headers = [...container.querySelectorAll('th')].map((node) => node.textContent);
     const cells = [...container.querySelectorAll('tbody td')].map((node) => node.textContent);
     for (const column of ['Finished', 'Won', 'Best score']) {
@@ -340,8 +342,6 @@ describe('GameHealthView', () => {
     });
 
     expect(healthCalls(fetchSpy)[1]).toContain('days=30');
-    // Both panels share the window, so the funnel must follow it too — a 7-day funnel
-    // above a 30-day table would be a quietly wrong page.
     const visitCalls = fetchSpy.mock.calls
       .map(([input]) => String(input))
       .filter((url) => url.includes('/telemetry/visits'));
