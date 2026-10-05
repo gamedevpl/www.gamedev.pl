@@ -130,6 +130,7 @@ function toPublicProposal(record: ProposalRecord) {
       ? { at: record.decision.at, reason: record.decision.reason, note: record.decision.note }
       : undefined,
     platformOwned: record.targetOwnerUid === null,
+    acceptedVia: record.acceptedVia,
   };
 }
 

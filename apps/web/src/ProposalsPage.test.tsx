@@ -67,4 +67,17 @@ describe('ProposalsPage', () => {
     expect(container.textContent).toContain("the creator's agent is building it");
     expect(container.textContent).not.toContain('Withdraw');
   });
+
+  it('says a data-applied accept waits on the creator publishing, not an agent', async () => {
+    await draw([proposal({ platformOwned: false, acceptedVia: 'data' })]);
+    expect(container.textContent).toContain('the creator applied your changes');
+    expect(container.textContent).toContain('when the creator publishes');
+    expect(container.textContent).not.toContain('agent');
+  });
+
+  it('says the same in Polish', async () => {
+    await i18n.changeLanguage('pl');
+    await draw([proposal({ platformOwned: false, acceptedVia: 'data' })]);
+    expect(container.textContent).toContain('twórca zastosował twoje zmiany');
+  });
 });

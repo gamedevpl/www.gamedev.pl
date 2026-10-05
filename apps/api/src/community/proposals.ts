@@ -112,6 +112,8 @@ export interface ProposalDeps {
     proposalId: string;
     gameTitle: string;
   }) => Promise<unknown>;
+  // Tells the admins a catalog proposal is waiting. Best effort.
+  notifyOperators?: (event: { proposalId: string; gameTitle: string }) => Promise<unknown>;
   now?: () => number;
 }
 
@@ -373,20 +375,31 @@ export async function reconcileProposalGate(deps: ProposalDeps, id: string): Pro
       gameTitle: record.targetSlug,
     });
   }
+  if (verdict.green && record.targetOwnerUid === null) await tellOperators(deps, record);
   return record;
+}
+
+async function tellOperators(deps: ProposalDeps, record: ProposalRecord): Promise<void> {
+  try {
+    await deps.notifyOperators?.({ proposalId: record.id, gameTitle: record.targetSlug });
+  } catch (error) {
+    deps.log?.error?.({ err: error, proposalId: record.id }, 'proposal operator notification failed');
+  }
 }
 
 export type DecisionResult =
   { ok: true; proposal: ProposalRecord } | { ok: false; status: number; error: string; category?: string };
 
+export type ProposalAcceptRoute = 'round' | 'data';
+
 export type ProposalRoundOutcome =
-  { ok: true; jobId: number; route: 'round' | 'data' } | { ok: false; status: number; error: string };
+  { ok: true; jobId: number; route: ProposalAcceptRoute } | { ok: false; status: number; error: string };
 
 // Starts the owner's round; must call `link` before any agent or gate runs.
 export type ProposalRoundStarter = (input: {
   proposal: ProposalRecord;
   ownerUid: string;
-  link: (jobId: number) => Promise<boolean>;
+  link: (jobId: number, via: ProposalAcceptRoute) => Promise<boolean>;
 }) => Promise<ProposalRoundOutcome>;
 
 // Accept never adopts proposer code: it opens an owner round that rebuilds it.
@@ -438,13 +451,14 @@ export async function acceptProposal(
   let linked: ProposalRecord | null = null;
   let linkError: string | null = null;
   // Runs under the starter's admission lease, before anything is dispatched.
-  const link = async (jobId: number): Promise<boolean> => {
+  const link = async (jobId: number, via: ProposalAcceptRoute): Promise<boolean> => {
     const fresh = await deps.store.getProposal(record.id);
     const holder = await resolveOwnerOfRecord(deps.store, record.targetSlug);
     if (holder.kind !== 'creator' || holder.uid !== ownerUid) linkError = 'stale_owner';
     else if (!fresh || !stampAccepted(fresh, 'accepted')) linkError = 'not_reviewable';
     if (linkError || !fresh) return false;
     fresh.adoptedJobId = jobId;
+    fresh.acceptedVia = via;
     await deps.store.putProposal(fresh);
     linked = fresh;
     return true;
@@ -463,6 +477,7 @@ export async function acceptProposal(
     // The round never started; the owner has not really decided yet.
     transitionProposal(settled, 'in_review', 'system', new Date(now()).toISOString(), 'round_not_started');
     delete settled.adoptedJobId;
+    delete settled.acceptedVia;
     delete settled.decision;
     await deps.store.putProposal(settled);
   }

@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProposalBlockAction } from './ProposalBlockAction.js';
 import { ProposalDiffView } from './ProposalDiffView.js';
+import { isStaleRefusal, reviewErrorKey, type ReviewAction } from './proposalErrors.js';
 import {
   acceptProposal,
   declineProposal,
   DECLINE_REASONS,
+  getProposal,
   requestProposalChanges,
   type DeclineReason,
   type Proposal,
@@ -46,18 +48,17 @@ export function ProposalReviewCard(props: {
   const [reason, setReason] = useState<DeclineReason>('not_the_direction');
   const [error, setError] = useState<string | null>(null);
 
-  async function run(action: () => Promise<Proposal>) {
+  async function run(kind: ReviewAction, action: () => Promise<Proposal>) {
     setBusy(true);
     setError(null);
     try {
       props.onChanged(await action());
       setMode('idle');
       setText('');
-    } catch {
-      // Deliberately vague here and specific nowhere else: every failure a reviewer can
-      // hit on this card is either a race (somebody else decided first) or a transient,
-      // and both are answered by looking again.
-      setError(t('propose.errors.generic'));
+    } catch (err) {
+      setError(t(reviewErrorKey(err, kind)));
+      // Somebody else moved it: show where it stands now.
+      if (isStaleRefusal(err)) void getProposal(proposal.id).then(props.onChanged, () => {});
     } finally {
       setBusy(false);
     }
@@ -106,7 +107,7 @@ export function ProposalReviewCard(props: {
               type="button"
               className="remix-btn is-primary"
               disabled={busy || text.trim().length < 2}
-              onClick={() => void run(() => requestProposalChanges(proposal.id, text.trim()))}
+              onClick={() => void run('changes', () => requestProposalChanges(proposal.id, text.trim()))}
             >
               {t('reviews.requestChanges')}
             </button>
@@ -142,7 +143,7 @@ export function ProposalReviewCard(props: {
               type="button"
               className="remix-btn is-primary"
               disabled={busy}
-              onClick={() => void run(() => declineProposal(proposal.id, reason, text.trim() || undefined))}
+              onClick={() => void run('decline', () => declineProposal(proposal.id, reason, text.trim() || undefined))}
             >
               {t('reviews.decline')}
             </button>
@@ -174,7 +175,7 @@ export function ProposalReviewCard(props: {
               type="button"
               className="remix-btn is-quiet"
               disabled={busy}
-              onClick={() => void run(() => acceptProposal(proposal.id))}
+              onClick={() => void run('accept', () => acceptProposal(proposal.id))}
             >
               {platform ? t('reviews.markNoted') : t('reviews.accept')}
             </button>
