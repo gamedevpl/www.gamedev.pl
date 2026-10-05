@@ -148,18 +148,15 @@ export async function verifyAsAccessToken(
   }
 
   const record = await store.getAsAccessToken(parsed.tokenId);
-  if (!record) return null;
-  if (!verifyAsTokenSecret(parsed.secretHalf, record.secretHash)) return null;
-  if (isAsAccessTokenExpired(record.expiresAt, nowMs)) {
-    await store.deleteOAuthAccessToken(parsed.tokenId);
-    return null;
-  }
-
+  if (!record || !verifyAsTokenSecret(parsed.secretHalf, record.secretHash)) return null;
   const grant = await store.getOAuthGrant(record.grantId);
-  if (!grant || grant.revokedAt || !(Date.parse(grant.viaTokenExpiresAt ?? '9999-12-31') > nowMs)) {
+  const expired = isAsAccessTokenExpired(record.expiresAt, nowMs);
+  if (expired || !grant || grant.revokedAt || !(Date.parse(grant.viaTokenExpiresAt ?? '9999-12-31') > nowMs)) {
     await store.deleteOAuthAccessToken(parsed.tokenId);
     return null;
   }
+  const owner = await store.getUser(record.ownerUid); // MCP tools trust this answer as-is.
+  if (!owner || owner.tier === 'blocked' || owner.deletionScheduledFor) return null;
 
   return {
     tokenId: record.tokenId,
