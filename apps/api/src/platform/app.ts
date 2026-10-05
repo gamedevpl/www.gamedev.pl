@@ -71,6 +71,7 @@ import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
 import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
 import { createProposalLifecycle } from '../community/proposal-lifecycle.js';
+import { emitProposalFeedbackAlert } from '../notifications/proposal-feedback-alert.js';
 import { createProposalRoundStarter, loadProposalChange } from '../community/proposal-round-start.js';
 import { proposalDiffPage } from '../community/proposal-diff-pages.js';
 import { contentDelivery } from '../creation/content-candidate.js';
@@ -391,9 +392,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // gate-verdict-routes.ts and infra/gate-hardening.md.
   const notifyProposal = (event: Parameters<typeof emitProposalNotification>[1]) =>
     emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event);
+  const notifyOperators = (event: { proposalId: string; gameTitle: string }) =>
+    emitProposalFeedbackAlert({ store, adminUids, logError: (err, message) => app.log.error({ err }, message) }, event);
   // Proposals advance server-side: on gate verdicts, on publish, and nightly.
   const proposals = createProposalLifecycle(
-    gamesStore ? { store, gamesStore, log: app.log, notify: notifyProposal } : null,
+    gamesStore ? { store, gamesStore, log: app.log, notify: notifyProposal, notifyOperators } : null,
   );
   if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict });
   // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.

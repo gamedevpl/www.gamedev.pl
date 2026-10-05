@@ -108,6 +108,10 @@
       "moderation_flag": {
         "title": "A reviewer reported a game",
         "body": "“{{title}}” was reported as {{detail}}. One report is enough to act on."
+      },
+      "proposal_feedback": {
+        "title": "A catalog game got a proposal",
+        "body": "“{{title}}” has a player proposal that passed our checks."
       }
     },
     "game": {
@@ -2184,6 +2188,7 @@
     "watcher": "You're a watcher on this game — you'll get a digest when it changes.",
     "mergedHelp": "Your change is live.",
     "acceptedHelp": "Accepted — the creator's agent is building it.",
+    "acceptedHelp_data": "Accepted — the creator applied your changes. They go live when the creator publishes.",
     "noted": "noted",
     "notedHelp": "The gamedev.pl team read your proposal — thank you. Catalog games are changed by the team, so it may not ship exactly as you built it."
   },
@@ -2203,6 +2208,22 @@
     "blockFailed": "Couldn't block just now. Try again in a moment.",
     "acceptHelp": "Accepting starts a round where your agent rebuilds this change in your game — the proposer's code is never copied in.",
     "markNoted": "Mark as noted",
+    "errors": {
+      "round_in_progress": "Your game already has a round building — accept again when it finishes.",
+      "quota_exhausted": "You've used today's rounds — try again tomorrow.",
+      "account_blocked": "Your account can't start rounds right now.",
+      "managed_unavailable": "The builder isn't available right now. Try again later — the proposal stays here.",
+      "content_rejected": "This proposal's text didn't pass our content rules, so it can't be applied. Decline it or ask for changes.",
+      "moderation_unavailable": "Our content check isn't answering just now. Try again in a moment.",
+      "not_published": "Your game isn't published right now, so it can't take a round. Publish it first.",
+      "stale_owner": "You're no longer this game's owner, so you can't accept this.",
+      "no_source_job": "This game has no build to start a round from.",
+      "round_failed": "The round couldn't start. Try again in a moment.",
+      "superseded": "Your game changed since this was proposed, so it's out of date. The proposer can rebuild it on the latest version.",
+      "not_reviewable": "This proposal isn't waiting on you any more — it was already decided or withdrawn.",
+      "not_found": "This proposal is gone — it may have been withdrawn.",
+      "note_rejected": "Your note didn't pass our content rules. Reword it and try again."
+    },
     "notedHelp": "Closes it as noted. Nothing changes in the game — the team makes any change itself.",
     "expiresIn": "Expires in {{days}} days if unreviewed",
     "changesPlaceholder": "What should they change?",

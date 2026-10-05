@@ -310,7 +310,7 @@ describe('decisions', () => {
   it('accepting starts an owner round, never adopts the version, publishes nothing', async () => {
     const proposal = await openAndGreen();
     const startRound = vi.fn<ProposalRoundStarter>(async ({ link }) => {
-      expect(await link(1_000_009)).toBe(true);
+      expect(await link(1_000_009, 'round')).toBe(true);
       return { ok: true, jobId: 1_000_009, route: 'round' };
     });
     const result = await acceptProposal(
@@ -340,7 +340,7 @@ describe('decisions', () => {
     // Ownership moves before the round links the proposal.
     const startRound = vi.fn<ProposalRoundStarter>(async ({ link }) => {
       await store.recordSettledOwner(SLUG, 'g:newowner', 999, at, at);
-      expect(await link(1_000_009)).toBe(false);
+      expect(await link(1_000_009, 'round')).toBe(false);
       return { ok: false, status: 502, error: 'round_failed' };
     });
     const result = await acceptProposal(
@@ -488,7 +488,7 @@ describe('sweeps', () => {
     await acceptProposal(
       {
         ...deps(store, gamesStore),
-        startRound: async ({ link }) => (await link(9), { ok: true, jobId: 9, route: 'round' }),
+        startRound: async ({ link }) => (await link(9, 'round'), { ok: true, jobId: 9, route: 'round' }),
       },
       { id: result.proposal.id, byUid: OWNER, reviewer: 'creator' },
     );

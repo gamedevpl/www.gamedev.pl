@@ -3,15 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { isProposalClosed, myProposals, withdrawProposal, type Proposal, type ProposalState } from './proposalsApi.js';
 
 /**
- * The proposer's tracker: what I sent, and what happened to it.
- *
- * Its whole job is to answer "whose move is it" without the reader working it out. A
- * proposal spends most of its life waiting on somebody, and which somebody it is decides
- * what the reader should do. So the state chip is the loudest thing on each row and the
- * help text says the quiet part: expired and superseded are not rejections.
- *
- * Gate detail stops at pass/fail: a player cannot act on a build log. An accepted
- * proposal to a platform game reads "noted" — the team read it, and no PR follows.
+ * The proposer's tracker: what I sent, and what happened to it. Its whole job is to
+ * answer "whose move is it" without the reader working it out. A proposal spends most
+ * of its life waiting on somebody, and which somebody decides what the reader should do,
+ * so the state chip is the loudest thing on each row and the help text says the quiet
+ * part: expired and superseded are not rejections. Gate detail stops at pass/fail: a
+ * player cannot act on a build log. An accepted proposal to a platform game reads
+ * "noted" — the team read it, and no PR follows.
  */
 
 /** How each state reads as a chip: neutral, good, or needs-attention. */
@@ -82,7 +80,9 @@ function ProposalRow({ proposal, onWithdraw }: { proposal: Proposal; onWithdraw:
       {proposal.state === 'superseded' ? <p className="proposal-sub">{t('proposals.supersededHelp')}</p> : null}
       {proposal.state === 'expired' ? <p className="proposal-sub">{t('proposals.expiredHelp')}</p> : null}
       {noted ? <p className="proposal-sub">{t('proposals.notedHelp')}</p> : null}
-      {proposal.state === 'accepted' && !noted ? <p className="proposal-sub">{t('proposals.acceptedHelp')}</p> : null}
+      {proposal.state === 'accepted' && !noted ? (
+        <p className="proposal-sub">{t('proposals.acceptedHelp', { context: proposal.acceptedVia })}</p>
+      ) : null}
       {proposal.state === 'merged' ? (
         <p className="proposal-sub">
           {t('proposals.mergedHelp')} {t('proposals.watcher')}

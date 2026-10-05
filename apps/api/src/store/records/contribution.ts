@@ -165,6 +165,8 @@ export interface ProposalRecord {
   };
   /** The improvement job created on accept, so the merge can be followed to `merged`. */
   adoptedJobId?: number;
+  // How accept applied it: as data, or through an agent round.
+  acceptedVia?: 'data' | 'round';
   /** Repo-lane only: the games-repo PR the apply-bot opened. */
   mergePr?: { number: number; url: string; openedAt: string; mergedAt?: string };
   createdAt: string;

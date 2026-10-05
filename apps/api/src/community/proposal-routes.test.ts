@@ -210,7 +210,7 @@ describe('proposal routes', () => {
       headers: { cookie: cookie(OWNER) },
     });
     expect(accept.statusCode).toBe(200);
-    expect(accept.json().proposal).toMatchObject({ state: 'accepted' });
+    expect(accept.json().proposal).toMatchObject({ state: 'accepted', acceptedVia: 'round' });
 
     // The game is still serving what it served before.
     expect((await store.getPublication(SLUG))?.currentVersion).toBe('base-1');

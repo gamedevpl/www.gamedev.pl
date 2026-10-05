@@ -108,6 +108,10 @@
       "moderation_flag": {
         "title": "Recenzent zgłosił grę",
         "body": "„{{title}}” zgłoszono jako {{detail}}. Jedno zgłoszenie wystarczy, żeby zadziałać."
+      },
+      "proposal_feedback": {
+        "title": "Gra z katalogu dostała propozycję",
+        "body": "„{{title}}” ma propozycję gracza, która przeszła nasze testy."
       }
     },
     "game": {
@@ -2198,6 +2202,7 @@
     "watcher": "Obserwujesz tę grę — dostaniesz podsumowanie, gdy się zmieni.",
     "mergedHelp": "Twoja zmiana jest na żywo.",
     "acceptedHelp": "Przyjęta — agent twórcy właśnie ją buduje.",
+    "acceptedHelp_data": "Przyjęta — twórca zastosował twoje zmiany. Trafią do gry, gdy twórca ją opublikuje.",
     "noted": "przyjęta do wiadomości",
     "notedHelp": "Zespół gamedev.pl przeczytał twoją propozycję — dziękujemy. Gry z katalogu zmienia zespół, więc może nie trafić na żywo dokładnie w twojej wersji."
   },
@@ -2217,6 +2222,22 @@
     "blockFailed": "Nie udało się teraz zablokować. Spróbuj za chwilę.",
     "acceptHelp": "Przyjęcie rozpoczyna rundę, w której twój agent odtwarza tę zmianę w twojej grze — kod autora propozycji nigdy nie jest kopiowany.",
     "markNoted": "Przyjęte do wiadomości",
+    "errors": {
+      "round_in_progress": "W twojej grze trwa już runda — przyjmij ponownie, gdy się skończy.",
+      "quota_exhausted": "Dzisiejsze rundy są już wykorzystane — spróbuj jutro.",
+      "account_blocked": "Twoje konto nie może teraz rozpoczynać rund.",
+      "managed_unavailable": "Builder jest teraz niedostępny. Spróbuj później — propozycja tu zostaje.",
+      "content_rejected": "Tekst tej propozycji nie spełnia naszych zasad treści, więc nie da się jej zastosować. Odrzuć ją albo poproś o zmiany.",
+      "moderation_unavailable": "Nasza kontrola treści chwilowo nie odpowiada. Spróbuj za moment.",
+      "not_published": "Twoja gra nie jest teraz opublikowana, więc nie może przyjąć rundy. Najpierw ją opublikuj.",
+      "stale_owner": "Nie jesteś już właścicielem tej gry, więc nie możesz tego przyjąć.",
+      "no_source_job": "Ta gra nie ma buildu, od którego można zacząć rundę.",
+      "round_failed": "Nie udało się rozpocząć rundy. Spróbuj za moment.",
+      "superseded": "Twoja gra zmieniła się od czasu tej propozycji, więc jest nieaktualna. Autor może ją odbudować na najnowszej wersji.",
+      "not_reviewable": "Ta propozycja już na ciebie nie czeka — została rozstrzygnięta albo wycofana.",
+      "not_found": "Tej propozycji już nie ma — mogła zostać wycofana.",
+      "note_rejected": "Twoja notatka nie spełnia naszych zasad treści. Przeredaguj ją i spróbuj ponownie."
+    },
     "notedHelp": "Zamyka propozycję jako przyjętą do wiadomości. Gra się nie zmienia — ewentualne zmiany zespół wprowadza sam.",
     "expiresIn": "Wygasa za {{days}} dni bez recenzji",
     "changesPlaceholder": "Co powinni zmienić?",
