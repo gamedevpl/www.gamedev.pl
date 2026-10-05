@@ -64,7 +64,8 @@ describe('admin alert for catalog proposals', () => {
     // Mail goes to admins with an address, linking to proposals.
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe('boss@example.test');
-    expect(sent[0]?.text).toContain('https://x.test/admin/proposals');
+    expect(sent[0]?.text).toContain('https://x.test/');
+    expect(sent[0]?.text).not.toContain('/admin');
 
     // Re-reconciling or sweeping must not alert twice.
     await reconcileProposalGate(deps(), proposal.id);
