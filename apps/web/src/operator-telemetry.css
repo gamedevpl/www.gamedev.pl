@@ -1,0 +1,112 @@
+.operator-telemetry {
+  padding: 1rem 0 2rem;
+}
+.operator-telemetry [hidden] {
+  display: none !important;
+}
+.operator-telemetry-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.operator-telemetry-nav button {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.operator-telemetry-nav button[aria-pressed='true'] {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  background: color-mix(in srgb, var(--turquoise) 8%, transparent);
+}
+.operator-telemetry-nav button:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+.operator-telemetry-description {
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+}
+.operator-performance-controls,
+.operator-performance-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.operator-performance-controls label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.operator-performance-controls select {
+  max-width: 100%;
+  padding: 0.4rem;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.4rem;
+  font: inherit;
+}
+.operator-performance-pages button {
+  padding: 0.4rem 0.7rem;
+}
+.operator-performance-table {
+  min-width: 820px;
+}
+.operator-performance-table td {
+  vertical-align: top;
+}
+.operator-performance-table small {
+  display: block;
+  color: var(--muted);
+}
+.operator-performance-table details {
+  text-align: left;
+}
+.operator-performance-table summary {
+  cursor: pointer;
+  color: var(--turquoise);
+}
+.operator-performance-details {
+  width: 19rem;
+  margin: 0.75rem 0 0;
+}
+.operator-performance-details dt {
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+.operator-performance-details dd {
+  margin: 0.15rem 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.operator-performance-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+@media (max-width: 600px) {
+  .operator-telemetry .health-header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .operator-telemetry-nav button {
+    flex: 1 0 28%;
+    padding: 0.55rem 0.35rem;
+  }
+  .operator-performance-controls label {
+    width: 100%;
+  }
+}
+
+.operator-performance-pages button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

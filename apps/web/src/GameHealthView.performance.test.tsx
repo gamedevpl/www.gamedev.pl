@@ -31,6 +31,7 @@ it('hides stale performance during loading and failure, then shows the replaceme
   };
   try {
     await act(async () => root.render(<GameHealthView />));
+    await selectWindow('Performance');
     expect(container.textContent).toContain('7 measured sessions');
 
     let rejectRequest!: (error: Error) => void;
