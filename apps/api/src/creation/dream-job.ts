@@ -14,7 +14,7 @@ import { postedAttemptKey, type ProposalRefusedBy } from '../store/slices/build-
 import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
-import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
+import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream-frames.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
 import { currentOwnerUid, gameOwnerUid } from '../platform/game-access-resolve.js';
@@ -27,6 +27,10 @@ const ORPHAN_LOG = 'proposal shots may be orphaned; delete only if no card refer
 export const DISCARD_ATTEMPTS = 3;
 export const DISCARD_BACKOFF_MS = 250;
 
+// The image model mostly answers 429; a retry usually lands.
+export const FRAME_ATTEMPTS = 4;
+export const FRAME_THROTTLE_BACKOFF_MS = 15_000;
+
 // One image-model frame; Firestore holds it base64 in one document.
 export const MAX_DREAM_FRAME_BYTES = 600 * 1024;
 
@@ -37,7 +41,6 @@ export type DreamOutcome =
   | 'muted'
   | 'no_capacity'
   | 'no_screenshot'
-  | 'no_hud'
   | 'pure_ui'
   | 'no_ideas'
   | 'no_frames'
@@ -93,6 +96,13 @@ function styleNoteFor(record: SubmissionRecord): string {
   return concept ? `a browser game: ${concept}` : 'a browser game';
 }
 
+function isThrottled(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (status === 429) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b429\b|RESOURCE_EXHAUSTED/.test(message);
+}
+
 function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | null {
   const bytes = Buffer.from(frame.data, 'base64');
   if (bytes.length === 0 || bytes.length > MAX_DREAM_FRAME_BYTES) return null;
@@ -109,6 +119,23 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   const now = deps.now ?? Date.now;
   const wait = deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
+  // Only throttling: a refused call bills nothing, a slow one might.
+  async function generateThrottled(
+    request: DreamFrameRequest,
+    halted: () => Promise<boolean>,
+  ): Promise<DreamFrame | null> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await frames.generate(request);
+      } catch (error) {
+        if (attempt >= FRAME_ATTEMPTS || !isThrottled(error)) throw error;
+        await wait(FRAME_THROTTLE_BACKOFF_MS * attempt);
+        // A pause or mute during the wait cancels the next paid call.
+        if (await halted()) return null;
+      }
+    }
+  }
+
   async function dreamFrame(input: {
     idea: NextIdea;
     sourcePng: string;
@@ -116,16 +143,20 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     styleNote: string;
     hudRegions: NonNullable<Awaited<ReturnType<HudRegionsReader>>>;
     jobId: number;
+    halted: () => Promise<boolean>;
   }): Promise<{ frame: DreamFrame; idea: NextIdea } | null> {
     try {
-      const frame = await frames.generate({
-        sourcePng: input.sourcePng,
-        width: input.size.width,
-        height: input.size.height,
-        styleNote: input.styleNote,
-        direction: input.idea.prompt.en,
-        hudRegions: input.hudRegions,
-      });
+      const frame = await generateThrottled(
+        {
+          sourcePng: input.sourcePng,
+          width: input.size.width,
+          height: input.size.height,
+          styleNote: input.styleNote,
+          direction: input.idea.prompt.en,
+          hudRegions: input.hudRegions,
+        },
+        input.halted,
+      );
       if (!frame) return null;
       const decoded = decodeFrame(frame);
       if (!decoded) return null;
@@ -181,8 +212,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const size = imageSize(source);
     if (!size) return 'no_screenshot';
 
-    const hudRegions = await readHudRegions({ slug: record.slug, version, width: size.width, height: size.height });
-    if (!hudRegions) return 'no_hud';
+    // Undeclared means the model finds the UI itself.
+    const hudRegions =
+      (await readHudRegions({ slug: record.slug, version, width: size.width, height: size.height })) ?? [];
     if (hudCoverage(hudRegions, size.width, size.height) >= PURE_UI_COVERAGE) return 'pure_ui';
 
     if (!record.spec?.trim()) return 'no_ideas';
@@ -215,7 +247,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       halt = await stopped();
       if (halt) return halt;
       await bookConcept(jobId, frames.model);
-      const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId });
+      const halted = async () => (halt = await stopped()) !== null;
+      const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId, halted });
+      if (halt) return halt;
       if (result) dreamed.push(result);
     }
     // The copy promises two directions; one is not a choice.
