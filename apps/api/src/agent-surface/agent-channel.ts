@@ -60,7 +60,7 @@ import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
-import { gameManifestHint } from './game-manifest-hint.js';
+import { stagedFileHint } from './staged-file-hint.js';
 import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
@@ -1431,7 +1431,7 @@ export async function registerAgentChannelRoutes(
         // After the buffer is durable, so the assembly it schedules reads this file too.
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
-        const manifestHint = gameManifestHint(staged.path, parsed.data.content);
+        const manifestHint = stagedFileHint(staged.path, parsed.data.content);
         const advisories = await stageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
@@ -1537,7 +1537,7 @@ export async function registerAgentChannelRoutes(
         options.onEvent?.(jobId);
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, content);
-        const manifestHint = gameManifestHint(staged.path, content);
+        const manifestHint = stagedFileHint(staged.path, content);
         const advisories = await stageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
@@ -1714,7 +1714,7 @@ export async function registerAgentChannelRoutes(
         let manifestHint: string | null = null;
         for (const item of prepared) {
           hint ??= largeSourceFileHint(item.path, Buffer.byteLength(item.content, 'utf8'), item.content);
-          manifestHint ??= gameManifestHint(item.path, item.content);
+          manifestHint ??= stagedFileHint(item.path, item.content);
         }
         const tsFile = [...prepared].reverse().find((item) => item.path.endsWith('.ts') || item.path.endsWith('.tsx'));
         const gameJson = prepared.find((item) => item.path === 'GAME.json');
