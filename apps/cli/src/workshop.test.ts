@@ -9,6 +9,7 @@ import { memoryStore } from './keychain.js';
 import { handleReplLine } from './repl.js';
 import {
   describeAdapters,
+  claudeAbsolutePath,
   detectLocalAdapters,
   openWorkshop,
   settleBuilder,
@@ -82,6 +83,11 @@ function workshop(root: string, over: Partial<Workshop> = {}): Workshop {
   };
 }
 
+it('writes absolute Claude permission paths in POSIX form on every platform', () => {
+  expect(claudeAbsolutePath('/Users/me/game')).toBe('//Users/me/game');
+  expect(claudeAbsolutePath('C:\\Users\\me\\game\\')).toBe('//c/Users/me/game');
+});
+
 describe('workshopTurn', () => {
   it('runs the agent in games/<slug> with a brief, no creator token, then delivers', async () => {
     const root = checkout();
@@ -111,7 +117,7 @@ describe('workshopTurn', () => {
     expect(calls[0]!.spec.name).toBe('claude');
     expect(calls[0]!.spec.headless.slice(0, 5)).toEqual([
       '--settings',
-      JSON.stringify({ permissions: { allow: [`Read(/${realpathSync(root)}/**)`] } }),
+      JSON.stringify({ permissions: { allow: [`Read(${claudeAbsolutePath(realpathSync(root))}/**)`] } }),
       '--strict-mcp-config',
       '--setting-sources',
       'project,local',

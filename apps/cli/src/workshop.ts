@@ -164,8 +164,13 @@ export async function settleBuilder(input: {
   }
 }
 
+export function claudeAbsolutePath(path: string): string {
+  const posix = path.replaceAll('\\', '/').replace(/^([A-Za-z]):\//, (_, drive: string) => `/${drive.toLowerCase()}/`);
+  return `/${posix.replace(/\/+$/, '')}`;
+}
+
 export function claudeLocalFlags(root: string, cwd: string): string[] {
-  const readRoot = { permissions: { allow: [`Read(/${realpathSync(root)}/**)`] } };
+  const readRoot = { permissions: { allow: [`Read(${claudeAbsolutePath(realpathSync(root))}/**)`] } };
   return [
     ...(cwd === root ? [] : ['--settings', JSON.stringify(readRoot)]),
     '--strict-mcp-config',
