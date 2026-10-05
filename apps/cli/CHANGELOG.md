@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- The Play conversation panel can be resized: drag its inner edge (or focus it and use the arrow keys), double-click to reset; the width is kept across reloads (#1631).
+
 ### Fixed
 
 - Local capture progress shows in the status line instead of flooding the task transcript, and a local task stops after 12 screenshots instead of capturing in a loop (#1632).
