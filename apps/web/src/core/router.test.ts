@@ -89,15 +89,10 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/studio/tok/%E0')).toEqual({ view: 'notFound' });
   });
 
-  it('parses the unlisted operator console, and keeps its old address working', () => {
-    expect(parsePathRoute('/admin')).toEqual({ view: 'admin', section: 'queue' });
-    expect(parsePathRoute('/admin/telemetry')).toEqual({ view: 'admin', section: 'telemetry' });
-    expect(parsePathRoute('/admin/assessments')).toEqual({ view: 'admin', section: 'assessments' });
-    // `/health` was the whole operator page before the console existed, and is what is
-    // in the operator's bookmarks — it resolves to the section it used to be.
-    expect(parsePathRoute('/health')).toEqual({ view: 'admin', section: 'telemetry' });
-    // A section that does not exist is a typo, and says so.
-    expect(parsePathRoute('/admin/nope')).toEqual({ view: 'notFound' });
+  it('no longer routes the operator console, which moved out of the site', () => {
+    expect(parsePathRoute('/admin')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/admin/telemetry')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/health')).toEqual({ view: 'notFound' });
     // Malformed percent-encoding is a 404, not a URIError: route parsing runs on every
     // navigation, and a throw there takes the whole app down.
     expect(parsePathRoute('/admin/%E0')).toEqual({ view: 'notFound' });
@@ -269,13 +264,10 @@ describe('path builders', () => {
     expect(canonicalPath('/ay/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPath('/draft/sky-dodge')).toBe('/play/sky-dodge');
-    expect(canonicalPath('/health')).toBe('/admin/telemetry');
     expect(canonicalPath('/status/tok-abc')).toBe('/studio/tok-abc');
     expect(canonicalPath('/creators/ada')).toBe('/ada');
     expect(canonicalPath('/gamedevpl')).toBe('/');
     expect(canonicalPath('/creators/gamedevpl')).toBe('/');
-    // A bare /admin names no section; the queue is what it shows, so that is what it says.
-    expect(canonicalPath('/admin')).toBe('/admin/queue');
     // An old tab name is not the current address for the surface that absorbed it.
     expect(canonicalPath('/studio/tv-tycoon/build')).toBe('/studio/tv-tycoon/thread');
     expect(canonicalPath('/studio/tv-tycoon/stats')).toBe('/studio/tv-tycoon/details');
@@ -294,7 +286,6 @@ describe('path builders', () => {
   it('leaves an address that is already current alone', () => {
     // Returning a path here would mean a replaceState on every navigation.
     expect(canonicalPath('/play/sky-dodge')).toBeNull();
-    expect(canonicalPath('/admin/telemetry')).toBeNull();
     expect(canonicalPath('/studio/tok-abc')).toBeNull();
     expect(canonicalPath('/studio/tok-abc/thread')).toBeNull();
     expect(canonicalPath('/studio')).toBeNull();
@@ -418,7 +409,6 @@ describe('navUpTarget', () => {
   });
 
   it('sends browsable non-studio surfaces home', () => {
-    expect(navUpTarget({ view: 'admin', section: 'queue' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'connect' })).toEqual({ path: '/', labelKey: 'upHome' });

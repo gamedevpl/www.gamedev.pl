@@ -118,7 +118,8 @@ plus four Vertex safety verdicts:
   call and no moderation call.
 
 Both ceilings are stored in `opsConfig/creationLimits`, so they move without a deploy, and
-both are shown and settable on `/admin` beside the gate-run and tab-complete caps. Setting
+both are shown and settable in the operator console (private ops repo, `console/`) beside
+the gate-run and tab-complete caps. Setting
 the global one to 0 closes the route, which is why this gate has no separate pause flag.
 
 Ordering follows the cost-control invariant exactly: the free peek first, then moderation,

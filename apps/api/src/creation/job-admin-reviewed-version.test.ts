@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { InMemoryStore } from '../platform/store.js';
 
 describe('publish reviewed version', () => {
-  const adminHeaders = {
-    cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', 'dev-session-secret-change-me')}`,
-  };
+  const adminHeaders = opsHeaders('g:boss');
   function gamesStoreWith(gate: { green: boolean }) {
     return {
       getManifest: async () => ({ gate: { ...gate, ranAt: '2026-07-30T11:00:00Z' } }),
@@ -52,6 +50,7 @@ describe('publish reviewed version', () => {
       store,
       sessionSecret: 'dev-session-secret-change-me',
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: { agentChannel: { gamesStore } },
     });
     return { app, store };
@@ -61,7 +60,7 @@ describe('publish reviewed version', () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
     const missing = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
     });
     expect(missing.statusCode).toBe(400);
@@ -70,7 +69,7 @@ describe('publish reviewed version', () => {
     await store.setSubmissionDeliveredVersion(1_000_001, 'v2');
     const stale = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -85,7 +84,7 @@ describe('publish reviewed version', () => {
     expect((await store.getSubmission(1_000_001))?.state).toBeUndefined();
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -103,7 +102,7 @@ describe('publish reviewed version', () => {
     };
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -118,7 +117,7 @@ describe('publish reviewed version', () => {
     await store.recordJobTransition(1_000_001, { to: 'building', at: '2026-07-30T10:01:00Z', by: 'creator' });
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -134,7 +133,7 @@ describe('publish reviewed version', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -154,7 +153,7 @@ describe('publish reviewed version', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -179,7 +178,7 @@ describe('publish reviewed version', () => {
     const store = (seam.store = built.store);
     const response = await built.app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });

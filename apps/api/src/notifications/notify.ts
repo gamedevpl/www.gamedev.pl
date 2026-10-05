@@ -361,16 +361,15 @@ export async function emitWaitlistJoined(
   return { created };
 }
 
-/** Where an operator notification lands: the queue, which is where the action is. */
-const OPERATOR_ALERT_LINK = '/admin/queue';
+// The operator console runs locally (ops repo), so alerts cannot deep-link it.
+const OPERATOR_ALERT_LINK = '/';
 
-/** Waitlist joins land on the membership panel — that is where the applicant is acted on. */
-const WAITLIST_ALERT_LINK = '/admin/waitlist';
+const WAITLIST_ALERT_LINK = '/';
 
 const REVIEW_SWEEP_LINK = '/review';
 
-// Reports land on the queue where the takedown lives.
-const MODERATION_FLAG_LINK = '/admin/moderation';
+// The reported game itself; the takedown lives in the ops console.
+const moderationFlagLink = (slug: string) => `/play/${encodeURIComponent(slug)}`;
 
 // One report is actionable alone, so it pages.
 export async function emitModerationFlag(
@@ -390,11 +389,11 @@ export async function emitModerationFlag(
       titleKey: `notifications.${type}.title`,
       bodyKey: `notifications.${type}.body`,
       params: { title: event.slug, detail: event.reason },
-      link: MODERATION_FLAG_LINK,
+      link: moderationFlagLink(event.slug),
     });
     if (!result.created) continue;
     created += 1;
-    await sendOperatorEmail(deps, uid, id, type, MODERATION_FLAG_LINK, {
+    await sendOperatorEmail(deps, uid, id, type, moderationFlagLink(event.slug), {
       title: event.slug,
       detail: event.reason,
     });

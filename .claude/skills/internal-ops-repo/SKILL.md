@@ -18,8 +18,7 @@ gamedev.pl splits across three repos:
 Moved out of this repo's `docs/` in 2026-07 (old revisions remain in public git history —
 accepted; future edits happen there):
 
-- `docs/gtm-plan.md` — go-to-market stages and gates. Code comments in
-  `creator-metrics.ts`, `visit-funnel.ts`, `CreatorMetricsPanel.tsx` refer to it.
+- `docs/gtm-plan.md` — go-to-market stages and gates.
 - `docs/risks-and-open-questions.md` — the risk register and resolved-decisions log.
 - `docs/legal-compliance-plan.md` — RODO/UŚUDE/DSA/AI-Act analysis behind the published
   legal pages.
@@ -35,6 +34,12 @@ accepted; future edits happen there):
 - `docs/byoca-execution-plan.md` / `docs/byoca-delegation-plan.md` — BYOCA / MCP
   self-build plans (tool contract, handoff). Public playbook:
   [`.claude/skills/byoca-mcp/SKILL.md`](../byoca-mcp/SKILL.md).
+
+It also holds the operator console,
+[`console/`](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console) — run
+locally with the operator's own gcloud credentials; it replaced the site's `/admin` pages
+and browser `/api/admin/*` routes, and reaches this server only through
+`/api/internal/ops/*` (`apps/api/src/platform/ops-console.ts`).
 
 Start at its [`docs/README.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/README.md);
 its `AGENTS.md` is the contract for working there.

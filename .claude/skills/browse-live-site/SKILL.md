@@ -164,8 +164,8 @@ roughly in order of how often they turn up real issues:
   a legacy `/draft/<slug>` (must rewrite to `/play/<slug>`), a bogus `/status/<token>`, a
   bogus `/join/<CODE>#<token>`. These should all render a friendly state, never a blank page
   or an unhandled console exception.
-- **`/health`** — renders "Not found" for a non-admin identity (including a token-authed
-  bot); that's correct per `docs/agent-access-tokens.md`, not a bug.
+- **`/health`, `/admin`** — render "Not found" for everyone now; the operator console moved
+  to the private ops repo. That's correct, not a bug.
 - **Signed-out pass** — a _second_, cookie-less browser context (`browser.newContext()`
   without `storageState`) hitting the same routes. Confirms anonymous visitors get a sane
   read-only experience and that nothing meant to be gated actually renders private data.
@@ -185,8 +185,9 @@ Not every console error or 404 is a bug:
   is how a real missing-favicon 404 survived a full manual walkthrough. Browser-initiated
   requests like `/favicon.ico` also never appear in `page.on('response')` at all, so that
   console line is their _only_ report.
-- A 404 on `/api/admin/telemetry/*` from a non-admin bot identity, or on `/health` itself, is
-  the intended behavior (unlisted admin route, 404s to everyone else).
+- A 404 on any `/api/admin/*` route is the intended behavior: operator routes answer 404 to
+  every browser and are reached only by the private ops repo's console through
+  `/api/internal/ops/*`.
 - A 404 on `/api/submissions/<garbage-token>` or `/api/games/<slug>` when you deliberately
   navigated to a bogus token/slug is the expected miss path, not a defect — check that the
   _page_ still rendered a friendly empty/error state, which is the actual thing worth verifying.

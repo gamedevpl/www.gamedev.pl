@@ -52,8 +52,10 @@ accounts sign in, which they cannot.
 
 ### 1. Using the Operator Console (Recommended)
 
-Signed-in operators (`ADMIN_UIDS`) open **`/admin/waitlist`** — a tab on the
-operator console. From there you can:
+Operators run the
+[operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)
+locally from the private ops repo (`console/`, with their own gcloud credentials) and open
+its **Waitlist** view. The site no longer has an `/admin` page for this. From there you can:
 
 - list applicants (filter pending / approved / rejected / all);
 - approve, reject, or reset an existing row;
@@ -66,8 +68,8 @@ operator console. From there you can:
   Claims made before that write existed leave no row — `npm run beta:invite:backfill`
   reconciles them.
 
-Join notifications deep-link here. The same writes go through
-`GET|POST /api/admin/waitlist` (session-only admin, 404 to everyone else).
+The console writes the same Firestore rows directly; there is no `/api/admin/waitlist`
+route any more.
 
 ### 2. Using the NPM Command (scripts / agents)
 

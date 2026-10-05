@@ -11,7 +11,6 @@ const copy: DocumentTitleCopy = {
   home: 'Gamedev.pl — Describe a game, play it',
   join: 'Join the game',
   invite: 'Beta invitation',
-  health: 'Telemetry',
   review: 'Game review',
   studio: 'Creator Studio',
   privacy: 'Privacy Policy',
@@ -75,7 +74,7 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy })).toBe('Play Sky Dodge — Gamedev.pl');
   });
 
-  it('titles studio / join / health / legal routes', () => {
+  it('titles studio / join / legal routes', () => {
     expect(resolveDocumentTitle({ view: 'play', slug: 'space-runner' }, { copy, playTitle: 'Space Runner' })).toBe(
       'Play Space Runner — Gamedev.pl',
     );
@@ -95,7 +94,6 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'invite', code: 'A'.repeat(32) }, { copy })).toBe(
       'Beta invitation — Gamedev.pl',
     );
-    expect(resolveDocumentTitle({ view: 'admin', section: 'queue' }, { copy })).toBe('Telemetry — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe('Privacy Policy — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe('Terms of Service — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'contact' }, { copy })).toBe('Contact — Gamedev.pl');
