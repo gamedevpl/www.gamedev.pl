@@ -5,6 +5,7 @@ import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { consentToken } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
+import { revokeAccessTokenAndGrants } from './pat-grant-binding.js';
 import { verifyAsAccessToken } from './oauth-tokens.js';
 import { InMemoryStore } from './store.js';
 
@@ -130,12 +131,7 @@ describe('OAuth consent session authentication', () => {
     app = env.app;
     const { tokenId } = await mintPat(env.store);
     const tokens = await approveAndExchange(app, cookie(UID, tokenId));
-    const revoked = await app.inject({
-      method: 'DELETE',
-      url: `/api/admin/access-tokens/${tokenId}`,
-      headers: { cookie: cookie(ADMIN) },
-    });
-    expect(revoked.statusCode).toBe(200);
+    expect(await revokeAccessTokenAndGrants(env.store, tokenId)).toBe(true);
     expect(await env.store.listOAuthGrantsByOwner(UID)).toEqual([]);
     expect(await verifyAsAccessToken(env.store, tokens.access_token)).toBeNull();
     const refreshed = await tokenCall(app, { grant_type: 'refresh_token', refresh_token: tokens.refresh_token });

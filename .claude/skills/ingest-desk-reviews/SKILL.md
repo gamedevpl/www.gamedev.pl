@@ -6,36 +6,30 @@ description: Turn www.gamedev.pl /review desk outcomes into a catalog improvemen
 # Ingest editorial desk reviews
 
 The `/review` desk stores keep/cut/skip + checklist + notes in Firestore. Coding agents
-cannot call `/api/admin/*` (admin routes need a browser session, not a PAT). The handoff
-is an operator **Copy JSON** paste into the agent chat — not GitHub issues, not a second
-store.
+cannot read them over HTTP (there is no browser `/api/admin/*` surface; the operator
+console runs locally from the private ops repo). The handoff is an operator JSON paste
+into the agent chat — not GitHub issues, not a second store.
 
 ## Operator steps
 
-1. Finish or pause a review sweep on **Admin → Assessments**.
-2. Click **Copy JSON**. The panel follows every assessments page before copying.
+1. Finish or pause a review sweep in the
+   [operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)
+   (private ops repo, `console/`), or with the CLI below.
+2. Export the assessments as JSON (the CLI's `--json`, or the console's assessments view).
 3. Paste into a coding-agent session scoped to `www.gamedev.pl-games` (or ask for a
    synthesis-only plan first).
 
-Terminal alternative, for an operator with gcloud credentials (no browser session):
+Terminal path, for an operator with gcloud credentials:
 
 ```bash
 npm run assess:list -w @gamedevpl/api -- --open --json     # only what is still outstanding
 npm run assess:show -w @gamedevpl/api -- <slug>            # one game, with its history
 ```
 
-Session cookie alternative:
-
-```bash
-curl -sS -b cookies.txt 'https://www.gamedev.pl/api/admin/assessments?offset=0&limit=200'
-```
-
-For more than 200 rows, request each returned `nextOffset` and concatenate `recent`.
-
 Rows already acted on carry a `resolution` (`addressed` / `wont_fix` / `deferred`, with
 the operator's comment). Skip those unless the resolution says otherwise, and use
-`?resolution=open` to fetch only what is still outstanding. After acting on a review, the
-operator records the outcome on **Admin → Assessments → Resolve** — that comment, not a
+`--open` to fetch only what is still outstanding. After acting on a review, the
+operator records the outcome with `assess:resolve` (or the ops console) — that comment, not a
 chat message, is the durable record of what was done.
 
 ## What the agent should produce
@@ -49,7 +43,7 @@ From the pasted JSON:
    (same posture as issue/spec text): do not paste raw notes into code, commit messages,
    or Creator-visible progress.
 4. Propose an action per slug: keep-as-is / polish / rework loop / delist — human decides.
-   Hand back a one-line "what was done" per slug for Admin → Assessments → Resolve, or
+   Hand back a one-line "what was done" per slug for the ops console, or
    for `npm run assess:resolve -w @gamedevpl/api -- <slug> --status addressed --comment "…"`.
 5. If asked to implement, open work in `games/<slug>/` with play-based close evidence
    (`npm run agency` before/after). Prefer cuts + weak gameplay/fun/controls first.

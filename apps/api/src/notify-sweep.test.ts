@@ -546,7 +546,7 @@ describe('operator alerts on the notify sweep', () => {
 
     expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 1 });
     const [notification] = await store.listNotifications('g:boss');
-    expect(notification).toMatchObject({ type: 'operator.review_ready', link: '/admin/queue' });
+    expect(notification).toMatchObject({ type: 'operator.review_ready', link: '/' });
 
     // Twice through the scheduler is one notification: the situation has not changed.
     expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0 });

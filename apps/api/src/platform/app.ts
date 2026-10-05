@@ -11,7 +11,6 @@ import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
-import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerApiCompression } from './api-compression.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
@@ -31,7 +30,6 @@ import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from '../delivery/gate-trigger.js';
 import { withGateRunCeiling } from './gate-run-ceiling.js';
-import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from '../creation/creator-profile-routes.js';
@@ -112,6 +110,7 @@ import {
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from '../creation/scorecard.js';
 import { createDefaultThemeExtractor } from '../community/feedback-themes.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { registerOpsConsole, rewriteOpsUrl } from './ops-console.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { registerOptionImageRoutes } from '../creation/option-image-routes.js';
 import type { OptionImageGenerator } from '../creation/option-images.js';
@@ -200,6 +199,7 @@ export interface BuildAppOptions {
   > & { internalAuthVerifier?: AccountDeletionRoutesOptions['internalAuthVerifier'] };
   // Seam for the spend brake; OIDC-or-deny-all from env.
   spendBrakeRoutes?: { internalAuthVerifier?: InternalAuthVerifier };
+  opsConsole?: { verifier?: InternalAuthVerifier };
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -215,7 +215,7 @@ export interface BuildAppOptions {
   reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'adminUids' | 'reviewerUids'>;
   creatorCodeRoutes?: Partial<Omit<CreatorCodeRoutesOptions, 'store'>>;
   // Seams for personal access tokens; its clock also goes to token-info.
-  accessTokenRoutes?: Partial<Omit<AccessTokenRoutesOptions, 'store' | 'adminUids'>>;
+  accessTokenRoutes?: { now?: () => number };
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -229,6 +229,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: options.logger ?? false,
     trustProxy: (_address, hop) => hop === 0,
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
+    rewriteUrl: rewriteOpsUrl,
   });
 
   const relayOnly = isRelayOnly() || options.multiplayerRoutes?.relayOnly === true;
@@ -350,6 +351,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reviewerUids,
     // A floored day count, so token-info reads the minting clock.
     now: options.accessTokenRoutes?.now,
+  });
+  registerOpsConsole(app, {
+    store,
+    adminUids,
+    verifier: options.opsConsole?.verifier ?? createInternalAuthVerifierFromEnv(process.env, 'opsConsole'),
   });
 
   /**
@@ -690,28 +696,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.playerFeedbackRoutes,
   });
 
-  // Operator reads over that telemetry. Separate allowlist from the beta one: being
-  // let into the closed beta is not the same as being allowed to read every game's
-  // numbers. Unset means the route admits nobody, which is the right default for a
-  // surface whose whole purpose is seeing across other people's games.
-  // The creation-breaker knobs come from the submission-route options so the operator
-  // surface reports the same ceiling and the same propagation delay the gate actually
-  // enforces, rather than a second copy of the defaults that could drift from it.
-  await registerAdminRoutes(app, {
-    store,
-    adminUids,
-    globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
-    creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
-    now: options.submissionRoutes?.now,
-    publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
-    publicPlayTtlMs,
-    hasPlatformBackend: submissionSeams.hasPlatformBackend,
-    configuredVendors: submissionSeams.configuredVendors,
-    defaultVendor: submissionSeams.defaultVendor,
-    configuredSeedProviders: submissionSeams.configuredSeedProviders,
-    defaultSeedProvider: submissionSeams.defaultSeedProvider,
-  });
-
   // Review catalog matches /api/catalog; snapshot first in prod.
   const publishedRef = process.env.GAMES_REPO_REF?.trim() || 'main';
   const reviewCatalogClient = submissionSeams.githubClient ?? gamesRepoClient;
@@ -841,7 +825,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // lets a coding agent in a cloud VM authenticate as a real account without a browser,
   // a Google identity, or any bypass route. Same operator allowlist as the views above,
   // and session-only, so a token can never mint another.
-  await registerAccessTokenRoutes(app, { store, adminUids, now: options.accessTokenRoutes?.now });
   registerProxyDiagnosticsRoutes(app);
 
   // The build queue, answered from the store alone. Until jobs carried their own state

@@ -37,16 +37,6 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     readCatalogFresh,
   } = options;
 
-  // Slugs only — titles would cost a manifest read per game.
-  app.get('/api/admin/games', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    const publications = await store.listPublications();
-    return reply.send({
-      games: publications.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)),
-    });
-  });
-
   // Manual trigger of the break-and-nudge loop, against the *current* engine.
   app.post<{ Params: { slug: string } }>('/api/admin/games/:slug/regate', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });

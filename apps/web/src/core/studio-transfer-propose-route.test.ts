@@ -6,7 +6,6 @@ const copy: DocumentTitleCopy = {
   home: 'Gamedev.pl — Describe a game, play it',
   join: 'Join the game',
   invite: 'Beta invitation',
-  health: 'Telemetry',
   review: 'Game review',
   studio: 'Creator Studio',
   privacy: 'Privacy Policy',

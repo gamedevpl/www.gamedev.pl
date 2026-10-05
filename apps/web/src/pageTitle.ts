@@ -25,7 +25,6 @@ export type DocumentTitleCopy = {
   home: string;
   join: string;
   invite: string;
-  health: string;
   review: string;
   studio: string;
   privacy: string;
@@ -74,8 +73,6 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedPageTitle(ctx.copy.join);
     case 'invite':
       return brandedPageTitle(ctx.copy.invite);
-    case 'admin':
-      return brandedPageTitle(ctx.copy.health);
     case 'review':
       return brandedPageTitle(ctx.copy.review);
     case 'studio':

@@ -6,8 +6,6 @@ import { createPublishedSlugGate } from '../catalog/published-slugs.js';
 import { summarizeFramePerformance } from './frame-performance.js';
 import { summarizeGameHealth } from './telemetry-health.js';
 import { buildDailyAggregate } from './telemetry-daily.js';
-import { summarizeVisitFunnel } from '../telemetry/visit-funnel.js';
-import { summarizeVisitDay } from '../telemetry/telemetry-trends.js';
 
 const secret = 'dev-session-secret-change-me';
 const sessionId = '00000000-0000-4000-8000-000000000123';
@@ -114,14 +112,6 @@ describe('reviewer telemetry cohorts', () => {
     expect(buildDailyAggregate(date, events, { computedAt: 'now', sealed: true, truncated: false }).games).toHaveLength(
       1,
     );
-    const visits = [
-      { visitId: 'player', type: 'visit_started' as const, at: `${date}T10:00:00Z`, entry: 'home' },
-      { visitId: 'review', type: 'visit_started' as const, at: `${date}T10:00:00Z`, entry: 'home' },
-      { visitId: 'review', type: 'play_started' as const, at: `${date}T10:00:01Z`, reviewer: true },
-    ];
-    expect(summarizeVisitFunnel(visits).visits).toBe(1);
-    expect(summarizeVisitFunnel(visits).plays).toBe(0);
-    expect(summarizeVisitDay(date, visits).activity.visits).toBe(1);
   });
 
   it('retains opening device/build context after leaving agent mode', () => {
@@ -134,44 +124,5 @@ describe('reviewer telemetry cohorts', () => {
     );
     expect(report.measuredSessions).toBe(1);
     expect(report.groups[0]).toMatchObject({ reviewer: true, artifactVersion: 'a'.repeat(64), windows: 1 });
-  });
-
-  it('applies the requested performance cohort without changing player health or exposing rows', async () => {
-    const store = new InMemoryStore();
-    await store.upsertUser({ uid: 'g:boss' });
-    await store.appendTelemetryEvents(date, [
-      row('player'),
-      row('reviewer', { reviewer: true }),
-      row('agent', { reviewer: true, agentMode: true }),
-    ]);
-    const app = await buildApp({ store, sessionSecret: secret, adminUids: 'g:boss' });
-    try {
-      for (const [cohort, count] of [
-        ['include', 2],
-        ['exclude', 1],
-        ['only', 1],
-      ] as const) {
-        const res = await app.inject({
-          method: 'GET',
-          url: `/api/admin/telemetry/health?days=1&performanceReviewers=${cohort}`,
-          headers: headers('g:boss'),
-        });
-        expect(res.statusCode).toBe(200);
-        expect(res.json().performance.measuredSessions).toBe(count);
-        expect(res.json().games[0].aliveTicks).toBe(1);
-        expect(res.body).not.toContain('sessionId');
-      }
-      expect(
-        (
-          await app.inject({
-            method: 'GET',
-            url: '/api/admin/telemetry/health?performanceReviewers=bogus',
-            headers: headers('g:boss'),
-          })
-        ).statusCode,
-      ).toBe(400);
-    } finally {
-      await app.close();
-    }
   });
 });

@@ -542,7 +542,7 @@ describe('emitOperatorAlert', () => {
       id: 'op-1000001-review_ready',
       type: 'operator.review_ready',
       titleKey: 'notifications.operator.review_ready.title',
-      link: '/admin/queue',
+      link: '/',
       params: { title: 'Comet Courier', jobId: '1000001' },
     });
     expect(mailer.sent.map((message) => message.to)).toEqual(['boss@example.com', 'second@example.com']);
@@ -620,13 +620,13 @@ describe('emitWaitlistJoined', () => {
       id: 'op-waitlist-g:waiter',
       type: 'operator.waitlist_joined',
       titleKey: 'notifications.operator.waitlist_joined.title',
-      link: '/admin/waitlist',
+      link: '/',
       params: { title: 'Waiter', email: 'waiter@example.com' },
     });
     expect(mailer.sent).toHaveLength(2);
     expect(mailer.sent[0].subject).toContain('waitlist');
     expect(mailer.sent[0].text).toContain('waiter@example.com');
-    expect(mailer.sent[0].text).toContain('/admin/waitlist');
+    expect(mailer.sent[0].text).not.toContain('/admin');
     expect(mailer.sent[0].text).not.toContain('Job #');
   });
 

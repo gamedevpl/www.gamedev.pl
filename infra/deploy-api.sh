@@ -182,6 +182,9 @@ SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-${RUNTIME_SA}}"
 # Its own caller identity: the Pub/Sub push subscription, not the scheduler.
 SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
 SPEND_BRAKE_CALLER_SA="${SPEND_BRAKE_CALLER_SA:-}"
+# The private ops console (/api/internal/ops/*): fixed audience, identity-only SA.
+OPS_CONSOLE_AUDIENCE="${OPS_CONSOLE_AUDIENCE:-https://www.gamedev.pl/api/internal/ops}"
+OPS_CONSOLE_SA="${OPS_CONSOLE_SA:-ops-console@${PROJECT_ID}.iam.gserviceaccount.com}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -560,6 +563,12 @@ if [ -n "$SPEND_BRAKE_AUDIENCE" ]; then
 fi
 if [ -n "$SPEND_BRAKE_CALLER_SA" ]; then
   ENV_VARS="${ENV_VARS}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}"
+fi
+if [ -n "$OPS_CONSOLE_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|OPS_CONSOLE_AUDIENCE=${OPS_CONSOLE_AUDIENCE}"
+fi
+if [ -n "$OPS_CONSOLE_SA" ]; then
+  ENV_VARS="${ENV_VARS}|OPS_CONSOLE_SA=${OPS_CONSOLE_SA}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

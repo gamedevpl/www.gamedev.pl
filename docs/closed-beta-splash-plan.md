@@ -75,18 +75,20 @@ explicit click.
 
 `Store` interface gains `upsertWaitlistEntry(entry)` (+ `InMemoryStore` and
 `FirestoreStore` implementations; Firestore collection `waitlist`, doc id =
-uid). Operator reads/writes go through `listWaitlistEntries` /
+uid). Operator reads/writes went through `listWaitlistEntries` /
 `setWaitlistStatus` / `setWaitlistStatusByEmail` and the `/api/admin/waitlist`
-routes behind the console tab.
+routes behind the console tab (removed; the ops repo console now writes the same
+collection directly).
 
 ## Promotion flow
 
-Primary: operator console **`/admin/waitlist`** — approve / reject / pre-approve
+Primary: the **Waitlist** view of the [operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console) in the private ops repo (`console/`;
+it replaced the site's `/admin/waitlist`) — approve / reject / pre-approve
 by email (Firestore `status: 'approved'`, no redeploy). Fallback: `npm run
 beta:approve` or the env allowlists (`BETA_ALLOWED_EMAILS` /
 `BETA_ALLOWED_UIDS`) when a script or agent needs to act without a browser.
 
-Promotional play links are managed separately in **`/admin/limits`**. The operator enters
+Promotional play links are managed separately in the console's **Limits** view. The operator enters
 published slugs in the **Promotional game links** panel; those `/play/<slug>` routes and
 their anonymous play telemetry bypass the beta wall without opening the catalog. A parent
 that iframes `/play/<slug>` is allowed to connect; the SPA shows an open-elsewhere
@@ -114,7 +116,8 @@ interstitial rather than the game (see [`security-model.md`](./security-model.md
 
 ## One-time invite links
 
-Operators can create a one-time invitation from **`/admin/waitlist`**. The panel returns the
+Operators can create a one-time invitation from the ops console's **Waitlist** view
+(formerly `/admin/waitlist`). The panel returns the
 link once, with a copy button, and keeps only its status afterward:
 
 - The link contains a high-entropy bearer code.
@@ -123,7 +126,7 @@ link once, with a copy button, and keeps only its status afterward:
   spend it twice.
 - The invitation is bound to the account used during sign-in, not to an email address.
 - Accepting writes that account's approved `waitlist` row, so the claimant shows up in
-  `/admin/waitlist` and keeps access after the session that claimed the link expires.
+  the operator's waitlist and keeps access after the session that claimed the link expires.
 - Operators can revoke an unused link and create another if it is lost or shared too widely.
 - The invitation page explains that the first account to accept owns the link; forwarding is
   therefore intentional access delegation, not proof of a particular person's identity.
@@ -151,7 +154,9 @@ another persistent personal-data field. Anonymous visit telemetry records `shown
 ## Existing operator surface
 
 - Admin UI for the waitlist shipped as the operator console **Waitlist** tab
-  (`/admin/waitlist`) — list, approve/reject/reset, pre-approve by email.
+  (`/admin/waitlist`) — list, approve/reject/reset, pre-approve by email. That console
+  has since moved to the private ops repo (`console/`), which writes Firestore directly;
+  the `/admin` pages and `/api/admin/waitlist` routes are gone.
 - Waitlist welcome mail: `npm run beta:welcome` previews (and with `--send --approve`
   actually sends) the "a spot opened" email the splash promised. Dry-run is the default.
   See [deployment.md](./deployment.md) → "Sending the waitlist welcome".

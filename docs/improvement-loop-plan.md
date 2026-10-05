@@ -610,7 +610,8 @@ at all and feeds the only autonomous-eligible class.
 ### Phase IL-2 — Distill (aggregates + dashboard)
 
 - ✅ **Operator health view** — `GET /api/admin/telemetry/health?days=N`
-  ([admin.ts](../apps/api/src/platform/admin.ts)) over a pure aggregator
+  (`platform/admin.ts`, since removed: the view now lives in the operator console of the
+  private ops repo) over a pure aggregator
   ([telemetry-health.ts](../apps/api/src/platform/telemetry-health.ts)), rendered at the
   unlisted `#/health` route. Per game: sessions, bounces, median play time, median
   fps, stall rate, and grouped error messages, worst first.
@@ -785,7 +786,8 @@ at all and feeds the only autonomous-eligible class.
   evidence blocks of measurements only. A second pass on the same sweep also routes
   creator-desk cut consensus as `editorial` (aggregates only — see
   [game-assessment-plan.md](./game-assessment-plan.md) and `editorial-suggestions.ts`).
-  the evidence behind the call, surfaced at `GET /api/admin/suggestions`.
+  the evidence behind the call, surfaced at `GET /api/admin/suggestions` (now read from Firestore by the ops repo
+  console instead).
 
   **The decision is rules over numbers, never a model over text** — and the invariant is
   about _text_ specifically, because the looser version would be false:

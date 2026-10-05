@@ -24,8 +24,6 @@ export function routeKind(view: string): VisitRouteKind {
       return 'party';
     case 'cli':
       return 'cli';
-    case 'admin':
-      return 'health';
     case 'review':
       return 'health';
     case 'contact':

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { createReviewQueueCache } from './review-queue-cache.js';
 
@@ -44,6 +45,7 @@ describe('reviewer badge read windows', () => {
       contentChecker: allowAll,
       reviewerUids: 'dev:reviewer,dev:other',
       adminUids: 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       reviewRoutes: { listCatalog: async () => catalog, ...(opts.now ? { now: opts.now } : {}) },
     });
     apps.push(app);
@@ -189,7 +191,8 @@ describe('reviewer badge read windows', () => {
   it('shows an operator requeue to the targeted reviewer inside the window', async () => {
     const { app } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');
-    const boss = await cookie(app, 'boss');
+    // The operator needs an account for the ops door to admit.
+    await cookie(app, 'boss');
 
     const posted = await app.inject({
       method: 'POST',
@@ -203,8 +206,8 @@ describe('reviewer badge read windows', () => {
     // Already judged, so it can only return as a targeted re-review.
     const requeue = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
     });
     expect(requeue.statusCode).toBe(200);
@@ -215,11 +218,12 @@ describe('reviewer badge read windows', () => {
   it('does not leave a resolved re-review targeted by a poll between the two writes', async () => {
     const { app, store } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');
-    const boss = await cookie(app, 'boss');
+    // The operator needs an account for the ops door to admit.
+    await cookie(app, 'boss');
     const requeue = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
     });
     expect(requeue.statusCode).toBe(200);
@@ -258,7 +262,8 @@ describe('reviewer badge read windows', () => {
   it('never lets an in-flight read restore a window a write dropped', async () => {
     const { app, store } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');
-    const boss = await cookie(app, 'boss');
+    // The operator needs an account for the ops door to admit.
+    await cookie(app, 'boss');
 
     let release = () => {};
     const gate = new Promise<void>((resolve) => {
@@ -275,8 +280,8 @@ describe('reviewer badge read windows', () => {
     const inflight = app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
     const paused = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps/swp-1',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps/swp-1'),
+      headers: opsHeaders('dev:boss'),
       payload: { status: 'paused' },
     });
     expect(paused.statusCode).toBe(200);
@@ -290,13 +295,14 @@ describe('reviewer badge read windows', () => {
   it('shows an operator sweep change inside the window', async () => {
     const { app } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');
-    const boss = await cookie(app, 'boss');
+    // The operator needs an account for the ops door to admit.
+    await cookie(app, 'boss');
     expect((await poll(app, reviewer)).remaining).toBe(2);
 
     const paused = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps/swp-1',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps/swp-1'),
+      headers: opsHeaders('dev:boss'),
       payload: { status: 'paused' },
     });
     expect(paused.statusCode).toBe(200);
