@@ -37,9 +37,7 @@ export function StudioLiveRoundRow({ status, emptyLabel }: { status: SubmissionS
           <time className="studio-build-history-time" dateTime={new Date(heartbeatAt).toISOString()}>
             {formatRelativeTime(heartbeatAt, i18n.language)}
           </time>
-        ) : (
-          <span />
-        )}
+        ) : null}
         <span className="studio-build-history-expand-icon" aria-hidden="true">
           <PixelIcon name={expanded ? 'chevronUp' : 'chevronDown'} size={10} />
         </span>
