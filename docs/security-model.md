@@ -98,32 +98,36 @@ can play a game holds its code. `assemblePublishedGameHtml`
 the snapshot bake, the store-lane gate's `bundle.html` and `preview.html`, and the play
 route's GitHub fallback. It runs the usual hygiene (byte budget, credential scan) on the
 readable sources, then `protectGameScript` (`protect-script.ts`) minifies the script with
-esbuild and obfuscates it with `javascript-obfuscator`.
+esbuild.
 
-This makes the code costly to read and reuse. It does not make it secret: property names
+This makes the code harder to read and reuse. It does not make it secret: property names
 such as `ctx.fillRect` or `player.velocity` survive by necessity, and a determined reader
 can still step through the game.
 
-- **No source maps, ever.** Neither stage emits one, and comments are dropped, so a
+- **No source maps, ever.** None is emitted, and comments are dropped, so a
   `sourceMappingURL` a source carried in does not survive either.
-- **The cheap end of the obfuscator.** Local names are mangled and string literals move
-  into a rotated, base64-encoded array. Control-flow flattening, dead-code injection and
-  number expressions are off because games run a frame loop, and they cost frame time on
-  the hot path. Self-defending code and debug protection are off because they break under
-  reformatting and punish players, not readers.
-- **Globals are kept.** Games and GameKit talk through `window`, and top-level
-  declarations in a classic script are globals, so neither the minifier nor the
-  obfuscator renames them. `data:` URIs (baked audio and images) stay out of the string
-  array.
-- **Deterministic.** The obfuscator's seed comes from a hash of the input, so an
-  unchanged game re-bakes byte-identical and does not churn the snapshot.
-- **Local only.** The package's `obfuscatePro` sends code to a third-party service and must
-  never be called.
+- **Local names are mangled; globals are kept.** Games and GameKit talk through `window`,
+  and top-level declarations in a classic script are globals, so esbuild leaves them alone.
+- **Inline-safe output.** esbuild escapes `</script` inside strings and templates, so a
+  string cannot end the inline `<script>` early. The test parses the whole document to
+  hold this, because a string-level check cannot see the truncation.
+- **Deterministic and async.** The same input gives the same output, so an unchanged game
+  re-bakes byte-identical. esbuild runs in its own process, so a play-route fallback does
+  not block the API's event loop.
+
+**Why not an obfuscator.** `javascript-obfuscator` was tried first and removed. Its string
+array, the only part that hides more than minification does, costs frame time: with a fixed
+seed and fixed 60 Hz steps, `biplane-skirmish` went from ~8.0 ms to ~10.7 ms per frame
+(+32–35%) and back to ~8.0 ms with only the string array off. Without the string array it
+adds almost nothing over esbuild: property access becomes `obj['gain']`, so the names
+remain as strings. It also re-emitted escaped `<\/script>` as a literal `</script>`, which
+truncates the inline script, and it runs synchronously for 5–50 s per game. Any future
+obfuscation pass must clear a frame-time A/B and the whole-document parse test first.
 
 Draft, remix and creator-preview documents go to the creator who owns the sources, so they
 keep using the plain `assembleGameHtml`. The games repo's own gates check the readable
-build. The protected build is checked by running both builds of every game in a browser
-and comparing errors; run that again when you change the obfuscator settings.
+build. The minified build is checked by running both builds of every game in a browser and
+comparing errors; run that again when you change the settings.
 
 ### 2. Public specs and issue text
 

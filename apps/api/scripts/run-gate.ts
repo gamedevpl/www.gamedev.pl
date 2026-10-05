@@ -48,7 +48,7 @@ import { withRemoteVerdicts } from '../src/delivery/gate-verdict-client.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { assemblePublishedGameHtml, projectFromSources } from '../src/platform/assemble.js';
 
-// Not the repo's dist/ build: ours adds serve policy and obfuscation.
+// Not the repo's dist/ build: ours adds serve policy and minification.
 async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
   const client = createLocalGamesClient({ rootDir: harness });
   const sources = await client.getGameSources('main', slug);
