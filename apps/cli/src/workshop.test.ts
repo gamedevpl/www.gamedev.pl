@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -110,8 +110,8 @@ describe('workshopTurn', () => {
     expect(calls[0]!.cwd).toBe(join(root, 'games', SLUG));
     expect(calls[0]!.spec.name).toBe('claude');
     expect(calls[0]!.spec.headless.slice(0, 5)).toEqual([
-      '--add-dir',
-      root,
+      '--settings',
+      JSON.stringify({ permissions: { allow: [`Read(/${realpathSync(root)}/**)`] } }),
       '--strict-mcp-config',
       '--setting-sources',
       'project,local',

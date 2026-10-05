@@ -15,6 +15,7 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
+import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { preflightAdapter, type AdapterSpec } from './adapters.js';
@@ -164,7 +165,13 @@ export async function settleBuilder(input: {
 }
 
 export function claudeLocalFlags(root: string, cwd: string): string[] {
-  return [...(cwd === root ? [] : ['--add-dir', root]), '--strict-mcp-config', '--setting-sources', 'project,local'];
+  const readRoot = { permissions: { allow: [`Read(/${realpathSync(root)}/**)`] } };
+  return [
+    ...(cwd === root ? [] : ['--settings', JSON.stringify(readRoot)]),
+    '--strict-mcp-config',
+    '--setting-sources',
+    'project,local',
+  ];
 }
 
 export async function runLocalBuild(input: {
