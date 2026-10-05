@@ -33,9 +33,21 @@ FROM node:22
 # Chromium from apt rather than a per-run Playwright/Puppeteer download: the capture
 # harness expects a browser on PATH, and one install at image build time beats a fetch
 # inside every gate run.
+#
+# iptables is for one rule: the runner refuses the sandbox user's traffic to the metadata
+# server (apps/api/src/delivery/gate-sandbox.ts). chromium-sandbox is the setuid helper
+# Chrome falls back to when the build host gives it no user namespaces; best effort,
+# because the package name is the one part of this line a base-image bump can move.
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates \
+ && apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates iptables \
+ && (apt-get install -y -qq --no-install-recommends chromium-sandbox || echo "no chromium-sandbox package") \
  && rm -rf /var/lib/apt/lists/*
+
+# The user candidate code runs as. The runner starts as root (Cloud Build runs steps that
+# way) and keeps the credentials; `npm ci`, `check:game` and the browser run as this user,
+# which cannot read root's /proc/<pid>/environ and lets Chrome keep its sandbox.
+# See infra/gate-hardening.md and apps/api/src/delivery/gate-sandbox.ts.
+RUN useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin gate
 
 # A shim rather than the browser itself, for two reasons carried over verbatim from the
 # inline step (keep the three in step — here, infra/cloudbuild-gate.yaml, and
@@ -44,13 +56,15 @@ RUN apt-get update -qq \
 #   1. Debian installs the browser as `chromium`, while the capture harness defaults to
 #      spawning `google-chrome` — "a browser is on PATH" is not enough, it has to be
 #      under a name the harness looks for, or capture dies on ENOENT.
-#   2. Build steps run as root, and Chrome refuses to start as root without --no-sandbox.
-#      `tools/capture.ts` adds that flag for neither case and does not take it from the
-#      environment. Fixed here rather than in the games repo on purpose: that file is
-#      hashed whole into `captureSourceHash`, so touching it restages the media of every
-#      published game — a catalog-wide recapture to fix our container.
+#   2. Chrome refuses to start as root without --no-sandbox, and `tools/capture.ts`
+#      neither adds that flag nor takes it from the environment. The gate now runs the
+#      browser as the `gate` user, so the shim adds --no-sandbox only when it is still
+#      root (a hand run of an older runner) or when the run probed the sandbox unusable
+#      on this host and set GATE_CHROME_NO_SANDBOX=1. Fixed here rather than in the games
+#      repo on purpose: capture.ts is hashed whole into `captureSourceHash`, so touching
+#      it restages the media of every published game — a catalog-wide recapture.
 RUN chrome_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome)" \
- && printf '#!/bin/sh\nexec "%s" --no-sandbox "$@"\n' "$chrome_bin" > /usr/local/bin/gate-chrome \
+ && printf '#!/bin/sh\nif [ "$(id -u)" = 0 ] || [ "${GATE_CHROME_NO_SANDBOX:-}" = 1 ]; then exec "%s" --no-sandbox "$@"; fi\nexec "%s" "$@"\n' "$chrome_bin" "$chrome_bin" > /usr/local/bin/gate-chrome \
  && chmod +x /usr/local/bin/gate-chrome
 
 # An explicit cache path, not the default under $HOME: Cloud Build sets HOME per step,
@@ -58,7 +72,8 @@ RUN chrome_bin="$(command -v chromium || command -v chromium-browser || command 
 ENV GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome \
     CHROME_PATH=/usr/local/bin/gate-chrome \
     PUPPETEER_SKIP_DOWNLOAD=1 \
-    npm_config_cache=/opt/npm-cache
+    npm_config_cache=/opt/npm-cache \
+    GATE_SANDBOX_USER=gate
 
 # Warm the npm cache with the harness's dependency set (phase 2).
 #
@@ -128,5 +143,9 @@ RUN npm ci --no-audit --no-fund
 # load: no verdict written, deliveries stuck in `submitted` reading as "verification
 # hasn't started". Keep ahead of gate:run.
 RUN npm run build:packages
+
+# Last, after every root-run install has written to it: the harness `npm ci` runs as
+# `gate` and writes here too. Copy-on-write per run, so nothing a run writes outlives it.
+RUN mkdir -p /opt/npm-cache && chown -R gate:gate /opt/npm-cache
 
 # No CMD: Cloud Build supplies the entrypoint and the command for each run.

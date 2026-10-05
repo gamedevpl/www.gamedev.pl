@@ -8,86 +8,22 @@
  * Spec: https://cloud.google.com/storage/docs/access-control/signing-urls-manually
  */
 
-import { createHash } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
+import {
+  DEFAULT_SIGNED_URL_TTL_SECONDS,
+  signGcsUploadUrl,
+  signGcsUrl,
+  type SignGcsReadUrlOptions,
+} from './gcs-v4-sign.js';
 
-/** Default kit/example download window — long enough to curl|tar, short enough to leak slowly. */
-export const DEFAULT_SIGNED_URL_TTL_SECONDS = 15 * 60;
-
-export interface SignGcsReadUrlOptions {
-  bucket: string;
-  object: string;
-  /** Seconds from `now` until the URL stops working. Capped at 7 days by GCS V4. */
-  expiresSeconds?: number;
-  now?: () => number;
-  /** RSA-SHA256 over the V4 string-to-sign; returns base64 digest (IAM signBlob shape). */
-  signBlob: (stringToSign: string) => Promise<string>;
-  /** Service account email embedded in X-Goog-Credential. */
-  serviceAccountEmail: string;
-}
+export { DEFAULT_SIGNED_URL_TTL_SECONDS, type SignGcsReadUrlOptions };
 
 /**
  * Builds a V4 GET signed URL for one object. The caller must already know the
  * object exists (or accept that the URL 404s when followed).
  */
 export async function signGcsReadUrl(options: SignGcsReadUrlOptions): Promise<string> {
-  const expiresSeconds = Math.min(
-    Math.max(1, options.expiresSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS),
-    7 * 24 * 60 * 60,
-  );
-  const nowMs = (options.now ?? Date.now)();
-  const at = new Date(nowMs);
-  const datestamp = formatUtc(at, 'date');
-  const timestamp = formatUtc(at, 'datetime');
-  const credentialScope = `${datestamp}/auto/storage/goog4_request`;
-  const credential = `${options.serviceAccountEmail}/${credentialScope}`;
-
-  const host = 'storage.googleapis.com';
-  const canonicalUri = `/${options.bucket}/${options.object
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/')}`;
-
-  const query: Record<string, string> = {
-    'X-Goog-Algorithm': 'GOOG4-RSA-SHA256',
-    'X-Goog-Credential': credential,
-    'X-Goog-Date': timestamp,
-    'X-Goog-Expires': String(expiresSeconds),
-    'X-Goog-SignedHeaders': 'host',
-  };
-
-  const canonicalQuery = Object.keys(query)
-    .sort()
-    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(query[key])}`)
-    .join('&');
-
-  const canonicalHeaders = `host:${host}\n`;
-  const canonicalRequest = ['GET', canonicalUri, canonicalQuery, canonicalHeaders, 'host', 'UNSIGNED-PAYLOAD'].join(
-    '\n',
-  );
-
-  const stringToSign = [
-    'GOOG4-RSA-SHA256',
-    timestamp,
-    credentialScope,
-    createHash('sha256').update(canonicalRequest, 'utf8').digest('hex'),
-  ].join('\n');
-
-  const signatureB64 = await options.signBlob(stringToSign);
-  const signatureHex = Buffer.from(signatureB64, 'base64').toString('hex');
-
-  return `https://${host}${canonicalUri}?${canonicalQuery}&X-Goog-Signature=${signatureHex}`;
-}
-
-function formatUtc(at: Date, kind: 'date' | 'datetime'): string {
-  const y = at.getUTCFullYear();
-  const m = String(at.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(at.getUTCDate()).padStart(2, '0');
-  if (kind === 'date') return `${y}${m}${d}`;
-  const hh = String(at.getUTCHours()).padStart(2, '0');
-  const mm = String(at.getUTCMinutes()).padStart(2, '0');
-  const ss = String(at.getUTCSeconds()).padStart(2, '0');
-  return `${y}${m}${d}T${hh}${mm}${ss}Z`;
+  return signGcsUrl(options, 'GET', {});
 }
 
 export interface GcsObjectStore {
@@ -97,6 +33,8 @@ export interface GcsObjectStore {
   objectExists(name: string): Promise<boolean>;
   // V4 GET URL. signedAtMs pins the instant, which anchors media URLs.
   signReadUrl(name: string, expiresSeconds?: number, signedAtMs?: number): Promise<string>;
+  // Optional: only the gate artifact route signs uploads.
+  signUploadUrl?(name: string, contentType: string, expiresSeconds?: number): Promise<string>;
 }
 
 export interface CreateGcsObjectStoreOptions {
@@ -185,6 +123,19 @@ export function createGcsObjectStore(options: CreateGcsObjectStoreOptions): GcsO
         object: name,
         expiresSeconds,
         now: signedAtMs === undefined ? now : () => signedAtMs,
+        serviceAccountEmail: email,
+        signBlob,
+      });
+    },
+
+    async signUploadUrl(name, contentType, expiresSeconds = DEFAULT_SIGNED_URL_TTL_SECONDS) {
+      const email = await resolveEmail();
+      return signGcsUploadUrl({
+        bucket,
+        object: name,
+        contentType,
+        expiresSeconds,
+        now,
         serviceAccountEmail: email,
         signBlob,
       });

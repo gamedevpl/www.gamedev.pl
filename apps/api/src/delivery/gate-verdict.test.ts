@@ -187,22 +187,22 @@ describe('POST /api/internal/gate-verdict', () => {
 });
 
 describe('the gate-side client', () => {
-  it('sends the four manifest writers and leaves the rest on the store', async () => {
+  it('sends the manifest writers to the API and leaves reads on the store', async () => {
     const seen: Array<Record<string, unknown>> = [];
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       seen.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       return new Response(null, { status: 204 });
     }) as unknown as typeof fetch;
 
-    const putDerivedArtifact = vi.fn(async () => {});
-    const base = { putDerivedArtifact } as unknown as GamesStore;
+    const getManifest = vi.fn(async () => null);
+    const base = { getManifest } as unknown as GamesStore;
     const store = withRemoteVerdicts(base, { endpoint: 'https://api.example/gate-verdict', token: 't', fetchImpl });
 
     await store.putGateResult('comet-courier', 'v1', { green: true });
-    await store.putDerivedArtifact('comet-courier', 'v1', 'media/a.png', Buffer.alloc(0), 'image/png');
+    await store.getManifest('comet-courier', 'v1');
 
     expect(seen).toEqual([{ slug: 'comet-courier', version: 'v1', kind: 'gate', result: { green: true } }]);
-    expect(putDerivedArtifact).toHaveBeenCalledOnce();
+    expect(getManifest).toHaveBeenCalledOnce();
   });
 
   it('throws when the API refuses', async () => {

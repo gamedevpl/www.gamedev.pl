@@ -46,6 +46,7 @@ import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
 import { withRemoteVerdicts } from '../src/delivery/gate-verdict-client.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
+import { createHarnessRunner } from '../src/delivery/gate-sandbox.js';
 import { assembleGameHtml, projectFromSources } from '../src/platform/assemble.js';
 
 // Not the repo's dist/ build — assembleGameHtml applies our serve-time policy.
@@ -75,10 +76,10 @@ function run(
   command: string,
   args: string[],
   cwd: string,
-  options?: { onChunk?: (text: string) => void; env?: NodeJS.ProcessEnv },
+  options?: { onChunk?: (text: string) => void; env?: NodeJS.ProcessEnv; uid?: number; gid?: number },
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: options?.env ?? process.env });
+    const child = spawn(command, args, { cwd, env: options?.env ?? process.env, uid: options?.uid, gid: options?.gid });
     let output = '';
     const capture = (chunk: Buffer) => {
       const text = chunk.toString();
@@ -128,6 +129,8 @@ async function main(): Promise<void> {
     );
   }
   const harnesses: string[] = [];
+  // Harness commands: sandbox user, no credentials in env.
+  const { sandbox, runInHarness } = await createHarnessRunner(run, harnesses);
   const health = process.argv.includes('--health');
   const preview = process.argv.includes('--preview');
   // The proposal lane: the full acceptance check, except that a behavioural-golden
@@ -155,7 +158,7 @@ async function main(): Promise<void> {
     version,
     {
       store,
-      run,
+      run: runInHarness,
       assembleBundle: assembleFromHarness,
       onProgress: (progress) => store.putGateProgress(slug, version, progress).catch(() => {}),
       async prepareHarness(engineRef) {
@@ -171,25 +174,20 @@ async function main(): Promise<void> {
           run('git', ['clone', '--depth', '1', '--branch', engineRef, url, dir], process.cwd()),
         );
         if (clone.code !== 0) throw new Error(`could not fetch harness at ${engineRef}`);
-        // Drop the PAT from the remote before any agent-authored tree runs: check:game
-        // executes under this harness, and `.git/config` would otherwise hand the token
-        // to anything that reads the remote URL (hostile-input invariant, BY-11).
+        // Drop the PAT from `.git/config` and env before agent-authored code runs (BY-11).
         const scrub = await run('git', ['remote', 'set-url', 'origin', `https://github.com/${repo}.git`], dir);
         if (scrub.code !== 0) throw new Error('could not scrub harness git credentials');
-        await writeProgress('installing');
-        // Scrubbed for this spawn: npm's own install scripts inherit it too (BY-11).
-        const harnessEnv = { ...process.env };
-        delete harnessEnv.GAMES_REPO_TOKEN;
-        delete harnessEnv.GITHUB_TOKEN;
-        const install = await phases.time('harnessInstall', () =>
-          run('npm', ['ci', '--no-audit', '--no-fund'], dir, { env: harnessEnv }),
-        );
-        if (install.code !== 0) throw new Error('harness install failed');
-        // Same reason for the process env: spawn inherits it, and check:game must not.
         delete process.env.GAMES_REPO_TOKEN;
         delete process.env.GITHUB_TOKEN;
+        await sandbox?.adopt(dir);
+        await writeProgress('installing');
+        const install = await phases.time('harnessInstall', () =>
+          runInHarness('npm', ['ci', '--no-audit', '--no-fund'], dir),
+        );
+        if (install.code !== 0) throw new Error('harness install failed');
         return dir;
       },
+      afterMaterialize: async (gameDir) => sandbox?.adopt(gameDir), // written as root
     },
     // Health asks about today's engine, so the manifest's pin is exactly the thing to
     // ignore. An acceptance run passes nothing and lets the pin (or `main`) decide.
@@ -229,6 +227,7 @@ async function main(): Promise<void> {
     });
   }
 
+  await sandbox?.dispose();
   if (!process.argv.includes('--keep-harness')) {
     await Promise.all(harnesses.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => {})));
   }

@@ -26,6 +26,7 @@ import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { decideEditorialClearance } from '../community/editorial-clearance.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
+import { registerGateArtifactRoutes } from '../delivery/gate-artifact-routes.js';
 import { registerGateVerdictRoutes } from '../delivery/gate-verdict-routes.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
@@ -397,6 +398,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
+  // Signs the gate's artifact uploads, so the gate's own identity needs no bucket write.
+  if (gamesStore && objectStore) registerGateArtifactRoutes(app, { objectStore });
   // Wrapped once here so every entry point — delivery, editor, remix, proposals,
   // re-gate and the health sweep — starts builds through the same daily ceiling.
   const gateTrigger = withGateRunCeiling(

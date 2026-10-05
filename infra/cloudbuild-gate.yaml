@@ -20,8 +20,12 @@
 #     names, images, substitution keys that reshape the graph, or tsconfig.
 #   - Candidate files are data. The runner materializes them into a clean harness
 #     at our pinned engine ref and runs our check:game toolchain against them.
-#   - Minimal identity. The build runs as gate-runner@… (store write + one
-#     read-only games-repo PAT), not the project default Cloud Build SA.
+#   - Minimal identity. The build runs as gate-runner@… (store read + one
+#     read-only games-repo PAT), not the project default Cloud Build SA. Derived
+#     artifacts are written through upload URLs the API signs per object, scoped to
+#     this slug and version (gate-artifact-routes.ts), not with the SA.
+#   - Candidate code runs as the unprivileged `gate` user, never as root, with no
+#     credential in its environment (apps/api/src/delivery/gate-sandbox.ts).
 # =============================================================================
 #
 # Cloud Build rather than a Cloud Run job, for now, for one practical reason: the gate
@@ -86,7 +90,8 @@ steps:
     entrypoint: bash
     # Sole secret in this environment. Deliberately not session/OAuth/dispatch tokens —
     # see availableSecrets. The runner drops GAMES_REPO_TOKEN from the process env (and
-    # strips it from the harness git remote) before check:game runs agent-authored code.
+    # strips it from the harness git remote) right after the clone, and runs everything
+    # inside the harness as the unprivileged `gate` user with no credential in its env.
     secretEnv: ['GAMES_REPO_TOKEN']
     env:
       - 'GAMES_STORE_BUCKET=${_GAMES_STORE_BUCKET}'
@@ -104,16 +109,22 @@ steps:
       - |
         set -euo pipefail
         apt-get update -qq
-        apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates
+        apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates iptables
+        apt-get install -y -qq --no-install-recommends chromium-sandbox || echo "no chromium-sandbox package"
+        # Candidate code runs as this user, not root: apps/api/src/delivery/gate-sandbox.ts.
+        useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin gate
+        export GATE_SANDBOX_USER=gate
         # A shim rather than the browser itself, for two reasons: Debian installs it as
-        # `chromium` while the capture harness spawns `google-chrome`, and this step runs
-        # as root, where Chrome will not start without --no-sandbox — a flag
-        # `tools/capture.ts` does not add and does not take from the environment. Both
-        # reasons are spelled out in apps/api/src/gate-trigger.ts; keep the two in step.
+        # `chromium` while the capture harness spawns `google-chrome`, and Chrome will not
+        # start as root without --no-sandbox — a flag `tools/capture.ts` does not add and
+        # does not take from the environment. The browser now runs as `gate`, so the shim
+        # adds it only as root or when the run probed the sandbox unusable on this host.
+        # Both reasons are spelled out in apps/api/src/delivery/gate-build-spec.ts; keep
+        # the two in step.
         # `$$` is Cloud Build's escape for a literal `$` — an unescaped one here is read
         # as a substitution key and the build is rejected before it ever starts.
         chrome_bin="$$(command -v chromium || command -v chromium-browser || command -v google-chrome)"
-        printf '#!/bin/sh\nexec "%s" --no-sandbox "$$@"\n' "$$chrome_bin" > /usr/local/bin/gate-chrome
+        printf '#!/bin/sh\nif [ "$$(id -u)" = 0 ] || [ "$${GATE_CHROME_NO_SANDBOX:-}" = 1 ]; then exec "%s" --no-sandbox "$$@"; fi\nexec "%s" "$$@"\n' "$$chrome_bin" "$$chrome_bin" > /usr/local/bin/gate-chrome
         chmod +x /usr/local/bin/gate-chrome
         export GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome
         export CHROME_PATH=/usr/local/bin/gate-chrome
