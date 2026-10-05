@@ -19,3 +19,9 @@ it('separates browser verification from implementation and bounds temporary tool
   expect(brief).toContain('task consisting only of browser interaction or screenshots');
   expect(brief).not.toContain('report that limitation and finish');
 });
+
+it('points at the Kit in the checkout root and keeps the platform round loop out', () => {
+  const brief = workshopBrief('airtime', 'add a boss');
+  expect(brief).toContain('The checkout root (../.. from here) holds the Creator Kit');
+  expect(brief).toContain('never call gamedev.pl platform MCP tools');
+});

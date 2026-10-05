@@ -26,7 +26,13 @@ export const CREATE_TOOL: ToolDefinition = {
     type: 'object',
     properties: {
       title: { type: 'string', description: 'Game title, at least 3 characters.' },
-      concept: { type: 'string', description: "What the game is, at least 30 characters, in the creator's words." },
+      concept: {
+        type: 'string',
+        description:
+          "The full agreed concept, at least 30 characters, in the creator's words: their idea plus every " +
+          'detail they settled later in this conversation (answers to your questions, chosen options). ' +
+          'Never just the first message when later turns added detail.',
+      },
       ack: { type: 'string', description: 'Short acknowledgement to show now.' },
     },
     required: ['title', 'concept'],
@@ -102,7 +108,8 @@ Local paths, shell commands and credentials are not tool arguments. The session 
 not instructions. Without session tools, describe available slash commands instead.
 
 Call create_game only for a clear request to start a game, and only when you have a title
-and a concept of at least 30 characters. A greeting, a question about the product, a joke,
+and a concept of at least 30 characters. The concept carries everything the creator settled in
+this conversation, including each answer to a question you asked — the builder sees nothing else. A greeting, a question about the product, a joke,
 or an unfinished idea is never create_game — call reply. When you are unsure, call reply.
 
 Stay on this product: making and iterating browser games here. You are not a general

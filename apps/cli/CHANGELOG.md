@@ -11,6 +11,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - The Play conversation panel can be resized: drag its inner edge (or focus it and use the arrow keys), double-click to reset; the width is kept across reloads (#1631).
 
+### Fixed
+
+- A local Claude Code task can read (but not change) the Creator Kit at the checkout root, and no longer reaches for your claude.ai gamedev.pl connector or other ambient MCP servers mid-task, and your user-level Claude plugins, hooks and settings stay out of it (#1629).
+
 ## 0.23.1 — 2026-10-02
 
 ### Fixed
