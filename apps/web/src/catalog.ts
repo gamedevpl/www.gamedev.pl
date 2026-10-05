@@ -207,6 +207,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     world: entry.world === 'shared' ? 'shared' : null,
     sensing: entry.sensing === 'tilt' || entry.sensing === 'backdrop' ? entry.sensing : null,
     editor: parseCatalogEditor(entry.editor),
+    ...(entry.remixOn === true ? { remixOn: true as const } : {}),
     orientation: parseCatalogOrientation(entry.orientation),
     touch: parseCatalogTouch(entry.touch),
     submittedBy: parseCatalogSubmittedBy(entry.submittedBy ?? entry.submitted_by),
@@ -221,6 +222,10 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     ...(effort !== undefined ? { effort } : {}),
   };
 }
+
+// Offered only when the game declares an editor and remix is on.
+export const offersRemix = (entry: Pick<CatalogEntry, 'editor' | 'remixOn'>): boolean =>
+  entry.editor === 'content' && entry.remixOn === true;
 
 function parseCatalogEffort(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) return undefined;

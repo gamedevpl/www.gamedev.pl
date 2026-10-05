@@ -284,6 +284,28 @@ remain; `apps/api/src/agent-surface/mcp-server.test.ts` fails if an unadvertised
 descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
 `MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
 
+### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
+
+Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens
+the owner's improvement round on the live version (`community/proposal-round-start.ts`),
+and the brief carries the proposer's title/description fenced as untrusted plus a compact
+summary — never the diff. The round's agent reads detail through two read-only tools in
+`agent-surface/mcp-proposal-round-tools.ts`:
+
+- `get_proposal_summary { sessionKey }` → `{ proposalId, untrusted, title, description,
+files: [{ path, added, removed }], params: [{ key, from, to }], content: [{ collection,
+summary }] }` (description is fenced behind the untrusted marker).
+- `get_proposal_diff { sessionKey, path, page? }` → one file's unified diff, ~8 KB pages
+  with `nextPage`; binary/oversized files, unknown paths and out-of-range pages refuse
+  with `invalid_arguments`.
+
+Both resolve the proposal by `adoptedJobId === session jobId`, so only that round's
+session can read it. The workflow step after `get_brief` points agents at them; keep
+diff text fenced with a fence longer than any backtick run inside (code keeps its
+backticks), and never let the summary grow into a diff. A data-only change (EditorKit
+defaults/content, same declaration) skips the agent entirely and lands as an
+`origin: 'editor'` content candidate.
+
 ### Context budget — one contract, not one suffix per tool
 
 The shared behavioural contract belongs in MCP `initialize.instructions`, not in every tool

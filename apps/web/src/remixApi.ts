@@ -15,8 +15,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
  * A remix needs a session and never publishes on its own. Parameter values live
  * here in the browser and reach the running game over the existing
  * `editor:content` bridge — no round trip, which is what makes a slider feel
- * like a slider. Only the model lanes and the save/share exits talk to the
- * server.
+ * like a slider. Only the model lanes and the share exit talk to the server.
  */
 
 export type { RemixSuggestion };
@@ -37,8 +36,6 @@ export type RemixSession = {
   contentDefaults?: EditorContentDoc;
   canAssist: boolean;
   canCode: boolean;
-  // False when the game's sources belong to another creator.
-  canSave?: boolean;
   /** Absent from an older server; an empty list is the same as none. */
   suggestions?: RemixSuggestion[];
   expiresInMs: number;
@@ -64,31 +61,29 @@ export type RemixCodeResponse =
   | { ok: true; html: string; undoable?: boolean; region: { file: string; name: string }; summary?: EditorLabel }
   | { ok: false; reason: 'no_region' | 'refused' | 'did_not_compile' | 'error'; summary?: EditorLabel };
 
-export type RemixShare = {
-  slug: string;
-  params: Record<string, EditorParamValue>;
-  code: string;
-  codeEditsExcluded: boolean;
-};
+// `code` is opaque and server-signed; the client never decodes it.
+export type RemixShare = { code: string; codeEditsExcluded?: boolean };
 
-export type RemixSave = {
-  slug: string;
-  token: string;
-  version: string;
-  /** Where to open the kept remix — `/play/<slug>`, not Studio. */
-  openPath: string;
-};
+export type RemixApiError = Error & { status?: number; code?: string; reason?: string; category?: string };
 
-export type RemixApiError = Error & { status?: number; reason?: string; category?: string };
+// The author switched remix off, or the game never allowed it.
+export function isRemixClosed(error: unknown): boolean {
+  const { status, code } = (error ?? {}) as RemixApiError;
+  return status === 403 && (code === 'remix_off' || code === 'not_remixable');
+}
 
 async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
+    let code: string | undefined;
     let reason: string | undefined;
     let category: string | undefined;
     let message = `request failed with ${response.status}`;
     try {
       const payload = (await response.json()) as { error?: string; reason?: string; category?: string };
-      if (typeof payload.error === 'string' && payload.error) message = payload.error;
+      if (typeof payload.error === 'string' && payload.error) {
+        message = payload.error;
+        code = payload.error;
+      }
       if (typeof payload.reason === 'string') reason = payload.reason;
       if (typeof payload.category === 'string') category = payload.category;
     } catch {
@@ -96,6 +91,7 @@ async function readJson<T>(response: Response): Promise<T> {
     }
     const error = new Error(message) as RemixApiError;
     error.status = response.status;
+    error.code = code;
     error.reason = reason;
     error.category = category;
     throw error;
@@ -165,64 +161,19 @@ export function remixShare(remixId: string, params: Record<string, EditorParamVa
   return post<RemixShare>(`/api/remixes/${encodeURIComponent(remixId)}/share`, { params });
 }
 
-/**
- * Fork the remixed sources into a private Studio draft under a new slug.
- *
- * Never publishes. Params and painted content travel with the request so the
- * server can bake them into EDITOR.json — they never lived there during the
- * ephemeral remix.
- */
-export function remixSave(
-  remixId: string,
-  body: {
-    title?: string;
-    params?: Record<string, EditorParamValue>;
-    content?: EditorContentDoc;
-  },
-): Promise<RemixSave> {
-  return post<RemixSave>(`/api/remixes/${encodeURIComponent(remixId)}/save`, body);
-}
-
-/**
- * Read shared parameter values out of the URL.
- *
- * Values are re-checked against the game's own declaration before they are
- * applied, so a hand-edited link is worth exactly as much as the schema allows.
- */
-export function readSharedParams(search: string): Record<string, EditorParamValue> | null {
-  const code = new URLSearchParams(search).get('remix');
-  if (!code) return null;
+// Shared params from a signed `?remix=` code; null when the server refuses it.
+export async function fetchSharedTune(slug: string, code: string): Promise<Record<string, EditorParamValue> | null> {
   try {
-    const decoded = JSON.parse(atob(code.replace(/-/g, '+').replace(/_/g, '/')));
-    return decoded && typeof decoded === 'object' && !Array.isArray(decoded) ? decoded : null;
+    const response = await fetch(
+      `${API_BASE}/api/games/${encodeURIComponent(slug)}/shared-tune?code=${encodeURIComponent(code)}`,
+      { credentials: 'include' },
+    );
+    if (!response.ok) return null;
+    const { params } = (await response.json()) as { params?: unknown };
+    return params && typeof params === 'object' && !Array.isArray(params)
+      ? (params as Record<string, EditorParamValue>)
+      : null;
   } catch {
     return null;
   }
-}
-
-/** Keep only values the declaration allows — the client half of the same rule. */
-export function coerceSharedParams(
-  specs: Record<string, EditorParamSpec>,
-  incoming: Record<string, EditorParamValue>,
-): Record<string, EditorParamValue> {
-  const out: Record<string, EditorParamValue> = {};
-  for (const [key, spec] of Object.entries(specs)) {
-    const value = Object.hasOwn(incoming, key) ? incoming[key] : undefined;
-    if (value === undefined) {
-      out[key] = spec.default;
-      continue;
-    }
-    if (spec.type === 'int' || spec.type === 'number') {
-      const numeric = typeof value === 'number' && Number.isFinite(value) ? value : spec.default;
-      const clamped = Math.min(spec.max, Math.max(spec.min, numeric as number));
-      out[key] = spec.type === 'int' ? Math.round(clamped) : clamped;
-    } else if (spec.type === 'bool') {
-      out[key] = typeof value === 'boolean' ? value : spec.default;
-    } else if (spec.type === 'enum') {
-      out[key] = typeof value === 'string' && spec.values.includes(value) ? value : spec.default;
-    } else {
-      out[key] = typeof value === 'string' ? value.slice(0, spec.max) : spec.default;
-    }
-  }
-  return out;
 }

@@ -10,6 +10,7 @@ import { SuggestionsPanel } from './SuggestionsPanel.js';
 import { WaitlistPanel } from './WaitlistPanel.js';
 import { AdminAssessmentsPanel } from './AdminAssessmentsPanel.js';
 import { ModerationPanel } from './ModerationPanel.js';
+import { RemixAllowPanel } from './RemixAllowPanel.js';
 import { fetchAdminSummary, type AdminSummary, type OperatorAlert } from './adminApi.js';
 import { ADMIN_SECTIONS, adminPath, type AdminSection } from '../../core/router.js';
 
@@ -127,9 +128,7 @@ function AlertBanner({
         <ul className="admin-alerts-list">
           {alerts.map((alert) => (
             <li key={alert.id} className={`admin-alert admin-alert--${alert.kind}`}>
-              {/* The row is the way to the queue, which is the only place any of these can
-                  actually be acted on. Before this it was inert text that told you
-                  something was wrong and offered no verb. */}
+              {/* The row opens the queue, the only place these can be acted on. */}
               <button type="button" className="admin-alert-open" onClick={onOpenQueue}>
                 <span className="admin-alert-title">{alert.title}</span>{' '}
                 <span className="admin-alert-kind">
@@ -274,6 +273,7 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
       {section === 'costs' && <CostsPanel />}
       {section === 'telemetry' && <GameHealthView />}
       {section === 'limits' && <CreationLimitsPanel onChanged={() => void load()} />}
+      {section === 'limits' && <RemixAllowPanel />}
       {section === 'tokens' && <AccessTokensPanel />}
       {section === 'suggestions' && <SuggestionsPanel />}
       {section === 'proposals' && <ProposalReviewPanel scope="platform" />}

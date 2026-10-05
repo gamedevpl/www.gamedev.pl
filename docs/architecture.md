@@ -262,6 +262,20 @@ holds the file contents a green gate ran against, so asking an agent to "apply" 
 make the merge unreviewable. From there the games repo's own `validate.yml` gates the PR,
 its CODEOWNERS puts a human on the merge, and the snapshot bake republishes.
 
+**Store lane, creator-owned games: accept never adopts code.** A proposal's own version
+stays in `proposal` mode forever. Accepting it (`community/proposal-round-start.ts`) opens
+the owner's own improvement round on the game's _live_ version — whichever builder their
+improve rounds normally use — with a brief that fences the proposer's title and description
+as untrusted text and carries only a compact change summary (files with +/- lines, params
+`key: old → new`, content collections). The round's agent reads detail through the MCP
+tools `get_proposal_summary` and `get_proposal_diff` (one file, ~8 KB pages), which answer
+only the session whose job the proposal is linked to (`adoptedJobId`). A change confined to
+EditorKit data (EDITOR.json defaults / `EDITOR.content.json`, same declaration) skips the
+agent: it is baked onto the live sources and delivered as a content-only candidate
+(`origin: 'editor'`, `creation/content-candidate.ts`), the same path Studio's editor
+publish uses. Either way the proposal is `accepted` with the job link, and becomes `merged`
+when that job publishes.
+
 ### Self-build (MCP)
 
 A creator can point their own agent — Claude Code, Codex, any MCP-capable client — at the

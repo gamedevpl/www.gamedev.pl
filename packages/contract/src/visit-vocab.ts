@@ -136,7 +136,6 @@ export const REMIX_STEPS = [
   'handoff',
   'refused',
   'shared',
-  'keep_clicked',
   'proposed',
 ] as const;
 export type RemixStep = (typeof REMIX_STEPS)[number];

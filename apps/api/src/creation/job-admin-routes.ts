@@ -24,6 +24,7 @@ import {
 import type { EditorialPublishCounts } from './job-admin-publish.js';
 
 type PublishBody = { expectedVersion?: string; override?: boolean; overrideReason?: string };
+type PublishEvent = { slug: string; version: string; gameTitle: string; ownerUid: string; jobId: number };
 
 /**
  * The operator's view of the build queue.
@@ -141,7 +142,7 @@ export async function registerJobAdminRoutes(
      * Fans a new version out to the game's followers (game-follow-notify.ts). Optional:
      * a deployment without it publishes exactly as before, silently.
      */
-    notifyFollowers?: (event: { slug: string; version: string; gameTitle: string; ownerUid: string }) => Promise<void>;
+    notifyFollowers?: (event: PublishEvent) => Promise<void>;
     // Policy at composition root, not a route invariant.
     editorialClearance?: (slug: string, version: string) => Promise<EditorialPublishCounts>;
   },
@@ -256,15 +257,13 @@ export async function registerJobAdminRoutes(
 
       await supersedeOtherRounds(store, record.slug, jobId, at);
 
-      // Tell the people who follow this game that it moved. Best-effort and after the
-      // publish has already happened: a notification that fails must never leave a game
-      // half-published, and the creator's own `submission.published` note comes from the
-      // sweep on its own path. The owner is skipped — they would get two.
+      // Best-effort follower fan-out; a failure never half-publishes.
       if (options.notifyFollowers) {
         try {
           await options.notifyFollowers({
             slug: record.slug,
             version: record.deliveredVersion,
+            jobId,
             gameTitle: record.title,
             // Skipped as "already knows": that is the owner now, not the old row's.
             ownerUid: publishOwner.kind === 'creator' ? publishOwner.uid : record.ownerUid,

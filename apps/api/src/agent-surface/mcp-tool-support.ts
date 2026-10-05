@@ -66,9 +66,7 @@ export function toolErrForReason(reason: string): ToolResult {
   return OPENER_REASONS.has(reason) ? toolRefusal(reason, 'opener_required') : toolErr(reason);
 }
 
-// The refusal shape is `{ error, code?, retryAfterSeconds? }`. It is described once
-// in `initialize`, not in every tool: undeclared properties validate anyway, so
-// repeating it forty times would only spend the tools/list budget.
+// Refusal shape `{ error, code?, retryAfterSeconds? }` is described once, in initialize.
 export const MCP_REFUSAL_CONTRACT =
   'Any tool can refuse: an isError result carries structuredContent { error, code?, retryAfterSeconds? } and none of the success fields. ' +
   `Codes are ${MCP_ERROR_CODES.join(', ')}; quota_exhausted and rate_limited carry retryAfterSeconds. ` +
@@ -163,6 +161,8 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'read_inbox',
   'ack_inbox',
   'get_transcript',
+  'get_proposal_summary',
+  'get_proposal_diff',
 ]);
 
 export function pendingMessagesFromChannel(body: {

@@ -131,6 +131,8 @@ export interface UsageCounters {
   worldWrites: number;
   // Remix model calls today. Studio's lanes count separately, under `assists`.
   remixEdits: number;
+  // Remix code-lane edits that landed today; capped per account.
+  remixCodeEdits?: number;
   // CreatorQA tile requests today; each bills up to eight calls.
   optionImages: number;
 }

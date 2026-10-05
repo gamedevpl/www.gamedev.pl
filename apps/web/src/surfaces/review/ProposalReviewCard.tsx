@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ProposalBlockAction } from './ProposalBlockAction.js';
 import { ProposalDiffView } from './ProposalDiffView.js';
 import {
   acceptProposal,
@@ -14,22 +15,20 @@ import '../../propose-composer.css';
 /**
  * One proposal, from the reviewer's seat.
  *
- * The same card serves a creator reviewing their own game and an operator reviewing a
- * platform-owned one, because the decision is the same decision — only the authority
- * differs, and the API already resolves that. Two cards would drift, and the one that
- * drifted would be the operator's, which is the one nobody uses daily.
+ * The same card serves a creator and an operator: the decision is the same, only the
+ * authority differs, and the API resolves that. Two cards would drift.
  *
- * Order is the argument: play it, then the verdict, then the words, then the buttons. A
- * creator judging a stranger's change to their game is being asked "is this good", and the
- * honest way to answer is to play it — so the playable preview leads and the diff is a
- * second click, not a wall of TypeScript in front of the decision.
+ * Order is the argument: play it, then the verdict, then the words, then the buttons —
+ * "is this good" is answered by playing, so the diff is a second click.
  *
- * The accept button says "Accept…" with an ellipsis and carries a line of help, because
- * the word on its own implies publication. It does not publish. Nothing here does.
+ * Accept carries a line of help because the word implies publication; nothing here
+ * publishes. On a platform game it reads "Mark as noted": the proposal is feedback the
+ * team reads, and accepting only closes it.
  */
 
 export function ProposalReviewCard(props: {
   proposal: Proposal;
+  scope?: 'mine' | 'platform';
   /** Handle of whoever sent it, when the caller has resolved one. */
   proposerHandle?: string | null;
   onChanged: (proposal: Proposal) => void;
@@ -40,9 +39,8 @@ export function ProposalReviewCard(props: {
   const { proposal } = props;
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'idle' | 'changes' | 'decline'>('idle');
-  // The diff is a second click, not a wall of TypeScript in front of the decision: a
-  // creator judging a stranger's change is being asked "is this good", and the honest way
-  // to answer that is to play it.
+  const platform = props.scope === 'platform' || proposal.platformOwned;
+  const handle = props.proposerHandle ?? proposal.proposerUid;
   const [showDiff, setShowDiff] = useState(false);
   const [text, setText] = useState('');
   const [reason, setReason] = useState<DeclineReason>('not_the_direction');
@@ -70,7 +68,7 @@ export function ProposalReviewCard(props: {
       <div>
         <h3>{proposal.title}</h3>
         <p className="proposal-sub">
-          {t('reviews.cardTitle', { handle: props.proposerHandle ?? proposal.proposerUid })} · {proposal.targetSlug}
+          {t('reviews.cardTitle', { handle })} · {proposal.targetSlug}
         </p>
       </div>
 
@@ -178,7 +176,7 @@ export function ProposalReviewCard(props: {
               disabled={busy}
               onClick={() => void run(() => acceptProposal(proposal.id))}
             >
-              {t('reviews.accept')}
+              {platform ? t('reviews.markNoted') : t('reviews.accept')}
             </button>
             <button type="button" className="remix-btn is-quiet" disabled={busy} onClick={() => setMode('changes')}>
               {t('reviews.requestChanges')}
@@ -190,7 +188,8 @@ export function ProposalReviewCard(props: {
           {showDiff ? <ProposalDiffView proposalId={proposal.id} /> : null}
           {/* Said on the card, not in a confirm dialog: it is the fact that makes accepting
               safe to try, and a dialog would put it where only the hesitant would read it. */}
-          <p className="propose-note">{t('reviews.acceptHelp')}</p>
+          <p className="propose-note">{platform ? t('reviews.notedHelp') : t('reviews.acceptHelp')}</p>
+          {platform ? null : <ProposalBlockAction proposerUid={proposal.proposerUid} handle={handle} />}
         </>
       )}
     </article>

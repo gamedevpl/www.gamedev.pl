@@ -86,7 +86,6 @@ const REMIX_LABELS: Record<string, string> = {
   handoff: 'told it needs more',
   refused: 'was refused',
   shared: 'shared their version',
-  keep_clicked: 'clicked "make it mine"',
   proposed: 'sent a proposal',
 };
 

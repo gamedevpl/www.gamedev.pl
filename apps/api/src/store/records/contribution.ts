@@ -1,4 +1,4 @@
-import type { ContributionMode } from '@gamedevpl/contract';
+import type { ContributionMode, RemixMode } from '@gamedevpl/contract';
 import type { DeclineReason, ProposalState, ProposalTransition } from '../../community/proposal-state.js';
 
 /**
@@ -196,6 +196,14 @@ export interface GameContributionSettings {
   mode: ContributionMode;
   updatedAt: string;
   /** Who last changed it. Absent on platform defaults nobody has touched. */
+  updatedByUid?: string;
+}
+
+// The per-game player remix switch, stored beside `contributions`.
+export interface GameRemixSettings {
+  slug: string;
+  mode: RemixMode;
+  updatedAt: string;
   updatedByUid?: string;
 }
 

@@ -124,7 +124,7 @@ export class InMemoryQuotaStore implements QuotaStore {
     };
     this.usage.set(key, newCounters);
 
-    return { allowed: true, current: newCounters[action], tier };
+    return { allowed: true, current: newCounters[action] ?? 0, tier };
   }
 
   async getCreationLimits(): Promise<CreationLimits | null> {

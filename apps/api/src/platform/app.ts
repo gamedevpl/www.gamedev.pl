@@ -46,7 +46,8 @@ import { createFollowerFanout } from '../notifications/game-follow-notify.js';
 import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
-import { applyProposalToRepo } from '../community/proposal-apply-bot.js';
+import { registerRemixSettingRoutes } from '../community/remix-setting-routes.js';
+import { invalidateRemixOnSlugs } from '../catalog/remix-on.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes } from './spend-brake.js';
@@ -71,13 +72,13 @@ import { VertexCodeLane } from '../creation/code-lane.js';
 import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.js';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
 import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
+import { createProposalLifecycle } from '../community/proposal-lifecycle.js';
+import { createProposalRoundStarter, loadProposalChange } from '../community/proposal-round-start.js';
+import { proposalDiffPage } from '../community/proposal-diff-pages.js';
+import { contentDelivery } from '../creation/content-candidate.js';
+import { bakeRemixEditorDefaults, collectEditorTextFields } from '../creation/remix-bake.js';
 import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
-import {
-  createEditingGate,
-  createCreationGate,
-  createGateRunGate,
-  createTabCompleteGate,
-} from '../creation/creation-limits.js';
+import { createEditingGate, createGateRunGate, createTabCompleteGate } from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from '../notifications/contact.js';
 import { registerEmailRoutes } from '../notifications/email-routes.js';
@@ -113,7 +114,7 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { registerOptionImageRoutes } from '../creation/option-image-routes.js';
 import type { OptionImageGenerator } from '../creation/option-images.js';
-import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
+import { InMemoryStore, type Store } from './store.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
@@ -382,7 +383,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     (gamesStoreBucket ? createGcsGamesStore({ bucket: gamesStoreBucket }) : undefined);
   // The gate records its verdict here rather than writing the manifest itself; see
   // gate-verdict-routes.ts and infra/gate-hardening.md.
-  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore });
+  const notifyProposal = (event: Parameters<typeof emitProposalNotification>[1]) =>
+    emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event);
+  // Proposals advance server-side: on gate verdicts, on publish, and nightly.
+  const proposals = createProposalLifecycle(
+    gamesStore ? { store, gamesStore, log: app.log, notify: notifyProposal } : null,
+  );
+  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict });
   // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
@@ -536,6 +543,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       transitionProposal,
       isProposerTurn,
       toPublicProposalState,
+      loadProposalChange,
+      proposalDiffPage,
     },
     assertDeliverableSourcePath,
   });
@@ -774,6 +783,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // reach an agent by different routes.
     startImprovementRound: submissionSeams.startImprovementRound,
     buildBrief: buildImprovementBrief,
+    sweepProposals: proposals.sweep,
     ...options.suggestionSweepRoutes,
   });
 
@@ -844,6 +854,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Tell followers a game they follow moved. Reuses the submission routes' own
     // notification deps, so email and the unsubscribe token behave identically here.
     notifyFollowers: async (event) => {
+      await proposals.onPublished(event);
       await createFollowerFanout({
         store,
         emitDeps: submissionSeams.buildNotifyDeps(),
@@ -941,22 +952,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     onSourcesDelivered: gateTrigger,
   });
 
-  /**
-   * Remix: signed-in, ephemeral live editing. Two exits never publish:
-   * share (param links) and save-as-yours (private Studio draft). Edit
-   * lanes gate on EDITOR_ASSIST / CODE_LANE; save spends a creation slot.
-   */
-  const creationGate = createCreationGate({
-    store,
-    logWarn: (payload, msg) => app.log.warn(payload, msg),
-  });
+  // Remix: signed-in, ephemeral live editing; share links and proposals never publish.
   await registerRemixRoutes(app, {
     store,
     gamesStore,
     // N1: community's own domain call, wired here rather than imported by creation/.
     openProposal,
     editingGate,
-    creationGate,
+    // Signs share codes so a link cannot carry values nobody shared.
     submissionTokenSecret,
     githubClient: submissionSeams.githubClient ?? undefined,
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
@@ -970,68 +973,34 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Same gate the delivery path uses: a proposal is checked by exactly the machinery a
     // creator's own upload is, or the reviewer would be judging something unverified.
     onSourcesDelivered: gateTrigger,
-    notifyProposal: (event) =>
-      emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event),
+    notifyProposal,
   });
 
-  /**
-   * Proposals — the contribute-back exit. A change to a game somebody else owns,
-   * carried as a candidate version the proposer cannot publish.
-   *
-   * `adoptIntoJob` is the accept step's only side effect on the job world: it creates a
-   * job owned by the *target's* owner that already carries the gate-green version, so the
-   * owner publishes it through the ordinary route. Deliberately no dispatch — the change
-   * is already built, and handing it to an agent would rebuild what a human just approved.
-   */
+  // Proposals: accepting a creator-game proposal starts the owner's own rebuild round.
   await registerProposalRoutes(app, {
     store,
     gamesStore,
     contentChecker,
     adminUids,
     // Both lanes, so the diff and an agent's proposal round ask one question.
-    // A base we cannot read is not a diff we can compute. The review card degrades to
-    // "play it and read the description", which is still a decision a human can make.
     resolveBase: resolveBaseForProposal,
-    notify: (event) =>
-      emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event),
-    snapshotPointer: snapshotReader ? () => snapshotReader.getPointer() : undefined,
-    applyToRepo: async (proposal) => {
-      if (!gamesStore) return null;
-      const applied = await applyProposalToRepo(
-        {
-          store,
-          gamesStore,
-          gamesRepoClient,
-          gamesRepo: gamesRepoName,
-          baseRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
-          log: app.log,
-        },
-        proposal,
-      );
-      return applied.ok ? { number: applied.pr.number, url: applied.pr.url } : null;
-    },
-    adoptIntoJob: async ({ proposal, ownerUid, admissionNonce }) => {
-      const source = await store.getSubmissionBySlug(proposal.targetSlug);
-      const at = new Date().toISOString();
-      const jobId = await store.allocateJobId();
-      // Owned by whoever holds the game, never by the proposer: this job is the owner's
-      // to publish, and a job on their slug owned by somebody else is a transfer.
-      await store.createSubmission(
-        jobId,
-        ownerUid ?? source?.ownerUid ?? BOT_UID_PREFIX + 'platform',
-        source?.title ?? proposal.targetSlug,
-      );
-      if (source?.locale) await store.setSubmissionLocale(jobId, source.locale);
-      await store.setSubmissionSlug(jobId, proposal.targetSlug, admissionNonce);
-      await store.recordJobTransition(jobId, { to: 'queued', at, by: 'creator', reason: 'proposal_accepted' });
-      await store.recordJobTransition(jobId, { to: 'building', at, by: 'creator', reason: 'proposal_accepted' });
-      await store.setSubmissionDeliveredVersion(jobId, proposal.version!);
-      await store.recordJobTransition(jobId, { to: 'submitted', at, by: 'creator', reason: 'proposal_adopted' });
-      // Straight to review: the gate already ran on this exact version, and re-running it
-      // would ask the same question of the same bytes.
-      await store.recordJobTransition(jobId, { to: 'ready_for_review', at, by: 'gate', reason: 'gate_green' });
-      return { jobId };
-    },
+    notify: notifyProposal,
+    startProposalRound:
+      store && gamesStore
+        ? createProposalRoundStarter({
+            store,
+            gamesStore,
+            startImprovementRound: submissionSeams.startImprovementRound,
+            content: {
+              bake: bakeRemixEditorDefaults,
+              textFields: collectEditorTextFields,
+              deliver: contentDelivery({ store, gamesStore, now: Date.now, onSourcesDelivered: gateTrigger }),
+            },
+            contentChecker,
+            dailyImprovementQuota: submissionSeams.agentSurface.mcp.dailyImprovementQuota ?? 2,
+            log: app.log,
+          })
+        : undefined,
   });
 
   // Publish-gated public identity. Building needs none of this; catalog bylines and
@@ -1056,6 +1025,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     githubClient: submissionSeams.githubClient ?? undefined,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     ...options.gamePageRoutes,
+  });
+
+  await registerRemixSettingRoutes(app, {
+    store,
+    adminUids,
+    onChanged: (slug) => {
+      gamePageRoute.invalidateGameCache(slug);
+      invalidateRemixOnSlugs(store);
+    },
   });
 
   // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.

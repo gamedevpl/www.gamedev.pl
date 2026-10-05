@@ -45,14 +45,8 @@ function fakeGamesStore() {
     async getManifest(slug: string, version: string) {
       return manifests.get(key(slug, version)) ?? null;
     },
-    async adoptProposalVersion(input: { slug: string; version: string; proposalId: string; byUid: string | null }) {
-      const manifest = manifests.get(key(input.slug, input.version));
-      if (!manifest) throw new Error('no manifest');
-      if (manifest.deliveryMode !== 'proposal') throw new Error('not a proposal');
-      if (!manifest.gate?.green) throw new Error('no green gate');
-      manifest.deliveryMode = 'publish';
-      manifest.adopted = { proposalId: input.proposalId, byUid: input.byUid, at: new Date(NOW).toISOString() };
-      return manifest;
+    async getSourceFile() {
+      return null;
     },
     setGate(slug: string, version: string, green: boolean) {
       const manifest = manifests.get(key(slug, version));
@@ -68,8 +62,10 @@ async function seed(store: InMemoryStore) {
   for (const uid of [OWNER, PROPOSER, STRANGER, ADMIN]) {
     await store.upsertUser({ uid, name: uid });
   }
-  const job = await store.createSubmission(1_000_001, OWNER, 'Neon Drift');
+  const job = await store.createSubmission(999, OWNER, 'Neon Drift');
   await store.setSubmissionSlug(job.jobId, SLUG);
+  await store.recordJobTransition(job.jobId, { to: 'published', at: new Date(NOW).toISOString(), by: 'operator' });
+  await store.setRoundBuilder(job.jobId, 'self');
   await store.setPublication({
     slug: SLUG,
     state: 'published',
@@ -216,11 +212,10 @@ describe('proposal routes', () => {
 
     // The game is still serving what it served before.
     expect((await store.getPublication(SLUG))?.currentVersion).toBe('base-1');
-    // And the owner now has a job holding the adopted version, ready to publish.
-    const jobs = await store.listSubmissionsBySlug(SLUG);
-    const adopted = jobs.find((job) => job.deliveredVersion === proposal.version);
-    expect(adopted?.ownerUid).toBe(OWNER);
-    expect(adopted?.state).toBe('ready_for_review');
+    // The owner's own round rebuilds it; the proposer's version is never delivered.
+    const round = await store.getSubmission((await store.getProposal(proposal.id))!.adoptedJobId!);
+    expect(round).toMatchObject({ ownerUid: OWNER, slug: SLUG });
+    expect(round?.deliveredVersion).toBeUndefined();
   });
 
   it('routes a pre-transfer proposal to the new owner, not the stale targetOwnerUid', async () => {

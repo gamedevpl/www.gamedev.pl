@@ -1600,66 +1600,6 @@ describe('getGameSourceMap', () => {
     expect(await client.getGameSourceMap('main', 'ghost')).toBeNull();
   });
 
-  it('getGameDeliverySources joins the import graph with fixed delivery files', async () => {
-    const files = new Map<string, string | Uint8Array>([
-      ['games/orchard/game.ts', "import { start } from './game/runtime.ts';\nstart();\n"],
-      ['games/orchard/game/runtime.ts', 'export function start(): number { return 1; }\n'],
-      ['games/orchard/SPEC.md', '---\ntitle: Orchard\n---\n'],
-      ['games/orchard/index.html', '<canvas></canvas>'],
-      ['games/orchard/style.css', 'body{}'],
-      ['games/orchard/GAME.json', '{"engine":{"modules":[]}}'],
-      ['games/orchard/EDITOR.json', '{"version":1,"params":{},"content":{}}'],
-      // Optional fixed file present on some games — must ride along when present.
-      ['games/orchard/AGENT.json', '{"play":"capture"}'],
-    ]);
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const pathname = new URL(String(input)).pathname;
-      const marker = '/contents/';
-      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
-      const value = files.get(path);
-      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
-    }) as unknown as typeof fetch;
-    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
-
-    const sources = await client.getGameDeliverySources('main', 'orchard');
-    expect(sources).not.toBeNull();
-    expect(sources?.['game.ts']).toContain('runtime');
-    expect(sources?.['game/runtime.ts']).toContain('start');
-    expect(sources?.['SPEC.md']).toContain('Orchard');
-    expect(sources?.['index.html']).toContain('canvas');
-    expect(sources?.['AGENT.json']).toContain('capture');
-    // Absent fixed files are omitted, not invented.
-    expect(sources?.['TRACE.json']).toBeUndefined();
-  });
-
-  it('generates index.html and style.css when the game ships neither, like every current game', async () => {
-    const files = new Map<string, string | Uint8Array>([
-      ['games/gilded-run/game.ts', 'GameKit.mount({ ok: true });\n'],
-      ['games/gilded-run/SPEC.md', '---\ntitle: Gilded Run\n---\n'],
-      [
-        'games/gilded-run/GAME.json',
-        JSON.stringify({
-          engine: { modules: [] },
-          howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Go', pl: 'Idź' } },
-          theme: { accent: '#ffd56a' },
-        }),
-      ],
-    ]);
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const pathname = new URL(String(input)).pathname;
-      const marker = '/contents/';
-      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
-      const value = files.get(path);
-      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
-    }) as unknown as typeof fetch;
-    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
-
-    const sources = await client.getGameDeliverySources('main', 'gilded-run');
-
-    expect(sources?.['index.html']).toContain('Win');
-    expect(sources?.['style.css']).toContain('color: #ffd56a');
-  });
-
   it('refuses a slug that could address anything but a game directory', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 200 })) as unknown as typeof fetch;
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
