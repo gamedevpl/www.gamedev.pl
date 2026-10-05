@@ -286,7 +286,7 @@ describe('GameTheater how-to-play', () => {
     expect(container.querySelector('.theater-more.is-open')).toBeNull();
   });
 
-  it('closes the card when the game goes fullscreen, since the bar holding both triggers unmounts', async () => {
+  it('closes the card when the game goes fullscreen, and reveal button remounts controls', async () => {
     await draw({ controls: CONTROLS });
     await click(container.querySelector('.howto-btn'));
     expect(document.querySelector('.howto-card')).not.toBeNull();
@@ -299,6 +299,12 @@ describe('GameTheater how-to-play', () => {
 
     expect(container.querySelector('.game-theater-bar')).toBeNull();
     expect(document.querySelector('.howto-card')).toBeNull();
+
+    const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement;
+    expect(reveal).not.toBeNull();
+    await click(reveal);
+    expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+    expect(container.querySelector('.theater-reveal-btn')).toBeNull();
     Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
   });
 

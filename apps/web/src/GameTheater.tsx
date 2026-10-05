@@ -344,25 +344,29 @@ export function GameTheater({
   }, []);
 
   useEffect(() => {
-    if (!fullscreen) return;
+    if (!fullscreen) {
+      setChromeIdle(false);
+      return;
+    }
     setMoreOpen(false);
     // The bar is unmounted while fullscreen, and it holds both of the card's triggers.
     // A card left open there cannot be reopened from anywhere, and reappears unbidden
     // when fullscreen ends.
     setHowToOpen(false);
+    setChromeIdle(true);
   }, [fullscreen]);
 
   // Gated on real game input: chrome stays while somebody is still orienting.
   // Focused controls stay reachable; repeated gameplay input does not reset the clock.
   useEffect(() => {
     if (chromeManuallyHidden || chromeIdle) return;
-    if (!playerEngaged || chromeFocused || moreOpen || howToOpen || fullscreen) {
+    if (!playerEngaged || chromeFocused || moreOpen || howToOpen) {
       setChromeIdle(false);
       return;
     }
     const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
     return () => window.clearTimeout(timer);
-  }, [chromeFocused, chromeIdle, chromeManuallyHidden, fullscreen, howToOpen, moreOpen, playerEngaged]);
+  }, [chromeFocused, chromeIdle, chromeManuallyHidden, howToOpen, moreOpen, playerEngaged]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -447,13 +451,14 @@ export function GameTheater({
   // game document still reports its own controls) — or a shout game that only needs Mic
   // — would have had the bar copy hidden by CSS and no menu to fall back to, and the
   // control would have vanished entirely.
+  const shellMenu = player.shellMenu;
   const showMoreMenu =
     Boolean(reportSlug) ||
     agentAvailable ||
     isNarrow ||
+    shellMenu ||
     (hasControls && isMidWidth) ||
     (voiceMeter.available && isMidWidth);
-  const shellMenu = player.shellMenu;
   const openGameMenu = useCallback(() => {
     setMoreOpen(false);
     postGameHostMessage(frameRef.current, { type: 'pressEscape' });
@@ -596,7 +601,7 @@ export function GameTheater({
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {(fullscreen || chromeIdle) && (
+      {chromeIdle && (
         <button
           type="button"
           className="theater-reveal-btn"
@@ -608,7 +613,7 @@ export function GameTheater({
           <PixelIcon name="chevronDown" size={15} />
         </button>
       )}
-      {!fullscreen && (
+      {(!fullscreen || !chromeIdle) && (
         <div
           className={`game-theater-bar${chromeIdle ? ' is-idle' : ''}`}
           aria-hidden={chromeIdle}
