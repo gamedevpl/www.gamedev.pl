@@ -13,6 +13,7 @@ import './seed-provider-openrouter.js';
 import { DEFAULT_VERTEX_SEED_MODEL } from './seed-provider-vertex.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 import type { GameSnapshotReader } from '../catalog/game-snapshot.js';
+import { createReferenceFilter } from './seed-reference-filter.js';
 
 interface Logger {
   info: (context: object, message: string) => void;
@@ -135,5 +136,6 @@ export function createGameSeederFromEnv(
     defaultProvider,
     ...(log ? { log } : {}),
     ...(knowledgeSearch ? { knowledgeSearch } : {}),
+    ...(process.env.SEED_REFERENCE_FILTER === 'on' ? { referenceFilter: createReferenceFilter({ log }) } : {}),
   });
 }

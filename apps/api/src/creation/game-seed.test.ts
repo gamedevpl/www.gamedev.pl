@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildGeneratePrompt,
   collectSeedFiles,
@@ -252,6 +252,7 @@ function stubContext(overrides: Partial<SeedContext> = {}): SeedContextSource {
     kitDeclaration: null,
     hasGame: (slug) => ['apex-sprint', 'word-forge'].includes(slug),
     renderReferences: (slugs) => slugs.map((slug) => `--- games/${slug}/game.ts ---\nexport {};`).join('\n'),
+    referenceFiles: (slugs) => slugs.map((slug) => ({ path: `games/${slug}/game.ts`, content: 'export {};' })),
     ...overrides,
   };
   return { load: async () => context };
@@ -364,6 +365,41 @@ interface GameKitGameContext {
 
 describe('ModelGameSeeder', () => {
   const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
+
+  it('generates from selected original references and keeps filter-model billing separate', async () => {
+    const { client, prompts } = stubClientWithPrompts([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]);
+    const usage = { model: 'gemini-3.5-flash-lite', provider: 'vertex', inputTokens: 80, outputTokens: 12 };
+    const onUsage = vi.fn(async () => undefined);
+    const filter = vi.fn(async (input) => {
+      await input.onUsage?.(usage);
+      return {
+        references: '--- games/apex-sprint/game/model.ts ---\nexport const selectedOriginalCode = true;',
+        usage,
+        beforeBytes: 1000,
+        afterBytes: 100,
+        selectedFiles: 1,
+      };
+    });
+    const seeder = new ModelGameSeeder({ context: stubContext(), client, referenceFilter: filter });
+    const draft = await seeder.seed({ ...request, onReferenceFilterUsage: onUsage });
+    expect(draft).not.toBeNull();
+    expect(prompts[1]).toContain('selectedOriginalCode');
+    expect(prompts[1]).not.toContain('--- games/apex-sprint/game.ts ---');
+    expect(onUsage).toHaveBeenCalledWith(usage);
+    expect(draft?.usage.model).toBe('gemini-3.8-flash');
+    expect(draft?.usage.inputTokens).toBe(200);
+  });
+
+  it('dispatches unseeded after a selection failure instead of retrying or generating with full references', async () => {
+    const { client, prompts } = stubClientWithPrompts([{ text: '{"picks":["apex-sprint"]}' }]);
+    const filter = vi.fn(async () => {
+      throw new Error('selector unavailable');
+    });
+    const seeder = new ModelGameSeeder({ context: stubContext(), client, referenceFilter: filter });
+    expect(await seeder.seed(request)).toBeNull();
+    expect(filter).toHaveBeenCalledTimes(1);
+    expect(prompts).toHaveLength(1);
+  });
 
   it('asks for the low thinking floor, not a raw budget gemini-3.8-flash rejects', async () => {
     const thinkingArgs: unknown[] = [];
@@ -876,6 +912,7 @@ describe('knowledge context injection (KQ-11)', () => {
       scaffold: '--- games/<slug>/game.ts ---\nexport {};',
       kitDeclaration: null,
       hasGame: (slug) => slug === 'apex-sprint',
+      referenceFiles: () => [],
       renderReferences: (slugs, byteBudget) => {
         budgets.push(byteBudget);
         return slugs.map((slug) => `--- games/${slug}/game.ts ---\nexport {};`).join('\n');

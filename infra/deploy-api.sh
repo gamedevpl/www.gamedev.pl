@@ -450,6 +450,7 @@ done
 # the rest only matter once the matching secret above is also present.
 for SEED_VAR in \
   SEED_PROVIDER \
+  SEED_REFERENCE_FILTER \
   SEED_MODEL \
   SEED_ANTHROPIC_MODEL \
   SEED_OPENAI_MODEL \

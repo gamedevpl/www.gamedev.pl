@@ -47,6 +47,7 @@ const GATED_AT_CALLER = {
   'creation/editor-assist.ts': 'editingGate, in editor-drafts.ts',
   'creation/tab-complete.ts': 'tabCompleteGate, in creator-code.ts',
   'creation/seed-provider-vertex.ts': 'seedAvailabilityGate, in seed-pipeline.ts',
+  'creation/seed-reference-filter.ts': 'seedAvailabilityGate, in seed-pipeline.ts',
   'creation/dream-frames.ts': 'dreamAvailabilityGate.spendFrameSlot, in dream-job.ts',
   'creation/next-ideas.ts': 'claimDreamRun once per version, in dream-job.ts',
   'community/feedback-themes.ts': 'THEME_CALL_BUDGET, in scorecard.ts',

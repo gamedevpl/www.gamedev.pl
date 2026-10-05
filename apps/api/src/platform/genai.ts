@@ -21,6 +21,7 @@ export interface VertexClientConfig {
   defaultRegion: string;
   defaultModel: string;
   generationConfig?: VertexGenerationConfig;
+  httpOptions?: VertexProviderOptions['httpOptions'];
 }
 
 export function resolveProjectId(projectId?: string): string {
@@ -42,6 +43,7 @@ export function createVertexClient(config: VertexClientConfig): GenAIClient {
       location: config.region ?? process.env.VERTEX_REGION ?? config.defaultRegion,
       model: config.model ?? process.env.VERTEX_MODEL ?? config.defaultModel,
       generationConfig: config.generationConfig,
+      ...(config.httpOptions ? { httpOptions: config.httpOptions } : {}),
     }),
   );
 }

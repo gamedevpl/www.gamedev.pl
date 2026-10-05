@@ -37,6 +37,7 @@ export interface SeedContext {
   kitDeclaration: string | null;
   hasGame(slug: string): boolean;
   renderReferences(slugs: string[], byteBudget: number): string;
+  referenceFiles(slugs: string[]): { path: string; content: string }[];
 }
 
 export interface SeedContextSource {
@@ -114,6 +115,18 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
       : '',
     kitDeclaration: index.read('shared/game-kit.d.ts'),
     hasGame: (slug: string) => slugs.has(slug),
+    referenceFiles(picks: string[]) {
+      return [...new Set(picks)]
+        .filter((slug) => slugs.has(slug))
+        .flatMap((slug) =>
+          listGameFiles(`games/${slug}`).flatMap((path) => {
+            const content = index.read(path);
+            return content !== null && Buffer.byteLength(content, 'utf8') <= MAX_REFERENCE_FILE_BYTES
+              ? [{ path, content }]
+              : [];
+          }),
+        );
+    },
     renderReferences(picks: string[], byteBudget: number): string {
       const budget = { remaining: byteBudget };
       return picks

@@ -1,7 +1,7 @@
 // Round 0 of a game, written by a model instead of by the coding agent.
 //
-// A direct model call picks the closest published games, puts their full source in
-// context, and generates a first draft the agent starts from instead of an empty
+// A direct model call picks the closest published games, filters their source files
+// when configured, and generates a first draft the agent starts from instead of an empty
 // directory. Measured over three specs (ops: llm-seed-spike.md): builds 3.2-3.8x
 // faster, no quality regression, agent kept 96-99% of the seed.
 //
@@ -28,6 +28,7 @@ import { TYPECHECK_PREFLIGHT_BUDGET_MS } from './typecheck-preflight.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 import { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
+import type { ReferenceFilter } from './seed-reference-filter.js';
 
 export { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
@@ -134,6 +135,8 @@ export interface SeedRequest {
   spec: string;
   // What the last draft got wrong. Data, never instructions.
   steer?: string;
+  // Separate model usage, including a selection that is paid but later discarded.
+  onReferenceFilterUsage?: (usage: SeedUsage) => Promise<void>;
   // Which provider answers. Resolved once per dispatch, never per-file or per-retry.
   provider?: string;
 }
@@ -433,6 +436,7 @@ export interface ModelGameSeederOptions {
   // knowledge-search.ts, called server-internally (chunks mode).
   knowledgeSearch?: QueryKnowledgeFn;
   knowledgeTimeoutMs?: number;
+  referenceFilter?: ReferenceFilter;
   typeCheck?: (sources: Record<string, string>, kitDeclaration: string | null) => TypeCheckResult;
   /**
    * Test seam for the bundle check. Defaults to the real esbuild pass; tests substitute
@@ -629,12 +633,21 @@ export class ModelGameSeeder implements GameSeeder {
       if (!context.scaffold) {
         this.options.log?.warn({ slug }, 'seed scaffold missing from the archive; prompting without one');
       }
+      const filtered = this.options.referenceFilter
+        ? await this.options.referenceFilter({
+            context,
+            picks,
+            spec: steer ? `${spec}\n\n${steer}` : spec,
+            byteBudget: referenceBudget,
+            onUsage: request.onReferenceFilterUsage,
+          })
+        : undefined;
       const generatePrompt = buildGeneratePrompt({
         slug,
         title: request.title,
         spec,
         scaffold: duplicate ? '' : context.scaffold,
-        references: context.renderReferences(picks, referenceBudget),
+        references: filtered?.references ?? context.renderReferences(picks, referenceBudget),
         ...(knowledgeContext ? { knowledgeContext } : {}),
         ...(steer ? { steer } : {}),
       });

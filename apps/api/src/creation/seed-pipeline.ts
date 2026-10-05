@@ -5,7 +5,7 @@ import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
 import type { AgentBackend, SeedDelivery } from '../agent-surface/agent-backend.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import type { GameSeeder, SeedDraft, SeedFile } from './game-seed.js';
+import type { GameSeeder, SeedDraft, SeedFile, SeedUsage } from './game-seed.js';
 import type { SeedAvailabilityGate } from './seed-availability.js';
 import type { BuilderKind } from './builder.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -73,17 +73,18 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
   // Seed is billed by token via Vertex, unlike Copilot's flat session.
   async function recordSeedCost(
     jobId: number,
-    draft: SeedDraft,
+    usage: SeedUsage,
     log: { error: (context: object, message: string) => void },
+    kind: 'seed' | 'seed_selection' = 'seed',
   ): Promise<void> {
     if (!store) return;
     try {
       await store.recordJobCost(jobId, {
-        kind: 'seed',
+        kind,
         at: new Date(now()).toISOString(),
-        by: draft.usage.model,
-        tokens: { input: draft.usage.inputTokens, output: draft.usage.outputTokens },
-        ...(draft.usage.provider ? { provider: draft.usage.provider } : {}),
+        by: usage.model,
+        tokens: { input: usage.inputTokens, output: usage.outputTokens },
+        ...(usage.provider ? { provider: usage.provider } : {}),
       });
     } catch (error) {
       log.error({ err: error, jobId }, 'could not record the cost of a seed');
@@ -121,11 +122,12 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
         title: record.title,
         spec: input.spec,
         provider,
+        onReferenceFilterUsage: (usage) => recordSeedCost(input.jobId, usage, input.log, 'seed_selection'),
         ...(input.steer ? { steer: input.steer } : {}),
       });
       if (!draft) return { reason: 'seeder_declined', provider };
 
-      await recordSeedCost(input.jobId, draft, input.log);
+      await recordSeedCost(input.jobId, draft.usage, input.log);
       return { draft };
     } catch (error) {
       // Fail-open survives round 0 becoming mandatory; the caller records the failure.

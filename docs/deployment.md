@@ -237,6 +237,26 @@ a CLI rather than the service — goes under `notServiceVars` with a reason.
 | `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                                                                                                                                                               | ✅ set                                                                                              |
 | `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                                                     | 🗑️ orphaned — no code or config references it; safe to delete (below)                               |
 
+### Seed reference file selection
+
+Round-0 seeding selects its reference games as before. A separate Vertex
+`gemini-3.5-flash-lite` call then selects file IDs from an automatically generated
+catalog of paths, sizes, top-level symbols and imports. It receives no source bodies;
+the generator receives original selected source files and their available game-local
+dependencies, capped at 80 KB including headers. There are no maintained excerpts.
+
+The selector has a 20-second timeout, one transport attempt, a 32 KB prompt ceiling
+and a 2,048-token output ceiling. Invalid output, timeout or an empty selection skips
+the seed and continues the ordinary unseeded build. It does not retry with full
+reference games. Usage is recorded separately as `seed_selection`, including when
+selection succeeds but generation fails. This does not mark that build as seeded.
+
+`SEED_REFERENCE_FILTER=on` enables selection. It is disabled by default while its
+effect on draft quality and repair cost is evaluated. Set it as a repository variable
+for CD, or an environment variable for `infra/deploy-api.sh`; both deploy paths
+preserve it. Unset keeps the previous reference rendering.
+The main seed provider, output budget, scaffold and generated scope are unchanged.
+
 ### Managed agent configuration
 
 The managed backend is selected by these Cloud Run variables; the deploy scripts carry them
