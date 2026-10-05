@@ -4,6 +4,9 @@ export const GAME_PREVIEW_CSP =
   'img-src data: blob:; media-src data: blob:; font-src data:; ' +
   "connect-src 'none'; form-action 'none'; base-uri 'none'";
 
+// Embedder policy also gates a game frame navigating itself.
+export const SHELL_FRAME_SRC = "frame-src 'self' blob: https://accounts.google.com/gsi/";
+
 // Header form adds sandbox, which a meta CSP cannot carry.
 export const GAME_PREVIEW_CSP_HEADER = `sandbox allow-scripts allow-pointer-lock; ${GAME_PREVIEW_CSP}`;
 

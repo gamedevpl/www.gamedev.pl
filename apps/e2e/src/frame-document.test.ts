@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { build, transform } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser, Page } from 'playwright-core';
-import { SHELL_FRAME_SRC } from '../../../packages/contract/src/shell-frame-src.js';
+import { SHELL_FRAME_SRC } from '../../../packages/contract/src/game-preview-csp.js';
 import { browserPrerequisite, launchSiteBrowser } from './browser.js';
 
 const prerequisite = browserPrerequisite();
