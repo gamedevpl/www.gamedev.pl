@@ -680,6 +680,8 @@ const FILE_BUCKET = {
   'unsubscribe-token-codec': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+  'operator-email-templates': 'notifications',
+  'proposal-feedback-alert': 'notifications',
   'uncollected-feedback': 'notifications',
   'notification-email-retry': 'notifications',
   'notify-sweep-routes': 'notifications',

@@ -39,11 +39,6 @@ export type NotificationType =
   /** A health re-gate came back red: a live game no longer passes on the current engine. */
   | 'operator.game_unhealthy'
   /**
-   * Seeded builds are generating drafts nobody can place. Not about one job — those
-   * jobs are fine, they just built unseeded — but about a platform fault that costs a
-   * paid model call per submission and shows no symptom anywhere a person looks.
-   */
-  /**
    * Someone asked to join the closed beta. Not a job alert — there is no issue number —
    * but it is still an operator action: approve (or not) via the waitlist tooling.
    */
@@ -51,6 +46,8 @@ export type NotificationType =
   // Operator started a review sweep; notify reviewers.
   | 'operator.review_sweep'
   | 'operator.moderation_flag'
+  // A catalog game's proposal passed the gate; admins read it.
+  | 'operator.proposal_feedback'
   /**
    * A proposal is waiting on this creator — somebody proposed a change to one of their
    * games and it passed our gate.

@@ -9,8 +9,6 @@ import {
   digestNotificationMessage,
   digestPushContent,
   normalizeLocale,
-  operatorNotificationMessage,
-  operatorPushContent,
   proposalNotificationMessage,
   proposalPushContent,
   transferNotificationMessage,
@@ -19,8 +17,12 @@ import {
   followedGamePushContent,
   submissionPushContent,
   type DigestEmailParams,
-  type OperatorEmailParams,
 } from './email-templates.js';
+import {
+  operatorNotificationMessage,
+  operatorPushContent,
+  type OperatorEmailParams,
+} from './operator-email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { invalidateNotificationCache } from './notification-cache.js';
 import type { JobAlert } from './operator-alerts.js';
@@ -112,7 +114,7 @@ export interface EmitDeps {
 }
 
 // One write path, so a new row drops the bell's window.
-async function createNotification(
+export async function createNotification(
   deps: EmitDeps,
   uid: string,
   notification: Parameters<Store['createNotification']>[1],
@@ -197,7 +199,7 @@ export async function maybeSendEmail(deps: EmitDeps, uid: string, notification: 
  * Never throws. Unlike email there's no per-notification "sent" flag — push is
  * cheap and ephemeral, and re-emits are idempotent (same `tag` coalesces).
  */
-async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
+export async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotification): Promise<void> {
   const pusher = deps.pusher ?? createPusherFromEnv();
   if (!pusher) return;
 
@@ -444,7 +446,7 @@ export async function emitReviewSweep(
  * `actionUrl` is built here — after the mailer early-return — so a bad `APP_BASE_URL`
  * cannot abort the operator fan-out loop before in-app + push land for everyone else.
  */
-async function sendOperatorEmail(
+export async function sendOperatorEmail(
   deps: EmitDeps,
   uid: string,
   notificationId: string,

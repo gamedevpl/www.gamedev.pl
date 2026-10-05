@@ -93,6 +93,7 @@ describe('accepting a creator-game proposal', () => {
     expect(started).toHaveLength(1);
     // Improves the live holder job; the proposer's version is never delivered.
     expect(started[0]).toMatchObject({ jobId: 10, ownerUid: OWNER });
+    expect(result.proposal.acceptedVia).toBe('round');
     const round = await store.getSubmission(result.proposal.adoptedJobId!);
     expect(round?.deliveredVersion).toBeUndefined();
     expect((await gamesStore.getManifest(SLUG, proposal.version!))?.deliveryMode).toBe('proposal');
@@ -112,6 +113,7 @@ describe('accepting a creator-game proposal', () => {
     expect(result).toMatchObject({ ok: true });
     if (!result.ok) return;
     expect(started).toHaveLength(0);
+    expect(result.proposal.acceptedVia).toBe('data');
     const job = await store.getSubmission(result.proposal.adoptedJobId!);
     expect(job).toMatchObject({ ownerUid: OWNER, state: 'submitted' });
     const version = job!.deliveredVersion!;
@@ -143,6 +145,7 @@ describe('accepting a creator-game proposal', () => {
     const after = await store.getProposal(proposal.id);
     expect(after?.state).toBe('in_review');
     expect(after?.adoptedJobId).toBeUndefined();
+    expect(after?.acceptedVia).toBeUndefined();
     expect(gate).not.toHaveBeenCalled();
   });
 

@@ -157,7 +157,7 @@ export function createProposalRoundStarter(deps: ProposalRoundStartDeps): Propos
         locale: source.locale,
         files: baked,
         ...(loaded.liveManifest.engineRef ? { engineRef: loaded.liveManifest.engineRef } : {}),
-        link,
+        link: (jobId) => link(jobId, 'data'),
       });
       if (!delivered.ok) {
         const error = delivered.error === 'busy' ? 'round_in_progress' : delivered.error;
@@ -189,7 +189,7 @@ export function createProposalRoundStarter(deps: ProposalRoundStartDeps): Propos
           refusal = { ok: false, status: blocked ? 403 : 429, error: blocked ? 'account_blocked' : 'quota_exhausted' };
           return false;
         }
-        if (!(await link(jobId))) return false;
+        if (!(await link(jobId, 'round'))) return false;
         linkedJobId = jobId;
         return true;
       },
