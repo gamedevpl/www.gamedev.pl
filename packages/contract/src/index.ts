@@ -169,3 +169,4 @@ export * from './editor-validate.js';
 export { validateLayerReachable } from './editor-validate-reach.js';
 export { embedGameHtml } from './game-embed.js';
 export { GAME_PREVIEW_CSP, GAME_PREVIEW_CSP_HEADER, withGamePreviewCsp } from './game-preview-csp.js';
+export { SHELL_FRAME_SRC } from './shell-frame-src.js';
