@@ -596,7 +596,7 @@ export function GameTheater({
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {!fullscreen && chromeIdle && (
+      {(fullscreen || chromeIdle) && (
         <button
           type="button"
           className="theater-reveal-btn"
