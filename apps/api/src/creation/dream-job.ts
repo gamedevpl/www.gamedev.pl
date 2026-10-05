@@ -120,13 +120,18 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   const wait = deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   // Only throttling: a refused call bills nothing, a slow one might.
-  async function generateThrottled(request: DreamFrameRequest): Promise<DreamFrame | null> {
+  async function generateThrottled(
+    request: DreamFrameRequest,
+    halted: () => Promise<boolean>,
+  ): Promise<DreamFrame | null> {
     for (let attempt = 1; ; attempt += 1) {
       try {
         return await frames.generate(request);
       } catch (error) {
         if (attempt >= FRAME_ATTEMPTS || !isThrottled(error)) throw error;
         await wait(FRAME_THROTTLE_BACKOFF_MS * attempt);
+        // A pause or mute during the wait cancels the next paid call.
+        if (await halted()) return null;
       }
     }
   }
@@ -138,16 +143,20 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     styleNote: string;
     hudRegions: NonNullable<Awaited<ReturnType<HudRegionsReader>>>;
     jobId: number;
+    halted: () => Promise<boolean>;
   }): Promise<{ frame: DreamFrame; idea: NextIdea } | null> {
     try {
-      const frame = await generateThrottled({
-        sourcePng: input.sourcePng,
-        width: input.size.width,
-        height: input.size.height,
-        styleNote: input.styleNote,
-        direction: input.idea.prompt.en,
-        hudRegions: input.hudRegions,
-      });
+      const frame = await generateThrottled(
+        {
+          sourcePng: input.sourcePng,
+          width: input.size.width,
+          height: input.size.height,
+          styleNote: input.styleNote,
+          direction: input.idea.prompt.en,
+          hudRegions: input.hudRegions,
+        },
+        input.halted,
+      );
       if (!frame) return null;
       const decoded = decodeFrame(frame);
       if (!decoded) return null;
@@ -238,7 +247,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       halt = await stopped();
       if (halt) return halt;
       await bookConcept(jobId, frames.model);
-      const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId });
+      const halted = async () => (halt = await stopped()) !== null;
+      const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId, halted });
+      if (halt) return halt;
       if (result) dreamed.push(result);
     }
     // The copy promises two directions; one is not a choice.

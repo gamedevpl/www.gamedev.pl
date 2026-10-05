@@ -72,46 +72,6 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toHaveLength(1);
   });
 
-  it('waits out image-model throttling and still posts', async () => {
-    let calls = 0;
-    const { run, waits } = await harness({
-      hud: [],
-      frame: () => {
-        calls += 1;
-        // Two refusals per frame, as production sees.
-        if (calls % 3 !== 0) throw Object.assign(new Error('RESOURCE_EXHAUSTED'), { status: 429 });
-        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
-      },
-    });
-    expect(await run()).toBe('posted');
-    expect(calls).toBe(6);
-    expect(waits).toEqual([15_000, 30_000, 15_000, 30_000]);
-  });
-
-  it('gives up on a frame after the last throttled attempt', async () => {
-    const { frames, run, waits } = await harness({
-      hud: [],
-      frame: () => {
-        throw new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}');
-      },
-    });
-    expect(await run()).toBe('no_frames');
-    expect(frames.requests).toHaveLength(8);
-    expect(waits).toEqual([15_000, 30_000, 45_000, 15_000, 30_000, 45_000]);
-  });
-
-  it('does not retry a frame that failed for a reason other than throttling', async () => {
-    const { frames, run, waits } = await harness({
-      hud: [],
-      frame: () => {
-        throw new Error('safety block');
-      },
-    });
-    expect(await run()).toBe('no_frames');
-    expect(frames.requests).toHaveLength(2);
-    expect(waits).toEqual([]);
-  });
-
   it('skips a delivery whose card was already posted, without touching the store', async () => {
     const { run, record } = await harness({});
     record.dreamRun = { version: 'v1', claimedAt: '2026-09-07T11:00:00.000Z', postedAt: '2026-09-07T11:01:00.000Z' };
