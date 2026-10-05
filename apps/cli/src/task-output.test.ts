@@ -102,7 +102,9 @@ it('keeps local capture chatter in the status line and failures in the transcrip
     (text) => activity.push(text),
   );
   try {
+    output.progress('Adding car collisions', false);
     output.write('Local capture: waiting for the current build…');
+    expect(activity.at(-1)).toBe('Local capture: waiting for the current build…');
     output.write('Local capture: taking a screenshot…');
     output.write('Local capture ready (desktop, build 83739c7d0b64).');
     output.write('Local capture failed: Browser timeout: Page.captureScreenshot');
