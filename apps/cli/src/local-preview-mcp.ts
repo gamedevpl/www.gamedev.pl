@@ -118,8 +118,8 @@ export async function startLocalPreviewMcp(input: {
         throw new Error(
           `This task used its ${MAX_CAPTURES_PER_TASK} captures. Continue without more visual checks and report what is unverified.`,
         );
-      captures++;
       if (Date.now() - lastStarted < 2000) throw new Error('Wait two seconds before another capture.');
+      captures++;
       lastStarted = Date.now();
       while (jobs.size >= 3) jobs.delete(jobs.keys().next().value!);
       const job: Job = { id: randomUUID(), state: 'building', startedAt: new Date().toISOString() };

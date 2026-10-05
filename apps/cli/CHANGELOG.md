@@ -9,9 +9,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Local capture progress shows in the status line instead of flooding the task transcript, and a local task stops after 12 screenshots instead of capturing in a loop.
-- A mistyped slash command now says so and suggests the nearest one, instead of doing nothing.
-- Picking an agent or another option no longer lands in the chat transcript as your message or in ↑ history.
+- Local capture progress shows in the status line instead of flooding the task transcript, and a local task stops after 12 screenshots instead of capturing in a loop (#1632).
+- A mistyped slash command now says so and suggests the nearest one, instead of doing nothing (#1632).
+- Picking an agent or another option no longer lands in the chat transcript as your message or in ↑ history (#1632).
 
 ## 0.23.1 — 2026-10-02
 
