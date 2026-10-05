@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.24.0 — 2026-10-05
+
 ### Added
 
 - The Play conversation panel can be resized: drag its inner edge (or focus it and use the arrow keys), double-click to reset; the width is kept across reloads (#1631).
