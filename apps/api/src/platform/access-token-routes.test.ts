@@ -474,9 +474,10 @@ describe('authenticating with a personal access token', () => {
     // token-derived session would silently become an ordinary one after six hours and
     // regain the authority it was just denied.
     const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { tokenId } = (await mintFor(app, 'g:boss', 'admin ci token')).json();
 
     // A token-derived session already past its half-life, so the onSend hook renews it.
-    const aging = mintSessionToken('g:boss', sessionSecret, 60, undefined, 'token');
+    const aging = mintSessionToken('g:boss', sessionSecret, 60, undefined, 'token', tokenId);
     const renewed = await app.inject({
       method: 'GET',
       url: '/api/auth/me',

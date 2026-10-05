@@ -11,6 +11,7 @@ import {
   sessionDurationSeconds,
   type GoogleAuthVerifier,
 } from './auth.js';
+import { mintAccessTokenFor } from './access-token-service.js';
 import { InMemoryStore } from './store.js';
 
 class MockGoogleVerifier implements GoogleAuthVerifier {
@@ -819,13 +820,14 @@ describe('Session lifetime', () => {
   const meWith = (app: FastifyInstance, token: string) =>
     app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` } });
 
-  const agedToken = (uid: string, ageSeconds: number, source?: 'token') =>
+  const agedToken = (uid: string, ageSeconds: number, source?: 'token', tokenId?: string) =>
     mintSessionToken(
       uid,
       'test-secret-key',
       sessionDurationSeconds(source),
       Math.floor(Date.now() / 1000) - ageSeconds,
       source,
+      tokenId,
     );
 
   it('signs a person in for 30 days, not for an afternoon', async () => {
@@ -864,9 +866,13 @@ describe('Session lifetime', () => {
 
   it('keeps a token-derived cookie on the short 12h clock, renewal included', async () => {
     // Renewal must not promote a token cookie to a month.
-    const { app, uid } = await setupServer();
+    const { app, store, uid } = await setupServer();
 
-    const res = await meWith(app, agedToken(uid, 7 * 60 * 60, 'token'));
+    const {
+      record: { tokenId },
+    } = await mintAccessTokenFor(store, { uid, name: 'agent', createdByUid: uid, nowMs: Date.now() });
+
+    const res = await meWith(app, agedToken(uid, 7 * 60 * 60, 'token', tokenId));
 
     expect(res.statusCode).toBe(200);
     const renewed = res.headers['set-cookie'] as string;

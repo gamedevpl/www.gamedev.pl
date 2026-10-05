@@ -165,7 +165,15 @@ describe('cookie-authenticated write CSRF protection', () => {
   });
 
   it('protects PAT-derived cookies, including when a Bearer header is added', async () => {
-    const tokenCookie = `${SESSION_COOKIE_NAME}=${mintSessionToken('g:alice', secret, 3600, undefined, 'token')}`;
+    const {
+      record: { tokenId },
+    } = await mintAccessTokenFor(store, {
+      uid: 'g:alice',
+      name: 'browser',
+      createdByUid: 'g:alice',
+      nowMs: Date.now(),
+    });
+    const tokenCookie = `${SESSION_COOKIE_NAME}=${mintSessionToken('g:alice', secret, 3600, undefined, 'token', tokenId)}`;
     for (const held of [cookie, tokenCookie]) {
       const res = await app.inject({
         method: 'POST',
