@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { GameProject } from '@gamedevpl/contract';
 import {
-  assembleGameHtml,
+  assemblePublishedGameHtml,
   projectFromSources,
   CredentialLeakError,
   EmptyProjectError,
@@ -116,7 +116,7 @@ export async function registerGamePlayRoute(
       const project: GameProject = projectFromSources(sources, sources.title ?? slug);
 
       // restrictNetwork: published games are self-contained, like unreviewed previews.
-      const html = assembleGameHtml(project, { restrictNetwork: true });
+      const html = await assemblePublishedGameHtml(project, { restrictNetwork: true });
       const value = { slug, title: project.title, html };
       gameCache.set(slug, value, currentTime);
       return sendPublished(reply, value);

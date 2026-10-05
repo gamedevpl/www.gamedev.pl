@@ -103,7 +103,7 @@ describe('publishSnapshot', () => {
     expect(result.published).toBe(1);
     const baked = spy.games.get('bubble-pop');
     expect(baked?.html).toContain('<!doctype html>');
-    expect(baked?.html).toContain('console.log("play")');
+    expect(baked?.html).not.toContain('console.log("play")');
   });
 
   it('applies the same serve-time policy the play route would have applied', async () => {

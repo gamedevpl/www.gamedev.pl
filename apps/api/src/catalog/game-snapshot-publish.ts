@@ -1,5 +1,5 @@
 import { isPublishedEntry, type GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
+import { assemblePublishedGameHtml, projectFromSources } from '../platform/assemble.js';
 import { generateSnapshotId, type GameSnapshotWriter, type SnapshotPointer } from './game-snapshot.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import { bakeMediaCopies } from './bake-media.js';
@@ -9,7 +9,7 @@ import { bakeMediaCopies } from './bake-media.js';
  *
  * This is the one place the expensive work still happens — the same GitHub reads
  * and esbuild bundle the play route used to do per request — and it deliberately
- * reuses `assembleGameHtml` rather than the games repo's own `tools/build.ts`.
+ * reuses `assemblePublishedGameHtml` rather than the games repo's own `tools/build.ts`.
  * That assembler is where the restrictive CSP, the AI Act art. 50(2) provenance
  * meta and the credential scan are applied, so baking through it keeps one
  * authoritative definition of "what a served game is". A second implementation on
@@ -132,7 +132,7 @@ async function bakeGame(args: {
 
   // restrictNetwork mirrors the play route exactly: published games are
   // self-contained by repo policy, so they are locked to their own inline assets.
-  const html = assembleGameHtml(project, { restrictNetwork: true });
+  const html = await assemblePublishedGameHtml(project, { restrictNetwork: true });
   await writer.putGame(snapshotId, { slug: entry.slug, title: project.title, html });
 
   const mediaNames = [

@@ -54,6 +54,7 @@
     "fastify-rate-limit": "npm:@fastify/rate-limit@^11.1.0",
     "genaicode": "^2.9.1",
     "google-auth-library": "^10.9.0",
+    "javascript-obfuscator": "5.9.0",
     "jose": "^6.2.4",
     "pngjs": "^7.0.0",
     "typescript": "5.9.3",

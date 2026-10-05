@@ -46,9 +46,9 @@ import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
 import { withRemoteVerdicts } from '../src/delivery/gate-verdict-client.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
-import { assembleGameHtml, projectFromSources } from '../src/platform/assemble.js';
+import { assemblePublishedGameHtml, projectFromSources } from '../src/platform/assemble.js';
 
-// Not the repo's dist/ build — assembleGameHtml applies our serve-time policy.
+// Not the repo's dist/ build: ours adds serve policy and obfuscation.
 async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
   const client = createLocalGamesClient({ rootDir: harness });
   const sources = await client.getGameSources('main', slug);
@@ -56,7 +56,7 @@ async function assembleFromHarness(harness: string, slug: string): Promise<strin
 
   const project: GameProject = projectFromSources(sources, sources.title ?? slug);
   // Self-contained by repo policy, same as the bake and play route.
-  return assembleGameHtml(project, { restrictNetwork: true });
+  return assemblePublishedGameHtml(project, { restrictNetwork: true });
 }
 
 function arg(name: string): string | undefined {
