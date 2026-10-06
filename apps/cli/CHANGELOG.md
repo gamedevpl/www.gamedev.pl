@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#PR).
+- Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
 
 ## 0.24.0 — 2026-10-05
 
