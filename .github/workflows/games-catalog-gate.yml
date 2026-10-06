@@ -420,7 +420,20 @@ jobs:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           set -euo pipefail
-          "$QUIET" npm run check:pr
+          # check:pr wraps one long check:gate chain. Run its links one at a
+          # time so the public log names the link that failed, not just "check:pr".
+          gate=$(node -p "require('./package.json').scripts['check:gate'] ?? ''")
+          if [ -z "$gate" ]; then
+            echo "Error: the games repo has no check:gate script"
+            exit 1
+          fi
+          rest="$gate"
+          while [ -n "$rest" ]; do
+            link="${rest%% && *}"
+            if [ "$link" = "$rest" ]; then rest=""; else rest="${rest#* && }"; fi
+            read -r -a argv <<< "$link"
+            "$QUIET" "${argv[@]}"
+          done
           if [ "${{ needs.resolve.outputs.catalog_agent_play }}" = 1 ]; then
             "$QUIET" npm run agent-play
           fi
