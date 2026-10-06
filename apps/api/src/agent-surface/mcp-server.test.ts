@@ -483,24 +483,26 @@ describe('POST /api/mcp (BY-05)', () => {
       annotations?: { title?: string };
     }>;
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
-    // The header is what makes the PUT parse; an example without it earned a 415.
-    expect(screenshotUpload?.description).toMatch(/Authorization: [^"]+" -H "Content-Type: [^"]+" --upload-file/i);
+    // Headers travel as data; without Content-Type the PUT earned a 415.
+    expect(screenshotUpload?.description).toMatch(/upload contract as data/);
+    expect(screenshotUpload?.description).toMatch(/exactly those headers/);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
-    expect(screenshotUpload?.description).toMatch(/--use-gl=angle/);
-    expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
-    expect(screenshotUpload?.description).toMatch(/canvas\.toDataURL/);
-    expect(screenshotUpload?.description).toMatch(/preserveDrawingBuffer|render callback/);
-    expect(screenshotUpload?.description).toMatch(/disposable capture harness/);
-    expect(screenshotUpload?.description).toMatch(/Buffer\.from|split\(","\)/);
-    expect(screenshotUpload?.description).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
+    // The capture recipe lives in documentation, not in server replies.
+    expect(screenshotUpload?.description).not.toMatch(/curl |--upload-file|--use-gl|chromium\.launch/i);
+    expect(screenshotUpload?.description).toMatch(/gamedevpl skill/);
+    const skill = await readFile(new URL('../../../../skills/gamedevpl/SKILL.md', import.meta.url), 'utf8');
+    expect(skill).toMatch(/--use-gl=angle/);
+    expect(skill).toMatch(/never `--disable-gpu`/);
+    expect(skill).toMatch(/disposable capture harness/);
+    expect(skill).toMatch(/GAME_CAPTURE_GFX=canvas2d/);
     expect(screenshotUpload?.description).toMatch(/mode=preview/);
     expect(screenshotUpload?.description).toMatch(/get_gate_media/);
     expect(screenshotUpload?.description).toMatch(/Without a shell or browser/i);
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
     expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
-    expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(
-      /curl -H "Authorization: Bearer <upload token>" -H "Content-Type: [^"]+" --upload-file/i,
-    );
+    const stageUpload = tools.find((t) => t.name === 'stage_upload_url')?.description;
+    expect(stageUpload).toMatch(/upload contracts as data .*exactly its headers/);
+    expect(stageUpload).not.toMatch(/curl |--upload-file/);
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
@@ -1231,15 +1233,11 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/get_kit_api/);
     // The loop must never send an agent to a web search instead.
     expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
-    expect(joined).toMatch(/screenshot_upload_url and the `upload` one-liner.{0,40}Authorization/);
+    expect(joined).toMatch(/screenshot_upload_url and PUT the PNG bytes to its url with exactly its returned headers/);
     expect(joined).not.toMatch(/send_screenshot/);
-    expect(joined).toMatch(/--use-gl=angle/);
-    expect(joined).toMatch(/never --disable-gpu/);
-    expect(joined).toMatch(/canvas\.toDataURL/);
-    expect(joined).toMatch(/preserveDrawingBuffer|render callback/);
-    expect(joined).toMatch(/disposable capture harness/);
-    expect(joined).toMatch(/Buffer\.from|split\(","\)/);
-    expect(joined).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
+    // Uploads and captures are described, never handed out as commands to run.
+    expect(joined).not.toMatch(/curl |--upload-file|--use-gl/);
+    expect(joined).toMatch(/gamedevpl skill/);
     expect(joined).toMatch(/Without a shell or browser[\s\S]*get_gate_media/i);
     expect(joined).toMatch(/later\/resumed|already available/);
     expect(joined).toMatch(/start does not surface preview_passed/);
@@ -1766,14 +1764,21 @@ declare const GameKit: { defineGame(): unknown };
       { 'mcp-session-id': sessionId },
     );
     expect(minted.isError).toBe(false);
-    const { url, upload, maxBytes } = minted.structured as {
+    const { url, method, headers, upload, maxBytes } = minted.structured as {
       url: string;
+      method: string;
+      headers: Record<string, string>;
       upload: string;
       maxBytes: number;
       expiresAt: string;
     };
     expect(maxBytes).toBe(700 * 1024);
-    expect(upload).toMatch(/^curl -H 'Authorization: Bearer [^']+' -H 'Content-Type: image\/png'/);
+    // Method and headers carry everything the PUT needs.
+    expect(method).toBe('PUT');
+    expect(headers.Authorization).toMatch(/^Bearer \S+$/);
+    expect(headers['Content-Type']).toBe('image/png');
+    // Deprecated command form remains, with the same credential.
+    expect(uploadAuthorization(upload)).toBe(headers.Authorization);
     expect(url).toMatch(/\/api\/agent\/build\/shot\/upload$/);
     const pngBytes = Buffer.from(TINY_PNG, 'base64');
     // ~500 KB of valid PNG prefix + padding would blow the signature check; use a
@@ -1782,10 +1787,7 @@ declare const GameKit: { defineGame(): unknown };
     const put = await app.inject({
       method: 'PUT',
       url: url.replace(/^https?:\/\/[^/]+/, ''),
-      headers: {
-        authorization: upload.match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '',
-        'content-type': 'application/octet-stream',
-      },
+      headers: { authorization: headers.Authorization, 'content-type': headers['Content-Type'] },
       payload: pngBytes,
     });
     expect(put.statusCode).toBe(200);
@@ -2232,11 +2234,16 @@ declare const GameKit: { defineGame(): unknown };
     const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
     expect(batchMinted.isError).toBe(false);
     const batchStructured = batchMinted.structured as {
-      uploads: Array<{ path: string; url: string; upload: string }>;
+      uploads: Array<{ path: string; url: string; method: string; headers: Record<string, string>; upload: string }>;
       uploadScript?: string;
     };
     expect(batchStructured.uploads).toHaveLength(20);
-    expect(batchStructured.uploadScript).toContain('curl -H');
+    for (const item of batchStructured.uploads) {
+      expect(item.method).toBe('PUT');
+      expect(item.headers['Content-Type']).toBe('text/plain; charset=utf-8');
+      // Deprecated command form remains, with the same credential.
+      expect(uploadAuthorization(item.upload)).toBe(item.headers.Authorization);
+    }
     expect(batchStructured.uploadScript?.split(' && ')).toHaveLength(20);
 
     // Parallel concurrent PUT execution — verifies CAS retry resilience under 20-way concurrency
@@ -2246,8 +2253,8 @@ declare const GameKit: { defineGame(): unknown };
           method: 'PUT',
           url: item.url.replace(/^https?:\/\/[^/]+/, ''),
           headers: {
-            authorization: uploadAuthorization(item.upload),
-            'content-type': 'text/plain; charset=utf-8',
+            authorization: item.headers.Authorization!,
+            'content-type': item.headers['Content-Type']!,
           },
           payload: Buffer.from(`// content for ${item.path}\n`, 'utf8'),
         }),
@@ -2650,6 +2657,8 @@ declare const GameKit: { defineGame(): unknown };
       {
         sessionKey,
         kitEngineRef: ENGINE,
+        // Publishing is never the default; this receipt is the publish lane's.
+        mode: 'publish',
         files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
       },
       { 'mcp-session-id': sessionId },
@@ -2924,12 +2933,11 @@ declare const GameKit: { defineGame(): unknown };
 
     // `destructiveHint: false` is a claim that the tool is purely *additive*, and a
     // client may skip its approval prompt on that basis — so consuming a cap, replacing
-    // content, or sending a persistent creator message must be marked honestly.
+    // content, or making creator messages stop appearing must be marked honestly.
     for (const name of [
       'submit_sources',
       'ack_inbox',
       'regenerate_seed',
-      'report_progress',
       'end',
       'stage_source_file',
       'patch_source_file',
@@ -2939,7 +2947,15 @@ declare const GameKit: { defineGame(): unknown };
     ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }
-    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft']) {
+    // Adding a note or a decision card is additive.
+    for (const name of [
+      'get_brief',
+      'start',
+      'open_round',
+      'continue_draft',
+      'report_progress',
+      'suggest_next_round',
+    ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 

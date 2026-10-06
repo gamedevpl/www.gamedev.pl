@@ -14,6 +14,7 @@ import {
   type ToolHandler,
   type ToolResult,
 } from './mcp-tool-support.js';
+import { UPLOAD_REQUEST_PROPS, uploadRequestFromChannel } from './upload-request.js';
 
 const READS = {
   readOnlyHint: true,
@@ -153,7 +154,8 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         properties: { ok: { type: 'boolean' }, reason: { type: 'string' }, ...REPLY_CONTROL },
         required: ['ok'],
       },
-      annotations: { title: 'Report progress', ...CONSUMES },
+      // Additive: appends a note; nothing is overwritten, consumed or hidden.
+      annotations: { title: 'Report progress', ...WRITES },
       description:
         'Report a build-progress update to the creator thread. Call before and after long steps. ' +
         `step is one of: ${BUILD_STEPS.join(', ')}. Reply includes stop and pendingMessages. ` +
@@ -237,22 +239,19 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
           url: { type: 'string' },
           expiresAt: { type: 'string' },
           expiresInSeconds: { type: 'number' },
-          upload: { type: 'string' },
           maxBytes: { type: 'number' },
+          ...UPLOAD_REQUEST_PROPS,
           ...REPLY_CONTROL,
         },
-        required: ['url', 'expiresAt', 'expiresInSeconds', 'upload', 'maxBytes'],
+        required: ['url', 'method', 'headers', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
       },
       annotations: { title: 'Get a screenshot upload URL', ...WRITES },
       description:
-        'The only way to send a mid-build screenshot. Returns a short-lived signed PUT URL — run the returned ' +
-        '`upload` one-liner verbatim (curl -H "Authorization: Bearer <upload token>" -H "Content-Type: image/png" --upload-file <png> "$url"); the URL alone is not a credential, the Authorization header is. PNG bytes must never enter the model as base64; ' +
+        'The only way to send a mid-build screenshot. Returns a short-lived upload contract as data — url, method, ' +
+        'headers, maxBytes. PUT the PNG file bytes to url with exactly those headers, using whatever HTTP client you ' +
+        'have; the URL alone is not a credential, the Authorization header is. PNG bytes must never enter the model as base64; ' +
         'there is no send_screenshot tool. The PUT validates ≤700 KB decoded PNG and returns only an upload receipt — read stop/pendingMessages from your other channel tools. ' +
-        'With a shell, produce the PNG from headless Chromium: ' +
-        'chromium.launch({args:["--use-gl=angle","--use-angle=swiftshader-webgl","--enable-unsafe-swiftshader","--enable-webgl","--ignore-gpu-blocklist"]}) ' +
-        '(never --disable-gpu; if the canvas is black, retry --use-angle=swiftshader). ' +
-        'Capture canvas.toDataURL("image/png") inside the same render callback. Do not bake preserveDrawingBuffer:true into shipped game source — only a disposable capture harness. After compositing the default buffer is gone. page.screenshot({path:"shot.png"}) writes PNG directly. Decode a data URL with fs.writeFileSync("shot.png", Buffer.from(dataUrl.split(",")[1], "base64")) in the same Node process — never print or return the data URL. ' +
-        'If SwiftShader is unavailable, GAME_CAPTURE_GFX=canvas2d or ?gfx=canvas2d (force2d). ' +
+        'Producing the PNG is up to you; a headless-browser capture recipe (WebGL flags, in-callback canvas capture) is documented in the gamedevpl skill. ' +
         'Without a shell or browser, skip this tool: deliver mode=preview, end, and on a later/resumed run call get_gate_verdict once then get_gate_media if a preview verdict is already available — that is the happy path. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -291,12 +290,12 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         if (body.rejected) {
           return toolErr(`screenshot upload URL was not issued (${body.rejected})`);
         }
-        // Never invent an expiry or cap the channel did not state.
+        const request = uploadRequestFromChannel(body);
+        // Never invent an expiry, cap or credential the channel did not state.
         if (
           typeof body.url !== 'string' ||
           !body.url ||
-          typeof body.upload !== 'string' ||
-          !body.upload ||
+          !request ||
           typeof body.expiresAt !== 'string' ||
           !body.expiresAt ||
           typeof body.expiresInSeconds !== 'number' ||
@@ -306,9 +305,10 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         }
         return toolOk({
           url: body.url,
+          ...request,
           expiresAt: body.expiresAt,
           expiresInSeconds: body.expiresInSeconds,
-          upload: body.upload,
+          ...(typeof body.upload === 'string' && body.upload ? { upload: body.upload } : {}),
           maxBytes: body.maxBytes,
           ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
@@ -334,8 +334,8 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
         'when you will not deliver more — required whenever submit returns warnings.code=call_end (sets stop:true). ' +
         'Successful submit already unlocks creator handoff (agentEndedAt); end closes your MCP session cleanly. ' +
         'Does not publish by itself. After a green publish verdict the key already retires — end is optional then. ' +
-        'Put your closing word to the creator in `summary` — anything you would otherwise write as plain prose ' +
-        'after this call is never seen by them. ' +
+        'Put your closing word to the creator in `summary`: a creator following the round from Studio sees the ' +
+        'summary, not this conversation, so also answer the person you are talking to directly. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',

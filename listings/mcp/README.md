@@ -86,10 +86,10 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `get_gate_verdict`                   | Check the gate once                     | read        |
 | `get_gate_media`                     | Fetch the gate's screenshots and video  | read        |
 | `get_reference_images`               | Fetch creator-attached reference images | read        |
-| `report_progress`                    | Report progress                         | destructive |
+| `report_progress`                    | Report progress                         | write       |
 | `screenshot_upload_url`              | Get a screenshot upload URL             | write       |
 | `concept_frame_upload_url`           | Get a concept frame upload URL          | write       |
-| `suggest_next_round`                 | Offer two concept directions            | destructive |
+| `suggest_next_round`                 | Offer two concept directions            | write       |
 | `show_round`                         | Show the creator a live round card      | read        |
 | `show_media`                         | Show the creator the gate's screenshots | read        |
 | `share_draft`                        | Share or unshare this draft's play link | write       |
@@ -100,7 +100,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `get_proposal_diff`                  | Read one file of the accepted proposal  | read        |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
-`readOnlyHint`, `destructive` is `destructiveHint`. Eleven tools are destructive, and the
+`readOnlyHint`, `destructive` is `destructiveHint`. Nine tools are destructive, and the
 protocol's opposite of destructive is _additive_, not "deletes" — a client may skip its
 approval prompt for anything marked non-destructive, so anything that consumes or
 overwrites is marked honestly even when nothing is erased. What each one actually does:
@@ -112,13 +112,13 @@ overwrites is marked honestly even when nothing is erased. What each one actuall
 - `regenerate_seed` consumes a capped regeneration and replaces the current draft;
 - `submit_sources` burns one of a capped number of deliveries and can move the pointer
   that decides what publishes;
-- `report_progress` sends a persistent creator-thread message;
-- `end` can send a closing message and acknowledge creator messages;
-- `suggest_next_round` posts a persistent proposal in the creator thread;
+- `end` can acknowledge creator messages, so they stop appearing;
 - `ack_inbox` makes creator messages stop appearing.
 
 The staging tools touch scratch space, which is undelivered by definition. The others
-consume bounded actions or have effects a creator sees, which is why they carry the hint.
+consume bounded actions or hide something a creator had, which is why they carry the hint.
+`report_progress` and `suggest_next_round` are not on the list: they only add a note or a
+decision card, which is exactly what additive means.
 
 **Not in that list, deliberately.** `get_round_status` and `get_round_media` appear only
 for a client that negotiates the UI extension, since a client with no views would offer

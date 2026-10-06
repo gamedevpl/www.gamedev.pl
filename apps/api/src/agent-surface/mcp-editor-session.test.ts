@@ -361,7 +361,8 @@ describe('MCP editor session actor', () => {
     expect(put.json()).toMatchObject({ error: expect.stringMatching(/finished/i) });
   });
 
-  it('refuses fromLatestDelivery without mode when the previous lane cannot be proven preview', async () => {
+  // Omitted mode is preview, so an unprovable lane never publishes.
+  it('treats fromLatestDelivery without mode as preview when the previous lane cannot be proven publish', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
     await seedSharedRound(store);
@@ -387,7 +388,7 @@ describe('MCP editor session actor', () => {
       { sessionKey, kitEngineRef: 'abcdef0123456789abcdef0123456789abcdef01', fromLatestDelivery: true },
       { 'mcp-session-id': sessionId },
     );
-    expect(submitted.isError).toBe(true);
-    expect((submitted.structured as { error: string }).error).toMatch(/only the owner can publish/i);
+    // No games store here; reaching delivery proves the publish check passed.
+    expect((submitted.structured as { error?: string }).error ?? '').not.toMatch(/only the owner can publish/i);
   });
 });
