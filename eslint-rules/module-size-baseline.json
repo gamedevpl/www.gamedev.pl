@@ -720,7 +720,7 @@
     "apps/web/src/proposalsApi.ts": 256,
     "apps/web/src/ProposalsPage.tsx": 140,
     "apps/web/src/ProposeComposer.tsx": 125,
-    "apps/web/src/PublicPlayView.tsx": 17,
+    "apps/web/src/PublicPlayView.tsx": 47,
     "apps/web/src/PublishedGameFrame.retry.test.tsx": 94,
     "apps/web/src/PublishedGameFrame.telemetry.test.tsx": 131,
     "apps/web/src/PublishedGameFrame.tsx": 245,

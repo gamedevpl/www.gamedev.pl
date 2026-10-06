@@ -1094,9 +1094,10 @@
     "openStudio": "Studio"
   },
   "draft": {
-    "title": "Gra w budowie",
+    "title": "Nie ma takiej gry",
     "loading": "Wczytujemy najnowszą wersję…",
-    "notFound": "Ta gra nie jest jeszcze dostępna. Może dopiero powstaje albo została już opublikowana.",
+    "notFound": "Ta gra nie istnieje.",
+    "errorTitle": "Nie udało się wczytać gry",
     "error": "Nie udało się teraz wczytać tej gry. Spróbuj ponownie za chwilę."
   },
   "statusView": {

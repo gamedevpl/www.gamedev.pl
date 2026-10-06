@@ -1084,9 +1084,10 @@
     "openStudio": "Studio"
   },
   "draft": {
-    "title": "A game in the making",
+    "title": "Game not found",
     "loading": "Loading the latest build…",
-    "notFound": "This game isn't available yet. It may still be starting up, or it has already been published.",
+    "notFound": "This game does not exist.",
+    "errorTitle": "Could not load game",
     "error": "We couldn't load this game right now. Please try again in a moment."
   },
   "statusView": {
