@@ -500,6 +500,7 @@ const FILE_BUCKET = {
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
   'capture-plan-hint': 'agent-surface',
+  'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',
   'kit-upcoming-rules': 'agent-surface',
   'staged-budget': 'agent-surface',

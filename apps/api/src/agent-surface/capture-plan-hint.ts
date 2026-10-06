@@ -1,4 +1,6 @@
-// Shallow CAPTURE.json shape check; a bad plan silently stores no stills.
+import { stepsProblem } from './capture-plan-steps.js';
+
+// CAPTURE.json shape check; a bad plan silently stores no stills.
 
 const EXAMPLE = '{ "seed": 42, "fps": 60, "maxFrames": 300, "script": [{ "wait": 60 }, { "capture": "gameplay" }] }';
 
@@ -33,6 +35,13 @@ export function capturePlanHint(content: string): string | null {
       `"script" step by step, so this file stores no screenshots — no gate stills and no concept proposal ` +
       `for the creator. Use this shape: ${EXAMPLE}. Steps: wait, press, tap, keyDown, keyUp, click, move, ` +
       `drag, assert, waitFor, repeat, capture.`
+    );
+  }
+  const broken = stepsProblem(plan.script);
+  if (broken) {
+    return (
+      `CAPTURE.json ${broken}. The capture runner stops at the first bad step, so the gate stores no ` +
+      `screenshot and the creator gets no concept proposal. Fix that step; a minimal plan is ${EXAMPLE}.`
     );
   }
   if (countCaptures(plan.script) === 0) {
