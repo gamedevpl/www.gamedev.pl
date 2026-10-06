@@ -4257,7 +4257,7 @@ describe('published game route', () => {
     const body = res.json();
     expect(body.slug).toBe('foo');
     expect(body.title).toBe('Bubble Pop Rush');
-    expect(body.html).toContain(sampleSources.gameJs);
+    expect(body.html).not.toContain(sampleSources.gameJs);
     expect(body.html).toContain(sampleSources.styleCss);
     expect(body.html).toContain('Content-Security-Policy');
     expect(body.html).toContain("default-src 'none'");
