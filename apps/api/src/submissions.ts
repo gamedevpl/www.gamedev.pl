@@ -1192,7 +1192,6 @@ export async function registerSubmissionRoutes(
     now,
     githubClient,
     snapshotReader,
-    publishedRef,
     mediaByIp,
     maxMediaPerWindow,
     mediaRateLimitWindowMs: gamesRateLimitWindowMs,

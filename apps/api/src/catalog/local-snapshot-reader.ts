@@ -19,3 +19,8 @@ export function createLocalSnapshotReader(client: GitHubClient, ref: string): Ga
     },
   };
 }
+
+// Test seam: a games client plus the snapshot baked from it.
+export function withSnapshot(githubClient: GitHubClient, ref = 'main') {
+  return { githubClient, snapshotReader: createLocalSnapshotReader(githubClient, ref) };
+}

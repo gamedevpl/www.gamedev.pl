@@ -32,7 +32,6 @@ export interface CatalogRoutesOptions {
   now: () => number;
   githubClient: GitHubClient | null;
   snapshotReader?: GameSnapshotReader | null;
-  publishedRef: string;
   // Shared with the build-screenshot route's IP budget.
   mediaByIp: Map<string, number[]>;
   maxMediaPerWindow: number;
@@ -69,7 +68,6 @@ export async function registerCatalogRoutes(
     gamesStore,
     now,
     githubClient,
-    publishedRef,
     mediaByIp,
     maxMediaPerWindow,
     mediaRateLimitWindowMs,
@@ -102,8 +100,8 @@ export async function registerCatalogRoutes(
       }
       throw new SnapshotUnavailableError('snapshot catalog is not published');
     }
-    if (!githubClient) return [];
-    return githubClient.getCatalog(publishedRef);
+    // No snapshot means no repo lane; store games still serve.
+    return [];
   }
 
   async function readSnapshotGame(slug: string): Promise<PublishedGame | null> {
@@ -168,21 +166,16 @@ export async function registerCatalogRoutes(
   }
 
   async function readCatalogFresh(): Promise<CatalogGameEntry[]> {
+    if (!snapshotReader) return [];
     let entries: CatalogGameEntry[];
-    if (snapshotReader) {
-      // Bypasses both this function's cache and the reader's pointer cache.
-      try {
-        const fresh = await snapshotReader.getCatalogFresh();
-        if (!fresh) throw new SnapshotUnavailableError('snapshot catalog is not published');
-        entries = fresh;
-      } catch (error) {
-        if (error instanceof SnapshotUnavailableError) throw error;
-        throw new SnapshotUnavailableError('snapshot catalog unavailable', { cause: error });
-      }
-    } else if (githubClient) {
-      entries = await githubClient.getCatalog(publishedRef);
-    } else {
-      entries = [];
+    // Bypasses both this function's cache and the reader's pointer cache.
+    try {
+      const fresh = await snapshotReader.getCatalogFresh();
+      if (!fresh) throw new SnapshotUnavailableError('snapshot catalog is not published');
+      entries = fresh;
+    } catch (error) {
+      if (error instanceof SnapshotUnavailableError) throw error;
+      throw new SnapshotUnavailableError('snapshot catalog unavailable', { cause: error });
     }
     catalogCache = { entries, expiresAt: now() + catalogTtlMs };
     return entries;
@@ -471,21 +464,8 @@ export async function registerCatalogRoutes(
 
       let body: Buffer | null = null;
       if (entry && allowedFiles.has(parsedParams.data.filename)) {
-        if (snapshotReader) {
-          const snapshotMedia = await readSnapshotMedia(
-            parsedParams.data.slug,
-            parsedParams.data.filename,
-            variantWidth,
-          );
-          body = snapshotMedia?.body ?? null;
-        } else {
-          const media = await githubClient.getGameMedia(
-            publishedRef,
-            parsedParams.data.slug,
-            parsedParams.data.filename,
-          );
-          body = media ? Buffer.from(media) : null;
-        }
+        const snapshotMedia = await readSnapshotMedia(parsedParams.data.slug, parsedParams.data.filename, variantWidth);
+        body = snapshotMedia?.body ?? null;
       }
 
       // Store-published games skip the repo catalog and the snapshot bake.
