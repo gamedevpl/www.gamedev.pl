@@ -446,7 +446,7 @@ describe('gallery media', () => {
 });
 
 describe('with no snapshot configured', () => {
-  it('serves games and catalog entirely from GitHub', async () => {
+  it('serves the catalog from GitHub but never assembles a published game', async () => {
     const { githubClient, getCatalog, getGameSources } = createGithubStub([catalogEntry('bubble-pop')]);
     const app = await createApp({ githubClient, snapshotReader: null });
 
@@ -454,9 +454,10 @@ describe('with no snapshot configured', () => {
     const game = await app.inject({ method: 'GET', url: '/api/games/bubble-pop' });
 
     expect(catalog.statusCode).toBe(200);
-    expect(game.statusCode).toBe(200);
     expect(getCatalog).toHaveBeenCalled();
-    expect(getGameSources).toHaveBeenCalled();
+    expect(game.statusCode).toBe(503);
+    expect(game.json()).toEqual({ error: 'game snapshot unavailable' });
+    expect(getGameSources).not.toHaveBeenCalled();
     await app.close();
   });
 });

@@ -7,18 +7,15 @@ describe('published game errors', () => {
   it('does not expose source errors in responses', async () => {
     const leakedValue = 'ghp_AAAAAAAAAAAAAAAAAAAAAAAA';
     const app = Fastify({ logger: false });
-    const githubClient = {
-      getGameSources: vi.fn().mockRejectedValue(new Error(`forbidden import: ${leakedValue}`)),
-    } as unknown as GitHubClient;
 
     await registerGamePlayRoute(app, {
-      githubClient,
-      publishedRef: 'main',
+      githubClient: {} as GitHubClient,
+      snapshotReader: {} as never,
       now: () => 1,
       catalog: {
         storePublishedGame: async () => null,
         isSlugPublished: async () => true,
-        readSnapshotGame: async () => null,
+        readSnapshotGame: vi.fn().mockRejectedValue(new Error(`forbidden import: ${leakedValue}`)),
       },
       draftPreview: {
         canPlayDraft: async () => null,
@@ -33,6 +30,30 @@ describe('published game errors', () => {
     expect(response.body).not.toContain(leakedValue);
     await app.close();
   });
+
+  it('answers 503 rather than assembling from GitHub with no snapshot', async () => {
+    const app = Fastify({ logger: false });
+    const getGameSources = vi.fn();
+
+    await registerGamePlayRoute(app, {
+      githubClient: { getGameSources } as unknown as GitHubClient,
+      snapshotReader: null,
+      now: () => 1,
+      catalog: {
+        storePublishedGame: async () => null,
+        isSlugPublished: async () => true,
+        readSnapshotGame: async () => null,
+      },
+      draftPreview: { canPlayDraft: async () => null, replyWithDraft: async (_, reply) => reply },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop' });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: 'game snapshot unavailable' });
+    expect(getGameSources).not.toHaveBeenCalled();
+    await app.close();
+  });
 });
 
 it('identifies actual served HTML consistently across publication lanes', async () => {
@@ -42,7 +63,6 @@ it('identifies actual served HTML consistently across publication lanes', async 
     await registerGamePlayRoute(app, {
       githubClient: {} as GitHubClient,
       snapshotReader: lane === 'snapshot' ? ({} as never) : null,
-      publishedRef: 'main',
       now: () => 1,
       catalog: {
         storePublishedGame: async () => (lane === 'store' ? game : null),

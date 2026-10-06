@@ -588,6 +588,7 @@ const FILE_BUCKET = {
   'games-repo-contract-check': 'catalog',
   'editor-contract-lockstep': 'catalog',
   'local-games-repo': 'catalog',
+  'local-snapshot-reader': 'catalog',
   'index-html-generator': 'catalog',
   'slug-backfill': 'catalog',
 
