@@ -1,8 +1,8 @@
 import { TaskDebug } from './debug.js';
 import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
-import { useEffect, useState } from 'react';
-import { Box, Static, Text, useInput, useStdout } from 'ink';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Box, Static, Text, useInput, useStdout, type Key } from 'ink';
 import { TranscriptLine, RichText } from './transcript.js';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
@@ -51,7 +51,7 @@ export function ReplApp({
       stdout.off('resize', onResize);
     };
   }, [stdout]);
-  useInput((input, key) => {
+  const onInput = (input: string, key: Key): void => {
     if (debug) {
       if (key.ctrl && input === 'c') session.cancel();
       return;
@@ -137,7 +137,11 @@ export function ReplApp({
       return;
     }
     if (!key.ctrl && !key.meta && input) session.insertDraft(input);
-  });
+  };
+  // Ink re-subscribes handlers late; keys must see the latest state.
+  const latestInput = useRef(onInput);
+  latestInput.current = onInput;
+  useInput(useCallback((input: string, key: Key) => latestInput.current(input, key), []));
 
   const border = color ? 'round' : 'single';
   const accent = color ? 'cyan' : undefined;
