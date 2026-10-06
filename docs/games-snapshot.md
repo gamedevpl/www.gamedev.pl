@@ -170,7 +170,23 @@ No redeploy is needed — instances re-read the pointer on its own TTL.
 
 Manual publish (after an assembler change here, or to recover a failed run): run
 **Publish games snapshot** via `workflow_dispatch`. It takes a `ref` and a `dry_run`
-that reports what would be baked without writing.
+that bakes without writing. The run log shows only pass or fail (see below); use the
+local commands for the details.
+
+### Public logs, private sources
+
+This repo is public, so every Actions log is readable by anyone, but the gate and the
+bake check out the private games repo. Their tools print file paths, test names and, on
+failure, fragments of game source (esbuild code frames, assertion diffs). So every
+games-repo command in `games-catalog-gate.yml`, and `snapshot:publish` in
+`publish-games.yml`, runs through `.github/scripts/quiet-step.sh`. The wrapper discards
+the output and prints only the command, its exit code, its elapsed time and a heartbeat
+every minute. A failure says which command broke on which slugs. To see why, run that
+command in the games repo at the gated SHA.
+
+When you add a step that runs games-repo code, put it through the wrapper as well. Its
+output is not stored anywhere, deliberately: an artifact on a public repo is just as
+public as the log.
 
 Locally:
 
