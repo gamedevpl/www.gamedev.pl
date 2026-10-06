@@ -30,7 +30,6 @@ export const POLLED_ROUTES = [
   'GET /api/submissions/mine (document, steady state)',
   'GET /api/review/status',
   'GET /api/notifications',
-  'GET /api/admin/summary (steady state)',
   'POST /api/internal/notify-sweep (steady state)',
 ] as const;
 

@@ -79,7 +79,13 @@ afterEach(() => {
 });
 
 async function draw(
-  props: { controls?: string; onExit?: () => void; initialRemixOpen?: boolean; initialRemixRequest?: string } = {},
+  props: {
+    controls?: string;
+    onExit?: () => void;
+    initialRemixOpen?: boolean;
+    initialRemixRequest?: string;
+    remixOn?: boolean;
+  } = {},
 ) {
   root = createRoot(container);
   await act(async () => {
@@ -90,6 +96,7 @@ async function draw(
         source={{ slug: 'brick-storm' }}
         reportSlug="brick-storm"
         editor="content"
+        remixOn={props.remixOn ?? true}
         onExit={props.onExit ?? (() => undefined)}
         controls={props.controls}
         initialRemixOpen={props.initialRemixOpen}
@@ -855,6 +862,14 @@ describe('GameTheater how-to-play visit telemetry', () => {
     session.flush();
     steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
     expect(steps).toContainEqual(expect.objectContaining({ type: 'remix_step', step: 'opened', control: 'bar' }));
+  });
+
+  it('hides the remix entry, unrecorded, until remix is switched on', async () => {
+    await draw({ remixOn: false });
+    session.flush();
+    expect(container.querySelector('.remix-btn')).toBeNull();
+    const steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
+    expect(steps).toEqual([]);
   });
 
   it('does not offer a remix entry on a theater with no published slug', async () => {

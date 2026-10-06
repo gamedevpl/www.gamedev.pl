@@ -6,7 +6,7 @@ import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
-import { gameManifestHint } from './game-manifest-hint.js';
+import { stagedFileHint } from './staged-file-hint.js';
 import type { SubmissionRecord } from '../platform/store.js';
 import type { AgentTokenClaims } from '../platform/agent-token.js';
 import {
@@ -446,7 +446,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         const hint =
           body.hint ??
           (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes, content) : null);
-        const manifestHint = body.manifestHint ?? gameManifestHint(body.path ?? path, content);
+        const manifestHint = body.manifestHint ?? stagedFileHint(body.path ?? path, content);
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),

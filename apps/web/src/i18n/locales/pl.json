@@ -108,6 +108,10 @@
       "moderation_flag": {
         "title": "Recenzent zgłosił grę",
         "body": "„{{title}}” zgłoszono jako {{detail}}. Jedno zgłoszenie wystarczy, żeby zadziałać."
+      },
+      "proposal_feedback": {
+        "title": "Gra z katalogu dostała propozycję",
+        "body": "„{{title}}” ma propozycję gracza, która przeszła nasze testy."
       }
     },
     "game": {
@@ -1675,7 +1679,6 @@
     "status": "Twoja gra jest w trakcie tworzenia",
     "join": "Dołącz do gry",
     "invite": "Zaproszenie do bety",
-    "health": "Telemetria",
     "review": "Ocena gier",
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
@@ -2074,19 +2077,6 @@
     "sharedWithoutCode": "Skopiowano link — zawiera Twoje ustawienia, ale nie zmianę kodu.",
     "shareFailed": "Nie udało się utworzyć linku.",
     "makeItYours": "Zrób ją moją",
-    "keepOfferTitle": "Zachować ten remiks?",
-    "keepOfferBody": "Kilka razy już to kształtowałeś. Zapisz do Studio — nic nie trafi na stronę, dopóki tego nie opublikujesz.",
-    "keepOfferName": "Nazwa",
-    "keepOfferNamePlaceholder": "Moja wersja",
-    "keepOfferConfirm": "Zachowaj w Studio",
-    "keepOfferDismiss": "Nie teraz",
-    "keepOfferMenu": "Zapisz do Studio",
-    "saving": "Zapisuję do Studio…",
-    "saveFailed": "Nie udało się teraz zapisać.",
-    "saveQuota": "Dziś już sporo utworzyłeś — spróbuj jutro.",
-    "saveNoSources": "Tej gry nie da się jeszcze zapisać w Studio.",
-    "saveNotYours": "Tylko twórcy tej gry mogą zapisać jej kopię w Studio.",
-    "saveNoChanges": "Najpierw coś zmień — potem możesz to zachować.",
     "conceptSeed": "Gra jak {{slug}}, ale moja własna wersja",
     "button": "Remiks",
     "signInToRemix": "Zaloguj się, aby remiksować",
@@ -2097,6 +2087,7 @@
     "tookTooLong": "To trwało za długo — oddaję Ci grę bez zmian.",
     "napping": "Edytowanie teraz odpoczywa — gra nadal działa.",
     "notHere": "Tej gry nie można jeszcze remiksować — ale nadal działa.",
+    "off": "Remiksowanie tej gry nie jest włączone — ale nadal można w nią grać.",
     "placeholderAgain": "Zmień jeszcze coś…",
     "buildingWait": "Chwilę to potrwa. Gra wróci sama.",
     "try": {
@@ -2209,7 +2200,11 @@
     "supersededHelp": "Gra została zaktualizowana po twojej propozycji. Przebuduj ją na najnowszej wersji.",
     "expiredHelp": "Gra ucichła, więc propozycja wygasła. To nie jest odmowa.",
     "watcher": "Obserwujesz tę grę — dostaniesz podsumowanie, gdy się zmieni.",
-    "mergedHelp": "Twoja zmiana jest na żywo."
+    "mergedHelp": "Twoja zmiana jest na żywo.",
+    "acceptedHelp": "Przyjęta — agent twórcy właśnie ją buduje.",
+    "acceptedHelp_data": "Przyjęta — twórca zastosował twoje zmiany. Trafią do gry, gdy twórca ją opublikuje.",
+    "noted": "przyjęta do wiadomości",
+    "notedHelp": "Zespół gamedev.pl przeczytał twoją propozycję — dziękujemy. Gry z katalogu zmienia zespół, więc może nie trafić na żywo dokładnie w twojej wersji."
   },
   "reviews": {
     "navTitle": "Propozycje",
@@ -2220,7 +2215,30 @@
     "accept": "Przyjmij…",
     "requestChanges": "Poproś o zmiany",
     "decline": "Odrzuć",
-    "acceptHelp": "Przyjęcie tworzy dla ciebie nową wersję — nic nie trafia na żywo, dopóki jej nie opublikujesz.",
+    "block": "Zablokuj tę osobę",
+    "blockConfirm": "Zablokować {{handle}}? Ta osoba nie będzie mogła proponować zmian do żadnej z twoich gier. Odblokujesz ją w ustawieniach tej gry.",
+    "blockConfirmAction": "Zablokuj",
+    "blockDone": "Zablokowano. Ta osoba nie może już proponować zmian do twoich gier.",
+    "blockFailed": "Nie udało się teraz zablokować. Spróbuj za chwilę.",
+    "acceptHelp": "Przyjęcie rozpoczyna rundę, w której twój agent odtwarza tę zmianę w twojej grze — kod autora propozycji nigdy nie jest kopiowany.",
+    "markNoted": "Przyjęte do wiadomości",
+    "errors": {
+      "round_in_progress": "W twojej grze trwa już runda — przyjmij ponownie, gdy się skończy.",
+      "quota_exhausted": "Dzisiejsze rundy są już wykorzystane — spróbuj jutro.",
+      "account_blocked": "Twoje konto nie może teraz rozpoczynać rund.",
+      "managed_unavailable": "Builder jest teraz niedostępny. Spróbuj później — propozycja tu zostaje.",
+      "content_rejected": "Tekst tej propozycji nie spełnia naszych zasad treści, więc nie da się jej zastosować. Odrzuć ją albo poproś o zmiany.",
+      "moderation_unavailable": "Nasza kontrola treści chwilowo nie odpowiada. Spróbuj za moment.",
+      "not_published": "Twoja gra nie jest teraz opublikowana, więc nie może przyjąć rundy. Najpierw ją opublikuj.",
+      "stale_owner": "Nie jesteś już właścicielem tej gry, więc nie możesz tego przyjąć.",
+      "no_source_job": "Ta gra nie ma buildu, od którego można zacząć rundę.",
+      "round_failed": "Nie udało się rozpocząć rundy. Spróbuj za moment.",
+      "superseded": "Twoja gra zmieniła się od czasu tej propozycji, więc jest nieaktualna. Autor może ją odbudować na najnowszej wersji.",
+      "not_reviewable": "Ta propozycja już na ciebie nie czeka — została rozstrzygnięta albo wycofana.",
+      "not_found": "Tej propozycji już nie ma — mogła zostać wycofana.",
+      "note_rejected": "Twoja notatka nie spełnia naszych zasad treści. Przeredaguj ją i spróbuj ponownie."
+    },
+    "notedHelp": "Zamyka propozycję jako przyjętą do wiadomości. Gra się nie zmienia — ewentualne zmiany zespół wprowadza sam.",
     "expiresIn": "Wygasa za {{days}} dni bez recenzji",
     "changesPlaceholder": "Co powinni zmienić?",
     "declineReason": {
@@ -2243,10 +2261,15 @@
       "off": "Wyłączone",
       "offHelp": "Nikt nie może proponować zmian do tej gry.",
       "review": "Recenzuj propozycje",
-      "reviewHelp": "Gracze i twórcy mogą proponować zmiany. Każda propozycja jest najpierw sprawdzana i uruchamiana, a ty recenzujesz każdą — nic nie zmienia twojej gry bez ciebie.",
+      "reviewHelp": "Gracze i twórcy mogą proponować zmiany, a ich agenci mogą czytać źródła twojej gry, żeby je przygotować. Każda propozycja jest sprawdzana i uruchamiana, a ty recenzujesz każdą — nic się nie zmienia bez ciebie.",
       "blocked": "Zablokowani",
       "blockedHelp": "Zablokowane osoby nie mogą proponować zmian do żadnej z twoich gier.",
-      "unblock": "Odblokuj"
+      "unblock": "Odblokuj",
+      "remixTitle": "Remiksowanie",
+      "remixOn": "Pozwól remiksować",
+      "remixOnHelp": "Gracze mogą przerabiać tymczasową kopię twojej gry dla siebie w trakcie gry. To nigdy nie zmienia twojej gry, a kopii nie da się zapisać ani skopiować.",
+      "remixOff": "Wyłączone (domyślnie)",
+      "remixOffHelp": "Remiksowanie pozostaje wyłączone, dopóki go nie włączysz. Twoja gra nie ma przycisku Remiks."
     },
     "diffSummary": "Zmienione pliki: {{files}} · +{{additions}} −{{deletions}}",
     "diffEmpty": "Brak zmian w plikach do pokazania.",

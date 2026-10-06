@@ -23,7 +23,7 @@ apps/
   api/       Fastify + TS. The whole backend: catalog, creation, agent surface,
              delivery, community, realtime, telemetry, notifications, platform.
   web/       Vite + React + TS. The player, catalog, Creator Studio, review desk,
-             party mode, admin console.
+             party mode. (The operator console lives in the private ops repo.)
   world/     Fastify + TS. The persistent-world zone host — its own Cloud Run
              service, not part of the API image.
   e2e/       Vitest suites that drive the deployed site.
@@ -116,6 +116,16 @@ module-boundary` reports it as such.
 `platform/app.ts` is a single `buildApp` that registers everything — including the agent
 channel and the MCP server, which are mounted in the same app rather than in a sidecar.
 
+**Operator routes have no browser door.** The operator console is not part of this site: it
+runs locally from the private ops repo
+([`console/`](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)) and reads
+and writes Firestore directly. The operator handlers that need this server (the
+`/api/admin/*` job, game, backfill, moderation, review-sweep and proposal routes) answer
+404 to every browser and are reached only through `/api/internal/ops/*`
+(`platform/ops-console.ts`), which needs a Google-signed ID token for the identity-only
+`ops-console@` service account plus an `x-operator-uid` in `ADMIN_UIDS`. See
+[`deployment.md`](./deployment.md) for the env vars.
+
 ---
 
 ## `apps/web` — core, surfaces, and lazy chunks
@@ -125,7 +135,6 @@ apps/web/src/
   core/              router.ts, dataLayer.ts, persistence.ts, styles/tokens.css
   surfaces/
     studio/          Creator Studio — by far the largest surface
-    admin/           Operator console
     catalog/         Browse and rails
     review/          The review desk
     party/           Party mode (shared screen, phones as controllers)
@@ -137,8 +146,8 @@ apps/web/src/
 invalidation), `persistence.ts` (one wrapper over what were twelve ad-hoc `localStorage`
 users).
 
-**Four surfaces are lazy route chunks** — `AdminConsole`, `CreatorStudioView`, `ReviewDesk`
-and `PartyPage` are `lazy(() => import(...))` in `App.tsx`, so none of them is in the entry
+**Three surfaces are lazy route chunks** — `CreatorStudioView`, `ReviewDesk` and
+`PartyPage` are `lazy(() => import(...))` in `App.tsx`, so none of them is in the entry
 bundle.
 
 That split has a consequence worth knowing before you touch CSS. Vite's `cssCodeSplit` emits
@@ -199,19 +208,18 @@ flowchart LR
   behind "the repo lane wins catalog ties".
 
 In the snapshot-backed configuration neither lane assembles a game on the request path —
-both are sealed earlier. (With `GAMES_SNAPSHOT_BUCKET` unset, the repo-lane path has no
-snapshot reader to consult and does assemble per request from the fixture sources; that is
-the local/dev configuration, not production.)
+both are sealed earlier. (With `GAMES_SNAPSHOT_BUCKET` unset, local dev serves the
+repo lane through `catalog/local-snapshot-reader.ts`, which bakes from the fixture or local
+checkout sources on demand; any other unset configuration answers 503 for a repo-lane game.)
 
 - **Store lane** — the gate produces `bundle.html` as a derived artefact; the play route
   serves those bytes as-is.
 - **Repo lane** — `catalog/game-snapshot-publish.ts` bakes to the Cloud Storage snapshot.
   With `GAMES_SNAPSHOT_BUCKET` set, published repo-lane catalog, play and media are served
-  only from that snapshot; unsetting it is an opt-out for local dev and fixtures, not a
-  fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
+  only from that snapshot; the play route has no GitHub fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
   had to go.
 
-Both sealing paths, plus the repo-lane fallback in the play route, go through one assembler:
+Both sealing paths, plus the local-dev snapshot reader, go through one assembler:
 `platform/assemble.ts`'s `assembleGameHtml`. The bake uses it deliberately rather than the
 games repo's own `tools/build.ts`, because that is where the restrictive CSP, the AI Act
 art. 50(2) provenance metadata and the credential scan are applied — so there is one
@@ -237,7 +245,8 @@ flowchart LR
 > **A green gate does not publish.** `delivery/gate-runner.ts` records a verdict and nothing
 > more — its own header says so: "This never publishes. It records a verdict; a human still
 > approves." The registry write happens in `creation/job-admin-routes.ts`, behind the
-> admin-only `POST /api/admin/jobs/:jobId/publish`, and the transition is recorded
+> admin-only `POST /api/admin/jobs/:jobId/publish` (reached from the ops console through
+> `/api/internal/ops/*`), and the transition is recorded
 > `by: 'operator'`. That human step is the moderation boundary; do not automate past it.
 
 A round is **dispatched to an agent backend** and the agent delivers back over the **build
@@ -261,6 +270,20 @@ The one place a delivery becomes a git commit is the **repo lane's** merge-back:
 holds the file contents a green gate ran against, so asking an agent to "apply" them would
 make the merge unreviewable. From there the games repo's own `validate.yml` gates the PR,
 its CODEOWNERS puts a human on the merge, and the snapshot bake republishes.
+
+**Store lane, creator-owned games: accept never adopts code.** A proposal's own version
+stays in `proposal` mode forever. Accepting it (`community/proposal-round-start.ts`) opens
+the owner's own improvement round on the game's _live_ version — whichever builder their
+improve rounds normally use — with a brief that fences the proposer's title and description
+as untrusted text and carries only a compact change summary (files with +/- lines, params
+`key: old → new`, content collections). The round's agent reads detail through the MCP
+tools `get_proposal_summary` and `get_proposal_diff` (one file, ~8 KB pages), which answer
+only the session whose job the proposal is linked to (`adoptedJobId`). A change confined to
+EditorKit data (EDITOR.json defaults / `EDITOR.content.json`, same declaration) skips the
+agent: it is baked onto the live sources and delivered as a content-only candidate
+(`origin: 'editor'`, `creation/content-candidate.ts`), the same path Studio's editor
+publish uses. Either way the proposal is `accepted` with the job link, and becomes `merged`
+when that job publishes.
 
 ### Self-build (MCP)
 

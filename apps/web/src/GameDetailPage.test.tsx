@@ -39,6 +39,7 @@ const game: CatalogEntry = {
   world: null,
   sensing: null,
   editor: 'content',
+  remixOn: true,
   orientation: 'any',
   touch: 'gamekit',
   submittedBy: 'Grzegorz',
@@ -140,6 +141,14 @@ describe('GameDetailPage', () => {
     const { onRemix } = render({ game: { ...game, editor: null } });
 
     expect(recordRemixStep).toHaveBeenCalledWith('no_lane', { control: 'page' });
+    expect(container.querySelector('.game-page-remix')).toBeNull();
+    expect(onRemix).not.toHaveBeenCalled();
+  });
+
+  it('hides Remix, recording nothing, until remix is switched on', () => {
+    const { onRemix } = render({ game: { ...game, remixOn: undefined } });
+
+    expect(recordRemixStep).not.toHaveBeenCalled();
     expect(container.querySelector('.game-page-remix')).toBeNull();
     expect(onRemix).not.toHaveBeenCalled();
   });

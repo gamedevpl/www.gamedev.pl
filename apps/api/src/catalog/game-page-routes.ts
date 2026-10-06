@@ -118,8 +118,7 @@ export async function registerGamePageRoutes(
 
   async function buildGamePage(slug: string): Promise<GamePageResponse | null> {
     const repoEntry = getRepoPublishedCatalogEntry ? await getRepoPublishedCatalogEntry(slug) : null;
-    const publication = await store.getPublication(slug);
-    const storePublished = isPublished(publication) ? publication : null;
+    const storePublished = await store.getPublication(slug).then((record) => (isPublished(record) ? record : null));
     if (!repoEntry && !storePublished) return null;
     if (repoEntry && !isPublishedEntry(repoEntry) && !storePublished) return null;
 
@@ -162,6 +161,7 @@ export async function registerGamePageRoutes(
     return {
       entry: {
         ...entry,
+        ...((await store.getRemixSettings(slug))?.mode === 'on' ? { remixOn: true as const } : {}),
         status: 'published',
         submittedBy: noAttribution ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
         creatorHandle: resolvedHandle,

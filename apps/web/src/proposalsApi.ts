@@ -48,6 +48,7 @@ export type Proposal = {
   decision?: { at: string; reason?: DeclineReason; note?: string };
   /** True when the reviewer is the platform rather than a creator. */
   platformOwned: boolean;
+  acceptedVia?: 'data' | 'round';
 };
 
 /** Why the "Propose this change" door is shut, when it is. */
@@ -79,12 +80,10 @@ export type ProposalDiff = {
 export type ProposalApiError = Error & { status?: number; code?: string; category?: string };
 
 /**
- * Coerce a list field to an array.
- *
- * A 200 whose body is missing the field is not an error the `catch` above can see, and the
- * component that renders it would throw on `.length` — which is how one shape-drifted
- * endpoint takes down the surface embedding it. Absent reads as empty, which is what an
- * absent list means everywhere else in this product.
+ * Coerce a list field to an array. A 200 whose body is missing the field is not an
+ * error the `catch` above can see, and the component that renders it would throw on
+ * `.length` — which is how one shape-drifted endpoint takes down the surface embedding
+ * it. Absent reads as empty, which is what an absent list means everywhere else here.
  */
 function asList<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];

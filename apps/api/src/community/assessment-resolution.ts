@@ -1,8 +1,6 @@
 // Operator follow-up on a verdict; see docs/game-assessment-plan.md.
 import { ASSESSMENT_RESOLUTION_STATUSES, type AssessmentResolutionStatus } from '@gamedevpl/contract';
-import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { AssessmentResolution, GameAssessment, Store } from '../platform/store.js';
 
@@ -120,44 +118,4 @@ export async function applyResolution(
     else missing += 1;
   }
   return { updated, stale, missing };
-}
-
-export interface AssessmentResolutionRouteOptions {
-  store: Store;
-  adminUids: Set<string>;
-  now: () => number;
-}
-
-export async function registerAssessmentResolutionRoute(
-  app: FastifyInstance,
-  options: AssessmentResolutionRouteOptions,
-): Promise<void> {
-  const { store, adminUids, now } = options;
-
-  // Operator follow-up: what was done about a verdict, and how.
-  app.post('/api/admin/assessments/resolve', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-    const body = ResolveAssessmentSchema.safeParse(request.body ?? {});
-    if (!body.success) {
-      return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
-    }
-
-    const prepared = prepareResolution(body.data, request.user!.uid, now());
-    if (!prepared.ok) {
-      return reply.status(400).send({ error: prepared.error });
-    }
-
-    const { updated, stale, missing } = await applyResolution(store, body.data, prepared.resolution);
-    if (updated.length === 0 && stale.length > 0) {
-      // The verdict moved under the operator; re-read before resolving again.
-      return reply.status(409).send({ error: 'stale_verdict', stale });
-    }
-    if (updated.length === 0 && (missing > 0 || stale.length === 0)) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-
-    return { assessments: updated, resolved: prepared.resolution !== null, stale };
-  });
 }

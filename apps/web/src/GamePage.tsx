@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, gamePageHandle, offersRemix, type CatalogEntry } from './catalog.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -87,7 +87,9 @@ export function GamePage({
   useEffect(() => {
     if (!page) return;
     onGameLoaded?.(page.entry.title);
-    recordRemixStep(page.entry.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
+    // Has a lane but not switched on: neither offered nor lane-less.
+    if (page.entry.editor !== 'content') recordRemixStep('no_lane', { control: 'page' });
+    else if (page.entry.remixOn === true) recordRemixStep('offered', { control: 'page' });
   }, [page, onGameLoaded]);
 
   const canonicalHandle = page?.entry.creatorHandle ?? null;
@@ -202,7 +204,7 @@ export function GamePage({
   const playTogether = () => onPlayTogether?.(entry, arrivalVia);
 
   const openRemixEntry = () => {
-    if (entry.editor !== 'content') return;
+    if (!offersRemix(entry)) return;
     recordRemixStep('opened', { control: 'page' });
     setRemixEntryOpen(true);
   };
@@ -211,7 +213,7 @@ export function GamePage({
 
   const startRemix = (event: FormEvent) => {
     event.preventDefault();
-    if (entry.editor !== 'content') return;
+    if (!offersRemix(entry)) return;
     const request = remixRequest.trim();
     if (request.length < 2) return;
     setRemixEntryOpen(false);
@@ -256,7 +258,7 @@ export function GamePage({
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
           ) : null}
-          {entry.editor === 'content' ? (
+          {offersRemix(entry) ? (
             <button
               type="button"
               className="secondary-btn game-page-remix"

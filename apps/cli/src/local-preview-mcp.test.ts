@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createHash } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
-import { startLocalPreviewMcp } from './local-preview-mcp.js';
+import { MAX_CAPTURES_PER_TASK, startLocalPreviewMcp } from './local-preview-mcp.js';
 import { capturePage, previewSource } from './local-preview-source.js';
 import { localPreviewAdapter } from './local-preview-adapter.js';
 import { readFileSync, existsSync } from 'node:fs';
@@ -92,6 +92,29 @@ it('rejects cross-origin, unauthenticated, arbitrary URL and shell requests', as
     body: 'x'.repeat(9000),
   });
   expect(oversized.status).toBe(400);
+});
+it('refuses captures past the per-task budget, not counting cooldown refusals', async () => {
+  const f = await bridge();
+  let clock = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => clock);
+  cleanup.push(() => vi.restoreAllMocks());
+  for (let i = 0; i < MAX_CAPTURES_PER_TASK; i++) {
+    clock += 3000;
+    const started = (await f.rpc('tools/call', { name: 'capture', arguments: {} })).data.result;
+    expect(started.isError).toBeFalsy();
+    const { jobId } = JSON.parse(started.content[0].text);
+    await vi.waitFor(async () => {
+      const data = (await f.rpc('tools/call', { name: 'capture_status', arguments: { jobId } })).data.result;
+      expect(JSON.parse(data.content[0].text).state).toBe('complete');
+    });
+    const tooSoon = (await f.rpc('tools/call', { name: 'capture', arguments: {} })).data.result;
+    expect(tooSoon.content[0].text).toContain(i < MAX_CAPTURES_PER_TASK - 1 ? 'Wait two seconds' : 'used its');
+  }
+  clock += 3000;
+  const refused = (await f.rpc('tools/call', { name: 'capture', arguments: {} })).data.result;
+  expect(refused.isError).toBe(true);
+  expect(refused.content[0].text).toContain(`used its ${MAX_CAPTURES_PER_TASK} captures`);
+  expect(f.capture).toHaveBeenCalledTimes(MAX_CAPTURES_PER_TASK);
 });
 it('waits for fresh builds and cancels without launching the browser', async () => {
   const f = await bridge();

@@ -62,12 +62,11 @@ describe('ProposalReviewCard', () => {
     vi.unstubAllGlobals();
   });
 
-  it('says on the card that accepting publishes nothing', async () => {
-    // The single most important sentence on this surface. A creator who reads "Accept" as
-    // "put this on my game right now" will either never press it or press it and feel
-    // ambushed, and both are worse than the feature not existing.
+  it('says on the card that accepting rebuilds the change and never copies code', async () => {
     const host = await mount(createElement(ProposalReviewCard, { proposal: proposal(), onChanged: () => {} }));
-    expect(host.querySelector('.propose-note')?.textContent).toBeTruthy();
+    const note = host.querySelector('.propose-note')?.textContent;
+    expect(note).toContain('your agent rebuilds this change');
+    expect(note).toContain("the proposer's code is never copied in");
   });
 
   it('shows the gate verdict and the behavioural-diff finding', async () => {

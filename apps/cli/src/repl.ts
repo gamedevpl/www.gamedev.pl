@@ -11,7 +11,7 @@ import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
-import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
+import { completeSlash, parseArgv, SLASH_VERBS, suggestSlash, type SlashVerb } from './argv.js';
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
@@ -252,8 +252,13 @@ export async function handleReplLine(input: {
         return { next: 'continue', conversationId: input.conversationId };
       }
     }
-    const matches = completeSlash(trimmed);
-    if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
+    const matches = completeSlash(cmd ?? '');
+    if (matches.includes(cmd as SlashVerb)) input.write(`/${cmd} is not available here. /help lists commands.`);
+    else if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
+    else {
+      const suggestion = suggestSlash(cmd ?? '');
+      input.write(`Unknown command /${cmd}.${suggestion ? ` Did you mean /${suggestion}?` : ''} /help lists commands.`);
+    }
     return { next: 'continue', conversationId: input.conversationId };
   }
   if (!retry) {

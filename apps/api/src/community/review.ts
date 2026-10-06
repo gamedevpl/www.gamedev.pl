@@ -17,12 +17,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from '../platform/admin-session.js';
-import { paginateAssessments, parseAssessmentPageQuery, QueueQuerySchema } from './assessment-pagination.js';
-import {
-  matchesResolutionFilter,
-  registerAssessmentResolutionRoute,
-  summarizeResolutions,
-} from './assessment-resolution.js';
+import { QueueQuerySchema } from './assessment-pagination.js';
 import type { emitReviewSweep as EmitReviewSweep, EmitDeps } from '../notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import { assessmentCreatorHandle } from './assessment-attribution.js';
@@ -47,7 +42,6 @@ import type {
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const MAX_NOTE = 2000;
-const MAX_ADMIN_ROWS = 200;
 const MAX_REQUEUE_SLUGS = 50;
 const MAX_REQUEUE_REVIEWERS = 50;
 const MAX_REQUEUE_PAIRS = 200;
@@ -396,63 +390,6 @@ export async function registerReviewRoutes(
     return { assessment };
   });
 
-  app.get('/api/admin/assessments', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-
-    const query = parseAssessmentPageQuery(request.query);
-    if (!query) return reply.status(400).send({ error: 'invalid query' });
-
-    const rows = await store.listGameAssessments();
-    const byGame = new Map<
-      string,
-      {
-        slug: string;
-        title: string;
-        keep: number;
-        cut: number;
-        skip: number;
-        notes: number;
-        resolved: number;
-        open: number;
-      }
-    >();
-    for (const row of rows) {
-      const current = byGame.get(row.slug) ?? {
-        slug: row.slug,
-        title: row.title,
-        keep: 0,
-        cut: 0,
-        skip: 0,
-        notes: 0,
-        resolved: 0,
-        open: 0,
-      };
-      current[row.verdict] += 1;
-      if (row.note) current.notes += 1;
-      if (row.resolution) current.resolved += 1;
-      else current.open += 1;
-      if (row.title && row.title !== row.slug) current.title = row.title;
-      byGame.set(row.slug, current);
-    }
-
-    const games = [...byGame.values()].sort((a, b) => b.cut - a.cut || b.keep - a.keep || a.slug.localeCompare(b.slug));
-    // Filter narrows detailed rows only; totals stay whole.
-    const matched = rows.filter((row) => matchesResolutionFilter(row, query.resolution));
-
-    return {
-      total: rows.length,
-      games,
-      ...summarizeResolutions(rows),
-      resolution: query.resolution,
-      matched: matched.length,
-      ...paginateAssessments(matched, query),
-    };
-  });
-
-  await registerAssessmentResolutionRoute(app, { store, adminUids, now });
-
   const CreateSweepSchema = z.object({
     source: z.enum(REVIEW_SWEEP_SOURCES).default('catalog'),
     maxGames: z.number().int().min(1).max(MAX_SWEEP_GAMES).default(40),
@@ -480,43 +417,6 @@ export async function registerReviewRoutes(
         patch.note !== undefined,
       'nothing to change',
     );
-
-  app.get('/api/admin/review-sweeps', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-    const [open, recent, allAssessments] = await Promise.all([
-      store.getOpenReviewSweep(),
-      store.listReviewSweeps({ limit: 20 }),
-      store.listGameAssessments(),
-    ]);
-    const assessedSlugs = new Set(allAssessments.map((row) => row.slug));
-    const nowMs = now();
-    const openView = open
-      ? {
-          ...open,
-          progress: summarizeSweepProgress(open, assessedSlugs, nowMs),
-          slugsPreview: open.slugs.slice(0, 40),
-        }
-      : null;
-    return {
-      open: openView,
-      recent: recent.map((sweep) => ({
-        id: sweep.id,
-        status: sweep.status,
-        source: sweep.source,
-        total: sweep.slugs.length,
-        released: effectiveReleasedCount(sweep, nowMs),
-        createdAt: sweep.createdAt,
-        createdBy: sweep.createdBy,
-        notifiedAt: sweep.notifiedAt,
-        notifiedCount: sweep.notifiedCount,
-        releasePerDay: sweep.releasePerDay,
-        note: sweep.note,
-      })),
-      reviewerCount: reviewerAudience(reviewerUids, adminUids).size,
-    };
-  });
 
   app.post('/api/admin/review-sweeps', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {
@@ -633,27 +533,6 @@ export async function registerReviewRoutes(
     };
   });
 
-  // Superseded rows a plain re-edit would otherwise overwrite silently.
-  const HistoryQuerySchema = z.object({
-    slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
-    reviewerUid: z.string().trim().min(1).max(120),
-  });
-
-  app.get('/api/admin/assessments/history', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-    const query = HistoryQuerySchema.safeParse(request.query);
-    if (!query.success) {
-      return reply.status(400).send({ error: query.error.issues[0]?.message ?? 'invalid query' });
-    }
-    const [current, history] = await Promise.all([
-      store.getGameAssessment(query.data.slug, query.data.reviewerUid),
-      store.listGameAssessmentHistory(query.data.slug, query.data.reviewerUid),
-    ]);
-    return { current, history };
-  });
-
   const RequeueSchema = z.object({
     slugs: z.array(z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug')).min(1).max(MAX_REQUEUE_SLUGS),
     reviewerUids: z.array(z.string().trim().min(1).max(120)).min(1).max(MAX_REQUEUE_REVIEWERS),
@@ -717,14 +596,6 @@ export async function registerReviewRoutes(
     }
 
     return { requests: created, notified };
-  });
-
-  app.get('/api/admin/review-requeue', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-    const requests = await store.listReReviewRequests({ limit: MAX_ADMIN_ROWS });
-    return { requests };
   });
 
   return { invalidateGameOwner };

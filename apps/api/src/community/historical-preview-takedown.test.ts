@@ -11,7 +11,7 @@ afterEach(async () => {
   for (const app of apps.splice(0)) await app.close();
 });
 
-it.each([false, true])('keeps historical previews closed after takedown (adoption: %s)', async (adopted) => {
+it.each([false, true])('keeps historical previews closed after takedown (accept attempted: %s)', async (adopted) => {
   const store = new InMemoryStore();
   const { jobId, at } = await gameWithHistory(store);
   await store.setDraftShared(jobId, at);
@@ -25,7 +25,6 @@ it.each([false, true])('keeps historical previews closed after takedown (adoptio
   const gamesStore = {
     getManifest: async () => ({ version: 'v1', gate: { green: true } }),
     getDerivedArtifact: async () => Buffer.from('<!doctype html><title>Historical</title>'),
-    adoptProposalVersion: async () => {},
   } as unknown as GamesStore;
   const app = await createTransferApp(store, apps, undefined, gamesStore);
   const url = `/api/submissions/${mintToken(jobId, SECRET)}/preview`;
@@ -61,9 +60,9 @@ it.each([false, true])('keeps historical previews closed after takedown (adoptio
       url: '/api/proposals/pending-proposal/accept',
       headers: session(SENDER),
     });
-    expect(accepted.statusCode).toBe(200);
-    expect((await store.getSubmissionBySlug('comet-courier'))?.jobId).not.toBe(newerJob);
-    expect((await store.getSubmissionBySlug('comet-courier'))?.moderationBlockedAt).toBeUndefined();
+    // A taken-down game opens no owner round for a proposal.
+    expect(accepted.json()).toEqual({ error: 'not_published' });
+    expect((await store.getProposal('pending-proposal'))?.state).toBe('in_review');
   }
   const historical = await app.inject({ method: 'GET', url, headers: session(RECIPIENT) });
   expect(historical.statusCode).toBe(404);

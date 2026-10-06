@@ -2,8 +2,9 @@
 
 **Status: ✅ built.** When `GAMES_SNAPSHOT_BUCKET` is set, published catalog / play /
 media are served **only** from the Cloud Storage snapshot. The bake runs on every
-merge to the games repo's `main`. Unset the env var for local/dev / fixtures /
-`local-games-repo` — that is an opt-out, not a fallback from a configured bucket.
+merge to the games repo's `main`. Published repo-lane games are **never** assembled
+from GitHub on the play route: with no bucket, local dev (`local-games-repo`) bakes
+from the local tree through an in-process snapshot reader, and anything else answers 503.
 
 ## The problem
 
@@ -81,11 +82,21 @@ of truth for _what a served game is_, and the bake is where the two meet.
 Slug not in the catalog → **404** (unchanged). Publication authority is the snapshot
 catalog, not “object exists in the bucket” — a stray object cannot resurrect a game.
 
-**When the bucket is configured, there is no GitHub assemble on the published serve
-path.** GitHub remains the source of truth for content (the bake reads it) and for
-draft / PR preview routes (unmerged heads have no snapshot). Unset
-`GAMES_SNAPSHOT_BUCKET` is the local/dev opt-out and restores the GitHub / fixtures /
-`local-games-repo` path.
+**There is no GitHub assemble on the published play route, configured bucket or
+not.** GitHub remains the source of truth for content (the bake reads it) and for
+draft / PR preview routes (unmerged heads have no snapshot).
+
+With `GAMES_SNAPSHOT_BUCKET` unset:
+
+- **Local dev** (`npm run dev`, no `GITHUB_TOKEN`, serving fixtures or a sibling games
+  checkout via `local-games-repo`) gets `catalog/local-snapshot-reader.ts` — a snapshot
+  reader that bakes each game on demand from the local tree through the bake job's own
+  `bakeGameDocument`. Catalog, play and media all go through it, so local play keeps
+  working and exercises the same snapshot code path as production.
+- **Anything else** (a real GitHub token with no bucket) has no snapshot reader:
+  `GET /api/games/:slug` answers **503** `game snapshot unavailable` for a published
+  repo-lane game. The catalog and media routes still read GitHub in that configuration
+  (see below); production never runs it — `infra/deploy-api.sh` always sets the bucket.
 
 In-process caches (catalog TTL, game TTL, last-known catalog on refresh failure) still
 apply; they cache snapshot results, not a GitHub escape hatch.
@@ -102,6 +113,12 @@ snapshot when it forces a refresh (`forceFresh`). That only happens during the
 publishing→published transition, which is precisely the window where the snapshot is
 the stale source and GitHub is the fresh one — status correctness while the bake is
 still in flight.
+
+Still reading GitHub when no snapshot reader exists (out of scope for the play-route
+change, and unreachable in production): `loadCatalog` / `readCatalogFresh` in
+`catalog/catalog-routes.ts` fall back to `githubClient.getCatalog`, and the media route
+falls back to `githubClient.getGameMedia`. Both read committed data rather than
+assembling a game.
 
 ## The publish path
 
@@ -219,11 +236,11 @@ against the games repo — a green merge there is not evidence the game stopped 
 
 ## Configuration
 
-| Name                    | Where                      | Purpose                                                |
-| ----------------------- | -------------------------- | ------------------------------------------------------ |
-| `GAMES_SNAPSHOT_BUCKET` | Cloud Run env var          | Bucket to read snapshots from; unset disables the path |
-| `GAMES_REPO_TOKEN`      | this repo, Actions secret  | Contents:read PAT on the games repo, for the bake      |
-| `SITE_DISPATCH_TOKEN`   | games repo, Actions secret | Fine-grained PAT that may dispatch into this repo      |
+| Name                    | Where                      | Purpose                                               |
+| ----------------------- | -------------------------- | ----------------------------------------------------- |
+| `GAMES_SNAPSHOT_BUCKET` | Cloud Run env var          | Bucket to read snapshots from; required in production |
+| `GAMES_REPO_TOKEN`      | this repo, Actions secret  | Contents:read PAT on the games repo, for the bake     |
+| `SITE_DISPATCH_TOKEN`   | games repo, Actions secret | Fine-grained PAT that may dispatch into this repo     |
 
 **`SITE_DISPATCH_TOKEN` is a write-capable credential, and cannot be made otherwise.**
 `repository_dispatch` is gated by **Contents: read+write** on `gamedevpl/www.gamedev.pl`

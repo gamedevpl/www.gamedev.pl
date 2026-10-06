@@ -49,8 +49,7 @@ export const MAX_DIFF_LINES_PER_FILE = 400;
 const CONTEXT = 3;
 
 function splitLines(content: string): string[] {
-  // A trailing newline would otherwise produce a phantom empty last line that reads as a
-  // change whenever one side has it and the other does not.
+  // Drop the phantom empty line after a trailing newline.
   const lines = content.split('\n');
   if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;
@@ -100,12 +99,7 @@ function diffLines(before: string[], after: string[]): DiffLine[] {
   return out;
 }
 
-/**
- * Drop runs of context far from any change.
- *
- * Without this a one-line change to a 600-line module renders 600 lines, 597 of which say
- * nothing — and the reviewer scrolls past the thing they were asked to look at.
- */
+// Drop runs of context far from any change.
 function trimContext(lines: DiffLine[]): DiffLine[] {
   const keep = new Array<boolean>(lines.length).fill(false);
   for (let index = 0; index < lines.length; index += 1) {
@@ -118,26 +112,28 @@ function trimContext(lines: DiffLine[]): DiffLine[] {
 }
 
 /** One file's diff, or null when the two sides are identical. */
-export function diffFile(path: string, before: string | null, after: string | null): FileDiff | null {
+export function diffFile(
+  path: string,
+  before: string | null,
+  after: string | null,
+  maxLines = MAX_DIFF_LINES_PER_FILE,
+): FileDiff | null {
   if (before === after) return null;
   const beforeLines = before === null ? [] : splitLines(before);
   const afterLines = after === null ? [] : splitLines(after);
 
   const operations = diffLines(beforeLines, afterLines);
-  // No add or del means the two sides differ only in trailing whitespace the line split
-  // already normalized away. Reporting that as a change would mark every file modified
-  // the moment one side was written with a trailing newline and the other was not.
+  // Only trailing-newline differences: not a change.
   if (!operations.some((line) => line.kind !== 'context')) return null;
 
   const all = trimContext(operations);
-  const truncated = all.length > MAX_DIFF_LINES_PER_FILE;
-  const lines = truncated ? all.slice(0, MAX_DIFF_LINES_PER_FILE) : all;
+  const truncated = all.length > maxLines;
+  const lines = truncated ? all.slice(0, maxLines) : all;
 
   return {
     path,
     status: before === null ? 'added' : after === null ? 'removed' : 'modified',
-    // Counted over the whole diff, not the truncated view: a reviewer deciding whether to
-    // read further needs the real size, not the size of what fitted.
+    // Counted over the whole diff: the reviewer needs the real size.
     additions: all.filter((line) => line.kind === 'add').length,
     deletions: all.filter((line) => line.kind === 'del').length,
     lines,

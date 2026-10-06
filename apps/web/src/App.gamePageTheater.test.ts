@@ -35,6 +35,7 @@ const catalogEntry: CatalogEntry = {
   world: null,
   sensing: null,
   editor: 'content',
+  remixOn: true,
   orientation: 'any',
   touch: null,
   submittedBy: 'nightshift',

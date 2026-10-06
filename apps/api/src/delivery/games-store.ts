@@ -109,9 +109,8 @@ export interface SourceFile {
  *
  * `proposal` is a sealed candidate somebody who does not own the game delivered. It runs
  * the same full gate as a publish — the reviewer has to be able to play it — but it is
- * refused by every path that could make a version live until the game's owner adopts it,
- * at which point {@link adoptProposalVersion} rewrites the mode to `publish`. That rewrite
- * is the only way out, and it is why the guard is a stored fact rather than a lookup: a
+ * refused by every path that could make a version live, forever: accepting one starts the
+ * owner's own round instead. The guard is a stored fact rather than a lookup, so a
  * publish path that forgot to consult the proposal registry would still be safe.
  */
 export type { DeliveryMode } from '@gamedevpl/contract';
@@ -395,14 +394,7 @@ export interface VersionManifest {
    * and under what proposal" is answerable from the manifest alone.
    */
   proposal?: { id: string; proposerUid: string };
-  /**
-   * Set when the game's owner accepted the proposal above, at which point
-   * {@link VersionManifest.deliveryMode} flips from `proposal` to `publish`.
-   *
-   * Both fields survive the flip. `proposal` says who wrote it, `adopted` says who took
-   * responsibility for it — and a published game's contributor byline is read from the
-   * pair, so erasing either would erase the credit.
-   */
+  // Legacy: versions adopted verbatim before accept became an owner round.
   adopted?: { proposalId: string; byUid: string | null; at: string };
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: GateVerdict;
@@ -579,23 +571,6 @@ export interface GamesStore {
     // Agent delivery supplies a Set; copies may defer.
     kitSharedPaths?: KitSharedLookup;
   }): Promise<{ version: string; manifest: VersionManifest }>;
-  /**
-   * Flips an accepted proposal version from `proposal` to `publish` and records who
-   * adopted it.
-   *
-   * The one door out of proposal mode, and deliberately narrow: it refuses a version that
-   * is not in proposal mode (so it cannot re-stamp an ordinary delivery), and it refuses
-   * one whose gate is not green (so acceptance cannot smuggle an unchecked change into the
-   * publishable set). Callers still have to have established that the caller may accept —
-   * this enforces the storage half of that rule, not the authorization half.
-   */
-  adoptProposalVersion(input: {
-    slug: string;
-    version: string;
-    proposalId: string;
-    byUid: string | null;
-    at?: string;
-  }): Promise<VersionManifest>;
   /**
    * Upserts one file into the job's staging buffer (does not run the gate).
    * Scoped by roundGeneration so a retired key cannot clobber a newer round's buffer.
@@ -1230,30 +1205,6 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       if (!response.ok) return 0;
       const listing = (await response.json()) as { prefixes?: string[] };
       return (listing.prefixes ?? []).length;
-    },
-
-    async adoptProposalVersion(input) {
-      const prefix = versionPrefix(input.slug, input.version);
-      const existing = await readObject(`${prefix}/manifest.json`);
-      if (!existing) throw new Error(`no manifest for ${input.slug}@${input.version}`);
-      const manifest = parseVersionManifest(existing);
-      if (manifest.deliveryMode !== 'proposal') {
-        // Not idempotent-by-accident: re-stamping an already-adopted version would
-        // rewrite who adopted it, and re-stamping an ordinary delivery would invent a
-        // proposal that never existed. Callers retrying a partial accept re-read first.
-        throw new InvalidUploadError(`${input.slug}@${input.version} is not a proposal version`);
-      }
-      if (!manifest.gate?.green) {
-        throw new InvalidUploadError(`${input.slug}@${input.version} has no green gate verdict`);
-      }
-      manifest.deliveryMode = 'publish';
-      manifest.adopted = {
-        proposalId: input.proposalId,
-        byUid: input.byUid,
-        at: input.at ?? new Date(now()).toISOString(),
-      };
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
-      return manifest;
     },
 
     async putGateResult(slug, version, result) {

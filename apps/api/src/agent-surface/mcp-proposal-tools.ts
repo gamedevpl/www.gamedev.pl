@@ -4,6 +4,8 @@ import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken }
 import type { OpenProposalInput, OpenProposalResult, ProposalDeps, ProposalRefusal } from '../community/proposals.js';
 import type { ProposalActor, ProposalPublicState, ProposalState } from '../community/proposal-state.js';
 import type { OwnerOfRecord } from '../community/owner-of-record.js';
+import type { ProposalChangeSet } from '../community/proposal-change-set.js';
+import type { ProposalDiffPage } from '../community/proposal-diff-pages.js';
 import { canSubmitProposal, MAX_PROPOSAL_SUBMITS, PROPOSAL_NO_JOB } from '../platform/proposal-limits.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
@@ -50,6 +52,13 @@ export interface ProposalDomain {
   ) => boolean;
   isProposerTurn: (state: ProposalState) => boolean;
   toPublicProposalState: (state: ProposalState) => ProposalPublicState;
+  // Accepted-proposal round reads; absent leaves those tools refusing.
+  loadProposalChange?: (
+    store: Store,
+    gamesStore: GamesStore,
+    proposal: ProposalRecord,
+  ) => Promise<{ change: ProposalChangeSet } | null>;
+  proposalDiffPage?: (path: string, before: string | null, after: string | null, page?: number) => ProposalDiffPage;
 }
 
 export interface ProposalToolsDeps {
@@ -74,6 +83,8 @@ export interface ProposalToolEntry {
   inputSchema: Record<string, unknown>;
   handler: ToolHandler;
 }
+
+const CATALOG_REFUSAL = 'proposal rounds are only open for creator-owned games';
 
 // A proposal has no job; the same credential repeats each call.
 export function createProposalTools(deps: ProposalToolsDeps): Record<string, ProposalToolEntry> {
@@ -188,9 +199,12 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
         // Checked before the fetch: a repo-lane base is a tarball download.
         const eligible = await canProposeTo(store, slug, proposer.uid);
         if (!eligible.ok) return toolErr(proposalRefusalHint(eligible.reason));
+        // Catalog/platform sources are never exported; feedback goes through Remix.
+        if (eligible.owner.kind !== 'creator') return toolErr(CATALOG_REFUSAL, { code: 'feature_unavailable' });
 
         const resolvedBase = await resolveProposalBase(slug);
         if (!resolvedBase) return toolErr("could not read that game's sources");
+        if (resolvedBase.base.kind === 'repo') return toolErr(CATALOG_REFUSAL, { code: 'feature_unavailable' });
 
         const opened = await openProposal(
           {
@@ -206,8 +220,9 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
             title,
             description,
             base: resolvedBase.base,
-            // Opened with the base itself, so the round exists as a draft.
+            // Opened with the base itself as a draft; submit_proposal sends it.
             files: resolvedBase.files,
+            draft: true,
           },
         );
         if (!opened.ok) {

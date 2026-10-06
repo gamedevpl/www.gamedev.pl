@@ -144,6 +144,22 @@ describe('repl turn loop', () => {
     expect(lines.join('\n')).not.toBe('run it as gamedevpl connect');
   });
 
+  it('names an unknown slash command instead of ignoring it', async () => {
+    const lines: string[] = [];
+    const calls: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        calls.push(String(url));
+        return new Response('{}', { status: 404 });
+      },
+    });
+    await handleReplLine({ line: '/delagate popraw gre', api, token: 'tok', write: (s) => lines.push(s) });
+    expect(lines).toEqual(['Unknown command /delagate. Did you mean /delegate? /help lists commands.']);
+    expect(calls).toEqual([]);
+  });
+
   it('prints the open session status from /status', async () => {
     const lines: string[] = [];
     const api = createApi({

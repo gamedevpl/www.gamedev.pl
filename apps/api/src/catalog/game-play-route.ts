@@ -1,14 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { GameProject } from '@gamedevpl/contract';
-import {
-  assemblePublishedGameHtml,
-  projectFromSources,
-  CredentialLeakError,
-  EmptyProjectError,
-  ProjectTooLargeError,
-} from '../platform/assemble.js';
+import { CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from '../platform/assemble.js';
 import { SnapshotIncompleteError, SnapshotUnavailableError, type GameSnapshotReader } from './game-snapshot.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import type { GitHubClient } from './github-client.js';
@@ -24,7 +17,6 @@ export interface GamePlayRouteOptions {
   store?: Store;
   githubClient: GitHubClient | null;
   snapshotReader?: GameSnapshotReader | null;
-  publishedRef: string;
   now: () => number;
   catalog: Pick<CatalogRoutesHandle, 'storePublishedGame' | 'isSlugPublished' | 'readSnapshotGame'>;
   draftPreview: Pick<DraftPreviewRoutesHandle, 'canPlayDraft' | 'replyWithDraft'>;
@@ -43,7 +35,7 @@ export async function registerGamePlayRoute(
   app: FastifyInstance,
   options: GamePlayRouteOptions,
 ): Promise<GamePlayRouteHandle> {
-  const { githubClient, snapshotReader, publishedRef, now, catalog, draftPreview } = options;
+  const { githubClient, snapshotReader, now, catalog, draftPreview } = options;
   const playableWithoutSession = options.playableWithoutSession ?? (async () => false);
   const maxGamesPerWindow = options.maxGamesPerWindow ?? 60;
   const gamesRateLimitWindowMs = options.gamesRateLimitWindowMs ?? 60 * 1000;
@@ -60,8 +52,6 @@ export async function registerGamePlayRoute(
     artifactVersions.set(value, artifactVersion);
     return reply.send({ ...value, artifactVersion });
   }
-
-  // Snapshot baked build preferred; falls back to assembling GitHub sources.
 
   // Same sandboxed, opaque-origin trust model as the preview endpoint.
   app.get('/api/games/:slug', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -98,28 +88,16 @@ export async function registerGamePlayRoute(
         return reply.status(404).send({ error: 'game not found' });
       }
 
-      if (snapshotReader) {
-        // Baked at merge time by the same assembler as the GitHub path.
-        const snapshotGame = await catalog.readSnapshotGame(slug);
-        if (!snapshotGame) {
-          throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
-        }
-        gameCache.set(slug, snapshotGame, currentTime);
-        return sendPublished(reply, snapshotGame);
+      // Repo-lane games are served only from the baked snapshot.
+      if (!snapshotReader) {
+        throw new SnapshotUnavailableError('no games snapshot is configured');
       }
-
-      const sources = await githubClient.getGameSources(publishedRef, slug);
-      if (!sources) {
-        return reply.status(404).send({ error: 'game not found' });
+      const snapshotGame = await catalog.readSnapshotGame(slug);
+      if (!snapshotGame) {
+        throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
       }
-
-      const project: GameProject = projectFromSources(sources, sources.title ?? slug);
-
-      // restrictNetwork: published games are self-contained, like unreviewed previews.
-      const html = await assemblePublishedGameHtml(project, { restrictNetwork: true });
-      const value = { slug, title: project.title, html };
-      gameCache.set(slug, value, currentTime);
-      return sendPublished(reply, value);
+      gameCache.set(slug, snapshotGame, currentTime);
+      return sendPublished(reply, snapshotGame);
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error, slug }, 'snapshot game unavailable');

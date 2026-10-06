@@ -35,7 +35,7 @@ export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/workspace-archive.js';
 import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
-import { buildSpecStub } from './creator-code.js';
+import { buildSpecStub } from './spec-stub.js';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';

@@ -5,6 +5,13 @@ import { InMemoryStore } from '../platform/store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { openProposal } from '../community/proposals.js';
 
+// Remix is an allowlist; these tests opt every unset game in.
+function remixAllowed(store: InMemoryStore): InMemoryStore {
+  const read = store.getRemixSettings;
+  store.getRemixSettings = async (slug) => (await read(slug)) ?? { slug, mode: 'on', updatedAt: '' };
+  return store;
+}
+
 // Repo-lane remix is gated on live catalog membership, before repo reads.
 
 const alice = { 'x-test-uid': 'g:alice' };
@@ -15,7 +22,6 @@ function spyClient(calls: string[]): GitHubClient {
   const answers: Record<string, (...args: string[]) => unknown> = {
     getGameFile: (_ref, _slug, path) => FILES[path] ?? null,
     getGameSourceMap: () => ({ 'game.ts': 'export {};' }),
-    getGameDeliverySources: () => ({ ...FILES }),
     getGameSources: () => null,
     getGameKitDeclaration: () => null,
     getRefSha: () => 'refsha1',
@@ -42,7 +48,7 @@ describe('remix catalog gate', () => {
   });
 
   async function build(lookup: ((slug: string) => Promise<object | null>) | undefined, calls: string[]) {
-    const store = new InMemoryStore();
+    const store = remixAllowed(new InMemoryStore());
     await store.upsertUser({ uid: 'g:alice' });
     const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
     instance.decorateRequest('user', null);
@@ -93,7 +99,7 @@ describe('remix catalog gate', () => {
     process.env.CODE_LANE = 'true';
     const calls: string[] = [];
     let listed = true;
-    app = await build(async () => (listed ? {} : null), calls);
+    app = await build(async () => (listed ? { editor: 'content' } : null), calls);
     const opened = await start(app);
     expect(opened.statusCode).toBe(200);
     const { remixId } = opened.json();

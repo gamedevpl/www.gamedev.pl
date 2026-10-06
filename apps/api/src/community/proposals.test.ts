@@ -13,6 +13,7 @@ import {
   supersedeStaleProposals,
   visibleToReviewer,
   withdrawProposal,
+  type ProposalRoundStarter,
 } from './proposals.js';
 import { PROPOSAL_EXPIRY_MS } from './proposal-state.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -30,10 +31,7 @@ function sources(overrides?: Partial<Record<string, string>>): SourceFile[] {
   ];
 }
 
-/**
- * A games store that keeps manifests in a map. Real enough to exercise the mode flip,
- * which is the invariant most of these tests are about.
- */
+// Manifests in a map: enough to check proposal mode never flips.
 function fakeGamesStore() {
   const manifests = new Map<string, VersionManifest>();
   const filesByVersion = new Map<string, SourceFile[]>();
@@ -63,15 +61,6 @@ function fakeGamesStore() {
     },
     async getManifest(slug: string, version: string) {
       return manifests.get(key(slug, version)) ?? null;
-    },
-    async adoptProposalVersion(input: { slug: string; version: string; proposalId: string; byUid: string | null }) {
-      const manifest = manifests.get(key(input.slug, input.version));
-      if (!manifest) throw new Error('no manifest');
-      if (manifest.deliveryMode !== 'proposal') throw new Error('not a proposal version');
-      if (!manifest.gate?.green) throw new Error('no green gate verdict');
-      manifest.deliveryMode = 'publish';
-      manifest.adopted = { proposalId: input.proposalId, byUid: input.byUid, at: new Date(NOW).toISOString() };
-      return manifest;
     },
     /** Test-only: stand in for the gate having run. */
     setGate(slug: string, version: string, gate: { green: boolean; report?: string; behaviouralDiff?: boolean }) {
@@ -318,11 +307,14 @@ describe('decisions', () => {
     return reconciled!;
   }
 
-  it('accepting adopts the version but publishes nothing', async () => {
+  it('accepting starts an owner round, never adopts the version, publishes nothing', async () => {
     const proposal = await openAndGreen();
-    const adoptIntoJob = vi.fn().mockResolvedValue({ jobId: 1_000_009 });
+    const startRound = vi.fn<ProposalRoundStarter>(async ({ link }) => {
+      expect(await link(1_000_009, 'round')).toBe(true);
+      return { ok: true, jobId: 1_000_009, route: 'round' };
+    });
     const result = await acceptProposal(
-      { ...deps(store, gamesStore), adoptIntoJob },
+      { ...deps(store, gamesStore), startRound },
       {
         id: proposal.id,
         byUid: OWNER,
@@ -335,10 +327,8 @@ describe('decisions', () => {
     expect(result.proposal.state).toBe('accepted');
     expect(result.proposal.adoptedJobId).toBe(1_000_009);
 
-    // The version is now publishable — but by the owner's ordinary publish, not by this.
-    const manifest = await gamesStore.getManifest(SLUG, proposal.version!);
-    expect(manifest?.deliveryMode).toBe('publish');
-    expect(manifest?.adopted).toMatchObject({ proposalId: proposal.id, byUid: OWNER });
+    // The proposer's version stays unpublishable.
+    expect((await gamesStore.getManifest(SLUG, proposal.version!))?.deliveryMode).toBe('proposal');
     // Nothing about what is live changed.
     expect((await store.getPublication(SLUG))?.currentVersion).toBe('base-1');
   });
@@ -347,32 +337,28 @@ describe('decisions', () => {
     const proposal = await openAndGreen();
     const at = new Date(NOW).toISOString();
     await store.ensureGameAccess(SLUG, OWNER, at, at);
-    const originalBegin = store.beginCheckoutRecovery.bind(store);
-    const spy = vi.spyOn(store, 'beginCheckoutRecovery').mockImplementationOnce(async (...args) => {
-      // Ownership moves between resolveReviewer's check and this lease's acquisition.
+    // Ownership moves before the round links the proposal.
+    const startRound = vi.fn<ProposalRoundStarter>(async ({ link }) => {
       await store.recordSettledOwner(SLUG, 'g:newowner', 999, at, at);
-      return originalBegin(...args);
+      expect(await link(1_000_009, 'round')).toBe(false);
+      return { ok: false, status: 502, error: 'round_failed' };
     });
-    const adoptIntoJob = vi.fn();
-    try {
-      const result = await acceptProposal(
-        { ...deps(store, gamesStore), adoptIntoJob },
-        { id: proposal.id, byUid: OWNER, reviewer: 'creator' },
-      );
-      expect(result).toMatchObject({ ok: false, error: 'stale_owner' });
-      expect(adoptIntoJob).not.toHaveBeenCalled();
-      expect((await store.getProposal(proposal.id))?.state).toBe('in_review');
-    } finally {
-      spy.mockRestore();
-    }
+    const result = await acceptProposal(
+      { ...deps(store, gamesStore), startRound },
+      { id: proposal.id, byUid: OWNER, reviewer: 'creator' },
+    );
+    expect(result).toMatchObject({ ok: false, error: 'stale_owner' });
+    const after = await store.getProposal(proposal.id);
+    expect(after?.state).toBe('in_review');
+    expect(after?.adoptedJobId).toBeUndefined();
   });
 
   it('refuses to accept a proposal the gate has not passed', async () => {
     const result = await openProposal(deps(store, gamesStore), OPEN_INPUT);
     if (!result.ok) throw new Error('setup failed');
-    const adoptIntoJob = vi.fn();
+    const startRound = vi.fn();
     const accepted = await acceptProposal(
-      { ...deps(store, gamesStore), adoptIntoJob },
+      { ...deps(store, gamesStore), startRound },
       {
         id: result.proposal.id,
         byUid: OWNER,
@@ -380,7 +366,7 @@ describe('decisions', () => {
       },
     );
     expect(accepted).toMatchObject({ ok: false, error: 'not_reviewable' });
-    expect(adoptIntoJob).not.toHaveBeenCalled();
+    expect(startRound).not.toHaveBeenCalled();
   });
 
   it('refuses to accept a proposal whose base moved under it', async () => {
@@ -391,9 +377,9 @@ describe('decisions', () => {
       currentVersion: 'base-2',
       publishedAt: new Date(NOW).toISOString(),
     });
-    const adoptIntoJob = vi.fn();
+    const startRound = vi.fn();
     const result = await acceptProposal(
-      { ...deps(store, gamesStore), adoptIntoJob },
+      { ...deps(store, gamesStore), startRound },
       {
         id: proposal.id,
         byUid: OWNER,
@@ -401,7 +387,7 @@ describe('decisions', () => {
       },
     );
     expect(result).toMatchObject({ ok: false, error: 'superseded' });
-    expect(adoptIntoJob).not.toHaveBeenCalled();
+    expect(startRound).not.toHaveBeenCalled();
     expect((await store.getProposal(proposal.id))?.state).toBe('superseded');
   });
 
@@ -494,20 +480,22 @@ describe('sweeps', () => {
     expect(count).toBe(0);
   });
 
-  it('marks an accepted proposal merged once its version goes live', async () => {
+  it('marks an accepted proposal merged once its linked round goes live', async () => {
     const result = await openProposal(deps(store, gamesStore), OPEN_INPUT);
     if (!result.ok) throw new Error('setup failed');
     gamesStore.setGate(SLUG, result.proposal.version!, { green: true });
     await reconcileProposalGate(deps(store, gamesStore), result.proposal.id);
     await acceptProposal(
-      { ...deps(store, gamesStore), adoptIntoJob: async () => ({ jobId: 1_000_009 }) },
+      {
+        ...deps(store, gamesStore),
+        startRound: async ({ link }) => (await link(9, 'round'), { ok: true, jobId: 9, route: 'round' }),
+      },
       { id: result.proposal.id, byUid: OWNER, reviewer: 'creator' },
     );
-
-    const merged = await markProposalsMerged(deps(store, gamesStore), {
-      slug: SLUG,
-      version: result.proposal.version!,
-    });
+    // Only the linked round's publish merges it.
+    const input = { slug: SLUG, version: result.proposal.version! };
+    expect(await markProposalsMerged(deps(store, gamesStore), input)).toHaveLength(0);
+    const merged = await markProposalsMerged(deps(store, gamesStore), { ...input, jobId: 9 });
     expect(merged).toHaveLength(1);
     expect(merged[0]?.state).toBe('merged');
   });

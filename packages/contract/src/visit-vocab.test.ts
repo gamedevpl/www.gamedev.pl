@@ -174,7 +174,6 @@ describe('visit vocab', () => {
       'handoff',
       'refused',
       'shared',
-      'keep_clicked',
       'proposed',
     ]);
   });

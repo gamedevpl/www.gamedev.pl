@@ -125,11 +125,9 @@ SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 # Pre-assembled published games, baked by .github/workflows/publish-games.yml.
-# Set GAMES_SNAPSHOT_BUCKET='' to serve every game from GitHub the way the site
-# did before. Note the `-` rather than `:-`: an explicit empty value has to survive
-# for that opt-out to work at all, and it is what makes the `-n` guard below mean
-# something instead of being always true.
-GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET-${PROJECT_ID}-games-snapshots}"
+# Required: published repo-lane games are served only from this snapshot, and
+# there is no GitHub fallback to opt into, so empty means the default.
+GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
 # The games store — where delivered game sources live. Unset means agents can build but
 # cannot deliver: the upload route answers 503 rather than accepting work and dropping it.
 GAMES_STORE_BUCKET="${GAMES_STORE_BUCKET-${PROJECT_ID}-games-store}"
@@ -182,6 +180,9 @@ SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-${RUNTIME_SA}}"
 # Its own caller identity: the Pub/Sub push subscription, not the scheduler.
 SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
 SPEND_BRAKE_CALLER_SA="${SPEND_BRAKE_CALLER_SA:-}"
+# The private ops console (/api/internal/ops/*): fixed audience, identity-only SA.
+OPS_CONSOLE_AUDIENCE="${OPS_CONSOLE_AUDIENCE:-https://www.gamedev.pl/api/internal/ops}"
+OPS_CONSOLE_SA="${OPS_CONSOLE_SA:-ops-console@${PROJECT_ID}.iam.gserviceaccount.com}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -336,9 +337,7 @@ fi
 # ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
 # commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
 ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}|EDITORKIT_V2=${EDITORKIT_V2}|DREAMS_ENABLED=${DREAMS_ENABLED}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED}|SHELF_DOCUMENT_READS=${SHELF_DOCUMENT_READS}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}"
-if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
-  ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
-fi
+ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
 if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}"
   # Which project runs the gate when a game is delivered (gate-trigger.ts). Set
@@ -560,6 +559,12 @@ if [ -n "$SPEND_BRAKE_AUDIENCE" ]; then
 fi
 if [ -n "$SPEND_BRAKE_CALLER_SA" ]; then
   ENV_VARS="${ENV_VARS}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}"
+fi
+if [ -n "$OPS_CONSOLE_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|OPS_CONSOLE_AUDIENCE=${OPS_CONSOLE_AUDIENCE}"
+fi
+if [ -n "$OPS_CONSOLE_SA" ]; then
+  ENV_VARS="${ENV_VARS}|OPS_CONSOLE_SA=${OPS_CONSOLE_SA}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

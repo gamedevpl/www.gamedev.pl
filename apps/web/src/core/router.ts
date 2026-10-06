@@ -47,35 +47,6 @@ export function isStudioTab(value: string): value is StudioTab {
 /** Old game-page tabs now resolve to the compact page and are rewritten to its URL. */
 const LEGACY_GAME_PAGE_SEGMENTS = new Set(['board', 'review', 'releases', 'sources']);
 
-/**
- * Operator console sections, in the order they are offered.
- *
- * `queue` leads because it is the only one with something to do in it; the rest are
- * things to look at. In the URL so a refresh, a bookmark, or the link in an alert
- * notification lands on the section it meant rather than on whichever one is first.
- */
-export const ADMIN_SECTIONS = [
-  'queue',
-  'costs',
-  'telemetry',
-  'limits',
-  'tokens',
-  'suggestions',
-  // Proposals against platform-owned catalog games. Beside `suggestions` because both are
-  // inbound work the operator decides on, rather than something to look at.
-  'proposals',
-  'waitlist',
-  // Reviewer assessment aggregates; see game-assessment-plan.md.
-  'assessments',
-  // Abuse reports awaiting a takedown decision; content-safety-plan.md Layer 5.
-  'moderation',
-] as const;
-export type AdminSection = (typeof ADMIN_SECTIONS)[number];
-
-export function isAdminSection(value: string): value is AdminSection {
-  return (ADMIN_SECTIONS as readonly string[]).includes(value);
-}
-
 export type AppRoute =
   | { view: 'home' }
   // A published game being played. The slug is a stable permalink, so refreshing
@@ -87,13 +58,8 @@ export type AppRoute =
   // token rides in the fragment so it never hits access logs or Referer
   // (see docs/path-routing-plan.md § Join, docs/multiplayer-plan.md §4.3).
   | { view: 'join'; code: string; token: string }
-  // The operator console. Unlisted rather than secret: reaching the route renders
-  // nothing unless the API recognises the caller as an admin, and the API answers 404
-  // to everyone else. `/health` still resolves here (telemetry) — it was the whole
-  // surface before there was a console, and links to it are in people's bookmarks.
-  | { view: 'admin'; section: AdminSection }
   | { view: 'invite'; code: string }
-  // Reviewer desk; unlisted like /admin.
+  // Reviewer desk; unlisted.
   | { view: 'review' }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
   //
@@ -298,30 +264,8 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     }
   }
 
-  // The console's old address, kept working: it is what the operator has bookmarked.
-  if (normalizedPath === '/health') {
-    return { view: 'admin', section: 'telemetry' };
-  }
-
-  if (normalizedPath === '/admin') {
-    return { view: 'admin', section: 'queue' };
-  }
-
   if (normalizedPath === '/review') {
     return { view: 'review' };
-  }
-
-  const adminMatch = normalizedPath.match(/^\/admin\/([^/]+)$/);
-  if (adminMatch?.[1]) {
-    // Matched raw rather than decoded: every section name is fixed lowercase ASCII, so
-    // an encoded one is not a section by definition and there is nothing to decode.
-    const section = adminMatch[1];
-    // An unknown section is a 404 rather than a silent fall back to the queue — same
-    // rule as the studio tabs, and for the same reason: a typo should be visible.
-    if (isAdminSection(section)) {
-      return { view: 'admin', section };
-    }
-    return { view: 'notFound' };
   }
 
   if (normalizedPath === '/studio') {
@@ -438,8 +382,7 @@ export function playPath(slug: string): string {
  *
  * Aliases accumulate as surfaces move. `/ay` and `/ai` are short forms of `/play`;
  * `/status/:token` is where the build page lived before Creator Studio absorbed it;
- * `/health` is where the operator console lived before it had sections. Every one of
- * them still resolves, and that is not negotiable — links live in bookmarks, in old
+ * Every one of them still resolves, and that is not negotiable — links live in bookmarks, in old
  * emails, in notifications sent months ago, and breaking them to tidy a route table
  * would be a strange kind of housekeeping.
  *
@@ -456,10 +399,6 @@ export function canonicalPath(pathname: string): string | null {
         return '/';
       case 'play':
         return playPath(route.slug);
-      // Including a bare `/admin`, which lands on the queue: the section a page is
-      // showing belongs in the URL, or a refresh is a different page than a reload.
-      case 'admin':
-        return adminPath(route.section);
       // Only the addressed form. `/studio` itself is canonical, and a tab is added by
       // the view once it knows which game it is showing rather than here. Rewriting a
       // token to its slug also happens there, for the same reason: it takes the shelf.
@@ -571,7 +510,6 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
         return { path: '/', labelKey: 'upHome' };
       }
       return { path: creatorPath(route.handle), labelKey: 'upCreator' };
-    case 'admin':
     case 'review':
     case 'legal':
     case 'contact':
@@ -583,11 +521,6 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'notFound':
       return { path: '/', labelKey: 'upHome' };
   }
-}
-
-/** Path for an operator console section. Used by the tabs and by alert deep links. */
-export function adminPath(section: AdminSection = 'queue'): string {
-  return `/admin/${section}`;
 }
 
 // Reviewer assessment desk path.

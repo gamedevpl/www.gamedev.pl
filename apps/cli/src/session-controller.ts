@@ -112,9 +112,10 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     const resolve = pending;
     pending = null;
     const typed = splitEvidence(line).text.trim();
-    const spoken = line.trim() ? [...state.lines, `› ${shownPrompt(line)}`] : state.lines;
-    if (line.trim()) savedLines = [...savedLines, `› ${shownPrompt(line)}`].slice(-200);
-    if (typed && history[history.length - 1] !== typed) {
+    const answer = state.mode === 'pick' || Boolean(state.question);
+    const spoken = line.trim() ? [...state.lines, `${answer ? '→' : '›'} ${shownPrompt(line)}`] : state.lines;
+    if (line.trim() && !answer) savedLines = [...savedLines, `› ${shownPrompt(line)}`].slice(-200);
+    if (typed && !answer && history[history.length - 1] !== typed) {
       history.push(typed);
       if (history.length > 50) history.shift();
     }

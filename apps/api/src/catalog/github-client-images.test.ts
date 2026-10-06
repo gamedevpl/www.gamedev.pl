@@ -168,25 +168,3 @@ describe('getGameSources images', () => {
     ).rejects.toThrow(/not found: scenes\/glade\/bg.png/);
   });
 });
-
-describe('getGameDeliverySources images', () => {
-  it('includes declared rasters as base64 file bytes', async () => {
-    const files = new Map<string, string | Uint8Array>([
-      ['games/painted/game.ts', 'GameKit.mount({ ok: true });\n'],
-      ['games/painted/SPEC.md', '---\ntitle: Painted\n---\n'],
-      ['games/painted/index.html', '<canvas></canvas>'],
-      ['games/painted/style.css', 'body{}'],
-      [
-        'games/painted/GAME.json',
-        JSON.stringify({
-          engine: { modules: [] },
-          images: { bg: 'scenes/glade/bg.png' },
-        }),
-      ],
-      ['games/painted/scenes/glade/bg.png', TINY_PNG],
-    ]);
-    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl: contentsFetch(files) });
-    const sources = await client.getGameDeliverySources('main', 'painted');
-    expect(sources?.['scenes/glade/bg.png']).toBe(TINY_PNG.toString('base64'));
-  });
-});

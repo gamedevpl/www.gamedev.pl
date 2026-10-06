@@ -30,10 +30,12 @@ export { CHAT_AGENT_SCOPES, type ChatAgentScope } from './chat-agent-scope.js';
 export {
   BETA_INVITE_STATUSES,
   CONTRIBUTION_MODES,
+  REMIX_MODES,
   VOTE_VALUES,
   WAITLIST_STATUSES,
   type BetaInviteStatus,
   type ContributionMode,
+  type RemixMode,
   type VoteValue,
   type WaitlistStatus,
 } from './community-vocab.js';

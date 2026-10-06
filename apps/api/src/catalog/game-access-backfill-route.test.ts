@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
-import { SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import type { GameSnapshotReader } from './game-snapshot.js';
 
@@ -25,6 +25,7 @@ describe('game access backfill route', () => {
       store,
       sessionSecret: secret,
       adminUids: 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: {
         githubToken: 'token',
         submissionTokenSecret: 'test-submission-secret',
@@ -41,19 +42,18 @@ describe('game access backfill route', () => {
     });
     apps.push(app);
 
-    // Admin needs a session, not a token.
-    const session = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: { uid: 'boss' } });
-    const cookie = `${SESSION_COOKIE_NAME}=${session.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
-    return { app, store, cookie };
+    // Operator routes answer only through the ops console door.
+    await store.upsertUser({ uid: 'dev:boss' });
+    return { app, store, headers: opsHeaders('dev:boss') };
   }
 
   it('covers a repo-lane game with no submission, publication or community data', async () => {
-    const { app, cookie } = await makeApp([repoEntry('repo-only')]);
+    const { app, headers } = await makeApp([repoEntry('repo-only')]);
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/game-access-backfill?dryRun=1',
-      headers: { cookie },
+      url: opsUrl('/api/admin/game-access-backfill?dryRun=1'),
+      headers,
     });
 
     expect(response.statusCode).toBe(200);
@@ -61,12 +61,12 @@ describe('game access backfill route', () => {
   });
 
   it('refuses rather than reporting coverage it cannot establish', async () => {
-    const { app, cookie } = await makeApp(new Error('catalog down'));
+    const { app, headers } = await makeApp(new Error('catalog down'));
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/game-access-backfill?dryRun=1',
-      headers: { cookie },
+      url: opsUrl('/api/admin/game-access-backfill?dryRun=1'),
+      headers,
     });
 
     expect(response.statusCode).toBe(503);
@@ -74,15 +74,15 @@ describe('game access backfill route', () => {
   });
 
   it('scans a private draft alongside the repo catalog', async () => {
-    const { app, store, cookie } = await makeApp([repoEntry('repo-only')]);
+    const { app, store, headers } = await makeApp([repoEntry('repo-only')]);
     await store.upsertUser({ uid: 'g:ada', name: 'Ada' });
     await store.createSubmission(1, 'g:ada', 'Orbital Dogfight');
     await store.setSubmissionSlug(1, 'orbital-dogfight');
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/game-access-backfill?dryRun=1',
-      headers: { cookie },
+      url: opsUrl('/api/admin/game-access-backfill?dryRun=1'),
+      headers,
     });
 
     expect(response.json()).toMatchObject({ scanned: 2, quarantined: ['repo-only'] });
@@ -98,7 +98,7 @@ describe('game access backfill route', () => {
 
   it('reads the catalog itself rather than trusting a warm cache', async () => {
     let reads = 0;
-    const { app, cookie } = await makeApp([repoEntry('repo-only')], () => {
+    const { app, headers } = await makeApp([repoEntry('repo-only')], () => {
       reads += 1;
     });
 
@@ -106,7 +106,7 @@ describe('game access backfill route', () => {
     await app.inject({ method: 'GET', url: '/api/catalog' });
     const warmed = reads;
 
-    await app.inject({ method: 'POST', url: '/api/admin/game-access-backfill?dryRun=1', headers: { cookie } });
+    await app.inject({ method: 'POST', url: opsUrl('/api/admin/game-access-backfill?dryRun=1'), headers });
 
     expect(reads).toBe(warmed + 1);
   });
@@ -135,6 +135,7 @@ describe('game access backfill route', () => {
       store,
       sessionSecret: secret,
       adminUids: 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: {
         githubToken: 'token',
         submissionTokenSecret: 'test-submission-secret',
@@ -142,8 +143,8 @@ describe('game access backfill route', () => {
       },
     });
     apps.push(app);
-    const session = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: { uid: 'boss' } });
-    const cookie = `${SESSION_COOKIE_NAME}=${session.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!.value}`;
+    await store.upsertUser({ uid: 'dev:boss' });
+    const headers = opsHeaders('dev:boss');
 
     // Warm the app-level cache the way ordinary traffic does.
     await app.inject({ method: 'GET', url: '/api/catalog' });
@@ -152,8 +153,8 @@ describe('game access backfill route', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/game-access-backfill?dryRun=1',
-      headers: { cookie },
+      url: opsUrl('/api/admin/game-access-backfill?dryRun=1'),
+      headers,
     });
 
     expect(response.statusCode).toBe(200);
@@ -162,7 +163,7 @@ describe('game access backfill route', () => {
   });
 
   it('refuses once refreshes fail, even while the cache still serves', async () => {
-    const { app, cookie } = await makeApp([repoEntry('repo-only')]);
+    const { app, headers } = await makeApp([repoEntry('repo-only')]);
 
     // The warm cache keeps serving; only a fresh read sees the failure.
     await app.inject({ method: 'GET', url: '/api/catalog' });
@@ -171,8 +172,8 @@ describe('game access backfill route', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/game-access-backfill?dryRun=1',
-      headers: { cookie },
+      url: opsUrl('/api/admin/game-access-backfill?dryRun=1'),
+      headers,
     });
 
     expect(response.statusCode).toBe(503);

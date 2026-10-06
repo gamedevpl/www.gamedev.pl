@@ -992,6 +992,58 @@ Acknowledging the same ids twice changes nothing further.
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `get_proposal_summary`
+
+**Read Only: True**
+
+```
+Returns what the accepted proposal linked to this round changes (files with line counts, params, content), and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only. It writes nothing and acknowledges nothing.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `get_proposal_diff`
+
+**Read Only: True**
+
+```
+Returns one page of one file's diff from the accepted proposal linked to this round, and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only. It writes nothing and acknowledges nothing.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
 ---
 
 ## Widget CSP — check before submitting

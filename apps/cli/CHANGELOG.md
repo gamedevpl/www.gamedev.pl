@@ -7,9 +7,22 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
+
+## 0.24.0 — 2026-10-05
+
 ### Added
 
 - The Play conversation panel can be resized: drag its inner edge (or focus it and use the arrow keys), double-click to reset; the width is kept across reloads (#1631).
+
+### Fixed
+
+- A local Claude Code task can read (but not change) the Creator Kit at the checkout root, and no longer reaches for your claude.ai gamedev.pl connector or other ambient MCP servers mid-task, and your user-level Claude plugins, hooks and settings stay out of it (#1629).
+- Local capture progress shows in the status line instead of flooding the task transcript, and a local task stops after 12 screenshots instead of capturing in a loop (#1632).
+- A mistyped slash command now says so and suggests the nearest one, instead of doing nothing (#1632).
+- Picking an agent or another option no longer lands in the chat transcript as your message or in ↑ history (#1632).
 
 ## 0.23.1 — 2026-10-02
 

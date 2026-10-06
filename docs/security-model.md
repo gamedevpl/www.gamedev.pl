@@ -95,8 +95,8 @@ instead of the standalone protocol fixture. The test logs which sender it used.
 The games repo is private, but a served game is its whole runtime, inline, so anyone who
 can play a game holds its code. `assemblePublishedGameHtml`
 (`apps/api/src/platform/assemble.ts`) is what every player-facing document goes through:
-the snapshot bake, the store-lane gate's `bundle.html` and `preview.html`, and the play
-route's GitHub fallback. It runs the usual hygiene (byte budget, credential scan) on the
+the snapshot bake (`bakeGameDocument`, which local dev's snapshot reader also uses) and
+the store-lane gate's `bundle.html` and `preview.html`. It runs the usual hygiene (byte budget, credential scan) on the
 readable sources, then `protectGameScript` (`protect-script.ts`) minifies the script with
 esbuild.
 
@@ -112,8 +112,8 @@ can still step through the game.
   string cannot end the inline `<script>` early. The test parses the whole document to
   hold this, because a string-level check cannot see the truncation.
 - **Deterministic and async.** The same input gives the same output, so an unchanged game
-  re-bakes byte-identical. esbuild runs in its own process, so a play-route fallback does
-  not block the API's event loop.
+  re-bakes byte-identical. esbuild runs in its own process, so local dev's on-demand bake
+  does not block the API's event loop.
 
 **Why not an obfuscator.** `javascript-obfuscator` was tried first and removed. Its string
 array, the only part that hides more than minification does, costs frame time: with a fixed

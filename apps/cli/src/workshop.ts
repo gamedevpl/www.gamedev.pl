@@ -15,6 +15,7 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
+import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { preflightAdapter, type AdapterSpec } from './adapters.js';
@@ -163,6 +164,21 @@ export async function settleBuilder(input: {
   }
 }
 
+export function claudeAbsolutePath(path: string): string {
+  const posix = path.replaceAll('\\', '/').replace(/^([A-Za-z]):\//, (_, drive: string) => `/${drive.toLowerCase()}/`);
+  return `/${posix.replace(/\/+$/, '')}`;
+}
+
+export function claudeLocalFlags(root: string, cwd: string): string[] {
+  const readRoot = { permissions: { allow: [`Read(${claudeAbsolutePath(realpathSync(root))}/**)`] } };
+  return [
+    ...(cwd === root ? [] : ['--settings', JSON.stringify(readRoot)]),
+    '--strict-mcp-config',
+    '--setting-sources',
+    'project,local',
+  ];
+}
+
 export async function runLocalBuild(input: {
   ws: Workshop;
   spec: AdapterSpec;
@@ -194,7 +210,7 @@ export async function runLocalBuild(input: {
         command: spec.command,
         cwd,
         env: subscriptionEnv(childEnv(ws.env, '')),
-        args: spec.headless,
+        args: [...claudeLocalFlags(ws.root, cwd), ...spec.headless],
         abort: controller.signal,
       });
       await authCheck;
@@ -235,6 +251,7 @@ export async function runLocalBuild(input: {
       progress: output.progress,
     });
     if (localTools) spec = localTools.spec;
+    if (spec.name === 'claude') spec = { ...spec, headless: [...claudeLocalFlags(ws.root, cwd), ...spec.headless] };
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
     input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
