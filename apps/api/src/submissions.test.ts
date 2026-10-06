@@ -147,7 +147,6 @@ async function createApp(params: {
   seedDispatch?: SeedDispatchClient | null;
   seedDispatchRoutes?: { internalAuthVerifier: InternalAuthVerifier };
   dreamJob?: DreamJob | null;
-  baked?: boolean;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -183,9 +182,8 @@ async function createApp(params: {
       ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
       ...(params.seedDispatch !== undefined ? { seedDispatch: params.seedDispatch } : {}),
       ...(params.dreamJob !== undefined ? { dreamJob: params.dreamJob } : {}),
-      ...(params.baked && params.githubClient
-        ? { snapshotReader: createLocalSnapshotReader(params.githubClient, 'main') }
-        : {}),
+      // Production always has a snapshot; tests bake one from the stub.
+      ...(params.githubClient ? { snapshotReader: createLocalSnapshotReader(params.githubClient, 'main') } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -4026,13 +4024,13 @@ describe('catalog route', () => {
     await app.close();
   });
 
-  it('returns 502 when the catalog cannot be loaded', async () => {
+  it('returns 503 when the catalog snapshot cannot be read', async () => {
     const { githubClient, getCatalog } = createGithubClientStub({});
     getCatalog.mockRejectedValueOnce(new Error('boom'));
     const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
-    expect(res.statusCode).toBe(502);
+    expect(res.statusCode).toBe(503);
 
     await app.close();
   });
@@ -4250,7 +4248,7 @@ describe('published game route', () => {
       catalog: [catalogEntry('foo', { title: 'Bubble Pop Rush' })],
       gameSources: sampleSources,
     });
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, baked: true });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
     expect(res.statusCode).toBe(200);
@@ -4271,7 +4269,7 @@ describe('published game route', () => {
       catalog: [catalogEntry('wip-game', { status: 'draft' })],
       gameSources: sampleSources,
     });
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, baked: true });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     for (const slug of ['wip-game', 'unknown-game']) {
       const res = await app.inject({ method: 'GET', url: `/api/games/${slug}` });
@@ -4292,7 +4290,6 @@ describe('published game route', () => {
       githubClient,
       submissionTokenSecret: secret,
       now: () => currentTime,
-      baked: true,
     });
 
     await app.inject({ method: 'GET', url: '/api/games/foo' });
@@ -5708,7 +5705,6 @@ describe('games published from the store rather than the repo', () => {
       submissionTokenSecret: secret,
       agentChannel: { gamesStore },
       storeMediaUrlSigner,
-      baked: true,
     });
     return { app, store };
   }

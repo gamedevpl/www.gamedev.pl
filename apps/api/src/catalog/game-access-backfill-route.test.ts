@@ -3,11 +3,13 @@ import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
+import { withSnapshot } from './local-snapshot-reader.js';
 import type { GameSnapshotReader } from './game-snapshot.js';
 
 const secret = 'dev-session-secret-change-me';
 
-const repoEntry = (slug: string): CatalogGameEntry => ({ slug, title: slug, description: '' }) as CatalogGameEntry;
+const repoEntry = (slug: string): CatalogGameEntry =>
+  ({ slug, title: slug, description: '', status: 'published' }) as CatalogGameEntry;
 
 describe('game access backfill route', () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
@@ -29,15 +31,14 @@ describe('game access backfill route', () => {
       submissionRoutes: {
         githubToken: 'token',
         submissionTokenSecret: 'test-submission-secret',
-        snapshotReader: null,
-        githubClient: {
+        ...withSnapshot({
           getCatalog: async () => {
             onCatalogRead?.();
             if (failCatalog) throw new Error('catalog refresh failed');
             if (catalog instanceof Error) throw catalog;
             return catalog;
           },
-        } as unknown as GitHubClient,
+        } as unknown as GitHubClient),
       },
     });
     apps.push(app);

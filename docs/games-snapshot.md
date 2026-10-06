@@ -82,8 +82,8 @@ of truth for _what a served game is_, and the bake is where the two meet.
 Slug not in the catalog → **404** (unchanged). Publication authority is the snapshot
 catalog, not “object exists in the bucket” — a stray object cannot resurrect a game.
 
-**There is no GitHub assemble on the published play route, configured bucket or
-not.** GitHub remains the source of truth for content (the bake reads it) and for
+**The published catalog, play and media routes never read GitHub, configured bucket
+or not.** GitHub remains the source of truth for content (the bake reads it) and for
 draft / PR preview routes (unmerged heads have no snapshot).
 
 With `GAMES_SNAPSHOT_BUCKET` unset:
@@ -93,10 +93,11 @@ With `GAMES_SNAPSHOT_BUCKET` unset:
   reader that bakes each game on demand from the local tree through the bake job's own
   `bakeGameDocument`. Catalog, play and media all go through it, so local play keeps
   working and exercises the same snapshot code path as production.
-- **Anything else** (a real GitHub token with no bucket) has no snapshot reader:
-  `GET /api/games/:slug` answers **503** `game snapshot unavailable` for a published
-  repo-lane game. The catalog and media routes still read GitHub in that configuration
-  (see below); production never runs it — `infra/deploy-api.sh` always sets the bucket.
+- **Anything else** (a real GitHub token with no bucket) has no snapshot reader and
+  therefore **no repo lane**: the repo catalog is empty, so `/api/catalog` lists only
+  store games and a repo slug 404s on play and media. Store-lane games and draft
+  permalinks keep working. Production never runs this way — `infra/deploy-api.sh`
+  always sets the bucket.
 
 In-process caches (catalog TTL, game TTL, last-known catalog on refresh failure) still
 apply; they cache snapshot results, not a GitHub escape hatch.
@@ -108,17 +109,9 @@ Two invariants survive unchanged, and are tested:
 - **Media is still gated by the catalog allowlist** before the snapshot is consulted, so
   a stray object cannot widen what the API will serve.
 
-One deliberate exception: `isSlugPublished(..., { refreshOnMiss: true })` skips the
-snapshot when it forces a refresh (`forceFresh`). That only happens during the
-publishing→published transition, which is precisely the window where the snapshot is
-the stale source and GitHub is the fresh one — status correctness while the bake is
-still in flight.
-
-Still reading GitHub when no snapshot reader exists (out of scope for the play-route
-change, and unreachable in production): `loadCatalog` / `readCatalogFresh` in
-`catalog/catalog-routes.ts` fall back to `githubClient.getCatalog`, and the media route
-falls back to `githubClient.getGameMedia`. Both read committed data rather than
-assembling a game.
+Outside these three routes, two readers still go to GitHub for content metadata:
+the game page's `SPEC.md` read (`catalog/game-page-routes.ts`) and the search indexer
+(`catalog/catalog-indexer.ts`). Neither serves a game.
 
 ## The publish path
 

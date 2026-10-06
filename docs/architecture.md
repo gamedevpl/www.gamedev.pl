@@ -210,13 +210,13 @@ flowchart LR
 In the snapshot-backed configuration neither lane assembles a game on the request path —
 both are sealed earlier. (With `GAMES_SNAPSHOT_BUCKET` unset, local dev serves the
 repo lane through `catalog/local-snapshot-reader.ts`, which bakes from the fixture or local
-checkout sources on demand; any other unset configuration answers 503 for a repo-lane game.)
+checkout sources on demand; any other unset configuration has no repo lane at all.)
 
 - **Store lane** — the gate produces `bundle.html` as a derived artefact; the play route
   serves those bytes as-is.
 - **Repo lane** — `catalog/game-snapshot-publish.ts` bakes to the Cloud Storage snapshot.
   With `GAMES_SNAPSHOT_BUCKET` set, published repo-lane catalog, play and media are served
-  only from that snapshot; the play route has no GitHub fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
+  only from that snapshot; catalog, play and media have no GitHub fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
   had to go.
 
 Both sealing paths, plus the local-dev snapshot reader, go through one assembler:

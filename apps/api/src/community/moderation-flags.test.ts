@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
-import { SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { mintToken } from '../platform/submission-token.js';
-import { mintSessionToken } from '../platform/auth.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { opsInject, opsTestVerifier } from '../platform/ops-console.fixture.js';
 import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js';
+import { withSnapshot } from '../catalog/local-snapshot-reader.js';
 
 const secret = 'submission-secret';
 const sessionSecret = 'dev-session-secret-change-me';
@@ -66,7 +66,7 @@ describe('moderation flags', () => {
       opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: {
         githubToken: 'token',
-        githubClient: githubStub(opts.published ?? [], opts.catalogDown, opts.catalogHangs),
+        ...withSnapshot(githubStub(opts.published ?? [], opts.catalogDown, opts.catalogHangs)),
         submissionTokenSecret: secret,
         gamesRepo: 'gamedevpl/www.gamedev.pl-games',
       },
