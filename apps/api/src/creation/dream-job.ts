@@ -103,15 +103,17 @@ function isThrottled(error: unknown): boolean {
   return /\b429\b|RESOURCE_EXHAUSTED/.test(message);
 }
 
-function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | null {
+// Why a frame was dropped, or the decoded frame.
+function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | { refused: string } {
   const bytes = Buffer.from(frame.data, 'base64');
-  if (bytes.length === 0 || bytes.length > MAX_DREAM_FRAME_BYTES) return null;
+  if (bytes.length === 0) return { refused: 'empty' };
+  if (bytes.length > MAX_DREAM_FRAME_BYTES) return { refused: `${bytes.length} bytes over the shot limit` };
   // The card outlives the claim, so an unrenderable frame is permanent.
-  if (!carriesPixels(bytes)) return null;
+  if (!carriesPixels(bytes)) return { refused: 'no pixels' };
   const declared = frame.mediaType === 'image/png' ? isPng(bytes) : isJpeg(bytes);
-  if (!declared) return null;
+  if (!declared) return { refused: `not a ${frame.mediaType}` };
   const size = imageSize(bytes);
-  return size ? { bytes, size } : null;
+  return size ? { bytes, size } : { refused: 'unmeasurable' };
 }
 
 export function createDreamJob(deps: DreamJobDeps): DreamJob {
@@ -159,7 +161,10 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       );
       if (!frame) return null;
       const decoded = decodeFrame(frame);
-      if (!decoded) return null;
+      if ('refused' in decoded) {
+        log.warn({ jobId: input.jobId, reason: decoded.refused }, 'dream frame refused');
+        return null;
+      }
       // Spike rule: a frame that changed shape redrew the HUD.
       if (!sameAspectRatio(decoded.size, input.size)) {
         log.warn({ jobId: input.jobId, size: decoded.size, source: input.size }, 'dream frame changed aspect ratio');
