@@ -7,6 +7,7 @@ import type { GameSeeder, SeedDraft } from './creation/game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import { opsHeaders, opsTestVerifier, opsUrl } from './platform/ops-console.fixture.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
+import { createLocalSnapshotReader } from './catalog/local-snapshot-reader.js';
 import type { ContentChecker } from './platform/moderation.js';
 import { InMemoryStore, type Store } from './platform/store.js';
 import { mintToken, verifyToken } from './platform/submission-token.js';
@@ -146,6 +147,7 @@ async function createApp(params: {
   seedDispatch?: SeedDispatchClient | null;
   seedDispatchRoutes?: { internalAuthVerifier: InternalAuthVerifier };
   dreamJob?: DreamJob | null;
+  baked?: boolean;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -181,6 +183,9 @@ async function createApp(params: {
       ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
       ...(params.seedDispatch !== undefined ? { seedDispatch: params.seedDispatch } : {}),
       ...(params.dreamJob !== undefined ? { dreamJob: params.dreamJob } : {}),
+      ...(params.baked && params.githubClient
+        ? { snapshotReader: createLocalSnapshotReader(params.githubClient, 'main') }
+        : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -4240,12 +4245,12 @@ describe('published game media route', () => {
 });
 
 describe('published game route', () => {
-  it('assembles a published game from the default branch with a strict CSP', async () => {
+  it('serves a published game baked from the default branch with a strict CSP', async () => {
     const { githubClient, getGameSources } = createGithubClientStub({
       catalog: [catalogEntry('foo', { title: 'Bubble Pop Rush' })],
       gameSources: sampleSources,
     });
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, baked: true });
 
     const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
     expect(res.statusCode).toBe(200);
@@ -4266,7 +4271,7 @@ describe('published game route', () => {
       catalog: [catalogEntry('wip-game', { status: 'draft' })],
       gameSources: sampleSources,
     });
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, baked: true });
 
     for (const slug of ['wip-game', 'unknown-game']) {
       const res = await app.inject({ method: 'GET', url: `/api/games/${slug}` });
@@ -4277,26 +4282,18 @@ describe('published game route', () => {
     await app.close();
   });
 
-  it('returns 404 when the game directory is missing on the default branch', async () => {
-    const { githubClient } = createGithubClientStub({
-      catalog: [catalogEntry('foo')],
-      gameSources: null,
-    });
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
-
-    const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
-    expect(res.statusCode).toBe(404);
-
-    await app.close();
-  });
-
-  it('caches an assembled game for 5 minutes', async () => {
+  it('caches a snapshot game for 5 minutes', async () => {
     const { githubClient, getGameSources } = createGithubClientStub({
       catalog: [catalogEntry('foo')],
       gameSources: sampleSources,
     });
     let currentTime = 10_000;
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+    const { app } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      now: () => currentTime,
+      baked: true,
+    });
 
     await app.inject({ method: 'GET', url: '/api/games/foo' });
     await app.inject({ method: 'GET', url: '/api/games/foo' });
@@ -5711,6 +5708,7 @@ describe('games published from the store rather than the repo', () => {
       submissionTokenSecret: secret,
       agentChannel: { gamesStore },
       storeMediaUrlSigner,
+      baked: true,
     });
     return { app, store };
   }
@@ -6015,7 +6013,7 @@ describe('games published from the store rather than the repo', () => {
 
     const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier' });
 
-    // Served from the repo path (the stub's sources), not refused.
+    // Served from the repo lane's snapshot, not refused.
     expect(response.statusCode).toBe(200);
 
     await app.close();

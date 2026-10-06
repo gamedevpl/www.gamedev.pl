@@ -453,10 +453,8 @@ async function safeBodyText(response: Response): Promise<string> {
 /**
  * Builds the reader the serve routes use, or null when no bucket is configured.
  *
- * Absent configuration is a supported opt-out, not a fallback from a configured
- * bucket: local development, fixtures, and `local-games-repo` leave
- * `GAMES_SNAPSHOT_BUCKET` unset and serve from GitHub / the local tree. When the
- * env var is set, published catalog / play / media routes require the snapshot.
+ * Local development leaves `GAMES_SNAPSHOT_BUCKET` unset and bakes from the local
+ * tree instead (local-snapshot-reader.ts). The play route never assembles from GitHub.
  */
 export function createSnapshotReaderFromEnv(env: NodeJS.ProcessEnv = process.env): GameSnapshotReader | null {
   const bucket = env.GAMES_SNAPSHOT_BUCKET?.trim();

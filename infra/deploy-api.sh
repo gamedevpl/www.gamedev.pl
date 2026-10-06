@@ -125,11 +125,9 @@ SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 # Pre-assembled published games, baked by .github/workflows/publish-games.yml.
-# Set GAMES_SNAPSHOT_BUCKET='' to serve every game from GitHub the way the site
-# did before. Note the `-` rather than `:-`: an explicit empty value has to survive
-# for that opt-out to work at all, and it is what makes the `-n` guard below mean
-# something instead of being always true.
-GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET-${PROJECT_ID}-games-snapshots}"
+# Required: published repo-lane games are served only from this snapshot, and
+# there is no GitHub fallback to opt into, so empty means the default.
+GAMES_SNAPSHOT_BUCKET="${GAMES_SNAPSHOT_BUCKET:-${PROJECT_ID}-games-snapshots}"
 # The games store — where delivered game sources live. Unset means agents can build but
 # cannot deliver: the upload route answers 503 rather than accepting work and dropping it.
 GAMES_STORE_BUCKET="${GAMES_STORE_BUCKET-${PROJECT_ID}-games-store}"
@@ -339,9 +337,7 @@ fi
 # ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
 # commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
 ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}|EDITORKIT_V2=${EDITORKIT_V2}|DREAMS_ENABLED=${DREAMS_ENABLED}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED}|SHELF_DOCUMENT_READS=${SHELF_DOCUMENT_READS}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}"
-if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
-  ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
-fi
+ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
 if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}"
   # Which project runs the gate when a game is delivered (gate-trigger.ts). Set

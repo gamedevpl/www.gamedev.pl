@@ -208,19 +208,18 @@ flowchart LR
   behind "the repo lane wins catalog ties".
 
 In the snapshot-backed configuration neither lane assembles a game on the request path —
-both are sealed earlier. (With `GAMES_SNAPSHOT_BUCKET` unset, the repo-lane path has no
-snapshot reader to consult and does assemble per request from the fixture sources; that is
-the local/dev configuration, not production.)
+both are sealed earlier. (With `GAMES_SNAPSHOT_BUCKET` unset, local dev serves the
+repo lane through `catalog/local-snapshot-reader.ts`, which bakes from the fixture or local
+checkout sources on demand; any other unset configuration answers 503 for a repo-lane game.)
 
 - **Store lane** — the gate produces `bundle.html` as a derived artefact; the play route
   serves those bytes as-is.
 - **Repo lane** — `catalog/game-snapshot-publish.ts` bakes to the Cloud Storage snapshot.
   With `GAMES_SNAPSHOT_BUCKET` set, published repo-lane catalog, play and media are served
-  only from that snapshot; unsetting it is an opt-out for local dev and fixtures, not a
-  fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
+  only from that snapshot; the play route has no GitHub fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
   had to go.
 
-Both sealing paths, plus the repo-lane fallback in the play route, go through one assembler:
+Both sealing paths, plus the local-dev snapshot reader, go through one assembler:
 `platform/assemble.ts`'s `assembleGameHtml`. The bake uses it deliberately rather than the
 games repo's own `tools/build.ts`, because that is where the restrictive CSP, the AI Act
 art. 50(2) provenance metadata and the credential scan are applied — so there is one

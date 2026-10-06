@@ -33,6 +33,7 @@ import {
   type GitHubClient,
 } from './catalog/github-client.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
+import { createLocalSnapshotReader } from './catalog/local-snapshot-reader.js';
 import {
   createMediaUrlSignerFromEnv,
   createStoreMediaUrlSignerFromEnv,
@@ -1044,20 +1045,25 @@ export async function registerSubmissionRoutes(
   // Published games live on the games repo's default branch.
   const publishedRef = process.env.GAMES_PUBLISHED_REF ?? 'main';
 
-  // Pre-assembled published games, baked on merge by scripts/publish-snapshot.ts.
-  // `undefined` means "read the environment"; an explicit null disables it (tests
-  // that assert the GitHub-backed behaviour pass null).
-  const snapshotReader = options.snapshotReader === undefined ? createSnapshotReaderFromEnv() : options.snapshotReader;
-  if (snapshotReader) {
-    app.log.info('serving published games from the snapshot bucket only (no GitHub fallback)');
-  }
-
   const githubClient =
     githubToken && submissionTokenSecret
       ? (options.githubClient ?? createGitHubClient({ token: githubToken, repo: gamesRepo, fetchImpl }))
       : localGames
         ? createLocalGamesClient({ rootDir: localGames.rootDir })
         : null;
+
+  // Pre-assembled published games, baked on merge by scripts/publish-snapshot.ts.
+  // `undefined` means "read the environment"; an explicit null disables it (tests
+  // that assert the GitHub-backed behaviour pass null).
+  const configuredSnapshotReader =
+    options.snapshotReader === undefined ? createSnapshotReaderFromEnv() : options.snapshotReader;
+  // Local dev has no bucket: bake from the local games tree instead.
+  const snapshotReader =
+    configuredSnapshotReader ??
+    (localGames && githubClient ? createLocalSnapshotReader(githubClient, publishedRef) : null);
+  if (configuredSnapshotReader) {
+    app.log.info('serving published games from the snapshot bucket only (no GitHub fallback)');
+  }
 
   if (localGames) {
     app.log.info(
@@ -1223,7 +1229,6 @@ export async function registerSubmissionRoutes(
     store,
     githubClient,
     snapshotReader,
-    publishedRef,
     now,
     catalog: catalogRoutes,
     draftPreview: draftPreviewRoutes,
