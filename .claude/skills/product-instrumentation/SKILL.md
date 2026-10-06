@@ -99,7 +99,7 @@ stored depends on `TELEMETRY_BACKEND`
 - **`bigquery`:** written to and read from BigQuery only.
 
 The BigQuery tables are `telemetry.play_events` and `telemetry.visit_events`, provisioned by
-[infra/setup-telemetry-bigquery.sh](../../../infra/setup-telemetry-bigquery.sh):
+`infra/setup-telemetry-bigquery.sh` in the private ops repo:
 
 - Each row keeps the whole event in a JSON `event` column, so a new field needs no schema
   change.

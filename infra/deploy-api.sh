@@ -77,7 +77,7 @@
 #                               account — see that script for why.)
 #   TELEMETRY_BACKEND=...      (where raw telemetry lives: unset is Firestore, dual writes
 #                               BigQuery too, bigquery moves it there. Needs
-#                               infra/setup-telemetry-bigquery.sh first.)
+#                               the BigQuery dataset from the ops repo first.)
 #   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
 #                               defaults to 3. Each one is a Cloud Build run, so this is
 #                               the knob that decides what the loop costs per day. Set it

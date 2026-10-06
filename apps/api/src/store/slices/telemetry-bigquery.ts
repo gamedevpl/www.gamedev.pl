@@ -12,7 +12,7 @@ export function telemetryBackend(env: NodeJS.ProcessEnv = process.env): Telemetr
   return value === 'dual' || value === 'bigquery' ? value : 'firestore';
 }
 
-// Provisioned by infra/setup-telemetry-bigquery.sh; the names must match it.
+// Names must match the ops repo's BigQuery setup script.
 export const TELEMETRY_DATASET = 'telemetry';
 export const PLAY_EVENTS_TABLE = 'play_events';
 export const VISIT_EVENTS_TABLE = 'visit_events';
