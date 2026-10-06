@@ -389,6 +389,8 @@ const FILE_BUCKET = {
   // which seed vendor is configured is creation's question, not the agent surface's.
   'seed-provider-env': 'creation',
   'game-seed': 'creation',
+  'seed-generate-prompt': 'creation',
+  'seed-usage': 'creation',
   'seed-paths': 'creation',
   'session-crash': 'creation',
   'session-crash-record': 'creation',

@@ -82,7 +82,11 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
         kind: 'seed',
         at: new Date(now()).toISOString(),
         by: draft.usage.model,
-        tokens: { input: draft.usage.inputTokens, output: draft.usage.outputTokens },
+        tokens: {
+          input: draft.usage.inputTokens,
+          output: draft.usage.outputTokens,
+          ...(draft.usage.cachedInputTokens !== undefined ? { cached: draft.usage.cachedInputTokens } : {}),
+        },
         ...(draft.usage.provider ? { provider: draft.usage.provider } : {}),
       });
     } catch (error) {
