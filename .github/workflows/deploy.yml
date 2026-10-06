@@ -300,6 +300,7 @@ jobs:
           SEED_PROVIDER: ${{ vars.SEED_PROVIDER }}
           SUGGESTION_SWEEP_AUDIENCE: ${{ vars.SUGGESTION_SWEEP_AUDIENCE }}
           TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}
+          TELEMETRY_BACKEND: ${{ vars.TELEMETRY_BACKEND }}
           TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
           VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
@@ -523,6 +524,13 @@ jobs:
           TAB_COMPLETE_VAL="${TAB_COMPLETE}"
           if [ -n "$TAB_COMPLETE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"
+          fi
+
+          # Where raw play and visit telemetry live: unset is Firestore, "dual" writes
+          # BigQuery too, "bigquery" moves it there (store/slices/telemetry-bigquery.ts).
+          TELEMETRY_BACKEND_VAL="${TELEMETRY_BACKEND}"
+          if [ -n "$TELEMETRY_BACKEND_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|TELEMETRY_BACKEND=${TELEMETRY_BACKEND_VAL}"
           fi
 
           # The Code surface (creator-code-editing-execution-plan.md CE-02): manual

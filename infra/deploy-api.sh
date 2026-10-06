@@ -75,6 +75,9 @@
 #                               <SERVICE>@<project>.iam.gserviceaccount.com, created by
 #                               infra/setup-runtime-sa.sh. Never the default compute
 #                               account — see that script for why.)
+#   TELEMETRY_BACKEND=...      (where raw telemetry lives: unset is Firestore, dual writes
+#                               BigQuery too, bigquery moves it there. Needs
+#                               infra/setup-telemetry-bigquery.sh first.)
 #   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
 #                               defaults to 3. Each one is a Cloud Build run, so this is
 #                               the knob that decides what the loop costs per day. Set it
@@ -416,7 +419,7 @@ done
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
-for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY; do
+for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY TELEMETRY_BACKEND; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"

@@ -9,6 +9,12 @@ export async function scanOwnedSlugs(
   slugs: string[],
   days: string[],
 ): Promise<{ events: TelemetryEvent[]; scanned: string[]; truncated: boolean }> {
+  if (store.listTelemetryEventsAcross) {
+    // BigQuery answers the whole window in one query, same cap.
+    const events = await store.listTelemetryEventsAcross(days, { slugs, limit: MAX_EVENTS_PER_REQUEST });
+    return { events, scanned: [...days], truncated: events.length >= MAX_EVENTS_PER_REQUEST };
+  }
+
   const events: TelemetryEvent[] = [];
   const scanned: string[] = [];
   let truncated = false;

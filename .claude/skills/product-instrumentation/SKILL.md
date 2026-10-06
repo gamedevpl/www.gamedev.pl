@@ -88,6 +88,27 @@ Creator-side facts (submissions, build events, revision messages, publish times)
 Firestore via the store — they are identity-attached and that is fine; creators are
 signed in. Both telemetry streams are the anonymous half.
 
+### Where raw events are stored: `TELEMETRY_BACKEND`
+
+The `TelemetryStore` interface does not change, but where raw play and visit events are
+stored depends on `TELEMETRY_BACKEND`
+([store/slices/telemetry-bigquery.ts](../../../apps/api/src/store/slices/telemetry-bigquery.ts)):
+
+- **Unset:** Firestore, one document per event.
+- **`dual`:** written to both Firestore and BigQuery, read from Firestore.
+- **`bigquery`:** written to and read from BigQuery only.
+
+The BigQuery tables are `telemetry.play_events` and `telemetry.visit_events`, provisioned by
+[infra/setup-telemetry-bigquery.sh](../../../infra/setup-telemetry-bigquery.sh):
+
+- Each row keeps the whole event in a JSON `event` column, so a new field needs no schema
+  change.
+- Rows are partitioned on the same `day` as the Firestore partitions.
+- Partitions expire after 90 days, which keeps the retention promise.
+
+Daily rollups (`telemetryDaily`) stay in Firestore in every mode. The same invariants
+apply in BigQuery: no shared key between the two tables, and no identity columns.
+
 ## Invariants (do not renegotiate these per-feature)
 
 - **Play telemetry measures games, not people.** No uid, no IP, no user agent, no
