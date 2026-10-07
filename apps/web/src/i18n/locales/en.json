@@ -1128,7 +1128,10 @@
       "notNow": "Not now",
       "askLess": "Don't suggest these",
       "muted": "Okay — no more concept proposals. You can turn them back on in notification settings.",
-      "close": "Close"
+      "close": "Close",
+      "enlarge": "Enlarge: {{name}}",
+      "compare": "Compare with your game",
+      "holdHint": "Or press and hold the picture to see your game."
     },
     "gallery": {
       "alt": "The game as it looks right now",

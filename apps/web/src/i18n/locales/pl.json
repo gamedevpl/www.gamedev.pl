@@ -1138,7 +1138,10 @@
       "notNow": "Nie teraz",
       "askLess": "Nie podpowiadaj mi tego",
       "muted": "OK — koniec z propozycjami konceptów. Włączysz je z powrotem w ustawieniach powiadomień.",
-      "close": "Zamknij"
+      "close": "Zamknij",
+      "enlarge": "Powiększ: {{name}}",
+      "compare": "Porównaj ze swoją grą",
+      "holdHint": "Albo przytrzymaj obrazek, aby zobaczyć swoją grę."
     },
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",
