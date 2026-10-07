@@ -42,8 +42,8 @@ could silently attach a remote server to your assistant. Two steps, on purpose.
 | Claude Cowork | 2026-08-06 | The above, plus an authenticated `create_game` round-trip returning a real `jobId` and slug |
 | Claude Code   | —          | Not yet exercised through the plugin path                                                   |
 
-1.0.3 (skill + portable manifests) is validated but not yet installed on any surface — the
-rows above still describe 1.0.2. They move when a tool call really runs, not when a
+1.0.3 (skill + portable manifests) and 1.0.4 (skill describes uploads as data) are
+validated but not yet installed on any surface — the rows above still describe 1.0.2. They move when a tool call really runs, not when a
 version ships.
 
 Recorded because "installs cleanly" and "actually exposes the server" turned out to be
