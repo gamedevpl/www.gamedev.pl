@@ -129,7 +129,6 @@ import { registerRecommendationRoutes, type RecommendationRoutesOptions } from '
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from '../catalog/published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from '../catalog/catalog-genre-source.js';
 import { registerRateLimit } from './rate-limit.js';
-import { createSharePreviewShell } from './share-meta.js';
 import { registerSpaShellFallback } from './spa-shell-fallback.js';
 import { registerOAuthProtectedResourceRoutes } from '../agent-surface/mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from '../agent-surface/mcp-server-discovery.js';
@@ -1182,17 +1181,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }
       },
     });
-    registerSpaShellFallback(
-      app,
-      createSharePreviewShell({
-        readIndexHtml: () => readFile(path.join(webDistDir, 'index.html'), 'utf8'),
-        getCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
-        store,
-        gamesStore,
-        isShareable: playableAnonymously,
-        isPastWall: pastBetaWall,
-      }),
-    );
+    registerSpaShellFallback(app, {
+      readIndexHtml: () => readFile(path.join(webDistDir, 'index.html'), 'utf8'),
+      getCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+      store,
+      gamesStore,
+      isShareable: playableAnonymously,
+      isPastWall: pastBetaWall,
+    });
   }
 
   return app;
