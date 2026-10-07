@@ -59,7 +59,7 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
           engineRef: { type: 'string' },
           kitUrl: { type: 'string' },
           sha256: { type: 'string' },
-          unpack: { type: 'string' },
+          unpack: { type: 'string', description: 'Deprecated: fetch kitUrl and check it against sha256.' },
           entry: { type: 'string' },
           kitEngineChanged: { type: 'boolean' },
           browse: {
@@ -82,24 +82,24 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
             },
           },
         },
-        required: ['engineRef', 'kitUrl', 'sha256', 'unpack', 'entry'],
+        required: ['engineRef', 'kitUrl', 'sha256', 'entry'],
       },
       description:
         'Fetch Creator Kit metadata: engineRef (required for submit_sources), sha256, entry, ' +
-        'and optional kitUrl/unpack for agents with shell egress. ' +
+        'and kitUrl (a short-lived signed tarball URL) for agents that can download files. ' +
         'engineRef is pinned for the round: repeat calls return the same engine even if the ' +
         'registry moves. kitEngineChanged:true means the pin was replaced — after a kit_outdated ' +
         'verdict, or because the pinned kit is no longer retained — so rebuild against the ' +
         'engine in this reply. ' +
-        'This platform and its Creator Kit are not on the public web — an unanswered question ' +
-        'about what it can build (multiplayer, persistent worlds, party games, …) is answered by ' +
-        'get_kit_api or browse, never by web search. ' +
+        'Creator Kit documentation is not on the public web, so questions about what it can build ' +
+        '(multiplayer, persistent worlds, party games, …) are answered by get_kit_api, knowledge_query ' +
+        'or the browse tools. ' +
         'For the API itself: get_kit_api (with this engineRef) for a prompt-ready orientation in ' +
         'one call — it flags what it had to cut (by name when a whole declaration is dropped, by ' +
         'count when a kept one is trimmed member-wise), so a missing signature is never silent; ' +
         "use the browse tools named in this reply's browse block (list/search/read) for those or " +
         'any other specific kit file. ' +
-        'With shell egress, kitUrl/unpack lets you unpack the kit locally and read SKILL.md directly. ' +
+        'With shell egress you can download kitUrl, check it against sha256, and read SKILL.md locally. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
         'do not assume a `cd` persists across tool calls). ' +
         BEHAVIOURAL_CONTRACT,
@@ -138,7 +138,7 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
         "The Creator Kit's prompt-ready orientation in one call: what engine modules exist " +
         '(party for same-screen multiplayer, zone for a real-time server-arbitrated world, ' +
         'commons and presence for persistent/shared state, and the rest — this is the answer ' +
-        'to "can this platform build X", not a web search), plus as much of the core API ' +
+        'to "can this platform build X" — this documentation is not on the public web), plus as much of the core API ' +
         'signatures, audio catalog, and exemplar game as fit in one tool result. ' +
         'The response is sized to a safe single-call limit, not to the whole API — for a real ' +
         'kit this routinely omits content: whole declarations dropped are named in an "Omitted ' +

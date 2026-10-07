@@ -34,11 +34,11 @@ import {
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
   mintUploadToken,
   UPLOAD_TOKEN_HEADER,
-  uploadCurlCommand,
   verifyUploadToken,
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { uploadContract } from './upload-request.js';
 import type { BuildShot } from '../store/records/build-log.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
@@ -148,7 +148,7 @@ const ShotUploadUrlInputSchema = z.object({
     .optional(),
 });
 
-const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then run its \`upload\` one-liner (curl -H "Authorization: Bearer <upload token>" --upload-file <png> "$url")`;
+const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then PUT the raw PNG bytes to the returned url with the returned method and headers`;
 
 const MAX_PREVIEW_LABEL = 120;
 /**
@@ -1175,7 +1175,7 @@ export async function registerAgentChannelRoutes(
         url,
         expiresAt,
         expiresInSeconds: ttlSeconds,
-        upload: uploadCurlCommand(url, token, 'shot.png', 'image/png'),
+        ...uploadContract(url, token, 'shot.png', 'image/png'),
         maxBytes: parsed.data.purpose === 'concept' ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES,
         ...(await channelState(jobId, record)),
       });

@@ -60,23 +60,23 @@ export interface SourceSubmitToolEntry {
   handler: ToolHandler;
 }
 
-// Omitted mode fail-closes as publish unless the previous candidate was preview.
-async function effectiveSubmitMode(
+// Omitted mode is preview; retries reuse the stored lane, like the channel.
+export async function effectiveSubmitMode(
   explicit: 'preview' | 'publish' | undefined,
   fromLatestDelivery: boolean,
   record: SubmissionRecord,
   gamesStore: GamesStore | undefined,
 ): Promise<'preview' | 'publish'> {
   if (explicit === 'preview' || explicit === 'publish') return explicit;
-  if (!fromLatestDelivery) return 'publish';
+  if (!fromLatestDelivery) return 'preview';
   const slug = record.slug;
   const version = record.previewVersion ?? record.deliveredVersion;
-  if (!slug || !version || !gamesStore) return 'publish';
+  if (!slug || !version || !gamesStore) return 'preview';
   try {
     const manifest = await gamesStore.getManifest(slug, version);
-    return manifest?.deliveryMode === 'preview' ? 'preview' : 'publish';
+    return manifest && manifest.deliveryMode !== 'preview' ? 'publish' : 'preview';
   } catch {
-    return 'publish';
+    return 'preview';
   }
 }
 
@@ -215,7 +215,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         `On kit_outdated: get_kit then fromLatestDelivery=true with the same mode and new kitEngineRef — do NOT re-upload the whole tree. ` +
         `mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
         `mode=publish (seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
-        `Omitting mode defaults to publish, except with fromLatestDelivery (reuses the previous candidate's lane). ` +
+        `Omitting mode defaults to preview — publish is only ever an explicit mode=publish — except with fromLatestDelivery (reuses the previous candidate's lane). ` +
         `files[{path, content, encoding utf8|base64}] optional when fromStaged/fromLatestDelivery (inline paths override); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         'gateStarted is true when Cloud Build accepted the gate create — not merely when the upload was accepted. ' +
@@ -263,7 +263,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
             enum: ['preview', 'publish'],
             description:
               'preview = iterate without TRACE (Studio draft). publish = sealed candidate (TRACE required). ' +
-              'Default publish when omitted, except fromLatestDelivery reuses the previous candidate lane.',
+              'Default preview when omitted (publish must be passed explicitly), except fromLatestDelivery reuses the previous candidate lane.',
           },
           slug: { type: 'string' },
           note: { type: 'string' },
