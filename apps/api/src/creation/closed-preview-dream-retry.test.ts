@@ -76,11 +76,25 @@ describe('dream handoff after a preview round closes', () => {
 });
 
 it.each([false, true])('retries only superseded ended old-generation claims: %s', async (superseded) => {
-  const { store, handoff, poll } = await setup(true);
+  const { store, handoff, poll } = await setup();
+  // Claimed before the seal, while the session was still open.
+  await store.claimDreamRun(9, 'v1', AT, (await store.getSubmission(9))!.roundGeneration!);
   await poll();
   await store.finishDreamRun(9, { version: 'v1', claimedAt: AT, superseded }, AT);
   await poll();
   expect(handoff).toHaveBeenCalledTimes(superseded ? 2 : 1);
+});
+
+it('hands the dream off after the seal, with the generation that will post it', async () => {
+  const { store, handoff, poll } = await setup();
+  const open = (await store.getSubmission(9))!;
+  await poll();
+  const sealed = (await store.getSubmission(9))!;
+  expect(sealed.roundGeneration).not.toBe(open.roundGeneration);
+  expect(handoff.mock.calls[0][0].record).toMatchObject({
+    state: 'ready_for_review',
+    roundGeneration: sealed.roundGeneration,
+  });
 });
 
 it('never repeats a posted claim even with a superseded marker', async () => {
