@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.24.1 — 2026-10-06
+
 ### Fixed
 
 - Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
