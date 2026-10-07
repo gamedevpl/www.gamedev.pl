@@ -210,6 +210,17 @@ export function validateSourceUpload(
   if (!hasIndexHtml && howToPlayProblem) {
     throw new InvalidUploadError(howToPlayProblem);
   }
+  // Both modes: a publish delivery would fail the same smoke.
+  if (gameJson) {
+    try {
+      const modules = (JSON.parse(gameJson.content) as { engine?: { modules?: unknown } }).engine?.modules;
+      const selected = Array.isArray(modules) ? modules.filter((m): m is string => typeof m === 'string') : [];
+      const dependencyProblem = missingModuleDependency(selected);
+      if (dependencyProblem) throw new InvalidUploadError(dependencyProblem);
+    } catch (error) {
+      if (error instanceof InvalidUploadError) throw error;
+    }
+  }
   if (mode === 'preview' && gameJson) {
     try {
       const manifest = JSON.parse(gameJson.content) as {
@@ -222,8 +233,6 @@ export function validateSourceUpload(
         );
       }
       const modules = manifest.engine.modules;
-      const dependencyProblem = missingModuleDependency(modules.filter((m): m is string => typeof m === 'string'));
-      if (dependencyProblem) throw new InvalidUploadError(dependencyProblem);
       const sounds = Array.isArray(manifest.audio?.sounds) ? manifest.audio.sounds : [];
       const music = typeof manifest.audio?.music === 'string' ? manifest.audio.music.trim() : '';
       // Same two rules the assembler enforces, one round trip earlier.

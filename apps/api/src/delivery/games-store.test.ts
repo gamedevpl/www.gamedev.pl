@@ -397,16 +397,18 @@ describe('validateSourceUpload — the delivery contract', () => {
     ).toThrow(/audio\.sounds/);
   });
 
-  it('refuses gfx without drawing before smoke runs', () => {
-    expect(() =>
-      validateSourceUpload(
-        [
-          ...MINIMAL_WITHOUT_GAME_JSON,
-          { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['gfx'] }, howToPlay: HOW_TO_PLAY }) },
-        ],
-        'preview',
-      ),
-    ).toThrow(/lacks "drawing", which "gfx" calls/);
+  it('refuses gfx without drawing before smoke runs, in either delivery mode', () => {
+    for (const mode of ['preview', 'publish'] as const) {
+      expect(() =>
+        validateSourceUpload(
+          [
+            ...MINIMAL_WITHOUT_GAME_JSON,
+            { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['gfx'] }, howToPlay: HOW_TO_PLAY }) },
+          ],
+          mode,
+        ),
+      ).toThrow(/lacks "drawing", which "gfx" calls/);
+    }
   });
 
   it('rejects a preview manifest without engine.modules before smoke runs', () => {

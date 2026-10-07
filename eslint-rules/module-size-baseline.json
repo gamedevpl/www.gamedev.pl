@@ -288,7 +288,7 @@
     "apps/api/src/creator-studio-workspace.test.ts": 321,
     "apps/api/src/delivery/build-transcript.test.ts": 339,
     "apps/api/src/delivery/build-transcript.ts": 162,
-    "apps/api/src/delivery/games-store.test.ts": 1135,
+    "apps/api/src/delivery/games-store.test.ts": 1137,
     "apps/api/src/delivery/games-store.ts": 1398,
     "apps/api/src/delivery/gate-crash.test.ts": 180,
     "apps/api/src/delivery/gate-crash.ts": 212,
