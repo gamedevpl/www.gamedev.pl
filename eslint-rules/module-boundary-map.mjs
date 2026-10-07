@@ -503,6 +503,7 @@ const FILE_BUCKET = {
   'inbox-reference-images': 'agent-surface',
   'reference-image-url': 'agent-surface',
   'capture-plan-hint': 'agent-surface',
+  'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',
   'kit-upcoming-rules': 'agent-surface',
   'staged-budget': 'agent-surface',
