@@ -9,7 +9,6 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   type ToolContext,
   type ToolHandler,
@@ -191,11 +190,10 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
         "Render a live status card for this round in the creator's chat: phase, latest progress note and " +
         'screenshot, gate verdict, deliveries left. It refreshes itself and stops when the round settles, so ' +
         'the creator can watch without you polling. ' +
-        'Call it ONCE per round, after start — a second call renders a second card. ' +
-        'A preview_failed / red card is not finished: honour warnings.code=must_fix_gate, fix, and ' +
-        'submit_sources again — show_round alone does not re-run the gate. ' +
-        'Only clients that render MCP Apps views see anything; elsewhere it is a plain status read. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Each call renders a card, so one call per round (after start) is enough. ' +
+        'A preview_failed / red card stays on the refused delivery until the next ' +
+        'submit_sources; show_round itself does not re-run the gate. ' +
+        'Only clients that render MCP Apps views see anything; elsewhere it is a plain status read.',
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
@@ -219,8 +217,7 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
         'with the gameplay recording and a link to play. ' +
         'Use this when the creator asks to see the game — get_gate_media lets *you* look at the frames, but its ' +
         'attachments are input to you rather than something the creator sees. ' +
-        'Defaults to the latest delivery. Only clients that render MCP Apps views show anything. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Defaults to the latest delivery. Only clients that render MCP Apps views show anything.',
       inputSchema: {
         type: 'object',
         properties: {

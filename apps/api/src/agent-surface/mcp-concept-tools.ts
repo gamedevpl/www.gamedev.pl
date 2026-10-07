@@ -5,7 +5,6 @@ import {
   toolErr,
   SESSION_KEY_PROP,
   REPLY_CONTROL,
-  BEHAVIOURAL_CONTRACT,
   CREATOR_TEXT_SAFETY,
   channelControlFields,
   pendingMessagesFromChannel,
@@ -89,8 +88,7 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
         'exactly those headers; PNG bytes must never enter the model as base64. The PUT answers with the stored frame id; keep it for suggest_next_round. ' +
         'The caption is set by the platform and always says the frame is AI-made, so do not pass one. ' +
         'Draw the frame by editing the gate capture (get_gate_media) rather than from nothing, and keep the ' +
-        "game's own HUD untouched — a frame that reshapes the interface is refused. " +
-        BEHAVIOURAL_CONTRACT,
+        "game's own HUD untouched — a frame that reshapes the interface is refused.",
       inputSchema: { type: 'object', properties: { sessionKey: SESSION_KEY_PROP }, required: [] },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -167,9 +165,7 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
         '`paused` means the platform switched them off. Do not retry either — build on. ' +
         "Write the labels and prompts in the creator's language (get_brief.locales[0]) via the *Localized " +
         'fields, with plain English in the base fields. ' +
-        CREATOR_TEXT_SAFETY +
-        ' ' +
-        BEHAVIOURAL_CONTRACT,
+        CREATOR_TEXT_SAFETY,
       inputSchema: {
         type: 'object',
         properties: {

@@ -13,7 +13,6 @@ import {
   toolOk,
   toolErr,
   toolRefusal,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   REPLY_CONTROL,
   channelControlFields,
@@ -118,8 +117,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         'the path from the next submit_sources({ fromStaged: true }) delivery entirely, same as if it had ' +
         'never existed. Use to retire an old game/*.ts module no longer imported anywhere, or to clear a ' +
         'leftover index.html/GAME.json field back to the platform default — index.html cannot be re-staged ' +
-        '(only removed); GAME.json.howToPlay is the only markup source now. ' +
-        BEHAVIOURAL_CONTRACT,
+        '(only removed); GAME.json.howToPlay is the only markup source now.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -220,8 +218,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         'gateStarted is true when Cloud Build accepted the gate create — not merely when the upload was accepted. ' +
         'A successful delivery unlocks creator handoff (agentEndedAt); still call end when you will not deliver more (warnings.code=call_end). ' +
-        'Pass summary — one sentence of what changed this delivery; Studio shows it on the build list. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Pass summary — one sentence of what changed this delivery; Studio shows it on the build list.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -402,17 +399,16 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
           warnings.push({
             code: 'call_end',
             message:
-              'Call end when you will not deliver more this round (sets stop:true). ' +
-              'Creator handoff is already unlocked from this submit; without end your session may look finished while still connected. ' +
-              'Call end instead of sitting in a get_gate_verdict loop — Studio shows the gate. ' +
-              'If you need an already-available verdict to keep iterating, call get_gate_verdict once; a pending delivery returns stop:true and ends this run.',
+              'Delivered. This session stays open until end, which sets stop:true and posts its summary to the creator; ' +
+              'creator handoff is already unlocked. The verdict lands in Studio in 2–5 minutes. ' +
+              'get_gate_verdict is a one-shot read, and a pending delivery returns stop:true.',
           });
           if (!gateStarted) {
             warnings.push({
               code: 'gate_not_started',
               message:
-                'Delivery accepted but the gate did not start (no Cloud Build id). ' +
-                'Do not assume a Studio preview is assembling — retry submit_sources or tell the creator.',
+                'Delivery accepted but the gate did not start (no Cloud Build id), so no Studio preview is assembling. ' +
+                'Another submit_sources retries it.',
             });
           }
         }

@@ -204,10 +204,10 @@ describe('plugin skills', () => {
     }
   });
 
-  // A skill that restates the loop drifts from mcp-server.ts.
-  it('defers to the server-returned workflow rather than restating it', () => {
+  it('points at the server-returned sequence rather than restating it', () => {
     const skill = readFileSync(join(skillsDir, 'gamedevpl/SKILL.md'), 'utf8');
-    expect(skill).toContain('When it disagrees');
+    expect(skill).toContain('more specific than this file');
+    expect(skill).not.toMatch(/it wins|Warnings are instructions/); // informs, never outranks
   });
 
   // skills.sh reads root, `skills/`, `.claude/skills/` — never inside the plugin.

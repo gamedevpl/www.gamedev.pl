@@ -3,7 +3,6 @@ import { AGENT_CHANNEL_ROUTES, GATE_STATUS_VALUES } from '@gamedevpl/contract';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   WARNINGS_PROP,
   type ToolContext,
@@ -74,7 +73,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
             description:
               'Informational delay before a later creator-led run checks again. stop:true takes priority in this run.',
           },
-          stop: { type: 'boolean', description: 'When true, stop this agent run immediately.' },
+          stop: { type: 'boolean', description: 'True while the delivered build is still running; reason says why.' },
           reason: { type: 'string' },
           ...WARNINGS_PROP,
         },
@@ -88,13 +87,12 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         'the build is still running — tell the user the verdict will appear in Studio in 2–5 minutes rather than checking again in this run. A pending result with deliveryId:null means ' +
         'you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. ' +
         'retryAfterSeconds is only for a later creator-led run checking a delivered gate. Repeated checks trigger warnings.code=gate_poll_backoff. ' +
-        'kit_outdated is terminal — stop polling, re-run get_kit, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) ' +
-        '(same mode as the refused delivery; omit mode only to reuse that lane; do not re-upload the whole tree; do not wait for green/red). ' +
+        'kit_outdated is terminal: a fresh get_kit engineRef plus submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) ' +
+        're-delivers the same files (same mode as the refused delivery; omitting mode reuses that lane). ' +
         'Terminal receipt: still readable after the round closes ' +
         "when your capability's generation owns that delivery (generation may be exactly one behind current), " +
         'so the verdict stays readable if the round closes between polls. ' +
-        'Expiry still applies. Wait for publish green before considering the round done. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Expiry still applies. Only a green publish verdict completes the round.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -121,7 +119,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
           return toolOk({
             ...body,
             summary:
-              'gate is still running — STOP this agent run now; do not call get_gate_verdict or any other tool again. Studio will show the eventual result.',
+              'the gate is still running; the verdict will appear in Studio in 2–5 minutes, and checking again in this run returns the same answer.',
             stop: true,
             reason: 'gate_pending',
           });
@@ -129,8 +127,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         if (body.status === 'pending') {
           return toolOk({
             ...body,
-            summary:
-              'nothing has been delivered yet — continue building and call submit_sources; do not call get_gate_verdict again before a delivery',
+            summary: 'nothing has been delivered yet, so there is no verdict to read; submit_sources delivers one',
             stop: false,
             reason: 'no_delivery',
           });
@@ -267,7 +264,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         'Fetch the media the gate itself produced for a delivery (default: latest). Screenshots come back ' +
         'BOTH as attached images (no fetching needed — use these) and as short-lived signed URLs; the ' +
         'gameplay MP4 is a URL only. ' +
-        'Without a shell or browser, on a later/resumed run call get_gate_verdict once first (start does not surface preview_passed); if a preview verdict is already available after mode=preview, then call this — that is how you see the game. Do not call it immediately after submit_sources: Cloud Build has stored nothing yet, and you must not wait or poll. ' +
+        'Without a shell or browser, on a later/resumed run call get_gate_verdict once first (start does not surface preview_passed); if a preview verdict is already available after mode=preview, then call this — that is how you see the game. Right after submit_sources there is nothing yet: Cloud Build has stored no media, and this tool does not wait. ' +
         'Use it when you cannot run the game yourself — look at the attached frames for visual defects ' +
         '(blank canvas, missing sprites) before resubmitting, and show them to the creator. ' +
         'frames=opening (default) attaches one frame; frames=all attaches up to 3; frames=none skips them ' +
@@ -276,8 +273,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         'to the creator, who can, and describe the game from the attached frames. ' +
         'Read-only over the gate run that already happened; it never triggers a build, and media exists only ' +
         'after a delivery has been gated. Terminal receipt: like get_gate_verdict, the latest delivery stays ' +
-        'readable after green closes the round. ' +
-        BEHAVIOURAL_CONTRACT,
+        'readable after green closes the round.',
       inputSchema: {
         type: 'object',
         properties: {

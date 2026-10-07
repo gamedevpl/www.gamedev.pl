@@ -281,8 +281,8 @@ export function createMcpNudgeTracker(
       warnings.push({
         code: 'card_unopened',
         message:
-          'The creator has no status card for this round — call show_round once so they can watch the build ' +
-          'and the gate without asking you. It is a read; it changes nothing.',
+          'The creator has no status card for this round yet. show_round renders one that follows the build ' +
+          'and the gate on its own; it is a read and changes nothing.',
       });
     }
 
@@ -293,8 +293,7 @@ export function createMcpNudgeTracker(
       if (staleByTime || staleByCalls) {
         warnings.push({
           code: 'progress_stale',
-          message:
-            'No recent report_progress — call report_progress with a short status so the creator sees you are still working, then continue.',
+          message: "No report_progress for a while, so the creator's thread shows no recent activity.",
         });
       }
     }
@@ -302,7 +301,7 @@ export function createMcpNudgeTracker(
     if (state.pendingCount > 0 && toolName !== 'read_inbox') {
       warnings.push({
         code: 'inbox_pending',
-        message: `Creator inbox has ${state.pendingCount} pending message(s) — call read_inbox, apply them, ack_inbox, then continue.`,
+        message: `${state.pendingCount} creator message(s) are waiting; read_inbox returns them and ack_inbox marks them handled.`,
       });
     }
 
@@ -314,7 +313,7 @@ export function createMcpNudgeTracker(
     ) {
       warnings.push({
         code: 'seed_unread',
-        message: 'A seed draft is available — call get_seed and continue that draft before scaffolding from the kit.',
+        message: 'A round-0 draft is available and has not been read yet; get_sources (or get_seed) returns it.',
       });
     }
 
@@ -330,8 +329,8 @@ export function createMcpNudgeTracker(
       warnings.push({
         code: 'transcript_unread',
         message:
-          'This game has an earlier build attempt — earlier conversation may exist. Call get_transcript before ' +
-          'deciding what to build; the latest message is the tail of a conversation, not the whole of it.',
+          'This game has an earlier build attempt, so earlier conversation exists; get_transcript returns its ' +
+          'latest window. The latest message is the tail of a conversation, not the whole of it.',
       });
     }
 
@@ -342,8 +341,8 @@ export function createMcpNudgeTracker(
         code: 'call_end',
         message:
           toolName === 'get_gate_verdict'
-            ? 'Still waiting for end — get_gate_verdict is a one-shot check, not a loop. A pending verdict means the build is still running; it will appear in Studio.'
-            : 'Still waiting for end — call end now if you will not deliver more this round (Studio handoff may already be unlocked from submit).',
+            ? 'Delivered, session still open. get_gate_verdict is a one-shot read; a pending verdict means the build is still running and will appear in Studio.'
+            : 'Delivered, session still open until end (Studio handoff may already be unlocked from submit).',
       });
     }
 
@@ -353,7 +352,7 @@ export function createMcpNudgeTracker(
       if (state.lastGatePollAt !== null && nowMs - state.lastGatePollAt < GATE_POLL_MIN_INTERVAL_MS) {
         warnings.push({
           code: 'gate_poll_backoff',
-          message: `Do not repeat get_gate_verdict in one run. If a delivery is pending, honour stop:true; if deliveryId is null, continue building and call submit_sources instead. A later creator-led run may check a delivered gate after retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS} has elapsed.`,
+          message: `get_gate_verdict was already checked in this run. A pending delivery stays pending until its build finishes (stop:true); deliveryId null means nothing is delivered yet. A later creator-led run can check again after retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS}.`,
         });
       }
       state.lastGatePollAt = nowMs;

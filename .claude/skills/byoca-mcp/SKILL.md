@@ -16,10 +16,11 @@ live round. Connector-only requests are inert; do not treat the connector as a r
 The GitHub Agents-side secret reference must use the `COPILOT_MCP_` prefix. Copilot's
 firewall does not cover MCP servers, so the round-key boundary is the isolation layer.
 
-## Session loop (what agents must do)
+## Session loop (what a round usually does)
 
-Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
-`apps/api/src/agent-surface/mcp-server.ts` (returned by `start`, appended to every tool description).
+Source of truth: `ROUND_SEQUENCE` (returned by `start` as `sequence`) and `MCP_INSTRUCTIONS`
+(`initialize.instructions`) in `apps/api/src/agent-surface/mcp-round-guide.ts`, plus each tool's
+own description. They describe; the client decides — see "Server text states facts" below.
 
 1. `start` → `show_round` (once) → `get_brief` → `get_sources` → `get_kit` as needed
    - `start` returns a compact, signed `sessionKey` for later calls. Previously issued
@@ -306,12 +307,12 @@ backticks), and never let the summary grow into a diff. A data-only change (Edit
 defaults/content, same declaration) skips the agent entirely and lands as an
 `origin: 'editor'` content candidate.
 
-### Context budget — one contract, not one suffix per tool
+### Context budget — one short overview, not one suffix per tool
 
-The shared behavioural contract belongs in MCP `initialize.instructions`, not in every tool
-description. Repeating it across the advertised schemas made the live 31-tool `tools/list`
-payload about 208 KiB — roughly 50k JSON/code tokens before the creator prompt or any tool
-result. `tools/list` strips the repeated suffix at serialization time and the Anthropic
+Shared guidance belongs once, in MCP `initialize.instructions` (`MCP_INSTRUCTIONS`, kept under
+3,000 characters so no client cuts it off), not in every tool description. Repeating a long
+contract across the advertised schemas once made the live 31-tool `tools/list` payload about
+208 KiB — roughly 50k JSON/code tokens before the creator prompt or any tool result. The
 managed provider defers optional MCP tools; keep the round-start/read/delivery path eager.
 Prompt caching lowers processing cost but does not remove those tokens from the context window.
 When adding or expanding a tool description, measure the serialized `tools/list` payload and
@@ -337,8 +338,8 @@ is sized to a safe _MCP single-tool-result_ limit, not to the API's own size —
 "A digest-sized tool result is not free" below before touching this constant again. Same
 `engineRef` convention as the browse routes: optional, defaults to the registry's current
 entry when omitted, but pass the `engineRef` `get_kit` returned so a mid-round registry
-bump cannot mix kit revisions. `get_kit` and `get_kit_api` both carry
-`BEHAVIOURAL_CONTRACT`'s line that the platform and kit are not on the public web — a
+bump cannot mix kit revisions. `get_kit` and `get_kit_api` both state that the platform
+and kit are not on the public web — a
 capability question is answered by `get_kit_api`, `knowledge_query` or browse. State the
 fact; do not phrase it as a prohibition.
 
@@ -1125,7 +1126,7 @@ throwaway `Bearer handshake`; a case that means to arrive without one says so.
   duplicate round card in the conversation per call. Re-run it only after a call is refused as
   unauthenticated. Observed 2026-08-05: ChatGPT called `start` before each operation and said it
   did so "to reacquire the key" — a fair reading of _short-lived_ that nothing in the contract
-  corrected. `SESSION_WORKFLOW`'s first step now does.
+  corrected. The first `sequence` step and the `start` description now do.
   Therefore revoking or rotating a creator key, revoking an OAuth grant, or detecting
   refresh-token reuse must also advance every open self round for that creator via
   `endOpenAgentSessions`. Revoking the opener alone would leave minted session keys live.
@@ -1178,6 +1179,35 @@ follow-up once nothing reads them. Tests in `mcp-server.test.ts` and
 `agent-upload-private-state.test.ts` fail if a command or launch flag reappears in a
 description or the contract.
 
+### Server text states facts; the client decides
+
+Tool replies used to order the agent about — a `start` workflow to "follow exactly", warnings
+to "act on", a pending gate that said "STOP this agent run now". A client should not take
+behaviour from a tool response: the reply is not what was reviewed, it can change at any time,
+and in a chat client the person talking to the model is the creator, who outranks the server.
+So server text describes and the client decides:
+
+- `start` returns `sequence` (the usual order of a round) and `nextSuggestedTool`; its own
+  description carries the same order where a reviewer can read it.
+- Replies carry state as data — `stop`, `pendingMessages`, `warnings[].code` with a message
+  that says what is true, and `nextSuggestedTool`. No "honour", "ALWAYS", "STOP" or "do not".
+- `initialize.instructions` is a short overview (`MCP_INSTRUCTIONS`), not a rulebook.
+- Kit-checkout scripts (`npm run typecheck` / `check:game` / `play` / `trace`) and the capture
+  recipe live in the shipped `gamedevpl` skill. `mcp-tool-text.test.ts` fails if a shell
+  command reappears in the instructions, the sequence, a description or a schema field.
+
+Our own managed builder still runs a strict loop — but that loop now lives in its system
+prompt (`infra/managed-agent.json`), which we write and which tells it to act on `stop`,
+`warnings` and `nextSuggestedTool`. That prompt is applied with
+`apps/api/scripts/managed-agent-apply.ts`, not by deploy, so apply it whenever it changes.
+
+**Measuring the change.** Every `mcp session started` log line carries `guideVersion`
+(`MCP_GUIDE_VERSION`). Compare self rounds before and after a version change on the outcomes
+the old wording existed to protect: the share that call `end` after submit (`agentEndedBy`),
+the share that deliver at least one preview, and the share that resubmit after a refused gate.
+If one drops, restore the specific sentence that carried it — in a tool description, as a
+fact — rather than bringing back the imperative contract.
+
 **`submit_sources` never publishes by default.** An omitted `mode` is `preview`;
 `publish` must be passed explicitly (`fromLatestDelivery` still reuses the previous lane).
 Sealing a green preview later still runs the full publish gate (`origin: 'seal'`).
@@ -1210,7 +1240,7 @@ cannot forget it. Before that, a refusal failed the declared schema and clients 
 back to `error` text otherwise — never parse the message.
 
 The refusal vocabulary and the warnings vocabulary are both declared once in `initialize`
-(`MCP_REFUSAL_CONTRACT`, `MCP_WARNINGS_CONTRACT`), not per tool: `tools/list` is capped at 120 KB
+(`MCP_INSTRUCTIONS`), not per tool: `tools/list` is capped at 120 KB
 and every byte there is context the building agent pays for on connect.
 
 Adding a code: extend `MCP_ERROR_CODES` in `mcp-tool-support.ts`, return it with `toolRefusal`,
@@ -1218,7 +1248,9 @@ and add a row here.
 
 ## Soft warnings (never `isError`)
 
-Merged by `applySessionNudges` / submit handler. Act, then continue:
+Merged by `applySessionNudges` / submit handler. Each message states the round's state, and
+the reply's `nextSuggestedTool` names the tool the most pressing warning points at
+(`nextSuggestedTool()` in `mcp-round-guide.ts`):
 
 | Code                    | Meaning                                                                                                                                                                                                                                                                                        |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

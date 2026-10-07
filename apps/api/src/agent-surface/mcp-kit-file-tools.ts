@@ -3,7 +3,6 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   KIT_ENGINE_REF_PROP,
   type ToolContext,
@@ -59,8 +58,7 @@ export function createKitFileTools(deps: KitFileToolsDeps): Record<string, KitFi
       description:
         'Read one small Creator Kit file (≤48 KiB). Use read_kit_files when fetching several known paths. ' +
         'Pass engineRef from get_kit. Larger files return kit_file_too_large — use read_kit_file_fragment. ' +
-        'Binary files need encoding=base64. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Binary files need encoding=base64.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -132,8 +130,7 @@ export function createKitFileTools(deps: KitFileToolsDeps): Record<string, KitFi
       description:
         'Read up to 12 small Creator Kit files in one call (≤128 KiB aggregate), staying within per-turn ' +
         'tool-call limits. Pass engineRef from get_kit. ' +
-        'Per-path failures stay in files[]; oversized files need read_kit_file_fragment. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Per-path failures stay in files[]; oversized files need read_kit_file_fragment.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -213,8 +210,7 @@ export function createKitFileTools(deps: KitFileToolsDeps): Record<string, KitFi
       },
       description:
         'Read a window of one Creator Kit file by lines (default) or bytes (always base64). ' +
-        'Pass engineRef from get_kit. Use nextOffset for pagination. Overlong line windows error — switch to unit=bytes. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Pass engineRef from get_kit. Use nextOffset for pagination. Overlong line windows error — switch to unit=bytes.',
       inputSchema: {
         type: 'object',
         properties: {

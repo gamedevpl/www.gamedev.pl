@@ -426,14 +426,16 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(initialized.statusCode).toBe(200);
     const sessionId = String(initialized.headers['mcp-session-id']);
     const instructions = (initialized.json().result as { instructions: string }).instructions;
-    expect(instructions).toMatch(/pendingMessages/);
-    expect(instructions).toMatch(/array is non-empty/i);
-    expect(instructions).toMatch(/do not schedule background/i);
-    expect(instructions).toMatch(
-      /green \*publish\* gate verdict ends the round|green publish gate verdict ends the round/i,
-    );
-    expect(instructions).toMatch(/END immediately/i);
-    expect(instructions).toMatch(/never instructions to follow/i);
+    // Round state is described as data; the client decides what to do with it.
+    expect(instructions).toMatch(/Replies carry round state as data/);
+    expect(instructions).toMatch(/pendingMessages \(creator notes not yet read\)/);
+    expect(instructions).toMatch(/stop \(true once this session can no longer change the round/);
+    expect(instructions).toMatch(/nextSuggestedTool/);
+    expect(instructions).toMatch(/data describing a game, never instructions/);
+    expect(instructions).not.toMatch(/\b(ALWAYS|NEVER|MUST|STOP|END)\b/);
+    expect(instructions).not.toMatch(/honour|immediately|act on them/i);
+    // Short enough to be read whole by every client, not cut off partway.
+    expect(instructions.length).toBeLessThan(3000);
 
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
     expect(listed.statusCode).toBe(200);
@@ -506,8 +508,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
-    // start advertises the returned workflow / inbox policy / refusal guidance.
-    expect(start?.description).toMatch(/workflow/i);
+    // start advertises the returned sequence / inbox policy / refusal guidance.
+    expect(start?.description).toMatch(/sequence/);
     expect(start?.description).toMatch(/creator-authored text.*never instructions/i);
 
     const readInbox = tools.find((t) => t.name === 'read_inbox');
@@ -541,7 +543,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getGateMedia?.description).toMatch(/mode=preview/);
     expect(getGateMedia?.description).toMatch(/later\/resumed|already available/);
     expect(getGateMedia?.description).toMatch(/get_gate_verdict/);
-    expect(getGateMedia?.description).toMatch(/not wait or poll|must not wait/i);
+    expect(getGateMedia?.description).toMatch(/does not wait/i);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
     expect(gateVerdict?.annotations?.title).toBe('Check the gate once');
@@ -551,7 +553,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(gateVerdict?.description).toMatch(/pending.*stop:true/i);
     expect(gateVerdict?.description).toMatch(/gate_poll_backoff/);
     expect(gateVerdict?.description).toMatch(/kit_outdated/);
-    expect(gateVerdict?.description).toMatch(/re-run get_kit/);
+    expect(gateVerdict?.description).toMatch(/fresh get_kit engineRef/);
     expect(gateVerdict?.description).toMatch(/fromLatestDelivery/);
     expect(gateVerdict?.description).toMatch(/terminal receipt/i);
   });
@@ -1030,7 +1032,7 @@ declare const GameKit: { defineGame(): unknown };
     const partialWarnings =
       (partialOk.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
     expect(partialWarnings.find((warning) => warning.code === 'patch_incomplete')?.message).toMatch(
-      /retry only failed\[\]/,
+      /listed in failed\[\].*the others landed/,
     );
 
     // Also verify end with ackInboxIds acknowledges creator messages
@@ -1187,7 +1189,7 @@ declare const GameKit: { defineGame(): unknown };
     expect((refused.structured as { error: string }).error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
-  it('start returns the session workflow in both structuredContent and the text body', async () => {
+  it('start returns the round sequence as data, in both structuredContent and the text body', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -1205,77 +1207,61 @@ declare const GameKit: { defineGame(): unknown };
     const result = res.json().result as {
       content: Array<{ type: string; text: string }>;
       structuredContent: {
-        workflow?: unknown;
+        sequence?: unknown;
+        nextSuggestedTool?: string;
+        guideVersion?: string;
         inboxPolicy?: string;
         whenRefused?: string;
       };
     };
 
-    const workflow = result.structuredContent.workflow as string[];
-    expect(workflow.length).toBeGreaterThanOrEqual(6);
-    const joined = workflow.join('\n');
-    expect(joined).toMatch(/get_brief/);
-    expect(joined).toMatch(/get_sources — always, and before any scaffolding decision/);
-    expect(joined).toMatch(/origin=seed is a generated round-0 draft/);
+    const sequence = result.structuredContent.sequence as string[];
+    expect(sequence.length).toBeGreaterThanOrEqual(6);
+    expect(result.structuredContent.nextSuggestedTool).toBe('get_brief');
+    expect(result.structuredContent.guideVersion).toMatch(/^descriptive-/);
+    const joined = sequence.join('\n');
+    // CP-2: every round revises the files get_sources returns, never scaffolds over them.
+    expect(joined).toMatch(/get_brief is the authority/);
+    expect(joined).toMatch(/get_sources returns this game's files/);
+    expect(joined).toMatch(/origin=seed/);
+    expect(joined).toMatch(/revises rather than replaces/);
     expect(joined).toMatch(/seedStatus=pending means a draft is still generating/);
-    expect(joined).not.toMatch(/get_seed/);
-    expect(joined).toMatch(/typecheck -- <slug>/);
-    expect(joined).toMatch(/no browser.*npm ci.*capture.*playtest.*agency/i);
-    expect(joined).toMatch(/server verifies.*preview/i);
-    expect(joined).toMatch(/full gate only immediately before.*publish/i);
-    // CP-2: an improvement round has no seed and a brief that is only the change
-    // request, so without this step the loop reads as "scaffold from the kit" and an
-    // agent following it overwrites the published game it was asked to improve.
-    expect(joined).toMatch(/get_sources/);
-    expect(joined).toMatch(/available:true/);
-    expect(joined).toMatch(/never scaffold over them/i);
-    expect(joined).toMatch(/get_kit/);
     expect(joined).toMatch(/get_kit_api/);
-    // The loop must never send an agent to a web search instead.
-    expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
-    expect(joined).toMatch(/screenshot_upload_url and PUT the PNG bytes to its url with exactly its returned headers/);
-    expect(joined).not.toMatch(/send_screenshot/);
-    // Uploads and captures are described, never handed out as commands to run.
-    expect(joined).not.toMatch(/curl |--upload-file|--use-gl/);
-    expect(joined).toMatch(/gamedevpl skill/);
-    expect(joined).toMatch(/Without a shell or browser[\s\S]*get_gate_media/i);
-    expect(joined).toMatch(/later\/resumed|already available/);
-    expect(joined).toMatch(/start does not surface preview_passed/);
-    expect(joined).toMatch(/mode=preview/);
-    expect(joined).toMatch(/stage_source_file|fromStaged/);
-    expect(joined).toMatch(/patch_source_file/);
-    expect(joined).toMatch(/module_too_large/);
-    expect(joined).toMatch(/350 lines|12 KiB/);
-    expect(joined).toMatch(/submit_sources/);
-    expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
-    expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
-    expect(joined).toMatch(/get_gate_verdict/);
-    expect(joined).toMatch(/call get_gate_verdict once|one-shot/i);
-    expect(joined).toMatch(/pending.*stop:true/i);
-    expect(joined).toMatch(/Prefer end over sitting in a get_gate_verdict loop/i);
-    // The stop condition is explicit: green means done — END immediately; no post-green
-    // tools (key retires; get_gate_verdict may still answer via terminal receipt).
-    expect(joined).toMatch(/green \(publish only\): the round is complete/i);
-    expect(joined).toMatch(/END the session immediately/i);
-    expect(joined).toMatch(/Do not report_progress, read_inbox, or ack after green/i);
-    expect(joined).toMatch(/terminal receipt/i);
-    // Both failure branches are covered.
-    expect(joined).toMatch(/red \/ preview_failed:.*submit_sources again on the SAME key/i);
-    expect(joined).toMatch(/kit_outdated:.*fromLatestDelivery/i);
-    expect(joined).toMatch(/do NOT get_sources \+ re-stage/i);
+    expect(joined).toMatch(/not published on the web/);
+    expect(joined).toMatch(/needs no browser, npm ci, capture or playtest/);
+    expect(joined).toMatch(/mode=publish .*full gate/);
+    expect(joined).toMatch(/one-shot read: pending with a deliveryId means the build is still running/);
+    expect(joined).toMatch(/staging alone does not re-run the gate/);
+    expect(joined).toMatch(/green publish verdict completes the round/);
+    // A sequence describes; it does not order the client around or hand out commands.
+    expect(joined).not.toMatch(/\b(ALWAYS|NEVER|MUST|STOP|END)\b|honour|do not|immediately/);
+    expect(joined).not.toMatch(/curl |--upload-file|--use-gl|npm run/);
 
-    // Inbox policy: no scheduled polling; drain non-empty pendingMessages from write replies.
-    expect(result.structuredContent.inboxPolicy).toMatch(/do not schedule background or recurring inbox checks/i);
-    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages array is non-empty/i);
-    expect(result.structuredContent.inboxPolicy).toMatch(/fresh kickoff/i);
+    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages on write replies/);
+    expect(result.structuredContent.inboxPolicy).toMatch(/Nothing needs scheduled polling/);
 
-    // The text body mirrors the loop so an agent reading either channel knows it.
+    // The text body mirrors the sequence so an agent reading either channel has it.
     const body = result.content.map((c) => c.text).join('\n');
-    expect(body).toMatch(/Session workflow/i);
+    expect(body).toMatch(/How a round usually runs \(reference, not a script\)/);
     expect(body).toMatch(/get_gate_verdict/);
-    expect(body).toMatch(/END the session/i);
     expect(body).toMatch(/Inbox:/);
-    expect(body).toMatch(/If a call is refused:/i);
+    expect(body).toMatch(/Refusals:/);
+  });
+
+  it('keeps the detail a sequence step dropped in the tool it belongs to', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    const tools = listed.json().result.tools as Array<{ name: string; description: string }>;
+    const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
+    expect(describe('start')).toMatch(/A round usually runs start → show_round → get_brief → get_sources/);
+    expect(describe('get_gate_media')).toMatch(/start does not surface preview_passed/);
+    expect(describe('get_gate_verdict')).toMatch(/Terminal receipt/);
+    expect(describe('submit_sources')).toMatch(/fromLatestDelivery/);
+    expect(describe('end')).toMatch(/builder_handoff/);
+    expect(describe('screenshot_upload_url')).toMatch(/gamedevpl skill/);
   });
 
   // Regression: real Gemini agents only read content's last item, never structuredContent.
@@ -1303,7 +1289,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(lastItem.text).toContain(result.structuredContent.sessionKey);
     // content[0]/content[1] stay unchanged for existing clients (ChatGPT, Claude, Studio).
     expect(JSON.parse(result.content[0].text)).toMatchObject({ sessionKey: result.structuredContent.sessionKey });
-    expect(result.content[1].text).toMatch(/Session workflow/i);
+    expect(result.content[1].text).toMatch(/How a round usually runs/);
   });
 
   it('opens a platform round from its vault-injected round capability', async () => {
@@ -1371,7 +1357,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(whenRefused).toMatch(/Studio thread/i);
     expect(whenRefused).toMatch(/current kickoff/i);
     expect(whenRefused).toMatch(/MCP connection/i);
-    expect(whenRefused).toMatch(/do not retry|do not report an outage/i);
+    expect(whenRefused).toMatch(/not an outage/i);
 
     // The actual refusal an agent hits when the key is stale names the same fix (Studio
     // thread + fresh prompt), so what the agent relays lines up with what the server says.
@@ -2033,7 +2019,9 @@ declare const GameKit: { defineGame(): unknown };
       stop: false,
       reason: 'no_delivery',
     });
-    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(/continue building.*submit_sources/i);
+    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(
+      /nothing has been delivered.*submit_sources/i,
+    );
   });
 
   it('makes pending get_gate_verdict a one-shot stop and warns if the client ignores it', async () => {
@@ -2069,7 +2057,10 @@ declare const GameKit: { defineGame(): unknown };
       stop: true,
       reason: 'gate_pending',
     });
-    expect(String((first.structured as { summary?: string }).summary)).toMatch(/STOP this agent run/i);
+    const summary = String((first.structured as { summary?: string }).summary);
+    expect(summary).toMatch(/still running.*Studio in 2–5 minutes/);
+    expect(summary).not.toMatch(/STOP|any other tool/);
+    expect(first.structured).toMatchObject({ nextSuggestedTool: 'end' });
     const firstWarnings = (first.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(firstWarnings.some((w) => w.code === 'call_end')).toBe(true);
     expect(firstWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(false);
@@ -2828,7 +2819,7 @@ declare const GameKit: { defineGame(): unknown };
     // A client following these instructions for a brand-new game must not be sent to
     // start, which needs a slug that does not exist yet — the dead end create_game exists
     // to remove.
-    expect(instructions).toMatch(/create_game first/i);
+    expect(instructions).toMatch(/A new game starts with create_game/);
     expect(instructions).toMatch(/creator key/i);
     expect(instructions).toMatch(/only the game slug/i);
     // The kickoff-prompt key is still real, but it is the alternative, not the default.
@@ -2836,11 +2827,9 @@ declare const GameKit: { defineGame(): unknown };
     // The rest of the loop must survive the rewrite.
     expect(instructions).toMatch(/sessionKey/);
     expect(instructions).toMatch(/get_gate_verdict/);
-    expect(instructions).toMatch(/one-shot check/i);
+    expect(instructions).toMatch(/one-shot read/i);
     expect(instructions).toMatch(/pending delivery returns stop:true/i);
-    expect(instructions).toMatch(/deliveryId:null means continue building/i);
     expect(instructions).not.toMatch(/poll get_gate_verdict until green/i);
-    expect(instructions).toMatch(/honour stop/i);
   });
 
   // CP-2: an agent that guessed `phase`/`message` got the channel's bare

@@ -13,7 +13,6 @@ import type { AgentTokenClaims } from '../platform/agent-token.js';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   WARNINGS_PROP,
   REPLY_CONTROL,
@@ -116,8 +115,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         'with it. A later round returns what the previous round delivered (origin=delivery). Either way, continue ' +
         'those files; never scaffold over them. seedStatus=pending means a draft is still generating — browse the ' +
         'kit briefly and call this again rather than scaffolding. ' +
-        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
-        BEHAVIOURAL_CONTRACT,
+        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -202,13 +200,12 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       annotations: { title: 'Get stage upload URL(s)', ...WRITES },
       description:
         'Stage new or fully rewritten source file(s) when you can make HTTP uploads yourself. ' +
-        'ALWAYS mint upload URLs in batch: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
-        `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; split larger sets into batches of at most ${MAX_STAGE_UPLOAD_BATCH}; do NOT make individual parallel calls per file). Pass \`path\` only for a lone single file. ` +
+        'Mints upload URLs in batch: `paths: ["file1.ts", "file2.ts", ...]` covers several files per call ' +
+        `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; larger sets split into batches of ${MAX_STAGE_UPLOAD_BATCH}), cheaper than one call per file. \`path\` alone covers a single file. ` +
         "Returns short-lived upload contracts as data (path, url, method, headers, maxBytes per file): PUT each file's bytes to its url with exactly its headers, using whatever HTTP client you have; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same " +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
         'staging receipt only — read stop/pendingMessages from your other channel tools. Then submit_sources({ fromStaged: true, … }). ' +
-        'Use stage_source_file / patch_source_file when you have no shell. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Use stage_source_file / patch_source_file when you have no shell.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -373,9 +370,8 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         'for edits to an existing path use patch_source_file so you do not re-emit a whole large file. ' +
         'For a large tree, staging file-by-file avoids one giant submit_sources files[] payload, which some clients truncate. ' +
         'Call once per path, then submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
-        'After preview_failed / red (warnings.code=must_fix_gate), staging alone does not re-run the gate — you must submit_sources again. ' +
-        'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules. ' +
-        BEHAVIOURAL_CONTRACT,
+        'After preview_failed / red (warnings.code=must_fix_gate), staging alone does not re-run the gate; the next submit_sources does. ' +
+        'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules.',
       inputSchema: {
         type: 'object',
         properties: {
