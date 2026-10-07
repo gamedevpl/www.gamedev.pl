@@ -20,6 +20,33 @@ describe('dreamHistory', () => {
     expect(history).toEqual(['Creator asked: Add artillery', 'Delivered: Artillery strikes on Q']);
   });
 
+  it('keeps ten asks when studio replies outnumber them', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(7, 'g:owner', 'Trench');
+    for (let index = 0; index < 10; index += 1) {
+      await store.appendCreatorMessage(7, `ask ${index}`);
+      await store.appendCreatorMessage(7, `reply ${index}`, { origin: 'studio', delivered: true });
+      await store.appendCreatorMessage(7, `ack ${index}`, { origin: 'studio_ack', delivered: true });
+    }
+    const history = await dreamHistory(store, 7);
+    expect(history).toEqual(Array.from({ length: 10 }, (_, index) => `Creator asked: ask ${index}`));
+  });
+
+  it('keeps a delivery behind thirty progress steps', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(7, 'g:owner', 'Trench');
+    await store.appendBuildEvent(7, {
+      kind: 'done',
+      step: 'deliver',
+      text: 'craters',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    });
+    for (let index = 0; index < 30; index += 1) {
+      await store.appendBuildEvent(7, { kind: 'step', step: 'build', text: `step ${index}` });
+    }
+    expect(await dreamHistory(store, 7)).toEqual(['Delivered: craters']);
+  });
+
   it(`keeps the newest ${MAX_DREAM_HISTORY}`, async () => {
     const store = new InMemoryStore();
     await store.createSubmission(7, 'g:owner', 'Trench');

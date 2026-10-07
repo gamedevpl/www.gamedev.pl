@@ -4,6 +4,7 @@ import type { Store } from '../platform/store.js';
 
 export const MAX_DREAM_HISTORY = 10;
 const MAX_LINE = 240;
+export const HISTORY_WINDOW = 60;
 
 function oneLine(text: string): string {
   // The playtest context block is machine data, not the creator's words.
@@ -18,9 +19,10 @@ export async function dreamHistory(
   store: Pick<Store, 'listBuildEvents' | 'listCreatorMessages'>,
   jobId: number,
 ): Promise<string[]> {
+  // Wide windows: studio replies and progress steps crowd the rows we keep.
   const [events, messages] = await Promise.all([
-    store.listBuildEvents(jobId, { limit: 20 }),
-    store.listCreatorMessages(jobId, { limit: 12, excludeProposals: true }),
+    store.listBuildEvents(jobId, { limit: HISTORY_WINDOW }),
+    store.listCreatorMessages(jobId, { limit: HISTORY_WINDOW, excludeProposals: true }),
   ]);
   const lines = [
     ...events
