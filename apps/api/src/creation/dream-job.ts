@@ -232,7 +232,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // Booked before the answer: a call that failed still billed.
     await bookConcept(jobId, ideas.model);
     // Fail open: the spec alone still gives ideas.
-    const history = await dreamHistory(store, jobId).catch(() => []);
+    const history = await dreamHistory(store, jobId, record.slug).catch(() => []);
     const generated = await ideas.generate({
       screenshotPng: source.toString('base64'),
       ...(history.length ? { history } : {}),
