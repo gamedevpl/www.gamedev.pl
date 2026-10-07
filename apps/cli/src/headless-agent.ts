@@ -16,6 +16,7 @@ import {
 import type { AdapterSpec } from './adapters.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import type { Steer } from './live-agent.js';
+import type { ApproveTool } from './agent-approval.js';
 import { evidenceImages } from './workbench-evidence.js';
 
 export type AdapterRunInput = {
@@ -30,6 +31,7 @@ export type AdapterRunInput = {
   onDiagnostic?: (line: string) => void;
   authCheck?: Promise<void>;
   onSteering?: (send: Steer | undefined) => void;
+  onApproval?: ApproveTool;
 };
 export type AdapterRun = (input: AdapterRunInput) => Promise<{ code: number | null; permissionSession?: string }>;
 

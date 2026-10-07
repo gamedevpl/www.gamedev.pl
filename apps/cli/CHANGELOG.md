@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Local Claude, Codex and Muse tasks ask for one-time tool approval in the Play panel or terminal and continue after your decision; Stop cancels pending approvals.
+
 ## 0.24.1 — 2026-10-06
 
 ### Fixed

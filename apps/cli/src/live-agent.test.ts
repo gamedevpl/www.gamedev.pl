@@ -176,3 +176,62 @@ it('reports a live agent that cannot start instead of throwing', async () => {
   expect(result.code).toBe(1);
   expect(lines.join('\n')).toMatch(/muse/);
 });
+
+it.each(['codex', 'muse'])('continues the same %s process after approval', async (name) => {
+  const root = mkdtempSync(join(tmpdir(), 'gd-live-approval-'));
+  roots.push(root);
+  const command = join(root, 'agent');
+  writeFileSync(
+    command,
+    `#!${process.execPath}
+const send=x=>process.stdout.write(JSON.stringify(x)+'\\n');
+const done=()=>send({method:'turn/completed',params:{threadId:'s',sessionId:'s',turn:{id:'t',status:'completed'},turnId:'t',terminal:'completed'}});
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
+ const m=JSON.parse(line); if(m.id===undefined)return;
+ if(m.id==='approval') {
+   if(${JSON.stringify(name)}==='codex') {
+     if(m.result?.decision!=='accept')process.exit(5);
+     done();
+   } else if(JSON.stringify(m.result)!=='{}')process.exit(6);
+   return;
+ }
+ if(m.method==='initialize')send({id:m.id,result:{}});
+ if(m.method==='thread/start') {
+   if(m.params.approvalPolicy!=='on-request')process.exit(7);
+   send({id:m.id,result:{thread:{id:'s'}}});
+ }
+ if(m.method==='session/start')send({id:m.id,result:{session:{sessionId:'s'}}});
+ if(m.method==='turn/start') {
+   send({id:m.id,result:{turn:{id:'t'},turnId:'t'}});
+   setTimeout(()=>send({id:'approval',method:${JSON.stringify(name === 'codex' ? 'item/commandExecution/requestApproval' : 'approval/request')},params:{
+     threadId:'s',sessionId:'s',turnId:'t',approvalId:'a',command:'npm test',
+     subject:{kind:'shell',command:'npm test'},currentRequirementId:{approvalId:'a',sourceIndex:0},
+     availableChoices:[{choiceId:'once',decision:'approved',scope:'once'},{choiceId:'no',decision:'denied',scope:'once'}]
+   }}),10);
+ }
+ if(m.method==='approval/decide') {
+   if(m.params.choiceId!=='once'||m.params.sessionId!=='s')process.exit(8);
+   send({id:m.id,result:{terminal:true}});
+   done();
+ }
+});`,
+    { mode: 0o700 },
+  );
+  const events: string[] = [];
+  const decisions: string[] = [];
+  const result = await runLiveAgent({
+    spec: { ...loadAdapters().adapters.find((adapter) => adapter.name === name)!, command },
+    prompt: 'test',
+    cwd: root,
+    env: process.env,
+    onApproval: async (request) => {
+      decisions.push(request.kind);
+      return 'approve';
+    },
+    onEvent: (event) => events.push(event.type),
+  });
+  expect(result.code).toBe(0);
+  expect(result.permissionSession).toBeUndefined();
+  expect(decisions).toEqual(['command']);
+  expect(events).toContain('approval-resolved');
+});

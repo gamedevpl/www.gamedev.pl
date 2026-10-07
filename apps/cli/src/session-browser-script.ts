@@ -27,7 +27,7 @@ function controls() {
   const ready = online && state && !pending && !sending;
   el('send').disabled = !ready || state.mode === 'pick' || (state.mode === 'busy' && !state.localTask);
   el('send').textContent = state?.mode === 'busy' ? 'Queue request' : 'Send';
-  el('stop').disabled = !online || !state?.localTask || state.mode !== 'busy' || stopping === state.taskId || Boolean(pending);
+  el('stop').disabled = !online || !state?.localTask || (state.mode !== 'busy' && !state.approvalPending) || stopping === state.taskId || Boolean(pending);
   draft.disabled = state?.mode === 'pick';
   for (const button of el('choices').children) button.disabled = !ready;
   el('retry').hidden = !pending || sending;
@@ -51,7 +51,7 @@ function render(next) {
   el('game-name').textContent = state.identity || 'gamedev.pl';
   el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
   window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,workspace:state.workspace}}));
-  el('task').textContent = (state.mode === 'busy' ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
+  el('task').textContent = (state.mode === 'busy' || state.approvalPending ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('task').dataset.tone = /^(?:blocked|failed|error)\b/i.test(state.activity) ? 'red' : '';
   el('queue').textContent = state.queued.length ? 'Queued (' + state.queued.length + ')\n' + state.queued.map((v, i) => (i + 1) + '. ' + v).join('\n') : '';
   el('question').textContent = state.question;
