@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { CreatorProposal, CreatorProposalOption } from '@gamedevpl/contract';
 import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
 import { recordStudioStep, type BuilderDimension } from '../../visitTelemetry.js';
+import { ConceptBadge, ProposalZoom, type ZoomTarget } from './ProposalZoom.js';
 import './studio-proposal.css';
 
 const FOCUSABLE =
@@ -112,9 +113,13 @@ export function ProposalCard({
             onClick={() => setOpen(true)}
             title={t('statusView.proposal.open')}
           >
-            <img src={buildMediaUrl(token, frameItem(option.frameRef))} alt={option.label[lang]} loading="lazy" />
-            <span className="studio-proposal-ai">{t('statusView.proposal.aiLabel')}</span>
-            <span className="studio-proposal-thumb-label">{option.label[lang]}</span>
+            <span className="studio-proposal-frame">
+              <img src={buildMediaUrl(token, frameItem(option.frameRef))} alt={option.label[lang]} loading="lazy" />
+            </span>
+            <span className="studio-proposal-thumb-label">
+              <ConceptBadge />
+              <span>{option.label[lang]}</span>
+            </span>
           </button>
         ))}
       </div>
@@ -161,6 +166,21 @@ function ProposalDialog({
   }
   const onPostponeRef = useRef(onPostpone);
   onPostponeRef.current = onPostpone;
+  const [zoom, setZoom] = useState<ZoomTarget | null>(null);
+  const zoomRef = useRef<HTMLDivElement | null>(null);
+  const zoomOpener = useRef<HTMLElement | null>(null);
+  const closeZoomRef = useRef<(() => void) | null>(null);
+  const currentSrc = buildMediaUrl(token, frameItem(proposal.sourceRef));
+  const currentLabel = t('statusView.proposal.current');
+  const openZoom = (target: ZoomTarget, event: MouseEvent<HTMLElement>) => {
+    zoomOpener.current = event.currentTarget;
+    setZoom(target);
+  };
+  const closeZoom = () => {
+    setZoom(null);
+    zoomOpener.current?.focus();
+  };
+  closeZoomRef.current = zoom ? closeZoom : null;
 
   useLayoutEffect(() => {
     dialogRef.current?.focus();
@@ -172,11 +192,13 @@ function ProposalDialog({
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
-        onPostponeRef.current();
+        // An enlarged frame closes first; the dialog stays.
+        if (closeZoomRef.current) closeZoomRef.current();
+        else onPostponeRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
-      const root = dialogRef.current;
+      const root = zoomRef.current ?? dialogRef.current;
       if (!root) return;
       const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
       const first = focusable[0];
@@ -218,7 +240,7 @@ function ProposalDialog({
           <h2>{t('statusView.proposal.title')}</h2>
           <button
             type="button"
-            className="studio-proposal-close"
+            className="modal-close-btn studio-proposal-close"
             onClick={onPostpone}
             aria-label={t('statusView.proposal.close')}
           >
@@ -228,31 +250,60 @@ function ProposalDialog({
         <p className="studio-proposal-intro">{t('statusView.proposal.intro')}</p>
         <div className="studio-proposal-grid">
           <figure className="studio-proposal-figure is-current">
-            <img src={buildMediaUrl(token, frameItem(proposal.sourceRef))} alt={t('statusView.proposal.current')} />
-            <figcaption>{t('statusView.proposal.current')}</figcaption>
+            <button
+              type="button"
+              className="studio-proposal-zoom"
+              aria-label={t('statusView.proposal.enlarge', { name: currentLabel })}
+              onClick={(event) => openZoom({ src: currentSrc, label: currentLabel, concept: false }, event)}
+            >
+              <img src={currentSrc} alt={currentLabel} />
+            </button>
+            <figcaption>{currentLabel}</figcaption>
           </figure>
-          {proposal.options.map((option) => (
-            <figure key={option.id} className="studio-proposal-figure">
-              <img src={buildMediaUrl(token, frameItem(option.frameRef))} alt={option.label[lang]} />
-              <span className="studio-proposal-ai">{t('statusView.proposal.aiLabel')}</span>
-              <figcaption>
-                <strong>{option.label[lang]}</strong>
-                <span>{option.prompt[lang]}</span>
-                <button type="button" className="studio-proposal-pick" onClick={() => onPick(option)}>
-                  {t('statusView.proposal.pick')}
+          {proposal.options.map((option) => {
+            const src = buildMediaUrl(token, frameItem(option.frameRef));
+            const label = option.label[lang];
+            return (
+              <figure key={option.id} className="studio-proposal-figure">
+                <button
+                  type="button"
+                  className="studio-proposal-zoom"
+                  aria-label={t('statusView.proposal.enlarge', { name: label })}
+                  onClick={(event) => openZoom({ src, label, concept: true }, event)}
+                >
+                  <img src={src} alt={label} />
                 </button>
-              </figcaption>
-            </figure>
-          ))}
+                <figcaption>
+                  <ConceptBadge />
+                  <strong>{label}</strong>
+                  <span>{option.prompt[lang]}</span>
+                </figcaption>
+                <div className="studio-proposal-actions">
+                  <button type="button" className="primary-btn studio-proposal-pick" onClick={() => onPick(option)}>
+                    {t('statusView.proposal.pick')}
+                  </button>
+                </div>
+              </figure>
+            );
+          })}
         </div>
         <footer className="studio-proposal-foot">
-          <button type="button" className="studio-proposal-secondary" onClick={onPostpone}>
+          <button type="button" className="secondary-btn" onClick={onPostpone}>
             {t('statusView.proposal.notNow')}
           </button>
-          <button type="button" className="studio-proposal-quiet" onClick={onMute}>
+          <button type="button" className="secondary-btn studio-proposal-quiet" onClick={onMute}>
             {t('statusView.proposal.askLess')}
           </button>
         </footer>
+        {zoom ? (
+          <ProposalZoom
+            ref={zoomRef}
+            target={zoom}
+            currentSrc={currentSrc}
+            currentLabel={currentLabel}
+            onClose={closeZoom}
+          />
+        ) : null}
       </div>
     </div>,
     document.body,
