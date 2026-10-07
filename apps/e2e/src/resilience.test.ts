@@ -66,14 +66,14 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
 
     expect((await bodyText()).length).toBeGreaterThan(0);
     // Lifetime `/play/<slug>`: an unknown slug is not in the catalog, so App mounts
-    // UnpublishedPlayView ("isn't available yet") rather than the published preview
+    // UnpublishedPlayView ("game not found") rather than the published preview
     // page's "does not exist". Keep the older missing / loadError wording too so a
     // catalog-error path that still renders GameDetailPage passes this gate.
     // The view retries a 404 with backoff before it settles, so poll past that window.
     await expect
       .poll(bodyText, { timeout: 20_000 })
       .toMatch(
-        /isn't available yet|nie jest jeszcze dostępna|does not exist|nie istnieje|could not load|nie udało|retry|ponów/i,
+        /game not found|nie ma takiej gry|isn't available yet|nie jest jeszcze dostępna|does not exist|nie istnieje|could not load|nie udało|retry|ponów/i,
       );
 
     expect(describeProblems(watcher.drain())).toBe('');
