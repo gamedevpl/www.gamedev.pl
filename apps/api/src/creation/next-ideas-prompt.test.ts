@@ -63,4 +63,26 @@ describe('VertexNextIdeaGenerator prompt', () => {
     expect(ideas.map((idea) => idea.label.en)).toEqual(['Fog']);
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it('gives the first draw at least the whole configured budget', async () => {
+    const budgets: number[] = [];
+    const chain = {
+      temperature: () => chain,
+      thinking: () => chain,
+      signal: (signal: AbortSignal) => {
+        void signal;
+        return chain;
+      },
+      json: async (parse: (value: unknown) => unknown) =>
+        parse({ ideas: [{ label: { en: 'Fog', pl: 'Mgła' }, prompt: { en: 'Add fog.', pl: 'Dodaj mgłę.' } }] }),
+    };
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      budgets.push(ms);
+      return new AbortController().signal;
+    });
+    const client = vi.fn(() => chain) as unknown as GenAIClient;
+    await new VertexNextIdeaGenerator({ client, timeoutMs: 45_000 }).generate(base);
+    timeout.mockRestore();
+    expect(budgets[0]).toBeGreaterThanOrEqual(45_000);
+  });
 });

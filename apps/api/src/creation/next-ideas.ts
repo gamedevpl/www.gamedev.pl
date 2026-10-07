@@ -158,7 +158,8 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
       // Malformed JSON or a capacity blip earns one more draw.
       let attempts = 0;
       const parsed = await callWithVertexResilience({
-        timeoutMs: this.timeoutMs,
+        // The first draw gets 60%; keep it above the budget.
+        timeoutMs: this.timeoutMs * 2,
         onAttempt: () => {
           attempts += 1;
           if (attempts > 1) params.onRetry?.();
