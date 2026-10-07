@@ -174,7 +174,7 @@ failure, fragments of game source (esbuild code frames, assertion diffs). So eve
 games-repo command in `games-catalog-gate.yml`, and `snapshot:publish` in
 `publish-games.yml`, runs through `.github/scripts/quiet-step.sh`. The wrapper discards
 the output and prints only the command, its exit code, its elapsed time and a heartbeat
-every minute. A failure says which command broke on which slugs. To see why, run that
+every minute. A failure also lists the `FAIL <word> <slug>` token of each failure line, plus its reason when that is a known tool phrase (trace drift, cost regression, CDP timeout). Free-form detail never gets through, because field names, values and Check examples can quote source. To see why, run that
 command in the games repo at the gated SHA.
 
 When you add a step that runs games-repo code, put it through the wrapper as well. Its
