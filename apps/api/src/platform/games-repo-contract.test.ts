@@ -264,6 +264,7 @@ describe('games-repo source extractors', () => {
     const source = `export const GAME_KIT_MODULE_REQUIRES = {
       actors: ['drawing'],
       gfx: ['drawing'],
+      urban: ['world'],
     } as const satisfies Record<string, readonly string[]>;`;
     expect(extractGameKitModuleRequires(source)).toEqual(GAME_KIT_MODULE_REQUIRES);
     expect(extractGameKitModuleRequires('export const GAME_KIT_MODULES = [];')).toBeNull();
@@ -273,6 +274,7 @@ describe('games-repo source extractors', () => {
     expect(missingModuleDependency(['input', 'gfx', 'ui'])).toMatch(/lacks "drawing", which "gfx" calls/);
     expect(missingModuleDependency(['input', 'actors'])).toMatch(/lacks "drawing", which "actors" calls/);
     expect(missingModuleDependency(['input', 'drawing', 'gfx'])).toBeNull();
+    expect(missingModuleDependency(['urban', 'drawing', 'gfx'])).toMatch(/lacks "world", which "urban" calls/);
   });
 
   it('reads GAME_KIT_VERTICALS from an assemble.ts-shaped source', () => {
