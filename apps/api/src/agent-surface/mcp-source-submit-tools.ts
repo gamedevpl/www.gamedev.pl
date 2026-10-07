@@ -212,7 +212,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         `(fromStaged overlays onto the latest delivery/seed — do not re-stage unchanged files). ` +
         `On kit_outdated: get_kit then fromLatestDelivery=true with the same mode and new kitEngineRef — do NOT re-upload the whole tree. ` +
         `mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
-        `mode=publish (seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
+        `mode=publish (seal): TRACE.json + PLAYTEST.json required (the kit's SKILL.md, via read_kit_file, says how to record them); full gate; only publish green ends the round. ` +
         `Omitting mode defaults to preview — publish is only ever an explicit mode=publish — except with fromLatestDelivery (reuses the previous candidate's lane). ` +
         `files[{path, content, encoding utf8|base64}] optional when fromStaged/fromLatestDelivery (inline paths override); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +

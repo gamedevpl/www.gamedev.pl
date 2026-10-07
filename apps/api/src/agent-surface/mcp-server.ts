@@ -43,6 +43,7 @@ import { createRoundReopenTools } from './mcp-round-reopen-tools.js';
 import { createSessionBasicsTools } from './mcp-session-basics-tools.js';
 import {
   INBOX_POLICY,
+  KIT_OUTDATED_MARK,
   MCP_GUIDE_VERSION,
   MCP_INSTRUCTIONS,
   nextSuggestedTool,
@@ -348,7 +349,7 @@ function mustFixGateWarningForStatus(status: string, deliveryId?: string | null)
     return {
       code: 'must_fix_gate',
       message:
-        `The gate refused the last delivery${delivery} as kit_outdated. A fresh engineRef from get_kit plus ` +
+        `The gate refused the last delivery${delivery} because ${KIT_OUTDATED_MARK}. A fresh engineRef from get_kit plus ` +
         'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) re-runs it; staging alone does not.',
     };
   }
@@ -414,6 +415,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
   const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
+  // Jobs whose kit pin get_kit replaced since their last delivery.
+  const refreshedKits = new Set<number>();
 
   function pruneTransportSessions(currentTime: number): void {
     for (const [id, meta] of transportSessions) {
@@ -876,13 +879,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         ? nudgeWarnings.filter((w) => w.code !== 'call_end')
         : nudgeWarnings;
     const warnings = [...prior, ...filteredNudges];
-    if (warnings.length === 0 && !piggybacked) {
+    if (toolName === 'get_kit' && data.kitEngineChanged === true) refreshedKits.add(jobId);
+    if (toolName === 'submit_sources' && data.ok === true) refreshedKits.delete(jobId);
+    const lastRead = nudgeTracker.peek(jobId)?.lastInboxCheckAt ?? null;
+    const pendingNotes = Array.isArray(data.pendingMessages)
+      ? (data.pendingMessages as Array<{ createdAt?: unknown }>)
+      : [];
+    const next = nextSuggestedTool({
+      tool: toolName,
+      stop: data.stop,
+      reason: data.reason,
+      warnings,
+      inboxUnread: lastRead === null || pendingNotes.some((note) => Date.parse(String(note.createdAt)) > lastRead),
+      kitRefreshed: refreshedKits.has(jobId),
+    });
+    if (warnings.length === 0 && !piggybacked && !next) {
       return result;
     }
-    if (warnings.length > 0) {
-      const next = nextSuggestedTool(warnings);
-      data = { ...data, warnings, ...(next ? { nextSuggestedTool: next } : {}) };
-    }
+    if (warnings.length > 0) data = { ...data, warnings };
+    if (next) data = { ...data, nextSuggestedTool: next };
     // Keep non-text content (e.g. get_gate_media's inline opening screenshot). Rebuilding
     // via toolOk() would drop those blocks whenever a warning or piggyback lands.
     return {

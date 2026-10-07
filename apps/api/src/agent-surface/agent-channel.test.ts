@@ -3030,7 +3030,7 @@ describe('the delivery reminder on every channel call', () => {
     });
 
     expect(response.json().control.delivered).toBe(false);
-    expect(response.json().control.mustDeliver).toContain('npm run submit');
+    expect(response.json().control.mustDeliver).toContain("shell sandbox's submit script");
 
     await app.close();
   });

@@ -2357,7 +2357,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(staged.isError).toBe(false);
     const warnings = (staged.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
     expect(warnings.some((w) => w.code === 'must_fix_gate')).toBe(true);
-    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/submit_sources again/i);
+    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/next submit_sources/i);
     expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/Staging alone/i);
     // Must not hard-code mode=preview — that contradicts publish red / kit_outdated.
     expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).not.toMatch(/mode:\s*"preview"/);

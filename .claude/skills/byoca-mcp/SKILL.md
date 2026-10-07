@@ -1187,8 +1187,9 @@ behaviour from a tool response: the reply is not what was reviewed, it can chang
 and in a chat client the person talking to the model is the creator, who outranks the server.
 So server text describes and the client decides:
 
-- `start` returns `sequence` (the usual order of a round) and `nextSuggestedTool`; its own
-  description carries the same order where a reviewer can read it.
+- `start` returns `sequence` (the usual order of a round) and `nextSuggestedTool: get_brief`
+  (or `get_kit` after a `kit_outdated` refusal); its own description carries the same order
+  where a reviewer can read it.
   `workflow` still ships as a deprecated alias of `sequence` for clients that cached the old
   `tools/list` schema; remove it with the other deprecated fields.
 - Replies carry state as data — `stop`, `pendingMessages`, `warnings[].code` with a message
@@ -1199,8 +1200,9 @@ So server text describes and the client decides:
   command reappears in the instructions, the sequence, a description or a schema field.
 
 Our own managed builder still runs a strict loop — but that loop now lives in its system
-prompt (`infra/managed-agent.json`), which we write and which tells it to act on `stop`,
-`warnings` and `nextSuggestedTool`. That prompt is applied with
+prompt (`infra/managed-agent.json`), which we write and which tells it to act on `stop` and
+`warnings` and to treat `nextSuggestedTool` as a hint that never replaces finishing or
+verifying a change. That prompt is applied with
 `apps/api/scripts/managed-agent-apply.ts`, not by deploy, so apply it whenever it changes.
 
 **Measuring the change.** Every `mcp session started` log line carries `guideVersion`
@@ -1250,9 +1252,17 @@ and add a row here.
 
 ## Soft warnings (never `isError`)
 
-Merged by `applySessionNudges` / submit handler. Each message states the round's state, and
-the reply's `nextSuggestedTool` names the tool the most pressing warning points at
-(`nextSuggestedTool()` in `mcp-round-guide.ts`):
+Merged by `applySessionNudges` / submit handler. Each message states the round's state. The
+reply's `nextSuggestedTool` (`nextSuggestedTool()` in `mcp-round-guide.ts`) is set only when
+the state alone justifies a step: `end` on `stop` with `builder_handoff` or `gate_pending`;
+`get_kit` for a `kit_outdated` refusal until a `get_kit` reply has replaced the pin (then
+nothing, since a breaking kit can need code changes); `read_inbox` for notes that arrived since the last
+read; `get_transcript` / `get_sources` for unread context; `end` on the `submit_sources` or
+`get_gate_verdict` reply that carries `call_end`. It is omitted otherwise — never
+`submit_sources`, because `must_deliver` / `must_fix_gate` say what must happen before the
+round can finish, not that the sources are ready, and never while a staged file carries a
+known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
+`audio_catalog_hint`):
 
 | Code                    | Meaning                                                                                                                                                                                                                                                                                        |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

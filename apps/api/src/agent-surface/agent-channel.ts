@@ -73,6 +73,7 @@ import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } 
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { KIT_OUTDATED_MARK } from './mcp-round-guide.js';
 
 // The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
 // Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.
@@ -950,28 +951,27 @@ export async function registerAgentChannelRoutes(
           ? {
               mustFixGate:
                 gate.status === 'kit_outdated'
-                  ? `The gate refused your delivery (${gate.version}) because the Creator Kit is ` +
-                    'outdated (`kit_outdated`). Re-run get_kit for a fresh engineRef, then ' +
-                    'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do NOT ' +
-                    're-stage or re-upload the whole tree through the model (burns tokens). Only ' +
-                    'pass files[] for paths you actually changed for the new kit.'
+                  ? `The gate refused delivery ${gate.version} because ${KIT_OUTDATED_MARK}. A fresh engineRef ` +
+                    'from get_kit plus submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) re-delivers ' +
+                    'the same files on the new kit in the same mode; ' +
+                    'files[] is only needed for paths changed for the new kit.'
                   : gate.status === 'preview_failed'
-                    ? `The preview check refused your delivery (${gate.version}). Fix typecheck/smoke/build, ` +
-                      'then submit_sources again with mode=preview. TRACE.json is not required until mode=publish.'
-                    : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
-                      'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
-                      'with the check that stopped the chain — fix the cause in your game, and deliver ' +
-                      'again with submit_sources mode=publish (or `npm run submit -- <slug>` in a shell ' +
-                      'sandbox). Re-delivering without a fix just stores another version that fails the same way.',
+                    ? `The preview check (typecheck, smoke, build) refused delivery ${gate.version}. The gate ` +
+                      're-runs on the next submit_sources with mode=preview once the cause is fixed; TRACE.json is ' +
+                      'not required until mode=publish.'
+                    : `The publish gate refused delivery ${gate.version}, so nothing can be published until it ` +
+                      'passes. gate.report ends with the check that stopped the chain; delivering again without ' +
+                      'fixing that cause stores another version that fails the same way.',
             }
           : {}),
         ...(record.deliveredVersion || record.previewVersion
           ? {}
           : {
               mustDeliver:
-                'Nothing has been delivered for this build yet. Pushing a branch is not delivering — ' +
-                'call submit_sources with mode=preview at least once (mode=publish to seal, or ' +
-                '`npm run submit -- <slug>` in a shell sandbox) before you finish, or this session produces nothing.',
+                'Nothing has been delivered for this build yet; a pushed branch or staged files are not a ' +
+                'delivery. A session that ends without submit_sources (mode=preview at least once, mode=publish ' +
+                "to seal; a shell sandbox's submit script also delivers) produces nothing, unless the round only " +
+                'answers a question.',
             }),
       },
     };

@@ -89,7 +89,9 @@ Replies carry round state as data, and each piece is worth resolving before carr
   open), `must_fix_gate` (the last delivery was refused; only another `submit_sources`
   re-runs the gate), `module_too_large`, `inbox_pending`, `progress_stale`, `seed_unread`,
   `gate_not_started`. Each warning's `message` has the detail.
-- `nextSuggestedTool` names the call the round is waiting on.
+- `nextSuggestedTool`, when present, names a read or a close the round state alone
+  justifies. It is absent while the next step is your own work, such as finishing or fixing
+  code — `must_deliver` means "deliver before you finish", not "deliver now".
 - `stop: true` means this session can no longer change the round; what is left is wrapping
   up with the creator.
 

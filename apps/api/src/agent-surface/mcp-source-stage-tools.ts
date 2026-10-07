@@ -110,7 +110,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         required: ['available', 'files'],
       },
       description:
-        "Fetch this game's current sources — the first call of every round, including the first round. " +
+        "Fetch this game's current sources — read in every round, including the first, before any scaffolding decision. " +
         'A new game already has files: a generated round-0 draft (origin=seed) whose references and notes come ' +
         'with it. A later round returns what the previous round delivered (origin=delivery). Either way, continue ' +
         'those files; never scaffold over them. seedStatus=pending means a draft is still generating — browse the ' +

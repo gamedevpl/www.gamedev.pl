@@ -175,7 +175,7 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
       message:
         fix +
         ' Staging alone does not re-run the gate or update the creator card; the next submit_sources with this ' +
-        'key does (same mode as the refused delivery; kit_outdated takes fromLatestDelivery with a fresh kitEngineRef).',
+        'key does (same mode as the refused delivery; a stale kit takes fromLatestDelivery with a fresh kitEngineRef).',
     });
   }
   const deliver = typeof body.control?.mustDeliver === 'string' ? body.control.mustDeliver.trim() : '';
