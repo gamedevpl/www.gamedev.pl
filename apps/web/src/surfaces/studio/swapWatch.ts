@@ -50,8 +50,16 @@ export function watchSwap(frame: () => HTMLIFrameElement | null, on: SwapWatchHa
     // Hidden tabs stop rAF, so zero frames proves nothing.
     if (document.visibilityState !== 'hidden') reportBlank();
   }
+  function checkSilent() {
+    if (sawAlive) return;
+    // Hidden tabs stop the bridge too: decide once the tab is back.
+    if (document.visibilityState === 'hidden') return;
+    document.removeEventListener('visibilitychange', checkSilent);
+    reportBlank();
+  }
   function stop() {
     window.removeEventListener('message', onMessage);
+    document.removeEventListener('visibilitychange', checkSilent);
     window.clearTimeout(errorTimer);
     window.clearTimeout(drewNothingTimer);
   }
@@ -63,7 +71,8 @@ export function watchSwap(frame: () => HTMLIFrameElement | null, on: SwapWatchHa
   }, SWAP_WATCH_MS);
   // Keeps listening after this: a later frame clears the verdict.
   const drewNothingTimer = window.setTimeout(() => {
-    if (!sawAlive && document.visibilityState !== 'hidden') reportBlank();
+    document.addEventListener('visibilitychange', checkSilent);
+    checkSilent();
   }, DREW_NOTHING_CHECK_MS);
   window.addEventListener('message', onMessage);
   return stop;

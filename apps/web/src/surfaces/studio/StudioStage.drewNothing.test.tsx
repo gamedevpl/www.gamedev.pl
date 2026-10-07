@@ -112,4 +112,26 @@ describe('StudioStage drew-nothing check', () => {
     expect(onStatusChange).toHaveBeenLastCalledWith({ kind: 'drew-nothing' });
     unmount();
   });
+  it('defers the no-heartbeat verdict while the tab is hidden', async () => {
+    vi.useFakeTimers();
+    const onStatusChange = vi.fn();
+    const props = baseProps({ posture: 'watch', onStatusChange });
+    const { rerender, unmount } = await mount(props);
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_100);
+    });
+    expect(onStatusChange).not.toHaveBeenCalledWith({ kind: 'drew-nothing' });
+    visibility.mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(onStatusChange).toHaveBeenLastCalledWith({ kind: 'drew-nothing' });
+    visibility.mockRestore();
+    unmount();
+  });
 });
