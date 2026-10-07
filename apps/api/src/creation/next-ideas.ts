@@ -39,7 +39,8 @@ export interface NextIdeaGenerator {
   readonly model: string;
 }
 
-export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 8_000;
+// Async dream job; an image prompt ran past 8s.
+export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 45_000;
 export const MAX_NEXT_IDEAS = 3;
 // Owner policy: 3.x only.
 export const DEFAULT_NEXT_IDEAS_MODEL = 'gemini-3.8-flash';
