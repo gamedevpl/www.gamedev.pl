@@ -1,9 +1,14 @@
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import type { FastifyRequest } from 'fastify';
-import type { ToolResult } from './mcp-tool-support.js';
 
 // The line playtest-context.ts writes under a message's context block.
 const SHOT_IDS = /referenceImageShotIds:\s*([^\n`]+)/g;
+
+export interface InboxReferenceImage {
+  id: string;
+  url: string;
+  expiresAt: string;
+}
 
 export function referenceShotIds(messages: ReadonlyArray<{ text: string }>): string[] {
   const ids = new Set<string>();
@@ -22,26 +27,25 @@ type InjectChannel = (
   channelToken: string,
 ) => Promise<{ statusCode: number; json: () => unknown }>;
 
-// A message names its pictures by id; the model only sees attached ones.
-export async function attachInboxReferenceImages(
-  result: ToolResult,
+// Download URLs for the pictures the pending messages name.
+export async function inboxReferenceImages(
   messages: ReadonlyArray<{ text: string }>,
   fetch: { request: FastifyRequest; channelToken: string; injectChannel: InjectChannel },
-): Promise<ToolResult> {
+): Promise<InboxReferenceImage[]> {
   const wanted = new Set(referenceShotIds(messages));
-  if (wanted.size === 0) return result;
+  if (wanted.size === 0) return [];
   const res = await fetch.injectChannel(
     fetch.request,
     'GET',
-    AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES,
+    `${AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES}?urls=1`,
     fetch.channelToken,
   );
   // The text still names the ids; get_reference_images can retry.
-  if (res.statusCode !== 200) return result;
-  const body = res.json() as { images?: Array<{ id: string; png?: string }> };
-  for (const image of body.images ?? []) {
-    if (image.png && wanted.has(image.id))
-      result.content.push({ type: 'image', data: image.png, mimeType: 'image/png' });
-  }
-  return result;
+  if (res.statusCode !== 200) return [];
+  const body = res.json() as { images?: Array<{ id: string; url?: string; expiresAt?: string }> };
+  return (body.images ?? []).flatMap((image) =>
+    image.url && image.expiresAt && wanted.has(image.id)
+      ? [{ id: image.id, url: image.url, expiresAt: image.expiresAt }]
+      : [],
+  );
 }

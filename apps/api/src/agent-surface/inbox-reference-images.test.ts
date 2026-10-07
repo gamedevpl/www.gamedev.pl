@@ -1,7 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { attachInboxReferenceImages, referenceShotIds } from './inbox-reference-images.js';
-import { toolOk } from './mcp-tool-support.js';
+import { inboxReferenceImages, referenceShotIds } from './inbox-reference-images.js';
 
 // The shape playtest-context.ts appends to a message with pictures.
 const picked = {
@@ -9,14 +8,14 @@ const picked = {
 };
 
 function channel(statusCode = 200) {
-  return vi.fn(async () => ({
+  return vi.fn(async (_request: FastifyRequest, _method: 'GET', _path: string, _token: string) => ({
     statusCode,
     json: () => ({
-      images: [
-        { id: 'shot-a', png: 'QUFB' },
-        { id: 'shot-b', png: 'QkJC' },
-        { id: 'shot-old', png: 'T0xE' },
-      ],
+      images: ['shot-a', 'shot-b', 'shot-old'].map((id) => ({
+        id,
+        url: `https://www.gamedev.pl/dl?t=${id}`,
+        expiresAt: '2026-10-07T11:00:00.000Z',
+      })),
     }),
   }));
 }
@@ -28,36 +27,25 @@ describe('inbox reference images', () => {
     expect(referenceShotIds([picked, { text: 'plain' }, picked])).toEqual(['shot-a', 'shot-b']);
   });
 
-  it('attaches only the images the pending messages name', async () => {
+  it('returns download URLs for only the images the pending messages name', async () => {
     const injectChannel = channel();
-    const result = await attachInboxReferenceImages(toolOk({ messages: [picked] }), [picked], {
-      request,
-      channelToken: 't',
-      injectChannel,
-    });
-    expect(result.content.slice(1)).toEqual([
-      { type: 'image', data: 'QUFB', mimeType: 'image/png' },
-      { type: 'image', data: 'QkJC', mimeType: 'image/png' },
+    const images = await inboxReferenceImages([picked], { request, channelToken: 't', injectChannel });
+    expect(injectChannel.mock.calls[0]?.[2]).toMatch(/\?urls=1$/);
+    expect(images.map((image) => image.url)).toEqual([
+      'https://www.gamedev.pl/dl?t=shot-a',
+      'https://www.gamedev.pl/dl?t=shot-b',
     ]);
   });
 
   it('fetches nothing for messages without pictures', async () => {
     const injectChannel = channel();
-    const result = await attachInboxReferenceImages(toolOk({}), [{ text: 'plain' }], {
-      request,
-      channelToken: 't',
-      injectChannel,
-    });
+    expect(await inboxReferenceImages([{ text: 'plain' }], { request, channelToken: 't', injectChannel })).toEqual([]);
     expect(injectChannel).not.toHaveBeenCalled();
-    expect(result.content).toHaveLength(1);
   });
 
-  it('keeps the text answer when the image read fails', async () => {
-    const result = await attachInboxReferenceImages(toolOk({}), [picked], {
-      request,
-      channelToken: 't',
-      injectChannel: channel(429),
-    });
-    expect(result.content).toHaveLength(1);
+  it('answers with no images when the listing fails', async () => {
+    expect(await inboxReferenceImages([picked], { request, channelToken: 't', injectChannel: channel(429) })).toEqual(
+      [],
+    );
   });
 });
