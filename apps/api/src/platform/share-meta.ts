@@ -11,11 +11,10 @@ import type { Store } from './store.js';
 
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
 const PLAY_PATH = /^\/(?:play|ay|ai|draft)\/([^/]+)$/;
-// Drafts are never published, so "not published" says nothing about them.
+// Drafts are never published; "unpublished" says nothing about them.
 const DRAFT_PATH = /^\/draft\//;
 
-// A game path whose slug no catalog lane publishes: the shell boots with 404, not 200,
-// so crawlers see a real 404 instead of a soft one (Search Console "Soft 404").
+// No lane publishes the slug: boot with 404, not a soft 404.
 export const GAME_NOT_FOUND: unique symbol = Symbol('game-not-found');
 const SLUG_ONLY = new RegExp(`^${SLUG}$`);
 // Same shape as GAME_PAGE_PATTERN in spa-paths.ts.
@@ -131,7 +130,7 @@ export interface SharePreviewShellOptions {
   now?: () => number;
 }
 
-// A store-lane game's entry from its published SPEC and media; GAME_NOT_FOUND when unpublished.
+// A store-lane game's entry from its published SPEC and media.
 async function storePublishedEntry(
   { store, gamesStore }: Pick<SharePreviewShellOptions, 'store' | 'gamesStore'>,
   slug: string,
@@ -156,8 +155,7 @@ const PREVIEW_CACHE_MAX = 256;
 // Cache misses read storage; rotating slugs must not buy more reads.
 const PREVIEW_MISS_BUDGET = 60;
 
-// The game's shell, GAME_NOT_FOUND for a game no lane publishes, or null for plain
-// index.html (other paths, failures, over budget). Never throws.
+// The game's shell, GAME_NOT_FOUND, or null for plain index.html.
 export function createSharePreviewShell(options: SharePreviewShellOptions) {
   let shell: Promise<string> | null = null;
   const origin = options.origin ?? canonicalAppBaseUrl();
@@ -190,7 +188,7 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
     // Undefined means over budget: answered plainly, never cached.
     if (!spendMiss()) return undefined;
     const stored = await storePublishedEntry(options, slug);
-    // Only both lanes answering "no" makes a 404; a failed repo read is not an answer.
+    // A failed repo read is not a "no".
     return stored === GAME_NOT_FOUND && repoFailed ? null : stored;
   }
 
