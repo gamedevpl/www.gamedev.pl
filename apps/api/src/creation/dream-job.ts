@@ -233,9 +233,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     await bookConcept(jobId, ideas.model);
     // Fail open: the spec alone still gives ideas.
     const history = await dreamHistory(store, jobId, record.slug).catch(() => []);
+    // Awaited below: the seed request's CPU ends with this run.
+    const retryBookings: Promise<void>[] = [];
     const generated = await ideas.generate({
       screenshotPng: source.toString('base64'),
-      onRetry: () => void bookConcept(jobId, ideas.model),
+      onRetry: () => retryBookings.push(bookConcept(jobId, ideas.model)),
       ...(history.length ? { history } : {}),
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
@@ -243,6 +245,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       published,
       ...(record.locale ? { locale: record.locale } : {}),
     });
+    await Promise.all(retryBookings);
     const candidates = generated.slice(0, DREAM_OPTIONS);
     // A slot and an image call for a card that cannot post.
     if (candidates.length < DREAM_OPTIONS) return 'no_ideas';
