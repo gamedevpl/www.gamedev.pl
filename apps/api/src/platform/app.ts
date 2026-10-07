@@ -282,9 +282,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
+  const pastBetaWall = async (slug: string) => !privateBeta || (await getPublicPlaySlugs()).has(slug);
   // A promotional slug is exempt from the beta wall, never from the rung.
-  const playableAnonymously = async (slug: string) =>
-    !(await loadShed.refusesAnonymous()) && (!privateBeta || (await getPublicPlaySlugs()).has(slug));
+  const playableAnonymously = async (slug: string) => !(await loadShed.refusesAnonymous()) && pastBetaWall(slug);
   registerServingBrake(app, { controls: loadShed });
   registerApiCachePolicy(app, { isOpenToVisitors: openToVisitors });
   const publicPlayFallbackSlugs = new Set(
@@ -1161,8 +1161,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await app.register(fastifyStatic, {
       root: webDistDir,
       wildcard: false,
-      // `wildcard: false` globs the dist tree at boot, and glob skips dotfiles
-      // unless told otherwise — without this, /.well-known/* 404s silently.
+      // Boot-time glob skips dotfiles; without this /.well-known/* 404s.
       serveDotFiles: true,
       // Serve build-time .br/.gz siblings (apps/web/scripts/precompress.mjs) —
       // never compress per-request: Cloud Run bills CPU.
@@ -1191,6 +1190,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         store,
         gamesStore,
         isShareable: playableAnonymously,
+        isPastWall: pastBetaWall,
       }),
     );
   }

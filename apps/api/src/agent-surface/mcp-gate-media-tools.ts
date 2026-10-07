@@ -85,7 +85,7 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         'Preview lane: preview_passed / preview_failed ' +
         '(does not end the round). Publish lane: green / red / kit_outdated — only green ends the round. ' +
         'Verdicts typically land in 2–5 minutes. When status=pending and deliveryId is set, the result has stop:true: ' +
-        'STOP this run immediately and let Studio show the eventual result. A pending result with deliveryId:null means ' +
+        'the build is still running — tell the user the verdict will appear in Studio in 2–5 minutes rather than checking again in this run. A pending result with deliveryId:null means ' +
         'you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. ' +
         'retryAfterSeconds is only for a later creator-led run checking a delivered gate. Repeated checks trigger warnings.code=gate_poll_backoff. ' +
         'kit_outdated is terminal — stop polling, re-run get_kit, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) ' +
