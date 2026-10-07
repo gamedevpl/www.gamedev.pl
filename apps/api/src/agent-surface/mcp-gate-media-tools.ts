@@ -73,7 +73,11 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
             description:
               'Informational delay before a later creator-led run checks again. stop:true takes priority in this run.',
           },
-          stop: { type: 'boolean', description: 'True while the delivered build is still running; reason says why.' },
+          stop: {
+            type: 'boolean',
+            description:
+              'True while the delivered build runs (gate_pending) or after a green publish (gate_green); see reason.',
+          },
           reason: { type: 'string' },
           ...WARNINGS_PROP,
         },

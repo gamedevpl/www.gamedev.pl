@@ -1218,6 +1218,8 @@ declare const GameKit: { defineGame(): unknown };
     const sequence = result.structuredContent.sequence as string[];
     expect(sequence.length).toBeGreaterThanOrEqual(6);
     expect(result.structuredContent.nextSuggestedTool).toBe('get_brief');
+    // Clients holding the previous tools/list schema still find the field it required.
+    expect((result.structuredContent as { workflow?: unknown }).workflow).toEqual(sequence);
     expect(result.structuredContent.guideVersion).toMatch(/^descriptive-/);
     const joined = sequence.join('\n');
     // CP-2: every round revises the files get_sources returns, never scaffolds over them.

@@ -53,6 +53,7 @@ export const MCP_INSTRUCTIONS = [
 const NEXT_TOOL_BY_WARNING: ReadonlyArray<readonly [string, string]> = [
   ['must_fix_gate', 'submit_sources'],
   ['must_deliver', 'submit_sources'],
+  ['gate_not_started', 'submit_sources'],
   ['inbox_pending', 'read_inbox'],
   ['transcript_unread', 'get_transcript'],
   ['seed_unread', 'get_sources'],

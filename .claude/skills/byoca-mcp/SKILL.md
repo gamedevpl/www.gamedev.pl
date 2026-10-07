@@ -1189,6 +1189,8 @@ So server text describes and the client decides:
 
 - `start` returns `sequence` (the usual order of a round) and `nextSuggestedTool`; its own
   description carries the same order where a reviewer can read it.
+  `workflow` still ships as a deprecated alias of `sequence` for clients that cached the old
+  `tools/list` schema; remove it with the other deprecated fields.
 - Replies carry state as data — `stop`, `pendingMessages`, `warnings[].code` with a message
   that says what is true, and `nextSuggestedTool`. No "honour", "ALWAYS", "STOP" or "do not".
 - `initialize.instructions` is a short overview (`MCP_INSTRUCTIONS`), not a rulebook.

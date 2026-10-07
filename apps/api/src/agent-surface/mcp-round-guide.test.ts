@@ -10,6 +10,7 @@ describe('mcp-round-guide', () => {
     expect(nextSuggestedTool([{ code: 'call_end' }, { code: 'must_fix_gate' }])).toBe('submit_sources');
     expect(nextSuggestedTool([{ code: 'inbox_pending' }, { code: 'call_end' }])).toBe('read_inbox');
     expect(nextSuggestedTool([{ code: 'gate_poll_backoff' }])).toBeUndefined();
+    expect(nextSuggestedTool([{ code: 'gate_not_started' }, { code: 'call_end' }])).toBe('submit_sources');
   });
 
   it('keeps the instructions short and every step a statement', () => {
