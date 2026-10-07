@@ -22,6 +22,7 @@ describe('mcp-round-guide', () => {
     expect(step('get_sources', ['inbox_pending'], { inboxUnread: false })).toBeUndefined();
     expect(step('get_kit_api', ['transcript_unread'])).toBe('get_transcript');
     expect(step('submit_sources', ['call_end'])).toBe('end');
+    expect(step('submit_sources', ['call_end', 'gate_not_started'])).toBeUndefined();
     // Staging after a delivery is new work, not a close.
     expect(step('stage_source_file', ['call_end'])).toBeUndefined();
     expect(step('stage_source_file', ['typecheck_hint', 'inbox_pending'])).toBeUndefined();

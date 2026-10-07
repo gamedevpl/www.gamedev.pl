@@ -415,7 +415,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
   const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
-  // Jobs whose kit pin get_kit replaced since their last delivery.
+  // Jobs that read get_kit since their last delivery.
   const refreshedKits = new Set<number>();
 
   function pruneTransportSessions(currentTime: number): void {
@@ -879,7 +879,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         ? nudgeWarnings.filter((w) => w.code !== 'call_end')
         : nudgeWarnings;
     const warnings = [...prior, ...filteredNudges];
-    if (toolName === 'get_kit' && data.kitEngineChanged === true) refreshedKits.add(jobId);
+    // Any answered get_kit reflects the current pin, on whichever instance served it.
+    if (toolName === 'get_kit') refreshedKits.add(jobId);
     if (toolName === 'submit_sources' && data.ok === true) refreshedKits.delete(jobId);
     const lastRead = nudgeTracker.peek(jobId)?.lastInboxCheckAt ?? null;
     const pendingNotes = Array.isArray(data.pendingMessages)

@@ -1255,10 +1255,10 @@ and add a row here.
 Merged by `applySessionNudges` / submit handler. Each message states the round's state. The
 reply's `nextSuggestedTool` (`nextSuggestedTool()` in `mcp-round-guide.ts`) is set only when
 the state alone justifies a step: `end` on `stop` with `builder_handoff` or `gate_pending`;
-`get_kit` for a `kit_outdated` refusal until a `get_kit` reply has replaced the pin (then
+`get_kit` for a `kit_outdated` refusal until this instance has answered a `get_kit` (then
 nothing, since a breaking kit can need code changes); `read_inbox` for notes that arrived since the last
 read; `get_transcript` / `get_sources` for unread context; `end` on the `submit_sources` or
-`get_gate_verdict` reply that carries `call_end`. It is omitted otherwise — never
+`get_gate_verdict` reply that carries `call_end`, unless `gate_not_started` rides with it. It is omitted otherwise — never
 `submit_sources`, because `must_deliver` / `must_fix_gate` say what must happen before the
 round can finish, not that the sources are ready, and never while a staged file carries a
 known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,

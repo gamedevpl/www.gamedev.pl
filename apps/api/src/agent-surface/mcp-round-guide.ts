@@ -62,7 +62,7 @@ export interface NextStepState {
   warnings: ReadonlyArray<{ code?: unknown; message?: unknown }>;
   // True when creator notes arrived since the last read_inbox.
   inboxUnread: boolean;
-  // True once get_kit replaced the pin since the last delivery.
+  // True once get_kit answered since the last delivery.
   kitRefreshed?: boolean;
 }
 
@@ -88,6 +88,8 @@ export function nextSuggestedTool(state: NextStepState): string | undefined {
   if (codes.has('inbox_pending')) return state.inboxUnread ? 'read_inbox' : undefined;
   const read = CONTEXT_READS.find(([code]) => codes.has(code));
   if (read) return read[1];
+  // A delivery whose gate never started is not one to close on.
+  if (codes.has('gate_not_started')) return undefined;
   const delivered = state.tool === 'submit_sources' || state.tool === 'get_gate_verdict';
   return codes.has('call_end') && delivered ? 'end' : undefined;
 }

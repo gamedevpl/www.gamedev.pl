@@ -104,7 +104,9 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     await app?.close();
   });
 
-  async function round(options: { gate?: Gate; kit?: boolean } = {}) {
+  type Options = { gate?: Gate; kit?: boolean; gateStarts?: boolean };
+
+  async function round(options: Options = {}) {
     store = new InMemoryStore();
     await store.createSubmission(ISSUE, 'g:owner', 'Comet Courier');
     await store.setSubmissionSlug(ISSUE, 'comet-courier');
@@ -113,6 +115,13 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     await store.setSubmissionBrief(ISSUE, { spec: 'Dodge debris while delivering parcels.', qa: [] });
     await store.recordJobTransition(ISSUE, { to: 'dispatched', at: new Date().toISOString(), by: 'system' });
     const games = gamesStoreWith(options.gate);
+    await instance(games.gamesStore, options);
+    return games;
+  }
+
+  // Another API instance over the same store, as Cloud Run serves it.
+  async function instance(gamesStore: GamesStore, options: Options) {
+    await app?.close();
     app = await buildApp({
       store,
       sessionSecret: 'dev-session-secret-change-me',
@@ -121,9 +130,10 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
         githubToken: 'gh-token',
         submissionTokenSecret: secret,
         agentChannel: {
-          gamesStore: games.gamesStore,
+          gamesStore,
           ...(options.kit ? { objectStore: kitStore } : {}),
-          onSourcesDelivered: async () => ({ accepted: true, buildId: 'build-1' }),
+          onSourcesDelivered: async () =>
+            options.gateStarts === false ? undefined : { accepted: true, buildId: 'build-1' },
         },
       },
     });
@@ -133,7 +143,6 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
       clientInfo: { name: 'test', version: '0' },
     });
     sessionId = String(init.headers['mcp-session-id']);
-    return games;
   }
 
   function post(method: string, params: unknown) {
@@ -272,6 +281,32 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     const handed = await call('report_progress', { text: 'Still here.', step: 'fixing' });
     expect(handed.data).toMatchObject({ stop: true, reason: 'builder_handoff' });
     expect(handed.next).toBe('end');
+  });
+
+  it('E2: a kit read on another instance ends the get_kit suggestion there too', async () => {
+    const games = await round({ gate: { lane: 'publish', status: 'kit_outdated' }, kit: true });
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    await store.pinRoundKitEngineRef(ISSUE, OLD_ENGINE);
+    await start();
+    expect((await call('get_kit')).data).toMatchObject({ kitEngineChanged: true });
+    // The next request lands where the pin change was never seen.
+    await instance(games.gamesStore, { kit: true });
+    expect((await call('report_progress', { text: 'Back.', step: 'fixing' })).next).toBe('get_kit');
+    const kit = await call('get_kit');
+    expect(kit.data).toMatchObject({ engineRef: NEW_ENGINE });
+    expect(kit.data.kitEngineChanged).toBeUndefined();
+    expect(kit.next).toBeUndefined();
+    expect((await call('report_progress', { text: 'Kit read.', step: 'fixing' })).next).toBeUndefined();
+  });
+
+  it('G2: a delivery whose gate never started does not point at end', async () => {
+    await round({ gateStarts: false });
+    await start();
+    for (const file of FILES) await call('stage_source_file', file);
+    const delivered = await call('submit_sources', { fromStaged: true, mode: 'preview', kitEngineRef: NEW_ENGINE });
+    expect(delivered.data).toMatchObject({ ok: true, gateStarted: false });
+    expect(codes(delivered)).toEqual(expect.arrayContaining(['call_end', 'gate_not_started']));
+    expect(delivered.next).toBeUndefined();
   });
 
   it('I: a question round can end with an answer and no delivery', async () => {
