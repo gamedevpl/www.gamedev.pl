@@ -42,8 +42,12 @@ export type StageStatus =
 
 /** How long to watch a freshly-swapped document for an uncaught error (RemixPanel parity). */
 const SWAP_WATCH_MS = 6_000;
-/** The bridge posts `{type:'alive', frames}` every 5s; wait one tick past that. */
-const DREW_NOTHING_CHECK_MS = 5_500;
+/**
+ * The bridge posts `{type:'alive', frames}` every 5s, counted from when the game
+ * document starts — not from the swap — so a slow-loading build reports late. The
+ * verdict waits for that report; this is only the cap for a document that never sends one.
+ */
+const DREW_NOTHING_CHECK_MS = 15_000;
 /** Cheap battery honesty for a tab left open overnight. */
 const IDLE_THROTTLE_MS = 10 * 60 * 1000;
 // Idle window before a held swap auto-applies.
@@ -256,6 +260,19 @@ export function StudioStage({
    */
   function watchSwappedDocument(candidate: string, origin: StageOrigin) {
     let sawFrame = false;
+    let sawAlive = false;
+    let watchElapsed = false;
+    let reportedBlank = false;
+    function promote() {
+      lastGoodRef.current = candidate;
+      lastGoodOriginRef.current = origin;
+      lastGoodAtRef.current = origin.at ?? Date.now();
+    }
+    function reportBlank() {
+      if (sawFrame || reportedBlank) return;
+      reportedBlank = true;
+      setStatusAndReport({ kind: 'drew-nothing' });
+    }
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
       if (!isFromGameFrame(event, frameRef.current)) return;
@@ -266,9 +283,24 @@ export function StudioStage({
         stop();
         return;
       }
-      if (data.type === 'alive') {
-        sawFrame = Number(data.frames ?? 0) > 0;
+      if (data.type !== 'alive') return;
+      sawAlive = true;
+      if (Number(data.frames ?? 0) > 0) {
+        // Sticky: one painted window proves the build draws. A later quiet window
+        // (paused, backgrounded tab) must not flip it back.
+        sawFrame = true;
+        if (reportedBlank) {
+          reportedBlank = false;
+          setStatusAndReport({ kind: 'ready' });
+        }
+        if (watchElapsed) {
+          promote();
+          stop();
+        }
+        return;
       }
+      // A hidden tab stops requestAnimationFrame, so zero frames there says nothing.
+      if (document.visibilityState !== 'hidden') reportBlank();
     }
     function stop() {
       window.removeEventListener('message', onMessage);
@@ -277,15 +309,17 @@ export function StudioStage({
       if (swapWatchRef.current?.stop === stop) swapWatchRef.current = null;
     }
     const errorTimer = window.setTimeout(() => {
+      watchElapsed = true;
       if (sawFrame) {
-        lastGoodRef.current = candidate;
-        lastGoodOriginRef.current = origin;
-        lastGoodAtRef.current = origin.at ?? Date.now();
+        promote();
+        stop();
       }
-      stop();
+      // Otherwise keep listening: the first heartbeat may still be on its way.
     }, SWAP_WATCH_MS);
     const drewNothingTimer = window.setTimeout(() => {
-      if (!sawFrame) setStatusAndReport({ kind: 'drew-nothing' });
+      if (!sawAlive && document.visibilityState !== 'hidden') reportBlank();
+      // Keep listening: a frame arriving later clears the verdict. The next swap or
+      // unmount stops this watch.
     }, DREW_NOTHING_CHECK_MS);
     swapWatchRef.current = { stop };
     window.addEventListener('message', onMessage);
