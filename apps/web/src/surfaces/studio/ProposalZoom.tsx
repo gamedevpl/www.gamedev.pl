@@ -50,7 +50,7 @@ export const ProposalZoom = forwardRef<
           <button
             ref={closeRef}
             type="button"
-            className="studio-proposal-close"
+            className="modal-close-btn studio-proposal-close"
             onClick={onClose}
             aria-label={t('statusView.proposal.close')}
           >
@@ -72,7 +72,7 @@ export const ProposalZoom = forwardRef<
           <div className="studio-proposal-zoom-foot">
             <button
               type="button"
-              className="studio-proposal-secondary studio-proposal-compare"
+              className="secondary-btn studio-proposal-compare"
               aria-pressed={toggled}
               onClick={() => setToggled((value) => !value)}
             >

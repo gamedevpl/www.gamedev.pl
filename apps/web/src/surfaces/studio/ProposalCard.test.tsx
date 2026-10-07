@@ -373,6 +373,65 @@ describe('ProposalCard', () => {
     expect(document.body.querySelector('.studio-proposal-dialog')).toBeTruthy();
   });
 
+  it('dresses the dialog buttons in the shared button classes', async () => {
+    const { container } = await mount();
+    await act(async () => {
+      button(container, 'Zobacz oba pomys\u0142y').click();
+    });
+    const dialog = document.body.querySelector('.studio-proposal-dialog') as HTMLElement;
+    for (const pick of dialog.querySelectorAll('.studio-proposal-pick')) {
+      expect(pick.classList).toContain('primary-btn');
+    }
+    expect(button(dialog, 'Nie teraz').classList).toContain('secondary-btn');
+    expect(button(dialog, 'Nie podpowiadaj mi tego').classList).toContain('secondary-btn');
+    expect(dialog.querySelector('.studio-proposal-head .studio-proposal-close')?.classList).toContain(
+      'modal-close-btn',
+    );
+
+    await act(async () => {
+      dialog.querySelectorAll<HTMLButtonElement>('.studio-proposal-zoom')[1]!.click();
+    });
+    const view = dialog.querySelector('.studio-proposal-zoom-view') as HTMLElement;
+    expect(view.querySelector('.studio-proposal-close')?.classList).toContain('modal-close-btn');
+    expect(button(view, 'Porównaj ze swoją grą').classList).toContain('secondary-btn');
+  });
+
+  it('ends every concept card with its action row, so the picks line up', async () => {
+    const { container } = await mount();
+    await act(async () => {
+      button(container, 'Zobacz oba pomys\u0142y').click();
+    });
+    const figures = [...document.body.querySelectorAll('.studio-proposal-figure:not(.is-current)')];
+    expect(figures).toHaveLength(2);
+    for (const figure of figures) {
+      const last = figure.lastElementChild;
+      expect(last?.classList).toContain('studio-proposal-actions');
+      expect(last?.querySelector('.studio-proposal-pick')).toBeTruthy();
+      expect(figure.querySelector('figcaption .studio-proposal-pick')).toBeNull();
+    }
+  });
+
+  it('enlarges every one of the three dialog frames', async () => {
+    const { container } = await mount();
+    await act(async () => {
+      button(container, 'Zobacz oba pomys\u0142y').click();
+    });
+    const expected = ['/shot/shot-source', '/shot/shot-a', '/shot/shot-b'];
+    const zooms = [...document.body.querySelectorAll<HTMLButtonElement>('.studio-proposal-zoom')];
+    expect(zooms).toHaveLength(3);
+    for (const [index, zoom] of zooms.entries()) {
+      await act(async () => {
+        zoom.click();
+      });
+      const src = document.body.querySelector('.studio-proposal-zoom-view img')?.getAttribute('src');
+      expect(src).toBe(expected[index]);
+      await act(async () => {
+        press('Escape');
+      });
+      expect(document.body.querySelector('.studio-proposal-zoom-view')).toBeNull();
+    }
+  });
+
   it('renders the muted note instead of frames once the creator opted out', async () => {
     const { container } = await mount({ muted: true });
     expect(container.querySelector('.studio-proposal-thumb')).toBeNull();

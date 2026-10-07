@@ -240,7 +240,7 @@ function ProposalDialog({
           <h2>{t('statusView.proposal.title')}</h2>
           <button
             type="button"
-            className="studio-proposal-close"
+            className="modal-close-btn studio-proposal-close"
             onClick={onPostpone}
             aria-label={t('statusView.proposal.close')}
           >
@@ -277,19 +277,21 @@ function ProposalDialog({
                   <ConceptBadge />
                   <strong>{label}</strong>
                   <span>{option.prompt[lang]}</span>
-                  <button type="button" className="studio-proposal-pick" onClick={() => onPick(option)}>
+                </figcaption>
+                <div className="studio-proposal-actions">
+                  <button type="button" className="primary-btn studio-proposal-pick" onClick={() => onPick(option)}>
                     {t('statusView.proposal.pick')}
                   </button>
-                </figcaption>
+                </div>
               </figure>
             );
           })}
         </div>
         <footer className="studio-proposal-foot">
-          <button type="button" className="studio-proposal-secondary" onClick={onPostpone}>
+          <button type="button" className="secondary-btn" onClick={onPostpone}>
             {t('statusView.proposal.notNow')}
           </button>
-          <button type="button" className="studio-proposal-quiet" onClick={onMute}>
+          <button type="button" className="secondary-btn studio-proposal-quiet" onClick={onMute}>
             {t('statusView.proposal.askLess')}
           </button>
         </footer>
