@@ -364,6 +364,7 @@ textarea {
   margin: 0;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 #choices {
   display: grid;

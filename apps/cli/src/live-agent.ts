@@ -11,6 +11,7 @@ import {
 import type { AdapterSpec } from './adapters.js';
 import type { AdapterRunInput } from './headless-agent.js';
 import { evidenceImages } from './workbench-evidence.js';
+import { liveApprovals } from './live-approvals.js';
 
 type RpcValue = Record<string, unknown>;
 export type Steer = (text: string) => Promise<void>;
@@ -58,6 +59,9 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
   let permissionSession: string | undefined;
   let accepting = false;
   let decided = false;
+  const lifetime = new AbortController();
+  const signal = input.abort ? AbortSignal.any([input.abort, lifetime.signal]) : lifetime.signal;
+  input = { ...input, abort: signal };
   const steering = (open: boolean) => {
     accepting = open;
     input.onSteering?.(
@@ -92,6 +96,7 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
     timeoutMs: TASK_TIMEOUT_MS,
     model: input.spec.selection?.model,
     effort: input.spec.selection?.effort,
+    onApproval: input.onApproval ? (request) => input.onApproval!(request, signal) : undefined,
   });
   try {
     for await (const event of run) input.onEvent?.(event);
@@ -100,6 +105,7 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
       input.onEvent?.({ type: 'error', message: result.error });
     return { code: result.ok ? 0 : 1, permissionSession };
   } finally {
+    lifetime.abort();
     accepting = false;
     input.onSteering?.(undefined);
   }
@@ -131,11 +137,23 @@ async function drive(
     if (!outcome.ok || inFlight === 0) settle(outcome);
   };
   const diagnostic = (method: string, params: unknown) => input.onDiagnostic?.(JSON.stringify({ method, params }));
+  const approvals = liveApprovals({
+    session,
+    muse,
+    id: () => id,
+    turn: () => turn,
+    active: () => !verdict && !input.abort?.aborted,
+    fail: (message) => {
+      session.emit({ type: 'error', message });
+      finish({ ok: false, error: message });
+    },
+  });
 
   session.onNotification((method, params) => {
     diagnostic(method, params);
     const value = (params ?? {}) as RpcValue;
     if (!id || value[key] !== id) return;
+    if (input.onApproval && approvals.notification(method, params)) return;
     if (method === 'turn/completed') {
       const ended = value.turn as RpcValue | undefined;
       if (turn && (muse ? value.turnId : ended?.id) !== turn) return;
@@ -151,6 +169,7 @@ async function drive(
   });
   session.onRequest((method, params) => {
     diagnostic(method, params);
+    if (input.onApproval) return approvals.request(method, params);
     if (muse && method === 'approval/request') {
       hooks.handoff(id);
       session.emit({ type: 'error', message: MUSE_APPROVAL_LINE });
@@ -169,7 +188,12 @@ async function drive(
     muse ? 'session/start' : 'thread/start',
     muse
       ? { commandId: uuidv7(), workspaceRoot: task.cwd, modelId: task.model, approvalMode: 'onRequest' }
-      : { cwd: task.cwd, model: task.model, sandbox: 'workspace-write', approvalPolicy: 'never' },
+      : {
+          cwd: task.cwd,
+          model: task.model,
+          sandbox: 'workspace-write',
+          approvalPolicy: input.onApproval ? 'on-request' : 'never',
+        },
     ACK_TIMEOUT_MS,
   )) as RpcValue;
   id = String(((created.session ?? created.thread) as RpcValue | undefined)?.[muse ? 'sessionId' : 'id'] ?? '');

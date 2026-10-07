@@ -1,4 +1,6 @@
 import { progressTool, progressReporter } from './local-progress.js';
+import type { ApproveTool } from './agent-approval.js';
+import { claudePermission, claudePermissionTool, CLAUDE_PERMISSION_TOOL } from './claude-approval.js';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -65,6 +67,7 @@ export async function startLocalPreviewMcp(input: {
   abort: AbortSignal;
   write: (line: string) => void;
   capture?: typeof captureBrowser;
+  onApproval?: ApproveTool;
 }) {
   const controller = new AbortController();
   const signal = AbortSignal.any([input.abort, controller.signal]);
@@ -102,7 +105,9 @@ export async function startLocalPreviewMcp(input: {
       render = undefined;
     }
   }
-  async function call(name: unknown, raw: unknown) {
+  async function call(name: unknown, raw: unknown, requestSignal: AbortSignal) {
+    if (name === CLAUDE_PERMISSION_TOOL && input.onApproval)
+      return claudePermission(raw, input.onApproval, requestSignal);
     const args = raw ?? {};
     if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid arguments.');
     const value = args as Record<string, unknown>;
@@ -202,11 +207,21 @@ export async function startLocalPreviewMcp(input: {
           serverInfo: { name: 'gamedevpl-local', version: '1.0.0' },
         };
       } else if (message.method === 'ping') result = {};
-      else if (message.method === 'tools/list') result = { tools: [progressTool, ...(source ? TOOLS : [])] };
+      else if (message.method === 'tools/list')
+        result = {
+          tools: [progressTool, ...(source ? TOOLS : []), ...(input.onApproval ? [claudePermissionTool] : [])],
+        };
       else if (message.method === 'tools/call') {
         const params = message.params as { name?: unknown; arguments?: unknown } | undefined;
         try {
-          result = await call(params?.name, params?.arguments);
+          const disconnected = new AbortController();
+          const disconnect = () => disconnected.abort();
+          response.once('close', disconnect);
+          try {
+            result = await call(params?.name, params?.arguments, AbortSignal.any([signal, disconnected.signal]));
+          } finally {
+            response.off('close', disconnect);
+          }
         } catch (error) {
           result = {
             isError: true,

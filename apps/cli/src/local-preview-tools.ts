@@ -3,6 +3,7 @@ import type { AdapterSpec } from './adapters.js';
 import { localPreviewAdapter, localPreviewSupported } from './local-preview-adapter.js';
 import { MAX_CAPTURES_PER_TASK, startLocalPreviewMcp } from './local-preview-mcp.js';
 import { formatError } from './errors.js';
+import type { ApproveTool } from './agent-approval.js';
 
 export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for visual verification: preview_status, then capture, then capture_status for its returned jobId. The completed result contains a PNG: inspect it. Tools run on the local CLI, need no shell browser setup, and never publish. They capture the initial rendered state, not an interactive playtest. Do not claim visual verification if they report an error. Capture after a meaningful visual change, not after every edit; each task has a budget of ${MAX_CAPTURES_PER_TASK} captures. A browser timeout is transient: retry once, then continue.`;
 
@@ -12,13 +13,14 @@ export async function localPreviewTools(input: {
   abort: AbortSignal;
   write: (line: string) => void;
   progress?: (text: string, blocked: boolean) => void;
+  onApproval?: ApproveTool;
 }) {
   if (!localPreviewSupported(input.spec.name)) return undefined;
   let server: Awaited<ReturnType<typeof startLocalPreviewMcp>> | undefined;
   let cleanup: (() => void) | undefined;
   try {
     server = await startLocalPreviewMcp({ ...input, previewUrl: input.previewUrl });
-    const wired = localPreviewAdapter(input.spec, server);
+    const wired = localPreviewAdapter(input.spec, server, Boolean(input.onApproval));
     cleanup = wired.cleanup;
     input.write('Local task tools connected: report_progress (Ctrl+L for diagnostics).');
     return {

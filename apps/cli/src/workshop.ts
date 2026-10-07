@@ -7,6 +7,7 @@ export { workshopBrief } from './workshop-brief.js';
 import { defaultAdapterRun } from './workshop-runner.js';
 import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
+import { approvalPrompt } from './agent-approval.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
@@ -34,7 +35,7 @@ import { repairLoop } from './repair-loop.js';
 import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
-export type PickChoice = (choices: string[], question: string) => Promise<string>;
+export type PickChoice = (choices: string[], question: string, signal?: AbortSignal) => Promise<string>;
 import type { AdapterRun } from './headless-agent.js';
 export type { AdapterRun } from './headless-agent.js';
 
@@ -198,6 +199,15 @@ export async function runLocalBuild(input: {
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
+  const onApproval = ws.unattended
+    ? undefined
+    : approvalPrompt({
+        agent: spec.name,
+        pick: ws.pick,
+        signal: controller.signal,
+        write: input.write,
+        activity: ws.onActivity,
+      });
   ws.abort.current = controller;
   let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
@@ -245,6 +255,7 @@ export async function runLocalBuild(input: {
     }
     localTools = await localPreviewTools({
       spec,
+      onApproval: spec.name === 'claude' ? onApproval : undefined,
       previewUrl,
       abort: controller.signal,
       write: input.write,
@@ -281,6 +292,7 @@ export async function runLocalBuild(input: {
           spec,
           prompt,
           authCheck,
+          onApproval,
           onSteering: ws.unattended ? undefined : ws.onSteering,
           cwd,
           env: childEnv(ws.env, ''),
