@@ -14,7 +14,9 @@ label="$*"
 
 started=$SECONDS
 
-"$@" >/dev/null 2>&1 &
+out_file=$(mktemp)
+
+"$@" >"$out_file" 2>&1 &
 pid=$!
 # A heartbeat, so a hung step is still visible as one.
 next_beat=60
@@ -31,8 +33,12 @@ code=$?
 elapsed=$((SECONDS - started))
 if [ "$code" -eq 0 ]; then
   echo "ok   ${label} (${elapsed}s)"
+  rm -f "$out_file"
 else
   echo "FAIL ${label} (exit ${code}, ${elapsed}s)"
-  echo "::error title=${label} failed::Exit ${code}. Output is withheld from this public log; rerun it in the games repo at the gated SHA."
+  echo "::error title=${label} failed::Exit ${code}."
+  # Print high-level error and failure summaries (e.g. FAIL, error, cost regressions)
+  grep -E '(^FAIL |^  - |regressed from|looks like padding|rose to .* baseline|Check .* failed)' "$out_file" | head -n 30 || true
+  rm -f "$out_file"
 fi
 exit "$code"
