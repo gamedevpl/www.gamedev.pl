@@ -45,10 +45,12 @@ import {
   DELIVERY_RESERVED_SEGMENTS,
   EDITOR_CONTRACT_PATH,
   extractDeliveryContract,
+  extractGameKitModuleRequires,
   extractGameKitModules,
   extractGameKitVerticals,
   extractMaxBundleBytes,
   extractMusicContractSignals,
+  GAME_KIT_MODULE_REQUIRES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
@@ -362,6 +364,25 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     );
   } else {
     log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
+  }
+
+  // Either side stricter means the stage hint and the gate disagree.
+  const remoteRequires = extractGameKitModuleRequires(assembleSource);
+  if (remoteRequires) {
+    const flatten = (map: Readonly<Record<string, readonly string[]>>) =>
+      Object.entries(map)
+        .flatMap(([owner, needs]) => needs.map((need) => `${owner}->${need}`))
+        .sort()
+        .join(', ');
+    const remote = flatten(remoteRequires);
+    const local = flatten(GAME_KIT_MODULE_REQUIRES);
+    if (remote !== local) {
+      return {
+        kind: 'drift',
+        reason: `GAME_KIT_MODULE_REQUIRES mismatch.\n  games-repo: ${remote}\n  website:    ${local}`,
+      };
+    }
+    log(`  ✓ GAME_KIT_MODULE_REQUIRES (${local})`);
   }
 
   // Names agreeing is not the same as resolving to the same file. A module promoted to a

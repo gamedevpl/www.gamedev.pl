@@ -27,6 +27,7 @@ import {
   DELIVERY_FIXED_FILES,
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
+  missingModuleDependency,
 } from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
@@ -221,6 +222,8 @@ export function validateSourceUpload(
         );
       }
       const modules = manifest.engine.modules;
+      const dependencyProblem = missingModuleDependency(modules.filter((m): m is string => typeof m === 'string'));
+      if (dependencyProblem) throw new InvalidUploadError(dependencyProblem);
       const sounds = Array.isArray(manifest.audio?.sounds) ? manifest.audio.sounds : [];
       const music = typeof manifest.audio?.music === 'string' ? manifest.audio.music.trim() : '';
       // Same two rules the assembler enforces, one round trip earlier.
