@@ -4,7 +4,6 @@ import { FirestoreStore } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
 import { createReadCostApp, seedReadCostFixture, sessionCookie } from './firestore-read-cost-setup.fixture.js';
 import {
-  ADMIN_UID,
   CREATOR_UID,
   DERIVED_OWNER_UID,
   POLLED_JOB_ID,
@@ -59,9 +58,6 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       url: '/api/internal/notify-sweep',
       headers: { authorization: 'Bearer sweep' },
     });
-  }
-  if (route === 'GET /api/admin/summary (steady state)') {
-    return app.inject({ method: 'GET', url: '/api/admin/summary', headers: { cookie: sessionCookie(ADMIN_UID) } });
   }
   if (route === 'GET /api/submissions/:token (stale dispatch, steady state)') {
     const token = mintToken(STALE_DISPATCH_JOB_ID, SUBMISSION_SECRET);
@@ -135,12 +131,6 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
       await injectRoute(app, route);
       // The production cadence: past a 2s cache, well inside a 60s one.
       clock += 4_000;
-    }
-    // The first call pays the backfill; a 30s poll does not.
-    if (route === 'GET /api/admin/summary (steady state)') {
-      await injectRoute(app, route);
-      // Past the first hour, when an empty stamp is trusted.
-      clock += 61 * 60_000;
     }
     // The first run derives every round; later runs defer the quiet ones.
     if (route === 'POST /api/internal/notify-sweep (steady state)') {

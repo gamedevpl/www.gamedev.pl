@@ -342,7 +342,7 @@ export function createMcpNudgeTracker(
         code: 'call_end',
         message:
           toolName === 'get_gate_verdict'
-            ? 'Still waiting for end — get_gate_verdict is a one-shot check, not a loop. Honour stop:true on pending and let Studio show the gate.'
+            ? 'Still waiting for end — get_gate_verdict is a one-shot check, not a loop. A pending verdict means the build is still running; it will appear in Studio.'
             : 'Still waiting for end — call end now if you will not deliver more this round (Studio handoff may already be unlocked from submit).',
       });
     }

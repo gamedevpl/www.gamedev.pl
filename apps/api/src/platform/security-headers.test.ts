@@ -39,7 +39,7 @@ describe('security headers', () => {
     rmSync(distDir, { recursive: true, force: true });
   });
 
-  it.each(['/', '/admin', '/studio/x/connect'])('refuses to be framed on the shell at %s', async (url) => {
+  it.each(['/', '/review', '/studio/x/connect'])('refuses to be framed on the shell at %s', async (url) => {
     const res = await app.inject({ method: 'GET', url });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/^text\/html/);

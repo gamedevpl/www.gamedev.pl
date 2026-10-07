@@ -45,15 +45,15 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      shipped game source) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a
      data URL to disk in-process (`fs.writeFileSync('shot.png',
 Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
-     data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` +
-     the returned `upload` one-liner. A black frame means those WebGL flags
+     data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and PUT the PNG to
+     its `url` with its returned `headers`. A black frame means those WebGL flags
      were missing or the drawing
      buffer was discarded. Fallback: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d`
      (force2d). There is **no** base64 `send_screenshot` — PNG bytes must never
      enter the model
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
-     the returned `upload` one-liner — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
+     PUT each file to its returned `url` with its returned `headers` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
@@ -338,8 +338,9 @@ is sized to a safe _MCP single-tool-result_ limit, not to the API's own size —
 `engineRef` convention as the browse routes: optional, defaults to the registry's current
 entry when omitted, but pass the `engineRef` `get_kit` returned so a mid-round registry
 bump cannot mix kit revisions. `get_kit` and `get_kit_api` both carry
-`BEHAVIOURAL_CONTRACT`'s line that the platform and kit are not on the public web — an
-unanswered capability question is answered by `get_kit_api` / browse, never a web search.
+`BEHAVIOURAL_CONTRACT`'s line that the platform and kit are not on the public web — a
+capability question is answered by `get_kit_api`, `knowledge_query` or browse. State the
+fact; do not phrase it as a prohibition.
 
 **The digest itself had a silent-drop bug the surface fix didn't touch.**
 `compactKitDigestForPrompt` (`apps/api/src/agent-surface/kit-digest.ts`) used to keep only API lines
@@ -823,8 +824,8 @@ compositing the default buffer is gone). Do not bake
 `preserveDrawingBuffer:true` into shipped game source — only a disposable
 capture harness. Decode the data URL to
 `shot.png` in-process (`Buffer.from(dataUrl.split(',')[1], 'base64')`; never
-print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` and run
-its returned `upload` one-liner verbatim — it carries the capability in an
+print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` and PUT to
+its `url` with its returned `headers` — the capability travels in the
 `Authorization: Bearer` header, never in the URL, and the PUT receipt carries
 no channel state. `page.screenshot({path:'shot.png'})` writes
 PNG directly — that is the gate's path.
@@ -1157,10 +1158,29 @@ meeting it as a refusal after the engine pin moves. The list lives in
 `apps/api/src/agent-surface/kit-upcoming-rules.ts`; add an entry when a rule is
 decided and remove it once it is enforced. It is omitted entirely when empty.
 
-Uploads: run the `upload` one-liner `stage_upload_url` / `screenshot_upload_url`
-returns, verbatim. It carries `-H 'Content-Type: …'`. A PUT that declares no type (or
-one curl guessed from the extension) is now read as bytes rather than refused with a
-415 that left staging silently empty — but the one-liner remains the supported form.
+Uploads: `stage_upload_url` / `screenshot_upload_url` / `concept_frame_upload_url` return
+the upload as data — `url`, `method: "PUT"`, `headers` (`Authorization` + `Content-Type`),
+`maxBytes` — and the client performs it with whatever HTTP client it has. A PUT that
+declares no type (or one guessed from the extension) is read as bytes rather than refused
+with a 415 that left staging silently empty, but sending the returned `headers` is the
+supported form.
+
+### Server text is data, never a command to run
+
+Whatever a tool reply contains could otherwise execute on someone's computer, and it can
+change after the surface was reviewed. So a reply never hands out a shell command to run
+verbatim: uploads are a request described as data (above), the kit is `kitUrl` + `sha256`,
+and recipes that need a shell — headless capture flags, the kit's local create script —
+live in documentation (this playbook and the shipped `gamedevpl` skill), not in tool text.
+The old command fields (`upload`, `uploadScript`, `get_kit`'s `unpack`) still ship, marked
+deprecated in the output schema, so a client mid-migration keeps working; remove them in a
+follow-up once nothing reads them. Tests in `mcp-server.test.ts` and
+`agent-upload-private-state.test.ts` fail if a command or launch flag reappears in a
+description or the contract.
+
+**`submit_sources` never publishes by default.** An omitted `mode` is `preview`;
+`publish` must be passed explicitly (`fromLatestDelivery` still reuses the previous lane).
+Sealing a green preview later still runs the full publish gate (`origin: 'seal'`).
 
 A batch `stage_upload_url({ paths })` mints every path it can and lists the rest in
 `rejected: [{ path, reason }]`. It used to refuse the whole batch over one bad path,

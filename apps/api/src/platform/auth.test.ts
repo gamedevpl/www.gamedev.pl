@@ -6,12 +6,10 @@ import {
   mintSessionToken,
   registerAuthPlugin,
   SESSION_COOKIE_NAME,
-  TOKEN_SESSION_DURATION_SECONDS,
   readSessionToken,
   sessionDurationSeconds,
   type GoogleAuthVerifier,
 } from './auth.js';
-import { mintAccessTokenFor } from './access-token-service.js';
 import { InMemoryStore } from './store.js';
 
 class MockGoogleVerifier implements GoogleAuthVerifier {
@@ -580,7 +578,7 @@ describe('POST /api/waitlist', () => {
     expect(notes[0]).toMatchObject({
       id: 'op-waitlist-g:20010',
       type: 'operator.waitlist_joined',
-      link: '/admin/waitlist',
+      link: '/',
       params: { title: 'Newbie', email: 'newbie@example.com' },
     });
 
@@ -820,14 +818,13 @@ describe('Session lifetime', () => {
   const meWith = (app: FastifyInstance, token: string) =>
     app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` } });
 
-  const agedToken = (uid: string, ageSeconds: number, source?: 'token', tokenId?: string) =>
+  const agedToken = (uid: string, ageSeconds: number, source?: 'token') =>
     mintSessionToken(
       uid,
       'test-secret-key',
       sessionDurationSeconds(source),
       Math.floor(Date.now() / 1000) - ageSeconds,
       source,
-      tokenId,
     );
 
   it('signs a person in for 30 days, not for an afternoon', async () => {
@@ -860,24 +857,6 @@ describe('Session lifetime', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['set-cookie'] as string).toContain(`Max-Age=${DEFAULT_SESSION_DURATION_SECONDS}`);
-
-    await app.close();
-  });
-
-  it('keeps a token-derived cookie on the short 12h clock, renewal included', async () => {
-    // Renewal must not promote a token cookie to a month.
-    const { app, store, uid } = await setupServer();
-
-    const {
-      record: { tokenId },
-    } = await mintAccessTokenFor(store, { uid, name: 'agent', createdByUid: uid, nowMs: Date.now() });
-
-    const res = await meWith(app, agedToken(uid, 7 * 60 * 60, 'token', tokenId));
-
-    expect(res.statusCode).toBe(200);
-    const renewed = res.headers['set-cookie'] as string;
-    expect(renewed).toContain(`Max-Age=${TOKEN_SESSION_DURATION_SECONDS}`);
-    expect(readSessionToken(renewed.split(';')[0]!.split('=')[1]!, 'test-secret-key').src).toBe('token');
 
     await app.close();
   });

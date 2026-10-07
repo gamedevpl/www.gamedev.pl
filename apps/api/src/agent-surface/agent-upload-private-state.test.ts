@@ -137,11 +137,9 @@ describe('upload capabilities and channel state', () => {
     });
   }
 
-  it('never shows the model a headerless upload command', () => {
-    const uploads = BEHAVIOURAL_CONTRACT.split('curl ')
-      .slice(1)
-      .filter((command) => command.slice(0, 200).includes('--upload-file'));
-    expect(uploads.length).toBeGreaterThan(0);
-    for (const command of uploads) expect(command).toMatch(/^-H "Authorization: Bearer /);
+  // Uploads are data, not commands; the credential travels in a header.
+  it('never shows the model an upload command, and names the credential header', () => {
+    expect(BEHAVIOURAL_CONTRACT).not.toMatch(/curl |--upload-file/);
+    expect(BEHAVIOURAL_CONTRACT).toMatch(/exactly those headers/);
   });
 });

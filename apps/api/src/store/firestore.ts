@@ -105,7 +105,8 @@ import { FirestoreRoundsStore } from './slices/rounds.js';
 import { FirestoreSocialStore } from './slices/social.js';
 import { FirestoreSubmissionQueryStore } from './slices/submission-queries.js';
 import { FirestoreSubmissionStore } from './slices/submission.js';
-import { FirestoreTelemetryStore } from './slices/telemetry.js';
+import { FirestoreTelemetryStore, type TelemetryStore, type VisitListOptions } from './slices/telemetry.js';
+import { telemetryStoreFor } from './slices/telemetry-bigquery.js';
 import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
@@ -113,7 +114,8 @@ import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } 
 
 export class FirestoreStore extends SubmissionFacade implements Store {
   private db: GuardedFirestore;
-  private telemetryStore: FirestoreTelemetryStore;
+  private telemetryStore: TelemetryStore;
+  listTelemetryEventsAcross?: TelemetryStore['listTelemetryEventsAcross'];
   private oauthStore: FirestoreOAuthStore;
   private playerDataStore: FirestorePlayerDataStore;
   private worldEntriesStore: FirestoreWorldEntriesStore;
@@ -152,7 +154,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   constructor(db?: Firestore) {
     super();
     this.db = createGuardedFirestore(db ?? new Firestore());
-    this.telemetryStore = new FirestoreTelemetryStore(this.db);
+    this.telemetryStore = telemetryStoreFor(new FirestoreTelemetryStore(this.db));
+    this.listTelemetryEventsAcross = this.telemetryStore.listTelemetryEventsAcross;
     this.oauthStore = new FirestoreOAuthStore(this.db);
     this.playerDataStore = new FirestorePlayerDataStore(this.db);
     this.worldEntriesStore = new FirestoreWorldEntriesStore(this.db);
@@ -839,10 +842,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.telemetryStore.appendVisitEvents(dateStr, events);
   }
 
-  async listVisitEvents(
-    dateStr: string,
-    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
-  ): Promise<VisitEvent[]> {
+  async listVisitEvents(dateStr: string, opts?: VisitListOptions): Promise<VisitEvent[]> {
     return this.telemetryStore.listVisitEvents(dateStr, opts);
   }
 

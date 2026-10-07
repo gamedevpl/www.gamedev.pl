@@ -91,12 +91,13 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     expect(page.body).toContain('studio-mac');
   });
 
+  // Public /api/admin is gone for everyone; the other two refuse tokens.
   it.each([
-    ['POST', '/api/admin/jobs/1000001/publish'],
-    ['POST', '/api/admin/games/comet-courier/delete'],
-    ['DELETE', '/api/me/account'],
-    ['POST', '/api/beta-invites/claim'],
-  ] as const)('%s %s answers 404 for a creator token', async (method, url) => {
+    ['POST', '/api/admin/jobs/1000001/publish', 'not found'],
+    ['POST', '/api/admin/games/comet-courier/delete', 'not found'],
+    ['DELETE', '/api/me/account', 'not_found'],
+    ['POST', '/api/beta-invites/claim', 'not_found'],
+  ] as const)('%s %s answers 404 for a creator token', async (method, url, error) => {
     const { token } = await signedInBoss();
     const res = await app!.inject({
       method,
@@ -105,7 +106,7 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
       payload: method === 'DELETE' ? { confirmation: 'DELETE' } : { code: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
     });
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: 'not_found' });
+    expect(res.json()).toEqual({ error });
   });
 
   it('revoking the grant in Studio kills the token on the next request', async () => {

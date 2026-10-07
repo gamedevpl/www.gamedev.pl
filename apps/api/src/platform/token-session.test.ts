@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { mintAccessTokenFor } from './access-token-service.js';
 import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { revokeAccessTokenAndGrants } from './pat-grant-binding.js';
+import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME, TOKEN_SESSION_DURATION_SECONDS } from './auth.js';
 import { InMemoryStore } from './store.js';
 
 // A cookie traded for a PAT dies with it, renewal included.
@@ -9,7 +10,6 @@ import { InMemoryStore } from './store.js';
 const sessionSecret = 'dev-session-secret-change-me';
 const HOUR = 60 * 60 * 1000;
 
-const adminCookie = () => `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}`;
 const derivedCookie = (uid: string, tokenId?: string, lifeSeconds = 60) =>
   `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret, lifeSeconds, undefined, 'token', tokenId)}`;
 
@@ -28,13 +28,13 @@ describe('token-derived session cookies', () => {
   });
 
   it('stops honouring, and stops renewing, a derived cookie once its token is revoked', async () => {
-    const minted = await app.inject({
-      method: 'POST',
-      url: '/api/admin/access-tokens',
-      headers: { cookie: adminCookie() },
-      payload: { uid: 'bot:e2e', name: 'agent vm' },
+    const { token, record } = await mintAccessTokenFor(store, {
+      uid: 'bot:e2e',
+      name: 'agent vm',
+      createdByUid: 'g:boss',
+      nowMs: Date.now(),
     });
-    const { token, tokenId } = minted.json();
+    const { tokenId } = record;
 
     const exchanged = await app.inject({
       method: 'POST',
@@ -46,12 +46,7 @@ describe('token-derived session cookies', () => {
     // Past half-life, so a live one gets renewed.
     expect(reissued(await me(derivedCookie('bot:e2e', tokenId)))).toHaveLength(1);
 
-    const revoked = await app.inject({
-      method: 'DELETE',
-      url: `/api/admin/access-tokens/${tokenId}`,
-      headers: { cookie: adminCookie() },
-    });
-    expect(revoked.statusCode).toBe(200);
+    expect(await revokeAccessTokenAndGrants(store, tokenId)).toBe(true);
 
     for (const held of [cookie, derivedCookie('bot:e2e', tokenId)]) {
       const res = await me(held);
@@ -97,5 +92,19 @@ describe('token-derived session cookies', () => {
     });
 
     expect((await me(derivedCookie('bot:e2e', record.tokenId, 3600))).statusCode).toBe(200);
+
+    // Renewal keeps the short clock and the token provenance.
+    const aged = mintSessionToken(
+      'bot:e2e',
+      sessionSecret,
+      TOKEN_SESSION_DURATION_SECONDS,
+      Math.floor(Date.now() / 1000) - 7 * 3600,
+      'token',
+      record.tokenId,
+    );
+    const renewed = reissued(await me(`${SESSION_COOKIE_NAME}=${aged}`));
+    expect(renewed).toHaveLength(1);
+    expect(renewed[0]!.maxAge).toBe(TOKEN_SESSION_DURATION_SECONDS);
+    expect(readSessionToken(renewed[0]!.value, sessionSecret)).toMatchObject({ src: 'token', tid: record.tokenId });
   });
 });

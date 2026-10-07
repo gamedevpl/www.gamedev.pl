@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore, FirestoreStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from '../store/fake-firestore.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import { retryUndispatchedBuild } from './retry-undispatched.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { SeedDraft } from './game-seed.js';
@@ -130,6 +130,7 @@ it('the admin retry reseeds an exhausted self job without starting a managed age
   const app = await buildApp({
     store,
     adminUids: 'operator',
+    opsConsole: { verifier: opsTestVerifier },
     submissionRoutes: {
       submissionTokenSecret: 'secret',
       agentBackends: { self, platform },
@@ -138,10 +139,10 @@ it('the admin retry reseeds an exhausted self job without starting a managed age
     },
   });
   apps.push(app);
-  const headers = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('operator', 'dev-session-secret-change-me')}` };
-  const unauthorized = await app.inject({ method: 'POST', url: `/api/admin/jobs/${record.jobId}/retry` });
+  const headers = opsHeaders('operator');
+  const unauthorized = await app.inject({ method: 'POST', url: opsUrl(`/api/admin/jobs/${record.jobId}/retry`) });
   expect(unauthorized.statusCode).toBe(404);
-  const response = await app.inject({ method: 'POST', url: `/api/admin/jobs/${record.jobId}/retry`, headers });
+  const response = await app.inject({ method: 'POST', url: opsUrl(`/api/admin/jobs/${record.jobId}/retry`), headers });
   expect(response.statusCode).toBe(200);
   expect(response.json()).toMatchObject({ ok: true, state: 'dispatched', creditsSpent: 0 });
   expect(seed).toHaveBeenCalledTimes(1);

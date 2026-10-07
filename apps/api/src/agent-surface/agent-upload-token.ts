@@ -8,7 +8,7 @@ import {
 } from '../platform/agent-token.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS } from '../delivery/gcs-sign.js';
 
-// Short-lived PUT URLs for curl --upload-file.
+// Short-lived signed PUT URLs for raw file uploads.
 
 const SCOPE = 'agent-upload-v1';
 
@@ -244,7 +244,7 @@ export function assertUploadTokenUnexpired(claims: UploadTokenClaims, nowMs: num
   }
 }
 
-// Explicit Content-Type: no parser claims a missing one.
+// Deprecated curl form of uploadRequest; no parser claims a missing Content-Type.
 export function uploadCurlCommand(url: string, token: string, localPath: string, contentType: string): string {
   const escaped = url.replace(/'/g, `'\\''`);
   const escapedToken = token.replace(/'/g, `'\\''`);

@@ -41,11 +41,6 @@ const GAME_PAGE_PATTERN =
 // Also: welcome/connect chapters; edit/editor EditorKit surface; code (the Code surface, CE-06).
 const STUDIO_PATTERN =
   /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|code|welcome|connect)|\/transfer\/propose\/[^/]+)?)?$/;
-// The operator console. Its sections are listed rather than matched loosely, so the
-// shell and the client's router agree about what is a real page and what is a typo —
-// the same contract the studio tabs above keep.
-const ADMIN_PATTERN =
-  /^\/admin(?:\/(?:queue|costs|telemetry|limits|tokens|suggestions|proposals|waitlist|assessments))?$/;
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;
 
@@ -96,7 +91,6 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   if (pathname === '/review') return true;
 
   if (STUDIO_PATTERN.test(pathname)) return true;
-  if (ADMIN_PATTERN.test(pathname)) return true;
 
   const statusMatch = pathname.match(STATUS_PATTERN);
   if (statusMatch?.[1]) return true;

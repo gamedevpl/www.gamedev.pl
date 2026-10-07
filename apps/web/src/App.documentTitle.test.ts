@@ -52,7 +52,7 @@ describe('document title follows navigation', () => {
     vi.restoreAllMocks();
   });
 
-  it('updates the tab title for home, legal, play, status, and health routes', async () => {
+  it('updates the tab title for home, legal, play, and status routes', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockPublicApis();
     await i18n.changeLanguage('en');
@@ -98,13 +98,6 @@ describe('document title follows navigation', () => {
       await flushEffects();
     });
     expect(document.title).toBe('Creator Studio — Gamedev.pl');
-
-    await act(async () => {
-      window.history.pushState(null, '', '/health');
-      window.dispatchEvent(new PopStateEvent('popstate'));
-      await flushEffects();
-    });
-    expect(document.title).toBe('Telemetry — Gamedev.pl');
 
     await act(async () => {
       window.history.pushState(null, '', '/this-page-does-not-exist');

@@ -86,7 +86,7 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
           deliveryId: version,
           summary: crashed
             ? 'our gate build failed before it could check your game — this is a platform fault, not your code. Deliver again to start a fresh gate run; the round is still open.'
-            : 'gate has not reported yet — do not loop on get_gate_verdict; stop this run and let Studio show the eventual result',
+            : 'gate has not reported yet — the build is still running and the verdict will appear in Studio in 2–5 minutes; checking again now returns the same answer',
           retryAfterSeconds: 30,
           access,
           ...(progress

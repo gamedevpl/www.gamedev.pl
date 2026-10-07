@@ -180,14 +180,10 @@ one document read per instance per minute in between. `GLOBAL_DAILY_SUBMISSION_C
 the fallback ceiling that applies when the document sets none — a real number (default 50),
 never infinity, so an unwritten or unreadable document still has a ceiling.
 
-Operating it (admin session required; `ADMIN_UIDS`):
-
-```bash
-curl -s -b cookies.txt https://www.gamedev.pl/api/admin/creation-limits          # what is in force + today's spend
-curl -s -b cookies.txt -X POST -H 'content-type: application/json' \
-  -d '{"paused":true}' https://www.gamedev.pl/api/admin/creation-limits          # stop creation
-  # …and '{"paused":false}' to resume, '{"globalDailySubmissionCap":25}' to retune.
-```
+Operating it: open the **Limits** view of the [operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console) in the private ops repo (`console/`,
+run locally with your own gcloud credentials). It shows what is in force and today's spend,
+and pauses, resumes or retunes by writing `opsConfig/creationLimits` directly. The former
+browser route `/api/admin/creation-limits` no longer exists.
 
 Three deliberate choices worth knowing:
 

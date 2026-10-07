@@ -446,17 +446,17 @@ describe('gallery media', () => {
 });
 
 describe('with no snapshot configured', () => {
-  it('serves games and catalog entirely from GitHub', async () => {
-    const { githubClient, getCatalog, getGameSources } = createGithubStub([catalogEntry('bubble-pop')]);
-    const app = await createApp({ githubClient, snapshotReader: null });
+  it('has no repo lane at all rather than reading GitHub', async () => {
+    const stub = createGithubStub([{ ...catalogEntry('bubble-pop'), media: { screenshots: [{ file: 'a.png' }] } }]);
+    const app = await createApp({ githubClient: stub.githubClient, snapshotReader: null });
+    const get = async (url: string) => (await app.inject({ method: 'GET', url })).statusCode;
 
-    const catalog = await app.inject({ method: 'GET', url: '/api/catalog' });
-    const game = await app.inject({ method: 'GET', url: '/api/games/bubble-pop' });
-
-    expect(catalog.statusCode).toBe(200);
-    expect(game.statusCode).toBe(200);
-    expect(getCatalog).toHaveBeenCalled();
-    expect(getGameSources).toHaveBeenCalled();
+    expect((await app.inject({ method: 'GET', url: '/api/catalog' })).json()).toEqual([]);
+    expect(await get('/api/games/bubble-pop')).toBe(404);
+    expect(await get('/api/games/bubble-pop/media/a.png')).toBe(404);
+    for (const read of [stub.getCatalog, stub.getGameSources, stub.getGameMedia]) {
+      expect(read).not.toHaveBeenCalled();
+    }
     await app.close();
   });
 });

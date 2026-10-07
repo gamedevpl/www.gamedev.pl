@@ -2,8 +2,9 @@
 
 **Status: ✅ built.** When `GAMES_SNAPSHOT_BUCKET` is set, published catalog / play /
 media are served **only** from the Cloud Storage snapshot. The bake runs on every
-merge to the games repo's `main`. Unset the env var for local/dev / fixtures /
-`local-games-repo` — that is an opt-out, not a fallback from a configured bucket.
+merge to the games repo's `main`. Published repo-lane games are **never** assembled
+from GitHub on the play route: with no bucket, local dev (`local-games-repo`) bakes
+from the local tree through an in-process snapshot reader, and anything else answers 503.
 
 ## The problem
 
@@ -81,11 +82,22 @@ of truth for _what a served game is_, and the bake is where the two meet.
 Slug not in the catalog → **404** (unchanged). Publication authority is the snapshot
 catalog, not “object exists in the bucket” — a stray object cannot resurrect a game.
 
-**When the bucket is configured, there is no GitHub assemble on the published serve
-path.** GitHub remains the source of truth for content (the bake reads it) and for
-draft / PR preview routes (unmerged heads have no snapshot). Unset
-`GAMES_SNAPSHOT_BUCKET` is the local/dev opt-out and restores the GitHub / fixtures /
-`local-games-repo` path.
+**The published catalog, play and media routes never read GitHub, configured bucket
+or not.** GitHub remains the source of truth for content (the bake reads it) and for
+draft / PR preview routes (unmerged heads have no snapshot).
+
+With `GAMES_SNAPSHOT_BUCKET` unset:
+
+- **Local dev** (`npm run dev`, no `GITHUB_TOKEN`, serving fixtures or a sibling games
+  checkout via `local-games-repo`) gets `catalog/local-snapshot-reader.ts` — a snapshot
+  reader that bakes each game on demand from the local tree through the bake job's own
+  `bakeGameDocument`. Catalog, play and media all go through it, so local play keeps
+  working and exercises the same snapshot code path as production.
+- **Anything else** (a real GitHub token with no bucket) has no snapshot reader and
+  therefore **no repo lane**: the repo catalog is empty, so `/api/catalog` lists only
+  store games and a repo slug 404s on play and media. Store-lane games and draft
+  permalinks keep working. Production never runs this way — `infra/deploy-api.sh`
+  always sets the bucket.
 
 In-process caches (catalog TTL, game TTL, last-known catalog on refresh failure) still
 apply; they cache snapshot results, not a GitHub escape hatch.
@@ -97,11 +109,9 @@ Two invariants survive unchanged, and are tested:
 - **Media is still gated by the catalog allowlist** before the snapshot is consulted, so
   a stray object cannot widen what the API will serve.
 
-One deliberate exception: `isSlugPublished(..., { refreshOnMiss: true })` skips the
-snapshot when it forces a refresh (`forceFresh`). That only happens during the
-publishing→published transition, which is precisely the window where the snapshot is
-the stale source and GitHub is the fresh one — status correctness while the bake is
-still in flight.
+Outside these three routes, two readers still go to GitHub for content metadata:
+the game page's `SPEC.md` read (`catalog/game-page-routes.ts`) and the search indexer
+(`catalog/catalog-indexer.ts`). Neither serves a game.
 
 ## The publish path
 
@@ -153,7 +163,23 @@ No redeploy is needed — instances re-read the pointer on its own TTL.
 
 Manual publish (after an assembler change here, or to recover a failed run): run
 **Publish games snapshot** via `workflow_dispatch`. It takes a `ref` and a `dry_run`
-that reports what would be baked without writing.
+that bakes without writing. The run log shows only pass or fail (see below); use the
+local commands for the details.
+
+### Public logs, private sources
+
+This repo is public, so every Actions log is readable by anyone, but the gate and the
+bake check out the private games repo. Their tools print file paths, test names and, on
+failure, fragments of game source (esbuild code frames, assertion diffs). So every
+games-repo command in `games-catalog-gate.yml`, and `snapshot:publish` in
+`publish-games.yml`, runs through `.github/scripts/quiet-step.sh`. The wrapper discards
+the output and prints only the command, its exit code, its elapsed time and a heartbeat
+every minute. A failure also lists the `FAIL <word> <slug>` token of each failure line, plus its reason when that is a known tool phrase (trace drift, cost regression, CDP timeout). Free-form detail never gets through, because field names, values and Check examples can quote source. To see why, run that
+command in the games repo at the gated SHA.
+
+When you add a step that runs games-repo code, put it through the wrapper as well. Its
+output is not stored anywhere, deliberately: an artifact on a public repo is just as
+public as the log.
 
 Locally:
 
@@ -219,11 +245,11 @@ against the games repo — a green merge there is not evidence the game stopped 
 
 ## Configuration
 
-| Name                    | Where                      | Purpose                                                |
-| ----------------------- | -------------------------- | ------------------------------------------------------ |
-| `GAMES_SNAPSHOT_BUCKET` | Cloud Run env var          | Bucket to read snapshots from; unset disables the path |
-| `GAMES_REPO_TOKEN`      | this repo, Actions secret  | Contents:read PAT on the games repo, for the bake      |
-| `SITE_DISPATCH_TOKEN`   | games repo, Actions secret | Fine-grained PAT that may dispatch into this repo      |
+| Name                    | Where                      | Purpose                                               |
+| ----------------------- | -------------------------- | ----------------------------------------------------- |
+| `GAMES_SNAPSHOT_BUCKET` | Cloud Run env var          | Bucket to read snapshots from; required in production |
+| `GAMES_REPO_TOKEN`      | this repo, Actions secret  | Contents:read PAT on the games repo, for the bake     |
+| `SITE_DISPATCH_TOKEN`   | games repo, Actions secret | Fine-grained PAT that may dispatch into this repo     |
 
 **`SITE_DISPATCH_TOKEN` is a write-capable credential, and cannot be made otherwise.**
 `repository_dispatch` is gated by **Contents: read+write** on `gamedevpl/www.gamedev.pl`

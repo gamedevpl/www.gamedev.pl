@@ -459,6 +459,7 @@ const FILE_BUCKET = {
   'mcp-install-links': 'agent-surface',
   'mcp-presence': 'agent-surface',
   'agent-upload-token': 'agent-surface',
+  'upload-request': 'agent-surface',
   'agent-upload-private-state': 'agent-surface',
   'agent-session-revocation': 'agent-surface',
   'agent-creator-key': 'agent-surface',
@@ -499,7 +500,10 @@ const FILE_BUCKET = {
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
+  'inbox-reference-images': 'agent-surface',
+  'reference-image-url': 'agent-surface',
   'capture-plan-hint': 'agent-surface',
+  'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',
   'kit-upcoming-rules': 'agent-surface',
   'staged-budget': 'agent-surface',
@@ -588,6 +592,7 @@ const FILE_BUCKET = {
   'games-repo-contract-check': 'catalog',
   'editor-contract-lockstep': 'catalog',
   'local-games-repo': 'catalog',
+  'local-snapshot-reader': 'catalog',
   'index-html-generator': 'catalog',
   'slug-backfill': 'catalog',
 

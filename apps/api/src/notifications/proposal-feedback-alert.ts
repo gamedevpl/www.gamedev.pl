@@ -3,8 +3,8 @@ import { createNotification, maybePush, sendOperatorEmail, type EmitDeps } from 
 
 // Catalog proposals have no creator; admins are their reviewers.
 
-// The admin console's proposals section, where catalog feedback is decided.
-export const PROPOSAL_FEEDBACK_LINK = '/admin/proposals';
+// Decided in the local ops console, which alerts cannot deep-link.
+export const PROPOSAL_FEEDBACK_LINK = '/';
 
 // One id per proposal, so re-reconciles and sweeps never repeat it.
 export function proposalFeedbackAlertId(proposalId: string): string {

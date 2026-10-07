@@ -48,7 +48,7 @@ on:
         required: false
         default: 'main'
       dry_run:
-        description: 'Report what would be baked without writing to the bucket'
+        description: 'Bake without writing to the bucket (output is withheld from the public log)'
         type: boolean
         required: false
         default: false
@@ -159,7 +159,8 @@ jobs:
             ARGS+=(--dry-run)
           fi
 
-          npm run snapshot:publish -- "${ARGS[@]}"
+          # Bake errors can quote game source; keep them out of this public log.
+          .github/scripts/quiet-step.sh npm run snapshot:publish -- "${ARGS[@]}"
 
       - name: Verify the live site serves the new snapshot
         if: ${{ github.event.inputs.dry_run != 'true' }}

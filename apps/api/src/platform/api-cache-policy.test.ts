@@ -6,6 +6,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
 import { PUBLISHED_GAME_CACHE_CONTROL } from '../catalog/game-play-route.js';
 import type { GitHubClient } from '../catalog/github-client.js';
+import { createLocalSnapshotReader } from '../catalog/local-snapshot-reader.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const uid = 'g:cache-policy';
@@ -24,7 +25,12 @@ async function publishedGameApp(options: { betaAllowedUids?: string; publicPlayS
     store,
     sessionSecret,
     ...options,
-    submissionRoutes: { githubToken: 'token', submissionTokenSecret: 's', githubClient, snapshotReader: null },
+    submissionRoutes: {
+      githubToken: 'token',
+      submissionTokenSecret: 's',
+      githubClient,
+      snapshotReader: createLocalSnapshotReader(githubClient, 'main'),
+    },
   });
 }
 

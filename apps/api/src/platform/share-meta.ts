@@ -11,6 +11,13 @@ import type { Store } from './store.js';
 
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
 const PLAY_PATH = /^\/(?:play|ay|ai|draft)\/([^/]+)$/;
+// Drafts are never published; "unpublished" says nothing about them.
+const DRAFT_PATH = /^\/draft\//;
+
+// No lane publishes the slug: boot with 404, not a soft 404.
+export const GAME_NOT_FOUND: unique symbol = Symbol('game-not-found');
+// Behind the beta wall: crawlers get noindex, never an existence oracle.
+export const GAME_WALLED: unique symbol = Symbol('game-walled');
 const SLUG_ONLY = new RegExp(`^${SLUG}$`);
 // Same shape as GAME_PAGE_PATTERN in spa-paths.ts.
 const GAME_PAGE_PATH = new RegExp(`^/([a-z][a-z0-9_]{2,23})/(${SLUG})(?:/(?:board|review|releases|sources))?$`);
@@ -120,6 +127,8 @@ export interface SharePreviewShellOptions {
   gamesStore?: Pick<GamesStore, 'getSourceFile' | 'getDerivedArtifact'>;
   // Only games a stranger can open; others would leak past the wall.
   isShareable: (slug: string) => Promise<boolean>;
+  // False when the beta wall, not load shedding, hides the slug.
+  isPastWall?: (slug: string) => Promise<boolean>;
   // Never the request Host header: a spoofed Host must not reach previews.
   origin?: string;
   now?: () => number;
@@ -129,10 +138,10 @@ export interface SharePreviewShellOptions {
 async function storePublishedEntry(
   { store, gamesStore }: Pick<SharePreviewShellOptions, 'store' | 'gamesStore'>,
   slug: string,
-): Promise<CatalogGameEntry | null> {
+): Promise<CatalogGameEntry | typeof GAME_NOT_FOUND | null> {
   if (!store || !gamesStore) return null;
   const publication = await store.getPublication(slug);
-  if (!isPublished(publication)) return null;
+  if (!isPublished(publication)) return GAME_NOT_FOUND;
   const [spec, media] = await Promise.all([
     gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md'),
     gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json'),
@@ -143,21 +152,23 @@ async function storePublishedEntry(
   );
 }
 
+export type SharePreview = string | typeof GAME_NOT_FOUND | typeof GAME_WALLED | null;
+
 const PREVIEW_TTL_MS = 60_000;
 const PREVIEW_CACHE_MAX = 256;
 // Cache misses read storage; rotating slugs must not buy more reads.
 const PREVIEW_MISS_BUDGET = 60;
 
-// The game's shell, or null for plain index.html. Never throws.
+// The game's shell, a not-found or walled marker, or null.
 export function createSharePreviewShell(options: SharePreviewShellOptions) {
   let shell: Promise<string> | null = null;
   const origin = options.origin ?? canonicalAppBaseUrl();
   const now = options.now ?? Date.now;
   // Bounds storage reads on this public path; misses are cached too.
-  const cache = new Map<string, { html: string | null; expiresAt: number }>();
+  const cache = new Map<string, { html: SharePreview; expiresAt: number }>();
   let missesLeft = 0;
   let missWindowEndsAt = 0;
-  const inFlight = new Map<string, Promise<string | null>>();
+  const inFlight = new Map<string, Promise<SharePreview>>();
 
   // Repo misses fall through to storage, which the budget bounds.
   function spendMiss(): boolean {
@@ -170,17 +181,24 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
     return true;
   }
 
-  async function lookup(slug: string): Promise<CatalogGameEntry | null | undefined> {
+  async function lookup(slug: string): Promise<CatalogGameEntry | typeof GAME_NOT_FOUND | null | undefined> {
     // Repo first, as the catalog, game page and media route resolve it.
-    const repo = await options.getCatalogEntry(slug).catch(() => null);
+    let repoFailed = false;
+    const repo = await options.getCatalogEntry(slug).catch(() => {
+      repoFailed = true;
+      return null;
+    });
     if (repo) return repo;
     // Undefined means over budget: answered plainly, never cached.
-    return spendMiss() ? storePublishedEntry(options, slug) : undefined;
+    if (!spendMiss()) return undefined;
+    const stored = await storePublishedEntry(options, slug);
+    // A failed repo read is not a "no".
+    return stored === GAME_NOT_FOUND && repoFailed ? null : stored;
   }
 
-  async function render(slug: string): Promise<string | null | undefined> {
+  async function render(slug: string): Promise<SharePreview | undefined> {
     const raw = await lookup(slug);
-    if (!raw) return raw;
+    if (!raw || raw === GAME_NOT_FOUND) return raw;
     // Taglines live in stored enrichments, as on GET /api/catalog.
     const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
     shell ??= options.readIndexHtml().catch((error: unknown) => {
@@ -190,11 +208,11 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
     return injectShareMeta(await shell, renderShareMeta({ entry, origin }));
   }
 
-  return async (request: { url: string }): Promise<string | null> => {
-    const slug = shareableGameSlug(request.url);
-    if (!slug) return null;
+  async function preview(slug: string): Promise<SharePreview> {
     try {
-      if (!(await options.isShareable(slug))) return null;
+      if (!(await options.isShareable(slug))) {
+        return (await options.isPastWall?.(slug)) === false ? GAME_WALLED : null;
+      }
       const cached = cache.get(slug);
       if (cached && cached.expiresAt > now()) return cached.html;
       // Concurrent requests for one slug share a render and one budget unit.
@@ -216,5 +234,12 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
     } catch {
       return null;
     }
+  }
+
+  return async (request: { url: string }): Promise<SharePreview> => {
+    const slug = shareableGameSlug(request.url);
+    if (!slug) return null;
+    const result = await preview(slug);
+    return result === GAME_NOT_FOUND && DRAFT_PATH.test(normalizePathname(request.url)) ? null : result;
   };
 }

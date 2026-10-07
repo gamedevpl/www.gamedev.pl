@@ -1,7 +1,8 @@
 import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
-import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
+import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken } from './agent-upload-token.js';
+import { UPLOAD_REQUEST_PROPS, uploadContract } from './upload-request.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
@@ -168,8 +169,8 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           expiresAt: { type: 'string' },
           expiresInSeconds: { type: 'number' },
           path: { type: 'string' },
-          upload: { type: 'string' },
-          uploadScript: { type: 'string' },
+          ...UPLOAD_REQUEST_PROPS,
+          uploadScript: { type: 'string', description: 'Deprecated: chained curl commands; use uploads[].' },
           maxBytes: { type: 'number' },
           uploads: {
             type: 'array',
@@ -178,12 +179,12 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
               properties: {
                 path: { type: 'string' },
                 url: { type: 'string' },
-                upload: { type: 'string' },
+                ...UPLOAD_REQUEST_PROPS,
                 expiresAt: { type: 'string' },
                 expiresInSeconds: { type: 'number' },
                 maxBytes: { type: 'number' },
               },
-              required: ['path', 'url', 'upload', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
+              required: ['path', 'url', 'method', 'headers', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
             },
           },
           rejected: {
@@ -200,11 +201,10 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       // Not READS: each call mints a fresh nonce, so never idempotent.
       annotations: { title: 'Get stage upload URL(s)', ...WRITES },
       description:
-        'Stage new or fully rewritten source file(s) when you have curl/shell egress. ' +
+        'Stage new or fully rewritten source file(s) when you can make HTTP uploads yourself. ' +
         'ALWAYS mint upload URLs in batch: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
         `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; split larger sets into batches of at most ${MAX_STAGE_UPLOAD_BATCH}; do NOT make individual parallel calls per file). Pass \`path\` only for a lone single file. ` +
-        'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) verbatim ' +
-        '(curl -H "Authorization: Bearer <upload token>" -H "Content-Type: text/plain; charset=utf-8" --upload-file <file> "$url") or `uploadScript`; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same ' +
+        "Returns short-lived upload contracts as data (path, url, method, headers, maxBytes per file): PUT each file's bytes to its url with exactly its headers, using whatever HTTP client you have; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same " +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
         'staging receipt only — read stop/pendingMessages from your other channel tools. Then submit_sources({ fromStaged: true, … }). ' +
         'Use stage_source_file / patch_source_file when you have no shell. ' +
@@ -298,7 +298,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             expiresAt,
             expiresInSeconds: ttlSeconds,
             path,
-            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
+            ...uploadContract(url, token, path, 'text/plain; charset=utf-8'),
             maxBytes: 1_000_000,
           });
         }
@@ -318,7 +318,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           return {
             path,
             url,
-            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
+            ...uploadContract(url, token, path, 'text/plain; charset=utf-8'),
             expiresAt,
             expiresInSeconds: ttlSeconds,
             maxBytes: 1_000_000,
@@ -368,7 +368,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       },
       description:
         'Upload ONE game source file into this round’s staging buffer (full rewrite) via inline content. ' +
-        'Use stage_upload_url + its returned `upload` one-liner (it carries the Content-Type header) when you have shell egress — re-emitting file contents ' +
+        'Use stage_upload_url (PUT each file to its returned url with its returned headers) when you can make HTTP uploads yourself — re-emitting file contents ' +
         'as a tool argument burns output tokens. Use this tool for new files when you have no shell; ' +
         'for edits to an existing path use patch_source_file so you do not re-emit a whole large file. ' +
         'For a large tree, staging file-by-file avoids one giant submit_sources files[] payload, which some clients truncate. ' +

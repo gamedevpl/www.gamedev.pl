@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { PLAY_STYLE } from './generated/play-ui.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 
@@ -50,6 +50,12 @@ function fixture(status = 200, mode?: string) {
   windows.push(dom);
   return { dom, state, requests, doc: dom.window.document };
 }
+// Pay the cold JSDOM parse once, outside any single test's timeout.
+beforeAll(async () => {
+  const { doc } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
+  for (const dom of windows.splice(0)) dom.window.close();
+}, 30_000);
 it('mounts working controls and opens chat without making the game inert or replacing it', async () => {
   const { doc } = fixture();
   await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
