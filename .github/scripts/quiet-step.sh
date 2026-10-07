@@ -37,8 +37,8 @@ if [ "$code" -eq 0 ]; then
 else
   echo "FAIL ${label} (exit ${code}, ${elapsed}s)"
   echo "::error title=${label} failed::Exit ${code}."
-  # Print high-level error and failure summaries (e.g. FAIL, error, cost regressions)
-  grep -E '(^FAIL |^  - |regressed from|looks like padding|rose to .* baseline|Check .* failed)' "$out_file" | head -n 30 || true
+  # Print high-level error and failure summaries (e.g. FAIL, error, cost regressions, diffs)
+  grep -E '(^FAIL |^  - |regressed from|looks like padding|rose to .* baseline|Check .* failed|the game rendered|raw diff lines)' "$out_file" | head -n 100 || true
   rm -f "$out_file"
 fi
 exit "$code"
