@@ -62,8 +62,8 @@ often enough to name up front:
    shipped game source) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a data
    URL to disk in-process (`fs.writeFileSync('shot.png',
 Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
-   data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and
-   the returned `upload` one-liner. A black/blank
+   data URL). Keep PNG ≤700 KB, then call `screenshot_upload_url` and PUT
+   the PNG bytes to its `url` with exactly the returned `method` and `headers`. A black/blank
    frame means those WebGL flags were missing or the drawing buffer was already
    discarded. If SwiftShader is unavailable, `GAME_CAPTURE_GFX=canvas2d` or
    `?gfx=canvas2d` (force2d). There is no base64 screenshot tool — PNG bytes must
