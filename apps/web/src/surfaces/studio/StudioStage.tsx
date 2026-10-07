@@ -147,6 +147,9 @@ export function StudioStage({
   const idleTimerRef = useRef<number | null>(null);
   const shimmerTimeoutRef = useRef<number | null>(null);
   const swapWatchRef = useRef<{ stop: () => void } | null>(null);
+  // A swap watch can outlive a posture change; crash handling reads it fresh.
+  const postureRef = useRef(posture);
+  postureRef.current = posture;
 
   useEffect(() => {
     return () => {
@@ -264,7 +267,7 @@ export function StudioStage({
   useEffect(() => () => swapWatchRef.current?.stop(), []);
 
   function reportCrash(message: string) {
-    if (posture === 'play') {
+    if (postureRef.current === 'play') {
       // The creator's run just vanished under them — restore instantly and say so via
       // status; a card in the middle of a play session has nowhere honest to sit.
       const good = lastGoodRef.current;

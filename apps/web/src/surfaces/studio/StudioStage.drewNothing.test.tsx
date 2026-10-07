@@ -134,4 +134,36 @@ describe('StudioStage drew-nothing check', () => {
     visibility.mockRestore();
     unmount();
   });
+  it('handles a late crash with the posture current when it arrives', async () => {
+    vi.useFakeTimers();
+    const props = baseProps({ posture: 'watch' });
+    const { host, rerender, unmount } = await mount(props);
+    const swapped = {
+      ...props,
+      source: {
+        html: GAME_B,
+        rawHtml: GAME_B,
+        origin: { kind: 'staged' as const, at: Date.now(), versionLabel: null },
+      },
+    };
+    await rerender(swapped);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7_000);
+    });
+    await rerender({ ...swapped, posture: 'play' });
+    const iframe = host.querySelector('iframe')!;
+    await act(async () => {
+      window.dispatchEvent(
+        documentMessage('message', {
+          source: iframe.contentWindow,
+          origin: 'null',
+          data: { source: 'gdpl-player', type: 'error', message: 'late boom' },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // Play posture restores the last good build instead of keeping the crash.
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+    unmount();
+  });
 });
