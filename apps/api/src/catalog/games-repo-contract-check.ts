@@ -59,6 +59,9 @@ import {
   type DeliveryContract,
   type GameKitModuleName,
 } from '../platform/games-repo-contract.js';
+
+// The games half lands first; absence after this date is drift.
+const MODULE_REQUIRES_ROLLOUT_UNTIL = Date.parse('2026-10-14T00:00:00.000Z');
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 
 const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../delivery/ts-any-scan.ts');
@@ -368,6 +371,14 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
 
   // Either side stricter means the stage hint and the gate disagree.
   const remoteRequires = extractGameKitModuleRequires(assembleSource);
+  if (!remoteRequires && now >= MODULE_REQUIRES_ROLLOUT_UNTIL) {
+    return {
+      kind: 'drift',
+      reason:
+        `games-repo assemble.ts has no GAME_KIT_MODULE_REQUIRES, but the website still ` +
+        `refuses selections by its own copy. Restore the map there or drop it here.`,
+    };
+  }
   if (remoteRequires) {
     const flatten = (map: Readonly<Record<string, readonly string[]>>) =>
       Object.entries(map)
