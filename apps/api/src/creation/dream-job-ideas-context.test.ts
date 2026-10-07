@@ -10,4 +10,22 @@ describe('createDreamJob ideas context', () => {
     expect(request.screenshotPng).toBeTruthy();
     expect(request.history).toEqual(['Creator asked: Add a second moon']);
   });
+
+  it('finishes only after the retry draw is in the ledger', async () => {
+    const { store, ideas, run } = await harness({ hud: [], ideas: [] });
+    const record = store.recordJobCost.bind(store);
+    // A slow write: an unawaited one would land after run() resolves.
+    store.recordJobCost = async (jobId, entry) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await record(jobId, entry);
+    };
+    const generate = ideas.generate.bind(ideas);
+    ideas.generate = async (params) => {
+      params.onRetry?.();
+      return generate(params);
+    };
+    expect(await run()).toBe('no_ideas');
+    const concept = ((await store.getSubmission(7))?.costs ?? []).filter((entry) => entry.kind === 'concept');
+    expect(concept).toHaveLength(2);
+  });
 });
