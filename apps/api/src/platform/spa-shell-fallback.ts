@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { GAME_NOT_FOUND, type SharePreview } from './share-meta.js';
+import { GAME_NOT_FOUND, GAME_WALLED, type SharePreview } from './share-meta.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 
 type PreviewShell = (request: { url: string }) => Promise<SharePreview>;
@@ -20,6 +20,9 @@ export function registerSpaShellFallback(app: FastifyInstance, previewShell: Pre
     // The SPA still boots its not-found panel; only the status differs.
     if (preview === GAME_NOT_FOUND) {
       return reply.status(404).type('text/html').sendFile('index.html');
+    }
+    if (preview === GAME_WALLED) {
+      return reply.status(200).type('text/html').header('x-robots-tag', 'noindex').sendFile('index.html');
     }
     if (preview) {
       return reply.status(200).type('text/html').header('cache-control', 'no-cache').send(preview);

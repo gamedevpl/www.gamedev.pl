@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CatalogGameEntry } from '../catalog/github-client.js';
 import {
   GAME_NOT_FOUND,
+  GAME_WALLED,
   createSharePreviewShell,
   injectShareMeta,
   previewScreenshotFile,
@@ -178,6 +179,32 @@ describe('createSharePreviewShell', () => {
     });
     expect(await shell(request)).toBeNull();
     expect(looked).toBe(false);
+  });
+
+  it('marks walled games for noindex without looking them up', async () => {
+    let looked = false;
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        looked = true;
+        return null;
+      },
+      isShareable: async () => false,
+      isPastWall: async () => false,
+    });
+    expect(await shell(request)).toBe(GAME_WALLED);
+    expect(await shell({ url: '/play/does-not-exist' })).toBe(GAME_WALLED);
+    expect(looked).toBe(false);
+  });
+
+  it('keeps load-shed games on the plain shell', async () => {
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => entry(),
+      isShareable: async () => false,
+      isPastWall: async () => true,
+    });
+    expect(await shell(request)).toBeNull();
   });
 
   it('falls back to the plain shell for unknown games, other paths and failures', async () => {

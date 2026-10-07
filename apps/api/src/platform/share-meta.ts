@@ -16,6 +16,8 @@ const DRAFT_PATH = /^\/draft\//;
 
 // No lane publishes the slug: boot with 404, not a soft 404.
 export const GAME_NOT_FOUND: unique symbol = Symbol('game-not-found');
+// Behind the beta wall: crawlers get noindex, never an existence oracle.
+export const GAME_WALLED: unique symbol = Symbol('game-walled');
 const SLUG_ONLY = new RegExp(`^${SLUG}$`);
 // Same shape as GAME_PAGE_PATTERN in spa-paths.ts.
 const GAME_PAGE_PATH = new RegExp(`^/([a-z][a-z0-9_]{2,23})/(${SLUG})(?:/(?:board|review|releases|sources))?$`);
@@ -125,6 +127,8 @@ export interface SharePreviewShellOptions {
   gamesStore?: Pick<GamesStore, 'getSourceFile' | 'getDerivedArtifact'>;
   // Only games a stranger can open; others would leak past the wall.
   isShareable: (slug: string) => Promise<boolean>;
+  // False when the beta wall, not load shedding, hides the slug.
+  isPastWall?: (slug: string) => Promise<boolean>;
   // Never the request Host header: a spoofed Host must not reach previews.
   origin?: string;
   now?: () => number;
@@ -148,14 +152,14 @@ async function storePublishedEntry(
   );
 }
 
-export type SharePreview = string | typeof GAME_NOT_FOUND | null;
+export type SharePreview = string | typeof GAME_NOT_FOUND | typeof GAME_WALLED | null;
 
 const PREVIEW_TTL_MS = 60_000;
 const PREVIEW_CACHE_MAX = 256;
 // Cache misses read storage; rotating slugs must not buy more reads.
 const PREVIEW_MISS_BUDGET = 60;
 
-// The game's shell, GAME_NOT_FOUND, or null for plain index.html.
+// The game's shell, a not-found or walled marker, or null.
 export function createSharePreviewShell(options: SharePreviewShellOptions) {
   let shell: Promise<string> | null = null;
   const origin = options.origin ?? canonicalAppBaseUrl();
@@ -206,7 +210,9 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
 
   async function preview(slug: string): Promise<SharePreview> {
     try {
-      if (!(await options.isShareable(slug))) return null;
+      if (!(await options.isShareable(slug))) {
+        return (await options.isPastWall?.(slug)) === false ? GAME_WALLED : null;
+      }
       const cached = cache.get(slug);
       if (cached && cached.expiresAt > now()) return cached.html;
       // Concurrent requests for one slug share a render and one budget unit.
