@@ -99,6 +99,7 @@ export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 export const GAME_KIT_MODULE_REQUIRES: Readonly<Record<string, readonly GameKitModuleName[]>> = {
   actors: ['drawing'],
   gfx: ['drawing'],
+  gfx3d: ['gfx'],
   urban: ['world'],
 };
 

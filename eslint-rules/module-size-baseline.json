@@ -396,7 +396,7 @@
     "apps/api/src/platform/erase-player-signals.ts": 240,
     "apps/api/src/platform/game-access-resolve-cache.test.ts": 158,
     "apps/api/src/platform/game-access-resolve.ts": 169,
-    "apps/api/src/platform/games-repo-contract.test.ts": 393,
+    "apps/api/src/platform/games-repo-contract.test.ts": 395,
     "apps/api/src/platform/games-repo-contract.ts": 517,
     "apps/api/src/platform/genai.ts": 52,
     "apps/api/src/platform/github-rate-limit.ts": 19,
