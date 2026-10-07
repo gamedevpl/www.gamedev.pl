@@ -370,6 +370,7 @@ const FILE_BUCKET = {
   'dream-availability': 'creation',
   'dream-frames': 'creation',
   'dream-job': 'creation',
+  'dream-history': 'creation',
   'dream-claim-finalization': 'creation',
   'dream-superseded': 'creation',
   'dream-claim': 'platform',
