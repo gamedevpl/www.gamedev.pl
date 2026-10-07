@@ -4,7 +4,9 @@ Interactive `gamedevpl play` and terminal sessions offer **Deny** (the default) 
 **Allow once** when a supported local agent requests tool permission. The prompt
 shows the vendor payload, including the command/tool arguments and any supplied
 working directory, paths and reason. It never rewrites the command or grants a
-session-wide rule. Existing vendor permission settings still apply first.
+session-wide rule. Codex permission-profile requests instead offer **Allow for this
+turn**: the displayed network/filesystem permissions expire when the current turn
+ends. Denial returns an empty grant. Existing vendor permission settings still apply first.
 
 The terminal and authenticated loopback Play panel share one pending question.
 Concurrent requests queue; each uses a fresh prompt generation, so a stale click
@@ -22,11 +24,11 @@ Approval counts and wait time are not separately measured.
 
 ## Implemented transports
 
-| Adapter | Mechanism                                                                                | Behavior                                                                                                                                                                                                                                      |
-| ------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude  | `--permission-prompt-tool mcp__gamedevpl_local__approve_tool`                            | Existing private, bearer-authenticated MCP listener asks the creator and returns `allow` with unchanged `updatedInput`, or `deny`. `acceptEdits` stays enabled. No preview is required. A disconnected MCP caller cancels its question.       |
-| Codex   | `app-server`, `item/commandExecution/requestApproval`, `item/fileChange/requestApproval` | `on-request` policy when the interactive callback is available. Only active-thread requests are accepted; answers are `accept` / `decline`. Unknown request methods are rejected.                                                             |
-| Muse    | `serve`, `approval/request` or `approval/requested`, then `approval/decide`              | Server requests receive a presentation receipt. Decisions use server-issued choice and requirement IDs, once per stage. Only `scope: once` may be approved. The old terminal recovery remains for unsupported/custom headless configurations. |
+| Adapter | Mechanism                                                                                                                    | Behavior                                                                                                                                                                                                                                                                                                          |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude  | `--permission-prompt-tool mcp__gamedevpl_local__approve_tool`                                                                | Existing private, bearer-authenticated MCP listener asks the creator and returns `allow` with unchanged `updatedInput`, or `deny`. `acceptEdits` stays enabled. No preview is required. A disconnected MCP caller cancels its question.                                                                           |
+| Codex   | `app-server`, `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval` | `on-request` policy when the interactive callback is available. Only active-thread requests are accepted; command/file answers are `accept` / `decline`. Permission profiles return the requested permissions with `scope: turn`, or an empty grant on denial/cancellation. Unknown request methods are rejected. |
+| Muse    | `serve`, `approval/request` or `approval/requested`, then `approval/decide`                                                  | Server requests receive a presentation receipt. Decisions use server-issued choice and requirement IDs, once per stage. Only `scope: once` may be approved. The old terminal recovery remains for unsupported/custom headless configurations.                                                                     |
 
 `agent-approval.ts` owns presentation and serialization; `claude-approval.ts` and
 `live-approvals.ts` translate vendor protocols. The browser uses existing authenticated
@@ -54,9 +56,11 @@ GenAIcode 2.9.1 already exports `ApprovalRequest`, `ApprovalDecision`,
 `AgentTask.onApproval`, `LiveSession.approve` and the live JSON-RPC transport.
 Its Codex/Muse drivers demonstrate approval support; gamedevpl's custom live driver
 keeps its stricter steering acknowledgements and screenshot input behavior.
-The installed library is sufficient for this change: no GenAIcode release or
-dependency bump is required. The inspected upstream 2.11.0 Claude driver is still
-headless and has no built-in approval callback.
+This patch implements the additional vendor translation in gamedevpl against those
+APIs, without upgrading GenAIcode. That leaves reusable protocol handling in the
+CLI; moving it into GenAIcode would require a library release and dependency bump.
+The inspected upstream 2.11.0 Claude driver is still headless and has no built-in
+approval callback.
 
 Reusable Claude approval plumbing and ACP / Copilot / OpenCode live drivers would
 belong in GenAIcode as additive features, warranting a minor library release, with

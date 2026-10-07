@@ -1,7 +1,18 @@
 import { RpcError, uuidv7, type LiveSession } from 'genaicode/agents';
 import { z } from 'zod';
+import type { ScopedApprovalRequest } from './agent-approval.js';
 
 const record = z.record(z.unknown());
+const permissionRequest = z.object({
+  turnId: z.string().min(1),
+  itemId: z.string().min(1),
+  permissions: z
+    .object({
+      network: record.nullish(),
+      fileSystem: record.nullish(),
+    })
+    .strict(),
+});
 const museRequest = z
   .object({
     sessionId: z.string(),
@@ -93,6 +104,20 @@ export function liveApprovals(input: {
     if (input.muse && method === 'approval/request') {
       notification('approval/requested', raw);
       return {};
+    }
+    if (!input.muse && method === 'item/permissions/requestApproval') {
+      const permissions = permissionRequest.safeParse(parsed.data);
+      if (!permissions.success) throw new RpcError('Invalid permission profile request.', -32602);
+      const value = permissions.data;
+      const approval: ScopedApprovalRequest = {
+        id: value.itemId,
+        kind: 'other',
+        scope: 'turn',
+        detail: parsed.data,
+      };
+      const decision = await session.approve(approval);
+      const granted = Object.fromEntries(Object.entries(value.permissions).filter(([, value]) => value != null));
+      return { permissions: ours(parsed.data) && decision === 'approve' ? granted : {}, scope: 'turn' };
     }
     const kinds = {
       'item/commandExecution/requestApproval': 'command',

@@ -108,3 +108,50 @@ it('fails promptly on malformed Muse requests', async () => {
   await vi.waitFor(() => expect(f.fail).toHaveBeenCalled());
   expect(f.approve).not.toHaveBeenCalled();
 });
+
+const permissions = { network: { enabled: true }, fileSystem: { read: null, write: ['/outside/game'] } };
+const permissionRequest = { threadId: 's', turnId: 't', itemId: 'p', permissions };
+
+it.each(['approve', 'deny'] as const)('answers Codex permission profiles with %s and turn scope', async (decision) => {
+  const f = fixture(false, decision);
+  expect(await f.handler.request('item/permissions/requestApproval', permissionRequest)).toEqual({
+    permissions: decision === 'approve' ? permissions : {},
+    scope: 'turn',
+  });
+  expect(f.approve).toHaveBeenCalledWith({ id: 'p', kind: 'other', scope: 'turn', detail: permissionRequest });
+});
+
+it('omits null permission categories from the grant', async () => {
+  const f = fixture(false);
+  expect(
+    await f.handler.request('item/permissions/requestApproval', {
+      ...permissionRequest,
+      permissions: { network: null, fileSystem: permissions.fileSystem },
+    }),
+  ).toEqual({ permissions: { fileSystem: permissions.fileSystem }, scope: 'turn' });
+});
+
+it('does not grant permissions after the task ends', async () => {
+  const f = fixture(false);
+  f.approve.mockImplementation(async () => {
+    f.state.active = false;
+    return 'approve';
+  });
+  expect(await f.handler.request('item/permissions/requestApproval', permissionRequest)).toEqual({
+    permissions: {},
+    scope: 'turn',
+  });
+});
+
+it.each([
+  { ...permissionRequest, threadId: 'other' },
+  { ...permissionRequest, turnId: 'other' },
+  { ...permissionRequest, turnId: undefined },
+  { ...permissionRequest, permissions: null },
+  { ...permissionRequest, permissions: { network: true } },
+  { ...permissionRequest, permissions: { unknownGrant: true } },
+])('rejects invalid or foreign permission requests before prompting', async (request) => {
+  const f = fixture(false);
+  await expect(f.handler.request('item/permissions/requestApproval', request)).rejects.toThrow();
+  expect(f.approve).not.toHaveBeenCalled();
+});

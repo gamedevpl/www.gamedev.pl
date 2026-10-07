@@ -177,7 +177,16 @@ it('reports a live agent that cannot start instead of throwing', async () => {
   expect(lines.join('\n')).toMatch(/muse/);
 });
 
-it.each(['codex', 'muse'])('continues the same %s process after approval', async (name) => {
+it.each([
+  { name: 'codex', profile: false, decision: 'approve' as const },
+  { name: 'muse', profile: false, decision: 'approve' as const },
+  { name: 'codex', profile: true, decision: 'approve' as const },
+  { name: 'codex', profile: true, decision: 'deny' as const },
+])('continues $name after approval (profile=$profile, decision=$decision)', async ({ name, profile, decision }) => {
+  const permissions = { network: { enabled: true }, fileSystem: { write: ['/outside/game'], read: null } };
+  const expected = profile
+    ? { permissions: decision === 'approve' ? permissions : {}, scope: 'turn' }
+    : { decision: 'accept' };
   const root = mkdtempSync(join(tmpdir(), 'gd-live-approval-'));
   roots.push(root);
   const command = join(root, 'agent');
@@ -190,7 +199,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
  const m=JSON.parse(line); if(m.id===undefined)return;
  if(m.id==='approval') {
    if(${JSON.stringify(name)}==='codex') {
-     if(m.result?.decision!=='accept')process.exit(5);
+     if(JSON.stringify(m.result)!==${JSON.stringify(JSON.stringify(expected))})process.exit(5);
      done();
    } else if(JSON.stringify(m.result)!=='{}')process.exit(6);
    return;
@@ -203,8 +212,8 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
  if(m.method==='session/start')send({id:m.id,result:{session:{sessionId:'s'}}});
  if(m.method==='turn/start') {
    send({id:m.id,result:{turn:{id:'t'},turnId:'t'}});
-   setTimeout(()=>send({id:'approval',method:${JSON.stringify(name === 'codex' ? 'item/commandExecution/requestApproval' : 'approval/request')},params:{
-     threadId:'s',sessionId:'s',turnId:'t',approvalId:'a',command:'npm test',
+   setTimeout(()=>send({id:'approval',method:${JSON.stringify(name === 'codex' ? (profile ? 'item/permissions/requestApproval' : 'item/commandExecution/requestApproval') : 'approval/request')},params:{
+     threadId:'s',sessionId:'s',turnId:'t',approvalId:'a',itemId:'p',command:'npm test',permissions:${JSON.stringify(permissions)},
      subject:{kind:'shell',command:'npm test'},currentRequirementId:{approvalId:'a',sourceIndex:0},
      availableChoices:[{choiceId:'once',decision:'approved',scope:'once'},{choiceId:'no',decision:'denied',scope:'once'}]
    }}),10);
@@ -226,12 +235,13 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     env: process.env,
     onApproval: async (request) => {
       decisions.push(request.kind);
-      return 'approve';
+      expect(request.scope).toBe(profile ? 'turn' : undefined);
+      return decision;
     },
     onEvent: (event) => events.push(event.type),
   });
   expect(result.code).toBe(0);
   expect(result.permissionSession).toBeUndefined();
-  expect(decisions).toEqual(['command']);
+  expect(decisions).toEqual([profile ? 'other' : 'command']);
   expect(events).toContain('approval-resolved');
 });

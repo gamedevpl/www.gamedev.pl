@@ -111,3 +111,13 @@ it('removes a Claude approval when its MCP connection closes', async () => {
   await pending;
   await vi.waitFor(() => expect(f.session.get().choices).toEqual([]));
 });
+
+it.each(['Allow for this turn', 'Deny'])('labels turn-scoped permissions explicitly: %s', async (answer) => {
+  const f = fixture();
+  const pending = f.approve({ id: 'p', kind: 'other', scope: 'turn', detail: { network: { enabled: true } } });
+  await vi.waitFor(() => expect(f.session.get().mode).toBe('pick'));
+  expect(f.session.get().choices).toEqual(['Deny', 'Allow for this turn']);
+  expect(f.session.get().question).toContain('until the current turn ends');
+  f.session.acceptInput(answer, f.session.get().promptId);
+  expect(await pending).toBe(answer === 'Deny' ? 'deny' : 'approve');
+});
