@@ -5,6 +5,7 @@ export const SLASH_VERBS = [
   'logs',
   'kit',
   'play',
+  'stop',
   'games',
   'status',
   'share',

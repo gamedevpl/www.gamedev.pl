@@ -3,7 +3,7 @@ import { acquireStartupLock } from './workbench-startup-lock.js';
 import { CliError } from './exit-codes.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, openSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { privatePlayDirectory, readPlayState } from './play-state.js';
@@ -140,7 +140,7 @@ export async function launchWorkbench(input: {
       if (state?.url && (await health(state))) {
         input.write(`Play session: ${state.url}`);
         input.write(
-          'Runs in the background; Ctrl+C does not stop it. Stop it from the browser: Commands → End session.',
+          'Runs in the background; Ctrl+C does not stop it. Stop it from the browser: Commands → End session, or run: gamedevpl stop.',
         );
         if (!input.noOpen && !(await openUrl(state.url)))
           input.write('Browser could not open. Copy the Play session URL above.');
@@ -232,6 +232,10 @@ export async function runPlayWorker(input: {
   const start = workerEntry(journal);
   delete journal.initial;
   save();
+  const onSigterm = () => {
+    process.exit(0);
+  };
+  process.once('SIGTERM', onSigterm);
   try {
     await runInkRepl({
       api,
@@ -255,8 +259,82 @@ export async function runPlayWorker(input: {
     });
     journal.ended = true;
   } finally {
+    process.removeListener('SIGTERM', onSigterm);
     delete journal.url;
     delete journal.pid;
     save();
   }
+}
+
+export async function stopWorkbenchSession(input: { cwd: string; slug?: string }): Promise<boolean> {
+  const base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
+  privatePlayDirectory(base);
+  let stoppedAny = false;
+  let entries: string[];
+  try {
+    entries = readdirSync(base);
+  } catch {
+    return false;
+  }
+  let targetCwd = input.cwd;
+  try {
+    targetCwd = realpathSync(input.cwd);
+  } catch {
+    // Keep targetCwd as is
+  }
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue;
+    const path = join(base, entry);
+    let journal: PlayJournal | undefined;
+    try {
+      journal = journalAt(path);
+    } catch {
+      continue;
+    }
+    if (!journal) continue;
+    const matchesCwd =
+      journal.cwd === targetCwd ||
+      journal.checkout?.root === targetCwd ||
+      (Boolean(journal.checkout?.root) && targetCwd.startsWith(journal.checkout!.root));
+    const matchesSlug =
+      Boolean(input.slug) &&
+      (journal.slug === input.slug || journal.checkout?.slug === input.slug || journal.launch?.slug === input.slug);
+    if (!matchesCwd && !matchesSlug) continue;
+    if (journal.ended && !running(journal.pid)) continue;
+
+    let stoppedThis = false;
+    if (journal.url) {
+      try {
+        const url = new URL(journal.url);
+        const res = await fetch(`${url.origin}/stop`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${url.hash.slice(1)}`,
+          },
+          signal: AbortSignal.timeout(2000),
+        });
+        if (res.ok) stoppedThis = true;
+      } catch {
+        // Fall back to PID kill
+      }
+    }
+    if (running(journal.pid)) {
+      try {
+        process.kill(journal.pid!, 'SIGTERM');
+        stoppedThis = true;
+      } catch {
+        // Already gone
+      }
+    }
+    try {
+      journal.ended = true;
+      delete journal.pid;
+      delete journal.url;
+      savePlayJournal(path, journal);
+    } catch {
+      // Ignore
+    }
+    if (stoppedThis) stoppedAny = true;
+  }
+  return stoppedAny;
 }

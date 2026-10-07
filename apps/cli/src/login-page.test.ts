@@ -12,5 +12,6 @@ describe('loopbackPage', () => {
     expect(html).not.toContain('text-align: center');
     expect(html).not.toContain('justify-content: center');
     expect(html).not.toContain('width: 70px');
+    expect(html).toContain('<link rel="icon" type="image/svg+xml"');
   });
 });

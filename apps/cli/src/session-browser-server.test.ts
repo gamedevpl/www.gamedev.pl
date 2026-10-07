@@ -245,3 +245,27 @@ it('stops advertising expired phone pairing and allows a replacement', async () 
     replacement.url,
   );
 });
+
+it('serves mascot favicon without authentication', async () => {
+  const { url } = await fixture();
+  for (const path of ['/favicon.ico', '/favicon.svg']) {
+    const res = await fetch(`${url.origin}${path}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('image/svg+xml');
+    const svg = await res.text();
+    expect(svg).toContain('<svg');
+    expect(svg).toContain('fill="#00e4ac"');
+  }
+});
+
+it('stops the session on authenticated POST /stop', async () => {
+  const { url, headers, session } = await fixture();
+  const prompt = session.prompt();
+  const res = await fetch(`${url.origin}/stop`, {
+    method: 'POST',
+    headers,
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true });
+  expect(await prompt).toBe('/quit');
+});

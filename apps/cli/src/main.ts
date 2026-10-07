@@ -5,7 +5,7 @@ export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
-import { playGame } from './play.js';
+import { playGame, stopPlaySession } from './play.js';
 import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -230,8 +230,33 @@ export async function runCli(
       }
       return EXIT_GREEN;
     }
+    if (verb === 'stop') {
+      const here = findCheckout(process.cwd());
+      const slug = args[0] ?? here?.slug;
+      const stopped = await stopPlaySession({
+        cwd: process.cwd(),
+        slug,
+        env,
+        write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
+      });
+      if (asJson) io.stdout.write(`${JSON.stringify({ stopped })}\n`);
+      return EXIT_GREEN;
+    }
     if (verb === 'play') {
-      if (!flags.stop && findCheckout(process.cwd())) {
+      const isStop = flags.stop === true || args[0] === 'stop';
+      if (isStop) {
+        const here = findCheckout(process.cwd());
+        const slug = (args[0] === 'stop' ? args[1] : args[0]) ?? here?.slug;
+        const stopped = await stopPlaySession({
+          cwd: process.cwd(),
+          slug,
+          env,
+          write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
+        });
+        if (asJson) io.stdout.write(`${JSON.stringify({ stopped })}\n`);
+        return EXIT_GREEN;
+      }
+      if (findCheckout(process.cwd())) {
         try {
           await offerKitUpdate({
             api,
@@ -251,7 +276,7 @@ export async function runCli(
         origin,
         env,
         noOpen: flags['no-open'] === true || asJson,
-        stop: flags.stop === true,
+        stop: false,
         telemetry,
         write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
       });

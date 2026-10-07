@@ -7,8 +7,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl stop` (and `/stop`) stops any running browser Play session or local preview from the terminal.
+
 ### Fixed
 
+- The Play browser tab displays the mascot favicon instead of falling back to a missing icon.
 - Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
 
 ## 0.24.0 — 2026-10-05
