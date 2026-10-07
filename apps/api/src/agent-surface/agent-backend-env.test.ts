@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createAgentBackendRegistryFromEnv } from './agent-backend-env.js';
 import { registerManagedProvider, type ManagedProviderConfig } from './managed-agent.js';
 import { createGeminiManagedProvider } from './managed-provider-gemini.js';
+import { builderSystemPrompt } from './builder-system-prompt.js';
 
 const ENV_KEYS = [
   'MANAGED_AGENT_VENDOR',
@@ -145,6 +146,33 @@ describe('createAgentBackendRegistryFromEnv', () => {
       expect(registry.platformByVendor.has('gemini')).toBe(true);
       expect(seen?.agentId).toBeUndefined();
       expect(seen?.environmentId).toBeUndefined();
+    } finally {
+      registerManagedProvider('gemini', createGeminiManagedProvider);
+    }
+  });
+
+  it('sends the shared builder system prompt to a non-Anthropic vendor by default', async () => {
+    const seen: Array<string | undefined> = [];
+    registerManagedProvider('gemini', (config) => ({
+      ...createGeminiManagedProvider(config),
+      startSession: async (request) => {
+        seen.push(request.systemPrompt);
+        return { id: 'session-1', state: 'running' };
+      },
+    }));
+    try {
+      setEnv({
+        MANAGED_AGENT_VENDOR: 'gemini',
+        MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+        MANAGED_AGENT_MAX_SECONDS: '900',
+        MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
+        MANAGED_AGENT_MCP_URL: MCP_URL,
+      });
+      const backend = registryFromEnv({ info: vi.fn(), warn: vi.fn() }).platformByVendor.get('gemini');
+      expect(backend).toBeDefined();
+      await backend!.dispatch({ jobId: 7, slug: 'comet-courier', spec: 'Deliver parcels.', channelToken: 'tok' });
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toBe(builderSystemPrompt({ shell: false }));
     } finally {
       registerManagedProvider('gemini', createGeminiManagedProvider);
     }

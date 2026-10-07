@@ -1,7 +1,5 @@
 // One managed round over MCP. Usage: docs/managed-agent-backend.md.
 
-import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
 import type { BuildBrief } from '../src/agent-surface/agent-backend.js';
 import { mintManagedMcpOpener } from '../src/platform/agent-token.js';
 import { buildPrompt } from '../src/agent-surface/build-prompt.js';
@@ -12,6 +10,7 @@ import '../src/agent-surface/managed-provider-gemini.js';
 import '../src/agent-surface/managed-provider-openai.js';
 import { createManagedBackend } from '../src/agent-surface/managed-backend.js';
 import { createFileKitDigestLoader } from '../src/agent-surface/kit-digest.js';
+import { builderSystemPrompt } from '../src/agent-surface/builder-system-prompt.js';
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -85,10 +84,6 @@ const brief: BuildBrief = {
   apiBaseUrl: 'http://127.0.0.1:3001',
   ...(flag('feedback') ? { feedback: 'make the comets bigger' } : {}),
 };
-const manifestPath = fileURLToPath(new URL('../../../infra/managed-agent.json', import.meta.url));
-const manifest = digestPath
-  ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as { agent?: { system?: string } })
-  : undefined;
 
 if (flag('prompt')) {
   console.log(buildPrompt(brief));
@@ -195,7 +190,7 @@ const backend = createManagedBackend({
     warn: (context, message) => console.warn('WARN ', message, context),
     info: (context, message) => console.log('INFO ', message, context),
   },
-  ...(manifest?.agent?.system ? { systemPrompt: async () => manifest.agent!.system } : {}),
+  systemPrompt: async () => builderSystemPrompt({ shell: provider.shell === true }),
   ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
   ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0

@@ -153,7 +153,7 @@ clamped rather than erroring on a stale or malformed value, so it always degrade
 something sane rather than refusing the call.
 
 The workflow's `get_brief` step and the managed system prompt
-(`infra/managed-agent.json`) both tell agents: when the latest message is terse
+(`apps/api/src/agent-surface/builder-system-prompt.ts`, sent to every managed vendor) both tell agents: when the latest message is terse
 ("continue", "build my game") or references anything unseen, call `get_transcript`
 before deciding what to build (it returns the tail on the plain call) — and only page
 further back with `cursor` when that window genuinely does not answer what is needed,
@@ -1200,10 +1200,12 @@ So server text describes and the client decides:
   command reappears in the instructions, the sequence, a description or a schema field.
 
 Our own managed builder still runs a strict loop — but that loop now lives in its system
-prompt (`infra/managed-agent.json`), which we write and which tells it to act on `stop` and
-`warnings` and to treat `nextSuggestedTool` as a hint that never replaces finishing or
-verifying a change. That prompt is applied with
-`apps/api/scripts/managed-agent-apply.ts`, not by deploy, so apply it whenever it changes.
+prompt (`builderSystemPrompt` in `apps/api/src/agent-surface/builder-system-prompt.ts`), which
+we write and which tells it to act on `stop` and `warnings` and to treat `nextSuggestedTool` as a
+hint that never replaces finishing or verifying a change. The backend sends it on every managed
+session (shell lane for Anthropic, MCP-only lane for OpenAI/Gemini), so it ships by deploy;
+`apps/api/scripts/managed-agent-apply.ts` also copies the shell lane onto the Anthropic Agent so
+the Console shows the same text.
 
 **Measuring the change.** Every `mcp session started` log line carries `guideVersion`
 (`MCP_GUIDE_VERSION`). Compare self rounds before and after a version change on the outcomes

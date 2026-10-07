@@ -13,6 +13,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
+import { builderSystemPrompt } from './builder-system-prompt.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
 
@@ -802,8 +803,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
     const tools = listed.json().result.tools as Array<{ name: string; description?: string }>;
     const advertised = new Set(tools.map((tool) => tool.name));
-    const manifest = await readFile(new URL('../../../../infra/managed-agent.json', import.meta.url), 'utf8');
-    const managedSystemPrompt = (JSON.parse(manifest) as { agent: { system: string } }).agent.system;
+    const managedSystemPrompt = [true, false].map((shell) => builderSystemPrompt({ shell })).join('\n');
 
     for (const hidden of MCP_UNADVERTISED_TOOLS) {
       expect(advertised.has(hidden)).toBe(false);

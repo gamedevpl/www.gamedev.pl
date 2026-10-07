@@ -422,6 +422,18 @@ npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
   --wait-seconds 120 --budget-usd 1 --digest-file /path/to/engine.digest.md
 ```
 
+**System prompt.** Every managed round sends
+[`builderSystemPrompt`](../apps/api/src/agent-surface/builder-system-prompt.ts) as its
+system prompt — `system` on the Anthropic session override, `instructions` for OpenAI,
+`system_instruction` for Gemini — so a Console edit to the Anthropic Agent cannot drift it, and
+`infra/managed-agent.json` no longer carries a `system` field (`managed:agent:apply` copies the
+shell lane onto the Agent). It has two lanes, keyed by the provider's `shell` flag, and the kickoff
+from `buildPrompt` follows the same flag:
+
+- **shell** (Anthropic): unpack `get_kit`'s `kitUrl` once and read the kit locally, never through
+  the MCP browse tools — the spike measured that one change cutting a round from $15 to $0.64.
+- **MCP-only** (OpenAI, Gemini): `get_kit_api` once, then `search_kit_files` / `read_kit_file`.
+
 The live registry does not yet pass a kit digest loader into the managed backend. When it
 does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref
 to `kits/<engineRef>.digest.md`, caches the result, and appends it to the configured Agent
