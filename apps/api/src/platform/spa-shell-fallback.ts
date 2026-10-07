@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { GAME_NOT_FOUND, type SharePreview } from './share-meta.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 
-type PreviewShell = (request: { url: string }) => Promise<string | null>;
+type PreviewShell = (request: { url: string }) => Promise<SharePreview>;
 
-// Deep links boot with 200, unknown paths with a real 404.
+// Deep links boot with 200, unknown paths and missing games with a real 404.
 export function registerSpaShellFallback(app: FastifyInstance, previewShell: PreviewShell): void {
   app.setNotFoundHandler(async (request, reply) => {
     if (request.method !== 'GET' || request.url.startsWith('/api')) {
@@ -16,6 +17,10 @@ export function registerSpaShellFallback(app: FastifyInstance, previewShell: Pre
       return reply.status(404).type('text/html').sendFile('index.html');
     }
     const preview = await previewShell(request);
+    // The SPA still boots and shows its not-found panel; only the status changes.
+    if (preview === GAME_NOT_FOUND) {
+      return reply.status(404).type('text/html').sendFile('index.html');
+    }
     if (preview) {
       return reply.status(200).type('text/html').header('cache-control', 'no-cache').send(preview);
     }

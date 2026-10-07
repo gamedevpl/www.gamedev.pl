@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogGameEntry } from '../catalog/github-client.js';
 import {
+  GAME_NOT_FOUND,
   createSharePreviewShell,
   injectShareMeta,
   previewScreenshotFile,
@@ -302,5 +303,61 @@ describe('createSharePreviewShell', () => {
       gamesStore: {} as never,
     });
     expect(await shell(request)).toContain('<title>Biplane Skirmish — gamedev.pl</title>');
+  });
+
+  describe('games no lane publishes', () => {
+    const unpublishedStore = {
+      getPublication: async () => null,
+      listCatalogEnrichments: async () => [],
+    } as never;
+
+    it('reports them as not found so the shell boots with a real 404', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => null,
+        isShareable: async () => true,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      expect(await shell({ url: '/play/gone-game' })).toBe(GAME_NOT_FOUND);
+      expect(await shell({ url: '/someone/gone-game' })).toBe(GAME_NOT_FOUND);
+    });
+
+    it('keeps draft links on the plain shell', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => null,
+        isShareable: async () => true,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      expect(await shell({ url: '/draft/gone-game' })).toBeNull();
+    });
+
+    it('never calls a game missing when the repo catalog failed to answer', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => {
+          throw new Error('catalog down');
+        },
+        isShareable: async () => true,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      expect(await shell({ url: '/play/gone-game' })).toBeNull();
+    });
+
+    it('never calls a game missing once the storage budget is spent', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => null,
+        isShareable: async () => true,
+        now: () => 0,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      for (let i = 0; i < 60; i += 1) expect(await shell({ url: `/play/gone-${i}` })).toBe(GAME_NOT_FOUND);
+      expect(await shell({ url: '/play/gone-60' })).toBeNull();
+    });
   });
 });
