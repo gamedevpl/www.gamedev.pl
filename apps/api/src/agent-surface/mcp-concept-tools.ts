@@ -22,6 +22,9 @@ const WRITES = {
   openWorldHint: false,
 } as const;
 
+// Posts a creator-visible card and spends the version's one proposal.
+const CONSUMES = { ...WRITES, destructiveHint: true } as const;
+
 export interface ConceptToolsDeps {
   resolveAuth: (ctx: ToolContext, args: Record<string, unknown>) => Promise<{ channelToken: string } | ToolResult>;
   injectChannel: (
@@ -142,8 +145,7 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
     },
 
     suggest_next_round: {
-      // Additive: posts a decision card; nothing is overwritten.
-      annotations: { title: 'Offer two concept directions', ...WRITES },
+      annotations: { title: 'Offer two concept directions', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {

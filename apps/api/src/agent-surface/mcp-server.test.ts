@@ -2944,18 +2944,12 @@ declare const GameKit: { defineGame(): unknown };
       'delete_source_file',
       'clear_staged_sources',
       'create_game',
+      'suggest_next_round',
     ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }
-    // Adding a note or a decision card is additive.
-    for (const name of [
-      'get_brief',
-      'start',
-      'open_round',
-      'continue_draft',
-      'report_progress',
-      'suggest_next_round',
-    ]) {
+    // Adding a note is additive.
+    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft', 'report_progress']) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 

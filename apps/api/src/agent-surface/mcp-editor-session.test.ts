@@ -362,7 +362,7 @@ describe('MCP editor session actor', () => {
   });
 
   // Omitted mode is preview, so an unprovable lane never publishes.
-  it('treats fromLatestDelivery without mode as preview when the previous lane cannot be proven publish', async () => {
+  it('treats fromLatestDelivery without mode as preview when the previous lane cannot be read', async () => {
     const store = new InMemoryStore();
     app = await createApp(store);
     await seedSharedRound(store);

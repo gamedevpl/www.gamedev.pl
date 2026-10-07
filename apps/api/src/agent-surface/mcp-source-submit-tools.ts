@@ -60,8 +60,8 @@ export interface SourceSubmitToolEntry {
   handler: ToolHandler;
 }
 
-// Omitted mode is preview; fromLatestDelivery reuses the previous lane.
-async function effectiveSubmitMode(
+// Omitted mode is preview; retries reuse the stored lane, like the channel.
+export async function effectiveSubmitMode(
   explicit: 'preview' | 'publish' | undefined,
   fromLatestDelivery: boolean,
   record: SubmissionRecord,
@@ -74,7 +74,7 @@ async function effectiveSubmitMode(
   if (!slug || !version || !gamesStore) return 'preview';
   try {
     const manifest = await gamesStore.getManifest(slug, version);
-    return manifest?.deliveryMode === 'publish' ? 'publish' : 'preview';
+    return manifest && manifest.deliveryMode !== 'preview' ? 'publish' : 'preview';
   } catch {
     return 'preview';
   }
