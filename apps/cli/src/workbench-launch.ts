@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, openSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { privatePlayDirectory, readPlayState } from './play-state.js';
 import { openUrl } from './open-url.js';
 import type { ApiClient } from './api.js';
@@ -292,14 +292,19 @@ export async function stopWorkbenchSession(input: { cwd: string; slug?: string }
       continue;
     }
     if (!journal) continue;
-    const matchesCwd =
-      journal.cwd === targetCwd ||
-      journal.checkout?.root === targetCwd ||
-      (Boolean(journal.checkout?.root) && targetCwd.startsWith(journal.checkout!.root));
+    const isSameOrDescendant = (candidate: string, parent: string): boolean => {
+      if (candidate === parent) return true;
+      const rel = relative(parent, candidate);
+      return !rel.startsWith('..') && !isAbsolute(rel);
+    };
     const matchesSlug =
       Boolean(input.slug) &&
       (journal.slug === input.slug || journal.checkout?.slug === input.slug || journal.launch?.slug === input.slug);
-    if (!matchesCwd && !matchesSlug) continue;
+    const matchesCwd =
+      isSameOrDescendant(targetCwd, journal.cwd) ||
+      (Boolean(journal.checkout?.root) && isSameOrDescendant(targetCwd, journal.checkout!.root));
+    const matches = input.slug ? matchesSlug : matchesCwd;
+    if (!matches) continue;
     if (journal.ended && !running(journal.pid)) continue;
 
     let stoppedThis = false;

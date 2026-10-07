@@ -5,6 +5,10 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { createSessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
+import { stopWorkbenchSession, savePlayJournal, type PlayJournal } from './workbench-launch.js';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 
 vi.mock('./workbench-phone.js', async (original) => ({
   ...(await original<typeof import('./workbench-phone.js')>()),
@@ -267,5 +271,34 @@ it('stops the session on authenticated POST /stop', async () => {
   });
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ ok: true });
+  expect(await prompt).toBe('/quit');
+});
+
+it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
+  const { url, session } = await fixture();
+  const base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
+  const journalPath = join(base, 'test-target.json');
+  const journal: PlayJournal = {
+    version: 1,
+    instance: 'test',
+    cwd: '/work/my-game',
+    checkout: { root: '/work/my-game', slug: 'my-game' },
+    slug: 'my-game',
+    url: url.href,
+  };
+  savePlayJournal(journalPath, journal);
+  cleanup.push(async () => {
+    rmSync(journalPath, { force: true });
+  });
+
+  // 1. Sibling directory must not match
+  expect(await stopWorkbenchSession({ cwd: '/work/my-game-copy' })).toBe(false);
+
+  // 2. Different explicit slug inside same cwd must not match
+  expect(await stopWorkbenchSession({ cwd: '/work/my-game', slug: 'other-game' })).toBe(false);
+
+  // 3. Matching explicit slug stops the session
+  const prompt = session.prompt();
+  expect(await stopWorkbenchSession({ cwd: '/somewhere-else', slug: 'my-game' })).toBe(true);
   expect(await prompt).toBe('/quit');
 });
