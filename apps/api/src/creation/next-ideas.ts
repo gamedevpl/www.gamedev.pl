@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { normalizeLocale } from '../platform/translate.js';
+import { callWithVertexResilience } from '../platform/vertex-resilience.js';
 
 // Layer-2 idea chips; generation always fails open.
 
@@ -31,6 +32,8 @@ export interface NextIdeasParams {
   screenshotPng?: string;
   // Recent round notes, oldest first: what was asked and delivered.
   history?: string[];
+  // Each retry is another billed call; the caller books it.
+  onRetry?: () => void;
 }
 
 export interface NextIdeaGenerator {
@@ -152,11 +155,21 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
       const request = params.screenshotPng
         ? user(promptText, { images: [image(params.screenshotPng, 'image/png')] })
         : promptText;
-      const parsed = await this.getClient()(request)
-        .temperature(0.4)
-        .thinking({ level: 'low' })
-        .signal(AbortSignal.timeout(this.timeoutMs))
-        .json((value) => NextIdeaResultSchema.parse(value));
+      // Malformed JSON or a capacity blip earns one more draw.
+      let attempts = 0;
+      const parsed = await callWithVertexResilience({
+        timeoutMs: this.timeoutMs,
+        onAttempt: () => {
+          attempts += 1;
+          if (attempts > 1) params.onRetry?.();
+        },
+        attempt: (_model, budgetMs) =>
+          this.getClient()(request)
+            .temperature(0.4)
+            .thinking({ level: 'low' })
+            .signal(AbortSignal.timeout(budgetMs))
+            .json((value) => NextIdeaResultSchema.parse(value)),
+      });
 
       const ideas: NextIdea[] = [];
       for (const [idx, raw] of (parsed.ideas ?? []).entries()) {

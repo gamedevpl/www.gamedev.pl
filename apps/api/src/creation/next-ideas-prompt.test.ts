@@ -44,4 +44,23 @@ describe('VertexNextIdeaGenerator prompt', () => {
     expect(typeof requests[0]).toBe('string');
     expect(requests[0]).not.toContain('Recent rounds');
   });
+
+  it('draws again after malformed JSON and reports the extra billed call', async () => {
+    let calls = 0;
+    const chain = {
+      temperature: () => chain,
+      thinking: () => chain,
+      signal: () => chain,
+      json: async (parse: (value: unknown) => unknown) => {
+        calls += 1;
+        if (calls === 1) throw new SyntaxError('Expected double-quoted property name in JSON at position 545');
+        return parse({ ideas: [{ label: { en: 'Fog', pl: 'Mgła' }, prompt: { en: 'Add fog.', pl: 'Dodaj mgłę.' } }] });
+      },
+    };
+    const client = vi.fn(() => chain) as unknown as GenAIClient;
+    const onRetry = vi.fn();
+    const ideas = await new VertexNextIdeaGenerator({ client }).generate({ ...base, onRetry });
+    expect(ideas.map((idea) => idea.label.en)).toEqual(['Fog']);
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
 });

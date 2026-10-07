@@ -235,6 +235,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const history = await dreamHistory(store, jobId, record.slug).catch(() => []);
     const generated = await ideas.generate({
       screenshotPng: source.toString('base64'),
+      onRetry: () => void bookConcept(jobId, ideas.model),
       ...(history.length ? { history } : {}),
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
