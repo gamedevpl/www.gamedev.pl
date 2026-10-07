@@ -166,6 +166,23 @@ describe('runGamesRepoContractCheck', () => {
     ).resolves.toEqual({ kind: 'ok' });
   });
 
+  it('ignores the dependency edges of an allowed website-first module', async () => {
+    const withoutUrban = GAME_KIT_MODULES.filter((name) => name !== 'urban');
+    const olderAssemble = `
+      const GAME_KIT_MODULES = [${withoutUrban.map((name) => `'${name}'`).join(', ')}];
+      ${REQUIRES_SOURCE.replace("urban: ['world'],", '')}
+      ${VERTICALS_SOURCE}
+      const catalog = readMusicCatalog();
+      const track = catalog.tracks[name];
+      out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
+    `;
+    const { fetchImpl } = createFetch({ ...agreeingPages(), 'tools/lib/assemble.ts': [ok(olderAssemble)] });
+
+    await expect(
+      runGamesRepoContractCheck({ ...BASE, fetchImpl, now: () => Date.parse('2026-08-04T00:00:00.000Z') }),
+    ).resolves.toEqual({ kind: 'ok' });
+  });
+
   it('fails closed when a website-first module rollout expires', async () => {
     const remoteWithoutFootball = GAME_KIT_MODULES.filter((name) => name !== 'football');
     const olderAssemble = `

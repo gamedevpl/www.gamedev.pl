@@ -380,9 +380,13 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     };
   }
   if (remoteRequires) {
+    // Edges of an allowed website-ahead module wait for its games change.
+    const ahead = new Set<string>(websiteExtras);
     const flatten = (map: Readonly<Record<string, readonly string[]>>) =>
       Object.entries(map)
-        .flatMap(([owner, needs]) => needs.map((need) => `${owner}->${need}`))
+        .flatMap(([owner, needs]) => needs.map((need) => [owner, need]))
+        .filter(([owner, need]) => !ahead.has(owner) && !ahead.has(need))
+        .map(([owner, need]) => `${owner}->${need}`)
         .sort()
         .join(', ');
     const remote = flatten(remoteRequires);
