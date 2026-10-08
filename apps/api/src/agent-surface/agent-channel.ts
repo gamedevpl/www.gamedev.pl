@@ -17,6 +17,7 @@ import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
 import { registerAgentChannelSeedRoutes, type AgentChannelSeedRoutesDeps } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
+import { registerAgentChannelSourcesRoutes } from './agent-channel-sources.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
 import { authedRoundGeneration } from './round-generation-guard.js';
 import {
@@ -58,7 +59,6 @@ import { createKitFileStore } from './kit-files.js';
 import { registerAgentChannelKitFileRoutes } from './agent-channel-kit-files.js';
 import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
-import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
 import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-version.js';
@@ -2144,90 +2144,6 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * Hands a build back the sources it should continue from.
-   *
-   * The channel was upload-only, and that quietly made the agent's *branch* the real
-   * home of a game: a follow-up session could only continue the work if it happened to
-   * land on the same branch, and when it did not — which is what happens whenever the
-   * branch is unknown at resume time — the creator's game started again from nothing.
-   * The store already holds every delivered version, immutably; this is the read that
-   * makes it the source of truth rather than a copy nobody can get back.
-   *
-   * Prefer the job's own latest candidate — previewVersion first (mode=preview may be
-   * the only upload so far, or a fix after a red publish), then deliveredVersion. A new
-   * sibling round inherits the newest eligible sibling delivery before the live
-   * publication. Without that, `npm run restore` reports nothing to restore and the
-   * agent rebuilds a stranger's game instead of revising what the creator played.
-   *
-   * Scoped to the job's own game by the same token that authorizes its delivery, so a
-   * build can restore what it (or its published predecessor) delivered and nothing else.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.SOURCES,
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      const { record } = resolved;
-
-      if (!options.gamesStore) {
-        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
-      }
-
-      const slug = record.slug;
-      const version = slug ? await resolveAuthorizedRoundBaseVersion(store!, record, slug, resolved.actorUid) : null;
-
-      // Round 0 arrives here, not through a verb of its own: one read for every round.
-      if (slug && !version && (record.seed?.files.length ?? 0) > 0) {
-        const seed = record.seed!;
-        return reply.send({
-          delivery: null,
-          origin: 'seed',
-          files: withoutRetiredPaths(seed.files).map((file) => ({ path: file.path, content: file.content })),
-          references: seed.references,
-          notes: seed.notes ?? null,
-          ...seedPayload(record),
-        });
-      }
-
-      // Nothing drafted and nothing delivered; seedStatus says whether to wait.
-      if (!slug || !version) {
-        return reply.send({ delivery: null, origin: null, files: [], ...seedPayload(record) });
-      }
-
-      const manifest = await options.gamesStore.getManifest(slug, version);
-      if (!manifest) {
-        request.log.error(
-          { slug, version },
-          'delivered version has no manifest — the store lost a version a job still points at',
-        );
-        return reply.status(502).send({ error: 'the delivered version could not be read back' });
-      }
-
-      const files = await Promise.all(
-        manifest.sourceFiles.map(async (path) => ({
-          path,
-          content: await options.gamesStore!.getSourceFile(slug, version, path),
-        })),
-      );
-      // A manifest listing a file the bucket does not have is a broken version, not a
-      // partial one. Handing back a game with holes would have the agent "restore" a
-      // deletion it never made.
-      const missing = files.filter((file) => file.content === null).map((file) => file.path);
-      if (missing.length > 0) {
-        request.log.error({ slug, version, missing }, 'delivered version is missing files its manifest lists');
-        return reply.status(502).send({ error: 'the delivered version could not be read back' });
-      }
-
-      return reply.send({
-        delivery: { slug, version },
-        origin: 'delivery',
-        files,
-      });
-    },
-  );
-
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.
   app.get(
@@ -2417,6 +2333,7 @@ export async function registerAgentChannelRoutes(
   });
 
   registerAgentChannelKitRoutes(app, { resolveBuild, store, objectStore: options.objectStore, gateVerdict });
+  registerAgentChannelSourcesRoutes(app, { resolveBuild, resolveUploadBuild, store, gamesStore: options.gamesStore });
 
   registerAgentChannelKitFileRoutes(app, { resolveBuild, kitFileStore });
 

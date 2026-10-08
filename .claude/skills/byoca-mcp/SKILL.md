@@ -29,6 +29,12 @@ own description. They describe; the client decides — see "Server text states f
    - `get_sources` is the first read of **every** round. A new game arrives with a
      generated round-0 draft (`origin: seed`), a later round with what it delivered
      (`origin: delivery`); `seedStatus: pending` means call again rather than scaffold
+   - A tree over `INLINE_SOURCES_MAX_CHARS` (20k chars) comes back as `manifest[]` plus
+     `GAME.json`/`SPEC.md` (`truncated: true`). Contents come from `read_source_files` (up to
+     12 paths) or, for a shell agent, `archive`: a signed GET of the same base as one
+     `.tar.gz` (`SOURCES_ARCHIVE`, upload-token kind `sources`, bound to the base version so
+     a newer delivery answers 409). Measured: a follow-up round re-read ~20k tokens of
+     sources it mostly never touched. `full: true` keeps the old shape.
    - The draft is a starting point, not an authority: where it and the brief disagree, the
      brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
      describes — then keep building rather than waiting on it

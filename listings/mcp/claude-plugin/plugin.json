@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "gamedev-pl",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Build browser games on gamedev.pl from your coding agent.",
   "author": {
     "name": "gamedev.pl",

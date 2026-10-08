@@ -59,6 +59,7 @@ const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
   read_kit_files: { key: 'reading_kit', text: 'Reading Creator Kit files…' },
   read_kit_file_fragment: { key: 'reading_kit', text: 'Reading Creator Kit files…' },
   get_sources: { key: 'loading_sources', text: 'Loading existing game sources…' },
+  read_source_files: { key: 'loading_sources', text: 'Reading game source files…' },
   list_examples: { key: 'browsing_examples', text: 'Browsing example games…' },
   get_example: { key: 'reading_example', text: 'Reading an example game…' },
   list_staged_sources: { key: 'checking_staged', text: 'Checking staged sources…' },
