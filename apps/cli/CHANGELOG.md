@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.25.0 — 2026-10-08
+
 ### Added
 
 - `gamedevpl stop` (and `/stop`) stops any running browser Play session or local preview from the terminal (#1680).
