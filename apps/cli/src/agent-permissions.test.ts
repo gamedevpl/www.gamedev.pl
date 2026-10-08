@@ -2,6 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { loadAdapters } from './adapters.js';
 import {
   applyPermissionMode,
+  choosePermissionMode,
+  PERMISSIONS_ENV,
   parsePermissionMode,
   permissionMode,
   permissionsCommand,
@@ -94,4 +96,12 @@ it('shows automatic decisions in the transcript', () => {
     'Permission auto-approved: ls',
   );
   expect(render.event({ type: 'approval-resolved', id: 'p2', decision: 'deny' })).toEqual([]);
+});
+
+it('takes the flag, or the mode a Play worker was started with', () => {
+  choosePermissionMode(undefined, { [PERMISSIONS_ENV]: 'yolo' });
+  expect(permissionMode()).toBe('yolo');
+  choosePermissionMode('auto', { [PERMISSIONS_ENV]: 'yolo' });
+  expect(permissionMode()).toBe('auto');
+  expect(() => choosePermissionMode(true, {})).toThrow('--permissions needs a mode');
 });

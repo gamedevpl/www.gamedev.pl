@@ -34,6 +34,16 @@ export function parsePermissionMode(value: string): PermissionMode {
   throw new CliError(`unknown permission mode ${value}`, EXIT_INPUT, 'use ask, auto or yolo');
 }
 
+// The Play worker inherits the launching process's mode through this variable.
+export const PERMISSIONS_ENV = 'GAMEDEVPL_PERMISSIONS';
+
+// `--permissions <mode>`, or the mode a Play worker was started with.
+export function choosePermissionMode(flag: string | boolean | undefined, env: NodeJS.ProcessEnv): void {
+  if (flag === true) throw new CliError('--permissions needs a mode', EXIT_INPUT, 'ask, auto or yolo');
+  const value = typeof flag === 'string' ? flag : env[PERMISSIONS_ENV];
+  if (value) setPermissionMode(parsePermissionMode(value));
+}
+
 // Ask keeps each adapter's own flags and the creator's prompts.
 export function modePermissions(mode: PermissionMode): AgentTask['permissions'] {
   if (mode === 'auto') return { approval: 'auto-approve', sandbox: 'workspace-write' } satisfies AgentPermissions;

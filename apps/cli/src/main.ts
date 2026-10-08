@@ -4,7 +4,7 @@ import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.
 export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
-import { parsePermissionMode, permissionsCommand, setPermissionMode } from './agent-permissions.js';
+import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame, stopPlaySession } from './play.js';
 import { realpathSync } from 'node:fs';
@@ -158,8 +158,7 @@ export async function runCli(
   if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
-    if (flags.permissions === true) throw new CliError('--permissions needs a mode', EXIT_INPUT, 'ask, auto or yolo');
-    if (typeof flags.permissions === 'string') setPermissionMode(parsePermissionMode(flags.permissions));
+    choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
     const workbench = selectWorkbenchEntry({
       verb,
       args,
