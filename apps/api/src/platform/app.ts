@@ -399,7 +399,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
   // Signs the gate's artifact uploads, so the gate's own identity needs no bucket write.
-  if (gamesStore && objectStore) registerGateArtifactRoutes(app, { objectStore });
+  if (gamesStore && objectStore) registerGateArtifactRoutes(app, { objectStore, store: gamesStore });
   // Wrapped once here so every entry point — delivery, editor, remix, proposals,
   // re-gate and the health sweep — starts builds through the same daily ceiling.
   const gateTrigger = withGateRunCeiling(

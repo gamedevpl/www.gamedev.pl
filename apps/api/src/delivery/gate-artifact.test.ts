@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GATE_ARTIFACT_URL_PATH, gateArtifactContentType, registerGateArtifactRoutes } from './gate-artifact-routes.js';
 import { withRemoteVerdicts } from './gate-verdict-client.js';
 import { mintGateVerdictToken } from './gate-verdict-token.js';
-import type { GamesStore } from './games-store.js';
+import type { GamesStore, VersionManifest } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 
 const secret = 'gate-artifact-test-secret';
@@ -51,12 +51,16 @@ describe(`POST ${GATE_ARTIFACT_URL_PATH}`, () => {
     while (apps.length) await apps.pop()!.close();
   });
 
-  async function serve() {
+  async function serve(manifest: Partial<VersionManifest> | null = {}) {
     const signUploadUrl = vi.fn(
       async (name: string, contentType: string) => `https://storage.example/${name}?ct=${contentType}`,
     );
     const app = Fastify();
-    registerGateArtifactRoutes(app, { objectStore: { signUploadUrl } as unknown as GcsObjectStore, secret });
+    registerGateArtifactRoutes(app, {
+      objectStore: { signUploadUrl } as unknown as GcsObjectStore,
+      store: { getManifest: async () => manifest as VersionManifest | null },
+      secret,
+    });
     await app.ready();
     apps.push(app);
     return { app, signUploadUrl };
@@ -92,6 +96,43 @@ describe(`POST ${GATE_ARTIFACT_URL_PATH}`, () => {
     });
     expect(res.statusCode).toBe(403);
     expect(signUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it('refuses once this run has recorded its verdict', async () => {
+    const token = mintGateVerdictToken('comet-courier', 'v1', secret);
+    const { app, signUploadUrl } = await serve({
+      gate: { green: true, ranAt: new Date(Date.now() + 1000).toISOString() },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: GATE_ARTIFACT_URL_PATH,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { slug: 'comet-courier', version: 'v1', name: 'bundle.html' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(signUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it('still signs for a re-gate minted after the previous verdict', async () => {
+    const { app } = await serve({ gate: { green: true, ranAt: '2026-01-01T00:00:00.000Z' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: GATE_ARTIFACT_URL_PATH,
+      headers: { authorization: `Bearer ${mintGateVerdictToken('comet-courier', 'v1', secret)}` },
+      payload: { slug: 'comet-courier', version: 'v1', name: 'bundle.html' },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('refuses a version that does not exist', async () => {
+    const { app } = await serve(null);
+    const res = await app.inject({
+      method: 'POST',
+      url: GATE_ARTIFACT_URL_PATH,
+      headers: { authorization: `Bearer ${mintGateVerdictToken('comet-courier', 'v1', secret)}` },
+      payload: { slug: 'comet-courier', version: 'v1', name: 'bundle.html' },
+    });
+    expect(res.statusCode).toBe(409);
   });
 
   it('refuses a name the lane may not write', async () => {

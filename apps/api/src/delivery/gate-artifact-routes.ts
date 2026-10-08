@@ -1,9 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { readBearerToken } from '../platform/bearer.js';
+import type { GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import { gcsUploadHeaders } from './gcs-v4-sign.js';
-import { InvalidGateVerdictTokenError, readGateVerdictToken, type GateVerdictKind } from './gate-verdict-token.js';
+import {
+  GATE_VERDICT_TOKEN_TTL_SECONDS,
+  InvalidGateVerdictTokenError,
+  readGateVerdictToken,
+  type GateVerdictKind,
+} from './gate-verdict-token.js';
 
 // Per-object upload URLs for gate artifacts. See infra/gate-hardening.md.
 export const GATE_ARTIFACT_URL_PATH = '/api/internal/gate-artifact-url';
@@ -35,6 +41,7 @@ export function gateArtifactContentType(kind: GateVerdictKind, name: string): st
 
 export interface GateArtifactRoutesOptions {
   objectStore: GcsObjectStore;
+  store: Pick<GamesStore, 'getManifest'>;
   secret?: string;
   now?: () => number;
 }
@@ -77,6 +84,15 @@ export function registerGateArtifactRoutes(app: FastifyInstance, options: GateAr
     if (!contentType) {
       request.log.warn({ lane: claims.kind, name }, 'gate artifact name');
       return reply.status(403).send({ error: 'gate capability does not cover this artifact' });
+    }
+
+    // The gate uploads before its verdict; a run already judged gets nothing.
+    const manifest = await options.store.getManifest(claims.slug, claims.version);
+    const verdict = claims.kind === 'gate' ? manifest?.gate : manifest?.previewGate;
+    const mintedAtMs = (claims.exp - GATE_VERDICT_TOKEN_TTL_SECONDS) * 1000;
+    if (!manifest || (verdict && Date.parse(verdict.ranAt) >= mintedAtMs)) {
+      request.log.warn({ lane: claims.kind, slug, version, name }, 'gate artifact after verdict');
+      return reply.status(409).send({ error: 'this gate run has already recorded its verdict' });
     }
 
     // From the signed claims, never the body's strings.

@@ -197,6 +197,13 @@ never `bundle.html` or the golden), builds the object name from the _signed_ slu
 version, and signs one V4 URL bound to one name and Content-Type, valid ten minutes. The
 capability itself never reaches candidate code (see above).
 
+The route also refuses once the run has recorded its verdict (the lane's `ranAt` is at or
+after the capability's mint time): the gate uploads before it reports, so after that no
+holder of the capability — including anyone who can read the build's step env — can
+replace a reviewed or published bundle. Within a running build the capability is as
+exposed as the verdict capability itself; keeping both out of build metadata is a
+follow-up.
+
 The replace a re-gate needs is the signer's IAM, so `setup-gcp.sh` grants the runtime
 `objectAdmin` conditioned on exactly those four name shapes (`games-store-gate-artifacts`).
 
