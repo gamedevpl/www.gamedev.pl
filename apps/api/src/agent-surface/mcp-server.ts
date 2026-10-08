@@ -34,6 +34,7 @@ import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
+import { createSourceReadTools } from './mcp-source-read-tools.js';
 import { createSourcePatchTools } from './mcp-source-patch-tools.js';
 import { createSourceSubmitTools } from './mcp-source-submit-tools.js';
 import { createGameCreateTools } from './mcp-game-create-tools.js';
@@ -1325,6 +1326,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createKitFileTools({ resolveAuth, injectChannel }),
     ...createSeedTools({ resolveAuth, injectChannel }),
 
+    ...createSourceReadTools({ resolveAuth, injectChannel, agentTokenSecret, now }),
     ...createSourceStageTools({ resolveAuth, injectChannel, agentTokenSecret, now, assertDeliverableSourcePath }),
     ...createExampleTools({ resolveAuth, injectChannel }),
 

@@ -91,6 +91,9 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
     "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
     'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
     'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
+    shell
+      ? 'A larger game comes back truncated: GET its `archive` once (exact headers), unpack, read locally.'
+      : 'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
     ...(shell
       ? [
           'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference.',

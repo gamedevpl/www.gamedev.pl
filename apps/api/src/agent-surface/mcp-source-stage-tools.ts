@@ -6,7 +6,7 @@ import { UPLOAD_REQUEST_PROPS, uploadContract } from './upload-request.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
-import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
+import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
 import type { SubmissionRecord } from '../platform/store.js';
 import type { AgentTokenClaims } from '../platform/agent-token.js';
@@ -14,7 +14,6 @@ import {
   toolOk,
   toolErr,
   SESSION_KEY_PROP,
-  WARNINGS_PROP,
   REPLY_CONTROL,
   channelControlFields,
   pendingMessagesFromChannel,
@@ -22,13 +21,6 @@ import {
   type ToolHandler,
   type ToolResult,
 } from './mcp-tool-support.js';
-
-const READS = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
 
 const WRITES = {
   readOnlyHint: false,
@@ -78,87 +70,11 @@ export interface SourceStageToolEntry {
   handler: ToolHandler;
 }
 
-// Fetch existing sources, then push new content into staging.
+// Push new content into staging; get_sources lives in mcp-source-read-tools.
 export function createSourceStageTools(deps: SourceStageToolsDeps): Record<string, SourceStageToolEntry> {
   const { resolveAuth, injectChannel, agentTokenSecret, now, assertDeliverableSourcePath } = deps;
 
   return {
-    get_sources: {
-      annotations: { title: 'Fetch existing game sources', ...READS },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          available: { type: 'boolean', description: 'True means this game has files — continue them.' },
-          origin: {
-            type: ['string', 'null'],
-            description: "'seed' = a generated round-0 draft; 'delivery' = a previous round's sources.",
-          },
-          delivery: { type: ['object', 'null'] },
-          files: {
-            type: 'array',
-            items: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } },
-          },
-          notes: { type: ['string', 'null'], description: 'Hand-off note from the round-0 draft, when there is one.' },
-          references: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Published games the round-0 draft was modelled on, when there is one.',
-          },
-          seedStatus: { type: 'string', description: 'pending = a round-0 draft is still generating; call again.' },
-          ...WARNINGS_PROP,
-        },
-        required: ['available', 'files'],
-      },
-      description:
-        "Fetch this game's current sources — read in every round, including the first, before any scaffolding decision. " +
-        'A new game already has files: a generated round-0 draft (origin=seed) whose references and notes come ' +
-        'with it. A later round returns what the previous round delivered (origin=delivery). Either way, continue ' +
-        'those files; never scaffold over them. seedStatus=pending means a draft is still generating — browse the ' +
-        'kit briefly and call this again rather than scaffolding. ' +
-        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          sessionKey: SESSION_KEY_PROP,
-          version: {
-            type: 'string',
-            description: "Optional. Reserved; the channel returns the job's latest delivery or published version.",
-          },
-        },
-        required: [],
-      },
-      handler: async (args, ctx) => {
-        const auth = await resolveAuth(ctx, args);
-        if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.SOURCES, auth.channelToken);
-        const body = res.json() as {
-          error?: string;
-          delivery?: unknown;
-          origin?: 'seed' | 'delivery' | null;
-          files?: Array<{ path: string; content: string }>;
-          notes?: string | null;
-          references?: string[];
-          seedStatus?: string;
-        };
-        if (res.statusCode !== 200) {
-          return toolErr(body.error ?? `sources failed (${res.statusCode})`);
-        }
-        const files = body.files ?? [];
-        const sizeWarnings = moduleSizeWarnings(files);
-        // Files decide; a round-0 draft counts as sources too.
-        return toolOk({
-          available: files.length > 0,
-          origin: body.origin ?? (body.delivery ? 'delivery' : null),
-          delivery: body.delivery ?? null,
-          files,
-          ...(body.notes ? { notes: body.notes } : {}),
-          ...(body.references?.length ? { references: body.references } : {}),
-          ...(body.seedStatus ? { seedStatus: body.seedStatus } : {}),
-          ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
-        });
-      },
-    },
-
     stage_upload_url: {
       outputSchema: {
         type: 'object',

@@ -16,6 +16,7 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('This round is on a clock');
     expect(prompt).toContain('do not download or unpack the kit archive');
     expect(prompt).toContain('`get_kit_api` once');
+    expect(prompt).toContain('`read_source_files` only the files you change');
     expect(prompt).not.toContain('injected digest');
     expect(prompt).not.toContain('two minutes');
     expect(prompt).toContain('Stage source content directly');
@@ -37,6 +38,8 @@ describe('buildPrompt', () => {
   it('sends a shell sandbox to the unpacked kit instead of the MCP-only lane', () => {
     const prompt = buildPrompt(BRIEF, { shell: true });
     expect(prompt).toContain('Unpack `get_kit`’s kitUrl once');
+    expect(prompt).toContain('GET its `archive` once');
+    expect(prompt).not.toContain('read_source_files');
     expect(prompt).not.toContain('Do not use bash');
     expect(prompt).not.toContain('do not download or unpack');
     expect(prompt).not.toContain('get_kit_api');
