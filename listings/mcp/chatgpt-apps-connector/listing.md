@@ -78,6 +78,18 @@ half was always ready; the skill is what makes this a plugin rather than a URL.
 | Category            | Developer tools / Games                                                                                                                                                                                                                                                                             |
 | Logo                | _(owner supplies)_                                                                                                                                                                                                                                                                                  |
 
+## Closed-beta line
+
+Every tool call is refused until the account is approved as a creator, so the listing says
+so up front. Append this to the description field as-is:
+
+> gamedev.pl is in closed beta: tools work only for approved creator accounts. Request
+> access by signing in at https://www.gamedev.pl/ with Google or Apple; approval is manual
+> and confirmed by email.
+
+The MCP server says the same in `initialize.instructions` and in the 401 hint, for clients
+that never show the listing.
+
 ## The skill half
 
 The directory accepts a skill two ways, and the choice matters:
