@@ -88,6 +88,7 @@ export const GAME_KIT_MODULES = [
   // Studio-editable content (EditorKit L2, games-repo Check 31). Opt-in, receive-only
   // bridge module; the Studio pushes drafts, the game re-enters play.
   'editor',
+  'settings',
   // Studio scene inspection; the shell owns the inspector UI.
   'inspect',
 ] as const;
@@ -101,6 +102,7 @@ export const GAME_KIT_MODULE_REQUIRES: Readonly<Record<string, readonly GameKitM
   gfx: ['drawing'],
   gfx3d: ['gfx'],
   urban: ['world'],
+  settings: ['ui', 'gfx', 'audio'],
 };
 
 // typecheck cannot see this: game-kit.d.ts declares every module at once.
@@ -238,6 +240,7 @@ export const MUSIC_CONTRACT = {
  * the nightly bake had to be the thing that noticed.
  */
 export const GAME_KIT_VERTICAL_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
+  settings: 'shared/modules/settings/index.ts',
   gfx3d: 'shared/modules/gfx3d/index.ts',
   vehicles: 'shared/verticals/vehicles/index.ts',
   urban: 'shared/verticals/urban/index.ts',
