@@ -14,7 +14,8 @@ cannot approve the next request. Follow-up game requests do not answer approvals
 Stop aborts the task and dismisses the question. Escape rejects the current request.
 Closing a browser tab leaves the task waiting for a decision; reconnect or answer
 in the terminal. Task cancellation, process exit, or the existing task timeout
-ends pending decisions. No unattended delegate run gains automatic approval.
+ends pending decisions. In the default **Ask** mode no unattended delegate run gains
+automatic approval; see [Permission modes](#permission-modes).
 
 Payloads too large to display completely are denied. Approval payloads remain
 local; they are not sent as analytics dimensions. This change affects the creator
@@ -22,17 +23,45 @@ funnel (instrumentation question 4): existing `cli_step` events such as
 `delegate_used`, `verify_failed` and `delivered` remain the queryable signals.
 Approval counts and wait time are not separately measured.
 
+## Permission modes
+
+`--permissions <mode>` (any verb) or `/permissions` (terminal, and **Agent permissions** in
+the Play panel) picks the mode for the rest of the CLI process. Every local task prints it
+next to the agent settings (`permissions: Ask`). The default is **Ask**, and nothing is
+saved between runs.
+
+| Mode   | GenAIcode `permissions`                                    | Effect                                                                                                                          |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ask`  | none (each adapter's own flags)                            | The creator answers each request, as above. Unattended runs get no approvals.                                                   |
+| `auto` | `{ approval: 'auto-approve', sandbox: 'workspace-write' }` | The agent's own sandbox limits writes to the checkout; requests inside it are approved without asking, also in unattended runs. |
+| `yolo` | `'yolo'` (`auto-approve`, `unrestricted`)                  | No sandbox and no questions, also in unattended runs.                                                                           |
+
+GenAIcode translates the mode into each adapter's flags (`applyPermissionArgs`) and into
+the Codex/Muse live session. An agent that cannot honor a mode refuses the task with the
+reason, instead of running in another mode: Auto-approve needs a vendor sandbox, so Cursor
+(`--force` runs unsandboxed), Copilot, OpenCode, Vibe and Muse refuse it; Antigravity refuses
+both automatic modes. Automatic decisions appear in the transcript as `Permission
+auto-approved: <summary>` (Claude: `claude: auto-approved command: …`). Approvals are
+still scoped as requested: one invocation, or the current turn for a Codex profile, never a
+session-wide grant.
+
 ## Implemented transports
 
 | Adapter | Mechanism                                                                                                                    | Behavior                                                                                                                                                                                                                                                                                                          |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude  | `--permission-prompt-tool mcp__gamedevpl_local__approve_tool`                                                                | Existing private, bearer-authenticated MCP listener asks the creator and returns `allow` with unchanged `updatedInput`, or `deny`. `acceptEdits` stays enabled. No preview is required. A disconnected MCP caller cancels its question.                                                                           |
+| Claude  | `--permission-prompt-tool mcp__gamedevpl_local__approve`                                                                     | Existing private, bearer-authenticated MCP listener asks the creator and returns `allow` with unchanged `updatedInput`, or `deny`. `acceptEdits` stays enabled. No preview is required. A disconnected MCP caller cancels its question.                                                                           |
 | Codex   | `app-server`, `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval` | `on-request` policy when the interactive callback is available. Only active-thread requests are accepted; command/file answers are `accept` / `decline`. Permission profiles return the requested permissions with `scope: turn`, or an empty grant on denial/cancellation. Unknown request methods are rejected. |
 | Muse    | `serve`, `approval/request` or `approval/requested`, then `approval/decide`                                                  | Server requests receive a presentation receipt. Decisions use server-issued choice and requirement IDs, once per stage. Only `scope: once` may be approved. The old terminal recovery remains for unsupported/custom headless configurations.                                                                     |
 
-`agent-approval.ts` owns presentation and serialization; `claude-approval.ts` and
-`live-approvals.ts` translate vendor protocols. The browser uses existing authenticated
-`input` commands and prompt IDs, not a new endpoint that executes arbitrary commands.
+`agent-approval.ts` owns presentation and serialization. Vendor protocol translation
+comes from GenAIcode (`genaicode/agents` 2.12.0): `claudeApprovalTool` is mounted on the
+private local MCP listener (with `claudeApprovalArgs` and `claudeApprovalEnv`, which raises
+`MCP_TOOL_TIMEOUT` so Claude waits for the creator), and the custom live driver hands Codex
+and Muse requests to `codexApprovals` / `museApprovals`. The driver keeps its own steering
+acknowledgements and screenshot input. GenAIcode passes each question an abort signal for
+withdrawal, turn end and process exit; its `scope` (`once` or `turn`) picks the button label.
+The browser uses existing authenticated `input` commands and prompt IDs, not a new endpoint
+that executes arbitrary commands.
 
 Tests cover exact Claude inputs, deny/allow, malformed and oversized requests,
 disconnects, cancellation, queued/stale responses, Muse multi-stage approvals,
@@ -52,18 +81,7 @@ Investigation on 2026-10-08:
 | Antigravity | Existing interactive terminal permission handoff                                                                                                                           | No verified headless approval-response protocol in this integration. |
 | Cursor      | Current adapter uses `--force`                                                                                                                                             | No verified approval callback here; no claim of panel support.       |
 
-GenAIcode 2.9.1 already exports `ApprovalRequest`, `ApprovalDecision`,
-`AgentTask.onApproval`, `LiveSession.approve` and the live JSON-RPC transport.
-Its Codex/Muse drivers demonstrate approval support; gamedevpl's custom live driver
-keeps its stricter steering acknowledgements and screenshot input behavior.
-This patch implements the additional vendor translation in gamedevpl against those
-APIs, without upgrading GenAIcode. That leaves reusable protocol handling in the
-CLI; moving it into GenAIcode would require a library release and dependency bump.
-The inspected upstream 2.11.0 Claude driver is still headless and has no built-in
-approval callback.
-
-Reusable Claude approval plumbing and ACP / Copilot / OpenCode live drivers would
-belong in GenAIcode as additive features, warranting a minor library release, with
-gamedevpl upgrading after it is published. Those additional transports are not
-implemented by this patch. The current gamedevpl fix uses the CLI's ordinary
-`Unreleased` → release PR → published CLI workflow.
+The Claude, Codex and Muse protocol handling now lives in GenAIcode 2.12.0, with its
+protocol tests; gamedevpl keeps presentation and integration tests. Reusable ACP / Copilot /
+OpenCode live drivers would belong in GenAIcode as additive features; they are not
+implemented yet.

@@ -26,6 +26,7 @@ export const SLASH_VERBS = [
   'push',
   'diff',
   'update',
+  'permissions',
 ] as const;
 
 export type SlashVerb = (typeof SLASH_VERBS)[number];

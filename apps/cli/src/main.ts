@@ -4,6 +4,7 @@ import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.
 export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
+import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame, stopPlaySession } from './play.js';
 import { realpathSync } from 'node:fs';
@@ -157,6 +158,7 @@ export async function runCli(
   if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
+    choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
     const workbench = selectWorkbenchEntry({
       verb,
       args,
@@ -203,6 +205,10 @@ export async function runCli(
     }
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'permissions') {
+      await permissionsCommand({ args, write: (line) => io.stdout.write(`${line}\n`) });
       return EXIT_GREEN;
     }
     if (verb === 'model') {

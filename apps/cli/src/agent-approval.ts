@@ -1,8 +1,8 @@
-import type { ApprovalDecision, ApprovalRequest } from 'genaicode/agents';
+import { claudeApprovalEnv, type ApprovalDecision, type ApprovalRequest } from 'genaicode/agents';
 import type { PickChoice } from './workshop.js';
 
-export type ScopedApprovalRequest = ApprovalRequest & { scope?: 'turn' };
-export type ApproveTool = (request: ScopedApprovalRequest, signal?: AbortSignal) => Promise<ApprovalDecision>;
+// genaicode translates each vendor's protocol; this module only asks the creator.
+export type ApproveTool = (request: ApprovalRequest, signal?: AbortSignal) => Promise<ApprovalDecision>;
 
 export function approvalPrompt(input: {
   agent: string;
@@ -42,4 +42,9 @@ export function approvalPrompt(input: {
     queue = answer.catch(() => {});
     return answer;
   };
+}
+
+// Let Claude wait for the creator's answer.
+export function approvalEnv(env: NodeJS.ProcessEnv, approvals: boolean | undefined): NodeJS.ProcessEnv {
+  return approvals ? { ...env, ...claudeApprovalEnv(env) } : env;
 }
