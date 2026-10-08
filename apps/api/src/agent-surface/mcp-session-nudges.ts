@@ -379,11 +379,11 @@ export function createMcpNudgeTracker(
   };
 }
 
-// Pending notes read_inbox has not returned yet; read ones stop nagging.
+// Unread notes; a full page (10) may hide newer ones.
 export function unreadFromPayload(payload: unknown, readIds: ReadonlySet<string>) {
   const obj = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
   const list = obj.pendingMessages ?? obj.pending ?? obj.messages;
   if (!Array.isArray(list)) return null;
-  const unread = list.filter((n) => !readIds.has(String(n?.id)));
+  const unread = list.length >= 10 ? list : list.filter((n) => !readIds.has(String(n?.id)));
   return { count: unread.length, images: unread.filter((n) => Number(n?.attachments) > 0).length };
 }

@@ -218,6 +218,17 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     expect(later.next).toBe('read_inbox');
   });
 
+  it('B3: a full inbox page keeps nagging, since newer notes wait behind it', async () => {
+    await round();
+    for (let i = 0; i < 10; i++) await store.appendCreatorMessage(ISSUE, `Note ${i}`);
+    await start();
+    expect((await call('read_inbox')).data.messages).toHaveLength(10);
+    await store.appendCreatorMessage(ISSUE, 'Note 10');
+    const sources = await call('get_sources');
+    expect(codes(sources)).toContain('inbox_pending');
+    expect(sources.next).toBe('read_inbox');
+  });
+
   it('C: writing the first file, or reporting progress, is not readiness to submit', async () => {
     await round();
     await start();
