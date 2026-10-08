@@ -46,6 +46,12 @@ snapshot/restore waits are bound to their initiating document; late replies cann
 a replacement. Navigation still retires sensing, microphone, presence and zone resources.
 The iframe sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
 
+A sandbox cannot stop a frame from navigating itself, and the game document's own CSP has
+no directive that covers its own navigation. The shell's enforced `frame-src`
+(`SHELL_FRAME_SRC` in `@gamedevpl/contract`) does: the embedder's policy is checked for every
+navigation of the game iframe, whoever starts it, so a game cannot carry bridge data to
+another origin in a URL. Host `srcdoc` replacements are unaffected.
+
 #### Image export
 
 A game may ask to save a PNG to the player's device (`apps/web/src/imageExport.ts`), but the
@@ -233,8 +239,10 @@ limiter, whose annotation its report sink relies on. Every response carries `X-C
 only to some response classes. HTML documents — the SPA shell, the OAuth
 consent and device pages, the CLI page — additionally carry:
 
-- `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` on HTML
-  documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
+- `Content-Security-Policy: frame-ancestors 'none'; frame-src 'self' blob: https://accounts.google.com/gsi/`
+  and `X-Frame-Options: DENY` on HTML documents. The enforced `frame-src` keeps the game iframe
+  from navigating to another origin (see Frame messages). Frame ancestry is denied
+  **except** on the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
   without a trailing slash). A percent-encoded hyphen (`/play/unicorn%2Dsnap`) is still
   a play permalink: the matcher decodes the path before testing. Malformed percent-encoding
   is denied, not treated as play.
@@ -262,7 +270,8 @@ consent and device pages, the CLI page — additionally carry:
   policy is also observed inside every game frame — inline script/style and `data:`/`blob:`
   media are allowed there so a game exercising its own sandbox never reads as a violation of
   ours, while a game reaching the network does. Enforcing this policy is a separate decision
-  to be taken on the reports, never by flipping the header name.
+  to be taken on the reports, never by flipping the header name. Its `frame-src` alone is
+  already enforced, in the header above.
 
 ## Historical finding: self-hosted agent credentials
 

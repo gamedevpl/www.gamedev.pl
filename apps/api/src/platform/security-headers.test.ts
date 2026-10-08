@@ -8,12 +8,12 @@ import { InMemoryStore } from './store.js';
 import {
   APP_CSP_REPORT_ONLY,
   CSP_REPORT_PATH,
-  FRAME_ANCESTORS_NONE,
-  FRAME_ANCESTORS_PLAY,
   isPlayPermalinkPath,
   PERMISSIONS_POLICY,
   REFERRER_POLICY,
   resolveCspReportOnly,
+  SHELL_CSP,
+  SHELL_CSP_PLAY,
   STRICT_TRANSPORT_SECURITY,
   summarizeCspReport,
   X_FRAME_OPTIONS,
@@ -43,7 +43,7 @@ describe('security headers', () => {
     const res = await app.inject({ method: 'GET', url });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/^text\/html/);
-    expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+    expect(res.headers['content-security-policy']).toBe(SHELL_CSP);
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
     expect(res.headers['permissions-policy']).toBe(PERMISSIONS_POLICY);
     expect(res.headers['content-security-policy-report-only']).toBe(APP_CSP_REPORT_ONLY);
@@ -52,7 +52,7 @@ describe('security headers', () => {
   it('hardens the unknown-path 404 shell the same way', async () => {
     const res = await app.inject({ method: 'GET', url: '/definitely/not/a/route' });
     expect(res.statusCode).toBe(404);
-    expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+    expect(res.headers['content-security-policy']).toBe(SHELL_CSP);
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
 
@@ -61,20 +61,20 @@ describe('security headers', () => {
     async (url) => {
       const res = await app.inject({ method: 'GET', url });
       expect(res.statusCode).toBe(200);
-      expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_PLAY);
+      expect(res.headers['content-security-policy']).toBe(SHELL_CSP_PLAY);
       expect(res.headers['x-frame-options']).toBeUndefined();
     },
   );
 
   it('does not let a parent frame a typo play path', async () => {
     const res = await app.inject({ method: 'GET', url: '/play/' });
-    expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+    expect(res.headers['content-security-policy']).toBe(SHELL_CSP);
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
 
   it('does not let a parent frame a trailing-slash play path', async () => {
     const res = await app.inject({ method: 'GET', url: '/play/unicorn-snap/' });
-    expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+    expect(res.headers['content-security-policy']).toBe(SHELL_CSP);
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
 
@@ -102,7 +102,7 @@ describe('security headers', () => {
     // Signed out: a redirect or the page; HTML must carry the rule.
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     if (String(res.headers['content-type'] ?? '').startsWith('text/html')) {
-      expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+      expect(res.headers['content-security-policy']).toBe(SHELL_CSP);
       expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
     }
   });
@@ -153,7 +153,7 @@ describe('security headers', () => {
       await off.close();
       expect(res.headers['content-security-policy-report-only']).toBeUndefined();
       // Framing is not a matter of opinion: still denied.
-      expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+      expect(res.headers['content-security-policy']).toBe(SHELL_CSP);
     } finally {
       delete process.env.APP_CSP_REPORT_ONLY;
       await probe.close();

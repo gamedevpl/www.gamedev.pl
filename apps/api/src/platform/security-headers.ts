@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { SHELL_FRAME_SRC } from '@gamedevpl/contract';
 
 // Rationale: docs/security-model.md § Browser hardening headers.
 
@@ -9,6 +10,9 @@ export const FRAME_ANCESTORS_NONE = "frame-ancestors 'none'";
 // Play permalinks may be framed; SPA shows the interstitial.
 export const FRAME_ANCESTORS_PLAY = 'frame-ancestors *';
 export const X_FRAME_OPTIONS = 'DENY';
+// Enforced: a sandboxed game may still navigate itself, carrying bridge data out.
+export const SHELL_CSP = `${FRAME_ANCESTORS_NONE}; ${SHELL_FRAME_SRC}`;
+export const SHELL_CSP_PLAY = `${FRAME_ANCESTORS_PLAY}; ${SHELL_FRAME_SRC}`;
 // Match route syntax before decoding its slug.
 const PLAY_PERMALINK = /^\/(?:play|ay|ai)\/([^/]+)$/;
 const PLAY_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -31,7 +35,7 @@ export const APP_CSP_REPORT_ONLY = [
   "media-src 'self' data: blob: https://storage.googleapis.com",
   // Realtime hosts over WebSocket; the MediaPipe model file from GCS.
   "connect-src 'self' wss: https://accounts.google.com/gsi/ https://cdn.jsdelivr.net https://storage.googleapis.com",
-  "frame-src 'self' blob: https://accounts.google.com/gsi/",
+  SHELL_FRAME_SRC,
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "object-src 'none'",
@@ -133,9 +137,9 @@ export function registerSecurityHeaders(app: FastifyInstance, options: SecurityH
     // A route that wrote its own CSP owns its embedding story.
     if (!reply.hasHeader('content-security-policy')) {
       if (isPlayPermalinkPath(request.url)) {
-        reply.header('content-security-policy', FRAME_ANCESTORS_PLAY);
+        reply.header('content-security-policy', SHELL_CSP_PLAY);
       } else {
-        reply.header('content-security-policy', FRAME_ANCESTORS_NONE);
+        reply.header('content-security-policy', SHELL_CSP);
         setIfAbsent(reply, 'x-frame-options', X_FRAME_OPTIONS);
       }
     }
