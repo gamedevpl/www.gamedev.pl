@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  attachCatalogEnrichment,
   attachCatalogEnrichments,
   CATALOG_ENRICHMENT_CACHE_TTL_MS,
   extractShortControls,
@@ -189,5 +190,24 @@ describe('catalog-enricher', () => {
     await Promise.all(burst);
 
     expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads one document for one game while the map is cold', async () => {
+    // Crawlers every ten minutes found the map cold each time.
+    const store = new InMemoryStore();
+    await getOrEnrichCatalogGame(MOCK_ENTRY, MOCK_SPEC, { store, genAIClient: null });
+    const list = vi.spyOn(store, 'listCatalogEnrichments');
+    const get = vi.spyOn(store, 'getCatalogEnrichment');
+    const t0 = 5_000_000;
+
+    const cold = await attachCatalogEnrichment(MOCK_ENTRY, store, t0);
+    expect(cold.tagline?.en).toContain("Mexico '86 Arcade Football");
+    expect(list).not.toHaveBeenCalled();
+    expect(get).toHaveBeenCalledTimes(1);
+
+    await attachCatalogEnrichments([MOCK_ENTRY], store, t0);
+    const warm = await attachCatalogEnrichment(MOCK_ENTRY, store, t0 + 1_000);
+    expect(warm.tagline?.en).toContain("Mexico '86 Arcade Football");
+    expect(get).toHaveBeenCalledTimes(1);
   });
 });

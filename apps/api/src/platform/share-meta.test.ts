@@ -240,7 +240,11 @@ describe('createSharePreviewShell', () => {
       isShareable: async () => true,
       store: {
         getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v3' }),
-        listCatalogEnrichments: async () => [{ slug: 'sky-duel', tagline: { en: 'Duel over the clouds.' } }],
+        getCatalogEnrichment: async (slug: string) =>
+          slug === 'sky-duel' ? { slug, tagline: { en: 'Duel over the clouds.' } } : null,
+        listCatalogEnrichments: async () => {
+          throw new Error('one preview must not scan every enrichment');
+        },
       } as never,
       gamesStore: {
         getSourceFile: async (_slug, version, file) => (version === 'v3' && file === 'SPEC.md' ? spec : null),
@@ -267,7 +271,7 @@ describe('createSharePreviewShell', () => {
           lookups += 1;
           return null;
         },
-        listCatalogEnrichments: async () => [],
+        getCatalogEnrichment: async () => null,
       } as never,
       gamesStore: {} as never,
     });
@@ -290,7 +294,7 @@ describe('createSharePreviewShell', () => {
       isShareable: async () => true,
       store: {
         getPublication: async () => ({ slug: 'sky-duel', state: 'published', currentVersion: 'v1' }),
-        listCatalogEnrichments: async () => [],
+        getCatalogEnrichment: async () => null,
       } as never,
       gamesStore: {
         getSourceFile: async () => spec,
@@ -325,7 +329,7 @@ describe('createSharePreviewShell', () => {
         getPublication: async () => {
           throw new Error('store must not be read for a repo-lane slug');
         },
-        listCatalogEnrichments: async () => [],
+        getCatalogEnrichment: async () => null,
       } as never,
       gamesStore: {} as never,
     });
@@ -335,7 +339,7 @@ describe('createSharePreviewShell', () => {
   describe('games no lane publishes', () => {
     const unpublishedStore = {
       getPublication: async () => null,
-      listCatalogEnrichments: async () => [],
+      getCatalogEnrichment: async () => null,
     } as never;
 
     it('reports them as not found so the shell boots with a real 404', async () => {
