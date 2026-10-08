@@ -4,7 +4,7 @@ import { approvalPrompt, type ApproveTool } from './agent-approval.js';
 import { CliError, EXIT_INPUT } from './exit-codes.js';
 import type { Workshop } from './workshop.js';
 
-// Ask is the default; the other modes are chosen explicitly per CLI process.
+// Ask is the default; other modes are chosen per process.
 export type PermissionMode = 'ask' | 'auto' | 'yolo';
 export const PERMISSION_MODES: readonly PermissionMode[] = ['ask', 'auto', 'yolo'];
 
@@ -66,7 +66,7 @@ function refuse(agent: string, mode: PermissionMode, reason: string): never {
   );
 }
 
-// Approves what the policy allows and says so; requests stay out of analytics.
+// Approves per policy and says so; nothing goes to analytics.
 export function autoApproval(agent: string, mode: PermissionMode, write: (line: string) => void): ApproveTool {
   const permissions = modePermissions(mode);
   return async (request, signal) => {
@@ -103,7 +103,7 @@ export function taskPermissions(input: {
   };
 }
 
-// `permissions [mode]`: show or switch the mode for the rest of this CLI process.
+// `permissions [mode]`: show or switch this process's mode.
 export async function permissionsCommand(input: {
   args: string[];
   pick?: (choices: string[], question: string) => Promise<string>;

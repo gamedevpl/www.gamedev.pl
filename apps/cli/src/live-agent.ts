@@ -247,7 +247,7 @@ async function drive(
   return settled;
 }
 
-// The adapter's own --sandbox; with permissions, their mapping (its flags already match).
+// The adapter's --sandbox, or the permissions mapping when set.
 function codexPolicy(input: AdapterRunInput, task: LiveSession['task']) {
   const at = input.spec.headless.indexOf('--sandbox');
   const sandbox = at >= 0 ? input.spec.headless[at + 1] : 'workspace-write';
