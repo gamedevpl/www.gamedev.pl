@@ -8,7 +8,6 @@ import {
   ModelGameSeeder,
   type SeedFile,
 } from './game-seed.js';
-
 import { registerSeedProvider } from './seed-provider.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
