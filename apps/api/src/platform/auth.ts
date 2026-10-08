@@ -12,6 +12,7 @@ import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
 import { sessionWriteAllowed } from './session-csrf.js';
+import { tokenSessionLive } from './token-session.js';
 import {
   clearSessionCookies,
   handlerWroteSessionCookie,
@@ -376,10 +377,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     try {
       const { uid, exp, src, tid } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
       const user = await store.getUser(uid);
-      if (!user || user.deletionScheduledFor) {
-        return { user: null, needsRenewal: false, fromToken: false };
-      }
-
+      const tokenDead = src === 'token' && !(await tokenSessionLive(store, uid, tid, now()));
+      if (!user || user.deletionScheduledFor || tokenDead) return { user: null, needsRenewal: false, fromToken: false };
       const nowSeconds = Math.floor(Date.now() / 1000);
       const needsRenewal = exp - nowSeconds < sessionRenewalThresholdSeconds(src);
       return { user, needsRenewal, fromToken: src === 'token', tokenId: tid };
