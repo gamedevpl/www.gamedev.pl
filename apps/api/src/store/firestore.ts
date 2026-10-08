@@ -654,6 +654,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.publicationStore.listPublications();
   }
 
+  async listPublicationsWithHealthRequestedSince(since: string): Promise<PublicationRecord[]> {
+    return this.publicationStore.listPublicationsWithHealthRequestedSince(since);
+  }
+
   async getCatalogEnrichment(slug: string): Promise<CatalogEnrichmentRecord | null> {
     return this.catalogEnrichmentStore.getCatalogEnrichment(slug);
   }

@@ -78,6 +78,8 @@ describe('health re-gate escalation, end to end through the notify sweep', () =>
       }),
     } as unknown as GamesStore;
 
+    // Sweeps see checks requested in the last two days.
+    let clock = Date.parse('2026-07-01T01:00:00.000Z');
     const app = await buildApp({
       store,
       sessionSecret: 'dev-session-secret-change-me',
@@ -89,6 +91,7 @@ describe('health re-gate escalation, end to end through the notify sweep', () =>
         githubClient: publishedGithubClient(),
         internalAuthVerifier: acceptAll,
         agentChannel: { gamesStore },
+        now: () => clock,
       },
     });
 
@@ -99,6 +102,7 @@ describe('health re-gate escalation, end to end through the notify sweep', () =>
     // A second re-gate request for the same version, past the cooldown.
     const check = (await store.getPublication('sky-dodge'))?.healthCheck;
     health = { green: false, ranAt: '2026-07-16T00:00:00.000Z' };
+    clock = Date.parse('2026-07-16T01:00:00.000Z');
     await store.setPublicationHealthCheck('sky-dodge', {
       version: 'v1',
       requestedAt: '2026-07-16T00:00:00.000Z',
