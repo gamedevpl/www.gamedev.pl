@@ -319,7 +319,7 @@ When adding or expanding a tool description, measure the serialized `tools/list`
 keep the full contract single-copy; a short creator-text safety reminder may stay eager.
 
 **`get_kit_api` — the orientation path that did not exist before 2026-08-09.** `get_kit`
-returns tarball metadata only (engineRef, sha256, unpack one-liner) — it was never the API
+returns tarball metadata only (engineRef, `kitUrl`, sha256) — it was never the API
 reference its own description claimed to be pointing at, because nothing injected a digest
 into the MCP surface. `appendKitDigest` (`apps/api/src/agent-surface/kit-digest.ts`) had exactly one
 caller, the platform Copilot system prompt (`managed-backend.ts`); a BYOCA agent with no
@@ -1173,11 +1173,12 @@ change after the surface was reviewed. So a reply never hands out a shell comman
 verbatim: uploads are a request described as data (above), the kit is `kitUrl` + `sha256`,
 and recipes that need a shell — headless capture flags, the kit's local create script —
 live in documentation (this playbook and the shipped `gamedevpl` skill), not in tool text.
-The old command fields (`upload`, `uploadScript`, `get_kit`'s `unpack`) still ship, marked
-deprecated in the output schema, so a client mid-migration keeps working; remove them in a
-follow-up once nothing reads them. Tests in `mcp-server.test.ts` and
-`agent-upload-private-state.test.ts` fail if a command or launch flag reappears in a
-description or the contract.
+The old command fields (`upload`, `uploadScript`, and `unpack` on `get_kit` and
+`get_example`) are gone; `get_example` returns `tarballUrl` + `sha256`. `SHELL_COMMAND`
+(`apps/api/src/agent-surface/shell-command-text.ts`) is the one pattern the tests share:
+`mcp-tool-text.test.ts` fails if any instruction, description or schema field matches it,
+with no exemption, and `mcp-server.test.ts`, `agent-build-reads.test.ts` and
+`agent-channel-proposal.test.ts` assert the same of the upload, kit and example results.
 
 ### Server text states facts; the client decides
 

@@ -305,7 +305,6 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
           ...request,
           expiresAt: body.expiresAt,
           expiresInSeconds: body.expiresInSeconds,
-          ...(typeof body.upload === 'string' && body.upload ? { upload: body.upload } : {}),
           maxBytes: body.maxBytes,
           ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),

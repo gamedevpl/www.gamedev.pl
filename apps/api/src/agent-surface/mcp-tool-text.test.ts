@@ -4,10 +4,7 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { ROUND_SEQUENCE_TEXT } from './mcp-round-guide.js';
-
-// Server text describes data; it never hands out shell commands.
-const SHELL_COMMAND =
-  /\b(curl|wget)\s|--upload-file|--use-gl|chromium\.launch|\btar -x|\| *(ba)?sh\b|\bnpm run\b|\bnpx\s/i;
+import { SHELL_COMMAND } from './shell-command-text.js';
 
 function post(app: FastifyInstance, method: string, params: unknown, headers: Record<string, string> = {}) {
   return app.inject({
@@ -66,8 +63,7 @@ describe('MCP tool text', () => {
       schemaDescriptions(tool.inputSchema, `${tool.name}.in`, texts);
       schemaDescriptions(tool.outputSchema, `${tool.name}.out`, texts);
     }
-    // Deprecated fields name the form they replace until removed.
-    const offenders = texts.filter(([, text]) => SHELL_COMMAND.test(text) && !text.startsWith('Deprecated:'));
+    const offenders = texts.filter(([, text]) => SHELL_COMMAND.test(text));
     expect(offenders.map(([where, text]) => `${where}: ${text.match(SHELL_COMMAND)?.[0]}`)).toEqual([]);
   });
 });

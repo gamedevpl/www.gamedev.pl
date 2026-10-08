@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken } from './agent-upload-token.js';
-import { UPLOAD_REQUEST_PROPS, uploadContract } from './upload-request.js';
+import { UPLOAD_REQUEST_PROPS, uploadRequest } from './upload-request.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
@@ -168,7 +168,6 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           expiresInSeconds: { type: 'number' },
           path: { type: 'string' },
           ...UPLOAD_REQUEST_PROPS,
-          uploadScript: { type: 'string', description: 'Deprecated: chained curl commands; use uploads[].' },
           maxBytes: { type: 'number' },
           uploads: {
             type: 'array',
@@ -295,7 +294,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             expiresAt,
             expiresInSeconds: ttlSeconds,
             path,
-            ...uploadContract(url, token, path, 'text/plain; charset=utf-8'),
+            ...uploadRequest(token, 'text/plain; charset=utf-8'),
             maxBytes: 1_000_000,
           });
         }
@@ -315,7 +314,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           return {
             path,
             url,
-            ...uploadContract(url, token, path, 'text/plain; charset=utf-8'),
+            ...uploadRequest(token, 'text/plain; charset=utf-8'),
             expiresAt,
             expiresInSeconds: ttlSeconds,
             maxBytes: 1_000_000,
@@ -324,7 +323,6 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
 
         return toolOk({
           uploads,
-          uploadScript: uploads.map((u) => u.upload).join(' && '),
           expiresAt,
           expiresInSeconds: ttlSeconds,
           ...(rejected.length ? { rejected } : {}),

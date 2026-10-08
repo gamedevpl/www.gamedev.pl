@@ -243,10 +243,3 @@ export function assertUploadTokenUnexpired(claims: UploadTokenClaims, nowMs: num
     throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
   }
 }
-
-// Deprecated curl form of uploadRequest; no parser claims a missing Content-Type.
-export function uploadCurlCommand(url: string, token: string, localPath: string, contentType: string): string {
-  const escaped = url.replace(/'/g, `'\\''`);
-  const escapedToken = token.replace(/'/g, `'\\''`);
-  return `curl -H 'Authorization: Bearer ${escapedToken}' -H 'Content-Type: ${contentType}' --upload-file ${localPath} '${escaped}'`;
-}

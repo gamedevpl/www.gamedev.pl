@@ -1,12 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { InvalidAgentTokenError } from '../platform/agent-token.js';
-import {
-  assertUploadTokenUnexpired,
-  mintUploadToken,
-  uploadCurlCommand,
-  verifyUploadToken,
-} from './agent-upload-token.js';
+import { assertUploadTokenUnexpired, mintUploadToken, verifyUploadToken } from './agent-upload-token.js';
 
 const secret = 'upload-test-secret';
 
@@ -129,11 +124,5 @@ describe('agent-upload-token', () => {
         kind: 'stage',
       }),
     ).toThrow(/path/i);
-  });
-
-  it('builds a curl --upload-file one-liner carrying an explicit content type', () => {
-    expect(uploadCurlCommand("https://example.com/u'b", "cap'b", 'shot.png', 'image/png')).toBe(
-      "curl -H 'Authorization: Bearer cap'\\''b' -H 'Content-Type: image/png' --upload-file shot.png 'https://example.com/u'\\''b'",
-    );
   });
 });

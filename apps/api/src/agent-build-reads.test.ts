@@ -10,6 +10,7 @@ import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import { KIT_ROOT_DIR } from './platform/kit-registry.js';
 import { InMemoryStore } from './platform/store.js';
+import { SHELL_COMMAND } from './agent-surface/shell-command-text.js';
 
 const secret = 'test-secret';
 const ISSUE = 77;
@@ -250,7 +251,7 @@ describe('agent build reads (BY-04)', () => {
       sha256: SHA,
       entry: 'gamedevpl-creator-kit/SKILL.md',
     });
-    expect(res.json().unpack).toBe(`curl -fsSL 'https://signed.example/kits/${ENGINE}.tgz?sig=1' | tar -xz`);
+    expect(res.body).not.toMatch(SHELL_COMMAND);
     expect(res.json().browse).toEqual({
       list: 'list_kit_files',
       search: 'search_kit_files',
@@ -531,6 +532,7 @@ describe('agent build reads (BY-04)', () => {
       sha256: SHA,
       tarballUrl: expect.stringContaining('examples%2Fblock-cascade.tgz'),
     });
+    expect(ok.body).not.toMatch(SHELL_COMMAND);
   });
 
   describe('exemplar files for fetchless agents (BY-28a)', () => {

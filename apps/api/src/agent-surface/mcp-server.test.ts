@@ -16,6 +16,7 @@ import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
 import { builderSystemPrompt } from './builder-system-prompt.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
+import { SHELL_COMMAND } from './shell-command-text.js';
 
 const secret = 'test-secret';
 const ISSUE = 55;
@@ -44,9 +45,9 @@ const TINY_PNG = Buffer.from(
   'base64',
 ).toString('base64');
 
-function uploadAuthorization(upload: unknown): string {
-  const authorization = String(upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
-  if (!authorization) throw new Error('upload command has no authorization header');
+function uploadAuthorization(minted: unknown): string {
+  const authorization = (minted as { headers?: Record<string, string> }).headers?.Authorization;
+  if (!authorization) throw new Error('upload contract has no Authorization header');
   return authorization;
 }
 
@@ -837,6 +838,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(kit.isError).toBe(false);
     const structured = kit.structured as { engineRef?: string; browse?: Record<string, string> };
     expect(structured.engineRef).toBe(engine);
+    expect(JSON.stringify(structured)).not.toMatch(SHELL_COMMAND);
     // Advertised now, so the whole block survives (reverse of the old assertion).
     expect(structured.browse).toEqual({
       list: 'list_kit_files',
@@ -1752,11 +1754,10 @@ declare const GameKit: { defineGame(): unknown };
       { 'mcp-session-id': sessionId },
     );
     expect(minted.isError).toBe(false);
-    const { url, method, headers, upload, maxBytes } = minted.structured as {
+    const { url, method, headers, maxBytes } = minted.structured as {
       url: string;
       method: string;
       headers: Record<string, string>;
-      upload: string;
       maxBytes: number;
       expiresAt: string;
     };
@@ -1765,8 +1766,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(method).toBe('PUT');
     expect(headers.Authorization).toMatch(/^Bearer \S+$/);
     expect(headers['Content-Type']).toBe('image/png');
-    // Deprecated command form remains, with the same credential.
-    expect(uploadAuthorization(upload)).toBe(headers.Authorization);
+    expect(JSON.stringify(minted.structured)).not.toMatch(SHELL_COMMAND);
     expect(url).toMatch(/\/api\/agent\/build\/shot\/upload$/);
     const pngBytes = Buffer.from(TINY_PNG, 'base64');
     // ~500 KB of valid PNG prefix + padding would blow the signature check; use a
@@ -1790,12 +1790,12 @@ declare const GameKit: { defineGame(): unknown };
     const huge = Buffer.alloc(800 * 1024, 0x41);
     huge.set(pngBytes.subarray(0, 8), 0);
     const minted2 = await callTool(app, 'screenshot_upload_url', { sessionKey }, { 'mcp-session-id': sessionId });
-    const secondUpload = minted2.structured as { url: string; upload: string };
+    const secondUpload = minted2.structured as { url: string; headers: Record<string, string> };
     const url2 = secondUpload.url.replace(/^https?:\/\/[^/]+/, '');
     const tooBig = await app.inject({
       method: 'PUT',
       url: url2,
-      headers: { authorization: uploadAuthorization(secondUpload.upload), 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(secondUpload), 'content-type': 'image/png' },
       payload: huge,
     });
     expect(tooBig.statusCode).toBe(413);
@@ -2091,11 +2091,11 @@ declare const GameKit: { defineGame(): unknown };
     let body: { staged?: { totalBytes: number; maxBytes: number }; budgetHint?: string } = {};
     for (const path of ['game/big-one.ts', 'game/big-two.ts']) {
       const minted = await callTool(app, 'stage_upload_url', { sessionKey, path }, sid);
-      const { url, upload } = minted.structured as Record<string, string>;
+      const { url } = minted.structured as Record<string, string>;
       const put = await app.inject({
         method: 'PUT',
         url: url.replace(/^https?:\/\/[^/]+/, ''),
-        headers: { authorization: uploadAuthorization(upload), 'content-type': 'text/plain; charset=utf-8' },
+        headers: { authorization: uploadAuthorization(minted.structured), 'content-type': 'text/plain; charset=utf-8' },
         payload: Buffer.from(`export const big = '${'x'.repeat(740_000)}';\n`, 'utf8'),
       });
       expect(put.statusCode).toBe(200);
@@ -2128,12 +2128,12 @@ declare const GameKit: { defineGame(): unknown };
     const sessionKey = (started.structured as Record<string, string>).sessionKey;
 
     const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/typeless.ts' }, sid);
-    const { url, upload } = minted.structured as Record<string, string>;
+    const { url } = minted.structured as Record<string, string>;
     const content = 'export const typeless = true;\n';
 
     for (const headers of [
-      { authorization: uploadAuthorization(upload) },
-      { authorization: uploadAuthorization(upload), 'content-type': 'video/mp2t' },
+      { authorization: uploadAuthorization(minted.structured) },
+      { authorization: uploadAuthorization(minted.structured), 'content-type': 'video/mp2t' },
     ]) {
       const put = await app.inject({
         method: 'PUT',
@@ -2162,16 +2162,23 @@ declare const GameKit: { defineGame(): unknown };
 
     const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/extra.ts' }, sid);
     expect(minted.isError).toBe(false);
-    const { url, path, maxBytes, upload } = minted.structured as Record<string, string | number>;
+    const { url, path, maxBytes, headers } = minted.structured as {
+      url: string;
+      path: string;
+      maxBytes: number;
+      headers: Record<string, string>;
+    };
     expect(path).toBe('game/extra.ts');
     expect(maxBytes).toBe(1_000_000);
-    expect(upload).toMatch(/^curl -H 'Authorization: Bearer [^']+' -H 'Content-Type: text\/plain; charset=utf-8'/);
+    expect(headers.Authorization).toMatch(/^Bearer \S+$/);
+    expect(headers['Content-Type']).toBe('text/plain; charset=utf-8');
+    expect(JSON.stringify(minted.structured)).not.toMatch(SHELL_COMMAND);
 
     const content = 'export const stagedViaCurl = true;\n';
     const put = await app.inject({
       method: 'PUT',
       url: (url as string).replace(/^https?:\/\/[^/]+/, ''),
-      headers: { authorization: uploadAuthorization(upload), 'content-type': 'text/plain; charset=utf-8' },
+      headers: { authorization: headers.Authorization, 'content-type': headers['Content-Type'] },
       payload: Buffer.from(content, 'utf8'),
     });
     expect(put.statusCode).toBe(200);
@@ -2227,17 +2234,15 @@ declare const GameKit: { defineGame(): unknown };
     const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
     expect(batchMinted.isError).toBe(false);
     const batchStructured = batchMinted.structured as {
-      uploads: Array<{ path: string; url: string; method: string; headers: Record<string, string>; upload: string }>;
-      uploadScript?: string;
+      uploads: Array<{ path: string; url: string; method: string; headers: Record<string, string> }>;
     };
     expect(batchStructured.uploads).toHaveLength(20);
     for (const item of batchStructured.uploads) {
       expect(item.method).toBe('PUT');
       expect(item.headers['Content-Type']).toBe('text/plain; charset=utf-8');
-      // Deprecated command form remains, with the same credential.
-      expect(uploadAuthorization(item.upload)).toBe(item.headers.Authorization);
+      expect(item.headers.Authorization).toMatch(/^Bearer /);
     }
-    expect(batchStructured.uploadScript?.split(' && ')).toHaveLength(20);
+    expect(JSON.stringify(batchStructured)).not.toMatch(SHELL_COMMAND);
 
     // Parallel concurrent PUT execution — verifies CAS retry resilience under 20-way concurrency
     const putResults = await Promise.all(
@@ -3646,12 +3651,12 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
       { sessionKey, label: 'first draw' },
       { 'mcp-session-id': sessionId },
     );
-    const shotUpload = minted.structured as { url: string; upload: string };
+    const shotUpload = minted.structured as { url: string; headers: Record<string, string> };
     const shotUrl = shotUpload.url.replace(/^https?:\/\/[^/]+/, '');
     await app.inject({
       method: 'PUT',
       url: shotUrl,
-      headers: { authorization: uploadAuthorization(shotUpload.upload), 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(shotUpload), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
 

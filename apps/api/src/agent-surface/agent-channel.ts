@@ -38,7 +38,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
-import { uploadContract } from './upload-request.js';
+import { uploadRequest } from './upload-request.js';
 import type { BuildShot } from '../store/records/build-log.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
@@ -1175,7 +1175,7 @@ export async function registerAgentChannelRoutes(
         url,
         expiresAt,
         expiresInSeconds: ttlSeconds,
-        ...uploadContract(url, token, 'shot.png', 'image/png'),
+        ...uploadRequest(token, 'image/png'),
         maxBytes: parsed.data.purpose === 'concept' ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES,
         ...(await channelState(jobId, record)),
       });
