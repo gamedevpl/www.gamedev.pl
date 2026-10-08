@@ -22,13 +22,21 @@ const ws = { pick: async () => '', unattended: undefined };
 it('defaults to Ask and keeps the adapter flags and the creator prompt', () => {
   expect(permissionMode()).toBe('ask');
   const claude = spec('claude');
-  const task = taskPermissions({ spec: claude, mode: 'ask', ws, signal: new AbortController().signal, write: vi.fn() });
+  const task = taskPermissions({
+    spec: claude,
+    mode: 'ask',
+    cwd: '/game',
+    ws,
+    signal: new AbortController().signal,
+    write: vi.fn(),
+  });
   expect(task.spec.headless).toEqual(claude.headless);
   expect(task.permissions).toBeUndefined();
   expect(task.onApproval).toBeDefined();
   const unattended = taskPermissions({
     spec: claude,
     mode: 'ask',
+    cwd: '/game',
     ws: { ...ws, unattended: { deliver: false } },
     signal: new AbortController().signal,
     write: vi.fn(),
@@ -64,6 +72,7 @@ it('approves unattended without asking and says so', async () => {
   const task = taskPermissions({
     spec: spec('claude'),
     mode: 'yolo',
+    cwd: '/game',
     ws: { pick, unattended: { deliver: false } },
     signal: new AbortController().signal,
     write,
@@ -104,4 +113,54 @@ it('takes the flag, or the mode a Play worker was started with', () => {
   choosePermissionMode('auto', { [PERMISSIONS_ENV]: 'yolo' });
   expect(permissionMode()).toBe('auto');
   expect(() => choosePermissionMode(true, {})).toThrow('--permissions needs a mode');
+});
+
+it('remembers across interactive tasks in one checkout and clears with /permissions ask', async () => {
+  const pick = vi.fn(async () => 'Always allow this exact command (this session)');
+  const ws = { pick };
+  const task = (owner = ws, cwd = '/game') =>
+    taskPermissions({
+      spec: spec('claude'),
+      mode: 'ask',
+      cwd,
+      ws: owner,
+      signal: new AbortController().signal,
+      write: vi.fn(),
+    });
+  const request = { id: 'a', kind: 'command' as const, detail: { tool_name: 'Bash', input: { command: 'npm test' } } };
+  const first = task();
+  expect(await first.onApproval!(request)).toBe('approve');
+  expect(await task().onApproval!({ ...request, id: 'b' })).toBe('approve');
+  expect(pick).toHaveBeenCalledOnce();
+  expect(await task(ws, '/other-game').onApproval!(request)).toBe('approve');
+  expect(await task({ pick }).onApproval!(request)).toBe('approve');
+  expect(pick).toHaveBeenCalledTimes(3);
+  const unattended = taskPermissions({
+    spec: spec('claude'),
+    mode: 'ask',
+    cwd: '/game',
+    ws: { ...ws, unattended: { deliver: false } },
+    signal: new AbortController().signal,
+    write: vi.fn(),
+  });
+  expect(unattended.onApproval).toBeUndefined();
+  await permissionsCommand({ args: ['ask'], write: vi.fn() });
+  expect(await first.onApproval!(request)).toBe('approve');
+  expect(pick).toHaveBeenCalledTimes(4);
+});
+
+it.each(['Allow once', 'Deny'])('does not remember an ordinary decision: %s', async (choice) => {
+  const pick = vi.fn(async () => choice);
+  const task = taskPermissions({
+    spec: spec('claude'),
+    mode: 'ask',
+    cwd: '/game',
+    ws: { pick },
+    signal: new AbortController().signal,
+    write: vi.fn(),
+  });
+  const request = { id: 'a', kind: 'command' as const, detail: { tool_name: 'Bash', input: { command: 'npm test' } } };
+  expect(await task.onApproval!(request)).toBe(choice === 'Deny' ? 'deny' : 'approve');
+  await task.onApproval!({ ...request, id: 'b' });
+  expect(pick).toHaveBeenCalledTimes(2);
 });

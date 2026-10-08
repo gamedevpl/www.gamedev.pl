@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Claude command approvals offer “Always allow this exact command (this session)”; matching commands in the same checkout no longer ask again until the CLI exits or `/permissions ask` clears remembered approvals (#1711).
+
 ## 0.26.0 — 2026-10-08
 
 ### Breaking
