@@ -141,6 +141,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     vendor: ANTHROPIC_VENDOR,
     model: config.model,
     supportsSeedFiles: false,
+    shell: true,
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       if (!agentId || !environmentId) {

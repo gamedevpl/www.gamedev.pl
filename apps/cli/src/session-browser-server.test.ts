@@ -9,6 +9,7 @@ import { stopWorkbenchSession, savePlayJournal, type PlayJournal } from './workb
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { rmSync } from 'node:fs';
+import { privatePlayDirectory } from './play-state.js';
 
 vi.mock('./workbench-phone.js', async (original) => ({
   ...(await original<typeof import('./workbench-phone.js')>()),
@@ -277,6 +278,8 @@ it('stops the session on authenticated POST /stop', async () => {
 it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
   const { url, session } = await fixture();
   const base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
+  // Fresh runners lack this directory; launch creates it too.
+  privatePlayDirectory(base);
   const journalPath = join(base, 'test-target.json');
   const journal: PlayJournal = {
     version: 1,
