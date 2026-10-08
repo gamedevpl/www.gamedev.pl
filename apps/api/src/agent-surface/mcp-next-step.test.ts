@@ -197,6 +197,27 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     expect(staged.next).toBeUndefined();
   });
 
+  it('B2: an image note counts its attachments; a read note stops counting until a new one lands', async () => {
+    await round();
+    await store.appendCreatorMessage(ISSUE, 'Like this one.\nreferenceImageShotIds: shot-1');
+    await start();
+    const sources = await call('get_sources');
+    expect(sources.data.pendingMessages).toEqual([expect.objectContaining({ attachments: 1 })]);
+    const pending = sources.warnings.find((warning) => warning.code === 'inbox_pending');
+    expect(pending?.message).toMatch(/1 with attached images only read_inbox returns/);
+    expect(sources.next).toBe('read_inbox');
+    await call('read_inbox');
+    // Read but not acknowledged: still listed, no longer pending.
+    const staged = await call('stage_source_file', { path: 'game.ts', content: 'export const ship = "blue";' });
+    expect(staged.data.pendingMessages).toHaveLength(1);
+    expect(codes(staged)).not.toContain('inbox_pending');
+    expect(codes(await call('get_sources'))).not.toContain('inbox_pending');
+    await store.appendCreatorMessage(ISSUE, 'Also make it faster');
+    const later = await call('get_sources');
+    expect(later.warnings.find((warning) => warning.code === 'inbox_pending')?.message).toMatch(/^1 creator message/);
+    expect(later.next).toBe('read_inbox');
+  });
+
   it('C: writing the first file, or reporting progress, is not readiness to submit', async () => {
     await round();
     await start();

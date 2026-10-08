@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { BUILDERS, type BuilderKind } from '@gamedevpl/contract';
 import { NO_OPEN_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
+import { referenceShotIds } from './inbox-reference-images.js';
 
 // text is the JSON body; image is a rendered frame (get_gate_media).
 type ToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
@@ -139,8 +140,12 @@ export const MCP_VISIBLE_TOOLS = new Set([
 export function pendingMessagesFromChannel(body: {
   pending?: Array<{ id: string; text: string; createdAt: string }>;
   pendingMessages?: Array<{ id: string; text: string; createdAt: string }>;
-}): Array<{ id: string; text: string; createdAt: string }> {
-  return body.pendingMessages ?? body.pending ?? [];
+}): Array<{ id: string; text: string; createdAt: string; attachments?: number }> {
+  // Count the images a note names; only read_inbox returns their URLs.
+  return (body.pendingMessages ?? body.pending ?? []).map((note) => {
+    const attachments = referenceShotIds([note]).length;
+    return attachments > 0 ? { ...note, attachments } : note;
+  });
 }
 
 export type ChannelControlBody = {
@@ -280,10 +285,15 @@ export const REPLY_CONTROL = {
   },
   pendingMessages: {
     type: 'array',
-    description: 'Creator notes not yet read; read_inbox returns them in full.',
+    description: 'Creator notes not yet acknowledged; read_inbox returns them in full, with attached images.',
     items: {
       type: 'object',
-      properties: { id: { type: 'string' }, text: { type: 'string' }, createdAt: { type: 'string' } },
+      properties: {
+        id: { type: 'string' },
+        text: { type: 'string' },
+        createdAt: { type: 'string' },
+        attachments: { type: 'number', description: 'Images attached to this note; read_inbox returns their URLs.' },
+      },
     },
   },
   ...WARNINGS_PROP,

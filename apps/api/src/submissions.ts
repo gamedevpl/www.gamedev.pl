@@ -954,6 +954,8 @@ export async function registerSubmissionRoutes(
         const relayed = await relayedMessageLocalization(origin, input.feedback);
         await store.appendCreatorMessage(input.jobId, relayed.text, {
           origin,
+          // The calling agent wrote this; it stays in the transcript only.
+          ...(origin === 'agent' ? { delivered: true } : {}),
           ...(relayed.textLocalized && relayed.locale
             ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
             : {}),

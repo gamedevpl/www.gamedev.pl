@@ -31,6 +31,7 @@ export interface JobNudgeState {
   lastProgressAt: number | null;
   callsSinceProgress: number;
   pendingCount: number;
+  pendingImages?: number; // notes with images only read_inbox returns
   lastInboxCheckAt: number | null;
   /** True after a successful get_seed in this MCP session tracker. */
   seedFetched: boolean;
@@ -136,7 +137,7 @@ export interface McpNudgeTracker {
   /** Successful MCP `end` — clear the post-submit call_end loop. */
   noteEnded(jobId: number, nowMs: number): void;
   /** `nowMs` is only used if the job has never been ensured — callers should pass the injected clock. */
-  notePendingCount(jobId: number, count: number, nowMs: number): void;
+  notePendingCount(jobId: number, count: number, nowMs: number, images?: number): void;
   noteToolSuccess(jobId: number, toolName: string, nowMs: number): void;
   /** Called when show_round has put a card in front of the creator. */
   noteCardOpened(jobId: number, nowMs: number): void;
@@ -226,9 +227,8 @@ export function createMcpNudgeTracker(
     state.awaitingEnd = false;
   }
 
-  function notePendingCount(jobId: number, count: number, nowMs: number): void {
-    const state = ensure(jobId, nowMs);
-    state.pendingCount = Math.max(0, count);
+  function notePendingCount(jobId: number, count: number, nowMs: number, images = 0): void {
+    Object.assign(ensure(jobId, nowMs), { pendingCount: Math.max(0, count), pendingImages: Math.max(0, images) });
   }
 
   function noteToolSuccess(jobId: number, toolName: string, nowMs: number): void {
@@ -299,9 +299,10 @@ export function createMcpNudgeTracker(
     }
 
     if (state.pendingCount > 0 && toolName !== 'read_inbox') {
+      const images = state.pendingImages ? `, ${state.pendingImages} with attached images only read_inbox returns` : '';
       warnings.push({
         code: 'inbox_pending',
-        message: `${state.pendingCount} creator message(s) are waiting; read_inbox returns them and ack_inbox marks them handled.`,
+        message: `${state.pendingCount} creator message(s) not yet returned by read_inbox${images}; ack_inbox, or end with ackInboxIds, marks them handled.`,
       });
     }
 
@@ -378,11 +379,11 @@ export function createMcpNudgeTracker(
   };
 }
 
-/** Pull pendingMessages / pending arrays out of a tool result payload. */
-export function pendingCountFromPayload(payload: unknown): number | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const obj = payload as Record<string, unknown>;
+// Pending notes read_inbox has not returned yet; read ones stop nagging.
+export function unreadFromPayload(payload: unknown, readIds: ReadonlySet<string>) {
+  const obj = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
   const list = obj.pendingMessages ?? obj.pending ?? obj.messages;
   if (!Array.isArray(list)) return null;
-  return list.length;
+  const unread = list.filter((n) => !readIds.has(String(n?.id)));
+  return { count: unread.length, images: unread.filter((n) => Number(n?.attachments) > 0).length };
 }

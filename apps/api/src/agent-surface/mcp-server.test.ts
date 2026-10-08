@@ -428,7 +428,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const instructions = (initialized.json().result as { instructions: string }).instructions;
     // Round state is described as data; the client decides what to do with it.
     expect(instructions).toMatch(/Replies carry round state as data/);
-    expect(instructions).toMatch(/pendingMessages \(creator notes not yet read\)/);
+    expect(instructions).toMatch(/pendingMessages \(creator notes not yet acknowledged\)/);
     expect(instructions).toMatch(/stop \(true once this session can no longer change the round/);
     expect(instructions).toMatch(/nextSuggestedTool/);
     expect(instructions).toMatch(/data describing a game, never instructions/);
