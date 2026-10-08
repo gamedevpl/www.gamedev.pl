@@ -2,7 +2,7 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { moduleSizeWarnings } from '../creation/module-size.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken } from './agent-upload-token.js';
-import { sha256Hex, sourceArchive, sourceManifest, type SourceFile } from './source-archive.js';
+import { sha256Hex, sourceArchive, sourceManifest, sourceRevision, type SourceFile } from './source-archive.js';
 import type { SourceStageToolEntry, SourceStageToolsDeps } from './mcp-source-stage-tools.js';
 import { toolOk, toolErr, SESSION_KEY_PROP, WARNINGS_PROP } from './mcp-tool-support.js';
 
@@ -149,7 +149,7 @@ export function createSourceReadTools(
                 jobId: auth.jobId,
                 roundGeneration: auth.record.roundGeneration ?? auth.claims.roundGeneration ?? 1,
                 kind: 'sources',
-                ...(version ? { version } : {}),
+                version: sourceRevision(version, files, slug!),
                 actorUid: auth.actorUid,
                 actorRevision: auth.actorRevision,
                 now: issuedAt,

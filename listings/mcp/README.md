@@ -67,6 +67,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `get_seed`                           | Fetch the seed draft                    | read        |
 | `regenerate_seed`                    | Regenerate the seed draft               | destructive |
 | `get_sources`                        | Fetch existing game sources             | read        |
+| `read_source_files`                  | Read some of this game's source files   | read        |
 | `get_kit`                            | Fetch the Creator Kit                   | read        |
 | `get_kit_api`                        | Fetch the Creator Kit's API reference   | read        |
 | `list_kit_files`                     | List Creator Kit files                  | read        |

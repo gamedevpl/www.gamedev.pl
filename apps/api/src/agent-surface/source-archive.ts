@@ -39,6 +39,11 @@ export function sourceManifest(files: readonly SourceFile[]): SourceManifestEntr
   });
 }
 
+// An archive URL binds a delivery version, or the seed's digest.
+export function sourceRevision(version: string | undefined, files: readonly SourceFile[], root: string): string {
+  return version ?? `seed:${sha256Hex(sourceArchive(files, root)).slice(0, 32)}`;
+}
+
 // Sorted, fixed mtime: the same sources always hash the same.
 export function sourceArchive(files: readonly SourceFile[], root: string): Buffer {
   return writeTarGz(

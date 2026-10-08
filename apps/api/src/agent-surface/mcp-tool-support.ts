@@ -101,6 +101,7 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'get_seed',
   'regenerate_seed',
   'get_sources',
+  'read_source_files',
   'get_kit',
   // get_kit_api is the orientation path; browse tools are the depth path.
   'get_kit_api',

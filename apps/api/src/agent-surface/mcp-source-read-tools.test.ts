@@ -59,8 +59,10 @@ async function setup(files = SEED_FILES) {
       agentChannel: { gamesStore },
     },
   });
+  setup.store = store;
   return app;
 }
+setup.store = null as InMemoryStore | null;
 
 async function mcpCall(app: FastifyInstance, method: string, params?: unknown, headers: Record<string, string> = {}) {
   return app.inject({
@@ -147,6 +149,34 @@ describe('get_sources and read_source_files', () => {
     const entries = await untar(res.rawPayload);
     expect([...entries.keys()].sort()).toEqual(SEED_FILES.map((file) => `${SLUG}/${file.path}`).sort());
     expect(entries.get(`${SLUG}/game/runtime.ts`)).toBe(SEED_FILES[2]!.content);
+  });
+
+  it('refuses an archive URL minted for a seed that has since been replaced', async () => {
+    app = await setup();
+    const { call } = await session(app);
+    const archive = (await call('get_sources')).structured.archive as { url: string; headers: Record<string, string> };
+    await setup.store!.setSubmissionSeed(ISSUE, {
+      slug: SLUG,
+      files: [...SEED_FILES.slice(0, 2), { path: 'game/runtime.ts', content: big('regenerated') }],
+      references: [],
+      notes: 'regenerated',
+    });
+    const res = await app.inject({ method: 'GET', url: new URL(archive.url).pathname, headers: archive.headers });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('advertises read_source_files in tools/list', async () => {
+    app = await setup();
+    const init = await mcpCall(app, 'initialize', {
+      protocolVersion: '2025-11-25',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '0' },
+    });
+    const listed = await mcpCall(app, 'tools/list', undefined, {
+      'mcp-session-id': String(init.headers['mcp-session-id']),
+    });
+    const names = (listed.json().result.tools as Array<{ name: string }>).map((tool) => tool.name);
+    expect(names).toEqual(expect.arrayContaining(['get_sources', 'read_source_files']));
   });
 
   it('refuses the archive without its credential', async () => {

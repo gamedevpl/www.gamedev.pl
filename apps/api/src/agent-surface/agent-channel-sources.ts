@@ -5,7 +5,7 @@ import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-versio
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { UploadKind, UploadTokenClaims } from './agent-upload-token.js';
 import { seedPayload } from './seed-status.js';
-import { sourceArchive, type SourceFile } from './source-archive.js';
+import { sourceArchive, sourceRevision, type SourceFile } from './source-archive.js';
 
 export interface AgentChannelSourcesRoutesDeps {
   resolveBuild: (
@@ -137,7 +137,7 @@ export function registerAgentChannelSourcesRoutes(app: FastifyInstance, deps: Ag
       if (sources.kind === 'none') return reply.status(404).send({ error: 'this game has no sources yet' });
       // A newer base than the minted version needs a fresh get_sources.
       const version = sources.kind === 'delivery' ? sources.version : undefined;
-      if ((upload.version ?? undefined) !== version) {
+      if (upload.version !== sourceRevision(version, sources.files, sources.slug)) {
         return reply
           .status(409)
           .send({ error: 'the sources changed since this URL was minted — call get_sources again' });
