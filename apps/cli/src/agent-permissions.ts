@@ -1,6 +1,7 @@
 import { applyPermissionArgs, decideApproval, type AgentTask, type AgentPermissions } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
 import { approvalPrompt, type ApproveTool } from './agent-approval.js';
+import { clearCommandApprovals, commandApprovalMemory } from './agent-approval-memory.js';
 import { CliError, EXIT_INPUT } from './exit-codes.js';
 import type { Workshop } from './workshop.js';
 
@@ -91,6 +92,7 @@ export function autoApproval(agent: string, mode: PermissionMode, write: (line: 
 export function taskPermissions(input: {
   spec: AdapterSpec;
   mode: PermissionMode;
+  cwd: string;
   ws: Pick<Workshop, 'unattended' | 'pick' | 'onActivity'>;
   signal: AbortSignal;
   write: (line: string) => void;
@@ -105,7 +107,15 @@ export function taskPermissions(input: {
   const { ws, signal, write } = input;
   const ask = ws.unattended
     ? undefined
-    : approvalPrompt({ agent, pick: ws.pick, signal, write, activity: ws.onActivity });
+    : approvalPrompt({
+        agent,
+        pick: ws.pick,
+        signal,
+        write,
+        activity: ws.onActivity,
+        cwd: input.cwd,
+        remembered: commandApprovalMemory(ws),
+      });
   return {
     ...applied,
     onApproval: input.mode === 'ask' ? ask : autoApproval(agent, input.mode, input.write),
@@ -125,7 +135,13 @@ export async function permissionsCommand(input: {
     const chosen = await input.pick(labels, `Agent permissions (now: ${permissionLabel(current)})`);
     value = PERMISSION_MODES[labels.indexOf(chosen)];
   }
-  if (value) setPermissionMode(parsePermissionMode(value));
+  if (value) {
+    setPermissionMode(parsePermissionMode(value));
+    if (current === 'ask') {
+      clearCommandApprovals();
+      input.write('Remembered command approvals cleared.');
+    }
+  }
   input.write(`Permissions: ${permissionLabel(current)}`);
   if (current === 'yolo') input.write('YOLO: agents run without a sandbox and nothing asks you first.');
   if (!value) input.write('permissions ask|auto|yolo; --permissions <mode> sets it for one run');

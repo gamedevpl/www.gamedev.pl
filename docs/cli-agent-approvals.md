@@ -3,9 +3,17 @@
 Interactive `gamedevpl play` and terminal sessions offer **Deny** (the default) and
 **Allow once** when a supported local agent requests tool permission. The prompt
 shows the vendor payload, including the command/tool arguments and any supplied
-working directory, paths and reason. It never rewrites the command or grants a
-session-wide rule. Codex permission-profile requests instead offer **Allow for this
-turn**: the displayed network/filesystem permissions expire when the current turn
+working directory, paths and reason. It never rewrites the command. Claude Bash
+requests also offer **Always allow this exact command (this session)**: subsequent
+matching requests in the same checkout session are answered without another prompt.
+The whole command string, execution options, agent and working directory must match;
+only the tool-call ID and description are ignored. Changed arguments, compound
+commands or sandbox overrides require a new decision. This is not a prefix rule or
+a grant for every Bash command. Rules live only in this CLI process, survive later
+interactive tasks in that checkout, and are cleared by `/permissions ask` or choosing
+**Ask** in **Agent permissions**. Browser reloads retain them; restarting the CLI loses
+them. No vendor settings are written. Codex permission-profile requests instead offer
+**Allow for this turn**: the displayed network/filesystem permissions expire when the current turn
 ends. Denial returns an empty grant. Existing vendor permission settings still apply first.
 
 The terminal and authenticated loopback Play panel share one pending question.
@@ -32,7 +40,7 @@ saved between runs.
 
 | Mode   | GenAIcode `permissions`                                    | Effect                                                                                                                          |
 | ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ask`  | none (each adapter's own flags)                            | The creator answers each request, as above. Unattended runs get no approvals.                                                   |
+| `ask`  | none (each adapter's own flags)                            | The creator answers requests or explicitly remembers an exact Claude command. Unattended runs get no approvals.                 |
 | `auto` | `{ approval: 'auto-approve', sandbox: 'workspace-write' }` | The agent's own sandbox limits writes to the checkout; requests inside it are approved without asking, also in unattended runs. |
 | `yolo` | `'yolo'` (`auto-approve`, `unrestricted`)                  | No sandbox and no questions, also in unattended runs.                                                                           |
 
@@ -42,8 +50,9 @@ reason, instead of running in another mode: Auto-approve needs a vendor sandbox,
 (`--force` runs unsandboxed), Copilot, OpenCode, Vibe and Muse refuse it; Antigravity refuses
 both automatic modes. Automatic decisions appear in the transcript as `Permission
 auto-approved: <summary>` (Claude: `claude: auto-approved command: …`). Approvals are
-still scoped as requested: one invocation, or the current turn for a Codex profile, never a
-session-wide grant.
+still scoped as requested: one invocation, or the current turn for a Codex profile.
+Remembered Claude commands receive a separate one-invocation reply each time;
+the CLI does not send a session-wide grant to the vendor.
 
 ## Implemented transports
 
@@ -54,7 +63,7 @@ session-wide grant.
 | Muse    | `serve`, `approval/request` or `approval/requested`, then `approval/decide`                                                  | Server requests receive a presentation receipt. Decisions use server-issued choice and requirement IDs, once per stage. Only `scope: once` may be approved. The old terminal recovery remains for unsupported/custom headless configurations.                                                                     |
 
 `agent-approval.ts` owns presentation and serialization. Vendor protocol translation
-comes from GenAIcode (`genaicode/agents` 2.12.0): `claudeApprovalTool` is mounted on the
+comes from GenAIcode (`genaicode/agents` 2.13.0): `claudeApprovalTool` is mounted on the
 private local MCP listener (with `claudeApprovalArgs` and `claudeApprovalEnv`, which raises
 `MCP_TOOL_TIMEOUT` so Claude waits for the creator), and the custom live driver hands Codex
 and Muse requests to `codexApprovals` / `museApprovals`. The driver keeps its own steering
@@ -81,7 +90,7 @@ Investigation on 2026-10-08:
 | Antigravity | Existing interactive terminal permission handoff                                                                                                                           | No verified headless approval-response protocol in this integration. |
 | Cursor      | Current adapter uses `--force`                                                                                                                                             | No verified approval callback here; no claim of panel support.       |
 
-The Claude, Codex and Muse protocol handling now lives in GenAIcode 2.12.0, with its
+The Claude, Codex and Muse protocol handling now lives in GenAIcode 2.13.0, with its
 protocol tests; gamedevpl keeps presentation and integration tests. Reusable ACP / Copilot /
 OpenCode live drivers would belong in GenAIcode as additive features; they are not
 implemented yet.

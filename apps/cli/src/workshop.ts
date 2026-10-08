@@ -203,7 +203,7 @@ export async function runLocalBuild(input: {
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
-  const permitted = taskPermissions({ ws, spec, mode, signal: controller.signal, write: input.write });
+  const permitted = taskPermissions({ ws, spec, mode, cwd, signal: controller.signal, write: input.write });
   spec = permitted.spec;
   const { onApproval, permissions } = permitted;
   ws.abort.current = controller;
