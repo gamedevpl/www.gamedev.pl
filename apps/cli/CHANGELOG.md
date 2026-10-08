@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.26.0 — 2026-10-08
+
 ### Breaking
 
 - Default `stop` targets the current checkout; an explicit game slug with sessions in multiple directories requires `--session <id>` or `--all` (#1703).
