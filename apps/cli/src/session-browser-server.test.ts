@@ -8,7 +8,7 @@ import { startSessionBrowser } from './session-browser-server.js';
 import { stopWorkbenchSession, savePlayJournal, type PlayJournal } from './workbench-launch.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { privatePlayDirectory } from './play-state.js';
 
 vi.mock('./workbench-phone.js', async (original) => ({
@@ -277,8 +277,15 @@ it('stops the session on authenticated POST /stop', async () => {
 
 it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
   const { url, session } = await fixture();
+  // A private TMPDIR keeps real Play journals out of the scan.
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-workbench-'));
+  vi.stubEnv('TMPDIR', root);
+  cleanup.push(async () => {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  });
   const base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
-  // Fresh runners lack this directory; launch creates it too.
+  // The private TMPDIR starts empty; launch creates this too.
   privatePlayDirectory(base);
   const journalPath = join(base, 'test-target.json');
   const journal: PlayJournal = {
@@ -290,9 +297,6 @@ it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
     url: url.href,
   };
   savePlayJournal(journalPath, journal);
-  cleanup.push(async () => {
-    rmSync(journalPath, { force: true });
-  });
 
   // 1. Sibling directory must not match
   expect(await stopWorkbenchSession({ cwd: '/work/my-game-copy' })).toBe(false);

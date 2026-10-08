@@ -50,6 +50,8 @@ it('uses owned registration for the shortcut and ignores spoofed stop text', asy
 it('clears owned preview state through the real play stop lifecycle', async () => {
   const root = mkdtempSync(join(tmpdir(), 'gdpl-preview-stop-'));
   writeFileSync(join(root, '.gamedev-slug'), 'robot');
+  // Keeps stop from scanning a developer's real Play sessions.
+  vi.stubEnv('TMPDIR', root);
   const onLocalPreview = vi.fn();
   try {
     await playGame({
@@ -62,6 +64,7 @@ it('clears owned preview state through the real play stop lifecycle', async () =
     });
     expect(onLocalPreview).toHaveBeenCalledWith('');
   } finally {
+    vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
   }
 });
