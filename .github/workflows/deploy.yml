@@ -1018,6 +1018,8 @@ jobs:
     name: Browser gate against the candidate
     needs: deploy
     runs-on: ubuntu-latest
+    # Usually ~4 min (slowest recent run 5); a hang must not hold the deploy queue.
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -1059,6 +1061,8 @@ jobs:
       # binary that was actually installed and hand it over explicitly; E2E_CHROMIUM_PATH
       # takes priority over every heuristic in findChromium().
       - name: Install Chromium
+        # Usually under 30s (slowest recent run 87s); this is where the hang was.
+        timeout-minutes: 5
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
         run: |
