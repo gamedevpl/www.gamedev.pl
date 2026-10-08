@@ -1,7 +1,7 @@
 import type { GenerationResult } from 'genaicode';
 import { usageOf } from './seed-usage.js';
 
-// Reservation rates from the former public token-price table, dated 2026-09-29.
+// Reservation rates from the public table (2026-09-29).
 interface TokenRate {
   inputPerMTok: number;
   outputPerMTok: number;
