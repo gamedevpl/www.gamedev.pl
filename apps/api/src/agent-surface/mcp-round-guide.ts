@@ -43,7 +43,7 @@ export const ROUND_SEQUENCE_TEXT = [
 
 // The one string every client reads before any tool runs.
 export const MCP_INSTRUCTIONS = [
-  'gamedev.pl builds browser games through these tools. They need an approved gamedev.pl creator account; until then calls are refused. Access is requested by signing in at https://www.gamedev.pl/ with Google or Apple; approval is manual and confirmed by email.',
+  'gamedev.pl builds browser games through these tools. They need an approved gamedev.pl creator account; until then calls are refused. Access is requested on the https://www.gamedev.pl/ front page itself, not through these tools; the account works here once approved.',
   'A new game starts with create_game; an existing one with start, which returns the sessionKey later calls carry. With a creator key or OAuth in Authorization: Bearer, start needs only the game slug (a legacy round key goes in its key argument instead).',
   'What to build comes from get_brief and the files to build on from get_sources; read_inbox holds new creator messages and get_transcript earlier conversation.',
   'Staging (stage_source_file, patch_source_file, stage_upload_url) changes a buffer only; submit_sources delivers it to the gate, mode=preview while iterating and mode=publish only to seal. A refused delivery re-runs only on a new submit_sources, after its cause is fixed. end closes this session; the round closes on a green publish verdict, a creator action or a builder handoff. A round that only answers a question can end with end({ summary }) and no delivery.',

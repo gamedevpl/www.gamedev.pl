@@ -33,11 +33,11 @@ Every tool call is refused until the account is approved as a creator, so the li
 so up front. Append this to the description field as-is:
 
 > gamedev.pl is in closed beta: tools work only for approved creator accounts. Request
-> access by signing in at https://www.gamedev.pl/ with Google or Apple; approval is manual
-> and confirmed by email.
+> access with "Join the waitlist" at https://www.gamedev.pl/ (it asks for a Google or Apple
+> sign-in); approval is manual and confirmed by email.
 
-The MCP server says the same in `initialize.instructions` and in the 401 hint, for clients
-that never show the listing.
+For clients that never show the listing, `initialize.instructions` and the 401 hint point
+at the front page too, without naming a launch stage (the same text serves an open site).
 
 ## Directory model (updated 2026-08-03)
 
