@@ -46,6 +46,11 @@ export const termsEn: LegalDocument = {
             'Submission tracking — a status page for your game, in-app notifications, push notifications and emails ' +
               'about progress.',
             'User account — created by signing in with a Google account.',
+            'Remix — temporarily changing the settings or content of someone else’s game for your own use, only in ' +
+              'games whose creator (or, for catalog games, the Provider) allows it. A remix does not change the ' +
+              'original game and cannot be saved as your own game.',
+            'Change proposals — sending a game’s creator a proposed change, only in games where the creator has ' +
+              'enabled proposals. The creator decides whether to use it.',
           ],
         },
         {
@@ -262,6 +267,25 @@ export const termsEn: LegalDocument = {
           text:
             'You may play games published in the Service for your own use. The games repository is not currently ' +
             'public; should the Provider release it under an open licence, it will announce this in the Service.',
+        },
+        {
+          kind: 'p',
+          text:
+            'A remix is for your own use only. Its changes are temporary, do not affect the creator’s game or other ' +
+            'players, and give no right to save, copy or publish the game or any part of it as your own. A remix ' +
+            'link carries settings only, never the game’s code.',
+        },
+        {
+          kind: 'p',
+          text:
+            'By sending a change proposal you grant the game’s creator and the Provider a free, non-exclusive, ' +
+            'worldwide and perpetual licence to use its content (description, settings, content and example code) ' +
+            'to improve the game, including to modify it and incorporate it into the game. The creator is under no ' +
+            'obligation to use the proposal or to pay for it. An accepted change is built by the creator’s AI agent ' +
+            'from the proposal — code from the proposal is not copied in directly. Proposals for the Provider’s ' +
+            'catalog games are feedback the Provider may use at its discretion. By enabling proposals for your ' +
+            'game you acknowledge that proposers’ AI agents may read the game’s source code to the extent needed ' +
+            'to prepare a proposal.',
         },
         {
           kind: 'p',

@@ -2159,7 +2159,7 @@
   },
   "proposals": {
     "navTitle": "My proposals",
-    "empty": "Nothing yet. Remix a game you like, then propose your change.",
+    "empty": "Nothing yet. When a game's creator opens it to proposals, you can suggest a change and track it here.",
     "toOwner": "to {{handle}}",
     "toPlatform": "to gamedev.pl",
     "state": {

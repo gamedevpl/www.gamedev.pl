@@ -2173,7 +2173,7 @@
   },
   "proposals": {
     "navTitle": "Moje propozycje",
-    "empty": "Jeszcze nic. Zremiksuj grę, która ci się podoba, i zaproponuj zmianę.",
+    "empty": "Jeszcze nic. Gdy twórca gry otworzy ją na propozycje, możesz zaproponować zmianę i śledzić ją tutaj.",
     "toOwner": "do {{handle}}",
     "toPlatform": "do gamedev.pl",
     "state": {
