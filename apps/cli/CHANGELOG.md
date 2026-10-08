@@ -9,11 +9,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Choose how local agents handle permissions: Ask (default), Auto-approve (sandboxed) or YOLO (full access, no questions), with `--permissions <mode>` or `/permissions`; the active mode is shown before each task, and Auto-approve or YOLO also run unattended (#PR).
+- Choose how local agents handle permissions: Ask (default), Auto-approve (sandboxed) or YOLO (full access, no questions), with `--permissions <mode>` or `/permissions`; the active mode is shown before each task, and Auto-approve or YOLO also run unattended (#1687).
 
 ### Internal
 
-- Agent approval protocols (Claude prompt tool, Codex and Muse approvals) now come from genaicode 2.13.0 instead of local copies (#PR).
+- Agent approval protocols (Claude prompt tool, Codex and Muse approvals) now come from genaicode 2.13.0 instead of local copies (#1687).
 
 ## 0.25.0 — 2026-10-08
 
