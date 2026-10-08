@@ -16,12 +16,26 @@ export function selectWorkbenchEntry(input: {
   const { verb, args, flags, interactive, bare, cwd } = input;
   if (flags.help || flags.h || verb === 'help') return;
   const explicit = (verb === 'create' && flags.play === true) || (verb === 'play' && flags.edit === true);
-  if (explicit && (flags.json || flags.terminal || flags.preview || flags.stop))
+  if (
+    explicit &&
+    (flags.json || flags.terminal || flags.preview || flags.stop || flags.list || flags.all || flags.session)
+  )
     throw new CliError(
-      'Browser workbench flags cannot be combined with --json, --terminal, --preview or --stop.',
+      'Browser workbench flags cannot be combined with --json, --terminal, --preview, --stop or session-selection flags.',
       EXIT_INPUT,
     );
-  if (!explicit && (!interactive || flags.json || flags.terminal || flags.preview || flags.stop)) return;
+  if (
+    !explicit &&
+    (!interactive ||
+      flags.json ||
+      flags.terminal ||
+      flags.preview ||
+      flags.stop ||
+      flags.list ||
+      flags.all ||
+      flags.session)
+  )
+    return;
   if (verb === 'create') return { entry: { mode: 'create' }, cwd, idea: args.join(' ').trim() || undefined };
   if (verb === 'repl' && bare && !args.length && !flags.token) return { entry: { mode: 'home' }, cwd };
   if (verb !== 'play') return;

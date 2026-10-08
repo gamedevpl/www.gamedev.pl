@@ -2,11 +2,21 @@ import type { handleReplLine } from './repl.js';
 import { parseArgv } from './argv.js';
 import { getStatus } from './turn.js';
 import { playGame } from './play.js';
+import { playSessionCommand } from './play-session-command.js';
 import { formatError } from './errors.js';
 
 export async function runReplPlay(input: Parameters<typeof handleReplLine>[0], trimmed: string): Promise<void> {
   try {
     const parsed = parseArgv(['node', 'cli', ...(trimmed.startsWith('/') ? trimmed.slice(1).split(/\s+/u) : ['play'])]);
+    if (
+      await playSessionCommand({
+        ...parsed,
+        cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
+        write: input.write,
+        onLocalPreview: input.onLocalPreview,
+      })
+    )
+      return;
     const slug =
       parsed.args[0] ??
       input.workshop?.slug ??

@@ -67,6 +67,8 @@ const BOOLEAN_FLAGS = new Set([
   'reset',
   'no-open',
   'stop',
+  'list',
+  'all',
   'force',
   'publish',
   'handoff',

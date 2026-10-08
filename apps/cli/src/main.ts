@@ -6,7 +6,8 @@ import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
-import { playGame, stopPlaySession } from './play.js';
+import { playGame } from './play.js';
+import { playSessionCommand } from './play-session-command.js';
 import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -159,6 +160,23 @@ export async function runCli(
 
   try {
     choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
+    if (
+      !flags.help &&
+      !flags.h &&
+      (await playSessionCommand({
+        verb,
+        args,
+        flags,
+        cwd: process.cwd(),
+        write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
+        json: asJson
+          ? (value) => {
+              io.stdout.write(`${JSON.stringify(value)}\n`);
+            }
+          : undefined,
+      }))
+    )
+      return EXIT_GREEN;
     const workbench = selectWorkbenchEntry({
       verb,
       args,
@@ -236,32 +254,7 @@ export async function runCli(
       }
       return EXIT_GREEN;
     }
-    if (verb === 'stop') {
-      const here = findCheckout(process.cwd());
-      const slug = args[0] ?? here?.slug;
-      const stopped = await stopPlaySession({
-        cwd: process.cwd(),
-        slug,
-        env,
-        write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
-      });
-      if (asJson) io.stdout.write(`${JSON.stringify({ stopped })}\n`);
-      return EXIT_GREEN;
-    }
     if (verb === 'play') {
-      const isStop = flags.stop === true || args[0] === 'stop';
-      if (isStop) {
-        const here = findCheckout(process.cwd());
-        const slug = (args[0] === 'stop' ? args[1] : args[0]) ?? here?.slug;
-        const stopped = await stopPlaySession({
-          cwd: process.cwd(),
-          slug,
-          env,
-          write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
-        });
-        if (asJson) io.stdout.write(`${JSON.stringify({ stopped })}\n`);
-        return EXIT_GREEN;
-      }
       if (findCheckout(process.cwd())) {
         try {
           await offerKitUpdate({

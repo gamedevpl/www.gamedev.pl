@@ -7,8 +7,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Default `stop` targets the current checkout; an explicit game slug with sessions in multiple directories requires `--session <id>` or `--all`.
+
 ### Added
 
+- `play` shows running local sessions; `play --list` lists their IDs, games, directories and URLs, and `play --stop --session <id>` or `--all` stops one or all.
 - Choose how local agents handle permissions: Ask (default), Auto-approve (sandboxed) or YOLO (full access, no questions), with `--permissions <mode>` or `/permissions`; the active mode is shown before each task, and Auto-approve or YOLO also run unattended (#1687).
 
 ### Internal

@@ -5,11 +5,12 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { createSessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
-import { stopWorkbenchSession, savePlayJournal, type PlayJournal } from './workbench-launch.js';
+import { savePlayJournal, type PlayJournal } from './workbench-launch.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { privatePlayDirectory } from './play-state.js';
+import { stopPlaySession } from './play.js';
 
 vi.mock('./workbench-phone.js', async (original) => ({
   ...(await original<typeof import('./workbench-phone.js')>()),
@@ -275,7 +276,7 @@ it('stops the session on authenticated POST /stop', async () => {
   expect(await prompt).toBe('/quit');
 });
 
-it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
+it('narrows stopPlaySession by slug and directory boundary', async () => {
   const { url, session } = await fixture();
   // A private tmpdir keeps the scan off real Play sessions.
   const root = mkdtempSync(join(tmpdir(), 'gamedev-stop-test-'));
@@ -288,7 +289,7 @@ it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
   const base = join(root, `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
   // A fresh tmpdir lacks this directory; launch creates it too.
   privatePlayDirectory(base);
-  const journalPath = join(base, 'test-target.json');
+  const journalPath = join(base, 'c'.repeat(64) + '.json');
   const journal: PlayJournal = {
     version: 1,
     instance: 'test',
@@ -300,13 +301,13 @@ it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
   savePlayJournal(journalPath, journal);
 
   // 1. Sibling directory must not match
-  expect(await stopWorkbenchSession({ cwd: '/work/my-game-copy' })).toBe(false);
+  expect(await stopPlaySession({ cwd: '/work/my-game-copy', write: vi.fn() })).toBe(false);
 
   // 2. Different explicit slug inside same cwd must not match
-  expect(await stopWorkbenchSession({ cwd: '/work/my-game', slug: 'other-game' })).toBe(false);
+  expect(await stopPlaySession({ cwd: '/work/my-game', slug: 'other-game', write: vi.fn() })).toBe(false);
 
   // 3. Matching explicit slug stops the session
   const prompt = session.prompt();
-  expect(await stopWorkbenchSession({ cwd: '/somewhere-else', slug: 'my-game' })).toBe(true);
+  expect(await stopPlaySession({ cwd: '/somewhere-else', slug: 'my-game', write: vi.fn() })).toBe(true);
   expect(await prompt).toBe('/quit');
 });

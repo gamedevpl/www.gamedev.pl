@@ -1,5 +1,13 @@
-import { privatePlayDirectory, readPlayState, lockAge } from './play-state.js';
-import { createHash } from 'node:crypto';
+import { privatePlayDirectory, lockAge } from './play-state.js';
+import {
+  alivePreview as alive,
+  previewKey,
+  listPlaySessions,
+  selectPlaySessions,
+  sessionLines,
+  stopDiscoveredSession,
+  type PreviewSession as Session,
+} from './play-sessions.js';
 import { spawn } from 'node:child_process';
 import {
   closeSync,
@@ -21,28 +29,7 @@ import { prepareWorkspace } from './prepare-workspace.js';
 import { PLAY_RUNTIME } from './play-runtime.js';
 import type { CliTelemetry } from './telemetry.js';
 
-type Session = { url: string; key: string };
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-async function alive(path: string, key: string): Promise<Session | null> {
-  const raw = readPlayState(path);
-  if (!raw) return null;
-  try {
-    const state = JSON.parse(raw) as Session;
-    const url = new URL(state.url);
-    if (
-      state.key !== key ||
-      url.protocol !== 'http:' ||
-      url.hostname !== '127.0.0.1' ||
-      !/^\/[a-f0-9]{48}\/$/.test(url.pathname)
-    )
-      return null;
-    const res = await fetch(`${state.url}status`, { signal: AbortSignal.timeout(600), redirect: 'error' });
-    return res.ok && ((await res.json()) as Session).key === key ? state : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function startLocalPlay(input: {
   root: string;
@@ -58,7 +45,7 @@ export async function startLocalPlay(input: {
   };
   checkAbort();
   const root = realpathSync(input.root);
-  const key = createHash('sha256').update(`${root}\0${input.slug}`).digest('hex');
+  const key = previewKey(root, input.slug);
   const dir = join(tmpdir(), `gamedev-play-${process.getuid?.() ?? 'user'}`);
   privatePlayDirectory(dir);
   const statePath = join(dir, `${key}.json`);
@@ -169,46 +156,35 @@ export async function startLocalPlay(input: {
 export async function stopPlaySession(input: {
   cwd: string;
   slug?: string;
+  all?: boolean;
+  session?: string;
   env?: NodeJS.ProcessEnv;
   write: (line: string) => void;
   onLocalPreview?: (url: string) => void;
 }): Promise<boolean> {
-  const checkout = findCheckout(input.cwd);
-  const slug = input.slug ?? checkout?.slug;
-  const { stopWorkbenchSession } = await import('./workbench-launch.js');
-  const stoppedWorkbench = await stopWorkbenchSession({
-    cwd: checkout?.root ?? input.cwd,
-    slug,
-  });
-  let stoppedPreview = false;
-  if (checkout && slug) {
+  const sessions = await listPlaySessions();
+  const targets = selectPlaySessions(sessions, input);
+  if (!targets.length) {
+    input.write('no local play session is running for this target');
+    if (sessions.length) sessionLines(sessions).forEach((line) => input.write(line));
+    return false;
+  }
+  const failures: string[] = [];
+  for (const target of targets) {
     try {
-      const root = realpathSync(checkout.root);
-      const key = createHash('sha256').update(`${root}\0${slug}`).digest('hex');
-      const dir = join(tmpdir(), `gamedev-play-${process.getuid?.() ?? 'user'}`);
-      privatePlayDirectory(dir);
-      const statePath = join(dir, `${key}.json`);
-      const existing = await alive(statePath, key);
-      if (existing) {
-        const response = await fetch(`${existing.url}stop`, {
-          method: 'POST',
-          headers: { Origin: new URL(existing.url).origin },
-          signal: AbortSignal.timeout(2000),
-        });
-        if (response.ok) stoppedPreview = true;
-      }
-    } catch {
-      // Ignore preview stop error
+      await stopDiscoveredSession(target);
+      input.write(`stopped ${target.kind} ${target.id.slice(0, 14)}: ${target.slug ?? 'unknown game'}`);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
     }
   }
-  const stopped = stoppedWorkbench || stoppedPreview;
-  input.onLocalPreview?.('');
-  if (stopped) {
-    input.write(stoppedWorkbench ? 'local play session stopped' : 'local preview stopped');
-  } else {
-    input.write('no local play session is running');
-  }
-  return stopped;
+  if (!input.session && !failures.length) input.onLocalPreview?.('');
+  if (failures.length)
+    throw new CliError(failures.join('\n'), EXIT_REFUSED, 'Run gamedevpl play --list to check remaining sessions.');
+  input.write(`stopped ${targets.length} local Play session${targets.length === 1 ? '' : 's'}`);
+  const remaining = sessions.filter((session) => !targets.includes(session));
+  if (remaining.length) sessionLines(remaining).forEach((line) => input.write(line));
+  return true;
 }
 
 export async function playGame(input: {
@@ -226,11 +202,10 @@ export async function playGame(input: {
   if (input.stop) {
     const checkout = findCheckout(input.cwd);
     const slug = input.slug ?? checkout?.slug;
-    const mode = checkout?.slug === slug ? 'local' : 'remote';
-    if (!checkout && !input.slug) throw new CliError('choose a game: gamedevpl play <slug>', EXIT_INPUT);
+    const mode = checkout && checkout.slug === slug ? 'local' : 'remote';
     await stopPlaySession({
       cwd: input.cwd,
-      slug,
+      slug: input.slug,
       env: input.env,
       write: input.write,
       onLocalPreview: input.onLocalPreview,
@@ -242,7 +217,7 @@ export async function playGame(input: {
   if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
     throw new CliError('choose a game: gamedevpl play <slug>', EXIT_INPUT);
   let url: string;
-  const mode = checkout?.slug === slug ? 'local' : 'remote';
+  const mode = checkout && checkout.slug === slug ? 'local' : 'remote';
   if (mode === 'local') {
     const session = await startLocalPlay({
       root: checkout!.root,
