@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
+import { ROUND_SEQUENCE_TEXT } from './mcp-round-guide.js';
 
 // Server text describes data; it never hands out shell commands.
 const SHELL_COMMAND =
@@ -33,7 +34,7 @@ describe('MCP tool text', () => {
     await app?.close();
   });
 
-  it('carries no shell commands in tool descriptions or live schema fields', async () => {
+  it('carries no shell commands in instructions, the round sequence, tool descriptions or schema fields', async () => {
     app = await buildApp({
       store: new InMemoryStore(),
       sessionSecret: 'dev-session-secret-change-me',
@@ -56,8 +57,10 @@ describe('MCP tool text', () => {
     const tools = listed.json().result.tools as Array<{ name: string; description?: string } & Record<string, unknown>>;
     expect(tools.length).toBeGreaterThan(20);
 
-    // Instructions still name kit scripts; checked once reworded.
-    const texts: Array<[string, string]> = [];
+    const texts: Array<[string, string]> = [
+      ['instructions', String(init.json().result.instructions ?? '')],
+      ['sequence', ROUND_SEQUENCE_TEXT],
+    ];
     for (const tool of tools) {
       texts.push([tool.name, tool.description ?? '']);
       schemaDescriptions(tool.inputSchema, `${tool.name}.in`, texts);

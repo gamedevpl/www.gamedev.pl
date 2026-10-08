@@ -14,12 +14,11 @@ Creators connect their own coding agent — you — over the remote MCP server a
 > retrying or debugging the connection. Accounts start at
 > [gamedev.pl](https://www.gamedev.pl).
 
-## The source of truth is the server, not this file
+## What the server describes
 
-`start` returns your **workflow** — the ordered start→done loop for this round — and every
-tool description carries the behavioural contract. That text is generated from the live
-server and is more specific than anything written here. **Follow it. When it disagrees
-with this skill, it wins.**
+`start` returns the round's state and its usual `sequence`, and every tool description says
+what that tool does and when it fits. That text is generated from the live server, so it is
+more specific than this file about the current surface.
 
 This skill exists for the part you need _before_ the first call: what kind of thing a
 round is, and which mistakes cost a whole build.
@@ -45,7 +44,7 @@ round is, and which mistakes cost a whole build.
 
 ## The five that actually bite
 
-Everything else is in the workflow `start` hands you. These are the ones agents get wrong
+Everything else is in the sequence `start` returns. These are the ones agents get wrong
 often enough to name up front:
 
 1. **Screenshot as soon as the game draws — or skip, if you have no browser.**
@@ -82,12 +81,38 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    array is non-empty, `read_inbox` and apply before continuing. That is the whole
    mechanism.
 
-## Warnings are instructions
+## Reading round state
 
-Replies carry `warnings` with a `code`. They are not advisory — `call_end`,
-`must_fix_gate`, `module_too_large`, `inbox_pending`, `progress_stale`, `seed_unread`,
-`gate_not_started` each name an action to take before continuing. And `stop: true` means
-stop, immediately.
+Replies carry round state as data, and each piece is worth resolving before carrying on:
+
+- `warnings[].code` names something about the round — `call_end` (delivered, session still
+  open), `must_fix_gate` (the last delivery was refused; only another `submit_sources`
+  re-runs the gate), `module_too_large`, `inbox_pending`, `progress_stale`, `seed_unread`,
+  `gate_not_started`. Each warning's `message` has the detail.
+- `nextSuggestedTool`, when present, names a read or a close the round state alone
+  justifies. It is absent while the next step is your own work, such as finishing or fixing
+  code — `must_deliver` means "deliver before you finish", not "deliver now".
+- `stop: true` means this session can no longer change the round; what is left is wrapping
+  up with the creator.
+
+## With a Creator Kit checkout
+
+With a shell, the kit from `get_kit`'s `kitUrl` (checked against its `sha256`) ships scripts
+that help between deliveries:
+
+- `npm run typecheck -- <slug>` is the only local check worth running while iterating. The
+  server verifies every `mode=preview` delivery, which needs no browser, `npm ci`, capture
+  or playtest.
+- `npm run check:game -- <slug> --preview` (typecheck → smoke → build) is optional near
+  delivery when a browser is available.
+- `npm run play -- <slug> --text` is a stepped NDJSON session over stdin — a cheap way to
+  see whether an input did anything before spending a preview.
+- `npm run trace -- <slug> --accept` records `TRACE.json` for a `mode=publish` seal; the
+  full gate is only worth running right before that seal.
+
+Game sources may not write `window` or `__GAME_HARNESS__` (gate check 17): register
+Agent-mode surfaces through `defineGame().ui()` / `.observation()` / `.agentApi()`, and reach
+anything else through `globalThis`.
 
 ## Two things that surprise people
 

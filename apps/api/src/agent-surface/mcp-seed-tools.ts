@@ -4,7 +4,6 @@ import { moduleSizeWarnings } from '../creation/module-size.js';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   CREATOR_TEXT_SAFETY,
   SESSION_KEY_PROP,
   KIT_ENGINE_REF_PROP,
@@ -129,8 +128,7 @@ export function createSeedTools(deps: SeedToolsDeps): Record<string, SeedToolEnt
         'Fetch the platform-generated compiling seed draft for this round when present. ' +
         'When available/status=available, revise this seed as the opening move. When status=pending, wait and call again before scaffolding. ' +
         'Only scaffold when status=unavailable; that response explicitly says no seed exists for this round. Then scaffold from a kit starter — read starters/<slug>/ via read_kit_file and stage those files (a local kit checkout also ships a create script for this). ' +
-        'Honour warnings.code=module_too_large by splitting oversized modules before growing them. ' +
-        BEHAVIOURAL_CONTRACT,
+        'warnings.code=module_too_large names game/*.ts modules over the soft size budget, best split before they grow.',
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
@@ -178,8 +176,7 @@ export function createSeedTools(deps: SeedToolsDeps): Record<string, SeedToolEnt
         'Pass steer to say what was wrong — without it the same references are picked and the same draft comes back. ' +
         'Not a way to poll: it returns immediately with status=pending, and generation takes a minute or two — ' +
         'keep building and call get_seed again later. Refused once you have staged files or delivered this round, ' +
-        'and capped per job. If it is refused, continue from what you have rather than asking again. ' +
-        BEHAVIOURAL_CONTRACT,
+        'and capped per job. If it is refused, continue from what you have rather than asking again.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -247,8 +244,7 @@ export function createSeedTools(deps: SeedToolsDeps): Record<string, SeedToolEnt
         'editor (EditorKit), examples (allowlisted example games), docs (process/spec/skill docs). ' +
         'Every response carries repoPaths and indexedCommit for attribution, and guidance to verify exact ' +
         'current API signatures via get_kit_api / read_kit_file rather than trusting prose alone. ' +
-        'For kit API surface questions, call get_kit_api first. ' +
-        BEHAVIOURAL_CONTRACT,
+        'For kit API surface questions, call get_kit_api first.',
       inputSchema: {
         type: 'object',
         properties: {

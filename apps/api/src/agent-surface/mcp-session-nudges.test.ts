@@ -77,7 +77,7 @@ describe('mcp-session-nudges', () => {
     expect(nudges.warningsFor(1, 'submit_sources', t0).map((w) => w.code)).not.toContain('call_end');
     const onGate = nudges.warningsFor(1, 'get_gate_verdict', t0);
     expect(onGate.map((w) => w.code)).toContain('call_end');
-    expect(onGate.find((w) => w.code === 'call_end')?.message).toMatch(/one-shot check.*still running/i);
+    expect(onGate.find((w) => w.code === 'call_end')?.message).toMatch(/one-shot read.*still running/i);
     nudges.noteToolSuccess(1, 'end', t0 + 1);
     expect(
       nudges.warningsFor(1, 'get_gate_verdict', t0 + GATE_POLL_MIN_INTERVAL_MS + 2).map((w) => w.code),
@@ -104,7 +104,7 @@ describe('mcp-session-nudges', () => {
     const repeated = nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000);
     expect(repeated.map((w) => w.code)).toContain('gate_poll_backoff');
     const message = repeated.find((w) => w.code === 'gate_poll_backoff')?.message ?? '';
-    expect(message).toMatch(/deliveryId is null.*submit_sources/i);
+    expect(message).toMatch(/deliveryId null means nothing is delivered yet/i);
     expect(message).toContain('retryAfterSeconds=30');
     expect(message).not.toMatch(/~\d+s/);
     expect(

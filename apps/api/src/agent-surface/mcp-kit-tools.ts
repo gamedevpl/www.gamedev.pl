@@ -4,7 +4,6 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   KIT_ENGINE_REF_PROP,
   MCP_VISIBLE_TOOLS,
@@ -101,8 +100,7 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
         'any other specific kit file. ' +
         'With shell egress you can download kitUrl, check it against sha256, and read SKILL.md locally. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
-        'do not assume a `cd` persists across tool calls). ' +
-        BEHAVIOURAL_CONTRACT,
+        'do not assume a `cd` persists across tool calls).',
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
@@ -151,8 +149,7 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
         'omitted, but that risks reading a different kit than the round is pinned to. ' +
         'Gives that orientation without unpacking the whole kit into context; the browse tools ' +
         '(list_kit_files / search_kit_files / read_kit_file) cover anything this digest omitted, ' +
-        'summarized, or named in its omission note. ' +
-        BEHAVIOURAL_CONTRACT,
+        'summarized, or named in its omission note.',
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP, engineRef: KIT_ENGINE_REF_PROP },
@@ -207,8 +204,7 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
       description:
         'List paths inside a pinned Creator Kit (size + text/binary kind). ' +
         'Pass engineRef from get_kit. Optional prefix (e.g. shared/modules) or simple glob (*). ' +
-        'Paginate with limit/offset. Start from get_kit.entry via read_kit_file. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Paginate with limit/offset. Start from get_kit.entry via read_kit_file.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -273,8 +269,7 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
       },
       description:
         'Search text files in a pinned Creator Kit for a substring (case-insensitive). ' +
-        'Pass engineRef from get_kit. Returns path + line + snippet; capped match count. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Pass engineRef from get_kit. Returns path + line + snippet; capped match count.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -10,7 +10,6 @@ import {
   pendingMessagesFromChannel,
   CREATOR_TEXT_SAFETY,
   REPLY_CONTROL,
-  BEHAVIOURAL_CONTRACT,
   type ToolContext,
   type ToolHandler,
   type ToolResult,
@@ -245,8 +244,7 @@ export function createInboxTools(deps: InboxToolsDeps): Record<string, InboxTool
       annotations: { title: 'Acknowledge creator messages', ...CONSUMES, idempotentHint: true },
       description:
         'Acknowledge creator inbox message ids after you have applied them. This is a write — the reply includes stop and pendingMessages ' +
-        'so a concurrent stop or newly queued message is visible without a separate poll. ' +
-        BEHAVIOURAL_CONTRACT,
+        'so a concurrent stop or newly queued message is visible without a separate poll.',
       inputSchema: {
         type: 'object',
         properties: {
