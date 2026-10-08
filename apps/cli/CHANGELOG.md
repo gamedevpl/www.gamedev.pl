@@ -7,6 +7,61 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.27.0 — 2026-10-08
+
+### Added
+
+- Claude command approvals offer “Always allow this exact command (this session)”; matching commands in the same checkout no longer ask again until the CLI exits or `/permissions ask` clears remembered approvals (#1711).
+
+## 0.26.0 — 2026-10-08
+
+### Breaking
+
+- Default `stop` targets the current checkout; an explicit game slug with sessions in multiple directories requires `--session <id>` or `--all` (#1703).
+
+### Added
+
+- `play` shows running local sessions; `play --list` lists their IDs, games, directories and URLs, and `play --stop --session <id>` or `--all` stops one or all (#1703).
+- Choose how local agents handle permissions: Ask (default), Auto-approve (sandboxed) or YOLO (full access, no questions), with `--permissions <mode>` or `/permissions`; the active mode is shown before each task, and Auto-approve or YOLO also run unattended (#1687).
+
+### Fixed
+
+- Push verification skips copying working-tree ignore files before reading the pushed commit’s rules, so a dangling ignore symlink does not abort setup (#1703).
+
+### Internal
+
+- Agent approval protocols (Claude prompt tool, Codex and Muse approvals) now come from genaicode 2.13.0 instead of local copies (#1687).
+
+## 0.25.0 — 2026-10-08
+
+### Added
+
+- `gamedevpl stop` (and `/stop`) stops any running browser Play session or local preview from the terminal (#1680).
+
+### Fixed
+
+- The Play browser tab displays the mascot favicon instead of falling back to a missing icon (#1680).
+- Local Claude, Codex and Muse tasks ask for tool approval in the Play panel or terminal (one invocation, or explicitly the current turn for Codex permission profiles) and continue after your decision; Stop cancels pending approvals (#1679).
+
+## 0.24.1 — 2026-10-06
+
+### Fixed
+
+- Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
+
+## 0.24.0 — 2026-10-05
+
+### Added
+
+- The Play conversation panel can be resized: drag its inner edge (or focus it and use the arrow keys), double-click to reset; the width is kept across reloads (#1631).
+
+### Fixed
+
+- A local Claude Code task can read (but not change) the Creator Kit at the checkout root, and no longer reaches for your claude.ai gamedev.pl connector or other ambient MCP servers mid-task, and your user-level Claude plugins, hooks and settings stay out of it (#1629).
+- Local capture progress shows in the status line instead of flooding the task transcript, and a local task stops after 12 screenshots instead of capturing in a loop (#1632).
+- A mistyped slash command now says so and suggests the nearest one, instead of doing nothing (#1632).
+- Picking an agent or another option no longer lands in the chat transcript as your message or in ↑ history (#1632).
+
 ## 0.23.1 — 2026-10-02
 
 ### Fixed

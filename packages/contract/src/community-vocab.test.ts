@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { BETA_INVITE_STATUSES, CONTRIBUTION_MODES, VOTE_VALUES, WAITLIST_STATUSES } from './community-vocab.js';
+import {
+  BETA_INVITE_STATUSES,
+  CONTRIBUTION_MODES,
+  REMIX_MODES,
+  VOTE_VALUES,
+  WAITLIST_STATUSES,
+} from './community-vocab.js';
 
 describe('community vocab', () => {
   it('lists vote values', () => {
@@ -8,6 +14,10 @@ describe('community vocab', () => {
 
   it('lists contribution modes', () => {
     expect(CONTRIBUTION_MODES).toEqual(['off', 'review']);
+  });
+
+  it('lists remix modes', () => {
+    expect(REMIX_MODES).toEqual(['on', 'off']);
   });
 
   it('lists waitlist statuses', () => {

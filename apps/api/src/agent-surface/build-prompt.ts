@@ -4,7 +4,7 @@ import type { BuildBrief } from './agent-backend.js';
 import { buildPromptOpening, gateRepairPrompt } from './build-prompt-opening.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
-export function buildPrompt(brief: BuildBrief): string {
+export function buildPrompt(brief: BuildBrief, lane: { shell: boolean } = { shell: false }): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const creating = Boolean(brief.createGame);
   const lines = [
@@ -32,7 +32,7 @@ export function buildPrompt(brief: BuildBrief): string {
           '## Before you change anything',
           '',
           'Fetch the version the creator actually played using the MCP tools below (`start` then `get_sources`).',
-          'Do not run bash exploration commands — this execution environment is an MCP-only sandbox with no local checkout.',
+          'Do not explore the filesystem — there is no local checkout; the MCP tools are the only source.',
           'Read the returned files, then make the creator’s changes on top of them.',
           'If get_sources reports nothing delivered yet, the earlier round never finished and you are starting the game rather than revising it.',
           '',
@@ -50,7 +50,7 @@ export function buildPrompt(brief: BuildBrief): string {
     // Measured: 15s of a two-minute round spent finding nothing.
     '- There is no repository checkout here. The kit you unpack is the only copy of any of it.',
     '',
-    ...channelDelivery(brief, creating),
+    ...channelDelivery(brief, creating, lane.shell),
     ...gateRepairPrompt(brief),
   ];
 
@@ -66,12 +66,12 @@ export function buildPrompt(brief: BuildBrief): string {
 }
 
 // The push contract: report and upload over the build channel, clocked.
-function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
+function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): string[] {
   return [
     '## This round is on a clock',
     '',
-    'You have roughly two minutes of wall clock. The session is cancelled when it runs out,',
-    'and a round that has not called `submit_sources` by then delivers nothing at all.',
+    'The session has a hard time limit and is cancelled when it runs out; a round that has',
+    'not called `submit_sources` by then delivers nothing at all.',
     '',
     'Do not reply with a plan. Execute tools immediately.',
     ...(creating
@@ -91,9 +91,19 @@ function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
     "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
     'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
     'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
-    'Call `get_kit` only to obtain kitEngineRef; do not download or browse the kit in this lane.',
-    'Use the injected digest and its template slice as your API and file-shape reference.',
-    'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
+    shell
+      ? 'A larger game comes back truncated: GET its `archive` once (exact headers), unpack, read locally.'
+      : 'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
+    ...(shell
+      ? [
+          'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference.',
+          'Stage with `patch_source_file` / `stage_source_file`, or PUT changed files to `stage_upload_url`.',
+        ]
+      : [
+          'Call `get_kit` for kitEngineRef, then `get_kit_api` once with it: that is your API and file-shape reference.',
+          'Fill its gaps with `search_kit_files` / `read_kit_file`; do not download or unpack the kit archive.',
+          'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
+        ]),
     'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`.',
     'Stage calls sequentially; never parallelize mutating calls.',
     'Before the first preview, stage `game.ts`, `GAME.json`, and the complete editor bundle: compiled `EDITOR.json`, `EDITOR.content.json` for v2, and `game/editor-content.ts`.',
@@ -102,7 +112,9 @@ function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
     'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
     '- Skip optional polish. One screen, one loop, readable visuals.',
     '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
-    "- Audio ids are a fixed catalog: copy from the digest's Audio catalog and never invent one.",
+    shell
+      ? '- Audio ids are a fixed catalog: copy from the unpacked kit’s audio catalog and never invent one.'
+      : "- Audio ids are a fixed catalog: copy from get_kit_api's Audio catalog and never invent one.",
     '- GAME.json must include an engine.modules array; every game needs an EditorKit editor with at least three meaningful tunables or one content collection; stage compiled `EDITOR.json`, `EDITOR.content.json` (v2), and `game/editor-content.ts` before submit. Keep EDITOR.ts local; upload only compiled JSON.',
     '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
     '- The publish gate requires the audio module, so removing it only defers the failure.',

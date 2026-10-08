@@ -5,7 +5,9 @@ import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './plat
 import { buildApp } from './platform/app.js';
 import type { GameSeeder, SeedDraft } from './creation/game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from './platform/ops-console.fixture.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
+import { createLocalSnapshotReader } from './catalog/local-snapshot-reader.js';
 import type { ContentChecker } from './platform/moderation.js';
 import { InMemoryStore, type Store } from './platform/store.js';
 import { mintToken, verifyToken } from './platform/submission-token.js';
@@ -152,6 +154,7 @@ async function createApp(params: {
     store,
     sessionSecret,
     ...(params.adminUids ? { adminUids: params.adminUids } : {}),
+    opsConsole: { verifier: opsTestVerifier },
     ...(params.contentChecker ? { contentChecker: params.contentChecker } : {}),
     ...(params.seedDispatchRoutes ? { seedDispatchRoutes: params.seedDispatchRoutes } : {}),
     submissionRoutes: {
@@ -179,6 +182,8 @@ async function createApp(params: {
       ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
       ...(params.seedDispatch !== undefined ? { seedDispatch: params.seedDispatch } : {}),
       ...(params.dreamJob !== undefined ? { dreamJob: params.dreamJob } : {}),
+      // Production always has a snapshot; tests bake one from the stub.
+      ...(params.githubClient ? { snapshotReader: createLocalSnapshotReader(params.githubClient, 'main') } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -1493,6 +1498,7 @@ describe('submission routes', () => {
       agentBackend: backend,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
     });
     await store.upsertUser({ uid: 'g:boss' });
 
@@ -1525,8 +1531,8 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: getAuthHeaders('g:boss'),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
     expect(response.statusCode).toBe(200);
 
@@ -1562,6 +1568,7 @@ describe('submission routes', () => {
       agentBackend: backend,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
     });
     await store.upsertUser({ uid: 'g:boss' });
 
@@ -1580,8 +1587,8 @@ describe('submission routes', () => {
     failNext = true;
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: getAuthHeaders('g:boss'),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
     expect(response.statusCode).toBe(502);
 
@@ -4017,13 +4024,13 @@ describe('catalog route', () => {
     await app.close();
   });
 
-  it('returns 502 when the catalog cannot be loaded', async () => {
+  it('returns 503 when the catalog snapshot cannot be read', async () => {
     const { githubClient, getCatalog } = createGithubClientStub({});
     getCatalog.mockRejectedValueOnce(new Error('boom'));
     const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
-    expect(res.statusCode).toBe(502);
+    expect(res.statusCode).toBe(503);
 
     await app.close();
   });
@@ -4236,7 +4243,7 @@ describe('published game media route', () => {
 });
 
 describe('published game route', () => {
-  it('assembles a published game from the default branch with a strict CSP', async () => {
+  it('serves a published game baked from the default branch with a strict CSP', async () => {
     const { githubClient, getGameSources } = createGithubClientStub({
       catalog: [catalogEntry('foo', { title: 'Bubble Pop Rush' })],
       gameSources: sampleSources,
@@ -4248,7 +4255,7 @@ describe('published game route', () => {
     const body = res.json();
     expect(body.slug).toBe('foo');
     expect(body.title).toBe('Bubble Pop Rush');
-    expect(body.html).toContain(sampleSources.gameJs);
+    expect(body.html).not.toContain(sampleSources.gameJs);
     expect(body.html).toContain(sampleSources.styleCss);
     expect(body.html).toContain('Content-Security-Policy');
     expect(body.html).toContain("default-src 'none'");
@@ -4273,26 +4280,17 @@ describe('published game route', () => {
     await app.close();
   });
 
-  it('returns 404 when the game directory is missing on the default branch', async () => {
-    const { githubClient } = createGithubClientStub({
-      catalog: [catalogEntry('foo')],
-      gameSources: null,
-    });
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
-
-    const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
-    expect(res.statusCode).toBe(404);
-
-    await app.close();
-  });
-
-  it('caches an assembled game for 5 minutes', async () => {
+  it('caches a snapshot game for 5 minutes', async () => {
     const { githubClient, getGameSources } = createGithubClientStub({
       catalog: [catalogEntry('foo')],
       gameSources: sampleSources,
     });
     let currentTime = 10_000;
-    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+    const { app } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      now: () => currentTime,
+    });
 
     await app.inject({ method: 'GET', url: '/api/games/foo' });
     await app.inject({ method: 'GET', url: '/api/games/foo' });
@@ -6011,7 +6009,7 @@ describe('games published from the store rather than the repo', () => {
 
     const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier' });
 
-    // Served from the repo path (the stub's sources), not refused.
+    // Served from the repo lane's snapshot, not refused.
     expect(response.statusCode).toBe(200);
 
     await app.close();
@@ -6032,6 +6030,7 @@ describe('games published from the store rather than the repo', () => {
       store,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       agentChannel: { gamesStore: publishedGamesStore() },
     });
 
@@ -6044,8 +6043,8 @@ describe('games published from the store rather than the repo', () => {
 
     const del = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/comet-courier/delete',
-      headers: getAuthHeaders('g:boss'),
+      url: opsUrl('/api/admin/games/comet-courier/delete'),
+      headers: opsHeaders('g:boss'),
     });
     expect(del.statusCode).toBe(200);
 
@@ -6718,7 +6717,6 @@ describe('POST /api/submissions/:token/improve', () => {
  */
 describe('operator cancel and retry', () => {
   const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
-  const bossHeaders = () => getAuthHeaders('g:boss');
 
   /** A dispatched job owned by g:test-user, with an operator allowlisted. */
   async function appWithJob(overrides: { backend?: AgentBackend } = {}) {
@@ -6729,6 +6727,7 @@ describe('operator cancel and retry', () => {
       agentBackend: overrides.backend ?? backend,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
     });
     // The auth hook resolves the session's user from the store, so the operator has to
     // exist there like anyone else.
@@ -6744,8 +6743,8 @@ describe('operator cancel and retry', () => {
     for (const verb of ['cancel', 'retry']) {
       const response = await app.inject({
         method: 'POST',
-        url: `/api/admin/jobs/${job.jobId}/${verb}`,
-        headers: getAuthHeaders('g:someone-else'),
+        url: opsUrl(`/api/admin/jobs/${job.jobId}/${verb}`),
+        headers: opsHeaders('g:someone-else'),
       });
       expect(response.statusCode).toBe(404);
     }
@@ -6758,8 +6757,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/cancel`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/cancel`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -6789,8 +6788,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/cancel`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/cancel`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(409);
@@ -6810,8 +6809,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/cancel`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/cancel`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(409);
@@ -6832,8 +6831,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -6864,8 +6863,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -6890,8 +6889,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -6930,12 +6929,13 @@ describe('operator cancel and retry', () => {
       agentBackend: backend,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       store,
     });
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(409);
@@ -6957,8 +6957,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(409);
@@ -6986,6 +6986,7 @@ describe('operator cancel and retry', () => {
       agentBackend: failing,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       store,
     });
     await store.recordJobTransition(job.jobId, {
@@ -6997,8 +6998,8 @@ describe('operator cancel and retry', () => {
 
     const response = await second.app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(502);
@@ -7031,8 +7032,8 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.jobId}/retry`,
-      headers: bossHeaders(),
+      url: opsUrl(`/api/admin/jobs/${job.jobId}/retry`),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(502);
@@ -7173,8 +7174,6 @@ describe('dispatch reaper', () => {
  * (notify-sweep.test.ts); this is the request side.
  */
 describe('operator health re-gate', () => {
-  const bossHeaders = () => getAuthHeaders('g:boss');
-
   async function appWithPublishedGame(publicationState: 'published' | 'disabled' = 'published') {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
@@ -7203,6 +7202,7 @@ describe('operator health re-gate', () => {
       store,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       agentChannel: {
         gamesStore,
         onSourcesDelivered: async (input) => {
@@ -7219,8 +7219,8 @@ describe('operator health re-gate', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/regate',
-      headers: getAuthHeaders('g:someone-else'),
+      url: opsUrl('/api/admin/games/sky-dodge/regate'),
+      headers: opsHeaders('g:someone-else'),
     });
     expect(response.statusCode).toBe(404);
 
@@ -7232,8 +7232,8 @@ describe('operator health re-gate', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/regate',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/games/sky-dodge/regate'),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -7262,36 +7262,13 @@ describe('operator health re-gate', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/regate',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/games/sky-dodge/regate'),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ error: 'not_published', state: 'disabled' });
     expect(triggered).toHaveLength(0);
-
-    await app.close();
-  });
-
-  it('lists the published shelf with its health for the console', async () => {
-    const { app, store } = await appWithPublishedGame();
-    await store.setPublicationHealthCheck('sky-dodge', {
-      version: 'v1',
-      requestedAt: '2026-07-29T10:00:00.000Z',
-      green: false,
-      verdictAt: '2026-07-29T10:20:00.000Z',
-    });
-
-    const response = await app.inject({ method: 'GET', url: '/api/admin/games', headers: bossHeaders() });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json().games).toEqual([
-      expect.objectContaining({
-        slug: 'sky-dodge',
-        currentVersion: 'v1',
-        healthCheck: expect.objectContaining({ green: false }),
-      }),
-    ]);
 
     await app.close();
   });
@@ -7413,8 +7390,6 @@ describe('creator deletes their own published game', () => {
 });
 
 describe('operator deletes a published game', () => {
-  const bossHeaders = () => getAuthHeaders('g:boss');
-
   async function appWithPublishedGame(publicationState: 'published' | 'disabled' = 'published') {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
@@ -7431,6 +7406,7 @@ describe('operator deletes a published game', () => {
       store,
       submissionTokenSecret: secret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
     });
     return { app, store };
   }
@@ -7440,8 +7416,8 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/delete',
-      headers: getAuthHeaders('g:someone-else'),
+      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      headers: opsHeaders('g:someone-else'),
     });
     expect(response.statusCode).toBe(404);
 
@@ -7453,8 +7429,8 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/never-published/delete',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/games/never-published/delete'),
+      headers: opsHeaders('g:boss'),
     });
     expect(response.statusCode).toBe(404);
 
@@ -7466,8 +7442,8 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/delete',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(409);
@@ -7482,8 +7458,8 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/delete',
-      headers: { ...bossHeaders(), 'content-type': 'application/json' },
+      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      headers: { ...opsHeaders('g:boss'), 'content-type': 'application/json' },
       payload: { reason: 'infringing assets' },
     });
 
@@ -7502,8 +7478,8 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/games/sky-dodge/delete',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -7563,7 +7539,12 @@ describe('seeded dispatch', () => {
       githubClient: stub.githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
-      gameSeeder: seederStub({}, (slug) => seeded.push(slug)),
+      gameSeeder: seederStub(
+        {
+          usage: { inputTokens: 30_000, outputTokens: 9_000, cachedInputTokens: 28_000, model: 'gemini-3.8-flash' },
+        },
+        (slug) => seeded.push(slug),
+      ),
     });
 
     expect(response.statusCode).toBe(200);
@@ -7584,7 +7565,7 @@ describe('seeded dispatch', () => {
     // A real token measurement on the ledger — the first thing in it that is not a
     // premium request with no numbers behind it.
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
-    expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
+    expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000, cached: 28_000 });
     expect(seedCost?.by).toBe('gemini-3.8-flash');
 
     await app.close();
@@ -8029,8 +8010,6 @@ describe('seeded dispatch', () => {
 });
 
 describe('operator slug backfill', () => {
-  const bossHeaders = () => getAuthHeaders('g:boss');
-
   /** An app with an operator, plus whatever slug-less records a test asks for. */
   async function appWithLegacyRecords(titles: string[]) {
     const { app, store } = await createApp({ adminUids: 'g:boss' });
@@ -8047,8 +8026,8 @@ describe('operator slug backfill', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/slug-backfill',
-      headers: getAuthHeaders('g:someone-else'),
+      url: opsUrl('/api/admin/slug-backfill'),
+      headers: opsHeaders('g:someone-else'),
     });
 
     expect(response.statusCode).toBe(404);
@@ -8058,7 +8037,11 @@ describe('operator slug backfill', () => {
   it('gives every slug-less game an address derived from its title', async () => {
     const { app, store } = await appWithLegacyRecords(['Space Miner', 'Łódź Nights']);
 
-    const response = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+    const response = await app.inject({
+      method: 'POST',
+      url: opsUrl('/api/admin/slug-backfill'),
+      headers: opsHeaders('g:boss'),
+    });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, dryRun: false, scanned: 2, named: 2, failed: 0 });
@@ -8074,8 +8057,8 @@ describe('operator slug backfill', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/slug-backfill?dryRun=1',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/slug-backfill?dryRun=1'),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.json()).toMatchObject({ dryRun: true, scanned: 1, named: 1 });
@@ -8090,8 +8073,8 @@ describe('operator slug backfill', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/slug-backfill?dryRun=1',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/slug-backfill?dryRun=1'),
+      headers: opsHeaders('g:boss'),
     });
 
     // Without an in-run ledger both would be told 'space-miner', and the rehearsal would
@@ -8105,7 +8088,11 @@ describe('operator slug backfill', () => {
     const { app, store } = await appWithLegacyRecords(['Space Miner']);
     await store.setSubmissionAbandoned(500, new Date().toISOString());
 
-    const response = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+    const response = await app.inject({
+      method: 'POST',
+      url: opsUrl('/api/admin/slug-backfill'),
+      headers: opsHeaders('g:boss'),
+    });
 
     expect(response.json()).toMatchObject({ scanned: 0, named: 0 });
     expect((await store.getSubmission(500))?.slug).toBeUndefined();
@@ -8116,8 +8103,12 @@ describe('operator slug backfill', () => {
   it('finds nothing to do on a second run', async () => {
     const { app } = await appWithLegacyRecords(['Space Miner']);
 
-    await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
-    const second = await app.inject({ method: 'POST', url: '/api/admin/slug-backfill', headers: bossHeaders() });
+    await app.inject({ method: 'POST', url: opsUrl('/api/admin/slug-backfill'), headers: opsHeaders('g:boss') });
+    const second = await app.inject({
+      method: 'POST',
+      url: opsUrl('/api/admin/slug-backfill'),
+      headers: opsHeaders('g:boss'),
+    });
 
     expect(second.json()).toMatchObject({ scanned: 0, named: 0, failed: 0 });
     await app.close();
@@ -8125,8 +8116,6 @@ describe('operator slug backfill', () => {
 });
 
 describe('operator title backfill', () => {
-  const bossHeaders = () => getAuthHeaders('g:boss');
-
   async function appWithTruncatedTitle() {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:boss' });
@@ -8139,6 +8128,7 @@ describe('operator title backfill', () => {
     } as unknown as GamesStore;
     const { app } = await createApp({
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       store,
       agentChannel: { gamesStore },
     });
@@ -8150,8 +8140,8 @@ describe('operator title backfill', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/title-backfill',
-      headers: getAuthHeaders('g:someone-else'),
+      url: opsUrl('/api/admin/title-backfill'),
+      headers: opsHeaders('g:someone-else'),
     });
 
     expect(response.statusCode).toBe(404);
@@ -8161,7 +8151,11 @@ describe('operator title backfill', () => {
   it('replaces the truncated prompt with the delivered SPEC title', async () => {
     const { app, store } = await appWithTruncatedTitle();
 
-    const response = await app.inject({ method: 'POST', url: '/api/admin/title-backfill', headers: bossHeaders() });
+    const response = await app.inject({
+      method: 'POST',
+      url: opsUrl('/api/admin/title-backfill'),
+      headers: opsHeaders('g:boss'),
+    });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -8188,8 +8182,8 @@ describe('operator title backfill', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/title-backfill?dryRun=1',
-      headers: bossHeaders(),
+      url: opsUrl('/api/admin/title-backfill?dryRun=1'),
+      headers: opsHeaders('g:boss'),
     });
 
     expect(response.json()).toMatchObject({ dryRun: true, renamed: 1 });
@@ -8209,11 +8203,16 @@ describe('operator title backfill', () => {
     } as unknown as GamesStore;
     const { app } = await createApp({
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       store,
       agentChannel: { gamesStore },
     });
 
-    const response = await app.inject({ method: 'POST', url: '/api/admin/title-backfill', headers: bossHeaders() });
+    const response = await app.inject({
+      method: 'POST',
+      url: opsUrl('/api/admin/title-backfill'),
+      headers: opsHeaders('g:boss'),
+    });
 
     expect(response.json()).toMatchObject({ scanned: 1, renamed: 0, unchanged: 1 });
     expect(response.json().games[0].changed).toBe(false);

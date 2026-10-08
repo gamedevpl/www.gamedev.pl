@@ -99,8 +99,7 @@
 }
 
 .studio-build-history-summary {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px;
@@ -114,6 +113,7 @@
   justify-content: center;
   color: var(--muted);
   opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .studio-build-history-details {
@@ -241,6 +241,7 @@
   border-radius: 50%;
   background: var(--panel-card);
   border: 1px solid var(--panel-border);
+  flex-shrink: 0;
 }
 
 .studio-build-history-row.is-green .studio-build-history-dot {
@@ -262,10 +263,8 @@
 .studio-build-history-mode {
   font-weight: 600;
   color: var(--text);
-}
-
-.studio-build-history-verdict {
-  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .studio-build-history-playing {
@@ -276,11 +275,22 @@
   background: rgba(0, 228, 172, 0.18);
   color: var(--turquoise);
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.studio-build-history-verdict {
+  color: var(--muted);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .studio-build-history-time {
   color: var(--muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

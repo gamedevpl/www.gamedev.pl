@@ -108,6 +108,10 @@
       "moderation_flag": {
         "title": "A reviewer reported a game",
         "body": "“{{title}}” was reported as {{detail}}. One report is enough to act on."
+      },
+      "proposal_feedback": {
+        "title": "A catalog game got a proposal",
+        "body": "“{{title}}” has a player proposal that passed our checks."
       }
     },
     "game": {
@@ -1084,9 +1088,10 @@
     "openStudio": "Studio"
   },
   "draft": {
-    "title": "A game in the making",
+    "title": "Game not found",
     "loading": "Loading the latest build…",
-    "notFound": "This game isn't available yet. It may still be starting up, or it has already been published.",
+    "notFound": "This game does not exist.",
+    "errorTitle": "Could not load game",
     "error": "We couldn't load this game right now. Please try again in a moment."
   },
   "statusView": {
@@ -1123,7 +1128,10 @@
       "notNow": "Not now",
       "askLess": "Don't suggest these",
       "muted": "Okay — no more concept proposals. You can turn them back on in notification settings.",
-      "close": "Close"
+      "close": "Close",
+      "enlarge": "Enlarge: {{name}}",
+      "compare": "Compare with your game",
+      "holdHint": "Or press and hold the picture to see your game."
     },
     "gallery": {
       "alt": "The game as it looks right now",
@@ -1661,7 +1669,6 @@
     "status": "Your game is in the works",
     "join": "Join the game",
     "invite": "Beta invitation",
-    "health": "Telemetry",
     "review": "Game review",
     "studio": "Creator Studio",
     "notFound": "Page not found",
@@ -2060,19 +2067,6 @@
     "sharedWithoutCode": "Link copied — it carries your settings, not the code change.",
     "shareFailed": "Couldn't make a link for that.",
     "makeItYours": "Make it mine",
-    "keepOfferTitle": "Keep this remix?",
-    "keepOfferBody": "You've shaped this a few times. Save it to your Studio — nothing goes live until you publish.",
-    "keepOfferName": "Name",
-    "keepOfferNamePlaceholder": "My version",
-    "keepOfferConfirm": "Keep in Studio",
-    "keepOfferDismiss": "Not now",
-    "keepOfferMenu": "Save to Studio",
-    "saving": "Saving to Studio…",
-    "saveFailed": "Couldn't save that just now.",
-    "saveQuota": "You've created a lot today — try again tomorrow.",
-    "saveNoSources": "This game can't be saved to Studio yet.",
-    "saveNotYours": "Only this game's creators can save a copy of it to Studio.",
-    "saveNoChanges": "Change something first — then you can keep it.",
     "conceptSeed": "A game like {{slug}}, but my own version",
     "button": "Remix",
     "signInToRemix": "Sign in to remix",
@@ -2083,6 +2077,7 @@
     "tookTooLong": "That took too long — here's your game back, unchanged.",
     "napping": "Editing is napping right now — the game still plays.",
     "notHere": "This game can't be remixed yet — but it still plays.",
+    "off": "Remixing isn't turned on for this game — but it still plays.",
     "placeholderAgain": "Change something else…",
     "buildingWait": "This takes a moment. The game comes back on its own.",
     "try": {
@@ -2164,7 +2159,7 @@
   },
   "proposals": {
     "navTitle": "My proposals",
-    "empty": "Nothing yet. Remix a game you like, then propose your change.",
+    "empty": "Nothing yet. When a game's creator opens it to proposals, you can suggest a change and track it here.",
     "toOwner": "to {{handle}}",
     "toPlatform": "to gamedev.pl",
     "state": {
@@ -2195,7 +2190,11 @@
     "supersededHelp": "This game was updated since your proposal. Rebuild it against the latest version to resubmit.",
     "expiredHelp": "This game went quiet, so the proposal timed out. It wasn't turned down.",
     "watcher": "You're a watcher on this game — you'll get a digest when it changes.",
-    "mergedHelp": "Your change is live."
+    "mergedHelp": "Your change is live.",
+    "acceptedHelp": "Accepted — the creator's agent is building it.",
+    "acceptedHelp_data": "Accepted — the creator applied your changes. They go live when the creator publishes.",
+    "noted": "noted",
+    "notedHelp": "The gamedev.pl team read your proposal — thank you. Catalog games are changed by the team, so it may not ship exactly as you built it."
   },
   "reviews": {
     "navTitle": "Proposals",
@@ -2206,7 +2205,30 @@
     "accept": "Accept…",
     "requestChanges": "Request changes",
     "decline": "Decline",
-    "acceptHelp": "Accepting creates a new version for you — nothing goes live until you publish it.",
+    "block": "Block this person",
+    "blockConfirm": "Block {{handle}}? They won't be able to propose to any of your games. You can unblock them in this game's settings.",
+    "blockConfirmAction": "Block",
+    "blockDone": "Blocked. They can't propose to your games any more.",
+    "blockFailed": "Couldn't block just now. Try again in a moment.",
+    "acceptHelp": "Accepting starts a round where your agent rebuilds this change in your game — the proposer's code is never copied in.",
+    "markNoted": "Mark as noted",
+    "errors": {
+      "round_in_progress": "Your game already has a round building — accept again when it finishes.",
+      "quota_exhausted": "You've used today's rounds — try again tomorrow.",
+      "account_blocked": "Your account can't start rounds right now.",
+      "managed_unavailable": "The builder isn't available right now. Try again later — the proposal stays here.",
+      "content_rejected": "This proposal's text didn't pass our content rules, so it can't be applied. Decline it or ask for changes.",
+      "moderation_unavailable": "Our content check isn't answering just now. Try again in a moment.",
+      "not_published": "Your game isn't published right now, so it can't take a round. Publish it first.",
+      "stale_owner": "You're no longer this game's owner, so you can't accept this.",
+      "no_source_job": "This game has no build to start a round from.",
+      "round_failed": "The round couldn't start. Try again in a moment.",
+      "superseded": "Your game changed since this was proposed, so it's out of date. The proposer can rebuild it on the latest version.",
+      "not_reviewable": "This proposal isn't waiting on you any more — it was already decided or withdrawn.",
+      "not_found": "This proposal is gone — it may have been withdrawn.",
+      "note_rejected": "Your note didn't pass our content rules. Reword it and try again."
+    },
+    "notedHelp": "Closes it as noted. Nothing changes in the game — the team makes any change itself.",
     "expiresIn": "Expires in {{days}} days if unreviewed",
     "changesPlaceholder": "What should they change?",
     "declineReason": {
@@ -2229,10 +2251,15 @@
       "off": "Off",
       "offHelp": "No one can propose changes to this game.",
       "review": "Review proposals",
-      "reviewHelp": "Players and creators can propose changes. Every proposal is checked and test-run first, and you review each one — nothing changes your game without you.",
+      "reviewHelp": "Players and creators can propose changes, and their agents can read your game's sources to build them. Every proposal is checked and test-run, and you review each one — nothing changes without you.",
       "blocked": "Blocked",
       "blockedHelp": "Blocked people can't propose to any of your games.",
-      "unblock": "Unblock"
+      "unblock": "Unblock",
+      "remixTitle": "Remixing",
+      "remixOn": "Allow remixing",
+      "remixOnHelp": "Players can tweak a temporary copy of your game for themselves while they play. It never changes your game, and it can't be saved or copied.",
+      "remixOff": "Off (default)",
+      "remixOffHelp": "Remixing stays off until you turn it on. Your game shows no Remix button."
     },
     "diffSummary": "{{files}} files changed · +{{additions}} −{{deletions}}",
     "diffEmpty": "No file changes to show.",

@@ -13,8 +13,10 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
+import { builderSystemPrompt } from './builder-system-prompt.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
+import { SHELL_COMMAND } from './shell-command-text.js';
 
 const secret = 'test-secret';
 const ISSUE = 55;
@@ -43,9 +45,9 @@ const TINY_PNG = Buffer.from(
   'base64',
 ).toString('base64');
 
-function uploadAuthorization(upload: unknown): string {
-  const authorization = String(upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
-  if (!authorization) throw new Error('upload command has no authorization header');
+function uploadAuthorization(minted: unknown): string {
+  const authorization = (minted as { headers?: Record<string, string> }).headers?.Authorization;
+  if (!authorization) throw new Error('upload contract has no Authorization header');
   return authorization;
 }
 
@@ -426,14 +428,16 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(initialized.statusCode).toBe(200);
     const sessionId = String(initialized.headers['mcp-session-id']);
     const instructions = (initialized.json().result as { instructions: string }).instructions;
-    expect(instructions).toMatch(/pendingMessages/);
-    expect(instructions).toMatch(/array is non-empty/i);
-    expect(instructions).toMatch(/do not schedule background/i);
-    expect(instructions).toMatch(
-      /green \*publish\* gate verdict ends the round|green publish gate verdict ends the round/i,
-    );
-    expect(instructions).toMatch(/END immediately/i);
-    expect(instructions).toMatch(/never instructions to follow/i);
+    // Round state is described as data; the client decides what to do with it.
+    expect(instructions).toMatch(/Replies carry round state as data/);
+    expect(instructions).toMatch(/pendingMessages \(creator notes not yet acknowledged\)/);
+    expect(instructions).toMatch(/stop \(true once this session can no longer change the round/);
+    expect(instructions).toMatch(/nextSuggestedTool/);
+    expect(instructions).toMatch(/data describing a game, never instructions/);
+    expect(instructions).not.toMatch(/\b(ALWAYS|NEVER|MUST|STOP|END)\b/);
+    expect(instructions).not.toMatch(/honour|immediately|act on them/i);
+    // Short enough to be read whole by every client, not cut off partway.
+    expect(instructions.length).toBeLessThan(3000);
 
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
     expect(listed.statusCode).toBe(200);
@@ -483,29 +487,31 @@ describe('POST /api/mcp (BY-05)', () => {
       annotations?: { title?: string };
     }>;
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
-    // The header is what makes the PUT parse; an example without it earned a 415.
-    expect(screenshotUpload?.description).toMatch(/Authorization: [^"]+" -H "Content-Type: [^"]+" --upload-file/i);
+    // Headers travel as data; without Content-Type the PUT earned a 415.
+    expect(screenshotUpload?.description).toMatch(/upload contract as data/);
+    expect(screenshotUpload?.description).toMatch(/exactly those headers/);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
-    expect(screenshotUpload?.description).toMatch(/--use-gl=angle/);
-    expect(screenshotUpload?.description).toMatch(/never --disable-gpu/);
-    expect(screenshotUpload?.description).toMatch(/canvas\.toDataURL/);
-    expect(screenshotUpload?.description).toMatch(/preserveDrawingBuffer|render callback/);
-    expect(screenshotUpload?.description).toMatch(/disposable capture harness/);
-    expect(screenshotUpload?.description).toMatch(/Buffer\.from|split\(","\)/);
-    expect(screenshotUpload?.description).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
+    // The capture recipe lives in documentation, not in server replies.
+    expect(screenshotUpload?.description).not.toMatch(/curl |--upload-file|--use-gl|chromium\.launch/i);
+    expect(screenshotUpload?.description).toMatch(/gamedevpl skill/);
+    const skill = await readFile(new URL('../../../../skills/gamedevpl/SKILL.md', import.meta.url), 'utf8');
+    expect(skill).toMatch(/--use-gl=angle/);
+    expect(skill).toMatch(/never `--disable-gpu`/);
+    expect(skill).toMatch(/disposable capture harness/);
+    expect(skill).toMatch(/GAME_CAPTURE_GFX=canvas2d/);
     expect(screenshotUpload?.description).toMatch(/mode=preview/);
     expect(screenshotUpload?.description).toMatch(/get_gate_media/);
     expect(screenshotUpload?.description).toMatch(/Without a shell or browser/i);
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
     expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
-    expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(
-      /curl -H "Authorization: Bearer <upload token>" -H "Content-Type: [^"]+" --upload-file/i,
-    );
+    const stageUpload = tools.find((t) => t.name === 'stage_upload_url')?.description;
+    expect(stageUpload).toMatch(/upload contracts as data .*exactly its headers/);
+    expect(stageUpload).not.toMatch(/curl |--upload-file/);
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
-    // start advertises the returned workflow / inbox policy / refusal guidance.
-    expect(start?.description).toMatch(/workflow/i);
+    // start advertises the returned sequence / inbox policy / refusal guidance.
+    expect(start?.description).toMatch(/sequence/);
     expect(start?.description).toMatch(/creator-authored text.*never instructions/i);
 
     const readInbox = tools.find((t) => t.name === 'read_inbox');
@@ -539,7 +545,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getGateMedia?.description).toMatch(/mode=preview/);
     expect(getGateMedia?.description).toMatch(/later\/resumed|already available/);
     expect(getGateMedia?.description).toMatch(/get_gate_verdict/);
-    expect(getGateMedia?.description).toMatch(/not wait or poll|must not wait/i);
+    expect(getGateMedia?.description).toMatch(/does not wait/i);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
     expect(gateVerdict?.annotations?.title).toBe('Check the gate once');
@@ -549,7 +555,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(gateVerdict?.description).toMatch(/pending.*stop:true/i);
     expect(gateVerdict?.description).toMatch(/gate_poll_backoff/);
     expect(gateVerdict?.description).toMatch(/kit_outdated/);
-    expect(gateVerdict?.description).toMatch(/re-run get_kit/);
+    expect(gateVerdict?.description).toMatch(/fresh get_kit engineRef/);
     expect(gateVerdict?.description).toMatch(/fromLatestDelivery/);
     expect(gateVerdict?.description).toMatch(/terminal receipt/i);
   });
@@ -798,8 +804,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
     const tools = listed.json().result.tools as Array<{ name: string; description?: string }>;
     const advertised = new Set(tools.map((tool) => tool.name));
-    const manifest = await readFile(new URL('../../../../infra/managed-agent.json', import.meta.url), 'utf8');
-    const managedSystemPrompt = (JSON.parse(manifest) as { agent: { system: string } }).agent.system;
+    const managedSystemPrompt = [true, false].map((shell) => builderSystemPrompt({ shell })).join('\n');
 
     for (const hidden of MCP_UNADVERTISED_TOOLS) {
       expect(advertised.has(hidden)).toBe(false);
@@ -833,6 +838,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(kit.isError).toBe(false);
     const structured = kit.structured as { engineRef?: string; browse?: Record<string, string> };
     expect(structured.engineRef).toBe(engine);
+    expect(JSON.stringify(structured)).not.toMatch(SHELL_COMMAND);
     // Advertised now, so the whole block survives (reverse of the old assertion).
     expect(structured.browse).toEqual({
       list: 'list_kit_files',
@@ -1028,7 +1034,7 @@ declare const GameKit: { defineGame(): unknown };
     const partialWarnings =
       (partialOk.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
     expect(partialWarnings.find((warning) => warning.code === 'patch_incomplete')?.message).toMatch(
-      /retry only failed\[\]/,
+      /listed in failed\[\].*the others landed/,
     );
 
     // Also verify end with ackInboxIds acknowledges creator messages
@@ -1185,7 +1191,7 @@ declare const GameKit: { defineGame(): unknown };
     expect((refused.structured as { error: string }).error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
-  it('start returns the session workflow in both structuredContent and the text body', async () => {
+  it('start returns the round sequence as data, in both structuredContent and the text body', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -1203,81 +1209,63 @@ declare const GameKit: { defineGame(): unknown };
     const result = res.json().result as {
       content: Array<{ type: string; text: string }>;
       structuredContent: {
-        workflow?: unknown;
+        sequence?: unknown;
+        nextSuggestedTool?: string;
+        guideVersion?: string;
         inboxPolicy?: string;
         whenRefused?: string;
       };
     };
 
-    const workflow = result.structuredContent.workflow as string[];
-    expect(workflow.length).toBeGreaterThanOrEqual(6);
-    const joined = workflow.join('\n');
-    expect(joined).toMatch(/get_brief/);
-    expect(joined).toMatch(/get_sources — always, and before any scaffolding decision/);
-    expect(joined).toMatch(/origin=seed is a generated round-0 draft/);
+    const sequence = result.structuredContent.sequence as string[];
+    expect(sequence.length).toBeGreaterThanOrEqual(6);
+    expect(result.structuredContent.nextSuggestedTool).toBe('get_brief');
+    // Clients holding the previous tools/list schema still find the field it required.
+    expect((result.structuredContent as { workflow?: unknown }).workflow).toEqual(sequence);
+    expect(result.structuredContent.guideVersion).toMatch(/^descriptive-/);
+    const joined = sequence.join('\n');
+    // CP-2: every round revises the files get_sources returns, never scaffolds over them.
+    expect(joined).toMatch(/get_brief is the authority/);
+    expect(joined).toMatch(/get_sources returns this game's files/);
+    expect(joined).toMatch(/origin=seed/);
+    expect(joined).toMatch(/revises rather than replaces/);
     expect(joined).toMatch(/seedStatus=pending means a draft is still generating/);
-    expect(joined).not.toMatch(/get_seed/);
-    expect(joined).toMatch(/typecheck -- <slug>/);
-    expect(joined).toMatch(/no browser.*npm ci.*capture.*playtest.*agency/i);
-    expect(joined).toMatch(/server verifies.*preview/i);
-    expect(joined).toMatch(/full gate only immediately before.*publish/i);
-    // CP-2: an improvement round has no seed and a brief that is only the change
-    // request, so without this step the loop reads as "scaffold from the kit" and an
-    // agent following it overwrites the published game it was asked to improve.
-    expect(joined).toMatch(/get_sources/);
-    expect(joined).toMatch(/available:true/);
-    expect(joined).toMatch(/never scaffold over them/i);
-    expect(joined).toMatch(/get_kit/);
     expect(joined).toMatch(/get_kit_api/);
-    // The loop must never send an agent to a web search instead.
-    expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
-    expect(joined).toMatch(/screenshot_upload_url and the `upload` one-liner.{0,40}Authorization/);
-    expect(joined).not.toMatch(/send_screenshot/);
-    expect(joined).toMatch(/--use-gl=angle/);
-    expect(joined).toMatch(/never --disable-gpu/);
-    expect(joined).toMatch(/canvas\.toDataURL/);
-    expect(joined).toMatch(/preserveDrawingBuffer|render callback/);
-    expect(joined).toMatch(/disposable capture harness/);
-    expect(joined).toMatch(/Buffer\.from|split\(","\)/);
-    expect(joined).toMatch(/GAME_CAPTURE_GFX=canvas2d|\?gfx=canvas2d/);
-    expect(joined).toMatch(/Without a shell or browser[\s\S]*get_gate_media/i);
-    expect(joined).toMatch(/later\/resumed|already available/);
-    expect(joined).toMatch(/start does not surface preview_passed/);
-    expect(joined).toMatch(/mode=preview/);
-    expect(joined).toMatch(/stage_source_file|fromStaged/);
-    expect(joined).toMatch(/patch_source_file/);
-    expect(joined).toMatch(/module_too_large/);
-    expect(joined).toMatch(/350 lines|12 KiB/);
-    expect(joined).toMatch(/submit_sources/);
-    expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
-    expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
-    expect(joined).toMatch(/get_gate_verdict/);
-    expect(joined).toMatch(/call get_gate_verdict once|one-shot/i);
-    expect(joined).toMatch(/pending.*stop:true/i);
-    expect(joined).toMatch(/Prefer end over sitting in a get_gate_verdict loop/i);
-    // The stop condition is explicit: green means done — END immediately; no post-green
-    // tools (key retires; get_gate_verdict may still answer via terminal receipt).
-    expect(joined).toMatch(/green \(publish only\): the round is complete/i);
-    expect(joined).toMatch(/END the session immediately/i);
-    expect(joined).toMatch(/Do not report_progress, read_inbox, or ack after green/i);
-    expect(joined).toMatch(/terminal receipt/i);
-    // Both failure branches are covered.
-    expect(joined).toMatch(/red \/ preview_failed:.*submit_sources again on the SAME key/i);
-    expect(joined).toMatch(/kit_outdated:.*fromLatestDelivery/i);
-    expect(joined).toMatch(/do NOT get_sources \+ re-stage/i);
+    expect(joined).toMatch(/not published on the web/);
+    expect(joined).toMatch(/needs no browser, npm ci, capture or playtest/);
+    expect(joined).toMatch(/mode=publish .*full gate/);
+    expect(joined).toMatch(/one-shot read: pending with a deliveryId means the build is still running/);
+    expect(joined).toMatch(/staging alone does not re-run the gate/);
+    expect(joined).toMatch(/green publish verdict completes the round/);
+    // A sequence describes; it does not order the client around or hand out commands.
+    expect(joined).not.toMatch(/\b(ALWAYS|NEVER|MUST|STOP|END)\b|honour|do not|immediately/);
+    expect(joined).not.toMatch(/curl |--upload-file|--use-gl|npm run/);
 
-    // Inbox policy: no scheduled polling; drain non-empty pendingMessages from write replies.
-    expect(result.structuredContent.inboxPolicy).toMatch(/do not schedule background or recurring inbox checks/i);
-    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages array is non-empty/i);
-    expect(result.structuredContent.inboxPolicy).toMatch(/fresh kickoff/i);
+    expect(result.structuredContent.inboxPolicy).toMatch(/pendingMessages on write replies/);
+    expect(result.structuredContent.inboxPolicy).toMatch(/Nothing needs scheduled polling/);
 
-    // The text body mirrors the loop so an agent reading either channel knows it.
+    // The text body mirrors the sequence so an agent reading either channel has it.
     const body = result.content.map((c) => c.text).join('\n');
-    expect(body).toMatch(/Session workflow/i);
+    expect(body).toMatch(/How a round usually runs \(reference, not a script\)/);
     expect(body).toMatch(/get_gate_verdict/);
-    expect(body).toMatch(/END the session/i);
     expect(body).toMatch(/Inbox:/);
-    expect(body).toMatch(/If a call is refused:/i);
+    expect(body).toMatch(/Refusals:/);
+  });
+
+  it('keeps the detail a sequence step dropped in the tool it belongs to', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    const tools = listed.json().result.tools as Array<{ name: string; description: string }>;
+    const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
+    expect(describe('start')).toMatch(/A round usually runs start → show_round → get_brief → get_sources/);
+    expect(describe('get_gate_media')).toMatch(/start does not surface preview_passed/);
+    expect(describe('get_gate_verdict')).toMatch(/Terminal receipt/);
+    expect(describe('submit_sources')).toMatch(/fromLatestDelivery/);
+    expect(describe('end')).toMatch(/builder_handoff/);
+    expect(describe('screenshot_upload_url')).toMatch(/gamedevpl skill/);
   });
 
   // Regression: real Gemini agents only read content's last item, never structuredContent.
@@ -1305,7 +1293,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(lastItem.text).toContain(result.structuredContent.sessionKey);
     // content[0]/content[1] stay unchanged for existing clients (ChatGPT, Claude, Studio).
     expect(JSON.parse(result.content[0].text)).toMatchObject({ sessionKey: result.structuredContent.sessionKey });
-    expect(result.content[1].text).toMatch(/Session workflow/i);
+    expect(result.content[1].text).toMatch(/How a round usually runs/);
   });
 
   it('opens a platform round from its vault-injected round capability', async () => {
@@ -1373,7 +1361,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(whenRefused).toMatch(/Studio thread/i);
     expect(whenRefused).toMatch(/current kickoff/i);
     expect(whenRefused).toMatch(/MCP connection/i);
-    expect(whenRefused).toMatch(/do not retry|do not report an outage/i);
+    expect(whenRefused).toMatch(/not an outage/i);
 
     // The actual refusal an agent hits when the key is stale names the same fix (Studio
     // thread + fresh prompt), so what the agent relays lines up with what the server says.
@@ -1766,14 +1754,19 @@ declare const GameKit: { defineGame(): unknown };
       { 'mcp-session-id': sessionId },
     );
     expect(minted.isError).toBe(false);
-    const { url, upload, maxBytes } = minted.structured as {
+    const { url, method, headers, maxBytes } = minted.structured as {
       url: string;
-      upload: string;
+      method: string;
+      headers: Record<string, string>;
       maxBytes: number;
       expiresAt: string;
     };
     expect(maxBytes).toBe(700 * 1024);
-    expect(upload).toMatch(/^curl -H 'Authorization: Bearer [^']+' -H 'Content-Type: image\/png'/);
+    // Method and headers carry everything the PUT needs.
+    expect(method).toBe('PUT');
+    expect(headers.Authorization).toMatch(/^Bearer \S+$/);
+    expect(headers['Content-Type']).toBe('image/png');
+    expect(JSON.stringify(minted.structured)).not.toMatch(SHELL_COMMAND);
     expect(url).toMatch(/\/api\/agent\/build\/shot\/upload$/);
     const pngBytes = Buffer.from(TINY_PNG, 'base64');
     // ~500 KB of valid PNG prefix + padding would blow the signature check; use a
@@ -1782,10 +1775,7 @@ declare const GameKit: { defineGame(): unknown };
     const put = await app.inject({
       method: 'PUT',
       url: url.replace(/^https?:\/\/[^/]+/, ''),
-      headers: {
-        authorization: upload.match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '',
-        'content-type': 'application/octet-stream',
-      },
+      headers: { authorization: headers.Authorization, 'content-type': headers['Content-Type'] },
       payload: pngBytes,
     });
     expect(put.statusCode).toBe(200);
@@ -1800,12 +1790,12 @@ declare const GameKit: { defineGame(): unknown };
     const huge = Buffer.alloc(800 * 1024, 0x41);
     huge.set(pngBytes.subarray(0, 8), 0);
     const minted2 = await callTool(app, 'screenshot_upload_url', { sessionKey }, { 'mcp-session-id': sessionId });
-    const secondUpload = minted2.structured as { url: string; upload: string };
+    const secondUpload = minted2.structured as { url: string; headers: Record<string, string> };
     const url2 = secondUpload.url.replace(/^https?:\/\/[^/]+/, '');
     const tooBig = await app.inject({
       method: 'PUT',
       url: url2,
-      headers: { authorization: uploadAuthorization(secondUpload.upload), 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(secondUpload), 'content-type': 'image/png' },
       payload: huge,
     });
     expect(tooBig.statusCode).toBe(413);
@@ -2031,7 +2021,9 @@ declare const GameKit: { defineGame(): unknown };
       stop: false,
       reason: 'no_delivery',
     });
-    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(/continue building.*submit_sources/i);
+    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(
+      /nothing has been delivered.*submit_sources/i,
+    );
   });
 
   it('makes pending get_gate_verdict a one-shot stop and warns if the client ignores it', async () => {
@@ -2067,7 +2059,10 @@ declare const GameKit: { defineGame(): unknown };
       stop: true,
       reason: 'gate_pending',
     });
-    expect(String((first.structured as { summary?: string }).summary)).toMatch(/STOP this agent run/i);
+    const summary = String((first.structured as { summary?: string }).summary);
+    expect(summary).toMatch(/still running.*Studio in 2–5 minutes/);
+    expect(summary).not.toMatch(/STOP|any other tool/);
+    expect(first.structured).toMatchObject({ nextSuggestedTool: 'end' });
     const firstWarnings = (first.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(firstWarnings.some((w) => w.code === 'call_end')).toBe(true);
     expect(firstWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(false);
@@ -2096,11 +2091,11 @@ declare const GameKit: { defineGame(): unknown };
     let body: { staged?: { totalBytes: number; maxBytes: number }; budgetHint?: string } = {};
     for (const path of ['game/big-one.ts', 'game/big-two.ts']) {
       const minted = await callTool(app, 'stage_upload_url', { sessionKey, path }, sid);
-      const { url, upload } = minted.structured as Record<string, string>;
+      const { url } = minted.structured as Record<string, string>;
       const put = await app.inject({
         method: 'PUT',
         url: url.replace(/^https?:\/\/[^/]+/, ''),
-        headers: { authorization: uploadAuthorization(upload), 'content-type': 'text/plain; charset=utf-8' },
+        headers: { authorization: uploadAuthorization(minted.structured), 'content-type': 'text/plain; charset=utf-8' },
         payload: Buffer.from(`export const big = '${'x'.repeat(740_000)}';\n`, 'utf8'),
       });
       expect(put.statusCode).toBe(200);
@@ -2133,12 +2128,12 @@ declare const GameKit: { defineGame(): unknown };
     const sessionKey = (started.structured as Record<string, string>).sessionKey;
 
     const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/typeless.ts' }, sid);
-    const { url, upload } = minted.structured as Record<string, string>;
+    const { url } = minted.structured as Record<string, string>;
     const content = 'export const typeless = true;\n';
 
     for (const headers of [
-      { authorization: uploadAuthorization(upload) },
-      { authorization: uploadAuthorization(upload), 'content-type': 'video/mp2t' },
+      { authorization: uploadAuthorization(minted.structured) },
+      { authorization: uploadAuthorization(minted.structured), 'content-type': 'video/mp2t' },
     ]) {
       const put = await app.inject({
         method: 'PUT',
@@ -2167,16 +2162,23 @@ declare const GameKit: { defineGame(): unknown };
 
     const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/extra.ts' }, sid);
     expect(minted.isError).toBe(false);
-    const { url, path, maxBytes, upload } = minted.structured as Record<string, string | number>;
+    const { url, path, maxBytes, headers } = minted.structured as {
+      url: string;
+      path: string;
+      maxBytes: number;
+      headers: Record<string, string>;
+    };
     expect(path).toBe('game/extra.ts');
     expect(maxBytes).toBe(1_000_000);
-    expect(upload).toMatch(/^curl -H 'Authorization: Bearer [^']+' -H 'Content-Type: text\/plain; charset=utf-8'/);
+    expect(headers.Authorization).toMatch(/^Bearer \S+$/);
+    expect(headers['Content-Type']).toBe('text/plain; charset=utf-8');
+    expect(JSON.stringify(minted.structured)).not.toMatch(SHELL_COMMAND);
 
     const content = 'export const stagedViaCurl = true;\n';
     const put = await app.inject({
       method: 'PUT',
       url: (url as string).replace(/^https?:\/\/[^/]+/, ''),
-      headers: { authorization: uploadAuthorization(upload), 'content-type': 'text/plain; charset=utf-8' },
+      headers: { authorization: headers.Authorization, 'content-type': headers['Content-Type'] },
       payload: Buffer.from(content, 'utf8'),
     });
     expect(put.statusCode).toBe(200);
@@ -2232,12 +2234,15 @@ declare const GameKit: { defineGame(): unknown };
     const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
     expect(batchMinted.isError).toBe(false);
     const batchStructured = batchMinted.structured as {
-      uploads: Array<{ path: string; url: string; upload: string }>;
-      uploadScript?: string;
+      uploads: Array<{ path: string; url: string; method: string; headers: Record<string, string> }>;
     };
     expect(batchStructured.uploads).toHaveLength(20);
-    expect(batchStructured.uploadScript).toContain('curl -H');
-    expect(batchStructured.uploadScript?.split(' && ')).toHaveLength(20);
+    for (const item of batchStructured.uploads) {
+      expect(item.method).toBe('PUT');
+      expect(item.headers['Content-Type']).toBe('text/plain; charset=utf-8');
+      expect(item.headers.Authorization).toMatch(/^Bearer /);
+    }
+    expect(JSON.stringify(batchStructured)).not.toMatch(SHELL_COMMAND);
 
     // Parallel concurrent PUT execution — verifies CAS retry resilience under 20-way concurrency
     const putResults = await Promise.all(
@@ -2246,8 +2251,8 @@ declare const GameKit: { defineGame(): unknown };
           method: 'PUT',
           url: item.url.replace(/^https?:\/\/[^/]+/, ''),
           headers: {
-            authorization: uploadAuthorization(item.upload),
-            'content-type': 'text/plain; charset=utf-8',
+            authorization: item.headers.Authorization!,
+            'content-type': item.headers['Content-Type']!,
           },
           payload: Buffer.from(`// content for ${item.path}\n`, 'utf8'),
         }),
@@ -2357,7 +2362,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(staged.isError).toBe(false);
     const warnings = (staged.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
     expect(warnings.some((w) => w.code === 'must_fix_gate')).toBe(true);
-    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/submit_sources again/i);
+    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/next submit_sources/i);
     expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/Staging alone/i);
     // Must not hard-code mode=preview — that contradicts publish red / kit_outdated.
     expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).not.toMatch(/mode:\s*"preview"/);
@@ -2650,6 +2655,8 @@ declare const GameKit: { defineGame(): unknown };
       {
         sessionKey,
         kitEngineRef: ENGINE,
+        // Publishing is never the default; this receipt is the publish lane's.
+        mode: 'publish',
         files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
       },
       { 'mcp-session-id': sessionId },
@@ -2819,7 +2826,7 @@ declare const GameKit: { defineGame(): unknown };
     // A client following these instructions for a brand-new game must not be sent to
     // start, which needs a slug that does not exist yet — the dead end create_game exists
     // to remove.
-    expect(instructions).toMatch(/create_game first/i);
+    expect(instructions).toMatch(/A new game starts with create_game/);
     expect(instructions).toMatch(/creator key/i);
     expect(instructions).toMatch(/only the game slug/i);
     // The kickoff-prompt key is still real, but it is the alternative, not the default.
@@ -2827,11 +2834,9 @@ declare const GameKit: { defineGame(): unknown };
     // The rest of the loop must survive the rewrite.
     expect(instructions).toMatch(/sessionKey/);
     expect(instructions).toMatch(/get_gate_verdict/);
-    expect(instructions).toMatch(/one-shot check/i);
+    expect(instructions).toMatch(/one-shot read/i);
     expect(instructions).toMatch(/pending delivery returns stop:true/i);
-    expect(instructions).toMatch(/deliveryId:null means continue building/i);
     expect(instructions).not.toMatch(/poll get_gate_verdict until green/i);
-    expect(instructions).toMatch(/honour stop/i);
   });
 
   // CP-2: an agent that guessed `phase`/`message` got the channel's bare
@@ -2924,22 +2929,23 @@ declare const GameKit: { defineGame(): unknown };
 
     // `destructiveHint: false` is a claim that the tool is purely *additive*, and a
     // client may skip its approval prompt on that basis — so consuming a cap, replacing
-    // content, or sending a persistent creator message must be marked honestly.
+    // content, or making creator messages stop appearing must be marked honestly.
     for (const name of [
       'submit_sources',
       'ack_inbox',
       'regenerate_seed',
-      'report_progress',
       'end',
       'stage_source_file',
       'patch_source_file',
       'delete_source_file',
       'clear_staged_sources',
       'create_game',
+      'suggest_next_round',
     ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }
-    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft']) {
+    // Adding a note is additive.
+    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft', 'report_progress']) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 
@@ -3645,12 +3651,12 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
       { sessionKey, label: 'first draw' },
       { 'mcp-session-id': sessionId },
     );
-    const shotUpload = minted.structured as { url: string; upload: string };
+    const shotUpload = minted.structured as { url: string; headers: Record<string, string> };
     const shotUrl = shotUpload.url.replace(/^https?:\/\/[^/]+/, '');
     await app.inject({
       method: 'PUT',
       url: shotUrl,
-      headers: { authorization: uploadAuthorization(shotUpload.upload), 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(shotUpload), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
 

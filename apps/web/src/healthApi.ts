@@ -1,4 +1,4 @@
-// Admin-only telemetry reads authenticate with the session cookie.
+// Ops console imports these telemetry reads; session cookie authenticates.
 
 import type { ReviewerCohort, GameHealth, FramePerformanceGroup } from '@gamedevpl/contract';
 

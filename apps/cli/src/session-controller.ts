@@ -25,6 +25,7 @@ export type SessionState = {
   sendStatus: string;
   promptId: number;
   taskId: number;
+  approvalPending: boolean;
 };
 
 export type SessionController = {
@@ -44,7 +45,7 @@ export type SessionController = {
   movePick: (delta: number) => void;
   historyPrev: () => void;
   historyNext: () => void;
-  prompt: (choices?: string[], question?: string) => Promise<string>;
+  prompt: (choices?: string[], question?: string, signal?: AbortSignal) => Promise<string>;
   submit: () => void;
   cancel: () => void;
   close: () => void;
@@ -85,6 +86,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     sendStatus: '',
     promptId: 0,
     taskId: 0,
+    approvalPending: false,
   };
   const listeners = new Set<(next: SessionState) => void>();
   let pending: ((line: string) => void) | null = null;
@@ -112,9 +114,10 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     const resolve = pending;
     pending = null;
     const typed = splitEvidence(line).text.trim();
-    const spoken = line.trim() ? [...state.lines, `› ${shownPrompt(line)}`] : state.lines;
-    if (line.trim()) savedLines = [...savedLines, `› ${shownPrompt(line)}`].slice(-200);
-    if (typed && history[history.length - 1] !== typed) {
+    const answer = state.mode === 'pick' || Boolean(state.question);
+    const spoken = line.trim() ? [...state.lines, `${answer ? '→' : '›'} ${shownPrompt(line)}`] : state.lines;
+    if (line.trim() && !answer) savedLines = [...savedLines, `› ${shownPrompt(line)}`].slice(-200);
+    if (typed && !answer && history[history.length - 1] !== typed) {
       history.push(typed);
       if (history.length > 50) history.shift();
     }
@@ -132,6 +135,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       choices: [],
       question: '',
       pickIndex: 0,
+      approvalPending: false,
     };
     emit();
     resolve(line);
@@ -194,7 +198,14 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       return true;
     },
     stopTask(taskId) {
-      if (closed || stopping || !state.localTask || state.mode !== 'busy' || taskId !== state.taskId) return false;
+      if (
+        closed ||
+        stopping ||
+        !state.localTask ||
+        (state.mode !== 'busy' && !state.approvalPending) ||
+        taskId !== state.taskId
+      )
+        return false;
       stopping = true;
       state = { ...state, queued: [] };
       emit();
@@ -352,7 +363,8 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       };
       emit();
     },
-    prompt(choices, question) {
+    prompt(choices, question, signal) {
+      if (signal?.aborted) return Promise.resolve('');
       if (closed) return Promise.resolve('/quit');
       const nextTurn = choices === undefined && question === undefined;
       if (state.mode === 'busy' && state.draft) followupDraft = state.draft;
@@ -372,7 +384,15 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
         stale('');
       }
       return new Promise((resolve) => {
-        pending = resolve;
+        const finish = (answer: string) => {
+          signal?.removeEventListener('abort', cancel);
+          resolve(answer);
+        };
+        const cancel = () => {
+          if (pending === finish) submitLine('');
+        };
+        pending = finish;
+        signal?.addEventListener('abort', cancel, { once: true });
         histIndex = history.length;
         stash = '';
         state = {
@@ -381,6 +401,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
           promptId: state.promptId + 1,
           choices: choices ?? [],
           question: question ?? '',
+          approvalPending: Boolean(signal),
           pickIndex: 0,
           draft: nextTurn ? followupDraft : '',
           draftCursor: nextTurn ? [...followupDraft].length : 0,
@@ -408,7 +429,16 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       }
       const resolve = pending;
       pending = null;
-      state = { ...state, mode: 'busy', draft: '', draftCursor: 0, choices: [], question: '', pickIndex: 0 };
+      state = {
+        ...state,
+        mode: 'busy',
+        draft: '',
+        draftCursor: 0,
+        choices: [],
+        question: '',
+        pickIndex: 0,
+        approvalPending: false,
+      };
       emit();
       resolve('/quit');
     },

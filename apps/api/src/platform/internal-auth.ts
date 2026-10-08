@@ -80,6 +80,7 @@ const AUDIENCE_ENV_VAR = {
   mpRelay: 'MP_RELAY_AUDIENCE',
   // App calling itself for seeding (seed-dispatch.ts); runtime SA.
   seedDispatch: 'SEED_DISPATCH_AUDIENCE',
+  opsConsole: 'OPS_CONSOLE_AUDIENCE', // ops repo console, identity-only SA
 } as const;
 
 export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
@@ -91,15 +92,10 @@ const CALLER_SA_ENV_VAR: Partial<Record<InternalSweep, string>> = {
   mpRelay: 'MP_RELAY_CALLER_SA',
   spendBrake: 'SPEND_BRAKE_CALLER_SA',
   seedDispatch: 'SEED_DISPATCH_SA',
+  opsConsole: 'OPS_CONSOLE_SA',
 };
 
-/**
- * Build the internal-auth verifier from env: OIDC when both the sweep's audience and
- * NOTIFY_SWEEP_SA are set, otherwise deny-all (endpoint present but closed).
- *
- * Fails closed per sweep rather than globally: configuring the notify sweep must not
- * silently open the scorecard sweep to a token minted for a different URL.
- */
+// OIDC when audience and caller SA are set; else deny-all, per sweep.
 export function createInternalAuthVerifierFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   sweep: InternalSweep = 'notifySweep',

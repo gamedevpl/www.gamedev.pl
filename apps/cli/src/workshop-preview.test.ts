@@ -71,6 +71,9 @@ it.each([true, false])('starts a preview only in interactive delegation: unatten
   ).resolves.toBe(true);
   expect(preflightAdapter).toHaveBeenCalled();
   expect(requireClaudeSubscription).toHaveBeenCalledTimes(1);
+  expect(requireClaudeSubscription).toHaveBeenCalledWith(
+    expect.objectContaining({ args: expect.arrayContaining(['--setting-sources', 'project,local']) }),
+  );
   const { runHeadlessAgent } = await import('./headless-agent.js');
   expect(runHeadlessAgent).toHaveBeenCalledWith(expect.objectContaining({ authCheck: expect.any(Promise) }));
   expect(startLocalPlay).toHaveBeenCalledTimes(unattended ? 0 : 1);

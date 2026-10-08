@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameLoadScreen } from './GameLoadScreen.js';
 import { GameTheater } from './GameTheater.js';
+import { PlayNotFoundPanel } from './PlayNotFoundPanel.js';
 import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 
 type UnpublishedPlayViewProps = {
@@ -54,24 +55,8 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }, [error]);
 
   if (error) {
-    return (
-      <section className="panel status-panel">
-        <h2 className="section-title">{t('draft.title')}</h2>
-        <p className="error">{error}</p>
-        <a
-          className="inline-link"
-          href="/"
-          onClick={(event) => {
-            if (event.defaultPrevented || event.button !== 0) return;
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            event.preventDefault();
-            onExit();
-          }}
-        >
-          {t('statusView.backHome')}
-        </a>
-      </section>
-    );
+    const isNotFound = fetchError?.status === 404 || fetchError?.status === 409;
+    return <PlayNotFoundPanel isNotFound={isNotFound} error={error} onExit={onExit} />;
   }
 
   if (!game) {

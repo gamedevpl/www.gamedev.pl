@@ -93,3 +93,25 @@ it('keeps successful MCP calls in diagnostics and failed MCP calls visible', () 
     rmSync(dirname(output.path), { recursive: true, force: true });
   }
 });
+
+it('keeps local capture chatter in the status line and failures in the transcript', () => {
+  const shown: string[] = [];
+  const activity: string[] = [];
+  const output = taskOutput(
+    (line) => shown.push(line),
+    (text) => activity.push(text),
+  );
+  try {
+    output.progress('Adding car collisions', false);
+    output.write('Local capture: waiting for the current build…');
+    expect(activity.at(-1)).toBe('Local capture: waiting for the current build…');
+    output.write('Local capture: taking a screenshot…');
+    output.write('Local capture ready (desktop, build 83739c7d0b64).');
+    output.write('Local capture failed: Browser timeout: Page.captureScreenshot');
+    expect(shown).toEqual(['Local capture failed: Browser timeout: Page.captureScreenshot']);
+    expect(activity.at(-1)).toBe('Local capture ready (desktop, build 83739c7d0b64).');
+    expect(readFileSync(output.path, 'utf8')).toContain('Local capture: taking a screenshot…');
+  } finally {
+    rmSync(dirname(output.path), { recursive: true, force: true });
+  }
+});

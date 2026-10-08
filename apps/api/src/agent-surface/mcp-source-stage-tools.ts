@@ -1,20 +1,19 @@
 import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
-import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
+import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken } from './agent-upload-token.js';
+import { UPLOAD_REQUEST_PROPS, uploadRequest } from './upload-request.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
-import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
-import { gameManifestHint } from './game-manifest-hint.js';
+import { largeSourceFileHint } from '../creation/module-size.js';
+import { stagedFileHint } from './staged-file-hint.js';
 import type { SubmissionRecord } from '../platform/store.js';
 import type { AgentTokenClaims } from '../platform/agent-token.js';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
-  WARNINGS_PROP,
   REPLY_CONTROL,
   channelControlFields,
   pendingMessagesFromChannel,
@@ -22,13 +21,6 @@ import {
   type ToolHandler,
   type ToolResult,
 } from './mcp-tool-support.js';
-
-const READS = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
 
 const WRITES = {
   readOnlyHint: false,
@@ -78,88 +70,11 @@ export interface SourceStageToolEntry {
   handler: ToolHandler;
 }
 
-// Fetch existing sources, then push new content into staging.
+// Push new content into staging; get_sources lives in mcp-source-read-tools.
 export function createSourceStageTools(deps: SourceStageToolsDeps): Record<string, SourceStageToolEntry> {
   const { resolveAuth, injectChannel, agentTokenSecret, now, assertDeliverableSourcePath } = deps;
 
   return {
-    get_sources: {
-      annotations: { title: 'Fetch existing game sources', ...READS },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          available: { type: 'boolean', description: 'True means this game has files — continue them.' },
-          origin: {
-            type: ['string', 'null'],
-            description: "'seed' = a generated round-0 draft; 'delivery' = a previous round's sources.",
-          },
-          delivery: { type: ['object', 'null'] },
-          files: {
-            type: 'array',
-            items: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } },
-          },
-          notes: { type: ['string', 'null'], description: 'Hand-off note from the round-0 draft, when there is one.' },
-          references: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Published games the round-0 draft was modelled on, when there is one.',
-          },
-          seedStatus: { type: 'string', description: 'pending = a round-0 draft is still generating; call again.' },
-          ...WARNINGS_PROP,
-        },
-        required: ['available', 'files'],
-      },
-      description:
-        "Fetch this game's current sources — the first call of every round, including the first round. " +
-        'A new game already has files: a generated round-0 draft (origin=seed) whose references and notes come ' +
-        'with it. A later round returns what the previous round delivered (origin=delivery). Either way, continue ' +
-        'those files; never scaffold over them. seedStatus=pending means a draft is still generating — browse the ' +
-        'kit briefly and call this again rather than scaffolding. ' +
-        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
-        BEHAVIOURAL_CONTRACT,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          sessionKey: SESSION_KEY_PROP,
-          version: {
-            type: 'string',
-            description: "Optional. Reserved; the channel returns the job's latest delivery or published version.",
-          },
-        },
-        required: [],
-      },
-      handler: async (args, ctx) => {
-        const auth = await resolveAuth(ctx, args);
-        if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.SOURCES, auth.channelToken);
-        const body = res.json() as {
-          error?: string;
-          delivery?: unknown;
-          origin?: 'seed' | 'delivery' | null;
-          files?: Array<{ path: string; content: string }>;
-          notes?: string | null;
-          references?: string[];
-          seedStatus?: string;
-        };
-        if (res.statusCode !== 200) {
-          return toolErr(body.error ?? `sources failed (${res.statusCode})`);
-        }
-        const files = body.files ?? [];
-        const sizeWarnings = moduleSizeWarnings(files);
-        // Files decide; a round-0 draft counts as sources too.
-        return toolOk({
-          available: files.length > 0,
-          origin: body.origin ?? (body.delivery ? 'delivery' : null),
-          delivery: body.delivery ?? null,
-          files,
-          ...(body.notes ? { notes: body.notes } : {}),
-          ...(body.references?.length ? { references: body.references } : {}),
-          ...(body.seedStatus ? { seedStatus: body.seedStatus } : {}),
-          ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
-        });
-      },
-    },
-
     stage_upload_url: {
       outputSchema: {
         type: 'object',
@@ -168,8 +83,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           expiresAt: { type: 'string' },
           expiresInSeconds: { type: 'number' },
           path: { type: 'string' },
-          upload: { type: 'string' },
-          uploadScript: { type: 'string' },
+          ...UPLOAD_REQUEST_PROPS,
           maxBytes: { type: 'number' },
           uploads: {
             type: 'array',
@@ -178,12 +92,12 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
               properties: {
                 path: { type: 'string' },
                 url: { type: 'string' },
-                upload: { type: 'string' },
+                ...UPLOAD_REQUEST_PROPS,
                 expiresAt: { type: 'string' },
                 expiresInSeconds: { type: 'number' },
                 maxBytes: { type: 'number' },
               },
-              required: ['path', 'url', 'upload', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
+              required: ['path', 'url', 'method', 'headers', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
             },
           },
           rejected: {
@@ -200,15 +114,13 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       // Not READS: each call mints a fresh nonce, so never idempotent.
       annotations: { title: 'Get stage upload URL(s)', ...WRITES },
       description:
-        'Stage new or fully rewritten source file(s) when you have curl/shell egress. ' +
-        'ALWAYS mint upload URLs in batch: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
-        `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; split larger sets into batches of at most ${MAX_STAGE_UPLOAD_BATCH}; do NOT make individual parallel calls per file). Pass \`path\` only for a lone single file. ` +
-        'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) verbatim ' +
-        '(curl -H "Authorization: Bearer <upload token>" -H "Content-Type: text/plain; charset=utf-8" --upload-file <file> "$url") or `uploadScript`; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same ' +
+        'Stage new or fully rewritten source file(s) when you can make HTTP uploads yourself. ' +
+        'Mints upload URLs in batch: `paths: ["file1.ts", "file2.ts", ...]` covers several files per call ' +
+        `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; larger sets split into batches of ${MAX_STAGE_UPLOAD_BATCH}), cheaper than one call per file. \`path\` alone covers a single file. ` +
+        "Returns short-lived upload contracts as data (path, url, method, headers, maxBytes per file): PUT each file's bytes to its url with exactly its headers, using whatever HTTP client you have; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same " +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
         'staging receipt only — read stop/pendingMessages from your other channel tools. Then submit_sources({ fromStaged: true, … }). ' +
-        'Use stage_source_file / patch_source_file when you have no shell. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Use stage_source_file / patch_source_file when you have no shell.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -298,7 +210,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             expiresAt,
             expiresInSeconds: ttlSeconds,
             path,
-            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
+            ...uploadRequest(token, 'text/plain; charset=utf-8'),
             maxBytes: 1_000_000,
           });
         }
@@ -318,7 +230,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           return {
             path,
             url,
-            upload: uploadCurlCommand(url, token, path, 'text/plain; charset=utf-8'),
+            ...uploadRequest(token, 'text/plain; charset=utf-8'),
             expiresAt,
             expiresInSeconds: ttlSeconds,
             maxBytes: 1_000_000,
@@ -327,7 +239,6 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
 
         return toolOk({
           uploads,
-          uploadScript: uploads.map((u) => u.upload).join(' && '),
           expiresAt,
           expiresInSeconds: ttlSeconds,
           ...(rejected.length ? { rejected } : {}),
@@ -368,14 +279,13 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       },
       description:
         'Upload ONE game source file into this round’s staging buffer (full rewrite) via inline content. ' +
-        'Use stage_upload_url + its returned `upload` one-liner (it carries the Content-Type header) when you have shell egress — re-emitting file contents ' +
+        'Use stage_upload_url (PUT each file to its returned url with its returned headers) when you can make HTTP uploads yourself — re-emitting file contents ' +
         'as a tool argument burns output tokens. Use this tool for new files when you have no shell; ' +
         'for edits to an existing path use patch_source_file so you do not re-emit a whole large file. ' +
         'For a large tree, staging file-by-file avoids one giant submit_sources files[] payload, which some clients truncate. ' +
         'Call once per path, then submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
-        'After preview_failed / red (warnings.code=must_fix_gate), staging alone does not re-run the gate — you must submit_sources again. ' +
-        'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules. ' +
-        BEHAVIOURAL_CONTRACT,
+        'After preview_failed / red (warnings.code=must_fix_gate), staging alone does not re-run the gate; the next submit_sources does. ' +
+        'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -446,7 +356,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         const hint =
           body.hint ??
           (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes, content) : null);
-        const manifestHint = body.manifestHint ?? gameManifestHint(body.path ?? path, content);
+        const manifestHint = body.manifestHint ?? stagedFileHint(body.path ?? path, content);
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),

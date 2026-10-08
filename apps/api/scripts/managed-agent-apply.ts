@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { builderSystemPrompt } from '../src/agent-surface/builder-system-prompt.js';
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -9,6 +10,8 @@ const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(
 
 const manifestPath = value('manifest') ?? fileURLToPath(new URL('../../../infra/managed-agent.json', import.meta.url));
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { agent: Record<string, unknown> };
+// Sessions override it anyway; this keeps the Console copy honest.
+manifest.agent.system = builderSystemPrompt({ shell: true });
 const existing = value('agent-id') ?? process.env.MANAGED_AGENT_ID?.trim();
 
 if (flag('dry-run')) {

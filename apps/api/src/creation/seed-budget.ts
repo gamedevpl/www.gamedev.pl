@@ -1,5 +1,20 @@
 import type { GenerationResult } from 'genaicode';
-import { rateForModel, type TokenRate } from './token-prices.js';
+import { usageOf } from './seed-usage.js';
+
+// Reservation rates from the former public token-price table, dated 2026-09-29.
+interface TokenRate {
+  inputPerMTok: number;
+  outputPerMTok: number;
+}
+const RATES: Readonly<Record<string, TokenRate>> = {
+  'claude-sonnet-5': { inputPerMTok: 2, outputPerMTok: 10 },
+  'claude-sonnet-5-5': { inputPerMTok: 2, outputPerMTok: 10 },
+  'claude-opus-5-5': { inputPerMTok: 4, outputPerMTok: 20 },
+  'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5 },
+  'gemini-3.8-flash': { inputPerMTok: 1.5, outputPerMTok: 7.5 },
+  'gemini-3.7-flash': { inputPerMTok: 1.5, outputPerMTok: 7.5 },
+  'gemini-3.5-flash-lite': { inputPerMTok: 0.3, outputPerMTok: 2.5 },
+};
 
 export const SEED_TOTAL_TIMEOUT_MS = 120_000;
 export const SEED_MAX_USD = 0.15;
@@ -17,11 +32,12 @@ export class SeedBudget {
   private readonly deadline: number;
 
   constructor(
-    model: string,
+    private readonly model: string,
     private readonly log?: Log,
     timeoutMs = SEED_TOTAL_TIMEOUT_MS,
+    private readonly provider = 'vertex',
   ) {
-    const rate = rateForModel(model);
+    const rate = RATES[model.trim().toLowerCase()];
     if (!rate) throw new Error(`seed budget: unpriced model ${model}`);
     this.rate = rate;
     const duration = Math.min(timeoutMs, SEED_TOTAL_TIMEOUT_MS);
@@ -83,7 +99,7 @@ export class SeedBudget {
     );
     const result = await this.wait(work(signal, tokens), timeoutMs);
     // Unknown usage cannot fund another call after a paid request.
-    const output = result.usage?.outputTokens ?? tokens;
+    const output = result.usage ? usageOf(result, this.provider, this.model).outputTokens : tokens;
     this.outputUsed -= tokens - output;
     this.log?.info(
       { stage, ms: Date.now() - startedAt, usage: result.usage, outputUsed: this.outputUsed },

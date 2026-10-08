@@ -1,4 +1,6 @@
-export const PHONE_PAGE = String.raw`<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Play on phone</title>
+import { MASCOT_FAVICON_DATA_URL } from './mascot-svg.js';
+
+export const PHONE_PAGE = String.raw`<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Play on phone</title><link rel="icon" type="image/svg+xml" href="${MASCOT_FAVICON_DATA_URL}">
 <style>html,body{margin:0;background:#080c12;color:#fff;font:16px system-ui}iframe{position:fixed;inset:0;width:100%;height:100%;border:0}nav{position:fixed;top:10px;left:10px;right:10px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}nav>*{pointer-events:auto}button,textarea{font:inherit;padding:10px;border-radius:8px}#status{background:#111c;padding:8px}dialog{background:#16202f;color:white;width:85%;border:0;border-radius:14px}textarea{width:90%}</style>
 <iframe id="game" sandbox="allow-scripts allow-pointer-lock" title="Game"></iframe><nav><span id="status">Connecting…</span><button id="update">Load latest build</button><button id="report">Report a moment</button></nav>
 <dialog id="sheet"><h2>Send feedback to computer</h2><p>Includes the shown build, screenshot and diagnostic trace when available.</p><textarea id="text" maxlength="8000"></textarea><p id="notice"></p><button id="send">Send</button><button id="close">Close</button></dialog>

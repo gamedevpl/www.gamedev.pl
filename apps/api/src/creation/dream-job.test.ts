@@ -56,13 +56,20 @@ describe('createDreamJob', () => {
   });
 
   it('runs once per version, even when the first run produced nothing', async () => {
-    const { store, run } = await harness({ hud: undefined });
-    expect(await run()).toBe('no_hud');
+    const { store, run } = await harness({ hud: [], frame: null });
+    expect(await run()).toBe('no_frames');
     expect(await run()).toBe('already_ran');
     const refreshed = await store.getSubmission(7);
     expect(refreshed?.dreamRun?.version).toBe('v1');
     await store.setSubmissionPreviewVersion(7, 'v2');
-    expect(await run({ version: 'v2' })).toBe('no_hud');
+    expect(await run({ version: 'v2', screenshotPath: undefined })).toBe('no_screenshot');
+  });
+
+  it('dreams a game that declares no HUD, letting the model find the UI', async () => {
+    const { store, frames, run } = await harness({ hud: undefined });
+    expect(await run()).toBe('posted');
+    expect(frames.requests.map((request) => request.hudRegions)).toEqual([[], []]);
+    expect(await store.listCreatorMessages(7)).toHaveLength(1);
   });
 
   it('skips a delivery whose card was already posted, without touching the store', async () => {
@@ -351,9 +358,18 @@ describe('createDreamJob', () => {
   });
 
   it('records the builder the card was drawn under', async () => {
-    const { store, run } = await harness({ hud: [], record: { builder: 'self' } });
+    const { store, run } = await harness({ hud: [], record: { builder: 'platform' } });
     expect(await run()).toBe('posted');
-    expect((await store.listCreatorMessages(7))[0]?.proposal?.builder).toBe('self');
+    expect((await store.listCreatorMessages(7))[0]?.proposal?.builder).toBe('platform');
+  });
+
+  it('draws nothing for a round an external agent builds', async () => {
+    const { store, frames, ideas: generator, run } = await harness({ hud: [], record: { builder: 'self' } });
+    expect(await run()).toBe('external_builder');
+    expect(generator.requests).toEqual([]);
+    expect(frames.requests).toEqual([]);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    expect((await store.getSubmission(7))?.dreamRun).toBeUndefined();
   });
 
   it('needs a real PNG capture to start from', async () => {

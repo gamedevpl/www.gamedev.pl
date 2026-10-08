@@ -41,7 +41,9 @@ are outside the supported measurement range; background/suspension artifacts mus
 not become low-FPS game findings. Unsupported optional payloads are dropped without
 rejecting an otherwise valid legacy heartbeat.
 
-The operator's existing `GET /api/admin/telemetry/health?days=N` adds `performance`:
+The operator health view adds `performance` (originally on
+`GET /api/admin/telemetry/health?days=N`; that route is gone and the view is now computed
+by the operator console in the private ops repo):
 aggregates grouped by slug, content version, normalized device and rendering context.
 It exposes observed duration, session/window counts, cadence FPS, optional presented
 FPS, histogram percentile upper bounds, maximum gap and counts above 100/250 ms.

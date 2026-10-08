@@ -23,6 +23,7 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { materializeCandidate } from './gate-materialize.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
+import { previewStillsNote } from './preview-stills-note.js';
 import {
   createGateStageBannerParser,
   gateProgressFor,
@@ -433,7 +434,8 @@ export async function runGate(
         green: true,
         report:
           `check:game --preview passed against engine ${engineCommit ?? engineRef}; ` +
-          `${artifacts.length} artifact(s) stored`,
+          `${artifacts.length} artifact(s) stored` +
+          (previewStills ? previewStillsNote(check.output, screenshot) : ''),
         artifacts,
         durationMs: now() - startedAt,
         ...(engineCommit ? { engineCommit } : {}),

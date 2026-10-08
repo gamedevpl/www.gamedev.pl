@@ -385,6 +385,7 @@ describe('catalog playback', () => {
               media: null,
               multiplayer: null,
               editor: 'content',
+              remixOn: true,
               submittedBy: 'nightshift',
               creatorHandle: 'nightshift',
             },

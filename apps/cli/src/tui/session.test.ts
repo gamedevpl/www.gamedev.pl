@@ -13,6 +13,27 @@ describe('tui session', () => {
     session.movePick(1);
     session.submit();
     expect(await picked).toBe('chaotic');
+    expect(session.get().lines.at(-1)).toBe('→ chaotic');
+  });
+
+  it('keeps picker answers out of the conversation history', async () => {
+    const session = createTuiSession('banner');
+    const typed = session.prompt();
+    session.setDraft('fix the cars');
+    session.submit();
+    await typed;
+    const picked = session.prompt(['claude', 'codex'], 'Which agent?');
+    session.submit();
+    expect(await picked).toBe('claude');
+    const modelId = session.prompt([], 'Model ID');
+    session.setDraft('opus');
+    session.submit();
+    expect(await modelId).toBe('opus');
+    expect(session.savedHistory().prompts).toEqual(['fix the cars']);
+    expect(session.savedHistory().lines).toEqual(['› fix the cars']);
+    session.prompt();
+    session.historyPrev();
+    expect(session.get().draft).toBe('fix the cars');
   });
 
   it('keeps live status across submit and stores the picker question', async () => {

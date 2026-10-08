@@ -3,17 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { isProposalClosed, myProposals, withdrawProposal, type Proposal, type ProposalState } from './proposalsApi.js';
 
 /**
- * The proposer's tracker: what I sent, and what happened to it.
- *
- * Its whole job is to answer "whose move is it" without the reader working it out. A
- * proposal spends most of its life waiting on somebody, and which somebody it is decides
- * what the person looking at this page should do — fix something, wait, or move on. So the
- * state chip is the loudest thing on each row and the help text says the quiet part: an
- * expired proposal was not turned down, a superseded one is not a rejection either.
- *
- * Gate detail deliberately stops at pass/fail. The report is a build log; a player who
- * described a change in a sentence cannot act on a stack trace, and showing one would
- * suggest they should.
+ * The proposer's tracker: what I sent, and what happened to it. Its whole job is to
+ * answer "whose move is it" without the reader working it out. A proposal spends most
+ * of its life waiting on somebody, and which somebody decides what the reader should do,
+ * so the state chip is the loudest thing on each row and the help text says the quiet
+ * part: expired and superseded are not rejections. Gate detail stops at pass/fail: a
+ * player cannot act on a build log. An accepted proposal to a platform game reads
+ * "noted" — the team read it, and no PR follows.
  */
 
 /** How each state reads as a chip: neutral, good, or needs-attention. */
@@ -35,21 +31,21 @@ function chipTone(state: ProposalState): 'ok' | 'warn' | 'err' | 'plain' {
   }
 }
 
-function StateChip({ state }: { state: ProposalState }) {
+function StateChip({ state, noted }: { state: ProposalState; noted: boolean }) {
   const { t } = useTranslation();
   const tone = chipTone(state);
   return (
     <span className={`proposal-chip${tone === 'plain' ? '' : ` is-${tone}`}`}>
-      {t(`proposals.state.${state}`, { defaultValue: state })}
+      {noted ? t('proposals.noted') : t(`proposals.state.${state}`, { defaultValue: state })}
     </span>
   );
 }
 
 function ProposalRow({ proposal, onWithdraw }: { proposal: Proposal; onWithdraw: (id: string) => void }) {
   const { t } = useTranslation();
-  // Only ever the newest reviewer turn: the thread is a conversation, but the tracker is a
-  // status board, and a row that grew with every exchange would bury the state chip.
+  // Only the newest reviewer turn: the tracker is a status board.
   const latestFromReviewer = [...proposal.thread].reverse().find((message) => message.from === 'reviewer');
+  const noted = proposal.platformOwned && proposal.state === 'accepted';
 
   return (
     <article className="proposal-card">
@@ -63,7 +59,7 @@ function ProposalRow({ proposal, onWithdraw }: { proposal: Proposal; onWithdraw:
       </div>
 
       <div className="proposal-chips">
-        <StateChip state={proposal.state} />
+        <StateChip state={proposal.state} noted={noted} />
         {proposal.gate ? (
           <span className={`proposal-chip ${proposal.gate.green ? 'is-ok' : 'is-err'}`}>
             {proposal.gate.green ? t('proposals.checksPassed') : t('proposals.checksFailed')}
@@ -83,13 +79,17 @@ function ProposalRow({ proposal, onWithdraw }: { proposal: Proposal; onWithdraw:
 
       {proposal.state === 'superseded' ? <p className="proposal-sub">{t('proposals.supersededHelp')}</p> : null}
       {proposal.state === 'expired' ? <p className="proposal-sub">{t('proposals.expiredHelp')}</p> : null}
+      {noted ? <p className="proposal-sub">{t('proposals.notedHelp')}</p> : null}
+      {proposal.state === 'accepted' && !noted ? (
+        <p className="proposal-sub">{t('proposals.acceptedHelp', { context: proposal.acceptedVia })}</p>
+      ) : null}
       {proposal.state === 'merged' ? (
         <p className="proposal-sub">
           {t('proposals.mergedHelp')} {t('proposals.watcher')}
         </p>
       ) : null}
 
-      {!isProposalClosed(proposal.state) ? (
+      {!isProposalClosed(proposal.state) && proposal.state !== 'accepted' ? (
         <div className="proposal-actions">
           <button type="button" className="remix-btn is-quiet" onClick={() => onWithdraw(proposal.id)}>
             {t('proposals.withdraw')}

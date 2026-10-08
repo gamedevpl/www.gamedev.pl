@@ -1,8 +1,9 @@
-import type { GenAIClient } from 'genaicode';
+import { image, user, type GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { normalizeLocale } from '../platform/translate.js';
+import { callWithVertexResilience } from '../platform/vertex-resilience.js';
 
 // Layer-2 idea chips; generation always fails open.
 
@@ -27,6 +28,12 @@ export interface NextIdeasParams {
   // True flips "next build" framing to "next thing for the live game".
   published: boolean;
   locale?: string;
+  // The game as it looks now, base64 PNG.
+  screenshotPng?: string;
+  // Recent round notes, oldest first: what was asked and delivered.
+  history?: string[];
+  // Each retry is another billed call; the caller books it.
+  onRetry?: () => void;
 }
 
 export interface NextIdeaGenerator {
@@ -35,7 +42,8 @@ export interface NextIdeaGenerator {
   readonly model: string;
 }
 
-export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 8_000;
+// Async dream job; an image prompt ran past 8s.
+export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 45_000;
 export const MAX_NEXT_IDEAS = 3;
 // Owner policy: 3.x only.
 export const DEFAULT_NEXT_IDEAS_MODEL = 'gemini-3.8-flash';
@@ -119,6 +127,8 @@ export class VertexNextIdeaGenerator implements NextIdeaGenerator {
 ${stageNote}
 
 Propose up to ${MAX_NEXT_IDEAS} concrete, distinct next steps. Each must be:
+- New to this game. The concept below is only the starting point: the game has grown since. If a screenshot or recent rounds are given, treat what they show as already built and never propose it again — extend or deepen it instead.
+- Visible in the game world. An artist will repaint the screenshot to show each idea while keeping the game's interface untouched, so prefer changes to what is on the field (units, terrain, effects, enemies, weather, level layout) over ideas that are only a new menu, meter or HUD panel.
 - Something a single build round could plausibly finish — never "add multiplayer" or "rebuild the engine".
 - Specific enough to act on immediately, not a vague direction like "make it more fun".
 - Genuinely different from the others (do not propose three variations of the same idea).
@@ -140,13 +150,27 @@ Game concept:
 """
 ${params.spec}
 """
-${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.map((line) => `- ${line}`).join('\n')}\n` : ''}`;
+${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.map((line) => `- ${line}`).join('\n')}\n` : ''}${params.history?.length ? `\nRecent rounds, oldest first (already built or asked for):\n${params.history.map((line) => `- ${line}`).join('\n')}\n` : ''}${params.screenshotPng ? '\nThe attached image is a real screenshot of the game as it is now.\n' : ''}`;
 
-      const parsed = await this.getClient()(promptText)
-        .temperature(0.4)
-        .thinking({ level: 'low' })
-        .signal(AbortSignal.timeout(this.timeoutMs))
-        .json((value) => NextIdeaResultSchema.parse(value));
+      const request = params.screenshotPng
+        ? user(promptText, { images: [image(params.screenshotPng, 'image/png')] })
+        : promptText;
+      // Malformed JSON or a capacity blip earns one more draw.
+      let attempts = 0;
+      const parsed = await callWithVertexResilience({
+        // The first draw gets 60%; keep it above the budget.
+        timeoutMs: this.timeoutMs * 2,
+        onAttempt: () => {
+          attempts += 1;
+          if (attempts > 1) params.onRetry?.();
+        },
+        attempt: (_model, budgetMs) =>
+          this.getClient()(request)
+            .temperature(0.4)
+            .thinking({ level: 'low' })
+            .signal(AbortSignal.timeout(budgetMs))
+            .json((value) => NextIdeaResultSchema.parse(value)),
+      });
 
       const ideas: NextIdea[] = [];
       for (const [idx, raw] of (parsed.ideas ?? []).entries()) {

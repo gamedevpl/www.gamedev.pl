@@ -5,7 +5,6 @@ import {
   toolErr,
   SESSION_KEY_PROP,
   REPLY_CONTROL,
-  BEHAVIOURAL_CONTRACT,
   CREATOR_TEXT_SAFETY,
   channelControlFields,
   pendingMessagesFromChannel,
@@ -13,6 +12,7 @@ import {
   type ToolHandler,
   type ToolResult,
 } from './mcp-tool-support.js';
+import { UPLOAD_REQUEST_PROPS, uploadRequestFromChannel } from './upload-request.js';
 
 const WRITES = {
   readOnlyHint: false,
@@ -22,12 +22,7 @@ const WRITES = {
 } as const;
 
 // Posts a creator-visible card and spends the version's one proposal.
-const CONSUMES = {
-  readOnlyHint: false,
-  destructiveHint: true,
-  idempotentHint: false,
-  openWorldHint: false,
-} as const;
+const CONSUMES = { ...WRITES, destructiveHint: true } as const;
 
 export interface ConceptToolsDeps {
   resolveAuth: (ctx: ToolContext, args: Record<string, unknown>) => Promise<{ channelToken: string } | ToolResult>;
@@ -79,8 +74,8 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
           url: { type: 'string' },
           expiresAt: { type: 'string' },
           expiresInSeconds: { type: 'number' },
-          upload: { type: 'string' },
           maxBytes: { type: 'number' },
+          ...UPLOAD_REQUEST_PROPS,
           issued: { type: 'boolean' },
           refused: { type: 'string' },
           ...REPLY_CONTROL,
@@ -89,12 +84,11 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
       },
       description:
         'Upload one image-model frame for a concept proposal. Same shape as screenshot_upload_url — a ' +
-        'short-lived signed PUT URL, run the returned `upload` one-liner; PNG bytes must never enter the ' +
-        'model as base64. The PUT answers with the stored frame id; keep it for suggest_next_round. ' +
+        'short-lived upload contract as data (url, method, headers, maxBytes): PUT the PNG bytes to url with ' +
+        'exactly those headers; PNG bytes must never enter the model as base64. The PUT answers with the stored frame id; keep it for suggest_next_round. ' +
         'The caption is set by the platform and always says the frame is AI-made, so do not pass one. ' +
         'Draw the frame by editing the gate capture (get_gate_media) rather than from nothing, and keep the ' +
-        "game's own HUD untouched — a frame that reshapes the interface is refused. " +
-        BEHAVIOURAL_CONTRACT,
+        "game's own HUD untouched — a frame that reshapes the interface is refused.",
       inputSchema: { type: 'object', properties: { sessionKey: SESSION_KEY_PROP }, required: [] },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
@@ -123,12 +117,12 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
             pendingMessages: pendingMessagesFromChannel(body),
           });
         }
-        // Never invent an expiry or cap the channel did not state.
+        const request = uploadRequestFromChannel(body);
+        // Never invent an expiry, cap or credential the channel did not state.
         if (
           typeof body.url !== 'string' ||
           !body.url ||
-          typeof body.upload !== 'string' ||
-          !body.upload ||
+          !request ||
           typeof body.expiresAt !== 'string' ||
           typeof body.expiresInSeconds !== 'number' ||
           typeof body.maxBytes !== 'number'
@@ -137,9 +131,9 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
         }
         return toolOk({
           url: body.url,
+          ...request,
           expiresAt: body.expiresAt,
           expiresInSeconds: body.expiresInSeconds,
-          upload: body.upload,
           maxBytes: body.maxBytes,
           ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
@@ -170,9 +164,7 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
         '`paused` means the platform switched them off. Do not retry either — build on. ' +
         "Write the labels and prompts in the creator's language (get_brief.locales[0]) via the *Localized " +
         'fields, with plain English in the base fields. ' +
-        CREATOR_TEXT_SAFETY +
-        ' ' +
-        BEHAVIOURAL_CONTRACT,
+        CREATOR_TEXT_SAFETY,
       inputSchema: {
         type: 'object',
         properties: {

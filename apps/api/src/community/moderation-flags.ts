@@ -176,16 +176,6 @@ export async function registerModerationFlagRoutes(
     },
   );
 
-  app.get('/api/admin/moderation-flags', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    const status = (request.query as { status?: string } | undefined)?.status;
-    const flags = await store.listModerationFlags(
-      status === 'resolved' || status === 'open' ? { status } : { status: 'open' },
-    );
-    return reply.send({ flags });
-  });
-
   // Resolving with taken_down is what actually pulls the game.
   app.post<{ Params: { id: string } }>('/api/admin/moderation-flags/:id/resolve', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });

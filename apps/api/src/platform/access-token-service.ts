@@ -9,15 +9,7 @@ import { BOT_UID_PREFIX, type AccessTokenRecord, type Store, type User } from '.
 
 export { isAccessTokenExpired } from './access-token.js';
 
-/**
- * The rules for issuing a personal access token, in one place
- * (docs/agent-access-tokens.md).
- *
- * There are two ways to mint one — the operator HTTP route and the `token:mint` CLI —
- * and they must agree about the namespace rule, the cap and the expiry default. Anything
- * duplicated across those two paths would eventually drift, and the drift would be silent
- * and security-relevant, so the route and the script are both thin wrappers over this.
- */
+// PAT issuing rules; the CLI and the ops console both wrap this.
 
 export const MAX_TOKENS_PER_UID = 10;
 export const DEFAULT_EXPIRY_DAYS = 90;

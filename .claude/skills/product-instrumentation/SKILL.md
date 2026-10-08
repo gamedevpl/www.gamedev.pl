@@ -55,8 +55,10 @@ Visit telemetry is the second, separate stream — the funnel before and between
   identity, acquisition capture, navigation subscription.
 - [apps/api/src/telemetry/visit-telemetry.ts](../../../apps/api/src/telemetry/visit-telemetry.ts) —
   `POST /api/telemetry/visit`, schema and caps.
-- [apps/api/src/telemetry/visit-funnel.ts](../../../apps/api/src/telemetry/visit-funnel.ts) — the read-side
-  aggregator (`summarizeVisitFunnel`).
+- The read side (`summarizeVisitFunnel` and the other aggregators) is no longer in this
+  repo: it lives in the operator console of the private ops repo
+  ([`console/`](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)), which
+  reads these collections from Firestore directly.
 - `VisitEvent` / `VISIT_COLLECTION` in
   [store/records/telemetry.ts](../../../apps/api/src/store/records/telemetry.ts) — the
   event's field types are plain `string` here, not the closed enums below.
@@ -66,8 +68,8 @@ steps, `PlayVia`, and so on) live in one canonical module,
 [packages/contract/src/visit-vocab.ts](../../../packages/contract/src/visit-vocab.ts) —
 an `X_VALUES` array plus an `X` type per vocabulary. All three files import from it
 instead of declaring their own copy. **Adding a rung means adding it to the shared array
-in `visit-vocab.ts`; the browser client, the zod schema, and the funnel aggregator pick
-it up from that one import.** `BuilderDimension` (`'platform' | 'self'`) is the one
+in `visit-vocab.ts`; the browser client and the zod schema pick it up from that one
+import, and the ops console's aggregator must be updated to read it.** `BuilderDimension` (`'platform' | 'self'`) is the one
 exception still declared separately in each of the three files — it also touches two
 frozen mega-files (`mcp-server.ts`, `submissions.ts`) and has not been folded in yet.
 
@@ -85,6 +87,27 @@ every visit, including the shared game links this stream exists to count.
 Creator-side facts (submissions, build events, revision messages, publish times) live in
 Firestore via the store — they are identity-attached and that is fine; creators are
 signed in. Both telemetry streams are the anonymous half.
+
+### Where raw events are stored: `TELEMETRY_BACKEND`
+
+The `TelemetryStore` interface does not change, but where raw play and visit events are
+stored depends on `TELEMETRY_BACKEND`
+([store/slices/telemetry-bigquery.ts](../../../apps/api/src/store/slices/telemetry-bigquery.ts)):
+
+- **Unset:** Firestore, one document per event.
+- **`dual`:** written to both Firestore and BigQuery, read from Firestore.
+- **`bigquery`:** written to and read from BigQuery only.
+
+The BigQuery tables are `telemetry.play_events` and `telemetry.visit_events`, provisioned by
+`infra/setup-telemetry-bigquery.sh` in the private ops repo:
+
+- Each row keeps the whole event in a JSON `event` column, so a new field needs no schema
+  change.
+- Rows are partitioned on the same `day` as the Firestore partitions.
+- Partitions expire after 90 days, which keeps the retention promise.
+
+Daily rollups (`telemetryDaily`) stay in Firestore in every mode. The same invariants
+apply in BigQuery: no shared key between the two tables, and no identity columns.
 
 ## Invariants (do not renegotiate these per-feature)
 
@@ -129,7 +152,12 @@ signed in. Both telemetry streams are the anonymous half.
 ## Known gaps (prefer closing one over inventing new metrics)
 
 Current state, audited 2026-07-25 and updated as gaps close. When your task touches an
-adjacent flow, close the gap in the same change or flag it explicitly in the PR:
+adjacent flow, close the gap in the same change or flag it explicitly in the PR.
+
+> The `GET /api/admin/telemetry/*` routes, the read-side aggregators and the operator-page
+> panels named in the closed entries below were removed from this repo; the operator
+> console in the private ops repo now computes those views from Firestore. The entries
+> stay as the record of what each rollup must answer.
 
 - ~~No landing/visit events~~ — **closed**: `visit_started` / `route_viewed` /
   `play_started` now cover questions 1–3.
@@ -381,9 +409,9 @@ is acceptable; a silent one is not.
 Self-improvement clause: if this skill is wrong, stale, or missing something that cost
 you time, update it in the same session.
 
-CLI vocabulary changes must also update the labels in `apps/web/src/CliFunnelBlock.tsx`
-(step, channel, OS and verify-stage maps) and, for a new dimension, `summarizeCliPilot`
-in `apps/api/src/telemetry/visit-cli-pilot.ts` — a dimension the read side drops is
+CLI vocabulary changes must also update the CLI funnel labels (step, channel, OS and
+verify-stage maps) and, for a new dimension, the CLI pilot aggregation — both now in the
+operator console of the private ops repo — because a dimension the read side drops is
 captured for nothing, which is how adapter, stage, channel and OS sat unread until CL-39.
 `play_requested` counts requests to open a local or remote game, not evidence that
 the game loaded or was played. Query `cli_step` grouped by `step` and visit ID;

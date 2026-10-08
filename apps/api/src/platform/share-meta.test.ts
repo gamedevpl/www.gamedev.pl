@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogGameEntry } from '../catalog/github-client.js';
 import {
+  GAME_NOT_FOUND,
+  GAME_WALLED,
   createSharePreviewShell,
   injectShareMeta,
   previewScreenshotFile,
@@ -179,6 +181,32 @@ describe('createSharePreviewShell', () => {
     expect(looked).toBe(false);
   });
 
+  it('marks walled games for noindex without looking them up', async () => {
+    let looked = false;
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => {
+        looked = true;
+        return null;
+      },
+      isShareable: async () => false,
+      isPastWall: async () => false,
+    });
+    expect(await shell(request)).toBe(GAME_WALLED);
+    expect(await shell({ url: '/play/does-not-exist' })).toBe(GAME_WALLED);
+    expect(looked).toBe(false);
+  });
+
+  it('keeps load-shed games on the plain shell', async () => {
+    const shell = createSharePreviewShell({
+      readIndexHtml: async () => SHELL,
+      getCatalogEntry: async () => entry(),
+      isShareable: async () => false,
+      isPastWall: async () => true,
+    });
+    expect(await shell(request)).toBeNull();
+  });
+
   it('falls back to the plain shell for unknown games, other paths and failures', async () => {
     const missing = createSharePreviewShell({
       readIndexHtml: async () => SHELL,
@@ -302,5 +330,61 @@ describe('createSharePreviewShell', () => {
       gamesStore: {} as never,
     });
     expect(await shell(request)).toContain('<title>Biplane Skirmish — gamedev.pl</title>');
+  });
+
+  describe('games no lane publishes', () => {
+    const unpublishedStore = {
+      getPublication: async () => null,
+      listCatalogEnrichments: async () => [],
+    } as never;
+
+    it('reports them as not found so the shell boots with a real 404', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => null,
+        isShareable: async () => true,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      expect(await shell({ url: '/play/gone-game' })).toBe(GAME_NOT_FOUND);
+      expect(await shell({ url: '/someone/gone-game' })).toBe(GAME_NOT_FOUND);
+    });
+
+    it('keeps draft links on the plain shell', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => null,
+        isShareable: async () => true,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      expect(await shell({ url: '/draft/gone-game' })).toBeNull();
+    });
+
+    it('never calls a game missing when the repo catalog failed to answer', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => {
+          throw new Error('catalog down');
+        },
+        isShareable: async () => true,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      expect(await shell({ url: '/play/gone-game' })).toBeNull();
+    });
+
+    it('never calls a game missing once the storage budget is spent', async () => {
+      const shell = createSharePreviewShell({
+        readIndexHtml: async () => SHELL,
+        getCatalogEntry: async () => null,
+        isShareable: async () => true,
+        now: () => 0,
+        store: unpublishedStore,
+        gamesStore: {} as never,
+      });
+      for (let i = 0; i < 60; i += 1) expect(await shell({ url: `/play/gone-${i}` })).toBe(GAME_NOT_FOUND);
+      expect(await shell({ url: '/play/gone-60' })).toBeNull();
+    });
   });
 });

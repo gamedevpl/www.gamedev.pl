@@ -6,7 +6,6 @@ import {
   mintSessionToken,
   registerAuthPlugin,
   SESSION_COOKIE_NAME,
-  TOKEN_SESSION_DURATION_SECONDS,
   readSessionToken,
   sessionDurationSeconds,
   type GoogleAuthVerifier,
@@ -579,7 +578,7 @@ describe('POST /api/waitlist', () => {
     expect(notes[0]).toMatchObject({
       id: 'op-waitlist-g:20010',
       type: 'operator.waitlist_joined',
-      link: '/admin/waitlist',
+      link: '/',
       params: { title: 'Newbie', email: 'newbie@example.com' },
     });
 
@@ -858,20 +857,6 @@ describe('Session lifetime', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['set-cookie'] as string).toContain(`Max-Age=${DEFAULT_SESSION_DURATION_SECONDS}`);
-
-    await app.close();
-  });
-
-  it('keeps a token-derived cookie on the short 12h clock, renewal included', async () => {
-    // Renewal must not promote a token cookie to a month.
-    const { app, uid } = await setupServer();
-
-    const res = await meWith(app, agedToken(uid, 7 * 60 * 60, 'token'));
-
-    expect(res.statusCode).toBe(200);
-    const renewed = res.headers['set-cookie'] as string;
-    expect(renewed).toContain(`Max-Age=${TOKEN_SESSION_DURATION_SECONDS}`);
-    expect(readSessionToken(renewed.split(';')[0]!.split('=')[1]!, 'test-secret-key').src).toBe('token');
 
     await app.close();
   });

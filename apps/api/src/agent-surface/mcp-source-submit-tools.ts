@@ -13,7 +13,6 @@ import {
   toolOk,
   toolErr,
   toolRefusal,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   REPLY_CONTROL,
   channelControlFields,
@@ -60,23 +59,23 @@ export interface SourceSubmitToolEntry {
   handler: ToolHandler;
 }
 
-// Omitted mode fail-closes as publish unless the previous candidate was preview.
-async function effectiveSubmitMode(
+// Omitted mode is preview; retries reuse the stored lane, like the channel.
+export async function effectiveSubmitMode(
   explicit: 'preview' | 'publish' | undefined,
   fromLatestDelivery: boolean,
   record: SubmissionRecord,
   gamesStore: GamesStore | undefined,
 ): Promise<'preview' | 'publish'> {
   if (explicit === 'preview' || explicit === 'publish') return explicit;
-  if (!fromLatestDelivery) return 'publish';
+  if (!fromLatestDelivery) return 'preview';
   const slug = record.slug;
   const version = record.previewVersion ?? record.deliveredVersion;
-  if (!slug || !version || !gamesStore) return 'publish';
+  if (!slug || !version || !gamesStore) return 'preview';
   try {
     const manifest = await gamesStore.getManifest(slug, version);
-    return manifest?.deliveryMode === 'preview' ? 'preview' : 'publish';
+    return manifest && manifest.deliveryMode !== 'preview' ? 'publish' : 'preview';
   } catch {
-    return 'publish';
+    return 'preview';
   }
 }
 
@@ -118,8 +117,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         'the path from the next submit_sources({ fromStaged: true }) delivery entirely, same as if it had ' +
         'never existed. Use to retire an old game/*.ts module no longer imported anywhere, or to clear a ' +
         'leftover index.html/GAME.json field back to the platform default — index.html cannot be re-staged ' +
-        '(only removed); GAME.json.howToPlay is the only markup source now. ' +
-        BEHAVIOURAL_CONTRACT,
+        '(only removed); GAME.json.howToPlay is the only markup source now.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -214,14 +212,13 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         `(fromStaged overlays onto the latest delivery/seed — do not re-stage unchanged files). ` +
         `On kit_outdated: get_kit then fromLatestDelivery=true with the same mode and new kitEngineRef — do NOT re-upload the whole tree. ` +
         `mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
-        `mode=publish (seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
-        `Omitting mode defaults to publish, except with fromLatestDelivery (reuses the previous candidate's lane). ` +
+        `mode=publish (seal): TRACE.json + PLAYTEST.json required (the kit's SKILL.md, via read_kit_file, says how to record them); full gate; only publish green ends the round. ` +
+        `Omitting mode defaults to preview — publish is only ever an explicit mode=publish — except with fromLatestDelivery (reuses the previous candidate's lane). ` +
         `files[{path, content, encoding utf8|base64}] optional when fromStaged/fromLatestDelivery (inline paths override); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         'gateStarted is true when Cloud Build accepted the gate create — not merely when the upload was accepted. ' +
         'A successful delivery unlocks creator handoff (agentEndedAt); still call end when you will not deliver more (warnings.code=call_end). ' +
-        'Pass summary — one sentence of what changed this delivery; Studio shows it on the build list. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Pass summary — one sentence of what changed this delivery; Studio shows it on the build list.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -263,7 +260,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
             enum: ['preview', 'publish'],
             description:
               'preview = iterate without TRACE (Studio draft). publish = sealed candidate (TRACE required). ' +
-              'Default publish when omitted, except fromLatestDelivery reuses the previous candidate lane.',
+              'Default preview when omitted (publish must be passed explicitly), except fromLatestDelivery reuses the previous candidate lane.',
           },
           slug: { type: 'string' },
           note: { type: 'string' },
@@ -402,17 +399,16 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
           warnings.push({
             code: 'call_end',
             message:
-              'Call end when you will not deliver more this round (sets stop:true). ' +
-              'Creator handoff is already unlocked from this submit; without end your session may look finished while still connected. ' +
-              'Call end instead of sitting in a get_gate_verdict loop — Studio shows the gate. ' +
-              'If you need an already-available verdict to keep iterating, call get_gate_verdict once; a pending delivery returns stop:true and ends this run.',
+              'Delivered. This session stays open until end, which sets stop:true and posts its summary to the creator; ' +
+              'creator handoff is already unlocked. The verdict lands in Studio in 2–5 minutes. ' +
+              'get_gate_verdict is a one-shot read, and a pending delivery returns stop:true.',
           });
           if (!gateStarted) {
             warnings.push({
               code: 'gate_not_started',
               message:
-                'Delivery accepted but the gate did not start (no Cloud Build id). ' +
-                'Do not assume a Studio preview is assembling — retry submit_sources or tell the creator.',
+                'Delivery accepted but the gate did not start (no Cloud Build id), so no Studio preview is assembling. ' +
+                'Another submit_sources retries it.',
             });
           }
         }

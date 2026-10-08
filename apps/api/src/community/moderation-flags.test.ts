@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
-import { SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { mintToken } from '../platform/submission-token.js';
-import { mintSessionToken } from '../platform/auth.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsInject, opsTestVerifier } from '../platform/ops-console.fixture.js';
 import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js';
+import { withSnapshot } from '../catalog/local-snapshot-reader.js';
 
 const secret = 'submission-secret';
 const sessionSecret = 'dev-session-secret-change-me';
@@ -62,15 +63,23 @@ describe('moderation flags', () => {
       contentChecker: opts.contentChecker ?? allowAll,
       reviewerUids: 'dev:reviewer',
       adminUids: 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: {
         githubToken: 'token',
-        githubClient: githubStub(opts.published ?? [], opts.catalogDown, opts.catalogHangs),
+        ...withSnapshot(githubStub(opts.published ?? [], opts.catalogDown, opts.catalogHangs)),
         submissionTokenSecret: secret,
         gamesRepo: 'gamedevpl/www.gamedev.pl-games',
       },
     });
     apps.push(app);
+    await store.upsertUser({ uid: 'dev:boss' });
     return { app, store };
+  }
+
+  // What the ops console sends to close a flag.
+  function resolveFlag(app: Awaited<ReturnType<typeof buildApp>>, id: string, payload: Record<string, string>) {
+    const url = `/api/admin/moderation-flags/${encodeURIComponent(id)}/resolve`;
+    return opsInject(app, 'dev:boss', { method: 'POST', url, payload });
   }
 
   async function settledAlert(store: InMemoryStore, uid: string) {
@@ -86,31 +95,19 @@ describe('moderation flags', () => {
     });
   }
 
-  it('takes a reviewer report and shows it to the operator, and nobody else', async () => {
-    const { app } = await makeApp();
+  it('takes a reviewer report into the operator queue, and refuses anyone else', async () => {
+    const { app, store } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');
 
     const raised = await raise(app, reviewer);
     expect(raised.statusCode).toBe(200);
     expect(raised.json().flag).toMatchObject({ slug: 'sky-dodge', reason: 'hate', status: 'open' });
 
-    // An ordinary signed-in account cannot report, and cannot read the queue.
+    // An ordinary signed-in account cannot report.
     const stranger = await cookie(app, 'nobody');
     expect((await raise(app, stranger, 'neon-courier')).statusCode).toBe(404);
-    const peeked = await app.inject({
-      method: 'GET',
-      url: '/api/admin/moderation-flags',
-      headers: { cookie: stranger },
-    });
-    expect(peeked.statusCode).toBe(404);
 
-    const queue = await app.inject({
-      method: 'GET',
-      url: '/api/admin/moderation-flags',
-      headers: { cookie: await cookie(app, 'boss') },
-    });
-    expect(queue.statusCode).toBe(200);
-    expect(queue.json().flags).toHaveLength(1);
+    expect(await store.listModerationFlags({ status: 'open' })).toHaveLength(1);
   });
 
   it('pulls a published game and closes the flag in one operator call', async () => {
@@ -125,12 +122,7 @@ describe('moderation flags', () => {
     const raised = await raise(app, await cookie(app, 'reviewer'));
     const flagId = raised.json().flag.id as string;
 
-    const resolved = await app.inject({
-      method: 'POST',
-      url: `/api/admin/moderation-flags/${encodeURIComponent(flagId)}/resolve`,
-      headers: { cookie: await cookie(app, 'boss') },
-      payload: { action: 'taken_down', note: 'removed, creator told' },
-    });
+    const resolved = await resolveFlag(app, flagId, { action: 'taken_down', note: 'removed, creator told' });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json()).toMatchObject({ unpublished: true });
     expect(resolved.json().flag).toMatchObject({ status: 'resolved', action: 'taken_down' });
@@ -150,12 +142,7 @@ describe('moderation flags', () => {
     await store.setDraftShared(jobId, '2026-09-01T00:00:00.000Z');
 
     const raised = await raise(app, await cookie(app, 'reviewer'));
-    const resolved = await app.inject({
-      method: 'POST',
-      url: `/api/admin/moderation-flags/${encodeURIComponent(raised.json().flag.id as string)}/resolve`,
-      headers: { cookie: await cookie(app, 'boss') },
-      payload: { action: 'taken_down' },
-    });
+    const resolved = await resolveFlag(app, raised.json().flag.id as string, { action: 'taken_down' });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json()).toMatchObject({ unpublished: false, unshared: true });
     expect((await store.getSubmission(jobId))?.draftSharedAt).toBeFalsy();
@@ -171,7 +158,7 @@ describe('moderation flags', () => {
     const alert = await settledAlert(store, 'dev:boss');
     expect(alert).toBeTruthy();
     expect(alert?.params).toMatchObject({ title: 'sky-dodge', detail: 'hate' });
-    expect(alert?.link).toBe('/admin/moderation');
+    expect(alert?.link).toBe('/play/sky-dodge');
   });
 
   it('waits for the notification attempt before answering the reviewer', async () => {
@@ -223,12 +210,7 @@ describe('moderation flags', () => {
     await store.setDraftShared(jobId, '2026-09-01T00:00:00.000Z');
 
     const raised = await raise(app, await cookie(app, 'reviewer'));
-    await app.inject({
-      method: 'POST',
-      url: `/api/admin/moderation-flags/${encodeURIComponent(raised.json().flag.id as string)}/resolve`,
-      headers: { cookie: await cookie(app, 'boss') },
-      payload: { action: 'taken_down' },
-    });
+    await resolveFlag(app, raised.json().flag.id as string, { action: 'taken_down' });
 
     const back = await app.inject({
       method: 'POST',
@@ -246,12 +228,7 @@ describe('moderation flags', () => {
     const { app, store } = await makeApp({ published: ['sky-dodge'] });
     const raised = await raise(app, await cookie(app, 'reviewer'));
 
-    const resolved = await app.inject({
-      method: 'POST',
-      url: `/api/admin/moderation-flags/${encodeURIComponent(raised.json().flag.id as string)}/resolve`,
-      headers: { cookie: await cookie(app, 'boss') },
-      payload: { action: 'taken_down' },
-    });
+    const resolved = await resolveFlag(app, raised.json().flag.id as string, { action: 'taken_down' });
     expect(resolved.json()).toMatchObject({ unpublished: false, stillPublic: true });
     expect(await store.getPublication('sky-dodge')).toBeNull();
   });
@@ -259,20 +236,10 @@ describe('moderation flags', () => {
   it('refuses a second resolve rather than taking the game down twice', async () => {
     const { app } = await makeApp();
     const raised = await raise(app, await cookie(app, 'reviewer'));
-    const id = encodeURIComponent(raised.json().flag.id as string);
-    const url = `/api/admin/moderation-flags/${id}/resolve`;
-    const boss = await cookie(app, 'boss');
+    const id = raised.json().flag.id as string;
 
-    expect(
-      (await app.inject({ method: 'POST', url, headers: { cookie: boss }, payload: { action: 'dismissed' } }))
-        .statusCode,
-    ).toBe(200);
-    const again = await app.inject({
-      method: 'POST',
-      url,
-      headers: { cookie: boss },
-      payload: { action: 'taken_down' },
-    });
+    expect((await resolveFlag(app, id, { action: 'dismissed' })).statusCode).toBe(200);
+    const again = await resolveFlag(app, id, { action: 'taken_down' });
     expect(again.statusCode).toBe(409);
     expect(again.json()).toMatchObject({ error: 'already_resolved' });
   });
@@ -287,22 +254,15 @@ describe('moderation flags', () => {
     });
     const raised = await raise(app, await cookie(app, 'reviewer'));
 
-    const resolved = await app.inject({
-      method: 'POST',
-      url: `/api/admin/moderation-flags/${encodeURIComponent(raised.json().flag.id as string)}/resolve`,
-      headers: { cookie: await cookie(app, 'boss') },
-      payload: { action: 'dismissed', note: 'looked, it is a cartoon explosion' },
+    const resolved = await resolveFlag(app, raised.json().flag.id as string, {
+      action: 'dismissed',
+      note: 'looked, it is a cartoon explosion',
     });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json()).toMatchObject({ unpublished: false, unshared: false });
     expect((await store.getPublication('sky-dodge'))?.state).toBe('published');
 
-    const open = await app.inject({
-      method: 'GET',
-      url: '/api/admin/moderation-flags',
-      headers: { cookie: await cookie(app, 'boss') },
-    });
-    expect(open.json().flags).toHaveLength(0);
+    expect(await store.listModerationFlags({ status: 'open' })).toHaveLength(0);
   });
 
   function report(app: Awaited<ReturnType<typeof buildApp>>, cookieHeader: string, slug = 'sky-dodge') {
@@ -339,17 +299,12 @@ describe('moderation flags', () => {
     });
 
     it('raises a flag into the same queue a reviewer uses, and it reaches the operator console', async () => {
-      const { app } = await makeApp({ published: ['sky-dodge'] });
+      const { app, store } = await makeApp({ published: ['sky-dodge'] });
       const res = await report(app, await cookie(app, 'alice'));
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true });
 
-      const queue = await app.inject({
-        method: 'GET',
-        url: '/api/admin/moderation-flags',
-        headers: { cookie: await cookie(app, 'boss') },
-      });
-      expect(queue.json().flags).toMatchObject([
+      expect(await store.listModerationFlags({ status: 'open' })).toMatchObject([
         { slug: 'sky-dodge', reason: 'hate', source: 'player', raisedByUid: 'dev:alice' },
       ]);
     });
@@ -383,12 +338,9 @@ describe('moderation flags', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true });
 
-      const queue = await app.inject({
-        method: 'GET',
-        url: '/api/admin/moderation-flags',
-        headers: { cookie: await cookie(app, 'boss') },
-      });
-      expect(queue.json().flags).toMatchObject([{ slug: 'neon-courier', source: 'player' }]);
+      expect(await store.listModerationFlags({ status: 'open' })).toMatchObject([
+        { slug: 'neon-courier', source: 'player' },
+      ]);
     });
 
     it('fails closed (404, not 500) when the store lane read throws', async () => {
@@ -431,19 +383,8 @@ describe('moderation flags', () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
       expect(await alerts()).toHaveLength(1);
 
-      const [flag] = (
-        await app.inject({
-          method: 'GET',
-          url: '/api/admin/moderation-flags',
-          headers: { cookie: await cookie(app, 'boss') },
-        })
-      ).json().flags as Array<{ id: string }>;
-      const dismissed = await app.inject({
-        method: 'POST',
-        url: `/api/admin/moderation-flags/${encodeURIComponent(flag!.id)}/resolve`,
-        headers: { cookie: await cookie(app, 'boss') },
-        payload: { action: 'dismissed', note: 'looked, it is fine' },
-      });
+      const [flag] = await store.listModerationFlags({ status: 'open' });
+      const dismissed = await resolveFlag(app, flag!.id, { action: 'dismissed', note: 'looked, it is fine' });
       expect(dismissed.statusCode).toBe(200);
 
       expect((await report(app, alice)).statusCode).toBe(200);

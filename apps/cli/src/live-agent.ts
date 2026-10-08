@@ -1,6 +1,9 @@
 import {
+  codexApprovals,
   codexNotification,
+  codexThreadPolicy,
   liveAgent,
+  museApprovals,
   museNotification,
   RpcError,
   uuidv7,
@@ -16,6 +19,7 @@ type RpcValue = Record<string, unknown>;
 export type Steer = (text: string) => Promise<void>;
 
 const ACK_TIMEOUT_MS = 30_000;
+const CODEX_SANDBOXES = ['workspace-write', 'read-only', 'danger-full-access'];
 const TASK_TIMEOUT_MS = 30 * 60_000;
 export const MUSE_APPROVAL_LINE = 'Muse needs your approval — returning to permission handoff.';
 
@@ -26,7 +30,7 @@ export function liveArgs(spec: AdapterSpec): string[] | undefined {
     const arg = spec.headless[i]!;
     if (['exec', '--json', '--skip-git-repo-check', '--prompt'].includes(arg)) continue;
     if (['--sandbox', '--output-format'].includes(arg)) {
-      if (arg === '--sandbox' && spec.headless[i + 1] !== 'workspace-write') return undefined;
+      if (arg === '--sandbox' && !CODEX_SANDBOXES.includes(spec.headless[i + 1] ?? '')) return undefined;
       i++;
       continue;
     }
@@ -51,13 +55,16 @@ export function turnInput(name: string, text: string): RpcValue[] {
   return [{ type: 'text', text }, ...images.map((path) => ({ type: 'localImage', path }))];
 }
 
-// Transport and events come from genaicode/agents; protocol choices stay here.
+// genaicode owns transport and approvals; steering and images stay here.
 export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: number; permissionSession?: string }> {
   const args = liveArgs(input.spec);
   if (!args) throw new Error('This adapter supports queued follow-ups only.');
   let permissionSession: string | undefined;
   let accepting = false;
   let decided = false;
+  const lifetime = new AbortController();
+  const signal = input.abort ? AbortSignal.any([input.abort, lifetime.signal]) : lifetime.signal;
+  input = { ...input, abort: signal };
   const steering = (open: boolean) => {
     accepting = open;
     input.onSteering?.(
@@ -72,6 +79,13 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
   const agent = liveAgent({
     name: input.spec.name,
     command: input.spec.command,
+    // What drive() translates itself; anything else is refused before start.
+    capabilities: {
+      permissions: {
+        approval: ['auto-approve', 'deny'],
+        sandbox: input.spec.name === 'muse' ? ['unrestricted'] : ['workspace-write', 'read-only', 'unrestricted'],
+      },
+    },
     args: () => args,
     drive: (session) =>
       drive(session, input, {
@@ -92,6 +106,10 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
     timeoutMs: TASK_TIMEOUT_MS,
     model: input.spec.selection?.model,
     effort: input.spec.selection?.effort,
+    permissions: input.permissions,
+    onApproval: input.onApproval
+      ? (request, cancelled) => input.onApproval!(request, cancelled ? AbortSignal.any([signal, cancelled]) : signal)
+      : undefined,
   });
   try {
     for await (const event of run) input.onEvent?.(event);
@@ -100,6 +118,7 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
       input.onEvent?.({ type: 'error', message: result.error });
     return { code: result.ok ? 0 : 1, permissionSession };
   } finally {
+    lifetime.abort();
     accepting = false;
     input.onSteering?.(undefined);
   }
@@ -126,16 +145,28 @@ async function drive(
   const finish = (outcome: AgentOutcome) => {
     if (verdict) return;
     verdict = outcome;
+    approvals.close();
     hooks.decided();
     hooks.steering(false);
     if (!outcome.ok || inFlight === 0) settle(outcome);
   };
   const diagnostic = (method: string, params: unknown) => input.onDiagnostic?.(JSON.stringify({ method, params }));
+  const ids = () => ({ session: id || undefined, turn: turn || undefined });
+  const approvals = muse
+    ? museApprovals(session, ids, {
+        requestTimeoutMs: ACK_TIMEOUT_MS,
+        onError: (message) => {
+          session.emit({ type: 'error', message });
+          finish({ ok: false, error: message });
+        },
+      })
+    : codexApprovals(session, ids);
 
   session.onNotification((method, params) => {
     diagnostic(method, params);
     const value = (params ?? {}) as RpcValue;
     if (!id || value[key] !== id) return;
+    if (input.onApproval && approvals.notification(method, params)) return;
     if (method === 'turn/completed') {
       const ended = value.turn as RpcValue | undefined;
       if (turn && (muse ? value.turnId : ended?.id) !== turn) return;
@@ -149,8 +180,13 @@ async function drive(
     }
     for (const event of (muse ? museNotification : codexNotification)(method, params)) session.emit(event);
   });
-  session.onRequest((method, params) => {
+  session.onRequest((method, params, context) => {
     diagnostic(method, params);
+    if (input.onApproval) {
+      const answer = approvals.request(method, params, context);
+      if (answer) return answer;
+      throw new RpcError('Unsupported request.', -32601);
+    }
     if (muse && method === 'approval/request') {
       hooks.handoff(id);
       session.emit({ type: 'error', message: MUSE_APPROVAL_LINE });
@@ -169,7 +205,7 @@ async function drive(
     muse ? 'session/start' : 'thread/start',
     muse
       ? { commandId: uuidv7(), workspaceRoot: task.cwd, modelId: task.model, approvalMode: 'onRequest' }
-      : { cwd: task.cwd, model: task.model, sandbox: 'workspace-write', approvalPolicy: 'never' },
+      : { cwd: task.cwd, model: task.model, ...codexPolicy(input, task) },
     ACK_TIMEOUT_MS,
   )) as RpcValue;
   id = String(((created.session ?? created.thread) as RpcValue | undefined)?.[muse ? 'sessionId' : 'id'] ?? '');
@@ -209,4 +245,12 @@ async function drive(
   });
   hooks.steering(true);
   return settled;
+}
+
+// The adapter's --sandbox, or the permissions mapping when set.
+function codexPolicy(input: AdapterRunInput, task: LiveSession['task']) {
+  const at = input.spec.headless.indexOf('--sandbox');
+  const sandbox = at >= 0 ? input.spec.headless[at + 1] : 'workspace-write';
+  if (task.permissions) return codexThreadPolicy(task);
+  return { sandbox, approvalPolicy: input.onApproval ? 'on-request' : 'never' };
 }

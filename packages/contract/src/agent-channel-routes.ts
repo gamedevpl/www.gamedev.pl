@@ -28,6 +28,7 @@ export const AGENT_CHANNEL_ROUTES = {
   SHOT_UPLOAD: '/api/agent/build/shot/upload',
   SHOT_UPLOAD_URL: '/api/agent/build/shot/upload-url',
   SOURCES: '/api/agent/build/sources',
+  SOURCES_ARCHIVE: '/api/agent/build/sources/archive',
   SOURCES_STAGE: '/api/agent/build/sources/stage',
   SOURCES_STAGE_CLEAR: '/api/agent/build/sources/stage/clear',
   SOURCES_STAGE_DELETE: '/api/agent/build/sources/stage/delete',

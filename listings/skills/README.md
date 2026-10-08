@@ -81,7 +81,7 @@ how to get into one, and the handful of loop rules that cost a whole build when 
 screenshot early (or skip and, on a later/resumed run after `mode=preview`, call
 `get_gate_verdict` once then `get_gate_media` if a preview verdict is already
 available when there is no browser), stage rather than re-upload, staging is not delivering, call end after
-the last submit, never poll the gate or the inbox.
+the last submit, no scheduled gate or inbox polling.
 
 It deliberately does not restate the session workflow. The server returns that on start
 and wins on any disagreement, so the skill cannot drift out of date as the loop changes.

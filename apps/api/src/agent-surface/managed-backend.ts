@@ -146,7 +146,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const session = await options.provider.startSession({
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
-      prompt: buildPrompt(effectiveBrief),
+      prompt: buildPrompt(effectiveBrief, { shell: options.provider.shell === true }),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(seedSupported && brief.seed

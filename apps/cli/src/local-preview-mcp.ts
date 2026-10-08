@@ -1,4 +1,6 @@
 import { progressTool, progressReporter } from './local-progress.js';
+import type { ApproveTool } from './agent-approval.js';
+import { claudeApprovalTool, resolvePermissions, type AgentTask } from 'genaicode/agents';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -57,15 +59,24 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
   return parsed as Record<string, unknown>;
 }
 
+export const MAX_CAPTURES_PER_TASK = 12;
+
 export async function startLocalPreviewMcp(input: {
   previewUrl?: string;
   progress?: (text: string, blocked: boolean) => void;
   abort: AbortSignal;
   write: (line: string) => void;
   capture?: typeof captureBrowser;
+  onApproval?: ApproveTool;
+  // Requests outside the sandbox are denied before anyone is asked.
+  sandbox?: { permissions: AgentTask['permissions']; cwd: string };
 }) {
   const controller = new AbortController();
   const signal = AbortSignal.any([input.abort, controller.signal]);
+  const sandbox = resolvePermissions(input.sandbox?.permissions).sandbox;
+  const approval = input.onApproval
+    ? claudeApprovalTool(input.onApproval, sandbox ? { sandbox, cwd: input.sandbox!.cwd } : {})
+    : undefined;
   const source = input.previewUrl ? previewSource(input.previewUrl, signal) : undefined;
   const report = progressReporter(input.progress ?? ((text) => input.write(text)));
   const key = randomBytes(32).toString('hex');
@@ -75,6 +86,7 @@ export async function startLocalPreviewMcp(input: {
   let render: { id: string; html: string } | undefined;
   let origin = '';
   let lastStarted = 0;
+  let captures = 0;
   async function execute(job: Job, viewport: CaptureViewport): Promise<void> {
     try {
       input.write('Local capture: waiting for the current build…');
@@ -99,7 +111,8 @@ export async function startLocalPreviewMcp(input: {
       render = undefined;
     }
   }
-  async function call(name: unknown, raw: unknown) {
+  async function call(name: unknown, raw: unknown, requestSignal: AbortSignal) {
+    if (approval && name === approval.name) return approval.call(raw, requestSignal);
     const args = raw ?? {};
     if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid arguments.');
     const value = args as Record<string, unknown>;
@@ -111,7 +124,12 @@ export async function startLocalPreviewMcp(input: {
       const viewport = value.viewport ?? 'desktop';
       if (viewport !== 'desktop' && viewport !== 'mobile') throw new Error('Unknown viewport.');
       if (current) throw new Error('A capture is already running. Use capture_status.');
+      if (captures >= MAX_CAPTURES_PER_TASK)
+        throw new Error(
+          `This task used its ${MAX_CAPTURES_PER_TASK} captures. Continue without more visual checks and report what is unverified.`,
+        );
       if (Date.now() - lastStarted < 2000) throw new Error('Wait two seconds before another capture.');
+      captures++;
       lastStarted = Date.now();
       while (jobs.size >= 3) jobs.delete(jobs.keys().next().value!);
       const job: Job = { id: randomUUID(), state: 'building', startedAt: new Date().toISOString() };
@@ -194,11 +212,27 @@ export async function startLocalPreviewMcp(input: {
           serverInfo: { name: 'gamedevpl-local', version: '1.0.0' },
         };
       } else if (message.method === 'ping') result = {};
-      else if (message.method === 'tools/list') result = { tools: [progressTool, ...(source ? TOOLS : [])] };
+      else if (message.method === 'tools/list')
+        result = {
+          tools: [
+            progressTool,
+            ...(source ? TOOLS : []),
+            ...(approval
+              ? [{ name: approval.name, description: approval.description, inputSchema: approval.inputSchema }]
+              : []),
+          ],
+        };
       else if (message.method === 'tools/call') {
         const params = message.params as { name?: unknown; arguments?: unknown } | undefined;
         try {
-          result = await call(params?.name, params?.arguments);
+          const disconnected = new AbortController();
+          const disconnect = () => disconnected.abort();
+          response.once('close', disconnect);
+          try {
+            result = await call(params?.name, params?.arguments, AbortSignal.any([signal, disconnected.signal]));
+          } finally {
+            response.off('close', disconnect);
+          }
         } catch (error) {
           result = {
             isError: true,

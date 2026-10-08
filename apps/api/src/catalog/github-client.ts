@@ -20,7 +20,6 @@ import { parseOptionalEffort } from './catalog-effort.js';
 import { buildCatalogFromArchive } from './catalog-from-archive.js';
 import { type CatalogGameTouch } from './catalog-touch.js';
 import {
-  DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_SOURCE_GRAPH_MODULES,
@@ -28,7 +27,7 @@ import {
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
 } from '../platform/games-repo-contract.js';
-import { appendDeclaredImageSources, bakeGameImageAssets, resolveGameImageBytes } from './bake-game-images.js';
+import { bakeGameImageAssets, resolveGameImageBytes } from './bake-game-images.js';
 import { parseGameManifest } from './parse-game-manifest.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 import { generateIndexHtml, type GameManifest as IndexHtmlManifest } from './index-html-generator.js';
@@ -307,9 +306,7 @@ export interface GitHubClient {
   closeIssue(issueNumber: number): Promise<void>;
   /**
    * Opens a pull request for an existing branch, or returns the open one if there
-   * already is one. The sole production caller, `proposal-apply-bot.ts`, uses this for
-   * the repo-lane merge-back: the PR it opens goes through the games repo's normal
-   * CODEOWNERS review and merge, same as any other PR.
+   * already is one. No production caller since the proposal apply-bot was retired.
    */
   ensureOpenPullRequest(input: { headRef: string; baseRef: string; title: string; body: string }): Promise<{
     number: number;
@@ -395,17 +392,6 @@ export interface GitHubClient {
    * the whole catalog could only be tuned through declared parameters.
    */
   getGameSourceMap(ref: string, slug: string): Promise<Record<string, string> | null>;
-  /**
-   * Full deliverable source set for a repo-era game: the TS import graph plus
-   * every fixed delivery file that exists on the ref (`SPEC.md`, `index.html`,
-   * …). Used to fork a remix into a Studio draft when the session never held a
-   * store copy — the code-lane map alone is not enough to pass
-   * `putCandidateSources` (preview still requires SPEC + index + game.ts).
-   *
-   * Null when the game has no entry point (same absence as {@link getGameSourceMap}).
-   * A missing optional fixed file is omitted rather than failing the whole set.
-   */
-  getGameDeliverySources(ref: string, slug: string): Promise<Record<string, string> | null>;
   /**
    * `shared/game-kit.d.ts` — the ambient declaration every game is written
    * against.
@@ -1255,42 +1241,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       // of", and the two would drift the first time an import convention moved.
       await bundleGameTypeScript(entry, ref, slug, undefined, collected);
       return Object.fromEntries(collected);
-    },
-
-    async getGameDeliverySources(ref, slug) {
-      const modules = await this.getGameSourceMap(ref, slug);
-      if (!modules) return null;
-      // Fixed files the store delivery contract accepts. Read in parallel; absent
-      // ones (TRACE on a preview-only fork, AGENT on an older game) are skipped.
-      // game.ts is already in `modules` from the walk — re-reading it is fine and
-      // keeps this list identical to DELIVERY_FIXED_FILES rather than a fork of it.
-      const fixedEntries = await Promise.all(
-        DELIVERY_FIXED_FILES.map(async (relative) => {
-          const content = await readRawFile(`games/${slug}/${relative}`, ref);
-          return content === null ? null : ([relative, content] as const);
-        }),
-      );
-      const sources: Record<string, string> = { ...modules };
-      for (const entry of fixedEntries) {
-        if (entry) sources[entry[0]] = entry[1];
-      }
-      const manifestSource = sources['GAME.json'];
-      if (manifestSource) {
-        await appendDeclaredImageSources(sources, manifestSource, (relPath) =>
-          readRawBytes(`games/${slug}/${relPath}`, ref),
-        );
-        // Every game relies on this — neither file is ever committed anymore.
-        if (!sources['index.html']?.trim()) {
-          const title = sources['SPEC.md'] ? parseSpecTitle(sources['SPEC.md']) : null;
-          const generated = generateIndexHtmlFromManifest(manifestSource, title ?? slug);
-          if (generated !== null) sources['index.html'] = generated;
-        }
-        if (!sources['style.css']?.trim()) {
-          const generated = generateStyleCssFromManifest(manifestSource);
-          if (generated !== null) sources['style.css'] = generated;
-        }
-      }
-      return sources;
     },
 
     async getGameKitDeclaration(ref) {

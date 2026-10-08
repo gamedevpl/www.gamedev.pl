@@ -26,7 +26,7 @@ judgment_ from someone who knows what the shelf should feel like.
 | Client env         | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time.                                                |
 | Storage            | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass archives the prior row to `gameAssessmentHistory` before overwriting.                         |
 | Resolution         | Operator marks a verdict **addressed** / **won't fix** / **deferred** with a required comment (and optional link). Stored on the row; a fresh reviewer pass clears it into history. |
-| Operator read      | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.                                                              |
+| Operator read      | Ops console (was `/admin/assessments`) — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.                                            |
 | Sweeps             | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips by 24h from `startedAt`; manual Release.                                                  |
 | Targeted re-review | Operator picks explicit `slugs` × `reviewerUids` (`reviewReRequests/{slug}:{reviewerUid}`) to re-surface a slug for one reviewer outside any sweep — see below.                     |
 | Notify             | Starting or re-notifying a sweep, or a targeted re-review, fans out `operator.review_sweep` to the intended reviewers (in-app + email + push).                                      |
@@ -35,8 +35,8 @@ judgment_ from someone who knows what the shelf should feel like.
 
 - Auto-unpublishing or auto-filing issues from a cut. Operator publish is default-deny
   until one `keep` (or an override with a written reason); two reviewers can still block
-  with a cut consensus. Handoff is **Copy JSON** on Admin → Assessments into a
-  coding-agent chat — see
+  with a cut consensus. Handoff is an assessments JSON export (ops console or
+  `npm run assess:list -- --json`) pasted into a coding-agent chat — see
   [`.claude/skills/ingest-desk-reviews/SKILL.md`](../.claude/skills/ingest-desk-reviews/SKILL.md).
 - Star ratings or free-form rubrics beyond the fixed five-axis checklist.
 - Granting reviewers access to _private_ (unshared) creator drafts.
@@ -84,6 +84,12 @@ Unset / empty means nobody extra is a reviewer. Locally: `REVIEWER_UIDS=dev:loca
 (or pass `reviewerUids` into `buildApp` in tests).
 
 ## API
+
+> **Since 2026-10:** the operator rows below (`/api/admin/*`) no longer answer a browser.
+> The [operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console) in the private ops repo reads assessments, history and sweep lists from
+> Firestore directly; starting/changing sweeps and re-review requeue go through
+> `/api/internal/ops/*` (see [architecture](architecture.md)). The `GET` and `resolve`
+> operator routes were removed.
 
 | Method | Path                                                | Who      | Body / query                                                                                                                   |
 | ------ | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -167,7 +173,7 @@ the archived history row keeps the old resolution, and the new verdict starts op
 targeted re-review to ask a reviewer to look again after a fix; the two compose — requeue,
 then resolve once the new verdict comes back.
 
-Admin → Assessments shows resolved/open per game, an **unresolved only** filter on the
+The assessments view (Admin → Assessments, now in the ops repo console) shows resolved/open per game, an **unresolved only** filter on the
 recent rows, and the resolve form itself. `Copy JSON` carries `resolved` / `open` totals
 and each row's `resolution`, so an agent reading the export can skip what was handled.
 
@@ -228,7 +234,7 @@ into the existing `health` bucket (same unlisted-console posture as `/admin`).
 - ✅ **Resolution** — an operator records what was done about a verdict, and how; see
   "Resolving an assessment" above. Still open: nothing links a resolution to the games-repo
   commit automatically, and nothing nags about long-open cuts.
-- Optional CSV for offline curation — **Copy JSON** on Admin → Assessments is enough for
+- Optional CSV for offline curation — a JSON export (ops console or `assess:list --json`) is enough for
   agent paste handoff ([`ingest-desk-reviews`](../.claude/skills/ingest-desk-reviews/SKILL.md)).
 - ✅ **Editorial signal class** — creator-source cut consensus (≥2 reviewers, cut ≥ keep)
   persists an `editorial` Studio suggestion via the nightly suggestion sweep

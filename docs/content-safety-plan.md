@@ -164,7 +164,8 @@ this is the half of its mitigation that reads the artifact.
 - **Reviewer abuse flag — the mechanism (2026-09-12)**: the review desk's keep/cut/skip vocabulary
   cannot express abuse, so a reviewer who found it had to write a note that reached nobody
   with authority. `POST /api/review/flags` is a separate action from the verdict, needs no
-  consensus, and lands in an operator queue (`GET /api/admin/moderation-flags`). Resolving
+  consensus, and lands in an operator queue (`GET /api/admin/moderation-flags`, since replaced by the ops
+  repo console reading the flags from Firestore; resolving goes through `/api/internal/ops/*`). Resolving
   one with `taken_down` archives the publication **and** closes the draft's share link in
   the same call — abuse lives in shared drafts as readily as in published games.
 

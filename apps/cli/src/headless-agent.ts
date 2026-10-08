@@ -11,11 +11,13 @@ import {
   createVibeParser,
   type AgentEvent,
   type AgentOutputParser,
+  type AgentTask,
   type CodingAgent,
 } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import type { Steer } from './live-agent.js';
+import type { ApproveTool } from './agent-approval.js';
 import { evidenceImages } from './workbench-evidence.js';
 
 export type AdapterRunInput = {
@@ -30,6 +32,9 @@ export type AdapterRunInput = {
   onDiagnostic?: (line: string) => void;
   authCheck?: Promise<void>;
   onSteering?: (send: Steer | undefined) => void;
+  onApproval?: ApproveTool;
+  // Set by Auto-approve and YOLO; the adapter flags already carry it.
+  permissions?: AgentTask['permissions'];
 };
 export type AdapterRun = (input: AdapterRunInput) => Promise<{ code: number | null; permissionSession?: string }>;
 

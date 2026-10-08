@@ -41,6 +41,10 @@ The exception is the **hermetic** files — `frame-document`, `editor-sensing`, 
 token, so CI runs them on every PR (`npm run e2e:hermetic -w @gamedevpl/e2e`, job
 _Hermetic browser tests_ in `ci.yml`). A new file that needs neither belongs in that script.
 
+The same job also runs `framed-play` (`npm run e2e:framed-local`), against the API serving
+the branch's own web build on loopback, so an embedding regression fails the PR rather than
+the deploy.
+
 ### Do not put `GAMEDEV_ACCESS_TOKEN` in `ci.yml`
 
 This is a public repo, and making the suite run in CI is the obvious next thought. It is
@@ -110,6 +114,9 @@ so the suite stays read-only against production.
 `src/framed-play.test.ts` frames `/play/<slug>` from a routed cross-site host and reloads
 once the service worker controls the frame. It needs no token, and it runs against a local
 server as well as a candidate:
+
+`npm run e2e:framed-local -w @gamedevpl/e2e` does the last two steps after a web build
+(`npm run build -w @gamedevpl/web`), which is what CI runs. By hand:
 
 ```bash
 npm run build

@@ -103,7 +103,7 @@ describe('build event reads under a three-second poll', () => {
   it('takes a full page again once the probe window lapses', async () => {
     const { list, poll, tick } = await harness();
     await poll();
-    tick(61_000);
+    tick(5 * 60_000 + 1_000);
     await poll();
     expect(list.mock.calls.filter((c) => c[1]?.limit === 20)).toHaveLength(2);
   });
@@ -138,7 +138,7 @@ describe('build event reads under a three-second poll', () => {
 });
 
 describe('build media reads under status polling', () => {
-  it('serves previews and shots from 30s cache rather than re-reading every poll', async () => {
+  it('serves previews and shots from cache past the CLI backoff ceiling', async () => {
     const { store, assembler, tick } = await harness();
     await store.appendBuildPreview(JOB, { slug: 'airtime', label: 'Preview 1' });
     await store.appendBuildShot(JOB, { label: 'Shot 1' });
@@ -153,14 +153,19 @@ describe('build media reads under status polling', () => {
     expect(listPreviews).toHaveBeenCalledTimes(1);
     expect(listShots).toHaveBeenCalledTimes(1);
 
-    // After 6s, events probe expires (5s) but media cache (30s) stays cached
+    // After 6s, events probe expires (5s) but media stays cached
     tick(6_000);
     await poll();
     expect(listPreviews).toHaveBeenCalledTimes(1);
     expect(listShots).toHaveBeenCalledTimes(1);
 
-    // After 31s, media cache expires and is re-read
+    // A poll at the CLI's 30s backoff must still hit.
     tick(25_000);
+    await poll();
+    expect(listPreviews).toHaveBeenCalledTimes(1);
+
+    // Past two minutes the safety-net TTL lapses.
+    tick(2 * 60_000);
     await poll();
     expect(listPreviews).toHaveBeenCalledTimes(2);
     expect(listShots).toHaveBeenCalledTimes(2);

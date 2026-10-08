@@ -9,7 +9,6 @@ export function remixClientPayload(input: {
   contentDefaults: Record<string, unknown>;
   canAssist: boolean;
   canCode: boolean;
-  canSave: boolean;
   expiresInMs: number;
   html?: string | null;
   undoable?: boolean;
@@ -29,7 +28,6 @@ export function remixClientPayload(input: {
     contentDefaults: input.contentDefaults,
     canAssist,
     canCode,
-    canSave: input.canSave,
     suggestions: buildSuggestions(definition, { canAssist, canCode }),
     expiresInMs: input.expiresInMs,
     ...(input.html !== undefined ? { html: input.html } : {}),

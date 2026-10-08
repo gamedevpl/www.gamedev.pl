@@ -168,3 +168,55 @@ describe('embedded GameKit transport compatibility', () => {
     expect(result).not.toContain('__GDPL_RASTER_');
   });
 });
+
+describe('frame bootstrap host delivery', () => {
+  function boot(acceptsSource: boolean) {
+    class FakeMessageEvent {
+      readonly type: string;
+      readonly source: unknown = null;
+      #data: unknown;
+      constructor(type: string, init: { data?: unknown; source?: unknown } = {}) {
+        if ('source' in init && !acceptsSource) {
+          throw new TypeError("MessageEvent constructor: 'source' member of MessageEventInit could not be converted");
+        }
+        this.type = type;
+        this.#data = init.data;
+        if ('source' in init) this.source = init.source;
+      }
+      get data() {
+        return this.#data;
+      }
+    }
+    const port1 = { onmessage: null as ((event: unknown) => void) | null, postMessage() {}, close() {}, start() {} };
+    const host = { postMessage: vi.fn() };
+    const dispatched: FakeMessageEvent[] = [];
+    const win = { addEventListener() {}, dispatchEvent: (event: FakeMessageEvent) => dispatched.push(event) };
+    const html = withFrameDocument('<html><head></head><body></body></html>', 'nonce');
+    const body = /<script>\(function\(\)\{([\s\S]*?)\}\)\(\);<\/script>/.exec(html)![1]!;
+    new Function('parent', 'MessageChannel', 'MessageEvent', 'window', 'document', body)(
+      host,
+      function () {
+        return { port1, port2: {} };
+      },
+      FakeMessageEvent,
+      win,
+      { currentScript: { remove() {} } },
+    );
+    port1.onmessage!(new FakeMessageEvent('message', { data: { source: 'gdpl-host', type: 'resume' } }));
+    return { dispatched, host };
+  }
+
+  it('delivers host messages with the parent as source', () => {
+    const { dispatched, host } = boot(true);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]!.data).toEqual({ source: 'gdpl-host', type: 'resume' });
+    expect(dispatched[0]!.source).toBe(host);
+  });
+
+  it('still delivers host messages when the browser rejects the parent as a source', () => {
+    const { dispatched, host } = boot(false);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]!.data).toEqual({ source: 'gdpl-host', type: 'resume' });
+    expect(dispatched[0]!.source).toBe(host);
+  });
+});

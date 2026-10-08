@@ -5,6 +5,7 @@ export const SLASH_VERBS = [
   'logs',
   'kit',
   'play',
+  'stop',
   'games',
   'status',
   'share',
@@ -25,6 +26,7 @@ export const SLASH_VERBS = [
   'push',
   'diff',
   'update',
+  'permissions',
 ] as const;
 
 export type SlashVerb = (typeof SLASH_VERBS)[number];
@@ -32,6 +34,27 @@ export type SlashVerb = (typeof SLASH_VERBS)[number];
 export function completeSlash(prefix: string): SlashVerb[] {
   const needle = prefix.replace(/^\//, '').toLowerCase();
   return SLASH_VERBS.filter((verb) => verb.startsWith(needle));
+}
+
+function editDistance(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++)
+      next[j] = Math.min(row[j]! + 1, next[j - 1]! + 1, row[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length]!;
+}
+
+export function suggestSlash(command: string): SlashVerb | undefined {
+  const needle = command.replace(/^\//, '').toLowerCase();
+  let best: { verb: SlashVerb; distance: number } | undefined;
+  for (const verb of SLASH_VERBS) {
+    const distance = editDistance(needle, verb);
+    if (distance <= 2 && (!best || distance < best.distance)) best = { verb, distance };
+  }
+  return best?.verb;
 }
 
 const BOOLEAN_FLAGS = new Set([
@@ -44,6 +67,8 @@ const BOOLEAN_FLAGS = new Set([
   'reset',
   'no-open',
   'stop',
+  'list',
+  'all',
   'force',
   'publish',
   'handoff',

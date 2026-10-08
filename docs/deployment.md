@@ -313,7 +313,7 @@ carries the service-level objectives and the load-shedding ladder.
 
 ### Promotional game links during closed beta
 
-Open the operator console at `/admin/limits` and edit **Promotional game links**. Enter a
+Open the [operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console) in the private ops repo (`console/`) and edit **Promotional game links**. Enter a
 comma-separated list such as `airtime,another-game`, then save. The change is stored in
 Firestore and reaches instances within the displayed propagation window; no redeploy is
 needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstrapping an
@@ -356,7 +356,7 @@ the session cookie has decided who the browser is — signing in as someone else
 out — so renewal must never overwrite it. Three separate defects came from breaking one half of that
 (logout re-minting the session it cleared; a sign-in leaving the previous identity's
 cookie last; a replacement leaving the 30-day old cookie standing beside a 12-hour new
-one). The tests in `auth.test.ts` and `access-token-routes.test.ts` pin each case.
+one). The tests in `auth.test.ts` pin each case.
 
 ## The client address, and `TRUST_EDGE_CLIENT_IP`
 
@@ -691,8 +691,8 @@ Do not change the service `MAIL_FROM` — notification mail should keep using th
 
 ### Sending a one-time invite link
 
-When you do not know the invitee's email, open `/admin/waitlist` and use **One-time invite
-links → Create invite link**. Copy the returned link into the conversation. It is a bearer
+When you do not know the invitee's email, open the waitlist in the [operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)
+(private ops repo, `console/`) and use **One-time invite links → Create invite link**. Copy the returned link into the conversation. It is a bearer
 link: the first account to accept it through Google or Apple receives beta access, and the
 same link cannot be used by a second account. New links use `/invite#<code>`; the
 fragment stays in the browser and is excluded from HTTP request logs. Previously issued
@@ -705,7 +705,7 @@ unused link. If a link is lost or shared accidentally, revoke it and create a re
 
 A claim also writes the claimant's approved `waitlist` row (`recordBetaInviteAdmission`),
 which is what makes the invite durable rather than a one-session pass: the row is what
-`/admin/waitlist` lists and what `isWaitlistApproved` reads on every later sign-in. Without
+the ops console's waitlist lists and what `isWaitlistApproved` reads on every later sign-in. Without
 it the claimant would hold a 12-hour session and then be locked out, because the link that
 let them in is already spent. The row carries the uid always, and the email only when the
 provider verified it — the Google/Apple sign-in paths pass one, `/api/beta-invites/claim`
@@ -728,8 +728,24 @@ The dry run lists only UIDs and invite IDs; `--apply` writes these UID-only appr
 Coding agents authenticate to the deployed site with personal access tokens
 ([`agent-access-tokens.md`](./agent-access-tokens.md)). Deliberately **no new deployment
 config**: no Secret Manager entry, no Cloud Run env var, nothing to rotate at the
-infrastructure level. The only prerequisite is that `ADMIN_UIDS` already contains your uid,
-which it must for the operator telemetry views anyway.
+infrastructure level. Tokens are minted with your own gcloud credentials, from the CLI or
+the operator console in the private ops repo.
+
+### The operator console's door
+
+The browser console at `/admin` is gone, and every `/api/admin/*` route answers 404 to a
+browser. The operator console now runs locally from the private ops repo
+([`console/`](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)) on the
+operator's own gcloud credentials, reading and writing Firestore directly. The few actions
+that need this server (publish/preview/retry/cancel a job, regate/delete a game, remix,
+backfills, resolving a moderation flag, review sweeps and re-review, platform proposals)
+go through `/api/internal/ops/*` ([`ops-console.ts`](../apps/api/src/platform/ops-console.ts)),
+which admits a request only with a Google-signed ID token for the identity-only
+`ops-console@<project>.iam.gserviceaccount.com` service account **and** an
+`x-operator-uid` header naming a uid in `ADMIN_UIDS`. Both deploy paths derive the two env
+vars rather than reading repo variables: `OPS_CONSOLE_AUDIENCE`
+(`https://www.gamedev.pl/api/internal/ops`) and `OPS_CONSOLE_SA`. Missing either makes the
+door deny-all, like the other internal routes.
 
 ### Reviewer assessment desk
 
@@ -815,9 +831,9 @@ A slug is minted at submission now, so this is for records written before that a
 anything that died between the record and its slug. Those games still work — the studio
 addresses them by status token — but a token in the URL bar is what slugs exist to stop.
 
-There are two ways in, and they run the same code (`runSlugBackfill`): the operator route
-`POST /api/admin/slug-backfill?dryRun=1`, which needs an admin browser session, and the
-CLI, which needs only gcloud credentials for the project:
+There are two ways in, and they run the same code (`runSlugBackfill`): the operator
+console in the private ops repo (through the `/api/internal/ops/*` door, see above), and
+the CLI, which needs only gcloud credentials for the project:
 
 ```bash
 npm run slug:backfill -w @gamedevpl/api -- --dry-run   # report, write nothing
@@ -837,10 +853,10 @@ list, but the snapshot is what production actually serves and gcloud can already
 If that read fails the run stops rather than guess; `--skip-catalog` overrides, which is
 only safe when you already know the backlog's titles.
 
-The API is not involved and there is nothing to deploy. Note that
-`POST /api/admin/slug-backfill` is `isAdminSession`-only and answers 404 to a personal
-access token by design (see [agent access tokens](agent-access-tokens.md)) — the CLI is
-the path for when no browser session is available, not a way around that rule.
+The API is not involved and there is nothing to deploy. Note that the backfill route is
+reachable only through the ops door and answers 404 to a personal access token by design
+(see [agent access tokens](agent-access-tokens.md)) — the CLI is not a way around that
+rule, it simply needs project credentials instead.
 
 ## How to deploy manually
 

@@ -5,6 +5,12 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { createSessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
+import { savePlayJournal, type PlayJournal } from './workbench-launch.js';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { privatePlayDirectory } from './play-state.js';
+import { stopPlaySession } from './play.js';
 
 vi.mock('./workbench-phone.js', async (original) => ({
   ...(await original<typeof import('./workbench-phone.js')>()),
@@ -244,4 +250,64 @@ it('stops advertising expired phone pairing and allows a replacement', async () 
     'phone.url',
     replacement.url,
   );
+});
+
+it('serves mascot favicon without authentication', async () => {
+  const { url } = await fixture();
+  for (const path of ['/favicon.ico', '/favicon.svg']) {
+    const res = await fetch(`${url.origin}${path}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('image/svg+xml');
+    const svg = await res.text();
+    expect(svg).toContain('<svg');
+    expect(svg).toContain('fill="#00e4ac"');
+  }
+});
+
+it('stops the session on authenticated POST /stop', async () => {
+  const { url, headers, session } = await fixture();
+  const prompt = session.prompt();
+  const res = await fetch(`${url.origin}/stop`, {
+    method: 'POST',
+    headers,
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true });
+  expect(await prompt).toBe('/quit');
+});
+
+it('narrows stopPlaySession by slug and directory boundary', async () => {
+  const { url, session } = await fixture();
+  // A private tmpdir keeps the scan off real Play sessions.
+  const root = mkdtempSync(join(tmpdir(), 'gamedev-stop-test-'));
+  for (const name of ['TMPDIR', 'TMP', 'TEMP']) vi.stubEnv(name, root);
+  cleanup.push(async () => {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  });
+  expect(tmpdir()).toBe(root);
+  const base = join(root, `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
+  // A fresh tmpdir lacks this directory; launch creates it too.
+  privatePlayDirectory(base);
+  const journalPath = join(base, 'c'.repeat(64) + '.json');
+  const journal: PlayJournal = {
+    version: 1,
+    instance: 'test',
+    cwd: '/work/my-game',
+    checkout: { root: '/work/my-game', slug: 'my-game' },
+    slug: 'my-game',
+    url: url.href,
+  };
+  savePlayJournal(journalPath, journal);
+
+  // 1. Sibling directory must not match
+  expect(await stopPlaySession({ cwd: '/work/my-game-copy', write: vi.fn() })).toBe(false);
+
+  // 2. Different explicit slug inside same cwd must not match
+  expect(await stopPlaySession({ cwd: '/work/my-game', slug: 'other-game', write: vi.fn() })).toBe(false);
+
+  // 3. Matching explicit slug stops the session
+  const prompt = session.prompt();
+  expect(await stopPlaySession({ cwd: '/somewhere-else', slug: 'my-game', write: vi.fn() })).toBe(true);
+  expect(await prompt).toBe('/quit');
 });

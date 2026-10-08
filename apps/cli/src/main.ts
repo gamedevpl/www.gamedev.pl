@@ -4,8 +4,10 @@ import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.
 export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
+import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
+import { playSessionCommand } from './play-session-command.js';
 import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -157,6 +159,24 @@ export async function runCli(
   if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
+    choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
+    if (
+      !flags.help &&
+      !flags.h &&
+      (await playSessionCommand({
+        verb,
+        args,
+        flags,
+        cwd: process.cwd(),
+        write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
+        json: asJson
+          ? (value) => {
+              io.stdout.write(`${JSON.stringify(value)}\n`);
+            }
+          : undefined,
+      }))
+    )
+      return EXIT_GREEN;
     const workbench = selectWorkbenchEntry({
       verb,
       args,
@@ -205,6 +225,10 @@ export async function runCli(
       io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;
     }
+    if (verb === 'permissions') {
+      await permissionsCommand({ args, write: (line) => io.stdout.write(`${line}\n`) });
+      return EXIT_GREEN;
+    }
     if (verb === 'model') {
       await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
       return EXIT_GREEN;
@@ -231,7 +255,7 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'play') {
-      if (!flags.stop && findCheckout(process.cwd())) {
+      if (findCheckout(process.cwd())) {
         try {
           await offerKitUpdate({
             api,
@@ -251,7 +275,7 @@ export async function runCli(
         origin,
         env,
         noOpen: flags['no-open'] === true || asJson,
-        stop: flags.stop === true,
+        stop: false,
         telemetry,
         write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
       });

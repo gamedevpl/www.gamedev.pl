@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsInject, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 const allowAll: ContentChecker = {
@@ -104,6 +105,7 @@ describe('reviewer assessment desk', () => {
       contentChecker: allowAll,
       reviewerUids: opts.reviewerUids ?? 'dev:reviewer',
       adminUids: opts.adminUids ?? 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       reviewRoutes: {
         listCatalog: async () => catalog,
       },
@@ -160,11 +162,11 @@ describe('reviewer assessment desk', () => {
     expect(idle.statusCode).toBe(200);
     expect(JSON.parse(idle.body)).toEqual({ remaining: 0, sweep: null });
 
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps'),
+      headers: opsHeaders('dev:boss'),
       payload: { source: 'catalog', maxGames: 2, releasePerDay: null, notify: false },
     });
     expect(created.statusCode).toBe(200);
@@ -196,7 +198,8 @@ describe('reviewer assessment desk', () => {
     const boss = await sessionCookie(app, 'boss');
     const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: boss } });
     expect(JSON.parse(me.body).user.reviewer).toBe(true);
-    expect(JSON.parse(me.body).user.admin).toBe(true);
+    // Operator authority lives behind the ops door, never on the site.
+    expect(JSON.parse(me.body).user.admin).toBeUndefined();
     expect((await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: boss } })).statusCode).toBe(
       200,
     );
@@ -209,11 +212,11 @@ describe('reviewer assessment desk', () => {
     expect(JSON.parse(empty.body).emptyReason).toBe('no_active_sweep');
     expect(JSON.parse(empty.body).remaining).toBe(0);
 
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps'),
+      headers: opsHeaders('dev:boss'),
       payload: { source: 'catalog', maxGames: 2, releasePerDay: 1, notify: false },
     });
     expect(created.statusCode).toBe(200);
@@ -227,8 +230,8 @@ describe('reviewer assessment desk', () => {
 
     const released = await app.inject({
       method: 'POST',
-      url: `/api/admin/review-sweeps/${createdBody.sweep.id}`,
-      headers: { cookie: boss },
+      url: opsUrl(`/api/admin/review-sweeps/${createdBody.sweep.id}`),
+      headers: opsHeaders('dev:boss'),
       payload: { releaseMore: 1, notify: false },
     });
     expect(released.statusCode).toBe(200);
@@ -240,12 +243,12 @@ describe('reviewer assessment desk', () => {
 
   it('rejects new assessments outside the active released sweep', async () => {
     const { app } = await makeApp({ seedSweep: false });
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     const reviewer = await sessionCookie(app, 'reviewer');
     const created = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps'),
+      headers: opsHeaders('dev:boss'),
       payload: { source: 'catalog', maxGames: 2, releasePerDay: 1, notify: false },
     });
     expect(created.statusCode).toBe(200);
@@ -282,8 +285,8 @@ describe('reviewer assessment desk', () => {
     // Re-edit still works even if the sweep later pauses.
     const pause = await app.inject({
       method: 'POST',
-      url: `/api/admin/review-sweeps/${JSON.parse(created.body).sweep.id}`,
-      headers: { cookie: boss },
+      url: opsUrl(`/api/admin/review-sweeps/${JSON.parse(created.body).sweep.id}`),
+      headers: opsHeaders('dev:boss'),
       payload: { status: 'paused' },
     });
     expect(pause.statusCode).toBe(200);
@@ -304,7 +307,7 @@ describe('reviewer assessment desk', () => {
 
   it('snapshots drip progress when pausing a sweep', async () => {
     const { app, store } = await makeApp({ seedSweep: false });
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     const startedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
     await store.createReviewSweep({
       id: 'swp-drip',
@@ -325,8 +328,8 @@ describe('reviewer assessment desk', () => {
 
     const paused = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps/swp-drip',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps/swp-drip'),
+      headers: opsHeaders('dev:boss'),
       payload: { status: 'paused' },
     });
     expect(paused.statusCode).toBe(200);
@@ -435,7 +438,7 @@ describe('reviewer assessment desk', () => {
     expect(noChecklist.statusCode).toBe(400);
   });
 
-  it('includes shared creator drafts and exposes an admin aggregate', async () => {
+  it('includes shared creator drafts in a creator sweep', async () => {
     const { app, store } = await makeApp({ seedSweep: false });
     await store.upsertUser({ uid: 'g:creator', email: 'c@example.com', name: 'Creator' });
     await store.claimHandle('g:creator', 'pixel', new Date().toISOString());
@@ -444,11 +447,11 @@ describe('reviewer assessment desk', () => {
     await store.setSubmissionDeliveredVersion(42, 'v1');
     await store.setDraftShared(42, new Date().toISOString());
 
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     const sweep = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps'),
+      headers: opsHeaders('dev:boss'),
       payload: { source: 'creator', notify: false },
     });
     expect(sweep.statusCode).toBe(200);
@@ -489,65 +492,9 @@ describe('reviewer assessment desk', () => {
       },
     });
 
-    const summary = await app.inject({
-      method: 'GET',
-      url: '/api/admin/assessments',
-      headers: { cookie: boss },
-    });
-    expect(summary.statusCode).toBe(200);
-    const adminBody = JSON.parse(summary.body) as {
-      total: number;
-      games: Array<{ slug: string; keep: number }>;
-    };
-    expect(adminBody.total).toBe(1);
-    expect(adminBody.games[0]).toEqual(expect.objectContaining({ slug: 'draft-runner', keep: 1 }));
-
-    // Non-admins (even reviewers) cannot read the operator aggregate.
-    expect(
-      (
-        await app.inject({
-          method: 'GET',
-          url: '/api/admin/assessments',
-          headers: { cookie },
-        })
-      ).statusCode,
-    ).toBe(404);
-  });
-
-  it('aggregates every assessment while paginating detailed rows', async () => {
-    const { app, store } = await makeApp({ catalog: [] });
-    for (let i = 0; i < 210; i += 1) {
-      const slug = `game-${String(i).padStart(3, '0')}`;
-      await store.upsertGameAssessment({
-        slug,
-        title: `Game ${i}`,
-        source: 'catalog',
-        creatorHandle: null,
-        reviewerUid: 'dev:reviewer',
-        verdict: i % 2 === 0 ? 'keep' : 'cut',
-        note: 'seed',
-        noteOrigin: 'text',
-        checklist: { ...sampleChecklist },
-        clientContext: null,
-      });
-    }
-
-    const boss = await sessionCookie(app, 'boss');
-    const summary = await app.inject({
-      method: 'GET',
-      url: '/api/admin/assessments?offset=40&limit=200',
-      headers: { cookie: boss },
-    });
-    expect(summary.statusCode).toBe(200);
-    const body = JSON.parse(summary.body) as {
-      total: number;
-      games: Array<{ slug: string; keep: number; cut: number }>;
-      recent: unknown[];
-    };
-    expect(body).toEqual(expect.objectContaining({ total: 210, offset: 40, limit: 200, nextOffset: null }));
-    expect(body.games).toHaveLength(210);
-    expect(body.games.reduce((sum, g) => sum + g.keep + g.cut, 0)).toBe(210);
-    expect(body.recent).toHaveLength(170);
+    expect(await store.getGameAssessment('draft-runner', 'dev:reviewer')).toEqual(
+      expect.objectContaining({ source: 'creator', verdict: 'keep' }),
+    );
   });
 });
 
@@ -584,6 +531,7 @@ describe('targeted re-review', () => {
       contentChecker: allowAll,
       reviewerUids: 'dev:reviewer,dev:second',
       adminUids: 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       reviewRoutes: {
         listCatalog: async () => catalog,
       },
@@ -602,7 +550,7 @@ describe('targeted re-review', () => {
     const { app, store } = await makeApp();
     const reviewer = await sessionCookie(app, 'reviewer');
     const second = await sessionCookie(app, 'second');
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
 
     // First pass, via a normal sweep.
     await store.createReviewSweep({
@@ -637,16 +585,16 @@ describe('targeted re-review', () => {
     // Close out the sweep so only the targeted request drives the queue.
     await app.inject({
       method: 'POST',
-      url: '/api/admin/review-sweeps/swp-first',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-sweeps/swp-first'),
+      headers: opsHeaders('dev:boss'),
       payload: { status: 'completed' },
     });
 
     // A fix lands; requeue that one slug for that one reviewer.
     const requeue = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: {
         slugs: ['sky-dodge'],
         reviewerUids: ['dev:reviewer'],
@@ -688,18 +636,8 @@ describe('targeted re-review', () => {
     expect(second_assessment.verdict).toBe('keep');
     expect(second_assessment.gameVersion).toBe('v2'); // inherited from the re-review request
 
-    const history = await app.inject({
-      method: 'GET',
-      url: '/api/admin/assessments/history?slug=sky-dodge&reviewerUid=dev:reviewer',
-      headers: { cookie: boss },
-    });
-    expect(history.statusCode).toBe(200);
-    const historyBody = JSON.parse(history.body) as {
-      current: { verdict: string };
-      history: Array<{ verdict: string; note: string; gameVersion: string | null }>;
-    };
-    expect(historyBody.current.verdict).toBe('keep');
-    expect(historyBody.history).toEqual([
+    expect((await store.getGameAssessment('sky-dodge', 'dev:reviewer'))?.verdict).toBe('keep');
+    expect(await store.listGameAssessmentHistory('sky-dodge', 'dev:reviewer')).toEqual([
       expect.objectContaining({ verdict: 'cut', note: 'Controls are broken.', gameVersion: 'v1' }),
     ]);
 
@@ -711,7 +649,7 @@ describe('targeted re-review', () => {
   it.each(['v3', null])('preserves explicit catalog gameVersion %s over re-review metadata', async (gameVersion) => {
     const { app, store } = await makeApp();
     const reviewer = await sessionCookie(app, 'reviewer');
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     await store.upsertGameAssessment({
       slug: 'neon-courier',
       title: 'Neon Courier',
@@ -727,8 +665,8 @@ describe('targeted re-review', () => {
     });
     await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: { slugs: ['neon-courier'], reviewerUids: ['dev:reviewer'], gameVersion: 'v2', notify: false },
     });
     const assessment = await assess(app, reviewer, {
@@ -744,20 +682,20 @@ describe('targeted re-review', () => {
 
   it('rejects a requeue naming a uid that is not a reviewer, and caps slug x reviewer pairs', async () => {
     const { app } = await makeApp();
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
 
     const badReviewer = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:stranger'], notify: false },
     });
     expect(badReviewer.statusCode).toBe(400);
 
     const tooManyPairs = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: {
         slugs: Array.from({ length: 41 }, (_, i) => `game-${i}`),
         reviewerUids: ['dev:reviewer', 'dev:second', 'dev:boss', 'dev:boss', 'dev:boss'],
@@ -767,11 +705,10 @@ describe('targeted re-review', () => {
     expect(tooManyPairs.statusCode).toBe(400);
 
     // Only admins can requeue.
-    const reviewer = await sessionCookie(app, 'reviewer');
-    const asReviewer = await app.inject({
+    await sessionCookie(app, 'reviewer');
+    const asReviewer = await opsInject(app, 'dev:reviewer', {
       method: 'POST',
       url: '/api/admin/review-requeue',
-      headers: { cookie: reviewer },
       payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
     });
     expect(asReviewer.statusCode).toBe(404);
@@ -780,15 +717,15 @@ describe('targeted re-review', () => {
   it('counts a targeted re-review in the nav badge with no active sweep', async () => {
     const { app } = await makeApp();
     const reviewer = await sessionCookie(app, 'reviewer');
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
 
     const idle = await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
     expect(JSON.parse(idle.body)).toEqual({ remaining: 0, sweep: null });
 
     await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
     });
 
@@ -797,20 +734,19 @@ describe('targeted re-review', () => {
   });
 
   it('rejects a slug that is neither in the catalog nor a reviewable draft', async () => {
-    const { app } = await makeApp();
-    const boss = await sessionCookie(app, 'boss');
+    const { app, store } = await makeApp();
+    await sessionCookie(app, 'boss');
 
     const res = await app.inject({
       method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
+      url: opsUrl('/api/admin/review-requeue'),
+      headers: opsHeaders('dev:boss'),
       payload: { slugs: ['does-not-exist'], reviewerUids: ['dev:reviewer'], notify: false },
     });
     expect(res.statusCode).toBe(400);
 
     // No phantom request was left behind for the valid slug either.
-    const list = await app.inject({ method: 'GET', url: '/api/admin/review-requeue', headers: { cookie: boss } });
-    expect(JSON.parse(list.body).requests).toEqual([]);
+    expect(await store.listReReviewRequests()).toEqual([]);
   });
 });
 
@@ -840,6 +776,7 @@ describe('assessment resolution', () => {
       contentChecker: allowAll,
       reviewerUids: opts.reviewerUids ?? 'dev:reviewer',
       adminUids: 'dev:boss',
+      opsConsole: { verifier: opsTestVerifier },
       reviewRoutes: { listCatalog: async () => catalog },
     });
     const now = new Date().toISOString();
@@ -869,206 +806,31 @@ describe('assessment resolution', () => {
     return JSON.parse(res.body).assessment;
   }
 
-  it('records what an operator did about a verdict, and how', async () => {
+  it('reopens a resolved verdict when a fresh one lands, archiving the follow-up', async () => {
     const { app, store } = await makeApp();
-    const boss = await sessionCookie(app, 'boss');
+    await sessionCookie(app, 'boss');
     const reviewer = await sessionCookie(app, 'reviewer');
     await assess(app, reviewer, {
       slug: 'sky-dodge',
       source: 'catalog',
       verdict: 'cut',
-      note: 'Controls are broken on touch.',
+      note: 'Too slow to start.',
       checklist: sampleChecklist,
     });
-
-    // Reviewers judge; only the operator console records the response.
-    expect(
-      (
-        await app.inject({
-          method: 'POST',
-          url: '/api/admin/assessments/resolve',
-          headers: { cookie: reviewer },
-          payload: { slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: 'addressed', comment: 'done' },
-        })
-      ).statusCode,
-    ).toBe(404);
-
-    // An unexplained "addressed" is what this stops.
-    const blank = await app.inject({
-      method: 'POST',
-      url: '/api/admin/assessments/resolve',
-      headers: { cookie: boss },
-      payload: { slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: 'addressed', comment: '   ' },
+    // The ops console records resolutions straight to Firestore.
+    const written = await store.setGameAssessmentResolution('sky-dodge', 'dev:reviewer', {
+      status: 'wont_fix',
+      comment: 'Pacing is the point of this one.',
+      link: null,
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: 'dev:boss',
     });
-    expect(blank.statusCode).toBe(400);
-    expect(JSON.parse(blank.body).error).toBe('comment is required');
-
-    const resolved = await app.inject({
-      method: 'POST',
-      url: '/api/admin/assessments/resolve',
-      headers: { cookie: boss },
-      payload: {
-        slug: 'sky-dodge',
-        reviewerUid: 'dev:reviewer',
-        status: 'addressed',
-        comment: 'Rebuilt the touch controls.',
-        link: 'https://github.com/gamedevpl/www.gamedev.pl-games/pull/12',
-      },
-    });
-    expect(resolved.statusCode).toBe(200);
-    const resolvedBody = JSON.parse(resolved.body) as {
-      resolved: boolean;
-      assessments: Array<{ resolution: { status: string; comment: string; link: string; resolvedBy: string } }>;
-    };
-    expect(resolvedBody.resolved).toBe(true);
-    expect(resolvedBody.assessments[0].resolution).toEqual(
-      expect.objectContaining({
-        status: 'addressed',
-        comment: 'Rebuilt the touch controls.',
-        link: 'https://github.com/gamedevpl/www.gamedev.pl-games/pull/12',
-        resolvedBy: 'dev:boss',
-      }),
-    );
-    expect(await store.getGameAssessment('sky-dodge', 'dev:reviewer')).toEqual(
-      expect.objectContaining({ resolution: expect.objectContaining({ status: 'addressed' }) }),
-    );
-
-    // The aggregate counts, and can list, what is open.
-    const summary = await app.inject({
-      method: 'GET',
-      url: '/api/admin/assessments',
-      headers: { cookie: boss },
-    });
-    const summaryBody = JSON.parse(summary.body) as {
-      resolved: number;
-      open: number;
-      games: Array<{ slug: string; resolved: number; open: number }>;
-    };
-    expect(summaryBody).toEqual(expect.objectContaining({ resolved: 1, open: 0 }));
-    expect(summaryBody.games[0]).toEqual(expect.objectContaining({ slug: 'sky-dodge', resolved: 1, open: 0 }));
-
-    const openOnly = await app.inject({
-      method: 'GET',
-      url: '/api/admin/assessments?resolution=open',
-      headers: { cookie: boss },
-    });
-    expect(JSON.parse(openOnly.body)).toEqual(expect.objectContaining({ total: 1, matched: 0, recent: [] }));
-
-    // Withdrawing a resolution filed by mistake.
-    const cleared = await app.inject({
-      method: 'POST',
-      url: '/api/admin/assessments/resolve',
-      headers: { cookie: boss },
-      payload: { slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: null },
-    });
-    expect(cleared.statusCode).toBe(200);
-    expect(JSON.parse(cleared.body).assessments[0].resolution).toBeNull();
-  });
-
-  it('refuses a resolution aimed at a verdict that has already moved', async () => {
-    const { app, store } = await makeApp();
-    const boss = await sessionCookie(app, 'boss');
-    const reviewer = await sessionCookie(app, 'reviewer');
-    const first = await assess(app, reviewer, {
-      slug: 'sky-dodge',
-      source: 'catalog',
-      verdict: 'cut',
-      note: 'Controls are broken on touch.',
-      checklist: sampleChecklist,
-    });
-
-    // Reviewer re-assesses while the operator holds the old row.
-    await app.inject({
-      method: 'POST',
-      url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
-      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
-    });
-    await assess(app, reviewer, {
-      slug: 'sky-dodge',
-      source: 'catalog',
-      verdict: 'keep',
-      note: 'Fixed in the new build.',
-      checklist: sampleChecklist,
-    });
-
-    // Fabricated: no reliance on millisecond clock granularity.
-    const staleStamp = new Date(Date.parse(first.updatedAt) - 60_000).toISOString();
-    const stale = await app.inject({
-      method: 'POST',
-      url: '/api/admin/assessments/resolve',
-      headers: { cookie: boss },
-      payload: {
-        slug: 'sky-dodge',
-        reviewerUid: 'dev:reviewer',
-        expectedUpdatedAt: staleStamp,
-        status: 'addressed',
-        comment: 'Rebuilt the touch controls.',
-      },
-    });
-    expect(stale.statusCode).toBe(409);
-    expect(JSON.parse(stale.body).error).toBe('stale_verdict');
-    expect((await store.getGameAssessment('sky-dodge', 'dev:reviewer'))?.resolution).toBeNull();
-
-    // Aimed at the verdict actually on the row, it lands.
-    const current = await store.getGameAssessment('sky-dodge', 'dev:reviewer');
-    const fresh = await app.inject({
-      method: 'POST',
-      url: '/api/admin/assessments/resolve',
-      headers: { cookie: boss },
-      payload: {
-        slug: 'sky-dodge',
-        reviewerUid: 'dev:reviewer',
-        expectedUpdatedAt: current!.updatedAt,
-        status: 'addressed',
-        comment: 'Rebuilt the touch controls.',
-      },
-    });
-    expect(fresh.statusCode).toBe(200);
-    expect(JSON.parse(fresh.body).stale).toEqual([]);
-  });
-
-  it('resolves every reviewer row for a slug when no reviewer is named, and a fresh verdict reopens it', async () => {
-    const { app, store } = await makeApp({ reviewerUids: 'dev:reviewer,dev:second' });
-    const boss = await sessionCookie(app, 'boss');
-    const reviewer = await sessionCookie(app, 'reviewer');
-    const second = await sessionCookie(app, 'second');
-    for (const cookie of [reviewer, second]) {
-      await assess(app, cookie, {
-        slug: 'sky-dodge',
-        source: 'catalog',
-        verdict: 'cut',
-        note: 'Too slow to start.',
-        checklist: sampleChecklist,
-      });
-    }
-
-    const resolved = await app.inject({
-      method: 'POST',
-      url: '/api/admin/assessments/resolve',
-      headers: { cookie: boss },
-      payload: { slug: 'sky-dodge', status: 'wont_fix', comment: 'Pacing is the point of this one.' },
-    });
-    expect(resolved.statusCode).toBe(200);
-    expect(JSON.parse(resolved.body).assessments).toHaveLength(2);
-
-    // A missing game is a 404, not a silent no-op.
-    expect(
-      (
-        await app.inject({
-          method: 'POST',
-          url: '/api/admin/assessments/resolve',
-          headers: { cookie: boss },
-          payload: { slug: 'no-such-game', status: 'addressed', comment: 'nothing to do' },
-        })
-      ).statusCode,
-    ).toBe(404);
+    expect(written.status).toBe('ok');
 
     // A second pass archives the follow-up with the old row.
-    await app.inject({
+    await opsInject(app, 'dev:boss', {
       method: 'POST',
       url: '/api/admin/review-requeue',
-      headers: { cookie: boss },
       payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
     });
     await assess(app, reviewer, {

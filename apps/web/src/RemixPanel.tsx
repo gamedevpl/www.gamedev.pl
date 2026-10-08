@@ -7,10 +7,9 @@ import { recordRemixStep } from './visitTelemetry.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import {
-  coerceSharedParams,
+  isRemixClosed,
   remixAssist,
   remixCode,
-  remixSave,
   remixShare,
   remixUndo,
   startRemix,
@@ -30,7 +29,6 @@ import type {
   EditorParamValue,
 } from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
-import { suggestedKeepTitle } from './pageTitle.js';
 import { ingestRemixSummary } from './remixChatCopy.js';
 import { composeRemixOutcome, describeParamChanges } from './remixChangeCopy.js';
 import {
@@ -44,14 +42,12 @@ import {
   type RemixChanged,
   type RemixNote,
 } from './remixSessionPersist.js';
-import { NAVIGATE_EVENT, playPath } from './core/router.js';
 import { useRemixGrip } from './useRemixGrip.js';
-import { RemixActionRow, RemixKeepOffer, RemixTranscript } from './RemixChatParts.js';
+import { RemixActionRow, RemixTranscript } from './RemixChatParts.js';
 import './remix-composer.css';
 import './remix-result.css';
 import './remix-editor-stage.css';
 
-const KEEP_OFFER_AFTER = 3;
 /** After this many landings the sheet becomes a mini sidebar chat. */
 const CHAT_MODE_AFTER = 2;
 
@@ -215,19 +211,8 @@ export function RemixPanel(props: {
   const failStreakRef = useRef(0);
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(() => restored?.undo ?? null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  /**
-   * How many times a change has actually landed this session.
-   *
-   * The keep-in-Studio offer waits until this crosses {@link KEEP_OFFER_AFTER}:
-   * forking on the first nudge trains people to tap a big button instead of
-   * playing, and the name they would give then is not yet earned.
-   */
+  // Landed changes this session; enough of them docks the sheet into chat.
   const [successCount, setSuccessCount] = useState(() => restored?.successCount ?? 0);
-  const [keepOfferOpen, setKeepOfferOpen] = useState(false);
-  const [keepOfferDismissed, setKeepOfferDismissed] = useState(false);
-  const [keepSaved, setKeepSaved] = useState(false);
-  const [keepTitle, setKeepTitle] = useState('');
   /**
    * Visible conversation for the mini-chat. Server session.turns feeds the
    * model; this list is what the player reads after the panel docks.
@@ -263,7 +248,7 @@ export function RemixPanel(props: {
   /** The player's own words, echoed back while the rebuild runs. */
   const [asked, setAsked] = useState(() => restored?.asked ?? '');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const [failed, setFailed] = useState<'unsupported' | 'error' | null>(null);
+  const [failed, setFailed] = useState<'unsupported' | 'off' | 'error' | null>(null);
   const valuesRef = useRef(values);
   valuesRef.current = values;
   /**
@@ -440,10 +425,12 @@ export function RemixPanel(props: {
     function applyDeclaration(started: RemixSession, keepValues: boolean) {
       if (!keepValues) {
         const base = started.values ?? {};
-        const merged =
-          props.initialParams && started.params
-            ? coerceSharedParams(started.params, { ...base, ...props.initialParams })
-            : base;
+        const declared = started.params ?? {};
+        // The server already validated shared values; keep only declared keys.
+        const shared = Object.fromEntries(
+          Object.entries(props.initialParams ?? {}).filter(([key]) => Object.hasOwn(declared, key)),
+        );
+        const merged = { ...base, ...shared };
         setValues(merged);
       }
       if (!restored?.contentDoc) {
@@ -490,7 +477,9 @@ export function RemixPanel(props: {
         if (props.initialParams) window.setTimeout(() => pushToGame(valuesRef.current), 300);
       })
       .catch((error: RemixApiError) => {
-        if (!cancelled) setFailed(error.status === 404 ? 'unsupported' : 'error');
+        if (cancelled) return;
+        if (isRemixClosed(error)) clearRemixSnapshot();
+        setFailed(isRemixClosed(error) ? 'off' : error.status === 404 ? 'unsupported' : 'error');
       });
     return () => {
       cancelled = true;
@@ -609,17 +598,6 @@ export function RemixPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on arrival
   }, [props.undoable]);
 
-  // An older server omits canSave; only an explicit false hides Keep.
-  const canKeep = session?.canSave !== false;
-
-  // Engagement threshold: after a few landings, ask once whether to keep it.
-  // Dismissed stays dismissed for the session; the header "Keep…" is the escape.
-  useEffect(() => {
-    if (!canKeep || successCount < KEEP_OFFER_AFTER || keepOfferDismissed || keepSaved || keepOfferOpen) return;
-    setKeepTitle((current) => current.trim() || suggestedKeepTitle(props.slug, user?.handle));
-    setKeepOfferOpen(true);
-  }, [canKeep, successCount, keepOfferDismissed, keepSaved, keepOfferOpen, props.slug, user?.handle]);
-
   const chatMode = successCount >= CHAT_MODE_AFTER;
   const transcriptRef = useRef<HTMLOListElement | null>(null);
   const sawChatModeRef = useRef(chatMode);
@@ -728,14 +706,17 @@ export function RemixPanel(props: {
     return t(`remix.try.${direction}`, { label: name });
   }
 
-  /** A change the player can see and play — the only ones that count toward Keep. */
+  /** A change the player can see and play — the only ones that count toward chat mode. */
   function noteSuccessfulChange() {
     setSuccessCount((n) => n + 1);
   }
 
-  function openKeepOffer() {
-    setKeepTitle((current) => current.trim() || suggestedKeepTitle(props.slug, user?.handle));
-    setKeepOfferOpen(true);
+  // Author switched remix off mid-session: say so, drop the session.
+  function closedByAuthor(error: unknown): boolean {
+    if (!isRemixClosed(error)) return false;
+    clearRemixSnapshot();
+    setFailed('off');
+    return true;
   }
 
   function appendChat(role: ChatTurn['role'], text: string, options?: { canUndo?: boolean; missed?: boolean }) {
@@ -759,11 +740,6 @@ export function RemixPanel(props: {
   /** Player-facing summary from a bilingual model reply. */
   function summaryFor(utteranceText: string, summary: EditorLabel | undefined, fallback: string): string {
     return ingestRemixSummary(summary, utteranceText, i18n.language, fallback);
-  }
-
-  function dismissKeepOffer() {
-    setKeepOfferOpen(false);
-    setKeepOfferDismissed(true);
   }
 
   function setParam(key: string, value: EditorParamValue) {
@@ -888,6 +864,7 @@ export function RemixPanel(props: {
         }
       } catch (error) {
         setLane('idle');
+        if (closedByAuthor(error)) return;
         const status = (error as RemixApiError).status;
         const miss = status === 429 ? t('remix.quota') : t('remix.unavailable');
         appendChat('assistant', miss, { missed: true });
@@ -967,6 +944,7 @@ export function RemixPanel(props: {
       // Whatever went wrong — timeout, network, 5xx — the old document simply
       // resumes; the player never pays for our slow afternoon with their run.
       postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'resume' });
+      if (closedByAuthor(error)) return;
       failStreakRef.current += 1;
       const status = (error as RemixApiError).status;
       const timedOut = controller.signal.aborted;
@@ -1015,8 +993,9 @@ export function RemixPanel(props: {
       setChatTurns((prev) => prev.map((turn) => (turn.canUndo ? { ...turn, canUndo: false } : turn)));
       if (chatMode) appendChat('assistant', t('remix.undone'), { canUndo: result.undoable });
       else setNote({ kind: 'ok', text: t('remix.undone') });
-    } catch {
+    } catch (error) {
       postToGameFrame(props.frameRef.current, { source: 'gdpl-host', type: 'resume' });
+      if (closedByAuthor(error)) return;
       setNote({ kind: 'error', text: t('remix.undoFailed') });
     } finally {
       setLane('idle');
@@ -1038,12 +1017,8 @@ export function RemixPanel(props: {
       // game ran a frame. Without this the funnel counts a broken build as a
       // success and can never say whether the safety flow is working.
       recordRemixStep('broken');
-      // Counted as a landing when the rebuild returned; a throw means it was not
-      // one. Roll the counter back and close any Keep sheet that opened on the
-      // strength of that landing — otherwise keepOfferOpen stays true (hiding
-      // the header hatch) and the sheet pops back after Undo clears `broke`.
+      // Counted as a landing when the rebuild returned; a throw means it was not one.
       setSuccessCount((n) => Math.max(0, n - 1));
-      setKeepOfferOpen(false);
       setChanged((current) => (current ? { ...current, broke: true, canShare: false } : current));
     }
     function stop() {
@@ -1071,7 +1046,7 @@ export function RemixPanel(props: {
     if (!session) return;
     try {
       const result = await remixShare(session.remixId, valuesRef.current);
-      const url = `${window.location.origin}/play/${result.slug}?remix=${result.code}`;
+      const url = `${window.location.origin}/play/${props.slug}?remix=${encodeURIComponent(result.code)}`;
       setShareUrl(url);
       recordRemixStep('shared');
       await navigator.clipboard?.writeText(url).catch(() => {});
@@ -1087,61 +1062,16 @@ export function RemixPanel(props: {
             ? t('remix.sharedWithoutContent')
             : t('remix.shared'),
       });
-    } catch {
-      setNote({ kind: 'error', text: t('remix.shareFailed') });
-    }
-  }
-
-  /**
-   * Keep the remixed sources as a private Studio draft under a new slug.
-   *
-   * Earned: only offered after a change has landed. Navigates to Studio on
-   * success — the remix panel has nowhere left to point once the draft exists.
-   */
-  async function saveAsMine() {
-    if (!session || saving) return;
-    const title = keepTitle.trim();
-    if (title.length < 2) return;
-    setSaving(true);
-    setNote(null);
-    try {
-      const result = await remixSave(session.remixId, {
-        title,
-        params: valuesRef.current,
-        ...(contentEditedRef.current ? { content: contentDocRef.current } : {}),
-      });
-      recordRemixStep('keep_clicked');
-      setKeepSaved(true);
-      setKeepOfferOpen(false);
-      clearRemixSnapshot();
-      // `/play/<slug>` — same permalink before and after publish. Studio is for later edits.
-      const path = result.openPath || playPath(result.slug);
-      window.history.pushState(null, '', path);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-      window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
-      props.onClose();
     } catch (error) {
-      const err = error as RemixApiError;
-      const text =
-        err.status === 429
-          ? t('remix.saveQuota')
-          : err.reason === 'source_access_required'
-            ? t('remix.saveNotYours')
-            : err.reason === 'no_sources'
-              ? t('remix.saveNoSources')
-              : err.reason === 'no_changes'
-                ? t('remix.saveNoChanges')
-                : t('remix.saveFailed');
-      setNote({ kind: 'error', text });
-    } finally {
-      setSaving(false);
+      if (closedByAuthor(error)) return;
+      setNote({ kind: 'error', text: t('remix.shareFailed') });
     }
   }
 
   if (failed) {
     return (
       <div className="remix-panel remix-panel-note" role="alert">
-        {failed === 'unsupported' ? t('remix.notHere') : t('remix.unavailable')}
+        {failed === 'off' ? t('remix.off') : failed === 'unsupported' ? t('remix.notHere') : t('remix.unavailable')}
         <button type="button" className="secondary-btn" onClick={closeSheet}>
           {t('remix.close')}
         </button>
@@ -1213,7 +1143,7 @@ export function RemixPanel(props: {
 
   /*
    * Level editor owns the theater — not a widget inside the remix sheet.
-   * Done returns to the sheet (Keep/Share stay earned there). Edit ↔ Play only
+   * Done returns to the sheet (Share stays earned there). Edit ↔ Play only
    * moves focus; the painter tree and the game iframe both stay mounted.
    */
   if (painterStageActive && (session?.content || session?.layers)) {
@@ -1366,17 +1296,6 @@ export function RemixPanel(props: {
       <div className="remix-head">
         <span className="remix-title">{chatMode ? t('remix.chatTitle') : t('remix.title')}</span>
         <div className="remix-head-actions">
-          {/*
-           * Escape hatch once they've earned a landing: the auto-offer waits for
-           * a few successes, but someone who already knows they want to keep it
-           * shouldn't wait for the third nudge. Hidden until then so the head
-           * stays a title bar, not a toolbar.
-           */}
-          {canKeep && successCount >= 1 && !keepSaved && !keepOfferOpen && !changed?.broke ? (
-            <button type="button" className="remix-keep-link" onClick={openKeepOffer}>
-              {t('remix.keepOfferMenu')}
-            </button>
-          ) : null}
           <button
             type="button"
             className="remix-close"
@@ -1397,7 +1316,6 @@ export function RemixPanel(props: {
         chatTurns={chatTurns}
         lane={lane}
         slow={slow}
-        saving={saving}
         undo={undo}
         changed={changed}
         onUndo={undoLast}
@@ -1454,44 +1372,21 @@ export function RemixPanel(props: {
               <span>{t('remix.brokeIt')}</span>
             </p>
           ) : null}
-          {keepOfferOpen && !changed.broke ? (
-            <RemixKeepOffer
-              keepTitle={keepTitle}
-              saving={saving}
-              lane={lane}
-              onTitleChange={setKeepTitle}
-              onConfirm={() => void saveAsMine()}
-              onDismiss={dismissKeepOffer}
-            />
-          ) : (
-            <>
-              <RemixActionRow
-                chatMode={chatMode}
-                lane={lane}
-                saving={saving}
-                undo={undo}
-                changed={changed}
-                canPropose={canPropose}
-                proposing={proposing}
-                proposed={proposed}
-                onShare={() => void share()}
-                onPropose={() => setProposing(true)}
-                onUndo={undoLast}
-                onUndoCode={() => void undoCode()}
-              />
-              {composer(true)}
-            </>
-          )}
+          <RemixActionRow
+            chatMode={chatMode}
+            lane={lane}
+            undo={undo}
+            changed={changed}
+            canPropose={canPropose}
+            proposing={proposing}
+            proposed={proposed}
+            onShare={() => void share()}
+            onPropose={() => setProposing(true)}
+            onUndo={undoLast}
+            onUndoCode={() => void undoCode()}
+          />
+          {composer(true)}
         </>
-      ) : keepOfferOpen ? (
-        <RemixKeepOffer
-          keepTitle={keepTitle}
-          saving={saving}
-          lane={lane}
-          onTitleChange={setKeepTitle}
-          onConfirm={() => void saveAsMine()}
-          onDismiss={dismissKeepOffer}
-        />
       ) : canType ? (
         <>
           {composer(chatMode)}
@@ -1637,11 +1532,6 @@ export function RemixPanel(props: {
         </div>
       ) : null}
 
-      {/*
-       * Save-as-yours is earned and sequential: change something first, then
-       * keep it. The button lives in the post-change actions row above — never
-       * as a standing CTA under an empty composer (owner decision, 2026-08-02).
-       */}
       {/*
        * Expert mode is the owner's debug surface, not the player's, so its share
        * is not held to the earned-reward rule — moving a slider is a change, and

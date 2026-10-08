@@ -6,12 +6,14 @@ import { recoverRepl } from './recover.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { readFileSync } from 'node:fs';
 import { modelCommand } from './model-command.js';
+import { permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
+import { playSessionCommand } from './play-session-command.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
-import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
+import { completeSlash, parseArgv, SLASH_VERBS, suggestSlash, type SlashVerb } from './argv.js';
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
@@ -102,7 +104,21 @@ export async function handleReplLine(input: {
     await modelCommand({ ...parsed, env: input.env ?? process.env, pick: input.pick, write: input.write });
     return { next: 'continue' };
   }
+  if (trimmed === '/permissions' || trimmed.startsWith('/permissions ')) {
+    await permissionsCommand({ args: trimmed.split(/\s+/).slice(1), pick: input.pick, write: input.write });
+    return { next: 'continue' };
+  }
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
+  if (trimmed === '/stop' || trimmed.startsWith('/stop ')) {
+    const parsed = parseArgv(['node', 'cli', ...trimmed.slice(1).split(/\s+/)]);
+    await playSessionCommand({
+      ...parsed,
+      cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
+      write: input.write,
+      onLocalPreview: input.onLocalPreview,
+    });
+    return { next: 'continue', conversationId: input.conversationId };
+  }
   if (trimmed === '/kit' || trimmed === '/kit update') {
     const controller = new AbortController();
     if (input.abort) input.abort.current = controller;
@@ -252,8 +268,13 @@ export async function handleReplLine(input: {
         return { next: 'continue', conversationId: input.conversationId };
       }
     }
-    const matches = completeSlash(trimmed);
-    if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
+    const matches = completeSlash(cmd ?? '');
+    if (matches.includes(cmd as SlashVerb)) input.write(`/${cmd} is not available here. /help lists commands.`);
+    else if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
+    else {
+      const suggestion = suggestSlash(cmd ?? '');
+      input.write(`Unknown command /${cmd}.${suggestion ? ` Did you mean /${suggestion}?` : ''} /help lists commands.`);
+    }
     return { next: 'continue', conversationId: input.conversationId };
   }
   if (!retry) {

@@ -278,7 +278,7 @@ describe('agent concept frame slots', () => {
       payload: { purpose: 'concept' },
     });
     const body = minted.json();
-    const authorization = String(body.upload).match(/-H 'Authorization: ([^']+)'/)?.[1] ?? '';
+    const authorization = String(body.headers?.Authorization ?? '');
     await store.setSubmissionPreviewVersion(ISSUE, 'v8');
     const put = await app.inject({
       method: 'PUT',

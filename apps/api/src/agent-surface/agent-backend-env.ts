@@ -14,6 +14,7 @@ import { GEMINI_DEFAULT_MODEL } from './managed-provider-gemini.js';
 import { createManagedBackend, type ManagedRoundSignals } from './managed-backend.js';
 import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
 import type { KitDigestLoader } from './kit-digest.js';
+import { builderSystemPrompt } from './builder-system-prompt.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
 interface Logger {
@@ -209,7 +210,7 @@ function buildManagedBackendForVendor(
             brief.mcpOpenerToken ? { url: mcpUrl, token: brief.mcpOpenerToken } : undefined,
         }
       : {}),
-    ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
+    systemPrompt: deps?.systemPrompt ?? (async () => builderSystemPrompt({ shell: provider.shell === true })),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),

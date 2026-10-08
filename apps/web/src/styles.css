@@ -1888,19 +1888,17 @@ body.player-open {
   transition: none;
 }
 
-/* Even at full immersion, one labeled Menu stays. A phone has no Escape.
-   A GameKit game's own pause menu answers that key; every other game opens
-   the player menu from the same corner once the bar has faded. */
+/* A quiet thumb-sized door in the top-right corner replaces the bar's
+   last control as it fades and brings the complete bar back in one tap. */
 .theater-reveal-btn {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
   z-index: 11;
-  width: auto;
+  width: 44px;
   min-width: 44px;
   height: 44px;
-  padding: 0 12px;
-  gap: 6px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1921,19 +1919,6 @@ body.player-open {
     background 180ms ease,
     border-color 180ms ease,
     transform 180ms ease;
-}
-
-.theater-reveal-btn .menu-label {
-  font-weight: 700;
-}
-
-/* The game menu keeps the right corner. This one brings the bar back. */
-.theater-reveal-btn.theater-chrome-reveal {
-  right: auto;
-  left: max(12px, env(safe-area-inset-left));
-  width: 44px;
-  min-width: 44px;
-  padding: 0;
 }
 
 .theater-reveal-btn:hover,

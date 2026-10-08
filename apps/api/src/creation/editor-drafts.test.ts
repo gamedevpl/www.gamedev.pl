@@ -41,7 +41,7 @@ const VERSION_SOURCES: Record<string, string> = {
   'SPEC.md': '---\ntitle: Test\n---\nbody',
   // index.html is refused as an upload — howToPlay supplies markup instead.
   'GAME.json': JSON.stringify({
-    engine: { modules: ['gfx', 'audio', 'editor'] },
+    engine: { modules: ['drawing', 'gfx', 'audio', 'editor'] },
     howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
   }),
   'EDITOR.json': EDITOR_JSON,

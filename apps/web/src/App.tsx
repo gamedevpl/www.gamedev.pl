@@ -7,7 +7,7 @@ import { ArcadeCatalog } from './surfaces/catalog/ArcadeCatalog.js';
 import { UnpublishedPlayView } from './UnpublishedPlayView.js';
 import { CreatorQA } from './CreatorQA.js';
 import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
-import { adminPath, creatorPath, navUpTarget, playPath, reviewPath, studioPath } from './core/router.js';
+import { creatorPath, navUpTarget, playPath, reviewPath, studioPath } from './core/router.js';
 import { RouteChunkBoundary } from './appRouteRecovery.js';
 import { useAppNavigation } from './useAppNavigation.js';
 import { useGameTheater } from './useGameTheater.js';
@@ -47,9 +47,8 @@ import { ControllerView } from './surfaces/party/ControllerView.js';
 import { navigateToOAuthReturn, parseOAuthReturnParam } from './oauthRedirect.js';
 
 // Deferred: an anonymous player playing a published game never has to pay for the
-// weight of the admin console, the studio (and everything it drags in — the code
+// weight of the studio (and everything it drags in — the code
 // editor, the remix panel), the review desk, or party's multiplayer client.
-const AdminConsole = lazy(() => import('./surfaces/admin/AdminConsole.js').then((m) => ({ default: m.AdminConsole })));
 const CreatorStudioView = lazy(() =>
   import('./surfaces/studio/CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })),
 );
@@ -181,7 +180,6 @@ export function App() {
         home: t('pageTitle.home'),
         join: t('pageTitle.join'),
         invite: t('pageTitle.invite'),
-        health: t('pageTitle.health'),
         review: t('pageTitle.review'),
         studio: t('pageTitle.studio'),
         privacy: t('legal.privacy'),
@@ -278,7 +276,6 @@ export function App() {
     activeBuildCount,
     onHome: () => navigate('/'),
     onStudio: () => navigate(studioPath()),
-    onAdmin: () => navigate(adminPath()),
     onReview: () => navigate(reviewPath()),
     onCreate: handleCreateNav,
     onPlay: () => handleHomeAnchorNav('play-anchor'),
@@ -497,9 +494,7 @@ export function App() {
           }
         >
           <Suspense fallback={<p className="content-loading">{t('app.loadingSurface')}</p>}>
-            {route.view === 'admin' ? (
-              <AdminConsole section={route.section} onNavigate={navigate} />
-            ) : route.view === 'review' ? (
+            {route.view === 'review' ? (
               <ReviewDesk />
             ) : route.view === 'studioTransferPropose' ? (
               <StudioTransferProposalConfirm slug={route.game} proposalId={route.proposalId} onOpenStudio={navigate} />

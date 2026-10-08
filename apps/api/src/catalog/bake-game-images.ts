@@ -3,10 +3,9 @@ import {
   assertImageFileSize,
   assertImageSignature,
   decodeRasterSourceContent,
-  encodeRasterSourceContent,
   mimeForImagePath,
 } from '../platform/raster-source.js';
-import { imageLoaderBootJs, imageLoaderHtml, parseGameImages, type ImageManifest } from './raster-assets.js';
+import { imageLoaderBootJs, imageLoaderHtml, type ImageManifest } from './raster-assets.js';
 
 export async function resolveGameImageBytes(
   relative: string,
@@ -49,26 +48,4 @@ export async function bakeGameImageAssets(
     bootJs: imageLoaderBootJs(imageNames),
     loaderHtml: imageLoaderHtml(),
   };
-}
-
-export async function appendDeclaredImageSources(
-  sources: Record<string, string>,
-  manifestSource: string,
-  readBytes: (relPath: string) => Promise<Uint8Array | null>,
-): Promise<void> {
-  let images: ImageManifest;
-  try {
-    images = parseGameImages((JSON.parse(manifestSource) as { images?: unknown }).images);
-  } catch {
-    images = {};
-  }
-  for (const [name, relPath] of Object.entries(images)) {
-    const bytes = await readBytes(relPath);
-    if (!bytes) {
-      throw new Error(`game image "${name}" not found: ${relPath}`);
-    }
-    assertImageFileSize(name, bytes.byteLength);
-    assertImageSignature(name, relPath, bytes);
-    sources[relPath] = encodeRasterSourceContent(bytes);
-  }
 }

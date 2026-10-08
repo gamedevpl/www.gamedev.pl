@@ -4,6 +4,20 @@ import { SeedBudget, SEED_MAX_USD, SEED_TOTAL_OUTPUT_TOKENS } from './seed-budge
 const result = (outputTokens: number) => ({ parts: [], usage: { inputTokens: 20, outputTokens } });
 
 describe('SeedBudget', () => {
+  it('includes billed Gemini thoughts in the remaining output allowance', async () => {
+    const budget = new SeedBudget('gemini-3.8-flash');
+    await budget.call('generate', 'prompt', 8192, 1000, async () => ({
+      ...result(100),
+      raw: { usageMetadata: { candidatesTokenCount: 100, thoughtsTokenCount: 7000 } },
+    }));
+    let remaining = 0;
+    await budget.call('repair', 'prompt', 8192, 1000, async (_signal, cap) => {
+      remaining = cap;
+      return result(100);
+    });
+    expect(remaining).toBe(1092);
+  });
+
   it('shares the output allowance across pick, generation and repair', async () => {
     const budget = new SeedBudget('claude-sonnet-5-5');
     const caps: number[] = [];

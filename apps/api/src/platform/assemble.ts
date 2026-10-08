@@ -1,6 +1,7 @@
 import type { GameProject } from '@gamedevpl/contract';
 import { findCredentialLikeStrings } from './credential-scan.js';
 import { MAX_PROJECT_BYTES as CONTRACT_MAX_PROJECT_BYTES } from './games-repo-contract.js';
+import { protectGameScript } from './protect-script.js';
 
 /**
  * Combined html+js+css size cap. Sourced from `games-repo-contract.ts` so Check 4
@@ -106,6 +107,12 @@ ${project.html}
     <script>${hiddenFieldsJs}${project.js}</script>
   </body>
 </html>`;
+}
+
+// What players get: hygiene checked on the readable sources, then script hardened.
+export async function assemblePublishedGameHtml(project: GameProject, options: AssembleOptions = {}): Promise<string> {
+  assembleGameHtml(project, options);
+  return assembleGameHtml({ ...project, js: await protectGameScript(project.js) }, options);
 }
 
 // Escape `<` rather than drop the name: dropping leaves it unredacted.

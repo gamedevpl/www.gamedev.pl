@@ -1,10 +1,18 @@
 import type { FastifyRequest } from 'fastify';
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    // False on the site's doors; admin authority needs the ops door.
+    operatorDoor?: boolean;
+  }
+}
+
 export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
 }
 
-// Stricter than isAdmin — session only, never a personal access token.
+// Session only, never a PAT or blocked account; ops door only.
 export function isAdminSession(request: FastifyRequest, adminUids: Set<string> | undefined): boolean {
+  if (request.operatorDoor === false || request.user?.tier === 'blocked') return false;
   return request.authMethod === 'session' && isAdmin(request.user?.uid, adminUids);
 }

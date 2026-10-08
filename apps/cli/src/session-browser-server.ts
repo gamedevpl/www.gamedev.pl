@@ -13,6 +13,7 @@ import { createSessionCommands } from './session-commands.js';
 import type { SessionController } from './session-controller.js';
 import { previewSource } from './local-preview-source.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
+import { MASCOT_FAVICON_SVG } from './mascot-svg.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const generation = z.number();
@@ -102,7 +103,7 @@ export async function startSessionBrowser(
     res.setHeader('referrer-policy', 'no-referrer');
     res.setHeader(
       'content-security-policy',
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src 'self'; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self'; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     );
     const reply = (status: number, value: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -122,11 +123,30 @@ export async function startSessionBrowser(
       res.end(SESSION_BROWSER_PAGE);
       return;
     }
+    if (req.method === 'GET' && (req.url === '/favicon.ico' || req.url === '/favicon.svg')) {
+      res.writeHead(200, {
+        'content-type': 'image/svg+xml',
+        'cache-control': 'public, max-age=86400',
+      });
+      res.end(MASCOT_FAVICON_SVG);
+      return;
+    }
     if (req.headers.authorization !== `Bearer ${token}`) {
       reply(401, { error: 'Reconnect from the terminal link' });
       return;
     }
     try {
+      if (req.method === 'POST' && req.url === '/stop') {
+        reply(200, { ok: true });
+        setTimeout(() => {
+          session.cancel();
+          session.close();
+          setTimeout(() => {
+            process.exit(0);
+          }, 100);
+        }, 20);
+        return;
+      }
       if (req.method === 'GET' && req.url === '/state') {
         if (phone?.closed) revokePhone();
         const state = session.get();
@@ -145,6 +165,7 @@ export async function startSessionBrowser(
           phone: phone && { url: phone.url, expiresAt: phone.expiresAt, qr: phone.qr },
           reports,
           mode: state.mode,
+          approvalPending: state.approvalPending,
           promptId: state.promptId,
           taskId: state.taskId,
           identity: clean(state.identity),

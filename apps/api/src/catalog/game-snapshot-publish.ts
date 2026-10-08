@@ -1,6 +1,11 @@
 import { isPublishedEntry, type GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml, projectFromSources } from '../platform/assemble.js';
-import { generateSnapshotId, type GameSnapshotWriter, type SnapshotPointer } from './game-snapshot.js';
+import { assemblePublishedGameHtml, projectFromSources } from '../platform/assemble.js';
+import {
+  generateSnapshotId,
+  type GameSnapshotWriter,
+  type SnapshotGame,
+  type SnapshotPointer,
+} from './game-snapshot.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import { bakeMediaCopies } from './bake-media.js';
 
@@ -9,7 +14,7 @@ import { bakeMediaCopies } from './bake-media.js';
  *
  * This is the one place the expensive work still happens — the same GitHub reads
  * and esbuild bundle the play route used to do per request — and it deliberately
- * reuses `assembleGameHtml` rather than the games repo's own `tools/build.ts`.
+ * reuses `assemblePublishedGameHtml` rather than the games repo's own `tools/build.ts`.
  * That assembler is where the restrictive CSP, the AI Act art. 50(2) provenance
  * meta and the credential scan are applied, so baking through it keeps one
  * authoritative definition of "what a served game is". A second implementation on
@@ -123,17 +128,11 @@ async function bakeGame(args: {
 }): Promise<{ mediaFiles: number }> {
   const { client, writer, ref, snapshotId, entry } = args;
 
-  const sources = await client.getGameSources(ref, entry.slug);
-  if (!sources) {
+  const game = await bakeGameDocument(client, ref, entry.slug, entry.title);
+  if (!game) {
     throw new Error('game sources not found on ref');
   }
-
-  const project: GameProject = projectFromSources(sources, sources.title ?? entry.title ?? entry.slug);
-
-  // restrictNetwork mirrors the play route exactly: published games are
-  // self-contained by repo policy, so they are locked to their own inline assets.
-  const html = assembleGameHtml(project, { restrictNetwork: true });
-  await writer.putGame(snapshotId, { slug: entry.slug, title: project.title, html });
+  await writer.putGame(snapshotId, game);
 
   const mediaNames = [
     ...(entry.media?.screenshots.map((screenshot) => screenshot.file) ?? []),
@@ -159,6 +158,21 @@ async function bakeGame(args: {
   }
 
   return { mediaFiles };
+}
+
+// The one assembler for served repo-lane games; local dev reuses it.
+export async function bakeGameDocument(
+  client: Pick<GitHubClient, 'getGameSources'>,
+  ref: string,
+  slug: string,
+  fallbackTitle?: string,
+): Promise<SnapshotGame | null> {
+  const sources = await client.getGameSources(ref, slug);
+  if (!sources) return null;
+  const project: GameProject = projectFromSources(sources, sources.title ?? fallbackTitle ?? slug);
+  // Published games are self-contained, so lock them to inline assets.
+  const html = await assemblePublishedGameHtml(project, { restrictNetwork: true });
+  return { slug, title: project.title, html };
 }
 
 /** Runs `worker` over `items` with at most `limit` in flight. */

@@ -1,4 +1,3 @@
-import type { ProposalAdopter } from './proposal-admission.js';
 // HTTP for proposals.
 //
 // Three audiences share one collection, and the routes are grouped by which of them is
@@ -23,7 +22,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from '../platform/admin-session.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
-import { diffProposal } from './proposal-diff.js';
+import { diffProposal, type ProposalDiff } from './proposal-diff.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { resolveOwnerOfRecord } from './owner-of-record.js';
 import { DECLINE_REASONS, isReviewerVisible, toPublicProposalState, type DeclineReason } from './proposal-state.js';
@@ -39,6 +38,7 @@ import {
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
+  type ProposalRoundStarter,
 } from './proposals.js';
 import type { ProposalRecord, Store } from '../platform/store.js';
 
@@ -74,24 +74,18 @@ export interface ProposalRoutesOptions {
   gamesStore?: GamesStore | null;
   /** Resolves a proposal's base sources, for the diff. Both lanes. */
   resolveBase?: (slug: string) => Promise<{ files: SourceFile[] } | null>;
-  /** Lands an accepted repo-lane proposal in the games repo. */
-  applyToRepo?: (proposal: ProposalRecord) => Promise<{ number: number; url: string } | null>;
-  /** The live snapshot pointer, for re-checking a repo-lane base at decision time. */
-  snapshotPointer?: () => Promise<{ commitSha: string | null } | null>;
   /** Tells somebody a proposal moved. Best effort — see ProposalDeps.notify. */
   notify?: ProposalDeps['notify'];
   contentChecker?: ContentChecker;
   adminUids?: Set<string>;
-  /**
-   * Creates the owner-side job that carries an accepted proposal's version.
-   *
-   * Injected rather than imported so this module does not depend on the submissions
-   * registrar, which is where job creation and dispatch live. Returns null when the job
-   * could not be created, which the caller reports rather than swallowing — an accepted
-   * proposal with no job is a change the owner cannot publish.
-   */
-  adoptIntoJob?: ProposalAdopter;
+  // Opens the owner's rebuild round for an accepted creator-game proposal.
+  startProposalRound?: ProposalRoundStarter;
   now?: () => number;
+}
+
+// Proposer view: added lines only; base context and deletions stay private.
+function redactForProposer(diff: ProposalDiff): ProposalDiff {
+  return { ...diff, files: diff.files.map((file) => ({ ...file, lines: file.lines.filter((l) => l.kind === 'add') })) };
 }
 
 /** Guard shared by every signed-in route here. Mirrors `checkUserAccess` in submissions. */
@@ -136,6 +130,7 @@ function toPublicProposal(record: ProposalRecord) {
       ? { at: record.decision.at, reason: record.decision.reason, note: record.decision.note }
       : undefined,
     platformOwned: record.targetOwnerUid === null,
+    acceptedVia: record.acceptedVia,
   };
 }
 
@@ -207,9 +202,8 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   /**
    * What this proposal changes, file by file.
    *
-   * Same readership as the proposal itself — author, reviewer, operator — because a
-   * proposer looking at their own rejected diff is as legitimate a reader as the person
-   * who rejected it. Computed on demand rather than stored: the version and its base are
+   * Same readership as the proposal itself — author, reviewer, operator — but the
+   * proposer sees only the lines they added, never the base's context or deletions. Computed on demand rather than stored: the version and its base are
    * both immutable, so the diff is a pure function of two things that cannot drift, and a
    * second stored representation could only ever disagree with them.
    */
@@ -222,9 +216,8 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     const record = await store.getProposal(params.data.id);
     if (!record?.version) return reply.status(404).send({ error: 'not_found' });
     const uid = request.user!.uid;
-    if (record.proposerUid !== uid && !(await canSeeAsReviewer(record, uid, isAdminSession(request, adminUids)))) {
-      return reply.status(404).send({ error: 'not_found' });
-    }
+    const reviewer = await canSeeAsReviewer(record, uid, isAdminSession(request, adminUids));
+    if (record.proposerUid !== uid && !reviewer) return reply.status(404).send({ error: 'not_found' });
 
     const manifest = await gamesStore.getManifest(record.targetSlug, record.version);
     if (!manifest) return reply.status(404).send({ error: 'not_found' });
@@ -235,7 +228,10 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     }
 
     const base = await options.resolveBase(record.targetSlug);
-    return reply.send({ diff: diffProposal(base?.files ?? [], proposed) });
+    if (reviewer) return reply.send({ diff: diffProposal(base?.files ?? [], proposed) });
+    // No base: every line reads as added, exposing the whole game.
+    if (!base) return reply.send({ diff: { files: [], additions: 0, deletions: 0, omittedFiles: 0 } });
+    return reply.send({ diff: redactForProposer(diffProposal(base.files, proposed)) });
   });
 
   app.post<{ Params: { id: string } }>('/api/proposals/:id/withdraw', async (request, reply) => {
@@ -320,16 +316,11 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     const reviewer = await resolveReviewer(request, record);
     if (!reviewer.ok) return reply.status(404).send({ error: 'not_found' });
 
-    const adoptIntoJob = options.adoptIntoJob;
-    if (!adoptIntoJob) return reply.status(503).send({ error: 'store_unavailable' });
+    const startRound = options.startProposalRound;
+    if (!startRound) return reply.status(503).send({ error: 'store_unavailable' });
 
     const result = await acceptProposal(
-      {
-        ...scope,
-        adoptIntoJob,
-        ...(options.applyToRepo ? { applyToRepo: options.applyToRepo } : {}),
-        ...(options.snapshotPointer ? { snapshotPointer: options.snapshotPointer } : {}),
-      },
+      { ...scope, startRound },
       { id: record.id, byUid: reviewer.byUid, reviewer: reviewer.reviewer },
     );
     if (!result.ok) return reply.status(result.status).send({ error: result.error });
@@ -408,7 +399,8 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   });
 
   /**
-   * The contributions switch — the creator-veto question, answered once as one setting.
+   * The contributions switch — the creator-veto question for proposals only. Remix
+   * shares and remixing itself have their own switch (`remix-setting-routes.ts`).
    *
    * Owner-only, and resolved through the same owner-of-record rule as everything else, so
    * a game that changed hands cannot be reopened to proposals by its previous owner.

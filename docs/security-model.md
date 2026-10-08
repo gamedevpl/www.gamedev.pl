@@ -46,6 +46,12 @@ snapshot/restore waits are bound to their initiating document; late replies cann
 a replacement. Navigation still retires sensing, microphone, presence and zone resources.
 The iframe sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
 
+A sandbox cannot stop a frame from navigating itself, and the game document's own CSP has
+no directive that covers its own navigation. The shell's enforced `frame-src`
+(`SHELL_FRAME_SRC` in `@gamedevpl/contract`) does: the embedder's policy is checked for every
+navigation of the game iframe, whoever starts it, so a game cannot carry bridge data to
+another origin in a URL. Host `srcdoc` replacements are unaffected.
+
 #### Image export
 
 A game may ask to save a PNG to the player's device (`apps/web/src/imageExport.ts`), but the
@@ -89,6 +95,45 @@ Run `npm run e2e -- src/frame-document.test.ts` with `E2E_CHROMIUM_PATH` to chec
 document navigation and delayed saves against a local fixture, without credentials or writes
 to production. Optional `FRAME_DOCUMENT_GAMEKIT_SAVE_PATH` tests an actual GameKit save module
 instead of the standalone protocol fixture. The test logs which sender it used.
+
+#### Shipped game code
+
+The games repo is private, but a served game is its whole runtime, inline, so anyone who
+can play a game holds its code. `assemblePublishedGameHtml`
+(`apps/api/src/platform/assemble.ts`) is what every player-facing document goes through:
+the snapshot bake (`bakeGameDocument`, which local dev's snapshot reader also uses) and
+the store-lane gate's `bundle.html` and `preview.html`. It runs the usual hygiene (byte budget, credential scan) on the
+readable sources, then `protectGameScript` (`protect-script.ts`) minifies the script with
+esbuild.
+
+This makes the code harder to read and reuse. It does not make it secret: property names
+such as `ctx.fillRect` or `player.velocity` survive by necessity, and a determined reader
+can still step through the game.
+
+- **No source maps, ever.** None is emitted, and comments are dropped, so a
+  `sourceMappingURL` a source carried in does not survive either.
+- **Local names are mangled; globals are kept.** Games and GameKit talk through `window`,
+  and top-level declarations in a classic script are globals, so esbuild leaves them alone.
+- **Inline-safe output.** esbuild escapes `</script` inside strings and templates, so a
+  string cannot end the inline `<script>` early. The test parses the whole document to
+  hold this, because a string-level check cannot see the truncation.
+- **Deterministic and async.** The same input gives the same output, so an unchanged game
+  re-bakes byte-identical. esbuild runs in its own process, so local dev's on-demand bake
+  does not block the API's event loop.
+
+**Why not an obfuscator.** `javascript-obfuscator` was tried first and removed. Its string
+array, the only part that hides more than minification does, costs frame time: with a fixed
+seed and fixed 60 Hz steps, `biplane-skirmish` went from ~8.0 ms to ~10.7 ms per frame
+(+32–35%) and back to ~8.0 ms with only the string array off. Without the string array it
+adds almost nothing over esbuild: property access becomes `obj['gain']`, so the names
+remain as strings. It also re-emitted escaped `<\/script>` as a literal `</script>`, which
+truncates the inline script, and it runs synchronously for 5–50 s per game. Any future
+obfuscation pass must clear a frame-time A/B and the whole-document parse test first.
+
+Draft, remix and creator-preview documents go to the creator who owns the sources, so they
+keep using the plain `assembleGameHtml`. The games repo's own gates check the readable
+build. The minified build is checked by running both builds of every game in a browser and
+comparing errors; run that again when you change the settings.
 
 ### 2. Public specs and issue text
 
@@ -194,8 +239,10 @@ limiter, whose annotation its report sink relies on. Every response carries `X-C
 only to some response classes. HTML documents — the SPA shell, the OAuth
 consent and device pages, the CLI page — additionally carry:
 
-- `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` on HTML
-  documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
+- `Content-Security-Policy: frame-ancestors 'none'; frame-src 'self' blob: https://accounts.google.com/gsi/`
+  and `X-Frame-Options: DENY` on HTML documents. The enforced `frame-src` keeps the game iframe
+  from navigating to another origin (see Frame messages). Frame ancestry is denied
+  **except** on the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
   without a trailing slash). A percent-encoded hyphen (`/play/unicorn%2Dsnap`) is still
   a play permalink: the matcher decodes the path before testing. Malformed percent-encoding
   is denied, not treated as play.
@@ -223,7 +270,8 @@ consent and device pages, the CLI page — additionally carry:
   policy is also observed inside every game frame — inline script/style and `data:`/`blob:`
   media are allowed there so a game exercising its own sandbox never reads as a violation of
   ours, while a game reaching the network does. Enforcing this policy is a separate decision
-  to be taken on the reports, never by flipping the header name.
+  to be taken on the reports, never by flipping the header name. Its `frame-src` alone is
+  already enforced, in the header above.
 
 ## Historical finding: self-hosted agent credentials
 

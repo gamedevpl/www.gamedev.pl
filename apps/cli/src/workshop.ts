@@ -7,6 +7,8 @@ export { workshopBrief } from './workshop-brief.js';
 import { defaultAdapterRun } from './workshop-runner.js';
 import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
+import { approvalEnv } from './agent-approval.js';
+import { permissionLabel, permissionMode, taskPermissions, type PermissionMode } from './agent-permissions.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
@@ -15,6 +17,7 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
+import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { preflightAdapter, type AdapterSpec } from './adapters.js';
@@ -33,7 +36,7 @@ import { repairLoop } from './repair-loop.js';
 import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
-export type PickChoice = (choices: string[], question: string) => Promise<string>;
+export type PickChoice = (choices: string[], question: string, signal?: AbortSignal) => Promise<string>;
 import type { AdapterRun } from './headless-agent.js';
 export type { AdapterRun } from './headless-agent.js';
 
@@ -63,6 +66,8 @@ export type Workshop = {
   run?: VerifyRun;
   // One-shot verb: no picks, first agent, deliver or not.
   unattended?: { deliver: boolean };
+  // Defaults to the process-wide mode (`--permissions`, /permissions).
+  permissionMode?: PermissionMode;
 };
 
 export type HandoffOutcome = { builder: string; pending: boolean };
@@ -163,6 +168,21 @@ export async function settleBuilder(input: {
   }
 }
 
+export function claudeAbsolutePath(path: string): string {
+  const posix = path.replaceAll('\\', '/').replace(/^([A-Za-z]):\//, (_, drive: string) => `/${drive.toLowerCase()}/`);
+  return `/${posix.replace(/\/+$/, '')}`;
+}
+
+export function claudeLocalFlags(root: string, cwd: string): string[] {
+  const readRoot = { permissions: { allow: [`Read(${claudeAbsolutePath(realpathSync(root))}/**)`] } };
+  return [
+    ...(cwd === root ? [] : ['--settings', JSON.stringify(readRoot)]),
+    '--strict-mcp-config',
+    '--setting-sources',
+    'project,local',
+  ];
+}
+
 export async function runLocalBuild(input: {
   ws: Workshop;
   spec: AdapterSpec;
@@ -176,12 +196,16 @@ export async function runLocalBuild(input: {
   ws.lastLog = output.path;
   input = { ...input, write: output.write };
   input.write(`\n── ${ws.slug} · local task ──`);
-  input.write(selectionLabel(spec.name, spec.selection ?? {}));
+  const mode = ws.permissionMode ?? permissionMode();
+  input.write(`${selectionLabel(spec.name, spec.selection ?? {})} · permissions: ${permissionLabel(mode)}`);
   input.write(ws.unattended ? `Full transcript: ${output.path}` : 'Settings: /model · full transcript: /logs');
   ws.onActivity?.(`Preparing ${spec.name}`);
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
+  const permitted = taskPermissions({ ws, spec, mode, cwd, signal: controller.signal, write: input.write });
+  spec = permitted.spec;
+  const { onApproval, permissions } = permitted;
   ws.abort.current = controller;
   let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
@@ -194,7 +218,7 @@ export async function runLocalBuild(input: {
         command: spec.command,
         cwd,
         env: subscriptionEnv(childEnv(ws.env, '')),
-        args: spec.headless,
+        args: [...claudeLocalFlags(ws.root, cwd), ...spec.headless],
         abort: controller.signal,
       });
       await authCheck;
@@ -229,12 +253,15 @@ export async function runLocalBuild(input: {
     }
     localTools = await localPreviewTools({
       spec,
+      onApproval: spec.name === 'claude' ? onApproval : undefined,
+      sandbox: { permissions, cwd },
       previewUrl,
       abort: controller.signal,
       write: input.write,
       progress: output.progress,
     });
     if (localTools) spec = localTools.spec;
+    if (spec.name === 'claude') spec = { ...spec, headless: [...claudeLocalFlags(ws.root, cwd), ...spec.headless] };
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
     input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
@@ -264,9 +291,11 @@ export async function runLocalBuild(input: {
           spec,
           prompt,
           authCheck,
+          onApproval,
+          permissions,
           onSteering: ws.unattended ? undefined : ws.onSteering,
           cwd,
-          env: childEnv(ws.env, ''),
+          env: { ...approvalEnv(childEnv(ws.env, ''), localTools?.approvals), ...permitted.env },
           abort: controller.signal,
           onDiagnostic: output.raw,
           onLine: (line) => {
