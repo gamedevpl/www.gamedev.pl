@@ -914,12 +914,20 @@ describe('getGameSources', () => {
       [
         'games/coin-catcher/GAME.json',
         JSON.stringify({
-          engine: { modules: ['input', 'audio'] },
+          engine: { modules: ['input', 'drawing', 'gfx', 'ui', 'audio', 'settings'] },
           audio: { sounds: ['ui-toggle', 'coin'], music: 'menu-theme' },
         }),
       ],
       ['shared/game-shell.css', '.shell { display: grid; }'],
       ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+      ['shared/modules/drawing.ts', 'GameKit.drawing = {};'],
+      ['shared/modules/gfx.ts', 'GameKit.createRenderer = () => ({});'],
+      ['shared/modules/ui.ts', 'GameKit.ui = {};'],
+      [
+        'shared/modules/settings/index.ts',
+        `import { preset } from './model.ts'; GameKit.createSettings = () => preset;`,
+      ],
+      ['shared/modules/settings/model.ts', `export const preset: string = 'auto';`],
       ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
       ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
       ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
@@ -945,6 +953,8 @@ describe('getGameSources', () => {
 
     const sources = await client.getGameSources('main', 'coin-catcher');
 
+    expect(sources?.gameJs).toContain('GameKit.createSettings');
+    expect(sources?.gameJs).not.toContain('require(');
     expect(sources?.title).toBe('Coin Catcher');
     expect(sources?.styleCss).toBe('.shell { display: grid; }\n.game { color: gold; }');
     expect(sources?.gameJs).toContain('"ui-toggle":"data:audio/wav;base64,AQI="');

@@ -106,42 +106,6 @@ describe('games-repo-contract (website half)', () => {
     expect(fixture.gameKitModules).toEqual([...GAME_KIT_MODULES]);
   });
 
-  it('lists GameKit modules in the post-draw-surface canonical order', () => {
-    expect([...GAME_KIT_MODULES]).toEqual([
-      'input',
-      'collision',
-      'world',
-      'grid',
-      'path',
-      'ai',
-      'gameplay',
-      'rng',
-      'cards',
-      'vehicles',
-      'urban',
-      'drawing',
-      'actors',
-      'gfx',
-      'ui',
-      'gfx3d',
-      'racing',
-      'football',
-      'platformer',
-      'effects',
-      'audio',
-      'party',
-      'save',
-      'commons',
-      'presence',
-      'mascot',
-      'zone',
-      'sensing',
-      'voice',
-      'editor',
-      'inspect',
-    ]);
-  });
-
   it('documents the optional per-game music.json path', () => {
     expect(MUSIC_CONTRACT.gameMusicPath).toBe('music.json');
     expect(MUSIC_CONTRACT.catalogPath).toBe('shared/audio/music.json');
@@ -254,7 +218,7 @@ describe('games-repo source extractors', () => {
       export const GAME_KIT_MODULES = [
         'input', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'cards', 'vehicles', 'urban',
         'drawing', 'actors', 'gfx', 'ui', 'gfx3d', 'racing', 'football', 'platformer', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
-        'sensing', 'voice', 'editor', 'inspect',
+        'sensing', 'voice', 'editor', 'settings', 'inspect',
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);
@@ -266,6 +230,7 @@ describe('games-repo source extractors', () => {
       gfx: ['drawing'],
       gfx3d: ['gfx'],
       urban: ['world'],
+      settings: ['ui', 'gfx', 'audio'],
     } as const satisfies Record<string, readonly string[]>;`;
     expect(extractGameKitModuleRequires(source)).toEqual(GAME_KIT_MODULE_REQUIRES);
     expect(extractGameKitModuleRequires('export const GAME_KIT_MODULES = [];')).toBeNull();
@@ -281,6 +246,7 @@ describe('games-repo source extractors', () => {
 
   it('reads GAME_KIT_VERTICALS from an assemble.ts-shaped source', () => {
     const source = `const GAME_KIT_VERTICALS = Object.freeze({
+      settings: 'shared/modules/settings/index.ts',
       gfx3d: 'shared/modules/gfx3d/index.ts',
       vehicles: 'shared/verticals/vehicles/index.ts',
       urban: 'shared/verticals/urban/index.ts',
