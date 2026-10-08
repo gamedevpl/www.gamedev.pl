@@ -73,7 +73,7 @@ function shutdown() {
 server.listen(0, '127.0.0.1', () => {
   origin = 'http://127.0.0.1:' + server.address().port;
   const pendingState = statePath + '.' + token;
-  writeFileSync(pendingState, JSON.stringify({ url: origin + '/' + token + '/', key }), { mode: 0o600, flag: 'wx' });
+  writeFileSync(pendingState, JSON.stringify({ url: origin + '/' + token + '/', key, root, slug }), { mode: 0o600, flag: 'wx' });
   renameSync(pendingState, statePath);
 });
 server.on('error', () => process.exit(1));

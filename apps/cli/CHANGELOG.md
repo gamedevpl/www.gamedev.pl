@@ -7,9 +7,18 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Default `stop` targets the current checkout; an explicit game slug with sessions in multiple directories requires `--session <id>` or `--all` (#1703).
+
 ### Added
 
+- `play` shows running local sessions; `play --list` lists their IDs, games, directories and URLs, and `play --stop --session <id>` or `--all` stops one or all (#1703).
 - Choose how local agents handle permissions: Ask (default), Auto-approve (sandboxed) or YOLO (full access, no questions), with `--permissions <mode>` or `/permissions`; the active mode is shown before each task, and Auto-approve or YOLO also run unattended (#1687).
+
+### Fixed
+
+- Push verification skips copying working-tree ignore files before reading the pushed commit’s rules, so a dangling ignore symlink does not abort setup (#1703).
 
 ### Internal
 
