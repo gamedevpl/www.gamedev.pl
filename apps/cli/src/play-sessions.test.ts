@@ -252,3 +252,15 @@ it('does not broaden a default stop to another game launched in the same directo
   expect(await stopPlaySession({ cwd, write: vi.fn() })).toBe(true);
   expect([a.stopped(), b.stopped()]).toEqual([true, false]);
 });
+
+it('clears the owned preview for a selected local ID while keeping other checkout registrations', async () => {
+  const cwd = checkout('first'),
+    otherCwd = checkout('second');
+  const local = await fixture(cwd),
+    other = await fixture(otherCwd);
+  const onLocalPreview = vi.fn();
+  expect(await stopPlaySession({ cwd, session: other.id, write: vi.fn(), onLocalPreview })).toBe(true);
+  expect(onLocalPreview).not.toHaveBeenCalled();
+  expect(await stopPlaySession({ cwd, session: local.id, write: vi.fn(), onLocalPreview })).toBe(true);
+  expect(onLocalPreview).toHaveBeenCalledWith('');
+});

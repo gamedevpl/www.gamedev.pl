@@ -164,7 +164,14 @@ export async function stopPlaySession(input: {
 }): Promise<boolean> {
   const sessions = await listPlaySessions();
   const targets = selectPlaySessions(sessions, input);
+  const checkout = findCheckout(input.cwd);
+  const currentKey = checkout ? previewKey(checkout.root, checkout.slug) : undefined;
+  const clearPreview =
+    input.all ||
+    targets.some((target) => target.kind === 'preview' && target.key === currentKey) ||
+    (!input.session && (!input.slug || input.slug === checkout?.slug));
   if (!targets.length) {
+    if (clearPreview) input.onLocalPreview?.('');
     input.write('no local play session is running for this target');
     if (sessions.length) sessionLines(sessions).forEach((line) => input.write(line));
     return false;
@@ -178,7 +185,7 @@ export async function stopPlaySession(input: {
       failures.push(error instanceof Error ? error.message : String(error));
     }
   }
-  if (!input.session && !failures.length) input.onLocalPreview?.('');
+  if (clearPreview && !failures.length) input.onLocalPreview?.('');
   if (failures.length)
     throw new CliError(failures.join('\n'), EXIT_REFUSED, 'Run gamedevpl play --list to check remaining sessions.');
   input.write(`stopped ${targets.length} local Play session${targets.length === 1 ? '' : 's'}`);
