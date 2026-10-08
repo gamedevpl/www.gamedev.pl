@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
-import { playGame } from './play.js';
+import { playGame, stopPlaySession } from './play.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, suggestSlash, type SlashVerb } from './argv.js';
@@ -103,6 +103,17 @@ export async function handleReplLine(input: {
     return { next: 'continue' };
   }
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
+  if (trimmed === '/stop' || trimmed.startsWith('/stop ')) {
+    const slug = trimmed.slice(5).trim() || input.workshop?.slug;
+    await stopPlaySession({
+      cwd: input.workshop?.root ?? input.cwd ?? process.cwd(),
+      slug: slug || undefined,
+      env: input.env,
+      write: input.write,
+      onLocalPreview: input.onLocalPreview,
+    });
+    return { next: 'continue', conversationId: input.conversationId };
+  }
   if (trimmed === '/kit' || trimmed === '/kit update') {
     const controller = new AbortController();
     if (input.abort) input.abort.current = controller;

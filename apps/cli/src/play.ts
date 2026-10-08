@@ -166,6 +166,51 @@ export async function startLocalPlay(input: {
   }
 }
 
+export async function stopPlaySession(input: {
+  cwd: string;
+  slug?: string;
+  env?: NodeJS.ProcessEnv;
+  write: (line: string) => void;
+  onLocalPreview?: (url: string) => void;
+}): Promise<boolean> {
+  const checkout = findCheckout(input.cwd);
+  const slug = input.slug ?? checkout?.slug;
+  const { stopWorkbenchSession } = await import('./workbench-launch.js');
+  const stoppedWorkbench = await stopWorkbenchSession({
+    cwd: checkout?.root ?? input.cwd,
+    slug,
+  });
+  let stoppedPreview = false;
+  if (checkout && slug) {
+    try {
+      const root = realpathSync(checkout.root);
+      const key = createHash('sha256').update(`${root}\0${slug}`).digest('hex');
+      const dir = join(tmpdir(), `gamedev-play-${process.getuid?.() ?? 'user'}`);
+      privatePlayDirectory(dir);
+      const statePath = join(dir, `${key}.json`);
+      const existing = await alive(statePath, key);
+      if (existing) {
+        const response = await fetch(`${existing.url}stop`, {
+          method: 'POST',
+          headers: { Origin: new URL(existing.url).origin },
+          signal: AbortSignal.timeout(2000),
+        });
+        if (response.ok) stoppedPreview = true;
+      }
+    } catch {
+      // Ignore preview stop error
+    }
+  }
+  const stopped = stoppedWorkbench || stoppedPreview;
+  input.onLocalPreview?.('');
+  if (stopped) {
+    input.write(stoppedWorkbench ? 'local play session stopped' : 'local preview stopped');
+  } else {
+    input.write('no local play session is running');
+  }
+  return stopped;
+}
+
 export async function playGame(input: {
   cwd: string;
   slug?: string;
@@ -178,6 +223,20 @@ export async function playGame(input: {
   open?: typeof openUrl;
   onLocalPreview?: (url: string) => void;
 }): Promise<{ url?: string; mode: 'local' | 'remote' }> {
+  if (input.stop) {
+    const checkout = findCheckout(input.cwd);
+    const slug = input.slug ?? checkout?.slug;
+    const mode = checkout?.slug === slug ? 'local' : 'remote';
+    if (!checkout && !input.slug) throw new CliError('choose a game: gamedevpl play <slug>', EXIT_INPUT);
+    await stopPlaySession({
+      cwd: input.cwd,
+      slug,
+      env: input.env,
+      write: input.write,
+      onLocalPreview: input.onLocalPreview,
+    });
+    return { mode };
+  }
   const checkout = findCheckout(input.cwd);
   const slug = input.slug ?? checkout?.slug;
   if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
@@ -199,7 +258,6 @@ export async function playGame(input: {
     url = session.url;
     input.onLocalPreview?.(url);
   } else {
-    if (input.stop) throw new CliError('no matching local checkout to stop', EXIT_INPUT);
     url = `${input.origin}/play/${encodeURIComponent(slug)}`;
   }
   input.write(`${mode === 'local' ? 'local live preview' : 'remote game'}: ${url}`);

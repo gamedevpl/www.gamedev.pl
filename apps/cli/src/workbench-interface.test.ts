@@ -156,3 +156,11 @@ it('embeds only the two WOFF2 font weights used by Play', () => {
   expect(PLAY_STYLE).not.toMatch(/font-weight:300|format\(["']?woff["']?\)/);
   expect(PLAY_STYLE.length).toBeLessThan(120_000);
 });
+
+it('declares mascot favicon link in head', () => {
+  const dom = new JSDOM(SESSION_BROWSER_PAGE);
+  const link = dom.window.document.querySelector('link[rel="icon"]');
+  expect(link).not.toBeNull();
+  expect(link?.getAttribute('type')).toBe('image/svg+xml');
+  expect(link?.getAttribute('href')).toContain('data:image/svg+xml,');
+});

@@ -5,6 +5,7 @@ import { SLASH_VERBS, type SlashVerb } from './argv.js';
 export const BLURB: Record<SlashVerb, string> = {
   recover: 'recover local sources after cancellation/deletion — recover [dir] [--slug <name>] --yes',
   play: 'open the browser workbench — play [slug]; --preview for raw preview; --stop to stop preview',
+  stop: 'stop any running play session or local preview — stop [slug]',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',
   model: 'view or choose delegated model and effort — model [agent]',
@@ -52,6 +53,7 @@ export function formatHelp(slash = false): string {
         `  ${CLI_BIN.padEnd(24)}open your browser workspace`,
         `  ${CLI_BIN} create [idea]          create in the browser (interactive)`,
         `  ${CLI_BIN} play [slug]            open a game in the browser (interactive)`,
+        `  ${CLI_BIN} stop [slug]            stop any running play session or preview`,
         `  ${CLI_BIN} --terminal           interactive conversation in the terminal`,
         `  ${CLI_BIN} play --preview       open the raw game preview`,
         `  ${CLI_BIN} create --play [idea]  explicit browser launch without a TTY`,

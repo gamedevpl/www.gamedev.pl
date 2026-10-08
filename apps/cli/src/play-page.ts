@@ -1,4 +1,5 @@
 import { PLAY_EMBED_SCRIPT } from './generated/play-ui.js';
+import { MASCOT_FAVICON_DATA_URL } from './mascot-svg.js';
 
 export const PLAY_PAGE = String.raw`<!doctype html>
 <html lang="en">
@@ -6,6 +7,7 @@ export const PLAY_PAGE = String.raw`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>gamedevpl play</title>
+<link rel="icon" type="image/svg+xml" href="${MASCOT_FAVICON_DATA_URL}">
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#eee;font:14px system-ui}
 iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}

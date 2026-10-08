@@ -167,6 +167,25 @@ describe('runCli verbs', () => {
     vi.unstubAllGlobals();
   });
 
+  it('stops play sessions with gamedevpl stop', async () => {
+    const streams = io();
+    const code = await runCli(['node', 'gamedevpl', 'stop', 'sky-dodge'], {}, streams);
+    expect(code).toBe(EXIT_GREEN);
+    expect(streams.read().out).toContain('no local play session is running');
+  });
+
+  it('stops play sessions with gamedevpl play --stop and gamedevpl play stop', async () => {
+    const streams1 = io();
+    const code1 = await runCli(['node', 'gamedevpl', 'play', '--stop', 'sky-dodge'], {}, streams1);
+    expect(code1).toBe(EXIT_GREEN);
+    expect(streams1.read().out).toContain('no local play session is running');
+
+    const streams2 = io();
+    const code2 = await runCli(['node', 'gamedevpl', 'play', 'stop', 'sky-dodge'], {}, streams2);
+    expect(code2).toBe(EXIT_GREEN);
+    expect(streams2.read().out).toContain('no local play session is running');
+  });
+
   it('treats a gamedevpl:// URL as the git remote helper even when argv1 is gamedevpl', () => {
     expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'origin', 'gamedevpl://sky-dodge'])).toBe(true);
     expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'status', 'tok'])).toBe(false);
