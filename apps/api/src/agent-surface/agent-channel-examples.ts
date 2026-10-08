@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { getAgentBuildExample, listAgentBuildExamples } from './agent-build-examples.js';
 import { ExampleFilesError, listExampleFiles, readExampleFile, type ExampleFileStore } from './example-files.js';
-import { exampleUnpackCommand } from '../platform/kit-registry.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import type { AgentTokenAccess } from '../platform/agent-token.js';
 import type { SubmissionRecord } from '../platform/store.js';
@@ -95,7 +94,6 @@ export function registerAgentChannelExamplesRoutes(app: FastifyInstance, deps: A
         title: example.title,
         tarballUrl,
         ...(sha256 ? { sha256 } : {}),
-        unpack: exampleUnpackCommand(tarballUrl),
       });
     },
   );

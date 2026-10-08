@@ -58,7 +58,6 @@ export function createKitTools(deps: KitToolsDeps): Record<string, KitToolEntry>
           engineRef: { type: 'string' },
           kitUrl: { type: 'string' },
           sha256: { type: 'string' },
-          unpack: { type: 'string', description: 'Deprecated: fetch kitUrl and check it against sha256.' },
           entry: { type: 'string' },
           kitEngineChanged: { type: 'boolean' },
           browse: {

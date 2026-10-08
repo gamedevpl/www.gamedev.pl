@@ -6,6 +6,7 @@ import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import { mintAgentToken } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
+import { SHELL_COMMAND } from './shell-command-text.js';
 
 // nextSuggestedTool at each point of a real round, via the endpoint.
 
@@ -13,7 +14,6 @@ const secret = 'test-secret';
 const ISSUE = 55;
 const OLD_ENGINE = 'a'.repeat(40);
 const NEW_ENGINE = 'b'.repeat(40);
-const SHELL_COMMAND = /\b(curl|wget)\s|--upload-file|--use-gl|\bnpm run\b|\bnpx\s/i;
 const FILES = [
   { path: 'game.ts', content: 'export {};' },
   { path: 'TRACE.json', content: '{"samples":[]}' },

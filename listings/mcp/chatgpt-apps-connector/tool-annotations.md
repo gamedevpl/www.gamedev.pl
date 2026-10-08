@@ -499,7 +499,7 @@ then fetch media if a preview verdict is already available after `mode=preview`.
 **Read Only: False**
 
 ```
-Mints a short-lived PUT command whose authorization header lets the agent upload a PNG into the round. The subsequent PUT writes state.
+Mints a short-lived upload request, returned as data (URL, method PUT, headers, size limit), whose Authorization header lets the agent upload a PNG into the round. The subsequent PUT writes state.
 ```
 
 **Destructive: False**
@@ -525,7 +525,7 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 **Read Only: False**
 
 ```
-Mints short-lived PUT commands whose authorization headers let the agent upload source files into the round’s staging area. The subsequent PUT writes state.
+Mints short-lived upload requests, returned as data (URL, method PUT, headers, size limit), whose Authorization headers let the agent upload source files into the round’s staging area. The subsequent PUT writes state.
 ```
 
 **Destructive: False**

@@ -6,6 +6,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { pngHeader } from '../platform/image-size.test.js';
 import { InMemoryStore } from '../platform/store.js';
+import { SHELL_COMMAND } from './shell-command-text.js';
 
 export const secret = 'test-secret';
 export const ISSUE = 42;
@@ -65,10 +66,9 @@ export async function mintConceptUrl(app: FastifyInstance, round = 1): Promise<{
     headers: agentHeaders(ISSUE, round),
     payload: { purpose: 'concept' },
   });
-  const body = minted.json();
-  const authorization = String(body.upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
-  if (!authorization) throw new Error('upload command has no authorization header');
-  return { url: body.url as string, authorization };
+  expect(minted.body).not.toMatch(SHELL_COMMAND);
+  const body = minted.json() as { url: string; headers: Record<string, string> };
+  return { url: body.url, authorization: body.headers.Authorization };
 }
 export async function putConceptFrame(
   app: FastifyInstance,

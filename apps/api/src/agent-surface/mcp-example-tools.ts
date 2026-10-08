@@ -114,9 +114,8 @@ export function createExampleTools(deps: ExampleToolsDeps): Record<string, Examp
           title: { type: 'string' },
           tarballUrl: { type: 'string' },
           sha256: { type: 'string' },
-          unpack: { type: 'string' },
         },
-        required: ['slug', 'title', 'tarballUrl', 'unpack'],
+        required: ['slug', 'title', 'tarballUrl'],
       },
       description:
         'Fetch one allowlisted exemplar as a signed tarball URL. Unknown or non-allowlisted slugs fail. ' +

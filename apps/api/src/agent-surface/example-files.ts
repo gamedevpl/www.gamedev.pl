@@ -2,8 +2,8 @@
  * Exemplar sources as browsable files for MCP / build-channel agents.
  *
  * The sibling of `kit-files.ts`, for the same reason and against the same finding:
- * `get_example` hands back a signed tarball and a `curl … | tar -xz` line, which
- * assumes the reader can open a socket. A ChatGPT-side connector cannot — it calls
+ * `get_example` hands back a signed tarball URL, which assumes the reader
+ * can open a socket. A ChatGPT-side connector cannot — it calls
  * MCP tools and nothing else (owner test, 2026-08-03) — so for that agent the
  * curated exemplars, the one piece of "here is how a good game is written" context
  * we offer, were unreachable. This serves list / read over the same

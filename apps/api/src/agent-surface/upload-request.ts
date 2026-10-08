@@ -1,5 +1,3 @@
-import { uploadCurlCommand } from './agent-upload-token.js';
-
 // Signed uploads described as data, so any HTTP client can perform them.
 
 export interface UploadRequest {
@@ -12,11 +10,6 @@ export function uploadRequest(token: string, contentType: string): UploadRequest
   return { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType } };
 }
 
-// The contract plus its deprecated curl form, until callers stop reading `upload`.
-export function uploadContract(url: string, token: string, localPath: string, contentType: string) {
-  return { ...uploadRequest(token, contentType), upload: uploadCurlCommand(url, token, localPath, contentType) };
-}
-
 // Output-schema fields for a tool that hands one out.
 export const UPLOAD_REQUEST_PROPS = {
   method: { type: 'string', enum: ['PUT'], description: 'HTTP method for the upload.' },
@@ -25,10 +18,6 @@ export const UPLOAD_REQUEST_PROPS = {
     additionalProperties: { type: 'string' },
     description:
       'Send exactly these headers with the upload. Authorization carries the short-lived upload credential — the URL alone is not one.',
-  },
-  upload: {
-    type: 'string',
-    description: 'Deprecated: the same request as a curl command. Use url, method and headers instead.',
   },
 } as const;
 
