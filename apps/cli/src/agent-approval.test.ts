@@ -69,21 +69,21 @@ it.each(['Allow once', 'Deny'])('round-trips Claude MCP permission through the c
       headers: { 'Content-Type': 'application/json', Authorization: mcp.authorization },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     }).then((response) => response.json());
-  expect((await call('tools/list')).result.tools.map((tool: { name: string }) => tool.name)).toContain('approve_tool');
+  expect((await call('tools/list')).result.tools.map((tool: { name: string }) => tool.name)).toContain('approve');
   const args = { command: 'cd /game && timeout 240 npm run play -- game --replay check.json 2>&1' };
-  const pending = call('tools/call', { name: 'approve_tool', arguments: { tool_name: 'Bash', input: args } });
+  const pending = call('tools/call', { name: 'approve', arguments: { tool_name: 'Bash', input: args } });
   await vi.waitFor(() => expect(f.session.get().question).toContain(args.command));
   f.session.acceptInput(answer, f.session.get().promptId);
   const result = JSON.parse((await pending).result.content[0].text);
   expect(result.behavior).toBe(answer === 'Allow once' ? 'allow' : 'deny');
   if (answer === 'Allow once') expect(result.updatedInput).toEqual(args);
-  const malformed = await call('tools/call', { name: 'approve_tool', arguments: { tool_name: 'Bash' } });
+  const malformed = await call('tools/call', { name: 'approve', arguments: { tool_name: 'Bash' } });
   expect(JSON.parse(malformed.result.content[0].text).behavior).toBe('deny');
   const spec = loadAdapters().adapters.find((adapter) => adapter.name === 'claude')!;
   const wired = localPreviewAdapter(spec, mcp, true);
   cleanup.push(wired.cleanup);
   expect(wired.spec.headless).toContain('--permission-prompt-tool');
-  expect(wired.spec.headless).toContain('mcp__gamedevpl_local__approve_tool');
+  expect(wired.spec.headless).toContain('mcp__gamedevpl_local__approve');
   expect(wired.spec.headless).toContain('acceptEdits');
 });
 
@@ -101,7 +101,7 @@ it('removes a Claude approval when its MCP connection closes', async () => {
       id: 1,
       method: 'tools/call',
       params: {
-        name: 'approve_tool',
+        name: 'approve',
         arguments: { tool_name: 'Bash', input: { command: 'npm test' } },
       },
     }),
@@ -120,4 +120,11 @@ it.each(['Allow for this turn', 'Deny'])('labels turn-scoped permissions explici
   expect(f.session.get().question).toContain('until the current turn ends');
   f.session.acceptInput(answer, f.session.get().promptId);
   expect(await pending).toBe(answer === 'Deny' ? 'deny' : 'approve');
+});
+
+it('lets Claude wait for an answer only when it asks through the approve tool', async () => {
+  const { approvalEnv } = await import('./agent-approval.js');
+  expect(approvalEnv({ PATH: '/bin' }, true).MCP_TOOL_TIMEOUT).toBe('86400000');
+  expect(approvalEnv({ PATH: '/bin', MCP_TOOL_TIMEOUT: '5000' }, true).MCP_TOOL_TIMEOUT).toBe('5000');
+  expect(approvalEnv({ PATH: '/bin' }, false)).toEqual({ PATH: '/bin' });
 });

@@ -78,6 +78,18 @@ half was always ready; the skill is what makes this a plugin rather than a URL.
 | Category            | Developer tools / Games                                                                                                                                                                                                                                                                             |
 | Logo                | _(owner supplies)_                                                                                                                                                                                                                                                                                  |
 
+## Closed-beta line
+
+Every tool call is refused until the account is approved as a creator, so the listing says
+so up front. Append this to the description field as-is:
+
+> gamedev.pl is in closed beta: tools work only for approved creator accounts. Request
+> access with "Join the waitlist" at https://www.gamedev.pl/ (it asks for a Google or Apple
+> sign-in); approval is manual and confirmed by email.
+
+For clients that never show the listing, `initialize.instructions` and the 401 hint point
+at the front page too, without naming a launch stage (the same text serves an open site).
+
 ## The skill half
 
 The directory accepts a skill two ways, and the choice matters:

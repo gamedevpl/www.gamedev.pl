@@ -205,7 +205,7 @@ describe('buildGeneratePrompt', () => {
     expect(prompt).not.toContain('ENGINE / DOCS CONTEXT');
   });
 
-  it('adds a clearly-delimited engine/docs section ahead of the reference games', () => {
+  it('adds request-specific engine/docs after the cacheable reference games', () => {
     const prompt = buildGeneratePrompt({
       slug: 'my-game',
       title: 'My Game',
@@ -216,8 +216,8 @@ describe('buildGeneratePrompt', () => {
     });
 
     expect(prompt).toContain('=== ENGINE / DOCS CONTEXT');
-    expect(prompt.indexOf('ENGINE / DOCS CONTEXT')).toBeLessThan(prompt.indexOf('REFERENCE GAMES'));
-    expect(prompt.indexOf('PartyApi')).toBeLessThan(prompt.indexOf('REFERENCE GAMES'));
+    expect(prompt.indexOf('ENGINE / DOCS CONTEXT')).toBeGreaterThan(prompt.indexOf('REFERENCE GAMES'));
+    expect(prompt.indexOf('PartyApi')).toBeLessThan(prompt.indexOf('CREATOR REQUEST'));
   });
 });
 
@@ -285,14 +285,20 @@ function makeChain(
 }
 
 // A genaicode-shaped client returning canned results, one per call in order.
-function stubClient(responses: { text: string; inputTokens?: number; outputTokens?: number }[]) {
+function stubClient(
+  responses: { text: string; inputTokens?: number; outputTokens?: number; cachedInputTokens?: number }[],
+) {
   let call = 0;
   const builder = () => {
     const response = responses[Math.min(call++, responses.length - 1)];
     return makeChain(() => ({
       parts: [{ type: 'text' as const, text: response.text }],
       model: 'gemini-3.8-flash',
-      usage: { inputTokens: response.inputTokens ?? 100, outputTokens: response.outputTokens ?? 50 },
+      usage: {
+        inputTokens: response.inputTokens ?? 100,
+        outputTokens: response.outputTokens ?? 50,
+        ...(response.cachedInputTokens !== undefined ? { cachedInputTokens: response.cachedInputTokens } : {}),
+      },
     }));
   };
   return builder as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
@@ -691,13 +697,14 @@ describe('ModelGameSeeder', () => {
     const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
-        { text: '{"picks":["apex-sprint"]}', inputTokens: 400, outputTokens: 10 },
-        { text: GOOD_DRAFT, inputTokens: 30_000, outputTokens: 8_000 },
+        { text: '{"picks":["apex-sprint"]}', inputTokens: 400, outputTokens: 10, cachedInputTokens: 200 },
+        { text: GOOD_DRAFT, inputTokens: 30_000, outputTokens: 8_000, cachedInputTokens: 28_000 },
         // The repair returns only the file it fixed; everything else must survive.
         {
           text: '--- games/my-game/game/model.ts ---\nexport const SPEED = 4;\n',
           inputTokens: 9_000,
           outputTokens: 700,
+          cachedInputTokens: 7_000,
         },
       ]),
       bundleCheck: async () => verdicts.shift()!,
@@ -717,6 +724,7 @@ describe('ModelGameSeeder', () => {
     // The repair round is billed like the rounds before it.
     expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
     expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);
+    expect(draft!.usage.cachedInputTokens).toBe(200 + 28_000 + 7_000);
   });
 
   it('repairs manifest module order before publishing a seed preview', async () => {

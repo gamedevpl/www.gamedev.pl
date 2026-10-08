@@ -37,6 +37,7 @@ export function createEventRenderer(adapter: string) {
     buffered = end ? buffered.slice(end) : '';
     return text.trim() || undefined;
   };
+  const asked = new Map<string, string>();
   const text = (event: AgentEvent): string | undefined => {
     switch (event.type) {
       case 'session':
@@ -58,6 +59,13 @@ export function createEventRenderer(adapter: string) {
         return `Tool failed: ${event.name ?? 'tool'}${event.output?.trim() ? ` — ${sanitizeEventPayload(event.output, 500)}` : ''}`;
       case 'file-change':
         return `Edited: ${event.paths.join(', ')}`;
+      case 'approval-request':
+        asked.set(event.request.id, event.request.summary ?? event.request.kind);
+        return;
+      // Prompts the creator answers are reported where they are asked.
+      case 'approval-resolved':
+        if (!event.automatic) return;
+        return `Permission ${event.decision === 'approve' ? 'auto-approved' : 'denied by policy'}: ${sanitizeEventPayload(asked.get(event.id) ?? event.id, 200)}`;
       case 'error':
         return event.message;
       case 'stderr':

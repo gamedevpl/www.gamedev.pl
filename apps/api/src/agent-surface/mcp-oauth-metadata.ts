@@ -128,7 +128,7 @@ export const MCP_MISSING_CREDENTIAL_HINT =
  */
 export const MCP_NO_ACCOUNT_HINT =
   'creating on gamedev.pl needs an approved creator account — without one there is no key to pass. ' +
-  'Start at https://www.gamedev.pl/ and connect again once you are approved';
+  'Request access on the https://www.gamedev.pl/ front page itself, then connect again once you are approved';
 
 export function mcpMissingCredentialHint(privateBeta = false): string {
   return privateBeta ? `${MCP_MISSING_CREDENTIAL_HINT}. ${MCP_NO_ACCOUNT_HINT}` : MCP_MISSING_CREDENTIAL_HINT;

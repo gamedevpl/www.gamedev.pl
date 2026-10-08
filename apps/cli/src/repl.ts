@@ -6,6 +6,7 @@ import { recoverRepl } from './recover.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { readFileSync } from 'node:fs';
 import { modelCommand } from './model-command.js';
+import { permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
 import { playGame, stopPlaySession } from './play.js';
@@ -100,6 +101,10 @@ export async function handleReplLine(input: {
   if (trimmed === '/model' || trimmed.startsWith('/model ')) {
     const parsed = parseArgv(['node', 'cli', ...trimmed.slice(1).split(/\s+/)]);
     await modelCommand({ ...parsed, env: input.env ?? process.env, pick: input.pick, write: input.write });
+    return { next: 'continue' };
+  }
+  if (trimmed === '/permissions' || trimmed.startsWith('/permissions ')) {
+    await permissionsCommand({ args: trimmed.split(/\s+/).slice(1), pick: input.pick, write: input.write });
     return { next: 'continue' };
   }
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };

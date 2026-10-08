@@ -277,15 +277,16 @@ it('stops the session on authenticated POST /stop', async () => {
 
 it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
   const { url, session } = await fixture();
-  // A private TMPDIR keeps real Play journals out of the scan.
-  const root = mkdtempSync(join(tmpdir(), 'gdpl-workbench-'));
-  vi.stubEnv('TMPDIR', root);
+  // A private tmpdir keeps the scan off real Play sessions.
+  const root = mkdtempSync(join(tmpdir(), 'gamedev-stop-test-'));
+  for (const name of ['TMPDIR', 'TMP', 'TEMP']) vi.stubEnv(name, root);
   cleanup.push(async () => {
     vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
   });
-  const base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
-  // The private TMPDIR starts empty; launch creates this too.
+  expect(tmpdir()).toBe(root);
+  const base = join(root, `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
+  // A fresh tmpdir lacks this directory; launch creates it too.
   privatePlayDirectory(base);
   const journalPath = join(base, 'test-target.json');
   const journal: PlayJournal = {

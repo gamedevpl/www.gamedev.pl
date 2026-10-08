@@ -136,7 +136,7 @@
     "apps/api/src/creation/editor-drafts.test.ts": 258,
     "apps/api/src/creation/editor-drafts.ts": 1144,
     "apps/api/src/creation/game-seed.test.ts": 372,
-    "apps/api/src/creation/game-seed.ts": 1587,
+    "apps/api/src/creation/game-seed.ts": 1449,
     "apps/api/src/creation/job-admin-routes.ts": 255,
     "apps/api/src/creation/job-costs.test.ts": 269,
     "apps/api/src/creation/job-costs.ts": 889,

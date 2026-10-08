@@ -1,6 +1,7 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { claudeApprovalArgs } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
 
 export function localPreviewSupported(name: string): boolean {
@@ -44,13 +45,7 @@ export function localPreviewAdapter(
   writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
   const flags =
     spec.name === 'claude'
-      ? [
-          '--mcp-config',
-          file,
-          '--allowedTools',
-          `mcp__${name}__*`,
-          ...(approvals ? ['--permission-prompt-tool', `mcp__${name}__approve_tool`] : []),
-        ]
+      ? ['--mcp-config', file, '--allowedTools', `mcp__${name}__*`, ...(approvals ? claudeApprovalArgs(name) : [])]
       : ['--additional-mcp-config', `@${file}`, `--allow-tool=${name}`];
   return {
     spec: { ...spec, headless: [...flags, ...spec.headless] },

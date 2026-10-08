@@ -235,7 +235,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     env: process.env,
     onApproval: async (request) => {
       decisions.push(request.kind);
-      expect(request.scope).toBe(profile ? 'turn' : undefined);
+      expect(request.scope).toBe(profile ? 'turn' : 'once');
       return decision;
     },
     onEvent: (event) => events.push(event.type),
@@ -244,4 +244,57 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
   expect(result.permissionSession).toBeUndefined();
   expect(decisions).toEqual([profile ? 'other' : 'command']);
   expect(events).toContain('approval-resolved');
+});
+it.each(['codex', 'muse'])('runs %s in YOLO without asking the creator', async (name) => {
+  const root = mkdtempSync(join(tmpdir(), 'gd-live-yolo-'));
+  roots.push(root);
+  const command = join(root, 'agent');
+  writeFileSync(
+    command,
+    `#!${process.execPath}
+const send=x=>process.stdout.write(JSON.stringify(x)+'\\n');
+const done=()=>send({method:'turn/completed',params:{threadId:'s',sessionId:'s',turn:{id:'t',status:'completed'},turnId:'t',terminal:'completed'}});
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
+ const m=JSON.parse(line); if(m.id===undefined||m.id==='approval')return;
+ if(m.method==='initialize')send({id:m.id,result:{}});
+ if(m.method==='thread/start') {
+   if(m.params.approvalPolicy!=='never'||m.params.sandbox!=='danger-full-access')process.exit(7);
+   send({id:m.id,result:{thread:{id:'s'}}});
+ }
+ if(m.method==='session/start')send({id:m.id,result:{session:{sessionId:'s'}}});
+ if(m.method==='turn/start') {
+   send({id:m.id,result:{turn:{id:'t'},turnId:'t'}});
+   if(m.params.threadId) return setTimeout(done,10);
+   setTimeout(()=>send({id:'approval',method:'approval/request',params:{sessionId:'s',turnId:'t',approvalId:'a',
+     subject:{kind:'shell',command:'npm test'},currentRequirementId:{approvalId:'a',sourceIndex:0},
+     availableChoices:[{choiceId:'always',decision:'approved',scope:'session'},{choiceId:'once',decision:'approved',scope:'once'},{choiceId:'no',decision:'denied',scope:'once'}]}}),10);
+ }
+ if(m.method==='approval/decide') {
+   if(m.params.choiceId!=='once')process.exit(8);
+   send({id:m.id,result:{terminal:true}});
+   done();
+ }
+});`,
+    { mode: 0o700 },
+  );
+  const asked: string[] = [];
+  const events: unknown[] = [];
+  const spec = { ...loadAdapters().adapters.find((adapter) => adapter.name === name)! };
+  const headless = name === 'codex' ? ['exec', '--json', '--sandbox', 'danger-full-access'] : spec.headless;
+  const result = await runLiveAgent({
+    spec: { ...spec, command, headless },
+    prompt: 'test',
+    cwd: root,
+    env: process.env,
+    permissions: 'yolo',
+    onApproval: async (request) => {
+      asked.push(request.id);
+      return 'deny';
+    },
+    onEvent: (event) => events.push(event),
+  });
+  expect(result.code).toBe(0);
+  expect(asked).toEqual([]);
+  if (name === 'muse')
+    expect(events).toContainEqual({ type: 'approval-resolved', id: 'a', decision: 'approve', automatic: true });
 });

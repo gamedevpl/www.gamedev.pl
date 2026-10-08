@@ -326,7 +326,7 @@ export interface AgentObservation {
 }
 
 export type AgentSessionTokens =
-  | { input: number; output: number; vendor?: 'anthropic' | 'copilot'; model?: string }
+  | { input: number; output: number; cached?: number; vendor?: 'anthropic' | 'copilot'; model?: string }
   | {
       vendor: 'gemini';
       model: string;
