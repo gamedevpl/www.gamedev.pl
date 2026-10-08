@@ -7539,7 +7539,12 @@ describe('seeded dispatch', () => {
       githubClient: stub.githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
-      gameSeeder: seederStub({}, (slug) => seeded.push(slug)),
+      gameSeeder: seederStub(
+        {
+          usage: { inputTokens: 30_000, outputTokens: 9_000, cachedInputTokens: 28_000, model: 'gemini-3.8-flash' },
+        },
+        (slug) => seeded.push(slug),
+      ),
     });
 
     expect(response.statusCode).toBe(200);
@@ -7560,7 +7565,7 @@ describe('seeded dispatch', () => {
     // A real token measurement on the ledger — the first thing in it that is not a
     // premium request with no numbers behind it.
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
-    expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
+    expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000, cached: 28_000 });
     expect(seedCost?.by).toBe('gemini-3.8-flash');
 
     await app.close();
