@@ -14,13 +14,36 @@ cannot approve the next request. Follow-up game requests do not answer approvals
 Stop aborts the task and dismisses the question. Escape rejects the current request.
 Closing a browser tab leaves the task waiting for a decision; reconnect or answer
 in the terminal. Task cancellation, process exit, or the existing task timeout
-ends pending decisions. No unattended delegate run gains automatic approval.
+ends pending decisions. In the default **Ask** mode no unattended delegate run gains
+automatic approval; see [Permission modes](#permission-modes).
 
 Payloads too large to display completely are denied. Approval payloads remain
 local; they are not sent as analytics dimensions. This change affects the creator
 funnel (instrumentation question 4): existing `cli_step` events such as
 `delegate_used`, `verify_failed` and `delivered` remain the queryable signals.
 Approval counts and wait time are not separately measured.
+
+## Permission modes
+
+`--permissions <mode>` (any verb) or `/permissions` (terminal, and **Agent permissions** in
+the Play panel) picks the mode for the rest of the CLI process. Every local task prints it
+next to the agent settings (`permissions: Ask`). The default is **Ask**, and nothing is
+saved between runs.
+
+| Mode   | GenAIcode `permissions`                                    | Effect                                                                                                                          |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ask`  | none (each adapter's own flags)                            | The creator answers each request, as above. Unattended runs get no approvals.                                                   |
+| `auto` | `{ approval: 'auto-approve', sandbox: 'workspace-write' }` | The agent's own sandbox limits writes to the checkout; requests inside it are approved without asking, also in unattended runs. |
+| `yolo` | `'yolo'` (`auto-approve`, `unrestricted`)                  | No sandbox and no questions, also in unattended runs.                                                                           |
+
+GenAIcode translates the mode into each adapter's flags (`applyPermissionArgs`) and into
+the Codex/Muse live session. An agent that cannot honor a mode refuses the task with the
+reason, instead of running in another mode: Auto-approve needs a vendor sandbox, so Cursor
+(`--force` runs unsandboxed), Copilot, OpenCode, Vibe and Muse refuse it; Antigravity refuses
+both automatic modes. Automatic decisions appear in the transcript as `Permission
+auto-approved: <summary>` (Claude: `claude: auto-approved command: …`). Approvals are
+still scoped as requested: one invocation, or the current turn for a Codex profile, never a
+session-wide grant.
 
 ## Implemented transports
 

@@ -10,6 +10,7 @@ export const BLURB: Record<SlashVerb, string> = {
   logs: 'show the full transcript of the last local task (interactive session)',
   model: 'view or choose delegated model and effort — model [agent]',
   agents: 'detect local agents and show supported modes',
+  permissions: 'agent approvals — permissions [ask|auto|yolo]; --permissions <mode> for one run (default ask)',
   games: 'list your games',
   status: 'round status — status <token>; in a checkout, the working copy',
   share: 'play URL — share <slug>',

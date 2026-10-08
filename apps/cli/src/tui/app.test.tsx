@@ -199,11 +199,11 @@ describe('command completion keyboard', () => {
     const view = screen(80, 24);
     void view.session.prompt();
     await view.press('/p');
-    expect(view.frame()).toContain('▸ /play');
+    expect(view.frame()).toContain('▸ /permissions');
     await view.press('\x1b[B');
-    expect(view.frame()).toContain('▸ /profile');
+    expect(view.frame()).toContain('▸ /play');
     await view.press('\r');
-    expect(view.session.get().draft).toBe('/profile ');
+    expect(view.session.get().draft).toBe('/play ');
     expect(view.session.get().mode).toBe('prompt');
   });
 

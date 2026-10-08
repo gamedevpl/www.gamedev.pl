@@ -1,6 +1,7 @@
 import {
   codexApprovals,
   codexNotification,
+  codexThreadPolicy,
   liveAgent,
   museApprovals,
   museNotification,
@@ -18,6 +19,7 @@ type RpcValue = Record<string, unknown>;
 export type Steer = (text: string) => Promise<void>;
 
 const ACK_TIMEOUT_MS = 30_000;
+const CODEX_SANDBOXES = ['workspace-write', 'read-only', 'danger-full-access'];
 const TASK_TIMEOUT_MS = 30 * 60_000;
 export const MUSE_APPROVAL_LINE = 'Muse needs your approval — returning to permission handoff.';
 
@@ -28,7 +30,7 @@ export function liveArgs(spec: AdapterSpec): string[] | undefined {
     const arg = spec.headless[i]!;
     if (['exec', '--json', '--skip-git-repo-check', '--prompt'].includes(arg)) continue;
     if (['--sandbox', '--output-format'].includes(arg)) {
-      if (arg === '--sandbox' && spec.headless[i + 1] !== 'workspace-write') return undefined;
+      if (arg === '--sandbox' && !CODEX_SANDBOXES.includes(spec.headless[i + 1] ?? '')) return undefined;
       i++;
       continue;
     }
@@ -77,6 +79,13 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
   const agent = liveAgent({
     name: input.spec.name,
     command: input.spec.command,
+    // What drive() translates itself; anything else is refused before start.
+    capabilities: {
+      permissions: {
+        approval: ['auto-approve', 'deny'],
+        sandbox: input.spec.name === 'muse' ? ['unrestricted'] : ['workspace-write', 'read-only', 'unrestricted'],
+      },
+    },
     args: () => args,
     drive: (session) =>
       drive(session, input, {
@@ -97,6 +106,7 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
     timeoutMs: TASK_TIMEOUT_MS,
     model: input.spec.selection?.model,
     effort: input.spec.selection?.effort,
+    permissions: input.permissions,
     onApproval: input.onApproval
       ? (request, cancelled) => input.onApproval!(request, cancelled ? AbortSignal.any([signal, cancelled]) : signal)
       : undefined,
@@ -195,12 +205,7 @@ async function drive(
     muse ? 'session/start' : 'thread/start',
     muse
       ? { commandId: uuidv7(), workspaceRoot: task.cwd, modelId: task.model, approvalMode: 'onRequest' }
-      : {
-          cwd: task.cwd,
-          model: task.model,
-          sandbox: 'workspace-write',
-          approvalPolicy: input.onApproval ? 'on-request' : 'never',
-        },
+      : { cwd: task.cwd, model: task.model, ...codexPolicy(input, task) },
     ACK_TIMEOUT_MS,
   )) as RpcValue;
   id = String(((created.session ?? created.thread) as RpcValue | undefined)?.[muse ? 'sessionId' : 'id'] ?? '');
@@ -240,4 +245,12 @@ async function drive(
   });
   hooks.steering(true);
   return settled;
+}
+
+// The adapter's own --sandbox; with permissions, their mapping (its flags already match).
+function codexPolicy(input: AdapterRunInput, task: LiveSession['task']) {
+  const at = input.spec.headless.indexOf('--sandbox');
+  const sandbox = at >= 0 ? input.spec.headless[at + 1] : 'workspace-write';
+  if (task.permissions) return codexThreadPolicy(task);
+  return { sandbox, approvalPolicy: input.onApproval ? 'on-request' : 'never' };
 }

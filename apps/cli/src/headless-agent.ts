@@ -11,6 +11,7 @@ import {
   createVibeParser,
   type AgentEvent,
   type AgentOutputParser,
+  type AgentTask,
   type CodingAgent,
 } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
@@ -32,6 +33,8 @@ export type AdapterRunInput = {
   authCheck?: Promise<void>;
   onSteering?: (send: Steer | undefined) => void;
   onApproval?: ApproveTool;
+  // Set by Auto-approve and YOLO; the adapter flags already carry it.
+  permissions?: AgentTask['permissions'];
 };
 export type AdapterRun = (input: AdapterRunInput) => Promise<{ code: number | null; permissionSession?: string }>;
 
