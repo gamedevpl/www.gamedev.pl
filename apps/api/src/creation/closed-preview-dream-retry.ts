@@ -3,6 +3,9 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import type { JobReconcilerDeps } from './job-reconciler.js';
 
+// Old drafts must not drain the shared daily cap.
+export const CLOSED_PREVIEW_DREAM_WINDOW_MS = 24 * 60 * 60_000;
+
 export async function retryClosedPreviewDream(
   record: SubmissionRecord,
   gamesStore: GamesStore,
@@ -20,6 +23,7 @@ export async function retryClosedPreviewDream(
     record.abandonedAt ||
     record.moderationBlockedAt ||
     record.transitions?.at(-1)?.reason !== 'preview_gate_green' ||
+    !(now() - Date.parse(record.transitions.at(-1)!.at) < CLOSED_PREVIEW_DREAM_WINDOW_MS) ||
     receipt?.version !== version ||
     receipt.generation + 1 !== record.roundGeneration
   )

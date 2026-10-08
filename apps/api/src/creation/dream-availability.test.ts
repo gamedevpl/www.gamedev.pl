@@ -108,4 +108,14 @@ describe('createDreamAvailabilityGate', () => {
     expect(resolveDefaultGlobalDailyDreamCap({ GLOBAL_DAILY_DREAM_CAP: '40' })).toBe(40);
     expect(resolveDefaultGlobalDailyDreamCap({ GLOBAL_DAILY_DREAM_CAP: 'lots' })).toBe(DEFAULT_GLOBAL_DAILY_DREAM_CAP);
   });
+
+  it('looks at the cap without spending it', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ globalDailyDreamCap: 3 }, 'g:boss');
+    const gate = createDreamAvailabilityGate({ store });
+    expect(await gate.hasFrameSlots('2026-09-07', 2)).toBe(true);
+    expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(true);
+    expect(await gate.hasFrameSlots('2026-09-07', 2)).toBe(false);
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(2);
+  });
 });

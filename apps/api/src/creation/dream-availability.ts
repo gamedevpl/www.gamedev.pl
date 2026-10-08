@@ -22,6 +22,8 @@ export interface DreamAvailabilityGate {
   dreamingEnabled(): Promise<boolean>;
   // Spends `count` frames from the day's shared allowance, all or none.
   spendFrameSlots(dateStr: string, count: number): Promise<boolean>;
+  // Looks without spending, so a refused card buys no ideas.
+  hasFrameSlots(dateStr: string, count: number): Promise<boolean>;
 }
 
 // Same chassis as seed availability: a platform job, not a request.
@@ -85,5 +87,18 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
     }
   }
 
-  return { dreamingEnabled, spendFrameSlots };
+  async function hasFrameSlots(dateStr: string, count: number): Promise<boolean> {
+    if (!store) return true;
+    const read = await config();
+    if (!read.known || read.value?.dreamsPaused === true) return false;
+    const cap = read.value?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap();
+    try {
+      return (await store.getGlobalDreamCount(dateStr)) + count <= cap;
+    } catch (error) {
+      logWarn({ err: error, dateStr }, 'global dream counter unreachable; skipping the idea call');
+      return false;
+    }
+  }
+
+  return { dreamingEnabled, spendFrameSlots, hasFrameSlots };
 }

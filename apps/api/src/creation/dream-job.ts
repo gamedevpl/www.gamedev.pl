@@ -232,6 +232,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The reads above take real time; either flag may have moved since.
     halt = await stopped();
     if (halt) return halt;
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    if (!(await availability.hasFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     // Booked before the answer: a call that failed still billed.
     await bookConcept(jobId, ideas.model);
     // Fail open: the spec alone still gives ideas.
@@ -256,7 +258,6 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const sourcePng = source.toString('base64');
     const styleNote = styleNoteFor(record);
     const dreamed: { frame: DreamFrame; idea: NextIdea }[] = [];
-    const dateStr = new Date(now()).toISOString().slice(0, 10);
     // Both frames or neither; one buys nothing.
     if (!(await availability.spendFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     for (const idea of candidates) {
