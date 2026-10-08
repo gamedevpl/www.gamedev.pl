@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { KIT_OUTDATED_MARK, MCP_INSTRUCTIONS, nextSuggestedTool, ROUND_SEQUENCE } from './mcp-round-guide.js';
 
 const step = (tool: string, codes: string[], extra: Partial<Parameters<typeof nextSuggestedTool>[0]> = {}) =>
-  nextSuggestedTool({ tool, warnings: codes.map((code) => ({ code, message: '' })), inboxUnread: true, ...extra });
+  nextSuggestedTool({ tool, warnings: codes.map((code) => ({ code, message: '' })), ...extra });
 
 describe('mcp-round-guide', () => {
   it('never names a delivery as the next step', () => {
@@ -19,7 +19,6 @@ describe('mcp-round-guide', () => {
 
   it('suggests reads and closes only when the state alone justifies them', () => {
     expect(step('get_sources', ['must_deliver', 'inbox_pending'])).toBe('read_inbox');
-    expect(step('get_sources', ['inbox_pending'], { inboxUnread: false })).toBeUndefined();
     expect(step('get_kit_api', ['transcript_unread'])).toBe('get_transcript');
     expect(step('submit_sources', ['call_end'])).toBe('end');
     expect(step('submit_sources', ['call_end', 'gate_not_started'])).toBeUndefined();
@@ -30,7 +29,7 @@ describe('mcp-round-guide', () => {
 
   it('refreshes a stale kit before anything else, and only a stale kit', () => {
     const refused = (message: string) =>
-      nextSuggestedTool({ tool: 'start', warnings: [{ code: 'must_fix_gate', message }], inboxUnread: false });
+      nextSuggestedTool({ tool: 'start', warnings: [{ code: 'must_fix_gate', message }] });
     expect(refused(`The gate refused delivery v2 because ${KIT_OUTDATED_MARK}.`)).toBe('get_kit');
     // Naming kit_outdated in passing is not a stale-kit refusal.
     expect(refused('Refused; a stale kit (kit_outdated) would take fromLatestDelivery.')).toBeUndefined();
@@ -40,7 +39,6 @@ describe('mcp-round-guide', () => {
       nextSuggestedTool({
         tool: 'get_kit',
         warnings: [{ code: 'must_fix_gate', message: `refused because ${KIT_OUTDATED_MARK}` }],
-        inboxUnread: false,
         kitRefreshed: true,
       }),
     ).toBeUndefined();

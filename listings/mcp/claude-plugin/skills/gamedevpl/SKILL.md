@@ -1,6 +1,6 @@
 ---
 name: gamedevpl
-description: Build and improve browser games on gamedev.pl through the gamedevpl MCP server — what a round is, how to connect, and the handful of loop rules agents get wrong (screenshot early, stage don't re-upload, end after submit, never poll the gate or the inbox). Use when asked to make, publish, or fix a game on gamedev.pl, or when the gamedevpl tools are connected and you are about to call start or create_game. Not for game development in general, and not for games hosted anywhere else — this is specific to the gamedev.pl platform.
+description: Build and improve browser games on gamedev.pl through the gamedevpl MCP server — what a round is, how to connect, and the handful of loop rules agents get wrong (screenshot early, stage don't re-upload, end after submit, no scheduled gate or inbox polling). Use when asked to make, publish, or fix a game on gamedev.pl, or when the gamedevpl tools are connected and you are about to call start or create_game. Not for game development in general, and not for games hosted anywhere else — this is specific to the gamedev.pl platform.
 ---
 
 # Building on gamedev.pl
@@ -77,9 +77,11 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
 4. **`end` after your last submit.** Do not stop at `submit_sources`, and do not sit in a
    `get_gate_verdict` loop waiting — Studio shows the gate to the creator on its own.
    `get_gate_verdict` is a one-shot check, never a poll.
-5. **Never schedule inbox polls.** Every write reply carries `pendingMessages`. When that
-   array is non-empty, `read_inbox` and apply before continuing. That is the whole
-   mechanism.
+5. **The inbox comes to you.** Every write reply carries `pendingMessages`. When it is
+   non-empty, `read_inbox` returns those notes plus their attached images (`attachments`
+   counts them), which `pendingMessages` does not. Notes already read stop counting as
+   pending; `ack_inbox`, or `end` with `ackInboxIds`, marks them handled. What isn't
+   needed is scheduled inbox polling.
 
 ## Reading round state
 

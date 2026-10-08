@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  unreadFromPayload,
   GATE_POLL_MIN_INTERVAL_MS,
   PROGRESS_STALE_CALLS,
   PROGRESS_STALE_MS,
   TRANSCRIPT_REMINDER_LIMIT,
   createMcpNudgeTracker,
-  pendingCountFromPayload,
 } from './mcp-session-nudges.js';
 
 describe('mcp-session-nudges', () => {
@@ -55,10 +55,10 @@ describe('mcp-session-nudges', () => {
   });
 
   it('reads pending counts from common payload shapes', () => {
-    expect(pendingCountFromPayload({ pendingMessages: [{ id: 'a' }] })).toBe(1);
-    expect(pendingCountFromPayload({ pending: [] })).toBe(0);
-    expect(pendingCountFromPayload({ messages: [{}, {}] })).toBe(2);
-    expect(pendingCountFromPayload({ ok: true })).toBeNull();
+    expect(unreadFromPayload({ pending: [] }, new Set())).toEqual({ count: 0, images: 0 });
+    expect(unreadFromPayload({ messages: [{}, { attachments: 1 }] }, new Set())).toEqual({ count: 2, images: 1 });
+    expect(unreadFromPayload({ ok: true }, new Set())).toBeNull();
+    expect(unreadFromPayload({ pendingMessages: [{ id: 'a' }, { id: 'b' }] }, new Set(['a']))?.count).toBe(1);
   });
 
   it('warns seed_unread on kit browse until get_seed runs', () => {

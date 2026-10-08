@@ -48,7 +48,7 @@ export const MCP_INSTRUCTIONS = [
   'What to build comes from get_brief and the files to build on from get_sources; read_inbox holds new creator messages and get_transcript earlier conversation.',
   'Staging (stage_source_file, patch_source_file, stage_upload_url) changes a buffer only; submit_sources delivers it to the gate, mode=preview while iterating and mode=publish only to seal. A refused delivery re-runs only on a new submit_sources, after its cause is fixed. end closes this session; the round closes on a green publish verdict, a creator action or a builder handoff. A round that only answers a question can end with end({ summary }) and no delivery.',
   "Without a shell, stage_source_file and patch_source_file carry file contents inline, and once a verdict exists get_gate_media shows the gate's own frames.",
-  "Replies carry round state as data: stop (true once this session can no longer change the round; reason says why: builder_handoff is acknowledged by one end call, gate_pending means the build is still running), pendingMessages (creator notes not yet read), warnings[].code (observations about the round) and nextSuggestedTool (present only when the next step follows from round state alone; absent while the next step is the client's own work, such as finishing or fixing code).",
+  "Replies carry round state as data: stop (true once this session can no longer change the round; reason says why: builder_handoff is acknowledged by one end call, gate_pending means the build is still running), pendingMessages (creator notes not yet acknowledged), warnings[].code (observations about the round) and nextSuggestedTool (present only when the next step follows from round state alone; absent while the next step is the client's own work, such as finishing or fixing code).",
   'Warning codes: progress_stale, inbox_pending, seed_unread, transcript_unread, call_end (delivered, session still open), must_fix_gate (last delivery refused), must_deliver (nothing delivered yet), gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, patch_incomplete, byte_budget_low, card_unopened; each carries a message with the detail.',
   `A refusal is an isError result whose structuredContent is { error, code?, retryAfterSeconds? }; codes are ${MCP_ERROR_CODES.join(', ')}.`,
   'Gate verdicts land in Studio 2–5 minutes after submit_sources; get_gate_verdict is a one-shot read, and a pending delivery returns stop:true while its build runs.',
@@ -60,8 +60,6 @@ export interface NextStepState {
   stop?: unknown;
   reason?: unknown;
   warnings: ReadonlyArray<{ code?: unknown; message?: unknown }>;
-  // True when creator notes arrived since the last read_inbox.
-  inboxUnread: boolean;
   // True once get_kit answered since the last delivery.
   kitRefreshed?: boolean;
 }
@@ -85,7 +83,8 @@ export function nextSuggestedTool(state: NextStepState): string | undefined {
   // A refused delivery is fixed first; a stale kit is refreshed first.
   if (refused)
     return String(refused.message).includes(KIT_OUTDATED_MARK) && !state.kitRefreshed ? 'get_kit' : undefined;
-  if (codes.has('inbox_pending')) return state.inboxUnread ? 'read_inbox' : undefined;
+  // inbox_pending counts only notes read_inbox has not returned.
+  if (codes.has('inbox_pending')) return 'read_inbox';
   const read = CONTEXT_READS.find(([code]) => codes.has(code));
   if (read) return read[1];
   // A delivery whose gate never started is not one to close on.

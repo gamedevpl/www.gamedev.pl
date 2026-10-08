@@ -121,7 +121,7 @@ import {
 import {
   INBOX_PIGGYBACK_TOOLS,
   createMcpNudgeTracker,
-  pendingCountFromPayload,
+  unreadFromPayload,
   type NudgeWarning,
 } from './mcp-session-nudges.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
@@ -417,6 +417,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const nudgeTracker = createMcpNudgeTracker();
   // Jobs that read get_kit since their last delivery.
   const refreshedKits = new Set<number>();
+  // Note ids each job's read_inbox already returned.
+  const readNoteIds = new Map<number, Set<string>>();
 
   function pruneTransportSessions(currentTime: number): void {
     for (const [id, meta] of transportSessions) {
@@ -786,9 +788,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       }
     }
 
-    const pending = pendingCountFromPayload(data);
-    if (pending !== null) {
-      nudgeTracker.notePendingCount(jobId, pending, nowMs);
+    const seen = readNoteIds.get(jobId) ?? new Set<string>();
+    if (toolName === 'read_inbox' && Array.isArray(data.messages)) {
+      for (const note of data.messages as Array<{ id?: unknown }>) seen.add(String(note?.id));
+      readNoteIds.set(jobId, seen);
+    }
+    const unread = unreadFromPayload(data, seen);
+    if (unread !== null) {
+      nudgeTracker.notePendingCount(jobId, unread.count, nowMs, unread.images);
     }
 
     // Only brief/seed payloads carry seed lifecycle status. Gate and other tools also
@@ -882,16 +889,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     // Any answered get_kit reflects the current pin, on whichever instance served it.
     if (toolName === 'get_kit') refreshedKits.add(jobId);
     if (toolName === 'submit_sources' && data.ok === true) refreshedKits.delete(jobId);
-    const lastRead = nudgeTracker.peek(jobId)?.lastInboxCheckAt ?? null;
-    const pendingNotes = Array.isArray(data.pendingMessages)
-      ? (data.pendingMessages as Array<{ createdAt?: unknown }>)
-      : [];
     const next = nextSuggestedTool({
       tool: toolName,
       stop: data.stop,
       reason: data.reason,
       warnings,
-      inboxUnread: lastRead === null || pendingNotes.some((note) => Date.parse(String(note.createdAt)) > lastRead),
       kitRefreshed: refreshedKits.has(jobId),
     });
     if (warnings.length === 0 && !piggybacked && !next) {
