@@ -278,7 +278,7 @@ it('stops the session on authenticated POST /stop', async () => {
 it('narrows stopWorkbenchSession by slug and directory boundary', async () => {
   const { url, session } = await fixture();
   const base = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
-  // A fresh runner has no journal directory yet; launch creates it this way.
+  // Fresh runners lack this directory; launch creates it too.
   privatePlayDirectory(base);
   const journalPath = join(base, 'test-target.json');
   const journal: PlayJournal = {
