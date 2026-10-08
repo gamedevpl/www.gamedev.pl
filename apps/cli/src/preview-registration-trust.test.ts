@@ -51,7 +51,7 @@ it('clears owned preview state through the real play stop lifecycle', async () =
   const root = mkdtempSync(join(tmpdir(), 'gdpl-preview-stop-'));
   writeFileSync(join(root, '.gamedev-slug'), 'robot');
   // Keeps stop from scanning a developer's real Play sessions.
-  vi.stubEnv('TMPDIR', root);
+  for (const name of ['TMPDIR', 'TMP', 'TEMP']) vi.stubEnv(name, root);
   const onLocalPreview = vi.fn();
   try {
     await playGame({

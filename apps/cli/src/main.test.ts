@@ -32,7 +32,7 @@ function io() {
 // Keeps stop from scanning, or stopping, a developer's real Play sessions.
 async function inPrivateTmpdir(run: () => Promise<void>): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), 'gdpl-stop-'));
-  vi.stubEnv('TMPDIR', root);
+  for (const name of ['TMPDIR', 'TMP', 'TEMP']) vi.stubEnv(name, root);
   try {
     await run();
   } finally {
