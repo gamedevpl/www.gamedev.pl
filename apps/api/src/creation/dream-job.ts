@@ -46,6 +46,7 @@ export type DreamOutcome =
   | 'no_ideas'
   | 'no_frames'
   | 'superseded'
+  | 'external_builder'
   | 'failed';
 
 // Naming for the store's refusal; a lost claim means superseded.
@@ -190,6 +191,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   async function run(input: DreamRunInput, claimedAt: string): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
+    // External agents draw their own frames; the platform draws none.
+    if (record.builder === 'self') return 'external_builder';
     // The same predicate the claim uses; two spellings would drift apart.
     if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString(), record.roundGeneration ?? 1))
       return 'already_ran';
@@ -336,7 +339,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         sourceRef: sourceShot.id,
         version,
         options,
-        builder: record.builder === 'self' ? 'self' : 'platform',
+        builder: 'platform',
       };
       // The transaction re-reads the mute, so it needs the same owner.
       const proposalOwnerUid = record.slug ? await gameOwnerUid(store, record) : record.ownerUid;

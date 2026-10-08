@@ -1372,6 +1372,8 @@ export async function registerSubmissionRoutes(
     const job = dreamJob;
     if (!job) return;
     const { record, version, screenshotPath } = input;
+    // The worker refuses these anyway; skip the hand-off.
+    if (record.builder === 'self') return;
     // The seam fires on every poll while the preview stays green, and the worker only
     // dedupes once it has started -- so without this the round would spend the seed
     // route's shared hourly allowance re-handing off work that is already done.
