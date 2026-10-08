@@ -1152,6 +1152,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }
+    // A blocked account keeps its cookie; only erasure stays reachable.
+    const erasure = request.method === 'DELETE' && request.url.split('?')[0] === '/api/me/account';
+    if (request.user.tier === 'blocked' && !erasure) return reply.status(403).send({ error: 'account is blocked' });
   });
 
   // Production serves the SPA from WEB_DIST_DIR on the API origin.

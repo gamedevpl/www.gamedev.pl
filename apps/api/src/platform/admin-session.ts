@@ -11,8 +11,8 @@ export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefi
   return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
 }
 
-// Session only, never a PAT; on the site, ops door only.
+// Session only, never a PAT or blocked account; ops door only.
 export function isAdminSession(request: FastifyRequest, adminUids: Set<string> | undefined): boolean {
-  if (request.operatorDoor === false) return false;
+  if (request.operatorDoor === false || request.user?.tier === 'blocked') return false;
   return request.authMethod === 'session' && isAdmin(request.user?.uid, adminUids);
 }

@@ -35,11 +35,13 @@ export function bindingFields(source: BindingFields): BindingFields {
   return { viaTokenId: source.viaTokenId, viaTokenExpiresAt: source.viaTokenExpiresAt };
 }
 
+// Every grant dies with its owner's standing, PAT-bound or not.
 export async function tokenBindingLive(store: Store, binding: TokenBinding, nowMs: number): Promise<boolean> {
-  if (!binding.viaTokenId) return true;
-  const record = await store.getAccessToken(binding.viaTokenId);
-  if (!record || record.uid !== binding.ownerUid) return false;
-  if (isAccessTokenExpired(record.expiresAt, nowMs)) return false;
+  if (binding.viaTokenId) {
+    const record = await store.getAccessToken(binding.viaTokenId);
+    if (!record || record.uid !== binding.ownerUid) return false;
+    if (isAccessTokenExpired(record.expiresAt, nowMs)) return false;
+  }
   const user = await store.getUser(binding.ownerUid);
   return Boolean(user && user.tier !== 'blocked' && !user.deletionScheduledFor);
 }

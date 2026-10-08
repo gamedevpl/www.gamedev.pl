@@ -124,6 +124,7 @@ export function isReviewerSession(
 ): boolean {
   // Reviewer bots (e.g. bot:grok) authenticate via PAT only, REVIEWER_UIDS-gated.
   if (request.authMethod !== 'session' && request.authMethod !== 'token') return false;
+  if (request.user?.tier === 'blocked') return false; // Blocking ends the reviewer role.
   return isReviewer(request.user?.uid, reviewerUids, adminUids);
 }
 
