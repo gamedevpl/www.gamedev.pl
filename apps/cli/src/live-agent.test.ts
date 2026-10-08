@@ -235,7 +235,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     env: process.env,
     onApproval: async (request) => {
       decisions.push(request.kind);
-      expect(request.scope).toBe(profile ? 'turn' : undefined);
+      expect(request.scope).toBe(profile ? 'turn' : 'once');
       return decision;
     },
     onEvent: (event) => events.push(event.type),

@@ -25,6 +25,8 @@ export async function localPreviewTools(input: {
     input.write('Local task tools connected: report_progress (Ctrl+L for diagnostics).');
     return {
       spec: wired.spec,
+      // Claude's permission prompts go to the approve tool on this server.
+      approvals: input.spec.name === 'claude' && Boolean(input.onApproval),
       async close() {
         await server!.close();
         wired.cleanup();

@@ -1,6 +1,8 @@
 import {
+  codexApprovals,
   codexNotification,
   liveAgent,
+  museApprovals,
   museNotification,
   RpcError,
   uuidv7,
@@ -11,7 +13,6 @@ import {
 import type { AdapterSpec } from './adapters.js';
 import type { AdapterRunInput } from './headless-agent.js';
 import { evidenceImages } from './workbench-evidence.js';
-import { liveApprovals } from './live-approvals.js';
 
 type RpcValue = Record<string, unknown>;
 export type Steer = (text: string) => Promise<void>;
@@ -52,7 +53,7 @@ export function turnInput(name: string, text: string): RpcValue[] {
   return [{ type: 'text', text }, ...images.map((path) => ({ type: 'localImage', path }))];
 }
 
-// Transport and events come from genaicode/agents; protocol choices stay here.
+// genaicode owns transport and approvals; steering and images stay here.
 export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: number; permissionSession?: string }> {
   const args = liveArgs(input.spec);
   if (!args) throw new Error('This adapter supports queued follow-ups only.');
@@ -96,7 +97,9 @@ export async function runLiveAgent(input: AdapterRunInput): Promise<{ code: numb
     timeoutMs: TASK_TIMEOUT_MS,
     model: input.spec.selection?.model,
     effort: input.spec.selection?.effort,
-    onApproval: input.onApproval ? (request) => input.onApproval!(request, signal) : undefined,
+    onApproval: input.onApproval
+      ? (request, cancelled) => input.onApproval!(request, cancelled ? AbortSignal.any([signal, cancelled]) : signal)
+      : undefined,
   });
   try {
     for await (const event of run) input.onEvent?.(event);
@@ -132,22 +135,22 @@ async function drive(
   const finish = (outcome: AgentOutcome) => {
     if (verdict) return;
     verdict = outcome;
+    approvals.close();
     hooks.decided();
     hooks.steering(false);
     if (!outcome.ok || inFlight === 0) settle(outcome);
   };
   const diagnostic = (method: string, params: unknown) => input.onDiagnostic?.(JSON.stringify({ method, params }));
-  const approvals = liveApprovals({
-    session,
-    muse,
-    id: () => id,
-    turn: () => turn,
-    active: () => !verdict && !input.abort?.aborted,
-    fail: (message) => {
-      session.emit({ type: 'error', message });
-      finish({ ok: false, error: message });
-    },
-  });
+  const ids = () => ({ session: id || undefined, turn: turn || undefined });
+  const approvals = muse
+    ? museApprovals(session, ids, {
+        requestTimeoutMs: ACK_TIMEOUT_MS,
+        onError: (message) => {
+          session.emit({ type: 'error', message });
+          finish({ ok: false, error: message });
+        },
+      })
+    : codexApprovals(session, ids);
 
   session.onNotification((method, params) => {
     diagnostic(method, params);
@@ -167,9 +170,13 @@ async function drive(
     }
     for (const event of (muse ? museNotification : codexNotification)(method, params)) session.emit(event);
   });
-  session.onRequest((method, params) => {
+  session.onRequest((method, params, context) => {
     diagnostic(method, params);
-    if (input.onApproval) return approvals.request(method, params);
+    if (input.onApproval) {
+      const answer = approvals.request(method, params, context);
+      if (answer) return answer;
+      throw new RpcError('Unsupported request.', -32601);
+    }
     if (muse && method === 'approval/request') {
       hooks.handoff(id);
       session.emit({ type: 'error', message: MUSE_APPROVAL_LINE });

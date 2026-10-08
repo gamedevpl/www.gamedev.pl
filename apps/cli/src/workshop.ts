@@ -7,7 +7,7 @@ export { workshopBrief } from './workshop-brief.js';
 import { defaultAdapterRun } from './workshop-runner.js';
 import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
-import { approvalPrompt } from './agent-approval.js';
+import { approvalEnv, approvalPrompt } from './agent-approval.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
@@ -295,7 +295,7 @@ export async function runLocalBuild(input: {
           onApproval,
           onSteering: ws.unattended ? undefined : ws.onSteering,
           cwd,
-          env: childEnv(ws.env, ''),
+          env: approvalEnv(childEnv(ws.env, ''), localTools?.approvals),
           abort: controller.signal,
           onDiagnostic: output.raw,
           onLine: (line) => {

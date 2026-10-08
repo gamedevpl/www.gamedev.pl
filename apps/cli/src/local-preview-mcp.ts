@@ -1,6 +1,6 @@
 import { progressTool, progressReporter } from './local-progress.js';
 import type { ApproveTool } from './agent-approval.js';
-import { claudePermission, claudePermissionTool, CLAUDE_PERMISSION_TOOL } from './claude-approval.js';
+import { claudeApprovalTool } from 'genaicode/agents';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -71,6 +71,7 @@ export async function startLocalPreviewMcp(input: {
 }) {
   const controller = new AbortController();
   const signal = AbortSignal.any([input.abort, controller.signal]);
+  const approval = input.onApproval ? claudeApprovalTool(input.onApproval) : undefined;
   const source = input.previewUrl ? previewSource(input.previewUrl, signal) : undefined;
   const report = progressReporter(input.progress ?? ((text) => input.write(text)));
   const key = randomBytes(32).toString('hex');
@@ -106,8 +107,7 @@ export async function startLocalPreviewMcp(input: {
     }
   }
   async function call(name: unknown, raw: unknown, requestSignal: AbortSignal) {
-    if (name === CLAUDE_PERMISSION_TOOL && input.onApproval)
-      return claudePermission(raw, input.onApproval, requestSignal);
+    if (approval && name === approval.name) return approval.call(raw, requestSignal);
     const args = raw ?? {};
     if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid arguments.');
     const value = args as Record<string, unknown>;
@@ -209,7 +209,13 @@ export async function startLocalPreviewMcp(input: {
       } else if (message.method === 'ping') result = {};
       else if (message.method === 'tools/list')
         result = {
-          tools: [progressTool, ...(source ? TOOLS : []), ...(input.onApproval ? [claudePermissionTool] : [])],
+          tools: [
+            progressTool,
+            ...(source ? TOOLS : []),
+            ...(approval
+              ? [{ name: approval.name, description: approval.description, inputSchema: approval.inputSchema }]
+              : []),
+          ],
         };
       else if (message.method === 'tools/call') {
         const params = message.params as { name?: unknown; arguments?: unknown } | undefined;
