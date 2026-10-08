@@ -109,7 +109,9 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
     'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
     '- Skip optional polish. One screen, one loop, readable visuals.',
     '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
-    "- Audio ids are a fixed catalog: copy from get_kit_api's Audio catalog and never invent one.",
+    shell
+      ? '- Audio ids are a fixed catalog: copy from the unpacked kit’s audio catalog and never invent one.'
+      : "- Audio ids are a fixed catalog: copy from get_kit_api's Audio catalog and never invent one.",
     '- GAME.json must include an engine.modules array; every game needs an EditorKit editor with at least three meaningful tunables or one content collection; stage compiled `EDITOR.json`, `EDITOR.content.json` (v2), and `game/editor-content.ts` before submit. Keep EDITOR.ts local; upload only compiled JSON.',
     '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
     '- The publish gate requires the audio module, so removing it only defers the failure.',

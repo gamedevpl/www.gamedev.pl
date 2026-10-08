@@ -86,7 +86,8 @@ const brief: BuildBrief = {
 };
 
 if (flag('prompt')) {
-  console.log(buildPrompt(brief));
+  // Same lane production picks: only the Anthropic sandbox has a shell.
+  console.log(buildPrompt(brief, { shell: vendor === 'anthropic' }));
   process.exit(0);
 }
 

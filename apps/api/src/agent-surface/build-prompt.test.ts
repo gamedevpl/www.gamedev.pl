@@ -39,6 +39,7 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('Unpack `get_kit`’s kitUrl once');
     expect(prompt).not.toContain('Do not use bash');
     expect(prompt).not.toContain('do not download or unpack');
+    expect(prompt).not.toContain('get_kit_api');
   });
 
   it('opens a creation round through create_game before start', () => {
