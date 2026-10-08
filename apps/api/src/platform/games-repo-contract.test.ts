@@ -7,7 +7,10 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
   extractDeliveryContract,
+  extractGameKitModuleRequires,
   extractGameKitModules,
+  GAME_KIT_MODULE_REQUIRES,
+  missingModuleDependency,
   extractGameKitVerticals,
   extractMaxBundleBytes,
   extractMusicContractSignals,
@@ -79,7 +82,12 @@ describe('games-repo-contract (website half)', () => {
       authorBudgetBytes: number;
       platformCeilingBytes: number;
       rasterBudgetBytes?: number;
-      audio: { musicField: string; musicTracksField: string; bankField: string; injectedGlobals: Record<string, string> };
+      audio: {
+        musicField: string;
+        musicTracksField: string;
+        bankField: string;
+        injectedGlobals: Record<string, string>;
+      };
     };
     expect(fixture.version).toBe(2);
     // The audio injection shape is half of what this fixture exists to pin: `music` is the
@@ -250,6 +258,25 @@ describe('games-repo source extractors', () => {
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);
+  });
+
+  it('reads GAME_KIT_MODULE_REQUIRES and tolerates a tip without it', () => {
+    const source = `export const GAME_KIT_MODULE_REQUIRES = {
+      actors: ['drawing'],
+      gfx: ['drawing'],
+      gfx3d: ['gfx'],
+      urban: ['world'],
+    } as const satisfies Record<string, readonly string[]>;`;
+    expect(extractGameKitModuleRequires(source)).toEqual(GAME_KIT_MODULE_REQUIRES);
+    expect(extractGameKitModuleRequires('export const GAME_KIT_MODULES = [];')).toBeNull();
+  });
+
+  it('names the module a selection is missing', () => {
+    expect(missingModuleDependency(['input', 'gfx', 'ui'])).toMatch(/lacks "drawing", which "gfx" calls/);
+    expect(missingModuleDependency(['input', 'actors'])).toMatch(/lacks "drawing", which "actors" calls/);
+    expect(missingModuleDependency(['input', 'drawing', 'gfx'])).toBeNull();
+    expect(missingModuleDependency(['urban', 'drawing', 'gfx'])).toMatch(/lacks "world", which "urban" calls/);
+    expect(missingModuleDependency(['drawing', 'ui', 'gfx3d'])).toMatch(/lacks "gfx", which "gfx3d" calls/);
   });
 
   it('reads GAME_KIT_VERTICALS from an assemble.ts-shaped source', () => {

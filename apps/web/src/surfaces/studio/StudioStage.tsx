@@ -1,4 +1,3 @@
-import { isFromGameFrame } from '../../frameMessage.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from '../../GameFrame.js';
@@ -20,6 +19,7 @@ import type { StageCheck } from '../../stageCheckVerdict.js';
 import { StudioStageStatusbar } from './StudioStageStatusbar.js';
 import { noteStudioInteraction } from './studioStatusStore.js';
 import { toFeedbackContext } from './studioFeedbackContext.js';
+import { watchSwap } from './swapWatch.js';
 
 /**
  * The stage: always mounted, always full-bleed, running the game whether or not the
@@ -40,10 +40,6 @@ export type StagePosture = 'watch' | 'play';
 export type StageStatus =
   { kind: 'empty' } | { kind: 'ready' } | { kind: 'crashed'; message: string } | { kind: 'drew-nothing' };
 
-/** How long to watch a freshly-swapped document for an uncaught error (RemixPanel parity). */
-const SWAP_WATCH_MS = 6_000;
-/** The bridge posts `{type:'alive', frames}` every 5s; wait one tick past that. */
-const DREW_NOTHING_CHECK_MS = 5_500;
 /** Cheap battery honesty for a tab left open overnight. */
 const IDLE_THROTTLE_MS = 10 * 60 * 1000;
 // Idle window before a held swap auto-applies.
@@ -151,6 +147,9 @@ export function StudioStage({
   const idleTimerRef = useRef<number | null>(null);
   const shimmerTimeoutRef = useRef<number | null>(null);
   const swapWatchRef = useRef<{ stop: () => void } | null>(null);
+  // A swap watch can outlive a posture change; crash handling reads it fresh.
+  const postureRef = useRef(posture);
+  postureRef.current = posture;
 
   useEffect(() => {
     return () => {
@@ -244,51 +243,22 @@ export function StudioStage({
   }
 
   /**
-   * Listen for the freshly-swapped document to throw, and separately for "nothing
-   * painted." The error path is exactly what RemixPanel already ships for the public
-   * Remix code lane (SWAP_WATCH_MS, the same constant) — no new bridge message, no
-   * assembler change, no sandbox change.
-   *
-   * `candidate` is only promoted to `lastGoodRef` once the full watch window elapses
-   * with no crash reported *and* the document actually painted a frame — marking it
-   * good the instant it's shown would let a crash, or a build that silently draws
-   * nothing, "restore" the same broken document on the next recovery.
+   * Watch the swapped document for a crash or a blank canvas. `candidate` becomes
+   * `lastGoodRef` only after the watch window passes with no crash *and* a painted
+   * frame — otherwise recovery could "restore" the same broken document.
    */
   function watchSwappedDocument(candidate: string, origin: StageOrigin) {
-    let sawFrame = false;
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== 'null') return;
-      if (!isFromGameFrame(event, frameRef.current)) return;
-      const data = event.data as { source?: string; type?: string; message?: string; frames?: number } | null;
-      if (data?.source !== 'gdpl-player') return;
-      if (data.type === 'error') {
-        reportCrash(String(data.message ?? '').slice(0, 200));
-        stop();
-        return;
-      }
-      if (data.type === 'alive') {
-        sawFrame = Number(data.frames ?? 0) > 0;
-      }
-    }
-    function stop() {
-      window.removeEventListener('message', onMessage);
-      window.clearTimeout(errorTimer);
-      window.clearTimeout(drewNothingTimer);
-      if (swapWatchRef.current?.stop === stop) swapWatchRef.current = null;
-    }
-    const errorTimer = window.setTimeout(() => {
-      if (sawFrame) {
+    const stop = watchSwap(() => frameRef.current, {
+      crash: reportCrash,
+      blank: () => setStatusAndReport({ kind: 'drew-nothing' }),
+      drew: () => setStatusAndReport({ kind: 'ready' }),
+      good: () => {
         lastGoodRef.current = candidate;
         lastGoodOriginRef.current = origin;
         lastGoodAtRef.current = origin.at ?? Date.now();
-      }
-      stop();
-    }, SWAP_WATCH_MS);
-    const drewNothingTimer = window.setTimeout(() => {
-      if (!sawFrame) setStatusAndReport({ kind: 'drew-nothing' });
-    }, DREW_NOTHING_CHECK_MS);
+      },
+    });
     swapWatchRef.current = { stop };
-    window.addEventListener('message', onMessage);
   }
 
   // Timers/listener installed above must not outlive the component — a candidate that
@@ -297,7 +267,7 @@ export function StudioStage({
   useEffect(() => () => swapWatchRef.current?.stop(), []);
 
   function reportCrash(message: string) {
-    if (posture === 'play') {
+    if (postureRef.current === 'play') {
       // The creator's run just vanished under them — restore instantly and say so via
       // status; a card in the middle of a play session has nowhere honest to sit.
       const good = lastGoodRef.current;

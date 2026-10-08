@@ -370,6 +370,7 @@ const FILE_BUCKET = {
   'dream-availability': 'creation',
   'dream-frames': 'creation',
   'dream-job': 'creation',
+  'dream-history': 'creation',
   'dream-claim-finalization': 'creation',
   'dream-superseded': 'creation',
   'dream-claim': 'platform',
@@ -500,7 +501,10 @@ const FILE_BUCKET = {
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
+  'inbox-reference-images': 'agent-surface',
+  'reference-image-url': 'agent-surface',
   'capture-plan-hint': 'agent-surface',
+  'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',
   'kit-upcoming-rules': 'agent-surface',
   'staged-budget': 'agent-surface',

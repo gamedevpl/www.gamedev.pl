@@ -94,6 +94,39 @@ export const GAME_KIT_MODULES = [
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
+// Unguarded cross-module calls between GameKit modules.
+// Lockstep twin: games-repo assemble.ts GAME_KIT_MODULE_REQUIRES.
+export const GAME_KIT_MODULE_REQUIRES: Readonly<Record<string, readonly GameKitModuleName[]>> = {
+  actors: ['drawing'],
+  gfx: ['drawing'],
+  gfx3d: ['gfx'],
+  urban: ['world'],
+};
+
+// typecheck cannot see this: game-kit.d.ts declares every module at once.
+export function missingModuleDependency(modules: readonly string[]): string | null {
+  for (const [owner, needs] of Object.entries(GAME_KIT_MODULE_REQUIRES)) {
+    if (!modules.includes(owner)) continue;
+    const missing = needs.find((need) => !modules.includes(need));
+    if (!missing) continue;
+    return (
+      `GAME.json engine.modules lacks "${missing}", which "${owner}" calls at runtime ` +
+      `(the game crashes with "GameKit.<fn> is not a function"). Add "${missing}" in canonical order.`
+    );
+  }
+  return null;
+}
+
+// Null when the games tip predates the map; absence is not drift.
+export function extractGameKitModuleRequires(assembleSource: string): Record<string, string[]> | null {
+  const match = assembleSource.match(/GAME_KIT_MODULE_REQUIRES\s*=\s*\{([\s\S]*?)\}/);
+  if (!match) return null;
+  const entries = [...match[1].matchAll(/([a-z0-9]+)\s*:\s*\[([^\]]*)\]/g)];
+  return Object.fromEntries(
+    entries.map(([, owner, list]) => [owner, [...list.matchAll(/['"]([a-z0-9-]+)['"]/g)].map((entry) => entry[1])]),
+  );
+}
+
 /**
  * Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`.
  *

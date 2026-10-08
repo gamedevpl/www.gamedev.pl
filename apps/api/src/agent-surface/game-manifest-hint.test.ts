@@ -71,13 +71,13 @@ describe('gameManifestHint', () => {
   });
 
   it('accepts a minimal valid manifest with no audio module', () => {
-    const content = JSON.stringify({ engine: { modules: ['input', 'gfx'] } });
+    const content = JSON.stringify({ engine: { modules: ['input', 'drawing', 'gfx'] } });
     expect(gameManifestHint('GAME.json', content)).toBeNull();
   });
 
   it('accepts a valid manifest with audio wired up', () => {
     const content = JSON.stringify({
-      engine: { modules: ['input', 'gfx', 'audio'] },
+      engine: { modules: ['input', 'drawing', 'gfx', 'audio'] },
       audio: { sounds: ['coin', 'pop'], music: 'dream-float' },
     });
     expect(gameManifestHint('GAME.json', content)).toBeNull();
@@ -85,10 +85,15 @@ describe('gameManifestHint', () => {
 
   it('flags a howToPlay field the generated page cannot render', () => {
     const content = JSON.stringify({
-      engine: { modules: ['input', 'gfx'] },
+      engine: { modules: ['input', 'drawing', 'gfx'] },
       howToPlay: { controls: [{ keys: 'Space', action: { en: 'Boost' } }] },
     });
     expect(gameManifestHint('GAME.json', content)).toMatch(/howToPlay\.controls\[0\]\.action/);
+  });
+
+  it('flags gfx selected without the drawing module it calls into', () => {
+    const content = JSON.stringify({ engine: { modules: ['input', 'gfx', 'ui'] } });
+    expect(gameManifestHint('GAME.json', content)).toMatch(/lacks "drawing", which "gfx" calls/);
   });
 
   // index.html has its own refusal now — see games-store.test.ts.

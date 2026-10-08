@@ -165,6 +165,7 @@ export async function startSessionBrowser(
           phone: phone && { url: phone.url, expiresAt: phone.expiresAt, qr: phone.qr },
           reports,
           mode: state.mode,
+          approvalPending: state.approvalPending,
           promptId: state.promptId,
           taskId: state.taskId,
           identity: clean(state.identity),

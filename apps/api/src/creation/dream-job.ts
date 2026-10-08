@@ -16,6 +16,7 @@ import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream-frames.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
+import { dreamHistory } from './dream-history.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
 import { currentOwnerUid, gameOwnerUid } from '../platform/game-access-resolve.js';
 
@@ -230,13 +231,21 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (halt) return halt;
     // Booked before the answer: a call that failed still billed.
     await bookConcept(jobId, ideas.model);
+    // Fail open: the spec alone still gives ideas.
+    const history = await dreamHistory(store, jobId, record.slug).catch(() => []);
+    // Awaited below: the seed request's CPU ends with this run.
+    const retryBookings: Promise<void>[] = [];
     const generated = await ideas.generate({
+      screenshotPng: source.toString('base64'),
+      onRetry: () => retryBookings.push(bookConcept(jobId, ideas.model)),
+      ...(history.length ? { history } : {}),
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
       title: record.title,
       published,
       ...(record.locale ? { locale: record.locale } : {}),
     });
+    await Promise.all(retryBookings);
     const candidates = generated.slice(0, DREAM_OPTIONS);
     // A slot and an image call for a card that cannot post.
     if (candidates.length < DREAM_OPTIONS) return 'no_ideas';

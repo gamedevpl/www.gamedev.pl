@@ -2397,7 +2397,7 @@ export async function registerAgentChannelRoutes(
     return imageSize(source);
   }
 
-  registerAgentChannelBriefRoutes(app, { resolveBuild, store });
+  registerAgentChannelBriefRoutes(app, { resolveBuild, store, agentTokenSecret, now });
 
   registerAgentChannelProposalRoutes(app, {
     resolveBuild,

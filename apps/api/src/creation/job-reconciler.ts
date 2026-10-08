@@ -415,14 +415,18 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         ...(preview.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
       });
       if (preview.green) {
-        await onPreviewGateGreen?.({
-          record,
-          version,
-          ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
-        });
+        const dream = (current: SubmissionRecord) =>
+          onPreviewGateGreen?.({
+            record: current,
+            version,
+            ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
+          });
         // Session over, preview green: the owner seals it from ready_for_review.
         const sealable = state === 'building' && currentSessionFinished(record) && !record.deliveredVersion;
-        if (!sealable || !canTransition(state, 'ready_for_review')) return null;
+        if (!sealable || !canTransition(state, 'ready_for_review')) {
+          await dream(record);
+          return null;
+        }
         const at = new Date(now()).toISOString();
         const transition: JobTransition = { to: 'ready_for_review', at, by: 'gate', reason: 'preview_gate_green' };
         // Guarded: a handoff may have opened a newer round since this read.
@@ -432,6 +436,9 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           dispatchRef: record.dispatch?.refs.at(-1),
         };
         if (!(await store.recordJobTransition(record.jobId, transition, guard))) return null;
+        // Sealing opens a generation; a dream claimed before it is superseded.
+        const sealed = await store.getSubmission(record.jobId);
+        if (sealed) await dream(sealed);
         // Same as the publish path: the closed round resumes a pending handoff.
         if (record.builderHandoff?.awaitsAgentAck) {
           await acknowledgeBuilderHandoff({ jobId: record.jobId, acknowledgedAt: at, log }).catch((error) => {

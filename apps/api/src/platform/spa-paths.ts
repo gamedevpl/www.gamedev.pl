@@ -14,12 +14,12 @@ import { PLATFORM_HANDLE, RESERVED_HANDLES } from './creator-profile.js';
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
 const DRAFT_PATTERN = /^\/draft\/([^/]+)$/;
-const STATUS_PATTERN = /^\/status\/([^/]+)$/;
+export const STATUS_PATTERN = /^\/status\/([^/]+)$/;
 const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
 const INVITE_PATTERN = /^\/invite(?:\/[A-Za-z0-9_-]{32})?$/;
 /** Public creator profile aliases — same grammar as `creatorPath` in apps/web/src/core/router.ts. */
-const CREATOR_ALIAS_PATTERN = /^\/creators\/([a-z][a-z0-9_]{2,23})$/;
-const ROOT_CREATOR_PATTERN = /^\/([a-z][a-z0-9_]{2,23})$/;
+export const CREATOR_ALIAS_PATTERN = /^\/creators\/([a-z][a-z0-9_]{2,23})$/;
+export const ROOT_CREATOR_PATTERN = /^\/([a-z][a-z0-9_]{2,23})$/;
 /**
  * Public game page: `/:handle/:slug`. The optional final segment is the closed set of
  * retired tab URLs; the client accepts those bookmarks and replaces them with the
@@ -39,7 +39,7 @@ const GAME_PAGE_PATTERN =
  * can see.
  */
 // Also: welcome/connect chapters; edit/editor EditorKit surface; code (the Code surface, CE-06).
-const STUDIO_PATTERN =
+export const STUDIO_PATTERN =
   /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|code|welcome|connect)|\/transfer\/propose\/[^/]+)?)?$/;
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;

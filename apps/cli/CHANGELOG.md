@@ -14,6 +14,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - The Play browser tab displays the mascot favicon instead of falling back to a missing icon (#1680).
+- Local Claude, Codex and Muse tasks ask for tool approval in the Play panel or terminal (one invocation, or explicitly the current turn for Codex permission profiles) and continue after your decision; Stop cancels pending approvals (#1679).
+
+## 0.24.1 — 2026-10-06
+
+### Fixed
+
 - Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
 
 ## 0.24.0 — 2026-10-05
