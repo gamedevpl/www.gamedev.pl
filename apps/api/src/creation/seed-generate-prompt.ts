@@ -10,7 +10,7 @@ export function buildGeneratePrompt(input: {
 }): string {
   return [
     'You write a first draft of a browser game for this repository. A coding agent will finish it;',
-    'your draft is its starting point, so completeness and idiomatic engine use matter more than polish.',
+    'Keep the draft small: one core mechanic, a simple renderer, and only essential modules; the agent adds depth.',
     '',
     'Rules:',
     '- howToPlay in GAME.json (goal, hint, optional controls/scoring/mode) generates index.html —',

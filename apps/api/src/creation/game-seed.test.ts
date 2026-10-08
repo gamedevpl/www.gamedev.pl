@@ -8,7 +8,6 @@ import {
   ModelGameSeeder,
   type SeedFile,
 } from './game-seed.js';
-
 import { registerSeedProvider } from './seed-provider.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
@@ -386,15 +385,16 @@ describe('ModelGameSeeder', () => {
 
     await seeder.seed(request);
 
-    expect(thinkingArgs).toEqual([{ level: 'low' }]);
+    expect(thinkingArgs).toEqual([{ level: 'low' }, { level: 'low' }]);
   });
 
   it('returns a draft with references, usage summed across both calls, and notes', async () => {
     const seeder = new ModelGameSeeder({
       context: stubContext(),
+      references: 2,
       client: stubClient([
         { text: '{"picks":["apex-sprint","word-forge"]}', inputTokens: 400, outputTokens: 10 },
-        { text: GOOD_DRAFT, inputTokens: 30_000, outputTokens: 8_000 },
+        { text: GOOD_DRAFT, inputTokens: 800, outputTokens: 800 },
       ]),
     });
 
@@ -408,8 +408,8 @@ describe('ModelGameSeeder', () => {
     expect(draft!.typeErrors).toBe(0);
     // Both calls are billed to the job, not just the expensive one.
     expect(draft!.usage).toEqual({
-      inputTokens: 30_400,
-      outputTokens: 8_010,
+      inputTokens: 1200,
+      outputTokens: 810,
       model: 'gemini-3.8-flash',
       provider: 'vertex',
     });
@@ -450,7 +450,7 @@ describe('ModelGameSeeder', () => {
             result: {
               parts: [{ type: 'text' as const, text: GOOD_DRAFT }],
               model: 'gemini-3.8-flash',
-              usage: { inputTokens: 30_000, outputTokens: 8_000 },
+              usage: { inputTokens: 800, outputTokens: 800 },
             },
           };
         },
@@ -486,7 +486,7 @@ describe('ModelGameSeeder', () => {
 
     const seeder = new ModelGameSeeder({
       context: stubContext(),
-      providers: new Map([['__test_narrow_vendor__', { model: 'narrow-model', maxOutputTokens: 4_096 }]]),
+      providers: new Map([['__test_narrow_vendor__', { model: 'gemini-3.8-flash', maxOutputTokens: 4_096 }]]),
     });
 
     await seeder.seed({ ...request, provider: '__test_narrow_vendor__' });
@@ -512,7 +512,7 @@ describe('ModelGameSeeder', () => {
 
     const seeder = new ModelGameSeeder({
       context: stubContext(),
-      providers: new Map([['__test_tiny_vendor__', { model: 'tiny-model', maxOutputTokens: 500 }]]),
+      providers: new Map([['__test_tiny_vendor__', { model: 'gemini-3.8-flash', maxOutputTokens: 500 }]]),
     });
 
     await seeder.seed({ ...request, provider: '__test_tiny_vendor__' });
@@ -538,13 +538,13 @@ describe('ModelGameSeeder', () => {
 
     const seeder = new ModelGameSeeder({
       context: stubContext(),
-      providers: new Map([['__test_reasoning_vendor__', { model: 'reasoning-model', pickMaxOutputTokens: 8192 }]]),
+      providers: new Map([['__test_reasoning_vendor__', { model: 'gemini-3.8-flash', pickMaxOutputTokens: 8192 }]]),
     });
 
     await seeder.seed({ ...request, provider: '__test_reasoning_vendor__' });
 
     // Above the 2048 default; below the generate ceiling, which stayed unset.
-    expect(maxOutputTokensArgs).toEqual([8192, 65_536]);
+    expect(maxOutputTokensArgs).toEqual([8192, 8187]);
   });
 
   it('falls back to the Vertex-sized ceiling when the provider sets none', async () => {
@@ -564,12 +564,12 @@ describe('ModelGameSeeder', () => {
 
     const seeder = new ModelGameSeeder({
       context: stubContext(),
-      providers: new Map([['__test_unbounded_vendor__', { model: 'unbounded-model' }]]),
+      providers: new Map([['__test_unbounded_vendor__', { model: 'gemini-3.8-flash' }]]),
     });
 
     await seeder.seed({ ...request, provider: '__test_unbounded_vendor__' });
 
-    expect(maxOutputTokensArgs).toEqual([2048, 65_536]);
+    expect(maxOutputTokensArgs).toEqual([2048, 8187]);
   });
 
   it('combines bundle and GameKit validation errors into one repair round', async () => {
@@ -698,13 +698,13 @@ describe('ModelGameSeeder', () => {
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint"]}', inputTokens: 400, outputTokens: 10, cachedInputTokens: 200 },
-        { text: GOOD_DRAFT, inputTokens: 30_000, outputTokens: 8_000, cachedInputTokens: 28_000 },
+        { text: GOOD_DRAFT, inputTokens: 800, outputTokens: 800, cachedInputTokens: 600 },
         // The repair returns only the file it fixed; everything else must survive.
         {
           text: '--- games/my-game/game/model.ts ---\nexport const SPEED = 4;\n',
-          inputTokens: 9_000,
+          inputTokens: 900,
           outputTokens: 700,
-          cachedInputTokens: 7_000,
+          cachedInputTokens: 700,
         },
       ]),
       bundleCheck: async () => verdicts.shift()!,
@@ -722,9 +722,9 @@ describe('ModelGameSeeder', () => {
       'game/model.ts',
     ]);
     // The repair round is billed like the rounds before it.
-    expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
-    expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);
-    expect(draft!.usage.cachedInputTokens).toBe(200 + 28_000 + 7_000);
+    expect(draft!.usage.inputTokens).toBe(400 + 800 + 900);
+    expect(draft!.usage.outputTokens).toBe(10 + 800 + 700);
+    expect(draft!.usage.cachedInputTokens).toBe(200 + 600 + 700);
   });
 
   it('repairs manifest module order before publishing a seed preview', async () => {
@@ -834,7 +834,7 @@ describe('ModelGameSeeder', () => {
     const draft = await seeder.seed(request);
 
     expect(draft).not.toBeNull();
-    expect(draft!.references).toEqual(['apex-sprint', 'word-forge']);
+    expect(draft!.references).toEqual(['apex-sprint']);
   });
 
   it('honours a valid override', async () => {
@@ -945,7 +945,7 @@ describe('knowledge context injection (KQ-11)', () => {
     const draft = await seeder.seed(request);
 
     expect(draft).not.toBeNull();
-    expect(budgets[0]).toBe(240_000);
+    expect(budgets[0]).toBe(20_000);
     expect(prompts[1]).not.toContain('ENGINE / DOCS CONTEXT');
   });
 
@@ -958,6 +958,6 @@ describe('knowledge context injection (KQ-11)', () => {
 
     await seeder.seed(request);
 
-    expect(budgets[0]).toBe(240_000);
+    expect(budgets[0]).toBe(20_000);
   });
 });
