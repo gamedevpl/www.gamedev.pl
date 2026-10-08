@@ -56,12 +56,11 @@ at the front page too, without naming a launch stage (the same text serves an op
 - **Policy positioning note:** the review criteria list "AI generation of images/video/
   audio via AI models" as an unsupported use case. No connector tool calls a media-
   generation model — the connector opens build rounds, relays briefs/feedback, and
-  submits source files to a gate. Two narrow exceptions are stated, not hidden:
-  `concept_frame_upload_url` accepts concept frames the client drew with its own model,
-  and after a green preview the platform itself may draw two concept frames (an image
-  model on Vertex AI, editing the gate capture). Both appear only in the creator's
-  Studio proposal card, labelled as AI-made; no MCP tool returns them. Listing copy
-  must avoid "AI generates your game" framing.
+  submits source files to a gate. `concept_frame_upload_url` accepts concept frames
+  the client drew with its own model; the platform draws none for rounds an external
+  agent builds (its own concept frames run only on platform-built rounds). Client frames
+  appear only in the creator's Studio proposal card, labelled as AI-made; no MCP tool
+  returns them. Listing copy must avoid "AI generates your game" framing.
 - Hosted-surface OAuth redirect: `https://claude.ai/api/mcp/auth_callback` must be
   accepted by our AS; Claude Code uses RFC 8252 loopback with port-agnostic matching
   (already supported). Anthropic egress range `160.79.104.0/21` if egress is ever
