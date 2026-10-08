@@ -64,7 +64,7 @@ describe('games-repo-contract (website half)', () => {
     // at ~334 KiB source is why this is 336 KiB rather than matching GAME_BUDGET_BYTES.
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(1062 * 1024);
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
-    expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(128);
+    expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(256);
   });
 
   it('keeps the fixtures/games-repo assemble-contract snapshot in lockstep', async () => {
