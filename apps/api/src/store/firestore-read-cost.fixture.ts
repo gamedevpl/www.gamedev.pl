@@ -42,6 +42,7 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
     });
   }
   if (
+    route === 'GET /api/submissions/:token (prior rounds, 31s cadence)' ||
     route === 'GET /api/submissions/:token (prior rounds)' ||
     route === 'GET /api/submissions/:token (prior rounds, steady state)'
   ) {
@@ -136,6 +137,11 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
     if (route === 'POST /api/internal/notify-sweep (steady state)') {
       await injectRoute(app, route);
       clock += 2 * 60_000;
+    }
+    // The CLI's backoff ceiling, just past a 30s cache.
+    if (route === 'GET /api/submissions/:token (prior rounds, 31s cadence)') {
+      await injectRoute(app, route);
+      clock += 31_000;
     }
     // A later round polls its history; the first has none.
     if (route === 'GET /api/submissions/:token (prior rounds, steady state)') {

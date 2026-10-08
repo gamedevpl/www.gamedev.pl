@@ -102,10 +102,10 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
-  // Previews and shots change rarely during a build; 30s matches prior rounds.
-  const mediaCacheTtlMs = 30_000;
+  // Writes invalidate it; outlast the CLI's 30s backoff.
+  const mediaCacheTtlMs = 2 * 60_000;
   // Past the window, a count is asked before the page.
-  const eventsProbeWindowMs = 60_000;
+  const eventsProbeWindowMs = 5 * 60_000;
   const maxEventsShown = 20;
   interface CachedEvents {
     expiresAt: number;
@@ -262,8 +262,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     });
   }
 
-  // Short cache: siblings rarely gain messages between polls.
-  const priorRoundsCacheTtlMs = 30_000;
+  // Siblings rarely change; outlast the CLI's 30s backoff.
+  const priorRoundsCacheTtlMs = 2 * 60_000;
   const maxPriorRounds = 6;
   const maxPriorEntriesPerRound = 10;
   const maxCachedPriorRounds = 100;
