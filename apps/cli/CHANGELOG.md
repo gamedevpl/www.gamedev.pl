@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Claude permission prompts offer Allow once, Deny, Always allow and a shortcut to sandboxed Auto for the next tasks; full commands appear first, and PgUp/PgDn scrolls long terminal requests without hiding the choices (#1720).
+
 ## 0.27.2 — 2026-10-09
 
 ### Fixed
