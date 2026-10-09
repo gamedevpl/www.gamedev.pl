@@ -7,6 +7,8 @@ import { connectSession } from '../connect-flow.js';
 import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
+import { approvalPrompt, AUTO_NEXT } from '../agent-approval.js';
+import { commandApprovalMemory } from '../agent-approval-memory.js';
 
 const cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -61,6 +63,49 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
 }
 
 describe('TUI feedback', () => {
+  it.each([
+    [40, 12],
+    [80, 24],
+    [110, 40],
+  ])('pages a complete approval request at %i × %i without hiding choices', async (columns, rows) => {
+    const view = screen(columns, rows);
+    view.session.setLocalTask('claude');
+    const autoNext = vi.fn();
+    const approve = approvalPrompt({
+      agent: 'claude',
+      cwd: '/game',
+      remembered: commandApprovalMemory(view.session),
+      pick: view.session.prompt,
+      signal: new AbortController().signal,
+      write: view.session.writeLine,
+      autoNext,
+    });
+    const command = Array.from({ length: 30 }, (_, i) => `printf "part-${i}"; cat game/file-${i}.ts`).join('\n');
+    const pending = approve({ id: 'a', kind: 'command', detail: { tool_name: 'Bash', input: { command } } });
+    await until(() => expect(view.session.get().mode).toBe('pick'));
+    expect(view.frame()).toContain('Command:');
+    expect(view.frame()).toContain('1. Allow once');
+    expect(view.frame()).toContain('2. Deny');
+    expect(view.frame()).toContain('PgUp/PgDn');
+    const pages: string[] = [];
+    for (let i = 0; i < 60; i++) {
+      pages.push(view.frame());
+      expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+      await view.press('\u001b[6~');
+    }
+    const complete = pages.join('\n');
+    for (let i = 0; i < 30; i++) expect(complete).toContain(`part-${i}`);
+    expect(complete).toContain('This task stays in Ask.');
+    await view.press('\u001b[5~');
+    expect(view.session.get().pickIndex).toBe(0);
+    expect(autoNext).not.toHaveBeenCalled();
+    await view.press('4');
+    expect(await pending).toBe('approve');
+    expect(autoNext).toHaveBeenCalledOnce();
+    expect(view.session.get().choices).not.toContain(AUTO_NEXT);
+    void view.session.prompt(['Allow once', 'Deny'], 'Command: npm test');
+    expect(view.frame()).toContain('Command: npm test');
+  });
   it.each([40, 110])('accepts a queued follow-up during a local task at width %s', async (width) => {
     const openPreview = vi.fn();
     const view = screen(width, 16, openPreview);
