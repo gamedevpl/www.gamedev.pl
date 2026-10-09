@@ -54,7 +54,7 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
     async press(keys: string) {
       settle();
       input.write(keys);
-      await vi.waitFor(() => expect(input.readableLength).toBe(0));
+      await vi.waitFor(() => expect(input.readableLength).toBe(0), { interval: 1 });
       settle();
     },
     frame: () =>
