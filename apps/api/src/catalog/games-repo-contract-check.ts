@@ -337,7 +337,11 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   // games-repo rollback into an apparently intentional rollout state. Remove an entry
   // as soon as its paired games change lands; the deadline is the fail-closed backstop.
   const WEBSITE_AHEAD_EXPIRY: ReadonlyMap<string, number> = new Map([
-    // games-repo #2100 (settings module). Remove once it lands.
+    ['football', Date.parse('2026-08-10T00:00:00.000Z')],
+    ['vehicles', Date.parse('2026-09-01T00:00:00.000Z')],
+    ['urban', Date.parse('2026-08-11T00:00:00.000Z')],
+    ['cards', Date.parse('2026-08-15T00:00:00.000Z')],
+    ['platformer', Date.parse('2026-08-29T00:00:00.000Z')],
     ['settings', Date.parse('2026-10-31T00:00:00.000Z')],
   ]);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
