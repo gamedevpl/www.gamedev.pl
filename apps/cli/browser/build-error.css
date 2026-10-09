@@ -1,0 +1,74 @@
+#preview-feedback {
+  position: fixed;
+  z-index: 7;
+  bottom: calc(100vh - var(--height) + 14px);
+  left: 14px;
+  width: min(560px, calc(100% - 28px));
+  display: grid;
+  gap: 8px;
+  max-height: min(360px, calc(var(--height) * 0.45));
+  overflow: auto;
+}
+#build-error {
+  padding: 14px 16px;
+  border: 1px solid #d88179;
+  border-radius: 12px;
+  background: #201b20f5;
+}
+#build-error h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #ffbbb2;
+}
+#build-error p {
+  margin: 8px 0;
+}
+#build-error details {
+  margin: 10px 0;
+}
+#build-error summary {
+  cursor: pointer;
+}
+#build-error-text {
+  max-height: 130px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  user-select: text;
+}
+.build-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#build-error-feedback:empty {
+  display: none;
+}
+#build-error-feedback {
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-height: 520px) {
+  #build-error {
+    padding: 8px 12px;
+  }
+  #build-error p,
+  #build-error details {
+    margin: 4px 0;
+  }
+  #build-error button {
+    min-height: 32px;
+    padding: 6px 10px;
+  }
+  #build-error-description {
+    display: none;
+  }
+  #build-error-text {
+    max-height: 40px;
+    margin: 4px 0;
+  }
+  #build-error-feedback {
+    font-size: 11px;
+  }
+}

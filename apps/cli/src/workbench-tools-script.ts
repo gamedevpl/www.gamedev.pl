@@ -7,7 +7,7 @@ async function attach(name,mime,data,purpose='diagnostic',shown=revision) {
   if(staged().length>=8)throw Error('Up to 8 attachments per request');
   const item=await api('/artifacts',{name,mime,data,purpose,revision:shown,device,capturedAt:new Date().toISOString()},30000);
   if(attachments.length>=8)attachments.splice(attachments.findIndex(a=>a.sent),1);
-  if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;attachments.push(item);tray();
+  if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;attachments.push(item);tray();return item;
 }
 function base64(bytes){let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out);}
 async function upload(file){

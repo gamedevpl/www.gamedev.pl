@@ -45,6 +45,57 @@ async function fixture() {
   return { session, server, url, headers, post, cancel };
 }
 
+it('authenticates build retries and refuses stale sources and unsupported previews', async () => {
+  const { server, url, headers } = await fixture();
+  const retry = vi.fn(async () => {});
+  const source = {
+    status: async () => ({ revision: '', error: 'compile failed', busy: false, stale: true, canRetry: true }),
+    snapshot: async () => ({ html: '', revision: '' }),
+    retry,
+  };
+  server.setSource('first', source);
+  const postRetry = (sourceId: number, extra = headers) =>
+    fetch(`${url.origin}/preview/retry`, {
+      method: 'POST',
+      headers: extra,
+      body: JSON.stringify({ sourceId }),
+    });
+  expect((await postRetry(1, { ...headers, Authorization: '' })).status).toBe(401);
+  expect((await postRetry(1, { ...headers, Origin: 'https://evil.test' })).status).toBe(403);
+  expect((await postRetry(1, { ...headers, 'Content-Type': 'text/plain' })).status).toBe(403);
+  expect((await postRetry(0)).status).toBe(409);
+  expect(retry).not.toHaveBeenCalled();
+  expect((await postRetry(1)).status).toBe(200);
+  expect(retry).toHaveBeenCalledTimes(1);
+  server.setSource('platform', { status: source.status, snapshot: source.snapshot });
+  expect((await postRetry(1)).status).toBe(409);
+  expect((await postRetry(2)).status).toBe(400);
+  expect(retry).toHaveBeenCalledTimes(1);
+});
+
+it('does not report a retry as current when its preview changes during the request', async () => {
+  const { server, url, headers } = await fixture();
+  let release!: () => void;
+  const source = {
+    status: async () => ({ revision: '', error: 'compile failed', busy: false, stale: true }),
+    snapshot: async () => ({ html: '', revision: '' }),
+    retry: () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  };
+  server.setSource('first', source);
+  const response = fetch(`${url.origin}/preview/retry`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ sourceId: 1 }),
+  });
+  await vi.waitFor(() => expect(release).toBeDefined());
+  server.setSource('second', { status: source.status, snapshot: source.snapshot });
+  release();
+  expect((await response).status).toBe(409);
+});
+
 it('authenticates state and commands; rejects game, foreign origins and DNS rebinding', async () => {
   const { url, headers } = await fixture();
   expect((await fetch(`${url.origin}/state`)).status).toBe(401);
@@ -131,7 +182,9 @@ it('serves only explicitly bound preview snapshots and fences a switched source'
   const { server, url, headers } = await fixture();
   const html = '<html><body>test game</body></html>';
   const revision = createHash('sha256').update(html).digest('hex');
+  let retryRequests = 0;
   const game = createServer((req, res) => {
+    if (req.method === 'POST') retryRequests++;
     if (req.url?.endsWith('/status')) res.end(JSON.stringify({ revision, busy: false, stale: false, error: '' }));
     else res.end(html);
   });
@@ -148,6 +201,14 @@ it('serves only explicitly bound preview snapshots and fences a switched source'
   expect(built.html).toContain('test game');
   expect(built.html).toContain('gdpl-embed');
   expect(built.html).toContain('gdpl-workbench-game');
+  expect(await fetch(`${url.origin}/preview/status`, { headers }).then((r) => r.json())).toMatchObject({
+    canRetry: false,
+  });
+  expect(
+    (await fetch(`${url.origin}/preview/retry`, { method: 'POST', headers, body: JSON.stringify({ sourceId: 1 }) }))
+      .status,
+  ).toBe(400);
+  expect(retryRequests).toBe(0);
   server.clearPreview();
   expect((await fetch(`${url.origin}/preview/game`, { headers })).status).toBe(404);
   expect(await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).toMatchObject({
@@ -265,6 +326,10 @@ it('serves mascot favicon without authentication', async () => {
 });
 
 it('stops the session on authenticated POST /stop', async () => {
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+  cleanup.push(async () => {
+    exit.mockRestore();
+  });
   const { url, headers, session } = await fixture();
   const prompt = session.prompt();
   const res = await fetch(`${url.origin}/stop`, {
@@ -274,9 +339,14 @@ it('stops the session on authenticated POST /stop', async () => {
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ ok: true });
   expect(await prompt).toBe('/quit');
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
 });
 
 it('narrows stopPlaySession by slug and directory boundary', async () => {
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+  cleanup.push(async () => {
+    exit.mockRestore();
+  });
   const { url, session } = await fixture();
   // A private tmpdir keeps the scan off real Play sessions.
   const root = mkdtempSync(join(tmpdir(), 'gamedev-stop-test-'));
@@ -310,4 +380,5 @@ it('narrows stopPlaySession by slug and directory boundary', async () => {
   const prompt = session.prompt();
   expect(await stopPlaySession({ cwd: '/somewhere-else', slug: 'my-game', write: vi.fn() })).toBe(true);
   expect(await prompt).toBe('/quit');
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
 });

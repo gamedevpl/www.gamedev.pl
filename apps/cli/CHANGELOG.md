@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play build errors replace endless loading with readable diagnostics, Copy error, Retry build and a repair request prepared in Chat with the error attached; the last working game stays playable (#1716).
+
 ### Internal
 
 - genaicode 2.13.2: approvals work on Node 20.0–20.2, and Codex permission profiles are denied without asking under a sandbox (#1715).

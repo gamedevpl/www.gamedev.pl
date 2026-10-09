@@ -11,7 +11,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { z } from 'zod';
 import { createSessionCommands } from './session-commands.js';
 import type { SessionController } from './session-controller.js';
-import { previewSource } from './local-preview-source.js';
+import { previewSource, type PreviewSource } from './local-preview-source.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 import { MASCOT_FAVICON_SVG } from './mascot-svg.js';
 
@@ -74,7 +74,7 @@ export async function startSessionBrowser(
   });
   let origin = '';
   let sequence = 0;
-  let preview: { url: string; abort: AbortController; source: ReturnType<typeof previewSource> } | undefined;
+  let preview: { url: string; abort: AbortController; source: PreviewSource } | undefined;
   let sourceId = 0;
   let stopped = false;
   let phone: Awaited<ReturnType<typeof startPhonePreview>> | undefined;
@@ -198,6 +198,28 @@ export async function startSessionBrowser(
         });
         return;
       }
+      if (req.method === 'POST' && req.url === '/preview/retry') {
+        if (req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
+          reply(403, { error: 'JSON and same-origin required' });
+          return;
+        }
+        const request = z
+          .object({ sourceId: z.number().int().nonnegative() })
+          .strict()
+          .parse(await body(req));
+        const current = preview;
+        if (!current || request.sourceId !== sourceId) {
+          reply(409, { error: 'Preview changed' });
+          return;
+        }
+        if (!current.source.retry) {
+          reply(400, { error: 'Build retries unavailable for this preview' });
+          return;
+        }
+        await current.source.retry();
+        reply(current === preview ? 200 : 409, { sourceId: request.sourceId });
+        return;
+      }
       if (req.method === 'POST' && req.url === '/phone') {
         if (req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
           reply(403, { error: 'JSON and same-origin required' });
@@ -293,7 +315,7 @@ export async function startSessionBrowser(
   }
   return {
     url: `${origin}/#${token}`,
-    setSource(key: string, source: ReturnType<typeof previewSource>) {
+    setSource(key: string, source: PreviewSource) {
       if (stopped || preview?.url === key) return;
       revokePhone();
       preview?.abort.abort();
