@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- genaicode 2.13.2: approvals work on Node 20.0–20.2, and Codex permission profiles are denied without asking under a sandbox (#1715).
+
 ## 0.27.0 — 2026-10-08
 
 ### Added
