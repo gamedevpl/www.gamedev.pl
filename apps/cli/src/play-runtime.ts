@@ -1,4 +1,5 @@
 import { PLAY_PAGE } from './play-page.js';
+import { PLAY_IDLE_MS } from './play-presence.js';
 
 // Embedded source lets the bundled CLI launch an independent server.
 export const PLAY_RUNTIME = String.raw`
@@ -13,6 +14,8 @@ const token = randomBytes(24).toString('hex');
 let html = '', revision = '', error = 'Preparing the first playable build…';
 let attemptedFingerprint = '', builtFingerprint = '', fingerprint = '', dirtyAt = 0, busy = false, lastVisit = Date.now();
 let origin, currentBuild;
+const consumers = new Set();
+let emptySince, pulseAt=Date.now();
 function treeStamp(dir) {
   try {
     return readdirSync(dir).sort().map(name => {
@@ -53,6 +56,12 @@ const server = createServer((req, res) => {
   const path = (req.url || '').split('?')[0];
   if (!path.startsWith(base)) { res.writeHead(404); res.end(); return; }
   lastVisit = Date.now();
+  if (req.method === 'GET' && path === base + 'presence') {
+    consumers.add(res); emptySince=undefined;
+    res.writeHead(200,{'content-type':'text/event-stream'}); res.write(': connected\n\n');
+    res.once('close',()=>{consumers.delete(res);if(!consumers.size)emptySince=Date.now();});
+    return;
+  }
   if (req.method === 'POST' && path === base + 'stop') { res.end('stopped', shutdown); return; }
   if (req.method === 'POST' && path === base + 'retry') {
     if (!busy) { fingerprint = sourceStamp(); dirtyAt = 0; error = ''; assemble(); }
@@ -82,7 +91,9 @@ server.listen(0, '127.0.0.1', () => {
 });
 server.on('error', () => process.exit(1));
 const timer = setInterval(() => {
-  if (Date.now() - lastVisit > 30 * 60_000) return shutdown();
+  const now=Date.now();
+  if (now-pulseAt>=15000) {pulseAt=now;for(const consumer of consumers)consumer.write(': alive\n\n');}
+  if (!busy && !consumers.size && (emptySince!==undefined ? now-emptySince>=${PLAY_IDLE_MS} : now-lastVisit>30*60_000)) return shutdown();
   const next = sourceStamp();
   if (next !== fingerprint) { fingerprint = next; dirtyAt = Date.now(); }
   if (dirtyAt && !busy && Date.now() - dirtyAt >= 500) { dirtyAt = 0; assemble(); }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
+import { holdPreview } from './play-presence.js';
 
 export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean; canRetry?: boolean };
 export type PreviewSnapshot = { html: string; revision: string };
@@ -15,6 +16,7 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
     throw new Error('Local tools require a CLI-owned loopback preview.');
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Invalid preview URL.');
+  void holdPreview(url, signal);
   async function read(path: string, limit: number): Promise<string> {
     const response = await fetch(`${url}${path}`, {
       redirect: 'error',

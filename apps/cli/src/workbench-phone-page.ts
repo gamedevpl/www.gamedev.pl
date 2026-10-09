@@ -1,4 +1,5 @@
 import { MASCOT_FAVICON_DATA_URL } from './mascot-svg.js';
+import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
 
 export const PHONE_PAGE = String.raw`<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Play on phone</title><link rel="icon" type="image/svg+xml" href="${MASCOT_FAVICON_DATA_URL}">
 <style>html,body{margin:0;background:#080c12;color:#fff;font:16px system-ui}iframe{position:fixed;inset:0;width:100%;height:100%;border:0}nav{position:fixed;top:10px;left:10px;right:10px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}nav>*{pointer-events:auto}button,textarea{font:inherit;padding:10px;border-radius:8px}#status{background:#111c;padding:8px}dialog{background:#16202f;color:white;width:85%;border:0;border-radius:14px}textarea{width:90%}</style>
@@ -7,6 +8,8 @@ export const PHONE_PAGE = String.raw`<!doctype html><html><meta name="viewport" 
 <script>
 const el=id=>document.getElementById(id),frame=el('game');let revision='',pending,capture;
 const token=location.hash.slice(1)||sessionStorage.getItem('phone-token')||'';sessionStorage.setItem('phone-token',token);history.replaceState(null,'','/');
+const presencePath='/presence',presenceHeaders={Authorization:'Bearer '+token};
+${PLAY_PRESENCE_SCRIPT}
 function uuid(){const a=crypto.getRandomValues(new Uint8Array(16));a[6]=a[6]&15|64;a[8]=a[8]&63|128;const h=[...a].map(x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);}
 async function api(path,data){const r=await fetch(path,{method:data?'POST':'GET',headers:{Authorization:'Bearer '+token,...(data?{'Content-Type':'application/json'}:{})},...(data?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(50000)});if(!r.ok)throw Error('Disconnected or access revoked ('+r.status+')');return r.json();}
 async function load(){try{const b=await api('/game');frame.srcdoc=b.html;revision=b.revision;el('status').textContent='Playing '+revision.slice(0,10);}catch(e){el('status').textContent=e.message;}}

@@ -14,6 +14,7 @@ import type { SessionController } from './session-controller.js';
 import { previewSource, type PreviewSource } from './local-preview-source.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 import { MASCOT_FAVICON_SVG } from './mascot-svg.js';
+import { playPresence } from './play-presence.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const generation = z.number();
@@ -63,7 +64,11 @@ async function body(req: IncomingMessage, limit = 40_000): Promise<unknown> {
 
 export async function startSessionBrowser(
   session: SessionController,
-  options: { detached?: boolean; workspace?: () => { mode: string; slug: string; suggestedSlug?: string } } = {},
+  options: {
+    detached?: boolean;
+    workspace?: () => { mode: string; slug: string; suggestedSlug?: string };
+    canStop?: () => boolean;
+  } = {},
 ) {
   const sessionId = randomUUID();
   const token = randomBytes(32).toString('hex');
@@ -80,6 +85,20 @@ export async function startSessionBrowser(
   let phone: Awaited<ReturnType<typeof startPhonePreview>> | undefined;
   let phoneOpening = false;
   const reports: PhoneReport[] = [];
+  const presence = playPresence(
+    options.detached
+      ? () => {
+          session.writeLine('No Play tabs connected for 60 seconds. Ending session.');
+          session.close();
+        }
+      : undefined,
+    () => {
+      const state = session.get();
+      return (
+        !state.localTask && !state.sending && !state.queued.length && (options.canStop?.() ?? state.mode !== 'busy')
+      );
+    },
+  );
   const revokePhone = () => {
     const previous = phone;
     phone = undefined;
@@ -136,6 +155,10 @@ export async function startSessionBrowser(
       return;
     }
     try {
+      if (req.method === 'GET' && req.url === '/presence') {
+        presence.connect(res);
+        return;
+      }
       if (req.method === 'POST' && req.url === '/stop') {
         reply(200, { ok: true });
         setTimeout(() => {
@@ -252,6 +275,7 @@ export async function startSessionBrowser(
                   : { error: 'Paired game changed' },
               artifact: artifacts.add,
               reports,
+              presence: presence.connect,
             });
           if (stopped || preview !== pairingSource) {
             await phone?.close();
@@ -309,6 +333,7 @@ export async function startSessionBrowser(
       });
     });
   } catch (error) {
+    presence.close();
     unsubscribe();
     artifacts.close();
     throw error;
@@ -339,6 +364,7 @@ export async function startSessionBrowser(
     },
     async close() {
       stopped = true;
+      presence.close();
       unsubscribe();
       await phone?.close();
       artifacts.close();

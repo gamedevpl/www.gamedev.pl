@@ -1,6 +1,6 @@
 import { isJsonContentType } from './workbench-http.js';
 import QRCode from 'qrcode';
-import { createServer } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -31,6 +31,7 @@ export async function startPhonePreview(input: {
   status: () => Promise<unknown>;
   artifact: (value: unknown) => { id: string };
   reports: PhoneReport[];
+  presence?: (response: ServerResponse) => void;
 }) {
   if (!lanAddresses().includes(input.address)) throw Error('Select a current private LAN address');
   const secret = randomBytes(32).toString('hex');
@@ -67,6 +68,10 @@ export async function startPhonePreview(input: {
       return;
     }
     try {
+      if (req.method === 'GET' && req.url === '/presence' && input.presence) {
+        input.presence(res);
+        return;
+      }
       if (req.method === 'GET' && req.url === '/game') {
         reply(200, await input.snapshot());
         return;
