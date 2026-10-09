@@ -280,6 +280,7 @@ it.each(['/verify', '/push'])('rejects changed sources during %s retries and acc
         return original(...args);
       };
     } else {
+      expect(_choices).toEqual(['Check again', BACK]);
       expect(f.lines.join('\n')).toContain('Sources changed during verification; result is stale.');
       expect(f.lines.join('\n')).not.toContain('Local checks passed.');
     }
@@ -317,3 +318,39 @@ it.each(['/verify', '/push'])('rechecks the current sources after an agent repai
   expect(f.lines.join('\n')).not.toContain('Local checks passed.');
   expect(f.writes()).toEqual([]);
 });
+
+it.each(['/verify', '/push'])(
+  'requires fresh diagnostics after a stale %s retry before offering repair',
+  async (line) => {
+    const f = fixture();
+    f.pick.mockImplementationOnce(async () => {
+      const original = f.ws.run!;
+      let changed = false;
+      f.ws.run = (...args) => {
+        if (!changed) {
+          changed = true;
+          writeFileSync(f.source, 'external edit');
+          f.state.detail = 'new error in externally edited sources';
+        }
+        return original(...args);
+      };
+      return 'Check again';
+    });
+    f.pick.mockImplementationOnce(async (choices) => {
+      expect(choices).toEqual(['Check again', BACK]);
+      expect(f.ws.runAdapter).not.toHaveBeenCalled();
+      return 'Check again';
+    });
+    f.pick.mockImplementationOnce(async (choices) => {
+      expect(choices).toContain('Fix with agent');
+      expect(f.lines.join('\n')).toContain(f.state.detail);
+      return 'Fix with agent';
+    });
+    await f.run(line);
+    expect(f.ws.runAdapter).toHaveBeenCalledTimes(1);
+    const prompt = vi.mocked(f.ws.runAdapter!).mock.calls[0][0].prompt;
+    expect(prompt).toContain(f.state.detail);
+    expect(prompt).not.toContain('No matching export for cue');
+    expect(f.writes()).toEqual([]);
+  },
+);

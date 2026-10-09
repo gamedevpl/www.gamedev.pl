@@ -66,15 +66,16 @@ export async function recoverVerification(
   const send = delivery.publish ? 'Publish game' : 'Send preview';
   const record = (error: VerificationError) =>
     (input.telemetry ?? ws?.telemetry)?.record('verify_failed', { stage: error.stage });
+  let diagnosticsCurrent = true;
   record(failure);
   for (;;) {
     const choice = await pick(
-      [...(ws?.adapters.length ? [FIX] : []), CHECK, BACK],
+      [...(diagnosticsCurrent && ws?.adapters.length ? [FIX] : []), CHECK, BACK],
       allowDelivery
         ? 'Local checks blocked delivery. What would you like to do?'
         : 'Local checks failed. What would you like to do?',
     );
-    if (choice === FIX && ws?.adapters.length) {
+    if (choice === FIX && diagnosticsCurrent && ws?.adapters.length) {
       const repaired = await handleWorkshopVerb({
         cmd: 'delegate',
         rest: [repairRequest(failure)],
@@ -97,10 +98,12 @@ export async function recoverVerification(
       return false;
     }
     if (result === 'stale') {
+      diagnosticsCurrent = false;
       input.write('Sources changed during verification; result is stale. Check again for the current files.');
       continue;
     }
     if (!result.ok) {
+      diagnosticsCurrent = true;
       failure = new VerificationError(result, delivery.dest);
       input.write(failure.message);
       record(failure);
