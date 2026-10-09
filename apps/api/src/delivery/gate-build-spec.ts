@@ -104,21 +104,23 @@ export function buildSpec(
         [
           'set -euo pipefail',
           'apt-get update -qq',
-          'apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates',
+          'apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates iptables',
+          'apt-get install -y -qq --no-install-recommends chromium-sandbox || echo "no chromium-sandbox package"',
+          // Candidate code runs as this user; see gate-sandbox.ts.
+          'useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin gate',
+          'export GATE_SANDBOX_USER=gate',
           // Two separate reasons the harness cannot just be pointed at the browser:
           //
           // 1. Debian's package installs `chromium`, but the capture harness defaults to
           //    spawning `google-chrome` — "a browser is on PATH" is not enough, it has
           //    to be under a name the harness looks for, or capture dies on ENOENT.
-          // 2. This step runs as root, and Chrome refuses to start as root without
-          //    --no-sandbox. `tools/capture.ts` adds that flag for neither case (its
-          //    sibling `tools/shot.ts` does), and it is not overridable by env — so the
-          //    browser launched, died instantly, and capture saw ECONNRESET on the CDP
-          //    pipe. Fixed here rather than in the games repo on purpose: that file is
-          //    hashed whole into `captureSourceHash`, so touching it restages the media
-          //    of every published game — a catalog-wide recapture to fix our container.
+          // 2. Chrome refuses root without --no-sandbox, which `tools/capture.ts` never
+          //    adds. The shim adds it only as root or after a failed sandbox probe.
+          //    Fixed here rather than in the games repo on purpose: that file is hashed
+          //    whole into `captureSourceHash`, so touching it restages the media of every
+          //    published game — a catalog-wide recapture to fix our container.
           'chrome_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome)"',
-          `printf '#!/bin/sh\\nexec "%s" --no-sandbox "$@"\\n' "$chrome_bin" > /usr/local/bin/gate-chrome`,
+          `printf '#!/bin/sh\\nif [ "$(id -u)" = 0 ] || [ "\${GATE_CHROME_NO_SANDBOX:-}" = 1 ]; then exec "%s" --no-sandbox "$@"; fi\\nexec "%s" "$@"\\n' "$chrome_bin" "$chrome_bin" > /usr/local/bin/gate-chrome`,
           'chmod +x /usr/local/bin/gate-chrome',
           'export GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome',
           'export CHROME_PATH=/usr/local/bin/gate-chrome',

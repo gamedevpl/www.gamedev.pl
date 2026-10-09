@@ -397,11 +397,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const proposals = createProposalLifecycle(
     gamesStore ? { store, gamesStore, log: app.log, notify: notifyProposal, notifyOperators } : null,
   );
-  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict });
   // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
+  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict, objectStore });
   // Wrapped once here so every entry point — delivery, editor, remix, proposals,
   // re-gate and the health sweep — starts builds through the same daily ceiling.
   const gateTrigger = withGateRunCeiling(

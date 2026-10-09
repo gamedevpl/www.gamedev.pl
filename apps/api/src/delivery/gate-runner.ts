@@ -111,6 +111,11 @@ export interface GateRunnerDeps {
   prepareHarness(engineRef: string): Promise<string>;
   /** Runs a command in the harness. Returns combined output and the exit code. */
   run: GateRunCommand;
+  /**
+   * Called once the candidate is written into the harness, before anything runs against
+   * it. The runner uses it to hand those files to the unprivileged user the check runs as.
+   */
+  afterMaterialize?: (gameDir: string) => Promise<void>;
   /** Mid-gate milestones (best-effort). */
   onProgress?: (progress: GateProgress) => void | Promise<void>;
   now?: () => number;
@@ -263,6 +268,7 @@ export async function runGate(
 
   try {
     await materializeCandidate(deps.store, manifest, gameDir);
+    await deps.afterMaterialize?.(gameDir);
 
     // A content-only Studio publish (`origin: 'editor'`) carries a TRACE.json that
     // was recorded against the *previous* content, so replaying it against the new

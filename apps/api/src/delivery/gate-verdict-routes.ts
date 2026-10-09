@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { readBearerToken } from '../platform/bearer.js';
 import type { GamesStore } from './games-store.js';
+import { registerGateArtifactRoutes } from './gate-artifact-routes.js';
+import type { GcsObjectStore } from './gcs-sign.js';
 import { InvalidGateVerdictTokenError, readGateVerdictToken } from './gate-verdict-token.js';
 
 // Manifest writes the gate used to make itself. See gate-hardening.md.
@@ -18,6 +20,8 @@ export interface GateVerdictRoutesOptions {
   now?: () => number;
   // Called after a verdict is stored; best effort, never fails the write.
   onVerdict?: (verdict: { slug: string; version: string; kind: string }) => Promise<unknown> | unknown;
+  // Also serves signed artifact uploads when given; see gate-artifact-routes.ts.
+  objectStore?: GcsObjectStore;
 }
 
 export const GATE_VERDICT_PATH = '/api/internal/gate-verdict';
@@ -25,6 +29,9 @@ export const GATE_VERDICT_PATH = '/api/internal/gate-verdict';
 export function registerGateVerdictRoutes(app: FastifyInstance, options: GateVerdictRoutesOptions): void {
   const secret = options.secret ?? process.env.SUBMISSION_TOKEN_SECRET?.trim();
   const now = options.now ?? Date.now;
+  if (options.objectStore) {
+    registerGateArtifactRoutes(app, { objectStore: options.objectStore, store: options.store, secret, now });
+  }
 
   app.post(GATE_VERDICT_PATH, async (request, reply) => {
     // No secret, no verification: refuse rather than trust the body.

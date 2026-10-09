@@ -229,6 +229,7 @@ const FILE_BUCKET = {
   'vertex-resilience': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
   'gcs-sign': 'platform',
+  'gcs-v4-sign': 'platform',
   // A cache in front of gcs-sign, so the media route can redirect instead of
   // carrying bytes. Imports gcs-sign and nothing else.
   'media-url-signer': 'platform',
@@ -555,6 +556,8 @@ const FILE_BUCKET = {
   'gate-verdict-routes': 'delivery',
   'gate-verdict-token': 'delivery',
   'gate-verdict-client': 'delivery',
+  'gate-artifact-routes': 'delivery',
+  'gate-sandbox': 'delivery',
   'native-job-status': 'delivery',
   'status-poll-floor': 'delivery',
   // Writes verdicts onto delivery's own VersionManifest, and validates a delivery's

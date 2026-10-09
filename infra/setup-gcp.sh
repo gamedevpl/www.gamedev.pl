@@ -403,6 +403,19 @@ gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --project="$PROJECT_ID" \
   >/dev/null
 
+# The gate's derived artifacts are written through PUT URLs this runtime signs
+# (apps/api/src/delivery/gate-artifact-routes.ts), so the replace a re-gate of the same
+# version needs is decided by the *runtime's* IAM, not the gate's. Bound to the four
+# shapes the route signs and nothing else under games/: a version's bundle.html,
+# preview.html, derived source/TRACE.json, and media/*. This is what lets gate-runner
+# drop its own bucket write — see "Revoking gate-runner's store write" below.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/games/') && resource.name.extract('/versions/{version}/') != '' && (resource.name.endsWith('/bundle.html') || resource.name.endsWith('/preview.html') || resource.name.endsWith('/source/TRACE.json') || resource.name.extract('/versions/{version}/media/') != ''),title=games-store-gate-artifacts,description=Replace a version's gate artifacts through signed uploads. Nothing else under games/" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
 # Live objects are never aged out — these are the originals, not a rebuildable
 # projection. Object versioning + soft-delete are the BY-11 compensating controls
 # for gate-runner's objectAdmin (overwrite/delete recovery); the lifecycle rule
@@ -493,11 +506,48 @@ grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STOR
   --condition=None \
   --project="$PROJECT_ID"
 
-grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
-  --member="serviceAccount:${GATE_SA_EMAIL}" \
-  --role="roles/storage.objectAdmin" \
-  --condition="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes but no game's manifest — the verdict goes through the API" \
-  --project="$PROJECT_ID"
+GATE_WRITE_CONDITION="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes but no game's manifest — the verdict goes through the API"
+
+# Revoking gate-runner's store write. Artifacts now go through URLs the API signs per
+# object (scoped to the run's slug and version), so gate-runner needs read only. The
+# revocation strands any build submitted before the signed-upload deploy — such a
+# build has no artifact route to fall back from — so it is opt-in, run once the new
+# code is serving and the gate queue is empty:
+#
+#   gcloud builds list --ongoing --project "$PROJECT_ID" --filter='tags:gate'
+#   REVOKE_GATE_STORE_WRITE=1 ./infra/setup-gcp.sh
+#
+# Until then the conditional grant stays, exactly as before. See infra/gate-hardening.md.
+if [ "${REVOKE_GATE_STORE_WRITE:-}" = "1" ]; then
+  gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
+    --member="serviceAccount:${GATE_SA_EMAIL}" \
+    --role="roles/storage.objectAdmin" \
+    --condition="$GATE_WRITE_CONDITION" \
+    --project="$PROJECT_ID" \
+    >/dev/null 2>&1 || true
+  # Absent may mean "already removed" or "removal failed"; only the policy can say which.
+  if ! GATE_WRITE_LEFT="$(gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}" \
+    --project="$PROJECT_ID" --format=json | python3 -c "
+import json, sys
+policy = json.load(sys.stdin)
+member = 'serviceAccount:${GATE_SA_EMAIL}'
+left = any(
+    b.get('role') == 'roles/storage.objectAdmin' and member in b.get('members', [])
+    for b in policy.get('bindings', [])
+)
+print('LEFT' if left else 'CLEAN')
+")" || [ "$GATE_WRITE_LEFT" != "CLEAN" ]; then
+    echo "Error: gate-runner still holds objectAdmin on gs://${STORE_BUCKET} (or the policy could not be read)." >&2
+    exit 1
+  fi
+  echo "    gate-runner: store write revoked (verified; artifacts go through signed uploads)."
+else
+  grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+    --member="serviceAccount:${GATE_SA_EMAIL}" \
+    --role="roles/storage.objectAdmin" \
+    --condition="$GATE_WRITE_CONDITION" \
+    --project="$PROJECT_ID"
+fi
 
 # An older run of this script left the unconditional binding; reconcile it away.
 # Not `|| true`: if this removal fails, the old unconditional objectAdmin stays in force
