@@ -8,6 +8,38 @@ function json(data: unknown, status = 200): Response {
 }
 
 describe('oauth refresh', () => {
+  it('uses refreshed credentials when an old 401 arrives after refresh finished', async () => {
+    const store = memoryStore({ accessToken: 'old', refreshToken: 'refresh', tokenType: 'Bearer', scope: 'creator' });
+    let refreshed!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      refreshed = resolve;
+    });
+    let refreshes = 0;
+    const api = createApi({
+      origin: 'https://example.test',
+      store,
+      env: {},
+      fetch: async (url, init) => {
+        if (url.endsWith('/oauth/token')) {
+          refreshes++;
+          return json({ access_token: 'new', refresh_token: 'next', token_type: 'Bearer', scope: 'creator' });
+        }
+        if ((init?.headers as Record<string, string>).authorization === 'Bearer old') {
+          if (url.endsWith('/late')) await finished;
+          return json({}, 401);
+        }
+        return json({ ok: true });
+      },
+    });
+    const first = api.request('GET', '/first').then((result) => {
+      refreshed();
+      return result;
+    });
+    const late = api.request('GET', '/late');
+    await expect(Promise.all([first, late])).resolves.toEqual([{ ok: true }, { ok: true }]);
+    expect(refreshes).toBe(1);
+  });
+
   it('retries a JSON request after a successful refresh', async () => {
     const store = memoryStore({
       accessToken: 'old',

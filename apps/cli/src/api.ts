@@ -59,48 +59,51 @@ export function createApi(input: {
   const env = input.env ?? process.env;
   let refreshWait: Promise<void> | null = null;
 
-  async function send(path: string, init: RequestInit): Promise<Response> {
+  async function send(path: string, init: RequestInit): Promise<{ response: Response; token: string }> {
     const token = bearerFrom(await input.store.get(), env);
     if (!token) {
       throw new CliError(`not signed in — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
     }
-    return fetchImpl(`${input.origin}${path}`, {
+    const response = await fetchImpl(`${input.origin}${path}`, {
       ...init,
       headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
     });
+    return { response, token };
   }
 
-  async function refreshOnce(): Promise<void> {
+  async function refreshOnce(failedToken: string): Promise<void> {
     if (env.GAMEDEV_TOKEN?.trim()) return;
-    const tokens = await input.store.get();
-    if (!tokens?.refreshToken) return;
-    const next = await refreshGrant({
-      origin: input.origin,
-      refreshToken: tokens.refreshToken,
-      fetch: fetchImpl,
-      signal: input.shutdownSignal,
-    });
-    await input.store.set({
-      accessToken: next.accessToken,
-      refreshToken: next.refreshToken ?? tokens.refreshToken,
-      tokenType: next.tokenType,
-      scope: next.scope,
-    });
+    await input.store.withLock(async () => {
+      const tokens = await input.store.get();
+      if (!tokens?.refreshToken || tokens.accessToken !== failedToken) return;
+      const next = await refreshGrant({
+        origin: input.origin,
+        refreshToken: tokens.refreshToken,
+        fetch: fetchImpl,
+        signal: input.shutdownSignal,
+      });
+      await input.store.set({
+        accessToken: next.accessToken,
+        refreshToken: next.refreshToken ?? tokens.refreshToken,
+        tokenType: next.tokenType,
+        scope: next.scope,
+      });
+    }, input.shutdownSignal);
   }
 
   async function authorized(path: string, init: RequestInit): Promise<Response> {
     const first = await send(path, init);
-    if (first.status !== 401) return first;
-    if (env.GAMEDEV_TOKEN?.trim()) return first;
+    if (first.response.status !== 401) return first.response;
+    if (env.GAMEDEV_TOKEN?.trim()) return first.response;
     const tokens = await input.store.get();
-    if (!tokens?.refreshToken) return first;
+    if (!tokens?.refreshToken) return first.response;
     if (!refreshWait) {
-      refreshWait = refreshOnce().finally(() => {
+      refreshWait = refreshOnce(first.token).finally(() => {
         refreshWait = null;
       });
     }
     await waitForRefresh(refreshWait, init.signal);
-    return send(path, init);
+    return (await send(path, init)).response;
   }
 
   return {
