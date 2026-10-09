@@ -151,7 +151,7 @@ ${WORKBENCH_TOOLS_SCRIPT}
 ${WORKBENCH_NAVIGATION_SCRIPT}
 ${WORKBENCH_ONBOARDING_SCRIPT}
 ${WORKBENCH_BUILD_ERROR_SCRIPT}
-const presencePath='/presence',presenceHeaders={Authorization:'Bearer '+token};
+const presencePath='/presence',presenceProtocols=['gamedevpl-presence','token.'+token];
 ${PLAY_PRESENCE_SCRIPT}
 tick(); previewTick();
 `;

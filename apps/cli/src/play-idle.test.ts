@@ -1,3 +1,5 @@
+import WebSocket from 'ws';
+import { once } from 'node:events';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createSessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
@@ -18,23 +20,36 @@ async function fixture(detached = true, canStop?: () => boolean) {
     await server.close();
   });
   const open = async () => {
-    const abort = new AbortController();
-    const response = await fetch(`${url.origin}/presence`, { headers, signal: abort.signal });
-    expect(response.status).toBe(200);
-    const reader = response.body!.getReader();
-    expect((await reader.read()).done).toBe(false);
-    cleanup.push(async () => {
-      abort.abort();
-      await reader.cancel().catch(() => {});
-    });
-    return async () => {
-      abort.abort();
-      await reader.cancel().catch(() => {});
-      await new Promise((r) => setTimeout(r, 50));
+    const socket = new WebSocket(`${url.origin}/presence`.replace('http:', 'ws:'), { headers });
+    await once(socket, 'open');
+    const close = async () => {
+      if (socket.readyState === WebSocket.CLOSED) return;
+      const closed = once(socket, 'close');
+      socket.close();
+      await closed;
     };
+    cleanup.push(close);
+    return close;
   };
   return { session, server, url, headers, open };
 }
+
+it('authenticates upgrades and rejects cross-origin or opaque-origin sockets', async () => {
+  const f = await fixture();
+  const address = `${f.url.origin}/presence`.replace('http:', 'ws:');
+  for (const headers of [{}, { ...f.headers, Origin: 'https://evil.test' }, { ...f.headers, Origin: 'null' }]) {
+    const socket = new WebSocket(address, { headers });
+    await expect(once(socket, 'open')).rejects.toThrow('403');
+  }
+  const socket = new WebSocket(address, ['gamedevpl-presence', `token.${f.url.hash.slice(1)}`], {
+    origin: f.url.origin,
+  });
+  await once(socket, 'open');
+  expect(socket.protocol).toBe('gamedevpl-presence');
+  const closed = once(socket, 'close');
+  socket.close();
+  await closed;
+});
 
 it('excludes CLI health probes and unauthenticated clients from keeping a detached session alive', async () => {
   const f = await fixture();

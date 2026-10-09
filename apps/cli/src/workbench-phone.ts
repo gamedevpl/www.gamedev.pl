@@ -1,6 +1,8 @@
 import { isJsonContentType } from './workbench-http.js';
 import QRCode from 'qrcode';
-import { createServer, type ServerResponse } from 'node:http';
+import { createServer } from 'node:http';
+import type WebSocket from 'ws';
+import { attachPlayPresence, presenceToken } from './play-presence.js';
 import { networkInterfaces } from 'node:os';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -31,7 +33,7 @@ export async function startPhonePreview(input: {
   status: () => Promise<unknown>;
   artifact: (value: unknown) => { id: string };
   reports: PhoneReport[];
-  presence?: (response: ServerResponse) => void;
+  presence?: (client: WebSocket) => void;
 }) {
   if (!lanAddresses().includes(input.address)) throw Error('Select a current private LAN address');
   const secret = randomBytes(32).toString('hex');
@@ -43,7 +45,7 @@ export async function startPhonePreview(input: {
     res.setHeader('x-content-type-options', 'nosniff');
     res.setHeader(
       'content-security-policy',
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; frame-src about:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; frame-src about:; connect-src 'self' ${origin.replace('http:', 'ws:')}; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     );
     const reply = (code: number, value: unknown) => {
       res.writeHead(code, { 'content-type': 'application/json' });
@@ -68,10 +70,6 @@ export async function startPhonePreview(input: {
       return;
     }
     try {
-      if (req.method === 'GET' && req.url === '/presence' && input.presence) {
-        input.presence(res);
-        return;
-      }
       if (req.method === 'GET' && req.url === '/game') {
         reply(200, await input.snapshot());
         return;
@@ -134,6 +132,18 @@ export async function startPhonePreview(input: {
       reply(400, { error: 'Report or preview unavailable' });
     }
   });
+  const closePresence = input.presence
+    ? attachPlayPresence(
+        server,
+        { connect: input.presence },
+        (req) =>
+          Boolean(origin) &&
+          req.url === '/presence' &&
+          req.headers.host === new URL(origin).host &&
+          (!req.headers.origin || req.headers.origin === origin) &&
+          presenceToken(req, secret),
+      )
+    : () => {};
   server.requestTimeout = 10_000;
   server.headersTimeout = 10_000;
   server.maxConnections = 16;
@@ -154,6 +164,7 @@ export async function startPhonePreview(input: {
   const close = async () => {
     if (closed) return;
     closed = true;
+    closePresence();
     clearTimeout(expiry);
     server.closeAllConnections();
     await new Promise<void>((r) => server.close(() => r()));

@@ -8,7 +8,7 @@ export const PHONE_PAGE = String.raw`<!doctype html><html><meta name="viewport" 
 <script>
 const el=id=>document.getElementById(id),frame=el('game');let revision='',pending,capture;
 const token=location.hash.slice(1)||sessionStorage.getItem('phone-token')||'';sessionStorage.setItem('phone-token',token);history.replaceState(null,'','/');
-const presencePath='/presence',presenceHeaders={Authorization:'Bearer '+token};
+const presencePath='/presence',presenceProtocols=['gamedevpl-presence','token.'+token];
 ${PLAY_PRESENCE_SCRIPT}
 function uuid(){const a=crypto.getRandomValues(new Uint8Array(16));a[6]=a[6]&15|64;a[8]=a[8]&63|128;const h=[...a].map(x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);}
 async function api(path,data){const r=await fetch(path,{method:data?'POST':'GET',headers:{Authorization:'Bearer '+token,...(data?{'Content-Type':'application/json'}:{})},...(data?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(50000)});if(!r.ok)throw Error('Disconnected or access revoked ('+r.status+')');return r.json();}

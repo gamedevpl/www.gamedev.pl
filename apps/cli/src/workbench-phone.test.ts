@@ -1,4 +1,7 @@
 import { request } from 'node:http';
+import WebSocket from 'ws';
+import { once } from 'node:events';
+import { playPresence } from './play-presence.js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 // Exercise LAN routing over loopback without exposing a network listener.
@@ -44,6 +47,31 @@ afterEach(async () => {
   await phone?.close();
   phone = undefined;
   vi.useRealTimers();
+});
+it('keeps a paired phone connected and revokes its socket when pairing closes', async () => {
+  const presence = playPresence();
+  try {
+    phone = await startPhonePreview({
+      address: '192.168.1.42',
+      snapshot: async () => ({}),
+      status: async () => ({}),
+      artifact: vi.fn(() => ({ id: 'evidence' })),
+      reports: [],
+      presence: presence.connect,
+    });
+    const url = new URL(phone.url);
+    const socket = new WebSocket(`ws://127.0.0.1:${url.port}/presence`, {
+      headers: { Host: url.host, Origin: url.origin, Authorization: `Bearer ${url.hash.slice(1)}` },
+    });
+    await once(socket, 'open');
+    expect(presence.connected).toBe(true);
+    const disconnected = once(socket, 'close');
+    await phone.close();
+    await disconnected;
+    await vi.waitFor(() => expect(presence.connected).toBe(false));
+  } finally {
+    presence.close();
+  }
 });
 it('phone capability can read and report but cannot execute editor operations', async () => {
   const reports: PhoneReport[] = [];

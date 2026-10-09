@@ -1,15 +1,15 @@
 import { EventEmitter } from 'node:events';
-import type { ServerResponse } from 'node:http';
+import type WebSocket from 'ws';
 import { afterEach, expect, it, vi } from 'vitest';
 import { playPresence, PLAY_IDLE_MS } from './play-presence.js';
 
 afterEach(() => vi.useRealTimers());
 function client() {
-  return Object.assign(new EventEmitter(), {
-    writeHead: vi.fn(),
-    write: vi.fn(),
-    end: vi.fn(),
-  }) as unknown as ServerResponse;
+  const events = new EventEmitter();
+  return Object.assign(events, {
+    ping: vi.fn(() => events.emit('pong')),
+    terminate: vi.fn(() => events.emit('close')),
+  }) as unknown as WebSocket;
 }
 
 it('counts open tabs rather than clicks, and stops only after the last disconnect', () => {
@@ -23,7 +23,7 @@ it('counts open tabs rather than clicks, and stops only after the last disconnec
   one.emit('close');
   vi.advanceTimersByTime(10 * PLAY_IDLE_MS);
   expect(idle).not.toHaveBeenCalled();
-  expect(two.write).toHaveBeenCalledWith(': alive\n\n');
+  expect(two.ping).toHaveBeenCalled();
   two.emit('close');
   vi.advanceTimersByTime(PLAY_IDLE_MS - 1000);
   expect(idle).not.toHaveBeenCalled();
@@ -69,7 +69,7 @@ it('waits for active work, then stops once and clears resources on close', () =>
   expect(vi.getTimerCount()).toBe(0);
   const late = client();
   presence.connect(late);
-  expect(late.writeHead).toHaveBeenCalledWith(503);
+  expect(late.terminate).toHaveBeenCalledOnce();
 });
 
 it('keeps an unopened --no-open session available until a tab has connected', () => {
@@ -78,5 +78,19 @@ it('keeps an unopened --no-open session available until a tab has connected', ()
     presence = playPresence(idle);
   vi.advanceTimersByTime(60 * PLAY_IDLE_MS);
   expect(idle).not.toHaveBeenCalled();
+  presence.close();
+});
+
+it('reaps a crashed tab that stops answering native pings', () => {
+  vi.useFakeTimers();
+  const idle = vi.fn(),
+    presence = playPresence(idle);
+  const tab = client();
+  tab.ping = vi.fn();
+  presence.connect(tab);
+  vi.advanceTimersByTime(30_000);
+  expect(tab.terminate).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(PLAY_IDLE_MS);
+  expect(idle).toHaveBeenCalledOnce();
   presence.close();
 });

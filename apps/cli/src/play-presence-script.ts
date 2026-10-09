@@ -1,21 +1,19 @@
 export const PLAY_PRESENCE_SCRIPT = String.raw`
-let presenceController, presencePaused=false;
-async function holdPresence() {
-  if (presenceController || presencePaused) return;
-  const controller = new AbortController();
-  presenceController = controller;
+let presenceSocket, presencePaused=false, presenceRetry;
+function holdPresence() {
+  if (presenceSocket || presencePaused) return;
+  const url=new URL(presencePath,location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';
   try {
-    const response = await fetch(presencePath, {headers:presenceHeaders,signal:controller.signal,cache:'no-store'});
-    if (!response.ok || !response.body) return;
-    const reader = response.body.getReader();
-    try { while (!(await reader.read()).done) {} }
-    finally { await reader.cancel(); }
-  } catch {} finally {
-    if (presenceController===controller) presenceController=undefined;
-    if (!presencePaused) setTimeout(holdPresence,1000);
-  }
+    const socket=new WebSocket(url,presenceProtocols);
+    presenceSocket=socket;
+    socket.onerror=()=>socket.close();
+    socket.onclose=()=>{
+      if(presenceSocket===socket)presenceSocket=undefined;
+      if(!presencePaused)presenceRetry=setTimeout(holdPresence,1000);
+    };
+  } catch {if(!presencePaused)presenceRetry=setTimeout(holdPresence,1000);}
 }
-addEventListener('pagehide',()=>{presencePaused=true;presenceController?.abort();});
-addEventListener('pageshow',()=>{presencePaused=false;void holdPresence();});
-void holdPresence();
+addEventListener('pagehide',()=>{presencePaused=true;clearTimeout(presenceRetry);presenceSocket?.close();});
+addEventListener('pageshow',()=>{presencePaused=false;holdPresence();});
+holdPresence();
 `;

@@ -14,7 +14,7 @@ import type { SessionController } from './session-controller.js';
 import { previewSource, type PreviewSource } from './local-preview-source.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 import { MASCOT_FAVICON_SVG } from './mascot-svg.js';
-import { playPresence } from './play-presence.js';
+import { playPresence, attachPlayPresence, presenceToken } from './play-presence.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const generation = z.number();
@@ -122,7 +122,7 @@ export async function startSessionBrowser(
     res.setHeader('referrer-policy', 'no-referrer');
     res.setHeader(
       'content-security-policy',
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self'; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     );
     const reply = (status: number, value: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -155,10 +155,6 @@ export async function startSessionBrowser(
       return;
     }
     try {
-      if (req.method === 'GET' && req.url === '/presence') {
-        presence.connect(res);
-        return;
-      }
       if (req.method === 'POST' && req.url === '/stop') {
         reply(200, { ok: true });
         setTimeout(() => {
@@ -319,6 +315,17 @@ export async function startSessionBrowser(
       reply(400, { error: 'Request unavailable; refresh state and retry' });
     }
   });
+  attachPlayPresence(
+    server,
+    presence,
+    (req) =>
+      Boolean(origin) &&
+      req.url === '/presence' &&
+      req.headers.host === new URL(origin).host &&
+      (!req.headers.origin || req.headers.origin === origin) &&
+      (!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(String(req.headers['sec-fetch-site']))) &&
+      presenceToken(req, token),
+  );
   server.requestTimeout = 10_000;
   server.headersTimeout = 10_000;
   server.maxConnections = 32;

@@ -1,3 +1,5 @@
+import WebSocket from 'ws';
+import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,7 +37,7 @@ it('stops the actual preview child after its last consumer leaves, despite healt
       resolve();
     }),
   );
-  const consumers: AbortController[] = [];
+  const consumers: WebSocket[] = [];
   try {
     await vi.waitFor(() => expect(readFileSync(state, 'utf8')).toContain('url'), { timeout: 5000 });
     const { url } = JSON.parse(readFileSync(state, 'utf8'));
@@ -43,18 +45,16 @@ it('stops the actual preview child after its last consumer leaves, despite healt
       timeout: 5000,
     });
     for (let i = 0; i < 2; i++) {
-      const abort = new AbortController();
-      consumers.push(abort);
-      const response = await fetch(url + 'presence', { signal: abort.signal });
-      expect(response.headers.get('content-type')).toBe('text/event-stream');
-      await response.body!.getReader().read();
+      const socket = new WebSocket((url + 'presence').replace('http:', 'ws:'));
+      consumers.push(socket);
+      await once(socket, 'open');
     }
-    consumers[0]!.abort();
+    consumers[0]!.close();
     writeFileSync(clock, '120000');
     await new Promise((r) => setTimeout(r, 1100));
     expect(exited, output).toBe(false);
     expect((await fetch(url + 'status')).status).toBe(200);
-    consumers[1]!.abort();
+    consumers[1]!.close();
     let elapsed = 120000;
     await vi.waitFor(
       () => {
@@ -68,7 +68,7 @@ it('stops the actual preview child after its last consumer leaves, despite healt
     expect(child.exitCode, output).toBe(0);
     expect(() => readFileSync(state)).toThrow();
   } finally {
-    consumers.forEach((consumer) => consumer.abort());
+    consumers.forEach((consumer) => consumer.terminate());
     if (!exited) child.kill();
     await exit;
     rmSync(root, { recursive: true, force: true });

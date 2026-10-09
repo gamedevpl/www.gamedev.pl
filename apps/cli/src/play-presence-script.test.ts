@@ -2,45 +2,42 @@ import { JSDOM } from 'jsdom';
 import { expect, it, vi } from 'vitest';
 import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
 
-it('retains hidden tabs, aborts on pagehide and reconnects after BFCache restore', async () => {
-  const pending: Array<{ signal: AbortSignal; release: () => void }> = [];
+it('retains hidden tabs, closes on pagehide and reconnects after BFCache restore', () => {
+  const sockets: Array<{ close: ReturnType<typeof vi.fn>; onclose?: () => void; url: string; protocols: string[] }> =
+    [];
   const dom = new JSDOM(
-    `<script>const presencePath='/presence',presenceHeaders={Authorization:'Bearer secret'};${PLAY_PRESENCE_SCRIPT}</script>`,
+    `<script>const presencePath='/presence',presenceProtocols=['gamedevpl-presence','token.secret'];${PLAY_PRESENCE_SCRIPT}</script>`,
     {
       url: 'http://localhost/',
       runScripts: 'dangerously',
       beforeParse(window) {
-        window.fetch = vi.fn(async (_url: string, options: RequestInit) => ({
-          ok: true,
-          body: {
-            getReader: () => ({
-              read: () =>
-                new Promise((resolve) => {
-                  const release = () => resolve({ done: true });
-                  pending.push({ signal: options.signal!, release });
-                  options.signal!.addEventListener('abort', release, { once: true });
-                }),
-              cancel: async () => {},
-            }),
-          },
-        })) as unknown as typeof fetch;
+        window.WebSocket = class {
+          url: string;
+          protocols: string[];
+          onclose?: () => void;
+          close = vi.fn(() => this.onclose?.());
+          constructor(url: URL, protocols: string[]) {
+            this.url = String(url);
+            this.protocols = protocols;
+            sockets.push(this);
+          }
+        } as unknown as typeof WebSocket;
       },
     },
   );
   try {
-    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    expect(sockets).toHaveLength(1);
     dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
-    expect(pending[0]!.signal.aborted).toBe(false);
+    expect(sockets[0]!.close).not.toHaveBeenCalled();
     dom.window.dispatchEvent(new dom.window.Event('pagehide'));
-    expect(pending[0]!.signal.aborted).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sockets[0]!.close).toHaveBeenCalledOnce();
     dom.window.dispatchEvent(new dom.window.Event('pageshow'));
-    await vi.waitFor(() => expect(pending).toHaveLength(2));
-    expect(pending[1]!.signal.aborted).toBe(false);
-    expect(dom.window.fetch).toHaveBeenCalledWith(
-      '/presence',
-      expect.objectContaining({ headers: { Authorization: 'Bearer secret' } }),
-    );
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]!.close).not.toHaveBeenCalled();
+    expect(sockets[1]).toMatchObject({
+      url: 'ws://localhost/presence',
+      protocols: ['gamedevpl-presence', 'token.secret'],
+    });
   } finally {
     dom.window.dispatchEvent(new dom.window.Event('pagehide'));
     dom.window.close();
