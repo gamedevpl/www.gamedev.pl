@@ -3,6 +3,7 @@ import { runInkRepl } from './host.js';
 import { handleReplLine } from '../repl.js';
 import { sessionBrowserHost } from '../session-browser-host.js';
 import type { SessionController } from '../session-controller.js';
+import { openWorkshop } from '../workshop.js';
 
 vi.mock('ink', () => ({ render: () => ({ unmount: vi.fn() }) }));
 vi.mock('./app.js', () => ({ ReplApp: () => null }));
@@ -13,6 +14,7 @@ vi.mock('../update-notice.js', () => ({ startUpdateNotice: () => vi.fn() }));
 vi.mock('./round-watch.js', () => ({ createRoundWatch: () => ({ poke: vi.fn(), stop: vi.fn() }) }));
 vi.mock('../repl.js', () => ({ handleReplLine: vi.fn(), replBanner: () => '' }));
 vi.mock('../session-browser-host.js', () => ({ sessionBrowserHost: vi.fn() }));
+vi.mock('../workshop.js', () => ({ openWorkshop: vi.fn(), settleBuilder: vi.fn() }));
 
 it('defers shutdown through a task question and remote operation, then exits through normal cleanup', async () => {
   let session!: SessionController;
@@ -106,6 +108,48 @@ it('aborts an active operation on terminal shutdown and closes the browser throu
     shutdown.abort();
     expect(await run).toBe(0);
     expect(active!.signal.aborted).toBe(true);
+    expect(close).toHaveBeenCalledOnce();
+  } finally {
+    shutdown.abort();
+    await run;
+  }
+});
+
+it('closes the browser cleanly when shutdown interrupts checkout preparation', async () => {
+  const shutdown = new AbortController();
+  const close = vi.fn(async () => {});
+  vi.mocked(sessionBrowserHost).mockImplementation(() => ({
+    start: async () => 'http://127.0.0.1/',
+    close,
+    registerPreview: vi.fn(),
+    registerPlatform: vi.fn(),
+    open: vi.fn(async () => true),
+  }));
+  let preparing = false;
+  vi.mocked(openWorkshop).mockImplementation(async () => {
+    preparing = true;
+    return await new Promise((_resolve, reject) =>
+      shutdown.signal.addEventListener('abort', () => reject(shutdown.signal.reason), { once: true }),
+    );
+  });
+  const run = runInkRepl({
+    api: {
+      origin: 'https://example.test',
+      request: vi.fn().mockResolvedValue({ user: { uid: 'owner' } }),
+      requestBytes: vi.fn(),
+    },
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: 'round',
+    checkout: { root: '/tmp', slug: 'robot' },
+    browserOnly: true,
+    detached: false,
+    shutdownSignal: shutdown.signal,
+  });
+  try {
+    await vi.waitFor(() => expect(preparing).toBe(true));
+    shutdown.abort();
+    expect(await run).toBe(0);
     expect(close).toHaveBeenCalledOnce();
   } finally {
     shutdown.abort();

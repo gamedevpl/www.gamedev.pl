@@ -366,6 +366,8 @@ export async function runInkRepl(input: {
       saveHistory();
       if (result.next === 'quit') break;
     }
+  } catch (error) {
+    if (!input.shutdownSignal?.aborted) throw error;
   } finally {
     input.shutdownSignal?.removeEventListener('abort', stop);
     saveHistory();
