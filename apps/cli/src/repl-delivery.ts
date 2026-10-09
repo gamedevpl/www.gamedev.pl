@@ -47,7 +47,7 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
       });
       if (controller.signal.aborted) return undefined;
       if (checkpointDigest(checkpointFiles(game)) !== hash) return 'stale' as const;
-      return result;
+      return { ...result, sourceHash: hash };
     });
   } finally {
     if (holder?.current === controller) holder.current = null;
@@ -67,14 +67,23 @@ export async function recoverVerification(
   const record = (error: VerificationError) =>
     (input.telemetry ?? ws?.telemetry)?.record('verify_failed', { stage: error.stage });
   let diagnosticsCurrent = true;
+  const game = pathInside(join(delivery.dest, 'games'), delivery.slug);
+  const matchesDiagnostics = () =>
+    failure.sourceHash !== undefined && checkpointDigest(checkpointFiles(game)) === failure.sourceHash;
   record(failure);
   for (;;) {
+    diagnosticsCurrent &&= matchesDiagnostics();
     const choice = await pick(
       [...(diagnosticsCurrent && ws?.adapters.length ? [FIX] : []), CHECK, BACK],
       allowDelivery
         ? 'Local checks blocked delivery. What would you like to do?'
         : 'Local checks failed. What would you like to do?',
     );
+    if (choice === FIX && !matchesDiagnostics()) {
+      diagnosticsCurrent = false;
+      input.write('Sources changed since the failed check. Check again before requesting a repair.');
+      continue;
+    }
     if (choice === FIX && diagnosticsCurrent && ws?.adapters.length) {
       const repaired = await handleWorkshopVerb({
         cmd: 'delegate',
@@ -104,7 +113,7 @@ export async function recoverVerification(
     }
     if (!result.ok) {
       diagnosticsCurrent = true;
-      failure = new VerificationError(result, delivery.dest);
+      failure = new VerificationError(result, delivery.dest, result.sourceHash);
       input.write(failure.message);
       record(failure);
       continue;

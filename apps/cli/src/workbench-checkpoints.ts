@@ -34,7 +34,7 @@ async function localActionUnlocked(
         write('Sources changed during verification; result is stale.');
       else if (result.ok) write(`Local checks passed for sources ${hash}. Publishing gate runs on delivery.`);
       else {
-        failure = new VerificationError(result, ws.root);
+        failure = new VerificationError(result, ws.root, hash);
         write(api && !ws.unattended ? failure.message : formatError(failure));
       }
     } finally {

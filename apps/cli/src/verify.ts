@@ -30,7 +30,11 @@ function verificationScripts(cwd: string): VerificationScripts {
 export class VerificationError extends CliError {
   readonly stage: VerifyStage;
   readonly detail: string;
-  constructor(result: { stage: VerifyStage; detail: string }, cwd: string) {
+  constructor(
+    result: { stage: VerifyStage; detail: string },
+    cwd: string,
+    readonly sourceHash?: string,
+  ) {
     const scripts = verificationScripts(cwd);
     const script = { typecheck: scripts.typecheck, check_static: scripts.checkStatic, check_game: scripts.checkGame }[
       result.stage
@@ -79,9 +83,13 @@ export function runLadder(input: {
   return { ok: true };
 }
 
-export function assertLadderGreen(result: ReturnType<typeof runLadder>, cwd = process.cwd()): void {
+export function assertLadderGreen(
+  result: ReturnType<typeof runLadder>,
+  cwd = process.cwd(),
+  sourceHash?: string,
+): void {
   if (!result.ok) {
-    throw new VerificationError(result, cwd);
+    throw new VerificationError(result, cwd, sourceHash);
   }
 }
 

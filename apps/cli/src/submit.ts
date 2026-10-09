@@ -16,8 +16,9 @@ import { inspectGame, ignoredGameFiles, localGameFiles, trackedTree, writeBase, 
 import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
-import { CliError, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
 import { assertLadderGreen, runLadder } from './verify.js';
+import { checkpointFiles, checkpointDigest } from './checkpoint-files.js';
 
 export type DeliverMode = 'preview' | 'publish';
 
@@ -136,8 +137,16 @@ async function submitGameUnlocked(input: {
     const refused = syncRefuse(first.sync, 'submit');
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
+  const game = pathInside(join(input.dest, 'games'), input.slug);
+  const sourceHash = checkpointDigest(checkpointFiles(game));
   const verify = runLadder({ cwd: input.dest, publish: input.publish === true, run: input.run });
-  assertLadderGreen(verify, input.dest);
+  assertLadderGreen(verify, input.dest, sourceHash);
+  if (checkpointDigest(checkpointFiles(game)) !== sourceHash)
+    throw new CliError(
+      'Sources changed during verification; result is stale. Nothing was sent.',
+      EXIT_RED,
+      'Run /verify or retry /push for the current files.',
+    );
 
   const latest = await inspectGame(input);
   if (!input.force && latest.sync.kind === 'conflict') {

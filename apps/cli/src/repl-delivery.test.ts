@@ -354,3 +354,62 @@ it.each(['/verify', '/push'])(
     expect(f.writes()).toEqual([]);
   },
 );
+
+it.each(['/push', '/submit'])(
+  'withholds agent repair when sources change during initial %s verification',
+  async (line) => {
+    const f = fixture();
+    const original = f.ws.run!;
+    let changed = false;
+    f.ws.run = (...args) => {
+      const result = original(...args);
+      if (!changed && result.status === 1) {
+        changed = true;
+        writeFileSync(f.source, 'external edit during initial delivery verification');
+        f.state.detail = 'current source has a different error';
+      }
+      return result;
+    };
+    f.pick.mockImplementationOnce(async (choices) => {
+      expect(choices).toEqual(['Check again', BACK]);
+      return 'Check again';
+    });
+    f.pick.mockImplementationOnce(async (choices) => {
+      expect(choices).toContain('Fix with agent');
+      return 'Fix with agent';
+    });
+    await f.run(line);
+    expect(f.ws.runAdapter).toHaveBeenCalledTimes(1);
+    const prompt = vi.mocked(f.ws.runAdapter!).mock.calls[0][0].prompt;
+    expect(prompt).toContain(f.state.detail);
+    expect(prompt).not.toContain('No matching export for cue');
+    expect(f.writes()).toEqual([]);
+  },
+);
+
+it('refuses an old repair choice when sources change while its menu is open', async () => {
+  const f = fixture();
+  f.pick.mockImplementationOnce(async () => {
+    writeFileSync(f.source, 'external edit while choosing');
+    return 'Fix with agent';
+  });
+  await f.run();
+  expect(f.pick.mock.calls[1][0]).toEqual(['Check again', BACK]);
+  expect(f.lines.join('\n')).toContain('Sources changed since the failed check');
+  expect(f.ws.runAdapter).not.toHaveBeenCalled();
+  expect(f.writes()).toEqual([]);
+});
+
+it('does not send files changed during an otherwise green initial delivery check', async () => {
+  const f = fixture();
+  f.state.red = false;
+  const original = f.ws.run!;
+  f.ws.run = (...args) => {
+    writeFileSync(f.source, 'external edit during green checks');
+    return original(...args);
+  };
+  await f.run();
+  expect(f.lines.join('\n')).toContain('Sources changed during verification; result is stale');
+  expect(f.pick).not.toHaveBeenCalled();
+  expect(f.writes()).toEqual([]);
+});
