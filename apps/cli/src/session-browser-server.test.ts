@@ -326,6 +326,10 @@ it('serves mascot favicon without authentication', async () => {
 });
 
 it('stops the session on authenticated POST /stop', async () => {
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+  cleanup.push(async () => {
+    exit.mockRestore();
+  });
   const { url, headers, session } = await fixture();
   const prompt = session.prompt();
   const res = await fetch(`${url.origin}/stop`, {
@@ -335,9 +339,14 @@ it('stops the session on authenticated POST /stop', async () => {
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ ok: true });
   expect(await prompt).toBe('/quit');
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
 });
 
 it('narrows stopPlaySession by slug and directory boundary', async () => {
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+  cleanup.push(async () => {
+    exit.mockRestore();
+  });
   const { url, session } = await fixture();
   // A private tmpdir keeps the scan off real Play sessions.
   const root = mkdtempSync(join(tmpdir(), 'gamedev-stop-test-'));
@@ -371,4 +380,5 @@ it('narrows stopPlaySession by slug and directory boundary', async () => {
   const prompt = session.prompt();
   expect(await stopPlaySession({ cwd: '/somewhere-else', slug: 'my-game', write: vi.fn() })).toBe(true);
   expect(await prompt).toBe('/quit');
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
 });

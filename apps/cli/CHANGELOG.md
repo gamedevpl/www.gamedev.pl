@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Play build errors replace endless loading with readable diagnostics, Copy error, Retry build and a repair request prepared in Chat with the error attached; the last working game stays playable (#0).
+- Play build errors replace endless loading with readable diagnostics, Copy error, Retry build and a repair request prepared in Chat with the error attached; the last working game stays playable (#1716).
 
 ### Internal
 
