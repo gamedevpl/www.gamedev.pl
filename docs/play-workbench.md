@@ -174,3 +174,21 @@ unknown remote outcomes and phone authority. Phone protocol tests bind only loop
 Real device/codec behavior needs a physical phone; desktop narrow viewports do not prove
 it. Browser integration checks use synthetic game/API fixtures and incur no paid agent
 or platform changes.
+
+## Recovering from a build error
+
+A failed first build replaces “Preparing your game…” with “Build failed”. If an update
+fails, Play keeps the last working game and labels the failure “Update could not build”.
+The error card provides expandable compiler diagnostics and **Copy error**. Diagnostics
+render as text, including paths and line numbers reported by the compiler.
+
+**Retry build** runs the local assembler again without requiring a file edit. It appears
+only when the preview server supports retries. Saving source changes still rebuilds
+automatically; a successful build clears the error card.
+
+**Fix with agent** opens Chat and stages the compiler output as a diagnostic attachment.
+It preserves an existing draft, or fills an empty draft with a repair request. Review the
+request and press **Send** to use the normal builder selection and permission flow. The
+button is unavailable while answering a question or choosing a builder; it does not answer
+an approval or dispatch an agent automatically. If the game changes while evidence is
+being attached, Play discards that staged attachment rather than submitting stale evidence.

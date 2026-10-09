@@ -2,6 +2,7 @@ import { WorkspaceHome } from './home.js';
 import { PixelIcon, type PixelIconName } from '../../web/src/PixelIcon.js';
 import { Conversation } from './conversation.js';
 import { SessionOutput } from './transcript-view.js';
+import { BuildError } from './build-error.js';
 
 function Icon({ name }: { name: PixelIconName }) {
   return <PixelIcon name={name} size={16} />;
@@ -52,7 +53,10 @@ export function PlayShell() {
         <Icon name="pencil" />
         Show controls
       </button>
-      <pre id="notice" role="status" />
+      <div id="preview-feedback">
+        <BuildError />
+        <pre id="notice" role="status" />
+      </div>
       <aside id="panel" hidden aria-labelledby="panel-title">
         <header className="panel-head">
           <div>

@@ -17,6 +17,7 @@ it.each(['ordinary', 'question', 'choice'])(
       choices: kind === 'choice' ? ['Red'] : [],
     };
     const context = {
+      buildErrorControls: () => {},
       api,
       draft,
       state,
@@ -83,6 +84,7 @@ it.each(['restored', 'late acceptance', 'late failure'])(
       .mockResolvedValue({ status: 'accepted' });
     const fields = new Map<string, { textContent: string; disabled: boolean; children: never[] }>();
     const context = {
+      buildErrorControls: () => {},
       pending: {
         envelope: { sessionId: 'old', command: { kind: 'input' } },
         text: 'Keep this draft',

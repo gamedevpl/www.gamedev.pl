@@ -1,5 +1,5 @@
 export const WORKBENCH_NAVIGATION_SCRIPT = String.raw`
-if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{document.body.style.setProperty('--notice-space',el('notice').textContent.trim()?(el('notice').getBoundingClientRect().height+28)+'px':'0px');}).observe(el('notice'));
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{document.body.style.setProperty('--notice-space',el('notice').textContent.trim()||!el('build-error').hidden?(el('preview-feedback').getBoundingClientRect().height+28)+'px':'0px');}).observe(el('preview-feedback'));
 let historyIndex=-1, historyDraft='', lastHistory='', firstWorkspace=true, lastQuestion='';
 function openChat(){document.exitPointerLock?.();panel.hidden=false;el('edit').setAttribute('aria-expanded','true');draft.focus();}
 function closeChat(){panel.hidden=true;leaveOnboarding();el('edit').setAttribute('aria-expanded','false');frame.focus();}
@@ -51,6 +51,7 @@ draft.addEventListener('keydown',event=>{
 function updateWorkspace(next){
   el('empty-title').textContent=next.hasPreview?'Preparing your game…':next.mode==='busy'?'Preparing your workspace…':'Your workspace is ready';
   el('empty-description').textContent=next.hasPreview?'Loading the first playable build.':next.mode==='busy'?next.activity:'Open a game from Commands, or describe an idea in Chat.';
+  updateBuildError();
   if(firstWorkspace){firstWorkspace=false;renderCommands();}
   const questionKey=JSON.stringify([next.promptId,next.question,next.choices]);if(questionKey!==lastQuestion&&(next.question||next.choices.length)){el('workbench-tools').hidden=true;if(panel.hidden)openChat();}lastQuestion=questionKey;
   const encoded=JSON.stringify(next.history??[]);if(encoded!==lastHistory){lastHistory=encoded;const box=el('prompt-history');box.replaceChildren();for(const text of [...(next.history??[])].reverse()){const button=document.createElement('button');button.type='button';button.textContent=text;button.onclick=()=>{if(draft.value.trim()&&!confirm('Replace the current draft with this prompt?'))return;setDraft(text);el('workbench-tools').hidden=true;openChat();};box.append(button);}if(!box.children.length)box.textContent='Your sent prompts will appear here.';}

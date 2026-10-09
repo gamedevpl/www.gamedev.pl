@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean };
+export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean; canRetry?: boolean };
 export type PreviewSnapshot = { html: string; revision: string };
+export type PreviewSource = {
+  status(): Promise<PreviewStatus>;
+  snapshot(): Promise<PreviewSnapshot>;
+  retry?(): Promise<void>;
+};
 
-export function previewSource(url: string, signal: AbortSignal) {
+export function previewSource(url: string, signal: AbortSignal): PreviewSource {
   const parsed = new URL(url);
   if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || !/^\/[a-f0-9]{48}\/$/.test(parsed.pathname)) {
     throw new Error('Local tools require a CLI-owned loopback preview.');
@@ -38,7 +43,23 @@ export function previewSource(url: string, signal: AbortSignal) {
       throw new Error('Invalid preview status.');
     }
     if (typeof value.stale !== 'boolean') throw new Error('Restart /play to enable versioned local captures.');
-    return { revision: value.revision, busy: value.busy, error: value.error.slice(0, 4000), stale: value.stale };
+    return {
+      revision: value.revision,
+      busy: value.busy,
+      error: value.error.slice(0, 4000),
+      stale: value.stale,
+      canRetry: value.canRetry === true,
+    };
+  }
+  async function retry(): Promise<void> {
+    if (!(await status()).canRetry) throw new Error('Restart /play to enable build retries.');
+    const response = await fetch(`${url}retry`, {
+      method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
+    });
+    if (!response.ok) throw new Error(`Build retry unavailable (${response.status}).`);
+    await response.body?.cancel();
   }
   async function snapshot(): Promise<PreviewSnapshot> {
     const deadline = Date.now() + 45_000;
@@ -63,7 +84,7 @@ export function previewSource(url: string, signal: AbortSignal) {
     }
     throw new Error('No current playable build within 45 seconds. Fix build errors and retry.');
   }
-  return { status, snapshot };
+  return { status, snapshot, retry };
 }
 
 export const CAPTURE_CSP =

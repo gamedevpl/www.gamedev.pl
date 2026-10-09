@@ -54,8 +54,12 @@ const server = createServer((req, res) => {
   if (!path.startsWith(base)) { res.writeHead(404); res.end(); return; }
   lastVisit = Date.now();
   if (req.method === 'POST' && path === base + 'stop') { res.end('stopped', shutdown); return; }
+  if (req.method === 'POST' && path === base + 'retry') {
+    if (!busy) { fingerprint = sourceStamp(); dirtyAt = 0; error = ''; assemble(); }
+    res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ busy })); return;
+  }
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
-  if (path === base + 'status') { const stamp = sourceStamp(); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ key, revision, error: attemptedFingerprint === stamp ? error : '', busy, stale: builtFingerprint !== stamp })); return; }
+  if (path === base + 'status') { const stamp = sourceStamp(); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ key, revision, error: attemptedFingerprint === stamp ? error : '', busy, stale: builtFingerprint !== stamp, canRetry: true })); return; }
   if (path === base + 'game') {
     // Game documents are only supplied to the trusted shell as inert text.
     res.setHeader('content-type', 'text/plain; charset=utf-8'); res.end(html); return;
