@@ -33,6 +33,8 @@ export async function runInkRepl(input: {
   checkout?: { slug: string; root: string };
   currentPath?: string;
   browserOnly?: boolean;
+  detached?: boolean;
+  shutdownSignal?: AbortSignal;
   entryMode?: 'home' | 'create' | 'game';
   suggestedSlug?: string;
   onReady?: (url: string) => void;
@@ -99,153 +101,170 @@ export async function runInkRepl(input: {
   let slug = input.checkout?.slug ?? input.slug ?? '';
   let initialLine = input.initialLine;
   let working = true;
+  const stop = () => {
+    abort.current?.abort();
+    session.close();
+  };
+  input.shutdownSignal?.addEventListener('abort', stop, { once: true });
+  if (input.shutdownSignal?.aborted) stop();
   const browser = sessionBrowserHost(
     session,
     input.browserOnly,
     () => ({ mode: slug ? 'game' : (input.entryMode ?? 'home'), slug, suggestedSlug: input.suggestedSlug }),
     () => !working && !abort.current,
+    input.detached ?? input.browserOnly,
   );
-  if (input.browserOnly) {
-    input.onReady?.(await browser.start());
-    session.writeLine('Play session ready. Closing the terminal does not stop this session.');
-  }
-  const refreshAccount = async (): Promise<void> => {
-    const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
-      'GET',
-      '/api/auth/me',
-      undefined,
-      AbortSignal.timeout(3000),
-    );
-    if (uid !== user.uid) {
-      saveHistory();
-      history = undefined;
-      historyScope = '';
-      conversationId = undefined;
-    }
-    uid = user.uid;
-    who = user.handle ?? uid;
-  };
+  let stopUpdateNotice: (() => void) | undefined;
+  let watch: ReturnType<typeof createRoundWatch> | undefined;
   try {
-    await refreshAccount();
-  } catch {
-    who = 'account unavailable';
-  }
+    if (input.browserOnly) {
+      input.onReady?.(await browser.start());
+      session.writeLine(
+        input.detached === false
+          ? 'Play session ready. Keep the terminal open; Ctrl+C ends this session.'
+          : 'Play session ready. Closing the terminal does not stop this session.',
+      );
+    }
+    const refreshAccount = async (): Promise<void> => {
+      const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
+        'GET',
+        '/api/auth/me',
+        undefined,
+        AbortSignal.timeout(3000),
+      );
+      if (uid !== user.uid) {
+        saveHistory();
+        history = undefined;
+        historyScope = '';
+        conversationId = undefined;
+      }
+      uid = user.uid;
+      who = user.handle ?? uid;
+    };
+    try {
+      await refreshAccount();
+    } catch {
+      who = 'account unavailable';
+    }
+    if (input.shutdownSignal?.aborted) return EXIT_GREEN;
 
-  if (input.browserOnly && !uid && input.login && !input.checkout) {
-    const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
-    if (answer === 'Sign in') {
-      try {
-        await input.login(session.writeLine);
-        await refreshAccount();
-      } catch (error) {
-        session.writeLine(formatError(error));
+    if (input.browserOnly && !uid && input.login && !input.checkout) {
+      const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
+      if (answer === 'Sign in') {
+        try {
+          await input.login(session.writeLine);
+          await refreshAccount();
+        } catch (error) {
+          session.writeLine(formatError(error));
+        }
       }
     }
-  }
-  if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
-  const openPreview = (url: string): void => {
-    telemetry.record('play_requested');
-    void browser.open(url).then((opened) => {
-      if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
-    });
-  };
-  let workshop: Workshop | undefined;
-  const readLogs = () => taskLogTail(workshop?.lastLog);
-  const mount = (historyOffset = 0) => {
-    if (input.browserOnly) return;
-    host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview, readLogs }), {
-      stdin: input.io.stdin,
-      stdout: input.io.stdout,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    });
-  };
-  mount();
-  const stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
-  const interactiveRun: InteractiveRun = async (request) => {
-    if (input.browserOnly)
-      throw new Error(
-        'This agent requires an interactive terminal permission handoff. Choose another installed agent or use gamedevpl connect in a terminal.',
-      );
-    const offset = session.get().lines.length;
-    host.instance?.unmount();
-    try {
-      return await runInteractive(request);
-    } finally {
-      mount(offset);
-    }
-  };
-  if (input.browserOnly && !uid && input.checkout) initialLine = '/play';
-  const paintIdentity = (): void => {
-    bindHistory(slug);
-    session.setIdentity(formatSessionIdentity(who, slug));
-  };
-  paintIdentity();
-  const pendingExecution: PendingExecution = {};
-  if (!input.checkout) {
-    const hint = agentHint(discoverAgents(input.env));
-    if (hint) session.writeLine(hint);
-  }
-  if (input.checkout && token) {
-    paintIdentity();
-    const write = (line: string): void => session.writeLine(line);
-    const opened = await openWorkshop({ api: input.api, token, ...input.checkout, env: input.env, write });
-    workshop = {
-      ...input.checkout,
-      token,
-      env: input.env,
-      ...opened,
-      pick: session.prompt,
-      abort,
-      telemetry,
-      onActivity: session.setActivity,
-      onLocalTask: session.setLocalTask,
-      onSteering: session.setSteering,
-      onLocalPreview: browser.registerPreview,
-      interactiveRun,
-    };
-    workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
-    session.writeLine('say what to change, or /help');
-  }
-  if (input.checkout && token) {
-    const controller = new AbortController();
-    abort.current = controller;
-    try {
-      session.setActivity('Checking Creator Kit updates');
-      await offerKitUpdate({
-        api: input.api,
-        cwd: input.checkout.root,
-        env: input.env,
-        write: (line: string) => session.writeLine(line),
-        pick: session.prompt,
-        abort: controller.signal,
-        telemetry,
-        activity: session.setActivity,
+    if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
+    if (input.shutdownSignal?.aborted) return EXIT_GREEN;
+    const openPreview = (url: string): void => {
+      telemetry.record('play_requested');
+      void browser.open(url).then((opened) => {
+        if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
       });
-    } catch (error) {
-      session.writeLine(`Kit update check: ${formatError(error)}. You can retry with /kit.`);
-    } finally {
-      abort.current = null;
+    };
+    let workshop: Workshop | undefined;
+    const readLogs = () => taskLogTail(workshop?.lastLog);
+    const mount = (historyOffset = 0) => {
+      if (input.browserOnly) return;
+      host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview, readLogs }), {
+        stdin: input.io.stdin,
+        stdout: input.io.stdout,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      });
+    };
+    mount();
+    stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
+    const interactiveRun: InteractiveRun = async (request) => {
+      if (input.browserOnly)
+        throw new Error(
+          'This agent requires an interactive terminal permission handoff. Choose another installed agent or use gamedevpl connect in a terminal.',
+        );
+      const offset = session.get().lines.length;
+      host.instance?.unmount();
+      try {
+        return await runInteractive(request);
+      } finally {
+        mount(offset);
+      }
+    };
+    if (input.browserOnly && !uid && input.checkout) initialLine = '/play';
+    const paintIdentity = (): void => {
+      bindHistory(slug);
+      session.setIdentity(formatSessionIdentity(who, slug));
+    };
+    paintIdentity();
+    const pendingExecution: PendingExecution = {};
+    if (!input.checkout) {
+      const hint = agentHint(discoverAgents(input.env));
+      if (hint) session.writeLine(hint);
     }
-  }
-  const watch = createRoundWatch({
-    getToken: () => token,
-    api: input.api,
-    setLive: (live) => session.setLive(live.map((line, index) => (index === 0 ? `Studio: ${line}` : line))),
-    announce: (text) => session.writeLine(text),
-    onStatus: (status) => {
-      if (isPublishTransition(watched, status.status)) telemetry.record('published');
-      watched = status.status;
-      if (token && !workshop) browser.registerPlatform(input.api, token);
-    },
-    onSlug: (next) => {
-      if (next !== slug) session.clearPreview();
-      slug = next;
+    if (input.checkout && token) {
       paintIdentity();
-    },
-  });
-  try {
+      const write = (line: string): void => session.writeLine(line);
+      const opened = await openWorkshop({ api: input.api, token, ...input.checkout, env: input.env, write });
+      if (input.shutdownSignal?.aborted) return EXIT_GREEN;
+      workshop = {
+        ...input.checkout,
+        token,
+        env: input.env,
+        ...opened,
+        pick: session.prompt,
+        abort,
+        telemetry,
+        onActivity: session.setActivity,
+        onLocalTask: session.setLocalTask,
+        onSteering: session.setSteering,
+        onLocalPreview: browser.registerPreview,
+        interactiveRun,
+      };
+      workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
+      session.writeLine('say what to change, or /help');
+    }
+    if (input.checkout && token) {
+      const controller = new AbortController();
+      abort.current = controller;
+      try {
+        session.setActivity('Checking Creator Kit updates');
+        await offerKitUpdate({
+          api: input.api,
+          cwd: input.checkout.root,
+          env: input.env,
+          write: (line: string) => session.writeLine(line),
+          pick: session.prompt,
+          abort: controller.signal,
+          telemetry,
+          activity: session.setActivity,
+        });
+      } catch (error) {
+        session.writeLine(`Kit update check: ${formatError(error)}. You can retry with /kit.`);
+      } finally {
+        abort.current = null;
+      }
+    }
+    watch = createRoundWatch({
+      getToken: () => token,
+      api: input.api,
+      setLive: (live) => session.setLive(live.map((line, index) => (index === 0 ? `Studio: ${line}` : line))),
+      announce: (text) => session.writeLine(text),
+      onStatus: (status) => {
+        if (isPublishTransition(watched, status.status)) telemetry.record('published');
+        watched = status.status;
+        if (token && !workshop) browser.registerPlatform(input.api, token);
+      },
+      onSlug: (next) => {
+        if (next !== slug) session.clearPreview();
+        slug = next;
+        paintIdentity();
+      },
+    });
     for (;;) {
+      if (input.shutdownSignal?.aborted) break;
       working = Boolean(initialLine);
       const line = initialLine ?? (await session.prompt());
       working = true;
@@ -304,7 +323,7 @@ export async function runInkRepl(input: {
               token = opened.token;
               delete pendingExecution.current;
               session.setLive([]);
-              watch.poke();
+              watch?.poke();
             }
           },
           onActivity: (activity) => session.setActivity(activity),
@@ -320,7 +339,7 @@ export async function runInkRepl(input: {
           delete pendingExecution.current;
         }
         token = result.token;
-        watch.poke();
+        watch?.poke();
       }
       if (result.workshop) {
         if (workshop?.slug !== result.workshop.slug || workshop?.root !== result.workshop.root) {
@@ -348,9 +367,10 @@ export async function runInkRepl(input: {
       if (result.next === 'quit') break;
     }
   } finally {
+    input.shutdownSignal?.removeEventListener('abort', stop);
     saveHistory();
-    stopUpdateNotice();
-    watch.stop();
+    stopUpdateNotice?.();
+    watch?.stop();
     session.close();
     await browser.close();
     host.instance?.unmount();

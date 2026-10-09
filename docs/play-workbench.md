@@ -12,18 +12,29 @@ Use `gamedevpl --terminal`, explicit `repl`, or `connect` for terminal conversat
 the raw-preview path. Explicit `create --play` and `play --edit` also launch a
 browser without a TTY; they cannot be combined with JSON, stop or raw-preview flags.
 `--no-open` prints the complete session URL instead of opening it.
+Browser launches stay in the invoking terminal by default. `Ctrl+C` ends Play and
+cancels active local work. Use `gamedevpl --detach` or `gamedevpl play --detach` to
+run in the background; `create --detach` also works without a TTY.
 
 Raw preview uses the same full bleed game embedding as the workbench. Reload, sound
 and game instructions live in the overlaid Preview controls; they reserve no stage
 space. Build errors appear over the last playable build.
 
-The launcher exits and the session stays alive until **Commands → End session**.
+With `--detach`, the launcher exits; Play ends 60 seconds after the last browser or
+paired phone tab closes, once active work finishes. Reopening a tab cancels the
+countdown. **Commands → End session** and `gamedevpl stop` end it immediately.
+Foreground sessions stay alive while their terminal is open, even with no tabs.
 Repeated launches resume the matching session without replaying a supplied idea.
+Reopening an already running session preserves its original terminal or background
+ownership; the reopening command prints that fact and exits.
 New-game intake never inherits the launch directory's existing checkout. An unknown
 legacy mutation blocks a new create until reconciled; existing recovery journals and
 acknowledged game identities remain authoritative. Explicit `play --edit` without a
 slug retains the legacy directory journal for recovery. Interactive terminal `/play`
 remains attached to that terminal's lifetime.
+Raw local `play --preview` also waits in the terminal; `--detach` runs it in the
+background. JSON output stays a one-shot discovery/launch command. Opening a remote
+published game requires no local server and returns immediately.
 
 ## Finding and stopping sessions
 

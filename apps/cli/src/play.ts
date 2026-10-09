@@ -39,6 +39,7 @@ export async function startLocalPlay(input: {
   stop?: boolean;
   prepared?: boolean;
   abort?: AbortSignal;
+  detached?: boolean;
 }): Promise<Session | null> {
   const checkAbort = () => {
     if (input.abort?.aborted) throw new CliError('preview startup cancelled', EXIT_REFUSED);
@@ -113,7 +114,7 @@ export async function startLocalPlay(input: {
         cwd: root,
         env: childEnv(input.env, ''),
         stdio: ['ignore', log, log],
-        detached: true,
+        detached: input.detached ?? true,
         windowsHide: true,
       });
     } finally {
@@ -126,6 +127,14 @@ export async function startLocalPlay(input: {
     child.once('exit', () => {
       failed = true;
     });
+    if (input.detached === false && input.abort) {
+      const stop = () => {
+        child.kill();
+      };
+      input.abort.addEventListener('abort', stop, { once: true });
+      child.once('close', () => input.abort?.removeEventListener('abort', stop));
+      if (input.abort.aborted) stop();
+    }
     child.unref();
     for (let attempt = 0; attempt < 40 && !failed; attempt++) {
       if (input.abort?.aborted) {
@@ -205,6 +214,8 @@ export async function playGame(input: {
   telemetry?: CliTelemetry;
   open?: typeof openUrl;
   onLocalPreview?: (url: string) => void;
+  abort?: AbortSignal;
+  detached?: boolean;
 }): Promise<{ url?: string; mode: 'local' | 'remote' }> {
   if (input.stop) {
     const checkout = findCheckout(input.cwd);
@@ -232,6 +243,8 @@ export async function playGame(input: {
       env: input.env ?? process.env,
       write: input.write,
       stop: input.stop,
+      abort: input.abort,
+      detached: input.detached,
     });
     if (!session) {
       if (input.stop) input.onLocalPreview?.('');

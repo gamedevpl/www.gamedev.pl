@@ -11,6 +11,22 @@ import { privatePlayDirectory, readPlayState } from './play-state.js';
 import { openUrl } from './open-url.js';
 import type { ApiClient } from './api.js';
 import { findCheckout } from './checkout.js';
+import { withPlaySignals } from './play-signals.js';
+import { runLoopbackLogin } from './login.js';
+
+export function workbenchLogin(input: Omit<Parameters<typeof runLoopbackLogin>[0], 'stdout'>) {
+  return async (write: (line: string) => void) => {
+    await runLoopbackLogin({
+      ...input,
+      stdout: {
+        write: (chunk) => {
+          write(String(chunk));
+          return true;
+        },
+      } as NodeJS.WritableStream,
+    });
+  };
+}
 
 export type PlayJournal = {
   version: 1;
@@ -87,6 +103,8 @@ export async function launchWorkbench(input: {
   idea?: string;
   launch?: WorkbenchEntry;
   noOpen: boolean;
+  detach?: boolean;
+  foreground?: (path: string, onReady: (url: string) => void) => Promise<void>;
   write: (line: string) => void;
 }) {
   const cwd = realpathSync(input.cwd),
@@ -104,6 +122,7 @@ export async function launchWorkbench(input: {
   assertRequestedGame(existing, input.launch);
   if (existing && (await health(existing))) {
     input.write(`Existing Play session: ${existing.url}`);
+    input.write('Reopened the running session; its lifetime stays with the original launch. Stop: gamedevpl stop.');
     if (permissionMode() !== 'ask')
       input.write('The running session keeps its permission mode; change it there with /permissions.');
     if (input.idea) input.write('The supplied idea was not sent. Review the active session and enter it in Play.');
@@ -114,11 +133,38 @@ export async function launchWorkbench(input: {
     throw Error(
       'Play process is still alive but not responding. Reconnect after it recovers; a second writer was not started.',
     );
-  const releaseStartup = acquireStartupLock(lock, existing?.pid);
+  const unlock = acquireStartupLock(lock, existing?.pid);
+  let locked = true;
+  const releaseStartup = () => {
+    if (!locked) return;
+    locked = false;
+    unlock();
+  };
   try {
     const journal = nextPlayJournal(existing, cwd, input.idea, input.write);
     if (!existing || (existing.ended && !existing.pending)) journal.launch = input.launch;
     savePlayJournal(path, journal);
+    if (!input.detach) {
+      if (!input.foreground) throw Error('Foreground Play requires a session runner.');
+      const previousCwd = process.cwd();
+      let url: string | undefined;
+      try {
+        process.chdir(cwd);
+        await input.foreground(path, (ready) => {
+          url = ready;
+          releaseStartup();
+          input.write(`Play session: ${ready}`);
+          input.write('Keep this terminal open. Ctrl+C ends Play. Use --detach to run in the background.');
+          if (!input.noOpen)
+            void openUrl(ready).then((opened) => {
+              if (!opened) input.write('Browser could not open. Copy the Play session URL above.');
+            });
+        });
+        return url;
+      } finally {
+        process.chdir(previousCwd);
+      }
+    }
     const log = openSync(join(base, `${key}.log`), 'a', 0o600);
     let child;
     try {
@@ -219,6 +265,8 @@ export async function runPlayWorker(input: {
   path: string;
   env: NodeJS.ProcessEnv;
   entry: string;
+  detached?: boolean;
+  onReady?: (url: string) => void;
   login: (write: (line: string) => void) => Promise<void>;
 }) {
   const expected = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
@@ -235,34 +283,34 @@ export async function runPlayWorker(input: {
   const start = workerEntry(journal);
   delete journal.initial;
   save();
-  const onSigterm = () => {
-    process.exit(0);
-  };
-  process.once('SIGTERM', onSigterm);
   try {
-    await runInkRepl({
-      api,
-      env: { ...input.env, GAMEDEV_PLAY_WORKBENCH: '1' },
-      io: { stdin: process.stdin, stdout: process.stdout },
-      browserOnly: true,
-      entryMode: journal.launch?.mode,
-      suggestedSlug: journal.launch?.mode === 'home' ? findCheckout(journal.cwd)?.slug : undefined,
-      currentPath: input.entry,
-      token: journal.token ?? null,
-      ...start,
-      login: input.login,
-      onReady: (url) => {
-        journal.url = url;
-        save();
-      },
-      onCheckpoint: (state) => {
-        Object.assign(journal, state);
-        save();
-      },
-    });
+    await withPlaySignals(async (shutdownSignal) =>
+      runInkRepl({
+        api,
+        env: { ...input.env, GAMEDEV_PLAY_WORKBENCH: '1' },
+        io: { stdin: process.stdin, stdout: process.stdout },
+        browserOnly: true,
+        detached: input.detached ?? true,
+        shutdownSignal,
+        entryMode: journal.launch?.mode,
+        suggestedSlug: journal.launch?.mode === 'home' ? findCheckout(journal.cwd)?.slug : undefined,
+        currentPath: input.entry,
+        token: journal.token ?? null,
+        ...start,
+        login: input.login,
+        onReady: (url) => {
+          journal.url = url;
+          save();
+          input.onReady?.(url);
+        },
+        onCheckpoint: (state) => {
+          Object.assign(journal, state);
+          save();
+        },
+      }),
+    );
     journal.ended = true;
   } finally {
-    process.removeListener('SIGTERM', onSigterm);
     delete journal.url;
     delete journal.pid;
     save();

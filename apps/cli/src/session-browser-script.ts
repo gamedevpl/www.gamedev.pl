@@ -45,7 +45,7 @@ function render(next) {
   reconcilePending(next.sessionId);
   const old = state;
   state = next;
-  el('session-lifetime').textContent=state.detached?'Play ends 60 seconds after its last tab closes, once active work finishes. Commands → End session stops it now.':'Shared with your terminal. Keep the terminal session open.';
+  el('session-lifetime').textContent=state.detached?'Play ends 60 seconds after its last tab closes, once active work finishes. Commands → End session stops it now.':'Keep the terminal session open. Ctrl+C ends Play.';
   const fingerprint=JSON.stringify([next.addresses,next.phone,next.reports]);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;devices(next);}
   if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';

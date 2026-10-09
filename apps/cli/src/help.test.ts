@@ -10,6 +10,8 @@ describe('formatHelp', () => {
     expect(out).toContain('open your browser workspace');
     expect(out).toContain('--terminal');
     expect(out).toContain('--preview');
+    expect(out).toContain('--detach');
+    expect(out).toContain('Ctrl+C ends Play');
     expect(out).toContain('builder <slug> globally');
     expect(out).toMatch(/push\s+send local changes as a preview/);
     for (const verb of SLASH_VERBS) {

@@ -4,7 +4,7 @@ import { SLASH_VERBS, type SlashVerb } from './argv.js';
 
 export const BLURB: Record<SlashVerb, string> = {
   recover: 'recover local sources after cancellation/deletion — recover [dir] [--slug <name>] --yes',
-  play: 'open the browser workbench — play [slug]; --preview for raw preview; --list for running sessions; --stop [--session <id>|--all] to stop',
+  play: 'open the browser workbench — play [slug]; --detach for background; --preview for raw preview; --list for running sessions; --stop [--session <id>|--all] to stop',
   stop: 'stop local Play — stop [slug] [--session <id>|--all]',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',
@@ -54,6 +54,7 @@ export function formatHelp(slash = false): string {
         `  ${CLI_BIN.padEnd(24)}open your browser workspace`,
         `  ${CLI_BIN} create [idea]          create in the browser (interactive)`,
         `  ${CLI_BIN} play [slug]            open a game in the browser (interactive)`,
+        `  ${CLI_BIN} [play] --detach       run the browser workspace in the background`,
         `  ${CLI_BIN} stop [slug]            stop Play in this checkout; --all stops all`,
         `  ${CLI_BIN} --terminal           interactive conversation in the terminal`,
         `  ${CLI_BIN} play --preview       open the raw game preview`,
@@ -62,6 +63,8 @@ export function formatHelp(slash = false): string {
         `  ${CLI_BIN} create --play [idea]  explicit browser launch without a TTY`,
         `  ${`${CLI_BIN} repl <slug>`.padEnd(24)}interactive session for an existing game`,
         `  ${`${CLI_BIN} <verb>`.padEnd(24)}one-shot command`,
+        '',
+        '  Browser sessions stay in this terminal. Ctrl+C ends Play; --detach runs in the background.',
         '',
       ];
   return [...intro, ...rows].join('\n');

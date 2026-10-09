@@ -68,3 +68,47 @@ it('defers shutdown through a task question and remote operation, then exits thr
     await run;
   }
 });
+
+it('aborts an active operation on terminal shutdown and closes the browser through normal cleanup', async () => {
+  const close = vi.fn(async () => {});
+  vi.mocked(sessionBrowserHost).mockImplementation(() => ({
+    start: async () => 'http://127.0.0.1/',
+    close,
+    registerPreview: vi.fn(),
+    registerPlatform: vi.fn(),
+    open: vi.fn(async () => true),
+  }));
+  let active: AbortController | undefined;
+  vi.mocked(handleReplLine).mockImplementation(async (input) => {
+    active = new AbortController();
+    input.abort!.current = active;
+    await new Promise<void>((resolve) => active!.signal.addEventListener('abort', () => resolve(), { once: true }));
+    input.abort!.current = null;
+    return { next: 'continue' };
+  });
+  const shutdown = new AbortController();
+  const run = runInkRepl({
+    api: {
+      origin: 'https://example.test',
+      request: vi.fn().mockResolvedValue({ user: { uid: 'owner' } }),
+      requestBytes: vi.fn(),
+    },
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/status',
+    browserOnly: true,
+    detached: false,
+    shutdownSignal: shutdown.signal,
+  });
+  try {
+    await vi.waitFor(() => expect(active).toBeDefined());
+    shutdown.abort();
+    expect(await run).toBe(0);
+    expect(active!.signal.aborted).toBe(true);
+    expect(close).toHaveBeenCalledOnce();
+  } finally {
+    shutdown.abort();
+    await run;
+  }
+});

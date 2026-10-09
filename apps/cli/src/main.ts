@@ -160,6 +160,14 @@ export async function runCli(
 
   try {
     choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
+    const workbench = selectWorkbenchEntry({
+      verb,
+      args,
+      flags,
+      interactive: tty && Boolean(io.stdout.isTTY),
+      bare: !argv[2] || argv[2].startsWith('-'),
+      cwd: process.cwd(),
+    });
     if (
       !flags.help &&
       !flags.h &&
@@ -177,16 +185,8 @@ export async function runCli(
       }))
     )
       return EXIT_GREEN;
-    const workbench = selectWorkbenchEntry({
-      verb,
-      args,
-      flags,
-      interactive: tty && Boolean(io.stdout.isTTY),
-      bare: !argv[2] || argv[2].startsWith('-'),
-      cwd: process.cwd(),
-    });
     if (workbench) {
-      const { launchWorkbench } = await import('./workbench-launch.js');
+      const { launchWorkbench, runPlayWorker, workbenchLogin } = await import('./workbench-launch.js');
       await launchWorkbench({
         cwd: workbench.cwd,
         launch: flags.edit === true && !args.length ? undefined : workbench.entry,
@@ -194,30 +194,29 @@ export async function runCli(
         env,
         idea: workbench.idea,
         noOpen: flags['no-open'] === true,
+        detach: flags.detach === true,
+        foreground: (path, onReady) =>
+          runPlayWorker({
+            api,
+            path,
+            env,
+            entry: argv[1]!,
+            detached: false,
+            onReady,
+            login: workbenchLogin({ origin, store, env }),
+          }),
         write: (line) => io.stdout.write(`${line}\n`),
       });
       return EXIT_GREEN;
     }
     if (verb === '__play-session') {
-      const { runPlayWorker } = await import('./workbench-launch.js');
+      const { runPlayWorker, workbenchLogin } = await import('./workbench-launch.js');
       await runPlayWorker({
         api,
         path: args[0] ?? '',
         env,
         entry: argv[1]!,
-        login: async (write) => {
-          await runLoopbackLogin({
-            origin,
-            store,
-            env,
-            stdout: {
-              write: (chunk) => {
-                write(String(chunk));
-                return true;
-              },
-            } as NodeJS.WritableStream,
-          });
-        },
+        login: workbenchLogin({ origin, store, env }),
       });
       return EXIT_GREEN;
     }
@@ -269,7 +268,8 @@ export async function runCli(
         }
       }
 
-      const played = await playGame({
+      const runPlay = flags.detach || asJson ? playGame : (await import('./play-foreground.js')).playForeground;
+      const played = await runPlay({
         cwd: process.cwd(),
         slug: args[0],
         origin,
