@@ -24,9 +24,8 @@ export function playForeground(input: Parameters<typeof playGame>[0]) {
             redirect: 'error',
           });
           await response.body?.cancel();
-          if (!response.ok) break;
-        } catch {
-          break;
+        } catch (error) {
+          if ((error as { cause?: NodeJS.ErrnoException }).cause?.code === 'ECONNREFUSED') break;
         }
         await delay(1000, undefined, { signal }).catch(() => undefined);
       }
