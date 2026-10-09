@@ -452,6 +452,7 @@ async function workshopTurnUnlocked(input: {
   ack?: string;
   agent?: string;
   retry?: boolean;
+  offerDelivery?: boolean;
   write: (line: string) => void;
 }): Promise<boolean> {
   if (!(await readyToEdit(input))) return false;
@@ -485,7 +486,7 @@ async function workshopTurnUnlocked(input: {
     return false;
   }
   delete input.ws.failedTask;
-  if (ok) await offerSubmit(input);
+  if (input.offerDelivery !== false) await offerSubmit(input);
   return ok;
 }
 

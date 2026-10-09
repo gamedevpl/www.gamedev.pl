@@ -1,72 +1,68 @@
 import { withCheckoutWriter } from './workbench-lock.js';
-import { createHash, randomUUID } from 'node:crypto';
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  readdirSync,
-  lstatSync,
-  mkdirSync,
-  renameSync,
-  rmSync,
-} from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { readFileSync, writeFileSync, existsSync, lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathInside } from './checkout-sync.js';
-import { runLadderAsync } from './verify.js';
+import { checkpointFiles, checkpointDigest } from './checkpoint-files.js';
+import { verificationSourceHash } from './verification-source.js';
+export { checkpointFiles } from './checkpoint-files.js';
+import { runLadderAsync, VerificationError } from './verify.js';
+import { recoverVerification } from './repl-delivery.js';
+import { formatError } from './errors.js';
+import type { ApiClient } from './api.js';
 import type { Workshop } from './workshop.js';
 
-type File = { path: string; data: string };
-export function checkpointFiles(root: string): File[] {
-  const files: File[] = [];
-  let size = 0;
-  const walk = (rel: string) => {
-    const dir = rel ? pathInside(root, rel) : root;
-    if (lstatSync(dir).isSymbolicLink()) throw Error('Checkpoints do not follow symbolic links');
-    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const name = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) throw Error('Checkpoints do not follow symbolic links');
-      if (entry.isDirectory()) walk(name);
-      else if (entry.isFile()) {
-        const bytes = readFileSync(pathInside(root, name));
-        size += bytes.length;
-        if (size > 32_000_000 || files.length >= 2000) throw Error('Checkpoint exceeds 32 MB or 2000 files');
-        files.push({ path: name, data: bytes.toString('base64') });
-      }
-    }
-  };
-  walk('');
-  return files;
-}
-const digest = (files: File[]) => createHash('sha256').update(JSON.stringify(files)).digest('hex');
 async function localActionUnlocked(
   line: string,
   ws: Workshop | undefined,
   write: (s: string) => void,
+  api?: ApiClient,
 ): Promise<boolean> {
   if (!['/verify', '/checkpoint', '/restore-checkpoint'].includes(line)) return false;
   if (!ws) throw Error('Open a local checkout first');
   const game = pathInside(join(ws.root, 'games'), ws.slug);
-  const files = checkpointFiles(game),
-    hash = digest(files);
   if (line === '/verify') {
+    const hash = verificationSourceHash(ws.root, ws.slug);
     const abort = new AbortController();
     ws.abort.current = abort;
     ws.onLocalTask?.('verification');
+    let failure: VerificationError | undefined;
     try {
-      const result = await runLadderAsync({ cwd: ws.root, abort: abort.signal });
-      write(
-        digest(checkpointFiles(game)) !== hash
-          ? 'Sources changed during verification; result is stale.'
-          : result.ok
-            ? `Local checks passed for sources ${hash}. Publishing gate runs on delivery.`
-            : `Verification failed at ${result.stage}: ${result.detail}`,
-      );
+      const result = await runLadderAsync({ cwd: ws.root, run: ws.run, abort: abort.signal });
+      if (abort.signal.aborted) write('Verification stopped. Your edits remain local.');
+      else if (verificationSourceHash(ws.root, ws.slug) !== hash)
+        write('Sources changed during verification; result is stale.');
+      else if (result.ok) write(`Local checks passed for sources ${hash}. Publishing gate runs on delivery.`);
+      else {
+        failure = new VerificationError(result, ws.root, hash);
+        write(api && !ws.unattended ? failure.message : formatError(failure));
+      }
     } finally {
       ws.abort.current = null;
       ws.onLocalTask?.('');
     }
+    if (failure && api && !ws.unattended)
+      await recoverVerification(
+        {
+          line,
+          api,
+          token: ws.token,
+          workshop: ws,
+          write,
+          pick: ws.pick,
+          onActivity: ws.onActivity,
+          telemetry: ws.telemetry,
+        },
+        { api, slug: ws.slug, dest: ws.root, run: ws.run },
+        failure,
+        ws.pick,
+        ws,
+        false,
+      );
     return true;
   }
+  const files = checkpointFiles(game),
+    hash = checkpointDigest(files);
   const path = join(ws.root, '.gamedev-play-checkpoint.json');
   if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw Error('Checkpoint must be a regular file');
   if (line === '/checkpoint') {
@@ -80,13 +76,17 @@ async function localActionUnlocked(
     return true;
   }
   if (lstatSync(path).size > 48_000_000) throw Error('Checkpoint exceeds size limit');
-  const saved = JSON.parse(readFileSync(path, 'utf8')) as { slug: string; hash: string; files: File[] };
+  const saved = JSON.parse(readFileSync(path, 'utf8')) as {
+    slug: string;
+    hash: string;
+    files: ReturnType<typeof checkpointFiles>;
+  };
   if (
     saved.slug !== ws.slug ||
     !Array.isArray(saved.files) ||
     saved.files.length > 2000 ||
     saved.files.some((f) => typeof f.path !== 'string' || typeof f.data !== 'string') ||
-    digest(saved.files) !== saved.hash
+    checkpointDigest(saved.files) !== saved.hash
   )
     throw Error('Invalid checkpoint');
   write(`Restore checkpoint ${saved.hash}. Files: ${saved.files.map((f) => f.path).join(', ')}`);
@@ -106,7 +106,7 @@ async function localActionUnlocked(
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, Buffer.from(file.data, 'base64'), { flag: 'wx', mode: 0o600 });
     }
-    if (digest(checkpointFiles(game)) !== hash) throw Error('Sources changed; review the restore again');
+    if (checkpointDigest(checkpointFiles(game)) !== hash) throw Error('Sources changed; review the restore again');
     renameSync(game, backup);
     try {
       renameSync(stage, game);

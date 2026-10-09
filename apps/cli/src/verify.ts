@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CliError, EXIT_RED } from './exit-codes.js';
+import { stripTerminalControls } from './ansi.js';
 
 export type VerifyStage = 'typecheck' | 'check_static' | 'check_game';
 
@@ -24,6 +25,29 @@ function verificationScripts(cwd: string): VerificationScripts {
       throw new CliError('Invalid Creator Kit verification scripts.', EXIT_RED);
   }
   return scripts as VerificationScripts;
+}
+
+export class VerificationError extends CliError {
+  readonly stage: VerifyStage;
+  readonly detail: string;
+  constructor(
+    result: { stage: VerifyStage; detail: string },
+    cwd: string,
+    readonly sourceHash?: string,
+  ) {
+    const scripts = verificationScripts(cwd);
+    const script = { typecheck: scripts.typecheck, check_static: scripts.checkStatic, check_game: scripts.checkGame }[
+      result.stage
+    ];
+    const detail = stripTerminalControls(result.detail).trim();
+    super(
+      `verify failed at ${result.stage}${detail ? '\n' + detail : '\nThe check returned no diagnostics.'}`,
+      EXIT_RED,
+      `Fix the reported errors, then retry delivery. To inspect this check, run npm run ${script} in the checkout.`,
+    );
+    this.stage = result.stage;
+    this.detail = detail;
+  }
 }
 
 type VerifyRun = (
@@ -59,9 +83,13 @@ export function runLadder(input: {
   return { ok: true };
 }
 
-export function assertLadderGreen(result: ReturnType<typeof runLadder>): void {
+export function assertLadderGreen(
+  result: ReturnType<typeof runLadder>,
+  cwd = process.cwd(),
+  sourceHash?: string,
+): void {
   if (!result.ok) {
-    throw new CliError(`verify failed at ${result.stage}`, EXIT_RED, 'hand the failure back to the adapter');
+    throw new VerificationError(result, cwd, sourceHash);
   }
 }
 
@@ -69,13 +97,15 @@ export async function runLadderAsync(input: {
   cwd: string;
   abort: AbortSignal;
   run?: VerifyRun;
+  publish?: boolean;
 }): Promise<ReturnType<typeof runLadder>> {
-  if (input.run) return runLadder({ ...input, publish: false });
+  if (input.run) return runLadder({ ...input, publish: input.publish === true });
   const scripts = verificationScripts(input.cwd);
   const env = childEnv(process.env, '');
   for (const [stage, script] of [
     ['typecheck', scripts.typecheck],
     ['check_static', scripts.checkStatic],
+    ...(input.publish ? [['check_game', scripts.checkGame] as const] : []),
   ] as const) {
     if (input.abort.aborted) return { ok: false, stage, detail: 'Verification stopped' };
     const child = spawnCommand({

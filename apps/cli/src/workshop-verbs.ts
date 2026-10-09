@@ -9,7 +9,8 @@ export async function handleWorkshopVerb(input: {
   api: ApiClient;
   ws: Workshop;
   write: (s: string) => void;
-}): Promise<void> {
+  offerDelivery?: boolean;
+}): Promise<boolean | undefined> {
   const { ws } = input;
   try {
     if (input.cmd === 'builder') {
@@ -59,14 +60,16 @@ export async function handleWorkshopVerb(input: {
         return;
       }
     }
-    await workshopTurn({
+    return await workshopTurn({
       api: input.api,
       ws,
       request,
       agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
       write: input.write,
+      offerDelivery: input.offerDelivery,
     });
   } catch (error) {
     input.write(formatError(error));
+    return false;
   }
 }

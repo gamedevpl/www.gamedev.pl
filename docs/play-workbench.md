@@ -192,3 +192,28 @@ request and press **Send** to use the normal builder selection and permission fl
 button is unavailable while answering a question or choosing a builder; it does not answer
 an approval or dispatch an agent automatically. If the game changes while evidence is
 being attached, Play discards that staged attachment rather than submitting stale evidence.
+
+## Recovering from failed local checks
+
+When `/push`, `/submit` or `/verify` fails local verification, the interactive session
+shows the failed check's diagnostic output and offers **Fix with agent**, **Check again**
+and **Back — keep local changes**. The same choices appear in the terminal and Play's
+Conversation. Fix with agent is offered when a local agent is available for that checkout.
+Choosing Back or cancelling keeps local edits and sends nothing.
+
+If game sources change during verification or while choosing a repair, the session
+withholds agent repair until **Check again** supplies fresh diagnostics. Kept-local
+notes and ignored media do not invalidate game verification.
+
+Fix with agent passes the actual diagnostic report through the existing local builder
+selection and permission flow. Diagnostics are identified as untrusted tool output;
+the repair must preserve game behavior and must not weaken checks or modify shared tools.
+The normal verification and repair loop checks the agent's changes afterward.
+
+After a repair or successful recheck of a failed delivery, the session offers **Send preview**
+or **Publish game**, according to the original delivery request. Confirming retries that
+request with its original checkout and flags and reruns verification before sending.
+Repairing a failure from `/verify` only repairs and checks the local game.
+
+Non-interactive commands keep their failure exit code and print diagnostics plus the
+specific Creator Kit command to run. They do not open a recovery menu.

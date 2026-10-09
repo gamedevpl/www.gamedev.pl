@@ -16,8 +16,9 @@ import { inspectGame, ignoredGameFiles, localGameFiles, trackedTree, writeBase, 
 import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
-import { CliError, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
 import { assertLadderGreen, runLadder } from './verify.js';
+import { verificationSourceHash } from './verification-source.js';
 
 export type DeliverMode = 'preview' | 'publish';
 
@@ -136,11 +137,15 @@ async function submitGameUnlocked(input: {
     const refused = syncRefuse(first.sync, 'submit');
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
+  const sourceHash = verificationSourceHash(input.dest, input.slug);
   const verify = runLadder({ cwd: input.dest, publish: input.publish === true, run: input.run });
-  if (!verify.ok) {
-    throw new CliError(`verify failed at ${verify.stage}`, EXIT_RED, 'fix locally, then submit again');
-  }
-  assertLadderGreen(verify);
+  assertLadderGreen(verify, input.dest, sourceHash);
+  if (verificationSourceHash(input.dest, input.slug) !== sourceHash)
+    throw new CliError(
+      'Sources changed during verification; result is stale. Nothing was sent.',
+      EXIT_RED,
+      'Run /verify or retry /push for the current files.',
+    );
 
   const latest = await inspectGame(input);
   if (!input.force && latest.sync.kind === 'conflict') {
