@@ -62,7 +62,7 @@ describe('games-repo-contract (website half)', () => {
   it('keeps the bake/play source-graph ceiling above the assembled author budget', () => {
     // Raw `.ts` can exceed assembled author bytes (comments/types). Carjack-city
     // at ~334 KiB source is why this is 336 KiB rather than matching GAME_BUDGET_BYTES.
-    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(1062 * 1024);
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(1593 * 1024);
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
     expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(256);
   });

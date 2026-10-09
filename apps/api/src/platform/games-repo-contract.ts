@@ -147,8 +147,9 @@ export const GAME_BUDGET_BYTES = 936 * 1024;
  * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
  * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
  * mission-ladder work. 336 → 708 KiB to stay above the 624 KiB author budget.
+ * 1062 → 1593 KiB (+50%) when ink-and-fury's acts reached the old ceiling.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 1062 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 1593 * 1024;
 
 // Raw TypeScript source-graph module ceiling (github-client, seed-bundle).
 export const MAX_SOURCE_GRAPH_MODULES = 256;
