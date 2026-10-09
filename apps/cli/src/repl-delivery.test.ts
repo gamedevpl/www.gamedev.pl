@@ -292,3 +292,28 @@ it.each(['/verify', '/push'])('rejects changed sources during %s retries and acc
   expect(f.ws.runAdapter).not.toHaveBeenCalled();
   expect(f.writes()).toEqual([]);
 });
+
+it.each(['/verify', '/push'])('rechecks the current sources after an agent repairs %s', async (line) => {
+  const f = fixture();
+  const original = f.ws.run!;
+  let greenStaticChecks = 0;
+  f.ws.run = (...args) => {
+    const result = original(...args);
+    if (args[1][1] === 'check:static' && result.status === 0) {
+      greenStaticChecks += 1;
+      if (greenStaticChecks === 1) {
+        writeFileSync(f.source, 'external edit during final agent check');
+        f.state.red = true;
+        f.state.detail = 'external edit introduced a type error';
+      }
+    }
+    return result;
+  };
+  f.pick.mockResolvedValueOnce('Fix with agent');
+  await f.run(line);
+  expect(f.ws.runAdapter).toHaveBeenCalledTimes(1);
+  expect(f.pick).toHaveBeenCalledTimes(2);
+  expect(f.lines.join('\n')).toContain('external edit introduced a type error');
+  expect(f.lines.join('\n')).not.toContain('Local checks passed.');
+  expect(f.writes()).toEqual([]);
+});

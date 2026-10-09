@@ -87,25 +87,24 @@ export async function recoverVerification(
         input.write('Repair did not complete. Your edits remain local.');
         return false;
       }
-    } else if (choice === CHECK) {
-      const result = await checkAgain(input, delivery, ws);
-      if (!result) {
-        input.write('Verification stopped. Your edits remain local.');
-        return false;
-      }
-      if (result === 'stale') {
-        input.write('Sources changed during verification; result is stale. Check again for the current files.');
-        continue;
-      }
-      if (!result.ok) {
-        failure = new VerificationError(result, delivery.dest);
-        input.write(failure.message);
-        record(failure);
-        continue;
-      }
-    } else {
+    } else if (choice !== CHECK) {
       input.write('Your edits remain local. Nothing was sent.');
       return false;
+    }
+    const result = await checkAgain(input, delivery, ws);
+    if (!result) {
+      input.write('Verification stopped. Your edits remain local.');
+      return false;
+    }
+    if (result === 'stale') {
+      input.write('Sources changed during verification; result is stale. Check again for the current files.');
+      continue;
+    }
+    if (!result.ok) {
+      failure = new VerificationError(result, delivery.dest);
+      input.write(failure.message);
+      record(failure);
+      continue;
     }
     input.write('Local checks passed.');
     if (!allowDelivery) return false;
