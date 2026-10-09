@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync, lstatSync, mkdirSync, renameSy
 import { dirname, join } from 'node:path';
 import { pathInside } from './checkout-sync.js';
 import { checkpointFiles, checkpointDigest } from './checkpoint-files.js';
+import { verificationSourceHash } from './verification-source.js';
 export { checkpointFiles } from './checkpoint-files.js';
 import { runLadderAsync, VerificationError } from './verify.js';
 import { recoverVerification } from './repl-delivery.js';
@@ -20,9 +21,8 @@ async function localActionUnlocked(
   if (!['/verify', '/checkpoint', '/restore-checkpoint'].includes(line)) return false;
   if (!ws) throw Error('Open a local checkout first');
   const game = pathInside(join(ws.root, 'games'), ws.slug);
-  const files = checkpointFiles(game),
-    hash = checkpointDigest(files);
   if (line === '/verify') {
+    const hash = verificationSourceHash(ws.root, ws.slug);
     const abort = new AbortController();
     ws.abort.current = abort;
     ws.onLocalTask?.('verification');
@@ -30,7 +30,7 @@ async function localActionUnlocked(
     try {
       const result = await runLadderAsync({ cwd: ws.root, run: ws.run, abort: abort.signal });
       if (abort.signal.aborted) write('Verification stopped. Your edits remain local.');
-      else if (checkpointDigest(checkpointFiles(game)) !== hash)
+      else if (verificationSourceHash(ws.root, ws.slug) !== hash)
         write('Sources changed during verification; result is stale.');
       else if (result.ok) write(`Local checks passed for sources ${hash}. Publishing gate runs on delivery.`);
       else {
@@ -61,6 +61,8 @@ async function localActionUnlocked(
       );
     return true;
   }
+  const files = checkpointFiles(game),
+    hash = checkpointDigest(files);
   const path = join(ws.root, '.gamedev-play-checkpoint.json');
   if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw Error('Checkpoint must be a regular file');
   if (line === '/checkpoint') {

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -412,4 +412,23 @@ it('does not send files changed during an otherwise green initial delivery check
   expect(f.lines.join('\n')).toContain('Sources changed during verification; result is stale');
   expect(f.pick).not.toHaveBeenCalled();
   expect(f.writes()).toEqual([]);
+});
+
+it.each(['/verify', '/push', '/submit'])('ignores kept-local notes and media during %s recovery', async (line) => {
+  const f = fixture();
+  const notes = join(f.root, 'private-notes.txt');
+  writeFileSync(notes, 'private notes');
+  symlinkSync(notes, join(f.root, 'games', 'example', 'NOTATKI.md'));
+  writeFileSync(join(f.root, 'games', 'example', 'cover.png'), Buffer.alloc(33_000_000));
+  f.pick.mockImplementation(async (_choices, question) => {
+    if (!question.startsWith('Local checks')) return BACK;
+    expect(_choices).toContain('Fix with agent');
+    writeFileSync(notes, 'notes edited during recovery');
+    return 'Fix with agent';
+  });
+  await f.run(line);
+  expect(f.ws.runAdapter).toHaveBeenCalledTimes(1);
+  expect(f.lines.join('\n')).toContain('Local checks passed.');
+  expect(f.writes()).toEqual([]);
+  expect(readFileSync(notes, 'utf8')).toBe('notes edited during recovery');
 });

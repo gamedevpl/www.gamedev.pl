@@ -1,7 +1,5 @@
 import { realpathSync } from 'node:fs';
-import { join } from 'node:path';
-import { checkpointFiles, checkpointDigest } from './checkpoint-files.js';
-import { pathInside } from './checkout-sync.js';
+import { verificationSourceHash } from './verification-source.js';
 import { parseArgv } from './argv.js';
 import { cliUsage } from './bin-name.js';
 import { readCheckoutSlug } from './checkout.js';
@@ -37,8 +35,7 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
   input.write('Checking the local game…');
   try {
     return await withCheckoutWriter(delivery.dest, async () => {
-      const game = pathInside(join(delivery.dest, 'games'), delivery.slug);
-      const hash = checkpointDigest(checkpointFiles(game));
+      const hash = verificationSourceHash(delivery.dest, delivery.slug);
       const result = await runLadderAsync({
         cwd: delivery.dest,
         publish: delivery.publish,
@@ -46,7 +43,7 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
         abort: controller.signal,
       });
       if (controller.signal.aborted) return undefined;
-      if (checkpointDigest(checkpointFiles(game)) !== hash) return 'stale' as const;
+      if (verificationSourceHash(delivery.dest, delivery.slug) !== hash) return 'stale' as const;
       return { ...result, sourceHash: hash };
     });
   } finally {
@@ -67,9 +64,8 @@ export async function recoverVerification(
   const record = (error: VerificationError) =>
     (input.telemetry ?? ws?.telemetry)?.record('verify_failed', { stage: error.stage });
   let diagnosticsCurrent = true;
-  const game = pathInside(join(delivery.dest, 'games'), delivery.slug);
   const matchesDiagnostics = () =>
-    failure.sourceHash !== undefined && checkpointDigest(checkpointFiles(game)) === failure.sourceHash;
+    failure.sourceHash !== undefined && verificationSourceHash(delivery.dest, delivery.slug) === failure.sourceHash;
   record(failure);
   for (;;) {
     diagnosticsCurrent &&= matchesDiagnostics();

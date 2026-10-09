@@ -20,6 +20,7 @@ import {
 import { submitImprovement } from '../../studioApi.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
 import { dispatchFromFrame } from '../../test-utils/frameMessage.js';
+import { nextFileRead } from '../../test-utils/nextFileRead.js';
 
 vi.mock('../../visitTelemetry', async () => {
   const actual = await vi.importActual<typeof import('../../visitTelemetry')>('../../visitTelemetry');
@@ -1873,14 +1874,14 @@ describe('SubmissionStatusView', () => {
 
     const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
     const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    const fileRead = nextFileRead();
     await act(async () => {
       const paste = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
       Object.defineProperty(paste, 'clipboardData', {
         value: { items: [{ type: 'image/png', getAsFile: () => file }] },
       });
       textarea?.dispatchEvent(paste);
-      // FileReader resolves on a real macrotask in jsdom, not a microtask.
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await fileRead;
     });
 
     expect(container.querySelector('.status-composer-attachment-chip')).not.toBeNull();
@@ -1892,7 +1893,6 @@ describe('SubmissionStatusView', () => {
   });
 
   it('blocks send until a pasted image finishes loading, so it never ships without it', async () => {
-    // Codex #887: a same-tick send after paste could beat the FileReader.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
@@ -1929,6 +1929,7 @@ describe('SubmissionStatusView', () => {
     });
 
     const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    const fileRead = nextFileRead();
     await act(async () => {
       const paste = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
       Object.defineProperty(paste, 'clipboardData', {
@@ -1948,8 +1949,7 @@ describe('SubmissionStatusView', () => {
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
 
     await act(async () => {
-      // Let the FileReader resolve.
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await fileRead;
     });
     expect(container.querySelector<HTMLButtonElement>('.status-composer-send')?.disabled).toBe(false);
 

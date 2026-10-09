@@ -201,6 +201,10 @@ and **Back — keep local changes**. The same choices appear in the terminal and
 Conversation. Fix with agent is offered when a local agent is available for that checkout.
 Choosing Back or cancelling keeps local edits and sends nothing.
 
+If game sources change during verification or while choosing a repair, the session
+withholds agent repair until **Check again** supplies fresh diagnostics. Kept-local
+notes and ignored media do not invalidate game verification.
+
 Fix with agent passes the actual diagnostic report through the existing local builder
 selection and permission flow. Diagnostics are identified as untrusted tool output;
 the repair must preserve game behavior and must not weaken checks or modify shared tools.
