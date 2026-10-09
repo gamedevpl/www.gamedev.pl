@@ -15,7 +15,12 @@ export function selectWorkbenchEntry(input: {
 }): { entry: WorkbenchEntry; cwd: string; idea?: string } | undefined {
   const { verb, args, flags, interactive, bare, cwd } = input;
   if (flags.help || flags.h || verb === 'help') return;
+  if (flags.detach !== undefined && typeof flags.detach !== 'boolean')
+    throw new CliError('Use --detach or --detach=false.', EXIT_INPUT);
+  if (flags.detach && (flags.terminal || flags.stop || flags.list || flags.all || flags.session || flags.json))
+    throw new CliError('--detach cannot be combined with --terminal, --json or session-selection flags.', EXIT_INPUT);
   const explicit = (verb === 'create' && flags.play === true) || (verb === 'play' && flags.edit === true);
+  const detachedEntry = flags.detach === true && !flags.preview;
   if (
     explicit &&
     (flags.json || flags.terminal || flags.preview || flags.stop || flags.list || flags.all || flags.session)
@@ -26,6 +31,7 @@ export function selectWorkbenchEntry(input: {
     );
   if (
     !explicit &&
+    !detachedEntry &&
     (!interactive ||
       flags.json ||
       flags.terminal ||

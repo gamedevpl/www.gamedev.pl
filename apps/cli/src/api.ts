@@ -9,7 +9,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 export interface ApiClient {
   origin: string;
   request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T>;
-  requestBytes(path: string): Promise<Buffer>;
+  requestBytes(path: string, signal?: AbortSignal): Promise<Buffer>;
 }
 
 export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv): string | null {
@@ -33,11 +33,27 @@ function throwForStatus(res: Response, errBody: { error?: string; message?: stri
   throw error;
 }
 
+async function waitForRefresh(refresh: Promise<void>, signal?: AbortSignal | null): Promise<void> {
+  if (!signal) return refresh;
+  let stop: () => void;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      stop = () => reject(signal.reason);
+      signal.addEventListener('abort', stop, { once: true });
+      refresh.then(resolve, reject);
+      if (signal.aborted) stop();
+    });
+  } finally {
+    signal.removeEventListener('abort', stop!);
+  }
+}
+
 export function createApi(input: {
   origin: string;
   store: TokenStore;
   fetch?: FetchLike;
   env?: NodeJS.ProcessEnv;
+  shutdownSignal?: AbortSignal;
 }): ApiClient {
   const fetchImpl = input.fetch ?? fetch;
   const env = input.env ?? process.env;
@@ -58,7 +74,12 @@ export function createApi(input: {
     if (env.GAMEDEV_TOKEN?.trim()) return;
     const tokens = await input.store.get();
     if (!tokens?.refreshToken) return;
-    const next = await refreshGrant({ origin: input.origin, refreshToken: tokens.refreshToken, fetch: fetchImpl });
+    const next = await refreshGrant({
+      origin: input.origin,
+      refreshToken: tokens.refreshToken,
+      fetch: fetchImpl,
+      signal: input.shutdownSignal,
+    });
     await input.store.set({
       accessToken: next.accessToken,
       refreshToken: next.refreshToken ?? tokens.refreshToken,
@@ -78,7 +99,7 @@ export function createApi(input: {
         refreshWait = null;
       });
     }
-    await refreshWait;
+    await waitForRefresh(refreshWait, init.signal);
     return send(path, init);
   }
 
@@ -96,9 +117,10 @@ export function createApi(input: {
       }
       return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
     },
-    async requestBytes(path: string): Promise<Buffer> {
+    async requestBytes(path: string, signal?: AbortSignal): Promise<Buffer> {
       const res = await authorized(path, {
         method: 'GET',
+        signal,
       });
       if (!res.ok) {
         throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });

@@ -467,7 +467,11 @@ You can send prompts, queue follow-ups, answer choices, read recent output and r
 Stop from the browser. Keep the terminal open; native agent permission handoffs still
 use it. Compatible game updates can preserve state; unsupported updates require an
 explicit restart. `gamedevpl play --preview` retains the raw preview; interactive
-`gamedevpl play` opens the detached workbench. The panel is local to this computer.
+`gamedevpl play` keeps its browser workbench attached to the terminal; Ctrl+C ends
+Play and cancels local work. Use `gamedevpl play --detach` to run it in the background.
+Bare `gamedevpl` and browser creation use the same default. Closing all tabs ends a
+detached session after 60 seconds once active work finishes. Reopening an existing
+session preserves its original lifetime. The panel is local to this computer.
 
 ### Local progress and diagnostics
 
@@ -492,7 +496,8 @@ In an interactive terminal, run `gamedevpl` for Open/Create, `gamedevpl create "
 for intake, or `gamedevpl play [slug]` for a game. Use `--terminal` for terminal chat
 and `play --preview` for raw preview. Non-TTY browser launches use explicit
 `create --play` or `play --edit`; JSON and stop retain their previous behavior.
-The session runs independently of the terminal. Use Commands, Attachments and Devices for
+Keep the terminal open; Ctrl+C ends the session and cancels active local work.
+Use `--detach` to run independently of the terminal. Use Commands, Attachments and Devices for
 CLI/platform operations, local attachments, screenshots,
 recording, diagnostic traces and phone pairing on trusted Wi-Fi. Compatible game
 updates can preserve state; unsupported updates require an explicit restart.

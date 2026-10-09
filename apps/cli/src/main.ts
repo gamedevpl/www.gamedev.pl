@@ -6,7 +6,6 @@ import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
-import { playGame } from './play.js';
 import { playSessionCommand } from './play-session-command.js';
 import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
@@ -160,6 +159,14 @@ export async function runCli(
 
   try {
     choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
+    const workbench = selectWorkbenchEntry({
+      verb,
+      args,
+      flags,
+      interactive: tty && Boolean(io.stdout.isTTY),
+      bare: !argv[2] || argv[2].startsWith('-'),
+      cwd: process.cwd(),
+    });
     if (
       !flags.help &&
       !flags.h &&
@@ -177,16 +184,8 @@ export async function runCli(
       }))
     )
       return EXIT_GREEN;
-    const workbench = selectWorkbenchEntry({
-      verb,
-      args,
-      flags,
-      interactive: tty && Boolean(io.stdout.isTTY),
-      bare: !argv[2] || argv[2].startsWith('-'),
-      cwd: process.cwd(),
-    });
     if (workbench) {
-      const { launchWorkbench } = await import('./workbench-launch.js');
+      const { launchWorkbench, runPlayWorker, workbenchLogin } = await import('./workbench-launch.js');
       await launchWorkbench({
         cwd: workbench.cwd,
         launch: flags.edit === true && !args.length ? undefined : workbench.entry,
@@ -194,30 +193,31 @@ export async function runCli(
         env,
         idea: workbench.idea,
         noOpen: flags['no-open'] === true,
+        detach: flags.detach === true,
+        foreground: (path, onReady) =>
+          runPlayWorker({
+            api,
+            apiForShutdown: (shutdownSignal) => createApi({ origin, store, env, shutdownSignal }),
+            path,
+            env,
+            entry: argv[1]!,
+            detached: false,
+            onReady,
+            login: workbenchLogin({ origin, store, env }),
+          }),
         write: (line) => io.stdout.write(`${line}\n`),
       });
       return EXIT_GREEN;
     }
     if (verb === '__play-session') {
-      const { runPlayWorker } = await import('./workbench-launch.js');
+      const { runPlayWorker, workbenchLogin } = await import('./workbench-launch.js');
       await runPlayWorker({
         api,
+        apiForShutdown: (shutdownSignal) => createApi({ origin, store, env, shutdownSignal }),
         path: args[0] ?? '',
         env,
         entry: argv[1]!,
-        login: async (write) => {
-          await runLoopbackLogin({
-            origin,
-            store,
-            env,
-            stdout: {
-              write: (chunk) => {
-                write(String(chunk));
-                return true;
-              },
-            } as NodeJS.WritableStream,
-          });
-        },
+        login: workbenchLogin({ origin, store, env }),
       });
       return EXIT_GREEN;
     }
@@ -255,21 +255,13 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'play') {
-      if (findCheckout(process.cwd())) {
-        try {
-          await offerKitUpdate({
-            api,
-            cwd: process.cwd(),
-            env,
-            telemetry,
-            write: (line) => io.stderr.write(`${line}\n`),
-          });
-        } catch {
-          // Update discovery must not prevent offline local play.
-        }
-      }
-
-      const played = await playGame({
+      const { playCommand } = await import('./play-command.js');
+      const played = await playCommand({
+        api,
+        apiForShutdown: (shutdownSignal) => createApi({ origin, store, env, shutdownSignal }),
+        asJson,
+        detached: flags.detach === true,
+        noticeWrite: (line) => io.stderr.write(`${line}\n`),
         cwd: process.cwd(),
         slug: args[0],
         origin,

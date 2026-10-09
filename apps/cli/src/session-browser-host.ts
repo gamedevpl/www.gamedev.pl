@@ -9,6 +9,7 @@ export function sessionBrowserHost(
   headless = false,
   workspace?: () => { mode: string; slug: string; suggestedSlug?: string },
   canStop?: () => boolean,
+  detached = headless,
 ) {
   let preview = '';
   let opening: ReturnType<typeof startSessionBrowser> | undefined;
@@ -20,7 +21,7 @@ export function sessionBrowserHost(
     }
   });
   const start = () =>
-    (opening ??= startSessionBrowser(session, { detached: headless, workspace, canStop }).catch((error: unknown) => {
+    (opening ??= startSessionBrowser(session, { detached, workspace, canStop }).catch((error: unknown) => {
       opening = undefined;
       throw error;
     }));
@@ -50,7 +51,7 @@ export function sessionBrowserHost(
     async open(url: string): Promise<boolean> {
       if (closed) return false;
       if (!preview || preview !== url) return openUrl(url);
-      opening ??= startSessionBrowser(session, { detached: headless, workspace, canStop }).catch((error: unknown) => {
+      opening ??= startSessionBrowser(session, { detached, workspace, canStop }).catch((error: unknown) => {
         opening = undefined;
         throw error;
       });

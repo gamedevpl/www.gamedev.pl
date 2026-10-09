@@ -61,6 +61,7 @@ const BOOLEAN_FLAGS = new Set([
   'play',
   'edit',
   'terminal',
+  'detach',
   'preview',
   'yes',
   'manual',

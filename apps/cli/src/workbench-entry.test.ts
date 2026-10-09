@@ -23,6 +23,11 @@ it('uses browser entry only for interactive defaults or explicit workbench flags
     expect(choose(args, false)).toBeUndefined();
   expect(choose(['create', '--play', 'A racer'], false)?.entry.mode).toBe('create');
   expect(choose(['play', '--edit', 'racer'], false)?.entry.slug).toBe('racer');
+  expect(choose(['--detach'], false)?.entry.mode).toBe('home');
+  expect(choose(['play', '--detach', 'racer'], false)?.entry.slug).toBe('racer');
+  expect(choose(['create', '--detach', 'A racer'], false)?.idea).toBe('A racer');
+  expect(choose(['play', '--preview', '--detach'], false)).toBeUndefined();
+  expect(() => choose(['--detach', '--terminal'])).toThrow('cannot be combined');
 });
 it('preserves terminal, raw preview, JSON, stop and help paths without spawning a worker', () => {
   for (const args of [

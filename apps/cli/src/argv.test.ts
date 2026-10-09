@@ -31,15 +31,25 @@ describe('oauth authorize url', () => {
   });
 });
 
-it.each(['force', 'publish', 'handoff', 'submit', 'json', 'help', 'platform', 'no-open', 'stop', 'list', 'all'])(
-  'keeps positional arguments after --%s',
-  (flag) => {
-    expect(parseArgv(['node', 'cli', 'submit', '--' + flag, './my-game'])).toMatchObject({
-      args: ['./my-game'],
-      flags: { [flag]: true },
-    });
-  },
-);
+it.each([
+  'force',
+  'publish',
+  'handoff',
+  'submit',
+  'json',
+  'help',
+  'platform',
+  'no-open',
+  'stop',
+  'list',
+  'all',
+  'detach',
+])('keeps positional arguments after --%s', (flag) => {
+  expect(parseArgv(['node', 'cli', 'submit', '--' + flag, './my-game'])).toMatchObject({
+    args: ['./my-game'],
+    flags: { [flag]: true },
+  });
+});
 it('parses explicit boolean false and preserves valued flags', () => {
   expect(parseArgv(['node', 'cli', 'submit', '--force=false', './game', '--agent', 'codex'])).toMatchObject({
     args: ['./game'],

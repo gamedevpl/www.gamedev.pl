@@ -46,9 +46,11 @@ export async function refreshGrant(input: {
   origin: string;
   refreshToken: string;
   fetch: (url: string, init?: RequestInit) => Promise<Response>;
+  signal?: AbortSignal;
 }): Promise<TokenResponse> {
   const res = await input.fetch(`${input.origin}/oauth/token`, {
     method: 'POST',
+    signal: input.signal,
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
