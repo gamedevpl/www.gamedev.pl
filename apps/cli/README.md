@@ -496,7 +496,8 @@ In an interactive terminal, run `gamedevpl` for Open/Create, `gamedevpl create "
 for intake, or `gamedevpl play [slug]` for a game. Use `--terminal` for terminal chat
 and `play --preview` for raw preview. Non-TTY browser launches use explicit
 `create --play` or `play --edit`; JSON and stop retain their previous behavior.
-The session runs independently of the terminal. Use Commands, Attachments and Devices for
+Keep the terminal open; Ctrl+C ends the session and cancels active local work.
+Use `--detach` to run independently of the terminal. Use Commands, Attachments and Devices for
 CLI/platform operations, local attachments, screenshots,
 recording, diagnostic traces and phone pairing on trusted Wi-Fi. Compatible game
 updates can preserve state; unsupported updates require an explicit restart.

@@ -64,9 +64,11 @@ by CLI preview startup are registered for the proxy; transcript text alone canno
 a new preview. The existing source reader checks assembled content against its revision,
 and source generations prevent late responses from attaching a previous preview.
 
-**Lifecycle:** terminal `/play` belongs to the terminal process. `create --play` and
-`play --edit` instead launch an independent browser controller with a private recovery
-journal. Closing a tab does not cancel work. A separate, explicitly enabled LAN listener
+**Lifecycle:** terminal `/play` and browser entry commands belong to the invoking
+terminal by default. Ctrl+C ends Play and cancels active local work. Browser controllers
+keep a private recovery journal. Use `--detach` to run independently of the terminal;
+then Play ends 60 seconds after its last tab closes, once active work finishes.
+Closing a tab does not interrupt active work. A separate, explicitly enabled LAN listener
 serves phone playtests without granting editor authority. Local attachments and fixed
 operation commands are described in [Play workbench](./play-workbench.md). Native vendor
 permission handoffs for unsupported transports may still require a terminal. Claude,
