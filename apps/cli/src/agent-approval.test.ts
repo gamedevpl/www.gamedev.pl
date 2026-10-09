@@ -40,7 +40,7 @@ it('serializes approvals and rejects stale browser answers without consuming fol
   const two = f.approve({ id: 'b', kind: 'command', detail: { command: 'npm run build' } });
   await vi.waitFor(() => expect(f.session.get().mode).toBe('pick'));
   const first = f.session.get().promptId;
-  expect(f.session.get().choices[f.session.get().pickIndex]).toBe('Deny');
+  expect(f.session.get().choices[f.session.get().pickIndex]).toBe('Allow once');
   expect(f.dispatch({ id: 'yes', kind: 'input', promptId: first, text: 'Allow once' }).status).toBe('accepted');
   expect(await one).toBe('approve');
   await vi.waitFor(() => expect(f.session.get().promptId).toBeGreaterThan(first));
@@ -66,6 +66,37 @@ it('denies oversized requests instead of approving a truncated command', async (
   const f = fixture();
   expect(await f.approve({ id: 'a', kind: 'command', detail: { command: 'x'.repeat(8000) } })).toBe('deny');
   expect(f.session.get().mode).toBe('busy');
+});
+
+it('shows the full command before execution options and remembered-command help', async () => {
+  const f = fixture();
+  const command = 'ls -la; wc -l $(find . -name "*.ts" -o -name "*.md"); cat SPEC.md | head -150\nprintf "done"';
+  const pending = f.approve({
+    id: 'a',
+    kind: 'command',
+    detail: { tool_name: 'Bash', input: { command, timeout: 240000 } },
+  });
+  await vi.waitFor(() => expect(f.session.get().mode).toBe('pick'));
+  const question = f.session.get().question;
+  expect(question).toContain(`Command: ${command}`);
+  expect(question.indexOf(command)).toBeLessThan(question.indexOf('"timeout"'));
+  expect(question.indexOf('"timeout"')).toBeLessThan(question.indexOf('Always allow remembers'));
+  f.session.cancel();
+  expect(await pending).toBe('deny');
+});
+
+it('displays terminal control characters visibly instead of executing them', async () => {
+  const f = fixture();
+  const pending = f.approve({
+    id: 'a',
+    kind: 'command',
+    detail: { tool_name: 'Bash', input: { command: 'printf "\u001b[2J"' } },
+  });
+  await vi.waitFor(() => expect(f.session.get().mode).toBe('pick'));
+  expect(f.session.get().question).toContain('Command: printf "\\u001b[2J"');
+  expect(f.session.get().question).not.toContain('\u001b');
+  f.session.cancel();
+  expect(await pending).toBe('deny');
 });
 
 it.each(['Allow once', 'Deny', 'Always allow this exact command (this session)'])(
@@ -137,7 +168,7 @@ it.each(['Allow for this turn', 'Deny'])('labels turn-scoped permissions explici
   const f = fixture();
   const pending = f.approve({ id: 'p', kind: 'other', scope: 'turn', detail: { network: { enabled: true } } });
   await vi.waitFor(() => expect(f.session.get().mode).toBe('pick'));
-  expect(f.session.get().choices).toEqual(['Deny', 'Allow for this turn']);
+  expect(f.session.get().choices).toEqual(['Allow for this turn', 'Deny']);
   expect(f.session.get().question).toContain('until the current turn ends');
   f.session.acceptInput(answer, f.session.get().promptId);
   expect(await pending).toBe(answer === 'Deny' ? 'deny' : 'approve');
@@ -156,7 +187,7 @@ it('remembers queued identical commands but still asks for a changed command', a
   const one = f.approve(request);
   const two = f.approve({ ...request, id: 'b' });
   await vi.waitFor(() => expect(f.session.get().mode).toBe('pick'));
-  expect(f.session.get().choices).toEqual(['Deny', 'Allow once', 'Always allow this exact command (this session)']);
+  expect(f.session.get().choices).toEqual(['Allow once', 'Deny', 'Always allow this exact command (this session)']);
   expect(f.session.get().question).toContain('for claude in /game');
   f.session.acceptInput('Always allow this exact command (this session)', f.session.get().promptId);
   expect(await Promise.all([one, two])).toEqual(['approve', 'approve']);

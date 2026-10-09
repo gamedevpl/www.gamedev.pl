@@ -12,6 +12,8 @@ import {
 } from './agent-permissions.js';
 import { createEventRenderer } from './agent-render.js';
 import { liveArgs } from './live-agent.js';
+import { AUTO_NEXT } from './agent-approval.js';
+import type { PermissionMode } from './agent-permissions.js';
 
 afterEach(() => setPermissionMode('ask'));
 
@@ -163,4 +165,76 @@ it.each(['Allow once', 'Deny'])('does not remember an ordinary decision: %s', as
   expect(await task.onApproval!(request)).toBe(choice === 'Deny' ? 'deny' : 'approve');
   await task.onApproval!({ ...request, id: 'b' });
   expect(pick).toHaveBeenCalledTimes(2);
+});
+
+it('offers Auto fourth, allowing once while sandboxing only future Claude tasks', async () => {
+  const pick = vi.fn(async () => AUTO_NEXT);
+  const owner = { pick, permissionMode: 'ask' as PermissionMode | undefined };
+  const options = {
+    spec: spec('claude'),
+    cwd: '/game',
+    ws: owner,
+    signal: new AbortController().signal,
+    write: vi.fn(),
+  };
+  const active = taskPermissions({ ...options, mode: 'ask' });
+  const request = { id: 'a', kind: 'command' as const, detail: { tool_name: 'Bash', input: { command: 'npm test' } } };
+  expect(await active.onApproval!(request)).toBe('approve');
+  expect(pick.mock.calls[0]?.[0]).toEqual([
+    'Allow once',
+    'Deny',
+    'Always allow this exact command (this session)',
+    AUTO_NEXT,
+  ]);
+  expect(permissionMode()).toBe('auto');
+  expect(owner.permissionMode).toBeUndefined();
+  expect(active.permissions).toBeUndefined();
+  expect(active.spec.headless).toEqual(spec('claude').headless);
+  pick.mockResolvedValue('Deny');
+  expect(await active.onApproval!({ ...request, id: 'b' })).toBe('deny');
+  expect(pick).toHaveBeenCalledTimes(2);
+  const next = taskPermissions({ ...options, mode: permissionMode() });
+  expect(next.permissions).toEqual({ approval: 'auto-approve', sandbox: 'workspace-write' });
+  const settings = JSON.parse(next.spec.headless[next.spec.headless.indexOf('--settings') + 1]!);
+  expect(settings.sandbox).toMatchObject({ enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false });
+  expect(options.write).toHaveBeenCalledWith(expect.stringContaining('This task stays in Ask.'));
+});
+
+it('does not switch permissions when Auto is cancelled', async () => {
+  const abort = new AbortController();
+  const pick = vi.fn(async () => {
+    abort.abort();
+    return AUTO_NEXT;
+  });
+  const task = taskPermissions({
+    spec: spec('claude'),
+    mode: 'ask',
+    cwd: '/game',
+    ws: { pick },
+    signal: abort.signal,
+    write: vi.fn(),
+  });
+  expect(
+    await task.onApproval!({ id: 'a', kind: 'command', detail: { tool_name: 'Bash', input: { command: 'ls' } } }),
+  ).toBe('deny');
+  expect(permissionMode()).toBe('ask');
+});
+
+it('does not offer Claude’s Auto shortcut for another agent or turn-scoped permissions', async () => {
+  for (const [agent, scope] of [
+    ['codex', undefined],
+    ['claude', 'turn'],
+  ] as const) {
+    const pick = vi.fn(async (_choices: string[]) => 'Deny');
+    const task = taskPermissions({
+      spec: spec(agent),
+      mode: 'ask',
+      cwd: '/game',
+      ws: { pick },
+      signal: new AbortController().signal,
+      write: vi.fn(),
+    });
+    await task.onApproval!({ id: 'a', kind: 'other', scope });
+    expect(pick.mock.calls[0]?.[0]).not.toContain(AUTO_NEXT);
+  }
 });

@@ -3,6 +3,7 @@ import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Static, Text, useInput, useStdout, type Key } from 'ink';
+import wrapAnsi from 'wrap-ansi';
 import { TranscriptLine, RichText } from './transcript.js';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
@@ -43,6 +44,7 @@ export function ReplApp({
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
   const [rows, setRows] = useState(stdout.rows || 24);
+  const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
   useEffect(() => session.subscribe(setState), [session]);
   useEffect(() => {
     const onResize = (): void => setRows(stdout.rows || 24);
@@ -100,7 +102,12 @@ export function ReplApp({
       return;
     }
     if (state.mode === 'pick') {
-      if (key.upArrow || input === 'k') session.movePick(-1);
+      if (key.pageUp || key.pageDown) {
+        setDetailScroll({
+          promptId: state.promptId,
+          offset: Math.max(0, Math.min(questionOffset + (key.pageUp ? -questionRows : questionRows), maxOffset)),
+        });
+      } else if (key.upArrow || input === 'k') session.movePick(-1);
       else if (key.downArrow || input === 'j') session.movePick(1);
       else if (key.return) session.submit();
       else if (/^[1-9]$/.test(input)) {
@@ -153,11 +160,18 @@ export function ReplApp({
     0,
     Math.min(state.pickIndex - Math.floor(choiceCount / 2), state.choices.length - choiceCount),
   );
+  const questionLines = wrapAnsi(state.question || 'Choose an option', choiceWidth, { hard: true, trim: false }).split(
+    '\n',
+  );
+  const choiceRows = choiceCount + selectedRows - 1;
+  const questionRows = Math.min(questionLines.length, Math.max(1, rows - choiceRows - 5));
+  const maxOffset = Math.max(0, questionLines.length - questionRows);
+  const questionOffset = Math.min(detailScroll.promptId === state.promptId ? detailScroll.offset : 0, maxOffset);
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
   const panelRows =
     suggestionRows +
     (state.mode === 'pick'
-      ? choiceCount + selectedRows + 2
+      ? choiceRows + questionRows + 2 + Number(maxOffset > 0)
       : state.mode === 'busy'
         ? state.localTask
           ? 6 + Number(Boolean(state.sendStatus))
@@ -198,9 +212,14 @@ export function ReplApp({
           <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
             {state.mode === 'pick' ? (
               <>
-                <Text bold color={accent} wrap="truncate-end">
-                  {state.question || 'Choose an option'}
+                <Text bold color={accent}>
+                  {questionLines.slice(questionOffset, questionOffset + questionRows).join('\n')}
                 </Text>
+                {maxOffset > 0 && (
+                  <Text dimColor>
+                    PgUp/PgDn · {questionOffset + 1}–{questionOffset + questionRows}/{questionLines.length}
+                  </Text>
+                )}
                 {state.choices.slice(choiceStart, choiceStart + choiceCount).map((choice, offset) => {
                   const index = choiceStart + offset;
                   return (

@@ -93,7 +93,7 @@ export function taskPermissions(input: {
   spec: AdapterSpec;
   mode: PermissionMode;
   cwd: string;
-  ws: Pick<Workshop, 'unattended' | 'pick' | 'onActivity'>;
+  ws: Pick<Workshop, 'unattended' | 'pick' | 'onActivity' | 'permissionMode'>;
   signal: AbortSignal;
   write: (line: string) => void;
 }): {
@@ -115,6 +115,14 @@ export function taskPermissions(input: {
         activity: ws.onActivity,
         cwd: input.cwd,
         remembered: commandApprovalMemory(ws),
+        autoNext:
+          agent === 'claude'
+            ? () => {
+                setPermissionMode('auto');
+                delete ws.permissionMode;
+                write('Permissions: Auto-approve (sandboxed) for next tasks. This task stays in Ask.');
+              }
+            : undefined,
       });
   return {
     ...applied,
