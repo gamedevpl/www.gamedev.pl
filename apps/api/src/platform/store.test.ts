@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { dispatchAttempt, InMemoryStore, MAX_JOB_TRANSITIONS } from './store.js';
+import { fakeFirestore } from '../store/fake-firestore.js';
+import { dispatchAttempt, FirestoreStore, InMemoryStore, MAX_JOB_TRANSITIONS } from './store.js';
 
 describe('InMemoryStore', () => {
   it('upserts and retrieves user', async () => {
@@ -672,6 +673,20 @@ describe('publication registry', () => {
     expect(all.filter((record) => record.state === 'published').map((record) => record.slug)).toEqual([
       'comet-courier',
     ]);
+  });
+
+  it.each([
+    ['in memory', () => new InMemoryStore()],
+    ['firestore', () => new FirestoreStore(fakeFirestore().db)],
+  ])('finds recently requested health checks without a full scan (%s)', async (_name, make) => {
+    const store = make();
+    const check = (requestedAt: string) => ({ version: published.currentVersion, requestedAt });
+    await store.setPublication({ ...published, slug: 'old', healthCheck: check('2026-07-01T00:00:00.000Z') });
+    await store.setPublication({ ...published, slug: 'fresh', healthCheck: check('2026-07-30T04:00:00.000Z') });
+    await store.setPublication({ ...published, slug: 'never' });
+
+    const found = await store.listPublicationsWithHealthRequestedSince('2026-07-29T00:00:00.000Z');
+    expect(found.map((record) => record.slug)).toEqual(['fresh']);
   });
 });
 
