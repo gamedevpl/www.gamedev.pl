@@ -9,7 +9,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 export interface ApiClient {
   origin: string;
   request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T>;
-  requestBytes(path: string): Promise<Buffer>;
+  requestBytes(path: string, signal?: AbortSignal): Promise<Buffer>;
 }
 
 export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv): string | null {
@@ -54,11 +54,16 @@ export function createApi(input: {
     });
   }
 
-  async function refreshOnce(): Promise<void> {
+  async function refreshOnce(signal?: AbortSignal): Promise<void> {
     if (env.GAMEDEV_TOKEN?.trim()) return;
     const tokens = await input.store.get();
     if (!tokens?.refreshToken) return;
-    const next = await refreshGrant({ origin: input.origin, refreshToken: tokens.refreshToken, fetch: fetchImpl });
+    const next = await refreshGrant({
+      origin: input.origin,
+      refreshToken: tokens.refreshToken,
+      fetch: fetchImpl,
+      signal,
+    });
     await input.store.set({
       accessToken: next.accessToken,
       refreshToken: next.refreshToken ?? tokens.refreshToken,
@@ -74,7 +79,7 @@ export function createApi(input: {
     const tokens = await input.store.get();
     if (!tokens?.refreshToken) return first;
     if (!refreshWait) {
-      refreshWait = refreshOnce().finally(() => {
+      refreshWait = refreshOnce(init.signal ?? undefined).finally(() => {
         refreshWait = null;
       });
     }
@@ -96,9 +101,10 @@ export function createApi(input: {
       }
       return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
     },
-    async requestBytes(path: string): Promise<Buffer> {
+    async requestBytes(path: string, signal?: AbortSignal): Promise<Buffer> {
       const res = await authorized(path, {
         method: 'GET',
+        signal,
       });
       if (!res.ok) {
         throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });

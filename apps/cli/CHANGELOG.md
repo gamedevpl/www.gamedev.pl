@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Browser Play and raw local previews stay in the terminal by default; Ctrl+C ends the session and cancels local work. Use `gamedevpl --detach`, `play --detach` or `create --detach` to run in the background (#1723).
+
 ### Added
 
 - Play ends automatically 60 seconds after its last browser or paired phone tab closes, once active work finishes; reopening cancels the countdown, and unused local preview processes also stop (#1722).

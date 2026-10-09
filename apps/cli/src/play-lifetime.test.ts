@@ -70,6 +70,14 @@ it.each([false, true])(
         expect(child.exitCode).toBeNull();
         expect(read()).toContain('Ctrl+C ends Play');
       }
+      const reopened = launch(root, ['play', '--edit', '--no-open', ...(detach ? [] : ['--detach'])]);
+      try {
+        await stopped(reopened.child, reopened.read);
+        expect(reopened.read()).toContain('lifetime stays with the original launch');
+        expect(JSON.parse(readFileSync(path, 'utf8')).pid).toBe(pid);
+      } finally {
+        reopened.child.kill();
+      }
       process.kill(pid!, detach ? 'SIGTERM' : 'SIGINT');
       await vi.waitFor(() => expect(JSON.parse(readFileSync(path, 'utf8')).ended, read()).toBe(true), {
         timeout: 8000,
@@ -82,7 +90,9 @@ it.each([false, true])(
     } finally {
       try {
         if (pid) process.kill(pid, 'SIGTERM');
-      } catch {}
+      } catch {
+        // The session may have already exited.
+      }
       child.kill();
       rmSync(root, { recursive: true, force: true });
     }

@@ -14,18 +14,18 @@ export function activityForRequest(method: string, path: string): string {
 export function activityApi(api: ApiClient, update: (activity: string) => void | (() => void)): ApiClient {
   return {
     origin: api.origin,
-    async request(method, path, body) {
+    async request(method, path, body, signal) {
       const restore = update(activityForRequest(method, path));
       try {
-        return await api.request(method, path, body);
+        return signal ? await api.request(method, path, body, signal) : await api.request(method, path, body);
       } finally {
         restore?.();
       }
     },
-    async requestBytes(path) {
+    async requestBytes(path, signal) {
       const restore = update('Downloading game files');
       try {
-        return await api.requestBytes(path);
+        return signal ? await api.requestBytes(path, signal) : await api.requestBytes(path);
       } finally {
         restore?.();
       }

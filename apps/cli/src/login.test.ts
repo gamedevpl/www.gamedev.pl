@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { encryptedFileStore, memoryStore } from './keychain.js';
 import { runLoopbackLogin } from './login.js';
@@ -29,6 +29,27 @@ function sink() {
 }
 
 describe('loopback login', () => {
+  it('closes its callback server when Play cancels a pending sign-in', async () => {
+    const abort = new AbortController();
+    const store = memoryStore();
+    let callback = '';
+    const pending = runLoopbackLogin({
+      origin: 'https://example.test',
+      store,
+      stdout: sink().stdout,
+      abort: abort.signal,
+      openUrl: async (url) => {
+        callback = new URL(url).searchParams.get('redirect_uri')!;
+        return false;
+      },
+    });
+    const cancelled = expect(pending).rejects.toThrow();
+    await vi.waitFor(() => expect(callback).toBeTruthy());
+    abort.abort();
+    await cancelled;
+    await expect(fetch(callback)).rejects.toThrow();
+    expect(await store.get()).toBeNull();
+  });
   it('opens the authorize URL, exchanges the code, and stores tokens', async () => {
     const store = memoryStore();
     const io = sink();

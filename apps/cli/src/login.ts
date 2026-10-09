@@ -26,6 +26,7 @@ export type LoopbackLoginInput = {
   openUrl?: (url: string) => Promise<boolean>;
   device?: string;
   timeoutMs?: number;
+  abort?: AbortSignal;
 };
 
 function sameSecret(left: string, right: string): boolean {
@@ -50,9 +51,11 @@ async function exchangeCode(input: {
   redirectUri: string;
   verifier: string;
   fetch: FetchLike;
+  signal?: AbortSignal;
 }): Promise<{ accessToken: string; refreshToken?: string; tokenType: string; scope: string }> {
   const res = await input.fetch(`${input.origin}/oauth/token`, {
     method: 'POST',
+    signal: input.signal,
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'authorization_code',
@@ -85,7 +88,7 @@ async function exchangeCode(input: {
 function listen(expectedState: string): Promise<{
   redirectUri: string;
   done: Promise<CallbackResult>;
-  close: () => Promise<void>;
+  close: (force?: boolean) => Promise<void>;
 }> {
   return new Promise((resolveListen, rejectListen) => {
     let settle: ((value: CallbackResult) => void) | undefined;
@@ -141,8 +144,9 @@ function listen(expectedState: string): Promise<{
       resolveListen({
         redirectUri: `http://127.0.0.1:${addr.port}/callback`,
         done,
-        close: () =>
+        close: (force) =>
           new Promise((resolve) => {
+            if (force) server.closeAllConnections();
             server.close(() => resolve());
           }),
       });
@@ -151,6 +155,7 @@ function listen(expectedState: string): Promise<{
 }
 
 export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void> {
+  input.abort?.throwIfAborted();
   const env = input.env ?? process.env;
   const fetchImpl = input.fetch ?? fetch;
   const open = input.openUrl ?? defaultOpenUrl;
@@ -166,13 +171,19 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
     state,
     device: deviceName(input.device),
   });
-  input.stdout.write(`${g.work} opening the browser to sign in\n`);
-  const opened = await open(url);
-  if (!opened) input.stdout.write(`open ${url}\n`);
   let result: CallbackResult;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancel = () => {};
   try {
+    input.abort?.throwIfAborted();
+    input.stdout.write(`${g.work} opening the browser to sign in\n`);
+    const opened = await open(url);
+    if (!opened) input.stdout.write(`open ${url}\n`);
     result = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      cancel = () => reject(input.abort?.reason);
+      input.abort?.addEventListener('abort', cancel, { once: true });
+      if (input.abort?.aborted) cancel();
+      timer = setTimeout(() => {
         reject(new CliError(`sign-in timed out — run \`${cliUsage('login')}\` again`, EXIT_INPUT, cliUsage('login')));
       }, timeoutMs);
       loop.done.then(
@@ -187,7 +198,9 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
       );
     });
   } finally {
-    await loop.close();
+    clearTimeout(timer);
+    input.abort?.removeEventListener('abort', cancel);
+    await loop.close(input.abort?.aborted);
   }
   if (result.kind === 'denied') {
     if (result.error === 'access_denied' && !result.description) {
@@ -205,6 +218,7 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
     redirectUri: loop.redirectUri,
     verifier,
     fetch: fetchImpl,
+    signal: input.abort,
   });
   await input.store.set({
     accessToken: tokens.accessToken,

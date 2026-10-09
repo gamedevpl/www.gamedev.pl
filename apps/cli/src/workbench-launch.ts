@@ -11,13 +11,14 @@ import { privatePlayDirectory, readPlayState } from './play-state.js';
 import { openUrl } from './open-url.js';
 import type { ApiClient } from './api.js';
 import { findCheckout } from './checkout.js';
-import { withPlaySignals } from './play-signals.js';
+import { withPlaySignals, playApi } from './play-signals.js';
 import { runLoopbackLogin } from './login.js';
 
 export function workbenchLogin(input: Omit<Parameters<typeof runLoopbackLogin>[0], 'stdout'>) {
-  return async (write: (line: string) => void) => {
+  return async (write: (line: string) => void, abort?: AbortSignal) => {
     await runLoopbackLogin({
       ...input,
+      abort,
       stdout: {
         write: (chunk) => {
           write(String(chunk));
@@ -267,7 +268,7 @@ export async function runPlayWorker(input: {
   entry: string;
   detached?: boolean;
   onReady?: (url: string) => void;
-  login: (write: (line: string) => void) => Promise<void>;
+  login: (write: (line: string) => void, signal?: AbortSignal) => Promise<void>;
 }) {
   const expected = join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`);
   if (dirname(resolve(input.path)) !== expected) throw Error('Invalid session journal path');
@@ -278,7 +279,6 @@ export async function runPlayWorker(input: {
   delete journal.url;
   const save = () => savePlayJournal(input.path, journal);
   save();
-  const api = journalApi(input.api, journal, save);
   const { runInkRepl } = await import('./tui/host.js');
   const start = workerEntry(journal);
   delete journal.initial;
@@ -286,7 +286,7 @@ export async function runPlayWorker(input: {
   try {
     await withPlaySignals(async (shutdownSignal) =>
       runInkRepl({
-        api,
+        api: playApi(journalApi(input.api, journal, save), shutdownSignal),
         env: { ...input.env, GAMEDEV_PLAY_WORKBENCH: '1' },
         io: { stdin: process.stdin, stdout: process.stdout },
         browserOnly: true,
@@ -297,7 +297,7 @@ export async function runPlayWorker(input: {
         currentPath: input.entry,
         token: journal.token ?? null,
         ...start,
-        login: input.login,
+        login: (write) => input.login(write, shutdownSignal),
         onReady: (url) => {
           journal.url = url;
           save();
