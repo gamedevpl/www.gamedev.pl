@@ -1,11 +1,25 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { withCredentialLock } from './credential-lock.js';
+
+vi.mock('node:fs', async () => {
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return { ...fs, unlinkSync: vi.fn(fs.unlinkSync) };
+});
 
 const roots: string[] = [];
 function file() {
@@ -97,4 +111,31 @@ it('recovers a dead owner safely when two contenders race', async () => {
 it('allows nested writes in the same transaction', async () => {
   const path = file();
   await expect(withCredentialLock(path, () => withCredentialLock(path, async () => 'done'))).resolves.toBe('done');
+});
+
+it('recovers a stale lock whose PID was reused by a live process', async () => {
+  const path = file();
+  mkdirSync(`${path}.lock`, { mode: 0o700 });
+  writeFileSync(
+    join(`${path}.lock`, `${process.pid}-${randomUUID()}`),
+    JSON.stringify({ startIdentity: 'previous-process-start' }),
+    { mode: 0o600 },
+  );
+  await expect(withCredentialLock(path, async () => 'recovered')).resolves.toBe('recovered');
+  expect(existsSync(`${path}.lock`)).toBe(false);
+});
+
+it('preserves a successor acquiring the directory during owner cleanup', async () => {
+  const path = file();
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  const nextMarker = `${process.pid}-${randomUUID()}`;
+  const candidate = `${path}.next`;
+  mkdirSync(candidate, { mode: 0o700 });
+  writeFileSync(join(candidate, nextMarker), '', { mode: 0o600 });
+  vi.mocked(unlinkSync).mockImplementationOnce((marker) => {
+    fs.unlinkSync(marker);
+    renameSync(candidate, `${path}.lock`);
+  });
+  await expect(withCredentialLock(path, async () => 'finished')).resolves.toBe('finished');
+  expect(readdirSync(`${path}.lock`)).toEqual([nextMarker]);
 });

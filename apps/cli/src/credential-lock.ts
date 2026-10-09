@@ -1,11 +1,31 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import { lstatSync, mkdirSync, readdirSync, renameSync, rmdirSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+  unlinkSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
+import { processStartIdentity } from './process-identity.js';
 
 const held = new AsyncLocalStorage<Set<string>>();
+
+function releaseMarker(lock: string, marker: string): void {
+  try {
+    unlinkSync(join(lock, marker));
+    rmdirSync(lock);
+  } catch (error) {
+    if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+  }
+}
 
 function recoverDeadOwner(path: string): void {
   try {
@@ -24,7 +44,9 @@ function recoverDeadOwner(path: string): void {
     if (!match) return;
     try {
       process.kill(Number(match[1]), 0);
-      return;
+      const ownerData = JSON.parse(readFileSync(join(path, owner), 'utf8')) as { startIdentity?: string };
+      const identity = processStartIdentity(Number(match[1]));
+      if (!identity || !ownerData.startIdentity || identity === ownerData.startIdentity) return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') return;
     }
@@ -40,6 +62,9 @@ export async function withCredentialLock<T>(file: string, run: () => Promise<T>,
   const key = resolve(file);
   signal?.throwIfAborted();
   if (held.getStore()?.has(key)) return run();
+  const startIdentity = processStartIdentity(process.pid);
+  if (!startIdentity)
+    throw new CliError('could not identify the sign-in lock owner', EXIT_REFUSED, 'retry in a moment');
   mkdirSync(dirname(key), { recursive: true });
   const lock = `${key}.lock`;
   const marker = `${process.pid}-${randomUUID()}`;
@@ -48,7 +73,7 @@ export async function withCredentialLock<T>(file: string, run: () => Promise<T>,
   let acquired = false;
   const deadline = Date.now() + 30_000;
   try {
-    writeFileSync(join(candidate, marker), '', { mode: 0o600, flag: 'wx' });
+    writeFileSync(join(candidate, marker), JSON.stringify({ startIdentity }), { mode: 0o600, flag: 'wx' });
     while (!acquired) {
       signal?.throwIfAborted();
       try {
@@ -68,8 +93,7 @@ export async function withCredentialLock<T>(file: string, run: () => Promise<T>,
     return await held.run(keys, run);
   } finally {
     if (acquired) {
-      unlinkSync(join(lock, marker));
-      rmdirSync(lock);
+      releaseMarker(lock, marker);
     } else {
       rmSync(candidate, { recursive: true, force: true });
     }
