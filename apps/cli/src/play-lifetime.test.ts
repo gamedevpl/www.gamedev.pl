@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, it, vi } from 'vitest';
 
-function launch(root: string, args: string[]) {
+function launch(root: string, args: string[], env: NodeJS.ProcessEnv = {}) {
   const child = spawn(
     process.execPath,
     ['--import', resolve('../../node_modules/tsx/dist/loader.mjs'), resolve('src/main.ts'), ...args],
@@ -23,6 +24,7 @@ function launch(root: string, args: string[]) {
         GAMEDEV_ACCESS_TOKEN: '',
         GAMEDEV_HISTORY: 'off',
         GAMEDEV_ALLOW_FILE_KEYCHAIN: '',
+        ...env,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -100,7 +102,7 @@ it.each([false, true])(
   20000,
 );
 
-it.each([false, true])(
+it.each([false, true, 'json'])(
   'runs the actual raw preview with detach=%s and stops it',
   async (detach) => {
     const root = mkdtempSync(join(tmpdir(), 'preview-lifetime-'));
@@ -110,7 +112,13 @@ it.each([false, true])(
     writeFileSync(join(root, '.gamedev-slug'), 'robot');
     writeFileSync(join(root, 'package.json'), '{"type":"module"}');
     writeFileSync(join(root, 'tools/lib/assemble.ts'), 'export const assembleGame=()=>({html:"<!doctype html>Game"});');
-    const { child, read } = launch(root, ['play', '--preview', '--no-open', ...(detach ? ['--detach'] : [])]);
+    const { child, read } = launch(root, [
+      'play',
+      '--preview',
+      '--no-open',
+      ...(detach === true ? ['--detach'] : []),
+      ...(detach === 'json' ? ['--json'] : []),
+    ]);
     let url = '';
     try {
       await vi.waitFor(
@@ -176,6 +184,41 @@ it('ends a raw preview cleanly when interrupted during checkout setup', async ()
     } catch {
       // Already stopped.
     }
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20000);
+
+it('ends cleanly and cancels the kit preflight before preview startup', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'preview-preflight-'));
+  mkdirSync(join(root, 'games/robot'), { recursive: true });
+  writeFileSync(join(root, '.gamedev-slug'), 'robot');
+  writeFileSync(join(root, 'package.json'), '{"type":"module"}');
+  let requested = false;
+  let disconnected = false;
+  const server = createServer((request, response) => {
+    expect(request.url).toContain('kitOnly=true');
+    requested = true;
+    response.once('close', () => {
+      disconnected = true;
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as { port: number }).port;
+  const { child, read } = launch(root, ['play', '--preview', '--no-open'], {
+    GAMEDEV_ORIGIN: `http://127.0.0.1:${port}`,
+    GAMEDEV_TOKEN: 'test',
+  });
+  try {
+    await vi.waitFor(() => expect(requested).toBe(true), { timeout: 8000 });
+    child.kill('SIGINT');
+    await stopped(child, read);
+    await vi.waitFor(() => expect(disconnected).toBe(true));
+    expect(read()).not.toContain('local live preview:');
+    expect(read()).not.toContain('cancelled');
+  } finally {
+    child.kill();
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(root, { recursive: true, force: true });
   }
 }, 20000);

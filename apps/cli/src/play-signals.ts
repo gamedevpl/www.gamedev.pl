@@ -8,6 +8,7 @@ export async function withPlaySignals<T>(run: (signal: AbortSignal) => Promise<T
   try {
     return await run(controller.signal);
   } finally {
+    controller.abort();
     signals.forEach((signal) => process.removeListener(signal, stop));
   }
 }

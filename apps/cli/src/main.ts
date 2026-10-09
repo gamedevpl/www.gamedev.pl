@@ -6,7 +6,6 @@ import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
-import { playGame } from './play.js';
 import { playSessionCommand } from './play-session-command.js';
 import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
@@ -256,22 +255,13 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'play') {
-      if (findCheckout(process.cwd())) {
-        try {
-          await offerKitUpdate({
-            api,
-            cwd: process.cwd(),
-            env,
-            telemetry,
-            write: (line) => io.stderr.write(`${line}\n`),
-          });
-        } catch {
-          // Update discovery must not prevent offline local play.
-        }
-      }
-
-      const runPlay = flags.detach || asJson ? playGame : (await import('./play-foreground.js')).playForeground;
-      const played = await runPlay({
+      const { playCommand } = await import('./play-command.js');
+      const played = await playCommand({
+        api,
+        apiForShutdown: (shutdownSignal) => createApi({ origin, store, env, shutdownSignal }),
+        asJson,
+        detached: flags.detach === true,
+        noticeWrite: (line) => io.stderr.write(`${line}\n`),
         cwd: process.cwd(),
         slug: args[0],
         origin,

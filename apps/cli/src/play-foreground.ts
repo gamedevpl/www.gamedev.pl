@@ -3,10 +3,15 @@ import { playGame } from './play.js';
 import { holdPreview } from './play-presence.js';
 import { withPlaySignals } from './play-signals.js';
 
-export function playForeground(input: Parameters<typeof playGame>[0]) {
+export function playForeground(
+  input: Parameters<typeof playGame>[0],
+  beforePlay?: (signal: AbortSignal) => Promise<void>,
+) {
   return withPlaySignals(async (signal) => {
     let played: Awaited<ReturnType<typeof playGame>>;
     try {
+      await beforePlay?.(signal);
+      signal.throwIfAborted();
       played = await playGame({ ...input, abort: signal, detached: false });
     } catch (error) {
       if (signal.aborted) return { mode: 'local' as const };
