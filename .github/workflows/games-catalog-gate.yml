@@ -1,6 +1,8 @@
 name: Games catalog gate
 
 # Runs the games repository's real post-merge gate on public Actions minutes.
+# Every games-repo command runs through .github/scripts/quiet-step.sh: this
+# log is public and the games repo is not (docs/games-snapshot.md).
 # publish-games.yml calls this workflow before advancing the snapshot pointer.
 # mode=full on schedule / manual dispatch / unidentifiable universal GameKit
 # patches (and catalog-wide fields like draw.rect): playtest --suite default, no
@@ -361,6 +363,17 @@ jobs:
       - name: Gate scope
         run: echo "mode=${{ needs.resolve.outputs.mode }} slugs=${{ needs.resolve.outputs.slugs || '(none)' }} webkit=${{ needs.resolve.outputs.need_webkit }}"
 
+      # Container jobs see a different workspace path, so resolve it in the shell.
+      - name: Check out the quiet-step helper
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: site
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Locate the quiet-step helper
+        run: echo "QUIET=$GITHUB_WORKSPACE/site/.github/scripts/quiet-step.sh" >> "$GITHUB_ENV"
+
       - name: Check out games repo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -407,14 +420,27 @@ jobs:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           set -euo pipefail
-          npm run check:pr
+          # check:pr wraps one long check:gate chain. Run its links one at a
+          # time so the public log names the link that failed, not just "check:pr".
+          gate=$(node -p "require('./package.json').scripts['check:gate'] ?? ''")
+          if [ -z "$gate" ]; then
+            echo "Error: the games repo has no check:gate script"
+            exit 1
+          fi
+          rest="$gate"
+          while [ -n "$rest" ]; do
+            link="${rest%% && *}"
+            if [ "$link" = "$rest" ]; then rest=""; else rest="${rest#* && }"; fi
+            read -r -a argv <<< "$link"
+            "$QUIET" "${argv[@]}"
+          done
           if [ "${{ needs.resolve.outputs.catalog_agent_play }}" = 1 ]; then
-            npm run agent-play
+            "$QUIET" npm run agent-play
           fi
           if [ "${{ needs.resolve.outputs.catalog_playtest }}" = all ]; then
-            npm run playtest -- --all
+            "$QUIET" npm run playtest -- --all
           else
-            npm run playtest -- --suite default
+            "$QUIET" npm run playtest -- --suite default
           fi
 
       - name: Run the static games gate
@@ -426,26 +452,26 @@ jobs:
           NARROW_CONFORMANCE: ${{ needs.resolve.outputs.narrow_conformance }}
         run: |
           set -euo pipefail
-          npm run check:no-js
-          npm run check:gfx
-          npm run check:ios
-          npm run audio:check
-          npm run audio:plan-check
-          npm run typecheck
+          "$QUIET" npm run check:no-js
+          "$QUIET" npm run check:gfx
+          "$QUIET" npm run check:ios
+          "$QUIET" npm run audio:check
+          "$QUIET" npm run audio:plan-check
+          "$QUIET" npm run typecheck
           if [ -n "${SLUGS// /}" ] && [ "$NARROW_CONFORMANCE" = 1 ]; then
-            GAME_TEST_SLUGS="$SLUGS" npm run test
+            GAME_TEST_SLUGS="$SLUGS" "$QUIET" npm run test
           else
-            npm run test
+            "$QUIET" npm run test
           fi
-          npm run validate
+          "$QUIET" npm run validate
           if [ -n "${SLUGS// /}" ]; then
-            npm run smoke -- $SLUGS
-            npm run trace -- -j 4 $SLUGS
-            npm run build -- $SLUGS
-            npm run accept -- $SLUGS
-            npm run agent-play -- -j 2 $SLUGS
-            npm run agency -- --strict -j 4 $SLUGS
-            npm run playtest -- $SLUGS
+            "$QUIET" npm run smoke -- $SLUGS
+            "$QUIET" npm run trace -- -j 4 $SLUGS
+            "$QUIET" npm run build -- $SLUGS
+            "$QUIET" npm run accept -- $SLUGS
+            "$QUIET" npm run agent-play -- -j 2 $SLUGS
+            "$QUIET" npm run agency -- --strict -j 4 $SLUGS
+            "$QUIET" npm run playtest -- $SLUGS
             need_webgl=$(node --import tsx -e '
               import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
               const touched = process.argv.slice(1);
@@ -462,21 +488,21 @@ jobs:
           SLUGS: ${{ needs.resolve.outputs.slugs }}
         run: |
           set -euo pipefail
-          npm run check:no-js
-          npm run check:gfx
-          npm run check:ios
-          npm run audio:check
-          npm run audio:plan-check
-          GAME_TEST_SLUGS="$SLUGS" npm run test:conformance
-          npm run typecheck
-          npm run validate -- $SLUGS
-          npm run smoke -- $SLUGS
-          npm run trace -- -j 4 $SLUGS
-          npm run build -- $SLUGS
-          npm run accept -- $SLUGS
-          npm run agent-play -- -j 2 $SLUGS
-          npm run agency -- --strict -j 4 $SLUGS
-          npm run playtest -- $SLUGS
+          "$QUIET" npm run check:no-js
+          "$QUIET" npm run check:gfx
+          "$QUIET" npm run check:ios
+          "$QUIET" npm run audio:check
+          "$QUIET" npm run audio:plan-check
+          GAME_TEST_SLUGS="$SLUGS" "$QUIET" npm run test:conformance
+          "$QUIET" npm run typecheck
+          "$QUIET" npm run validate -- $SLUGS
+          "$QUIET" npm run smoke -- $SLUGS
+          "$QUIET" npm run trace -- -j 4 $SLUGS
+          "$QUIET" npm run build -- $SLUGS
+          "$QUIET" npm run accept -- $SLUGS
+          "$QUIET" npm run agent-play -- -j 2 $SLUGS
+          "$QUIET" npm run agency -- --strict -j 4 $SLUGS
+          "$QUIET" npm run playtest -- $SLUGS
           need_webgl=$(node --import tsx -e '
             import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
             const touched = process.argv.slice(1);
@@ -499,6 +525,17 @@ jobs:
     env:
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
     steps:
+      # Container jobs see a different workspace path, so resolve it in the shell.
+      - name: Check out the quiet-step helper
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: site
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Locate the quiet-step helper
+        run: echo "QUIET=$GITHUB_WORKSPACE/site/.github/scripts/quiet-step.sh" >> "$GITHUB_ENV"
+
       - name: Check out games repo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -527,7 +564,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$MODE" = full ]; then
-            npm run check:webkit
+            "$QUIET" npm run check:webkit
           else
-            npm run check:webkit -- $SLUGS
+            "$QUIET" npm run check:webkit -- $SLUGS
           fi

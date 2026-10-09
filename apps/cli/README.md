@@ -220,7 +220,19 @@ process keeps watching while your agent edits or after its command exits. Intera
 CLI delegation starts this preview automatically and prints its URL.
 
 - `gamedevpl play --preview [slug]` reuses the running preview for the matching checkout.
-- `--no-open` prints the URL without launching a browser; `--stop` stops it.
+- `--no-open` prints the URL without launching a browser.
+- `gamedevpl play --list` lists running workbenches and previews, with session IDs,
+  game names, directories and URLs. Ordinary `play` also shows already-running sessions.
+- `gamedevpl play --stop` (or `gamedevpl stop`) stops sessions for the current checkout.
+  `--stop <slug>` selects a game; multiple checkout copies require a session ID.
+- `gamedevpl play --stop --session <id>` stops exactly the selected workbench or preview
+  from any directory. `--stop --all` stops all local Play sessions for your OS user.
+  These flags also work with `gamedevpl stop`, `/stop` and `/play --stop`.
+- Older previews remain discoverable by ID even when their records lack game/directory
+  metadata. Their current checkout can still identify them for a default stop.
+- Stale, unreachable and unsafe records are excluded. Discovery checks only registered
+  loopback servers; stop uses their authenticated HTTP endpoint. It never kills an
+  unrelated process from an old PID or scans browser tabs.
 - `/play` opens the active
   game in the REPL without sending a build request. Mixed editing requests still
   go through the ordinary conversation.

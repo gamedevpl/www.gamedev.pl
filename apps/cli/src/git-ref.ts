@@ -15,7 +15,7 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { BASE_FILE } from './checkout-sync.js';
 
 const ARCHIVE_BYTES = 80 * 1024 * 1024;
-const SKIP_SCAFFOLD = new Set(['.git', 'games']);
+const SKIP_SCAFFOLD = new Set(['.git', 'games', '.gitignore', '.gamedevplignore']);
 const LINK_SCAFFOLD = new Set(['node_modules', 'shared']);
 
 function spawnOrThrow(cmd: string, args: string[], input?: Buffer): Buffer {

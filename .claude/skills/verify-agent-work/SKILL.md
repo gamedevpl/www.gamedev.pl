@@ -597,7 +597,8 @@ Rules that matter:
 - **A token acts as a real account against real data.** Anything you create is real: use a
   `bot:` account, and clean up what you make.
 - **A token deliberately cannot reach operator surfaces or mint another token.** A 404 from
-  `/api/admin/*` with a valid token is correct behaviour, not a bug to route around.
+  `/api/admin/*` (or `/api/internal/ops/*`) with a valid token is correct behaviour, not a
+  bug to route around.
 - **Exchange once, reuse the cookie.** `/api/auth/session` shares the auth rate limiter
   (20/hour/IP).
 

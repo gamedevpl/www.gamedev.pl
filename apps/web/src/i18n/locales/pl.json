@@ -1098,9 +1098,10 @@
     "openStudio": "Studio"
   },
   "draft": {
-    "title": "Gra w budowie",
+    "title": "Nie ma takiej gry",
     "loading": "Wczytujemy najnowszą wersję…",
-    "notFound": "Ta gra nie jest jeszcze dostępna. Może dopiero powstaje albo została już opublikowana.",
+    "notFound": "Ta gra nie istnieje.",
+    "errorTitle": "Nie udało się wczytać gry",
     "error": "Nie udało się teraz wczytać tej gry. Spróbuj ponownie za chwilę."
   },
   "statusView": {
@@ -1137,7 +1138,10 @@
       "notNow": "Nie teraz",
       "askLess": "Nie podpowiadaj mi tego",
       "muted": "OK — koniec z propozycjami konceptów. Włączysz je z powrotem w ustawieniach powiadomień.",
-      "close": "Zamknij"
+      "close": "Zamknij",
+      "enlarge": "Powiększ: {{name}}",
+      "compare": "Porównaj ze swoją grą",
+      "holdHint": "Albo przytrzymaj obrazek, aby zobaczyć swoją grę."
     },
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",
@@ -1679,7 +1683,6 @@
     "status": "Twoja gra jest w trakcie tworzenia",
     "join": "Dołącz do gry",
     "invite": "Zaproszenie do bety",
-    "health": "Telemetria",
     "review": "Ocena gier",
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
@@ -2170,7 +2173,7 @@
   },
   "proposals": {
     "navTitle": "Moje propozycje",
-    "empty": "Jeszcze nic. Zremiksuj grę, która ci się podoba, i zaproponuj zmianę.",
+    "empty": "Jeszcze nic. Gdy twórca gry otworzy ją na propozycje, możesz zaproponować zmianę i śledzić ją tutaj.",
     "toOwner": "do {{handle}}",
     "toPlatform": "do gamedev.pl",
     "state": {

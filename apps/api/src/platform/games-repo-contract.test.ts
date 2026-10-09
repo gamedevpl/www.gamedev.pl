@@ -7,7 +7,10 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
   extractDeliveryContract,
+  extractGameKitModuleRequires,
   extractGameKitModules,
+  GAME_KIT_MODULE_REQUIRES,
+  missingModuleDependency,
   extractGameKitVerticals,
   extractMaxBundleBytes,
   extractMusicContractSignals,
@@ -59,9 +62,9 @@ describe('games-repo-contract (website half)', () => {
   it('keeps the bake/play source-graph ceiling above the assembled author budget', () => {
     // Raw `.ts` can exceed assembled author bytes (comments/types). Carjack-city
     // at ~334 KiB source is why this is 336 KiB rather than matching GAME_BUDGET_BYTES.
-    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(1062 * 1024);
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(1593 * 1024);
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
-    expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(128);
+    expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(256);
   });
 
   it('keeps the fixtures/games-repo assemble-contract snapshot in lockstep', async () => {
@@ -79,7 +82,12 @@ describe('games-repo-contract (website half)', () => {
       authorBudgetBytes: number;
       platformCeilingBytes: number;
       rasterBudgetBytes?: number;
-      audio: { musicField: string; musicTracksField: string; bankField: string; injectedGlobals: Record<string, string> };
+      audio: {
+        musicField: string;
+        musicTracksField: string;
+        bankField: string;
+        injectedGlobals: Record<string, string>;
+      };
     };
     expect(fixture.version).toBe(2);
     // The audio injection shape is half of what this fixture exists to pin: `music` is the
@@ -96,42 +104,6 @@ describe('games-repo-contract (website half)', () => {
     expect(fixture.platformCeilingBytes).toBe(GAMEKIT_PLATFORM_BYTES);
     expect(fixture.rasterBudgetBytes).toBe(RASTER_ASSET_BUDGET_BYTES);
     expect(fixture.gameKitModules).toEqual([...GAME_KIT_MODULES]);
-  });
-
-  it('lists GameKit modules in the post-draw-surface canonical order', () => {
-    expect([...GAME_KIT_MODULES]).toEqual([
-      'input',
-      'collision',
-      'world',
-      'grid',
-      'path',
-      'ai',
-      'gameplay',
-      'rng',
-      'cards',
-      'vehicles',
-      'urban',
-      'drawing',
-      'actors',
-      'gfx',
-      'ui',
-      'gfx3d',
-      'racing',
-      'football',
-      'platformer',
-      'effects',
-      'audio',
-      'party',
-      'save',
-      'commons',
-      'presence',
-      'mascot',
-      'zone',
-      'sensing',
-      'voice',
-      'editor',
-      'inspect',
-    ]);
   });
 
   it('documents the optional per-game music.json path', () => {
@@ -246,14 +218,35 @@ describe('games-repo source extractors', () => {
       export const GAME_KIT_MODULES = [
         'input', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'cards', 'vehicles', 'urban',
         'drawing', 'actors', 'gfx', 'ui', 'gfx3d', 'racing', 'football', 'platformer', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
-        'sensing', 'voice', 'editor', 'inspect',
+        'sensing', 'voice', 'editor', 'settings', 'inspect',
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);
   });
 
+  it('reads GAME_KIT_MODULE_REQUIRES and tolerates a tip without it', () => {
+    const source = `export const GAME_KIT_MODULE_REQUIRES = {
+      actors: ['drawing'],
+      gfx: ['drawing'],
+      gfx3d: ['gfx'],
+      urban: ['world'],
+      settings: ['ui', 'gfx', 'audio'],
+    } as const satisfies Record<string, readonly string[]>;`;
+    expect(extractGameKitModuleRequires(source)).toEqual(GAME_KIT_MODULE_REQUIRES);
+    expect(extractGameKitModuleRequires('export const GAME_KIT_MODULES = [];')).toBeNull();
+  });
+
+  it('names the module a selection is missing', () => {
+    expect(missingModuleDependency(['input', 'gfx', 'ui'])).toMatch(/lacks "drawing", which "gfx" calls/);
+    expect(missingModuleDependency(['input', 'actors'])).toMatch(/lacks "drawing", which "actors" calls/);
+    expect(missingModuleDependency(['input', 'drawing', 'gfx'])).toBeNull();
+    expect(missingModuleDependency(['urban', 'drawing', 'gfx'])).toMatch(/lacks "world", which "urban" calls/);
+    expect(missingModuleDependency(['drawing', 'ui', 'gfx3d'])).toMatch(/lacks "gfx", which "gfx3d" calls/);
+  });
+
   it('reads GAME_KIT_VERTICALS from an assemble.ts-shaped source', () => {
     const source = `const GAME_KIT_VERTICALS = Object.freeze({
+      settings: 'shared/modules/settings/index.ts',
       gfx3d: 'shared/modules/gfx3d/index.ts',
       vehicles: 'shared/verticals/vehicles/index.ts',
       urban: 'shared/verticals/urban/index.ts',

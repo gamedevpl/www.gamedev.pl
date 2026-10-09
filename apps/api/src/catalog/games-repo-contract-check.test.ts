@@ -9,6 +9,7 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
   EDITOR_CONTRACT_PATH,
+  GAME_KIT_MODULE_REQUIRES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
@@ -33,8 +34,15 @@ ${Object.entries(GAME_KIT_VERTICAL_ENTRIES)
   });
 `;
 
+const REQUIRES_SOURCE = `export const GAME_KIT_MODULE_REQUIRES = {
+${Object.entries(GAME_KIT_MODULE_REQUIRES)
+  .map(([owner, needs]) => `    ${owner}: [${needs.map((need) => `'${need}'`).join(', ')}],`)
+  .join('\n')}
+  } as const;`;
+
 const ASSEMBLE_SOURCE = `
   const GAME_KIT_MODULES = [${GAME_KIT_MODULES.map((name) => `'${name}'`).join(', ')}];
+  ${REQUIRES_SOURCE}
   ${VERTICALS_SOURCE}
   const catalog = readMusicCatalog();
   const track = catalog.tracks[name];
@@ -158,6 +166,23 @@ describe('runGamesRepoContractCheck', () => {
     ).resolves.toEqual({ kind: 'ok' });
   });
 
+  it('ignores the dependency edges of an allowed website-first module', async () => {
+    const withoutUrban = GAME_KIT_MODULES.filter((name) => name !== 'urban');
+    const olderAssemble = `
+      const GAME_KIT_MODULES = [${withoutUrban.map((name) => `'${name}'`).join(', ')}];
+      ${REQUIRES_SOURCE.replace("urban: ['world'],", '')}
+      ${VERTICALS_SOURCE}
+      const catalog = readMusicCatalog();
+      const track = catalog.tracks[name];
+      out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
+    `;
+    const { fetchImpl } = createFetch({ ...agreeingPages(), 'tools/lib/assemble.ts': [ok(olderAssemble)] });
+
+    await expect(
+      runGamesRepoContractCheck({ ...BASE, fetchImpl, now: () => Date.parse('2026-08-04T00:00:00.000Z') }),
+    ).resolves.toEqual({ kind: 'ok' });
+  });
+
   it('fails closed when a website-first module rollout expires', async () => {
     const remoteWithoutFootball = GAME_KIT_MODULES.filter((name) => name !== 'football');
     const olderAssemble = `
@@ -233,6 +258,35 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('ok');
     expect(outcome.kind === 'ok' && outcome.notes?.[0]).toContain('GAME_KIT_VERTICALS not compared');
+  });
+
+  it('reports drift when the two module dependency maps disagree', async () => {
+    const looser = ASSEMBLE_SOURCE.replace("actors: ['drawing'],", '');
+    const { fetchImpl } = createFetch({ ...agreeingPages(), 'tools/lib/assemble.ts': [ok(looser)] });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_MODULE_REQUIRES mismatch');
+  });
+
+  it('tolerates a games tip without the dependency map only until the rollout ends', async () => {
+    const withoutMap = ASSEMBLE_SOURCE.replace(REQUIRES_SOURCE, '');
+    const { fetchImpl } = createFetch({
+      ...agreeingPages(),
+      'tools/lib/assemble.ts': [ok(withoutMap), ok(withoutMap)],
+    });
+
+    const before = await runGamesRepoContractCheck({
+      ...BASE,
+      fetchImpl,
+      now: () => Date.parse('2026-10-10T00:00:00.000Z'),
+    });
+    expect(before.kind).toBe('ok');
+    const after = await runGamesRepoContractCheck({
+      ...BASE,
+      fetchImpl,
+      now: () => Date.parse('2026-10-14T00:00:00.000Z'),
+    });
+    expect(after.kind === 'drift' && after.reason).toContain('has no GAME_KIT_MODULE_REQUIRES');
   });
 
   it('skips without a token so forks and fresh clones stay green', async () => {

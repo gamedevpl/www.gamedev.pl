@@ -5,7 +5,8 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { mintUploadToken, type UploadKind } from './agent-upload-token.js';
-import { BEHAVIOURAL_CONTRACT } from './mcp-tool-support.js';
+import { MCP_INSTRUCTIONS, ROUND_SEQUENCE_TEXT } from './mcp-round-guide.js';
+import { UPLOAD_REQUEST_PROPS } from './upload-request.js';
 
 const secret = 'test-secret';
 const ISSUE = 77;
@@ -137,11 +138,9 @@ describe('upload capabilities and channel state', () => {
     });
   }
 
-  it('never shows the model a headerless upload command', () => {
-    const uploads = BEHAVIOURAL_CONTRACT.split('curl ')
-      .slice(1)
-      .filter((command) => command.slice(0, 200).includes('--upload-file'));
-    expect(uploads.length).toBeGreaterThan(0);
-    for (const command of uploads) expect(command).toMatch(/^-H "Authorization: Bearer /);
+  // Uploads are data, not commands; the credential travels in a header.
+  it('never shows the model an upload command, and names the credential header', () => {
+    for (const text of [MCP_INSTRUCTIONS, ROUND_SEQUENCE_TEXT]) expect(text).not.toMatch(/curl |--upload-file/);
+    expect(UPLOAD_REQUEST_PROPS.headers.description).toMatch(/exactly these headers/i);
   });
 });

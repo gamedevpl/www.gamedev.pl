@@ -69,7 +69,9 @@ and source generations prevent late responses from attaching a previous preview.
 journal. Closing a tab does not cancel work. A separate, explicitly enabled LAN listener
 serves phone playtests without granting editor authority. Local attachments and fixed
 operation commands are described in [Play workbench](./play-workbench.md). Native vendor
-permission handoffs may still require a terminal. No controller restores a vendor
+permission handoffs for unsupported transports may still require a terminal. Claude,
+Codex and Muse approvals use the shared, generation-bound choices described in
+[Local agent approvals](./cli-agent-approvals.md). No controller restores a vendor
 conversation or automatically retries a mutation whose outcome is unknown.
 
 The browser submits through the existing CLI execution loop, retaining its first-turn,

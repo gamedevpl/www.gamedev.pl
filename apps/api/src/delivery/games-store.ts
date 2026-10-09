@@ -27,6 +27,7 @@ import {
   DELIVERY_FIXED_FILES,
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
+  missingModuleDependency,
 } from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
@@ -208,6 +209,17 @@ export function validateSourceUpload(
   }
   if (!hasIndexHtml && howToPlayProblem) {
     throw new InvalidUploadError(howToPlayProblem);
+  }
+  // Both modes: a publish delivery would fail the same smoke.
+  if (gameJson) {
+    try {
+      const modules = (JSON.parse(gameJson.content) as { engine?: { modules?: unknown } }).engine?.modules;
+      const selected = Array.isArray(modules) ? modules.filter((m): m is string => typeof m === 'string') : [];
+      const dependencyProblem = missingModuleDependency(selected);
+      if (dependencyProblem) throw new InvalidUploadError(dependencyProblem);
+    } catch (error) {
+      if (error instanceof InvalidUploadError) throw error;
+    }
   }
   if (mode === 'preview' && gameJson) {
     try {

@@ -55,6 +55,11 @@ export const termsPl: LegalDocument = {
             'Śledzenie zgłoszeń — strona statusu Twojej gry, powiadomienia w Serwisie, powiadomienia push i ' +
               'wiadomości e-mail o postępie prac.',
             'Konto użytkownika — zakładane przez zalogowanie kontem Google.',
+            'Remiks — tymczasowa zmiana ustawień lub treści cudzej gry na własny użytek, wyłącznie w grach, dla ' +
+              'których autor (a w przypadku gier z katalogu — Usługodawca) na to zezwolił. Remiks nie zmienia ' +
+              'oryginalnej gry i nie może zostać zapisany jako Twoja gra.',
+            'Propozycje zmian — przesłanie autorowi gry propozycji zmiany, wyłącznie w grach, w których autor ' +
+              'włączył propozycje. O wykorzystaniu propozycji decyduje autor.',
           ],
         },
         {
@@ -275,6 +280,26 @@ export const termsPl: LegalDocument = {
           text:
             'Możesz grać w gry opublikowane w Serwisie na własny użytek. Repozytorium gier nie jest obecnie ' +
             'publiczne; jeśli Usługodawca udostępni je na licencji otwartej, poinformuje o tym w Serwisie.',
+        },
+        {
+          kind: 'p',
+          text:
+            'Remiks służy wyłącznie do własnego użytku. Wprowadzone w nim zmiany są tymczasowe, nie wpływają na ' +
+            'grę autora ani na innych graczy i nie uprawniają do zapisania, kopiowania ani publikowania gry lub jej ' +
+            'części jako własnej. Link do remiksu przenosi wyłącznie ustawienia, a nie kod gry.',
+        },
+        {
+          kind: 'p',
+          text:
+            'Przesyłając propozycję zmiany, udzielasz autorowi gry oraz Usługodawcy nieodpłatnej, niewyłącznej, ' +
+            'nieograniczonej terytorialnie i bezterminowej licencji na korzystanie z jej treści (opisu, ustawień, ' +
+            'treści i przykładowego kodu) w celu ulepszenia gry, w tym na jej modyfikowanie i włączenie do gry. ' +
+            'Autor nie ma obowiązku wykorzystania propozycji ani wypłaty wynagrodzenia. Zaakceptowaną zmianę ' +
+            'wprowadza agent AI autora na podstawie propozycji — kod z propozycji nie jest kopiowany wprost. ' +
+            'Propozycje dotyczące gier z katalogu Usługodawcy mają charakter opinii, z której Usługodawca może ' +
+            'skorzystać według własnego uznania. Włączając propozycje dla swojej gry, przyjmujesz do wiadomości, ' +
+            'że agenci AI proponujących mogą odczytać kod źródłowy gry w zakresie potrzebnym do przygotowania ' +
+            'propozycji.',
         },
         {
           kind: 'p',

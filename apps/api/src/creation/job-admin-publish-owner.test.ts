@@ -2,12 +2,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { InMemoryStore } from '../platform/store.js';
 
 const SESSION_SECRET = 'dev-session-secret-change-me';
-const ADMIN_HEADERS = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', SESSION_SECRET)}` };
+const ADMIN_HEADERS = opsHeaders('g:boss');
 
 function gamesStoreWith(gate: { green: boolean } | null) {
   return {
@@ -54,13 +54,14 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
       store,
       sessionSecret: SESSION_SECRET,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: { agentChannel: { gamesStore: gamesStoreWith({ green: true }) } },
     });
 
     try {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/admin/jobs/909/publish',
+        url: opsUrl('/api/admin/jobs/909/publish'),
         headers: ADMIN_HEADERS,
         payload: { expectedVersion: 'v1' },
       });
@@ -113,6 +114,7 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
       store,
       sessionSecret: SESSION_SECRET,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: {
         agentChannel: { gamesStore },
       },
@@ -121,7 +123,7 @@ describe('publishing a bot-seeded game transferred to a creator', () => {
     try {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/admin/jobs/909/publish',
+        url: opsUrl('/api/admin/jobs/909/publish'),
         headers: ADMIN_HEADERS,
         payload: { expectedVersion: 'v1' },
       });

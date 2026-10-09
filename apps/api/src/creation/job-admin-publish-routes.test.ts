@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsHeaders, opsTestVerifier, opsUrl } from '../platform/ops-console.fixture.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { InMemoryStore } from '../platform/store.js';
 
 describe('POST /api/admin/jobs/:jobId/publish', () => {
   const sessionSecret = 'dev-session-secret-change-me';
-  const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
+  const adminHeaders = opsHeaders('g:boss');
 
   function gamesStoreWith(
     gate: { green: boolean } | null,
@@ -80,6 +80,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
       store,
       sessionSecret,
       adminUids: 'g:boss',
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: { agentChannel: { gamesStore } },
     });
     return { app, store };
@@ -91,7 +92,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -106,7 +107,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -120,7 +121,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -151,7 +152,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -174,7 +175,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -206,7 +207,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -238,7 +239,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -254,7 +255,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -271,7 +272,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -289,8 +290,8 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
-      headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:someone', sessionSecret)}` },
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
+      headers: opsHeaders('g:someone'),
     });
 
     // 404, not 403: operator surface stays invisible.
@@ -305,7 +306,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -329,7 +330,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -349,7 +350,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -372,7 +373,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: adminHeaders,
       payload: { expectedVersion: 'v1' },
     });
@@ -388,7 +389,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: { ...adminHeaders, 'content-type': 'application/json' },
       payload: { expectedVersion: 'v1', override: true },
     });
@@ -406,7 +407,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: { ...adminHeaders, 'content-type': 'application/json' },
       payload: { expectedVersion: 'v1', override: true, overrideReason: 'x'.repeat(501) },
     });
@@ -423,7 +424,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: { ...adminHeaders, 'content-type': 'application/json' },
       payload: { expectedVersion: 'v1', override: true, overrideReason: 'still the right call' },
     });
@@ -445,7 +446,7 @@ describe('POST /api/admin/jobs/:jobId/publish', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/admin/jobs/1000001/publish',
+      url: opsUrl('/api/admin/jobs/1000001/publish'),
       headers: { ...adminHeaders, 'content-type': 'application/json' },
       payload: { expectedVersion: 'v1', override: true, overrideReason: 'already clear' },
     });

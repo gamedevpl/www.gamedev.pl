@@ -21,6 +21,7 @@ export const WORKBENCH_ACTIONS = {
   logs: '/logs',
   agents: '/agents',
   model: '/model',
+  permissions: '/permissions',
   kit: '/kit',
   'kit-update': '/kit update',
   'builder-local': '/builder self',

@@ -1,6 +1,7 @@
 import { workbenchScope, workerEntry, assertRequestedGame, type WorkbenchEntry } from './workbench-entry.js';
 import { acquireStartupLock } from './workbench-startup-lock.js';
 import { CliError } from './exit-codes.js';
+import { PERMISSIONS_ENV, permissionMode } from './agent-permissions.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, openSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
@@ -103,6 +104,8 @@ export async function launchWorkbench(input: {
   assertRequestedGame(existing, input.launch);
   if (existing && (await health(existing))) {
     input.write(`Existing Play session: ${existing.url}`);
+    if (permissionMode() !== 'ask')
+      input.write('The running session keeps its permission mode; change it there with /permissions.');
     if (input.idea) input.write('The supplied idea was not sent. Review the active session and enter it in Play.');
     if (!input.noOpen) await openUrl(existing.url!);
     return existing.url!;
@@ -121,7 +124,7 @@ export async function launchWorkbench(input: {
     try {
       child = spawn(process.execPath, [...process.execArgv, resolve(input.entry), '__play-session', path], {
         cwd,
-        env: input.env,
+        env: { ...input.env, [PERMISSIONS_ENV]: permissionMode() },
         detached: true,
         stdio: ['ignore', log, log],
         windowsHide: true,
@@ -140,7 +143,7 @@ export async function launchWorkbench(input: {
       if (state?.url && (await health(state))) {
         input.write(`Play session: ${state.url}`);
         input.write(
-          'Runs in the background; Ctrl+C does not stop it. Stop it from the browser: Commands → End session.',
+          'Runs in the background; Ctrl+C does not stop it. Stop it from the browser: Commands → End session, or run: gamedevpl stop.',
         );
         if (!input.noOpen && !(await openUrl(state.url)))
           input.write('Browser could not open. Copy the Play session URL above.');
@@ -232,6 +235,10 @@ export async function runPlayWorker(input: {
   const start = workerEntry(journal);
   delete journal.initial;
   save();
+  const onSigterm = () => {
+    process.exit(0);
+  };
+  process.once('SIGTERM', onSigterm);
   try {
     await runInkRepl({
       api,
@@ -255,6 +262,7 @@ export async function runPlayWorker(input: {
     });
     journal.ended = true;
   } finally {
+    process.removeListener('SIGTERM', onSigterm);
     delete journal.url;
     delete journal.pid;
     save();

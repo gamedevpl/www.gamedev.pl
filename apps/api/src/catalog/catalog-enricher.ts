@@ -225,6 +225,27 @@ export async function attachCatalogEnrichments(
   });
 }
 
+// One game: the warm map if cached, else one document.
+export async function attachCatalogEnrichment(
+  entry: CatalogGameEntry,
+  store: Store | null | undefined,
+  now: number = Date.now(),
+): Promise<CatalogGameEntry> {
+  if (!store) return entry;
+  const cached = enrichmentCaches.get(store);
+  const enrichment =
+    cached && cached.expiresAt > now
+      ? cached.bySlug.get(entry.slug)
+      : await store.getCatalogEnrichment(entry.slug).catch(() => null);
+  if (!enrichment) return entry;
+  return {
+    ...entry,
+    tagline: enrichment.tagline,
+    shortControls: enrichment.shortControls,
+    searchKeywords: enrichment.searchKeywords,
+  };
+}
+
 // Creates default Vertex AI client for enrichment.
 export function createDefaultEnricherClient(): GenAIClient | null {
   try {

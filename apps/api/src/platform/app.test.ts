@@ -7,10 +7,6 @@ import { InMemoryStore } from './store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 
-function cookieFor(uid: string) {
-  return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
-}
-
 async function createAuthenticatedApp() {
   const store = new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -117,18 +113,12 @@ describe('private beta gate', () => {
       store,
       sessionSecret,
       betaAllowedUids: ownerUid,
-      adminUids: ownerUid,
       publicPlayTtlMs: 0,
       publicPlaySlugs: 'fallback-game',
     });
 
-    const saved = await app.inject({
-      method: 'POST',
-      url: '/api/admin/public-play',
-      headers: cookieFor(ownerUid),
-      payload: { slugs: ['promo-game'] },
-    });
-    expect(saved.statusCode).toBe(200);
+    // The ops console writes this document straight to Firestore.
+    await store.setPublicPlaySlugs(['promo-game'], ownerUid);
 
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     expect(health.json()).toMatchObject({ publicPlaySlugs: ['promo-game'] });

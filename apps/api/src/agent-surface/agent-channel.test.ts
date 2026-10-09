@@ -1002,9 +1002,9 @@ describe('agent build channel', () => {
   });
   // A 1x1 PNG — the smallest payload that still carries a real PNG signature.
   const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-  function uploadAuthorization(upload: unknown): string {
-    const authorization = String(upload).match(/-H 'Authorization: ([^']+)'/)?.[1];
-    if (!authorization) throw new Error('upload command has no authorization header');
+  function uploadAuthorization(minted: unknown): string {
+    const authorization = (minted as { headers?: Record<string, string> }).headers?.Authorization;
+    if (!authorization) throw new Error('upload contract has no Authorization header');
     return authorization;
   }
   it('refuses a reserved proposal caption on an agent upload', async () => {
@@ -1038,7 +1038,7 @@ describe('agent build channel', () => {
     const pushed = await app.inject({
       method: 'PUT',
       url,
-      headers: { authorization: uploadAuthorization(body.upload), 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(body), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
     expect(pushed.statusCode).toBe(200);
@@ -1062,7 +1062,7 @@ describe('agent build channel', () => {
     expect(image.headers['content-type']).toContain('image/png');
     expect(image.rawPayload.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   });
-  it('mints a curl one-liner that sets Content-Type, and still takes an upload that declares none', async () => {
+  it('mints an upload contract that sets Content-Type, and still takes an upload that declares none', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     app = await createApp(store);
@@ -1073,15 +1073,15 @@ describe('agent build channel', () => {
       payload: {},
     });
     expect(minted.statusCode).toBe(200);
-    const { url, upload, expiresAt, expiresInSeconds, maxBytes } = minted.json();
+    const { url, method, headers, expiresAt, expiresInSeconds, maxBytes } = minted.json();
     expect(url).not.toContain('?');
-    expect(upload).toContain("-H 'Authorization: Bearer ");
-    expect(upload).toContain("-H 'Content-Type: image/png'");
+    expect({ method, ...headers }).toMatchObject({ method: 'PUT', 'Content-Type': 'image/png' });
+    expect(minted.json()).not.toHaveProperty('upload');
     expect(typeof expiresAt).toBe('string');
     expect(typeof expiresInSeconds).toBe('number');
     expect(maxBytes).toBe(700 * 1024);
     // expiresAt must match the signed exp, not a second clock read.
-    const token = uploadAuthorization(upload).replace(/^Bearer\s+/i, '');
+    const token = uploadAuthorization(minted.json()).replace(/^Bearer\s+/i, '');
     const claims = verifyUploadToken(String(token), secret);
     expect(Math.floor(Date.parse(expiresAt) / 1000)).toBe(claims.exp);
     expect(expiresInSeconds).toBeGreaterThan(0);
@@ -1095,7 +1095,7 @@ describe('agent build channel', () => {
     const untyped = await app.inject({
       method: 'PUT',
       url: String(url).replace(/^https?:\/\/[^/]+/, ''),
-      headers: { authorization: uploadAuthorization(upload) },
+      headers: { authorization: uploadAuthorization(minted.json()) },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
     expect(untyped.statusCode).toBe(200);
@@ -1131,7 +1131,7 @@ describe('agent build channel', () => {
     const response = await app.inject({
       method: 'PUT',
       url,
-      headers: { authorization: uploadAuthorization(body.upload), 'content-type': 'application/octet-stream' },
+      headers: { authorization: uploadAuthorization(body), 'content-type': 'application/octet-stream' },
       payload: Buffer.from('<svg onload=alert(1)>'),
     });
     expect(response.statusCode).toBe(400);
@@ -1154,7 +1154,7 @@ describe('agent build channel', () => {
     const pushed = await app.inject({
       method: 'PUT',
       url,
-      headers: { authorization: uploadAuthorization(body.upload), 'content-type': 'image/png' },
+      headers: { authorization: uploadAuthorization(body), 'content-type': 'image/png' },
       payload: Buffer.from(TINY_PNG, 'base64'),
     });
     const shotId = pushed.json().shot.id as string;
@@ -3030,7 +3030,7 @@ describe('the delivery reminder on every channel call', () => {
     });
 
     expect(response.json().control.delivered).toBe(false);
-    expect(response.json().control.mustDeliver).toContain('npm run submit');
+    expect(response.json().control.mustDeliver).toContain("shell sandbox's submit script");
 
     await app.close();
   });

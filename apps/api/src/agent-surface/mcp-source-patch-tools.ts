@@ -5,7 +5,6 @@ import type { SubmissionRecord } from '../platform/store.js';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   REPLY_CONTROL,
   channelControlFields,
@@ -124,12 +123,11 @@ export function createSourcePatchTools(deps: SourcePatchToolsDeps): Record<strin
         'PRIMARY FORM: pass old + new (exact unique substring replace), or patches: [{ old, new }, ...] for multiple replacements in one file, ' +
         'or files: [{ path, old, new } | { path, patches: [{ old, new }] }, ...] to edit several files in one call — no @@ line numbers, no diff format. ' +
         'With patches[] / files[], replacements apply sequentially per file; ensure earlier replacements do not make a later old snippet ambiguous. ' +
-        'Edits that apply are kept even if later ones miss — retry only failed[] (path + index), do not resend the ones that landed. Honour warnings.code=patch_incomplete. ' +
+        'Edits that apply are kept even if later ones miss — failed[] (path + index) lists what to retry, and warnings.code=patch_incomplete flags a partial apply. ' +
         'ALTERNATE: pass path + patch as a unified diff for that single file ' +
         '("--- a/game/render.ts\\n+++ b/game/render.ts\\n@@\\n context\\n-old\\n+new\\n context\\n"; bare @@ ok). ' +
         'old must match exactly once; widen the snippet if it is ambiguous. Do not mix files[] with top-level path/old/new/patches/patch. ' +
-        'Then submit_sources({ fromStaged: true, mode, kitEngineRef }); fromStaged overlays onto the latest delivery/seed so you only need the patched paths staged. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Then submit_sources({ fromStaged: true, mode, kitEngineRef }); fromStaged overlays onto the latest delivery/seed so you only need the patched paths staged.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -297,8 +295,8 @@ export function createSourcePatchTools(deps: SourcePatchToolsDeps): Record<strin
                   {
                     code: 'patch_incomplete' as const,
                     message:
-                      `${body.failed.length} edit${body.failed.length === 1 ? '' : 's'} did not apply — ` +
-                      'retry only failed[] (path + index). Do not resend edits that already landed.',
+                      `${body.failed.length} edit${body.failed.length === 1 ? '' : 's'} did not apply (listed in failed[] ` +
+                      'with path + index); the others landed and are kept.',
                   },
                 ]
               : []),
@@ -330,8 +328,7 @@ export function createSourcePatchTools(deps: SourcePatchToolsDeps): Record<strin
       },
       description:
         'List paths currently in the staging buffer (no contents). Use after stage_source_file / patch_source_file ' +
-        'to confirm changed paths before submit_sources({ fromStaged: true, … }). ' +
-        BEHAVIOURAL_CONTRACT,
+        'to confirm changed paths before submit_sources({ fromStaged: true, … }).',
       inputSchema: {
         type: 'object',
         properties: { sessionKey: SESSION_KEY_PROP },
@@ -376,8 +373,7 @@ export function createSourcePatchTools(deps: SourcePatchToolsDeps): Record<strin
       },
       description:
         'Clear the staging buffer (all paths, or only paths[]). Use before re-staging a clean tree. ' +
-        'Successful submit_sources({ fromStaged: true }) also clears automatically. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Successful submit_sources({ fromStaged: true }) also clears automatically.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -2,13 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
-import {
-  KIT_ENTRY,
-  KitRegistryError,
-  kitUnpackCommand,
-  parseKitRegistry,
-  parseKitSidecar,
-} from '../platform/kit-registry.js';
+import { KIT_ENTRY, KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import type { GateVerdictSummary } from './gate-verdict.js';
 import type { AgentTokenAccess } from '../platform/agent-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -75,7 +69,6 @@ export function registerAgentChannelKitRoutes(app: FastifyInstance, deps: AgentC
           engineRef,
           kitUrl,
           sha256: sidecar.sha256,
-          unpack: kitUnpackCommand(kitUrl),
           entry: KIT_ENTRY,
           ...(kitEngineChanged ? { kitEngineChanged: true } : {}),
           browse: {

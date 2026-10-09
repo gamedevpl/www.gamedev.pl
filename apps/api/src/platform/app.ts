@@ -11,7 +11,6 @@ import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
-import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerApiCompression } from './api-compression.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
@@ -26,13 +25,11 @@ import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { decideEditorialClearance } from '../community/editorial-clearance.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
-import { registerGateArtifactRoutes } from '../delivery/gate-artifact-routes.js';
 import { registerGateVerdictRoutes } from '../delivery/gate-verdict-routes.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from '../delivery/gate-trigger.js';
 import { withGateRunCeiling } from './gate-run-ceiling.js';
-import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from '../creation/creator-profile-routes.js';
@@ -113,6 +110,7 @@ import {
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from '../creation/scorecard.js';
 import { createDefaultThemeExtractor } from '../community/feedback-themes.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { registerOpsConsole, rewriteOpsUrl } from './ops-console.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { registerOptionImageRoutes } from '../creation/option-image-routes.js';
 import type { OptionImageGenerator } from '../creation/option-images.js';
@@ -131,7 +129,6 @@ import { registerRecommendationRoutes, type RecommendationRoutesOptions } from '
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from '../catalog/published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from '../catalog/catalog-genre-source.js';
 import { registerRateLimit } from './rate-limit.js';
-import { createSharePreviewShell } from './share-meta.js';
 import { registerSpaShellFallback } from './spa-shell-fallback.js';
 import { registerOAuthProtectedResourceRoutes } from '../agent-surface/mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from '../agent-surface/mcp-server-discovery.js';
@@ -201,6 +198,7 @@ export interface BuildAppOptions {
   > & { internalAuthVerifier?: AccountDeletionRoutesOptions['internalAuthVerifier'] };
   // Seam for the spend brake; OIDC-or-deny-all from env.
   spendBrakeRoutes?: { internalAuthVerifier?: InternalAuthVerifier };
+  opsConsole?: { verifier?: InternalAuthVerifier };
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -216,7 +214,7 @@ export interface BuildAppOptions {
   reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'adminUids' | 'reviewerUids'>;
   creatorCodeRoutes?: Partial<Omit<CreatorCodeRoutesOptions, 'store'>>;
   // Seams for personal access tokens; its clock also goes to token-info.
-  accessTokenRoutes?: Partial<Omit<AccessTokenRoutesOptions, 'store' | 'adminUids'>>;
+  accessTokenRoutes?: { now?: () => number };
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -230,6 +228,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: options.logger ?? false,
     trustProxy: (_address, hop) => hop === 0,
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
+    rewriteUrl: rewriteOpsUrl,
   });
 
   const relayOnly = isRelayOnly() || options.multiplayerRoutes?.relayOnly === true;
@@ -282,9 +281,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
+  const pastBetaWall = async (slug: string) => !privateBeta || (await getPublicPlaySlugs()).has(slug);
   // A promotional slug is exempt from the beta wall, never from the rung.
-  const playableAnonymously = async (slug: string) =>
-    !(await loadShed.refusesAnonymous()) && (!privateBeta || (await getPublicPlaySlugs()).has(slug));
+  const playableAnonymously = async (slug: string) => !(await loadShed.refusesAnonymous()) && pastBetaWall(slug);
   registerServingBrake(app, { controls: loadShed });
   registerApiCachePolicy(app, { isOpenToVisitors: openToVisitors });
   const publicPlayFallbackSlugs = new Set(
@@ -352,6 +351,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // A floored day count, so token-info reads the minting clock.
     now: options.accessTokenRoutes?.now,
   });
+  registerOpsConsole(app, {
+    store,
+    adminUids,
+    verifier: options.opsConsole?.verifier ?? createInternalAuthVerifierFromEnv(process.env, 'opsConsole'),
+  });
 
   /**
    * `appleSignIn` tells the web app whether this server can verify an Apple token.
@@ -393,13 +397,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const proposals = createProposalLifecycle(
     gamesStore ? { store, gamesStore, log: app.log, notify: notifyProposal, notifyOperators } : null,
   );
-  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict });
   // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
-  // Signs the gate's artifact uploads, so the gate's own identity needs no bucket write.
-  if (gamesStore && objectStore) registerGateArtifactRoutes(app, { objectStore, store: gamesStore });
+  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict, objectStore });
   // Wrapped once here so every entry point — delivery, editor, remix, proposals,
   // re-gate and the health sweep — starts builds through the same daily ceiling.
   const gateTrigger = withGateRunCeiling(
@@ -693,28 +695,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.playerFeedbackRoutes,
   });
 
-  // Operator reads over that telemetry. Separate allowlist from the beta one: being
-  // let into the closed beta is not the same as being allowed to read every game's
-  // numbers. Unset means the route admits nobody, which is the right default for a
-  // surface whose whole purpose is seeing across other people's games.
-  // The creation-breaker knobs come from the submission-route options so the operator
-  // surface reports the same ceiling and the same propagation delay the gate actually
-  // enforces, rather than a second copy of the defaults that could drift from it.
-  await registerAdminRoutes(app, {
-    store,
-    adminUids,
-    globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
-    creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
-    now: options.submissionRoutes?.now,
-    publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
-    publicPlayTtlMs,
-    hasPlatformBackend: submissionSeams.hasPlatformBackend,
-    configuredVendors: submissionSeams.configuredVendors,
-    defaultVendor: submissionSeams.defaultVendor,
-    configuredSeedProviders: submissionSeams.configuredSeedProviders,
-    defaultSeedProvider: submissionSeams.defaultSeedProvider,
-  });
-
   // Review catalog matches /api/catalog; snapshot first in prod.
   const publishedRef = process.env.GAMES_REPO_REF?.trim() || 'main';
   const reviewCatalogClient = submissionSeams.githubClient ?? gamesRepoClient;
@@ -844,7 +824,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // lets a coding agent in a cloud VM authenticate as a real account without a browser,
   // a Google identity, or any bypass route. Same operator allowlist as the views above,
   // and session-only, so a token can never mint another.
-  await registerAccessTokenRoutes(app, { store, adminUids, now: options.accessTokenRoutes?.now });
   registerProxyDiagnosticsRoutes(app);
 
   // The build queue, answered from the store alone. Until jobs carried their own state
@@ -1173,6 +1152,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }
+    // A blocked account keeps its cookie; only erasure stays reachable.
+    const erasure = request.method === 'DELETE' && request.url.split('?')[0] === '/api/me/account';
+    if (request.user.tier === 'blocked' && !erasure) return reply.status(403).send({ error: 'account is blocked' });
   });
 
   // Production serves the SPA from WEB_DIST_DIR on the API origin.
@@ -1181,8 +1163,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await app.register(fastifyStatic, {
       root: webDistDir,
       wildcard: false,
-      // `wildcard: false` globs the dist tree at boot, and glob skips dotfiles
-      // unless told otherwise — without this, /.well-known/* 404s silently.
+      // Boot-time glob skips dotfiles; without this /.well-known/* 404s.
       serveDotFiles: true,
       // Serve build-time .br/.gz siblings (apps/web/scripts/precompress.mjs) —
       // never compress per-request: Cloud Run bills CPU.
@@ -1203,16 +1184,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }
       },
     });
-    registerSpaShellFallback(
-      app,
-      createSharePreviewShell({
-        readIndexHtml: () => readFile(path.join(webDistDir, 'index.html'), 'utf8'),
-        getCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
-        store,
-        gamesStore,
-        isShareable: playableAnonymously,
-      }),
-    );
+    registerSpaShellFallback(app, {
+      readIndexHtml: () => readFile(path.join(webDistDir, 'index.html'), 'utf8'),
+      getCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+      store,
+      gamesStore,
+      isShareable: playableAnonymously,
+      isPastWall: pastBetaWall,
+    });
   }
 
   return app;

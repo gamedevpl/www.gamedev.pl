@@ -56,7 +56,8 @@ along on the user is one forgotten `delete` away from being served to a client.
 - **Revocation is a delete**, not a flag — the record _is_ the token's existence, so there
   is no revoked-but-still-verifiable state to get wrong. It takes effect on the next
   request, with no redeploy (unlike rotating an environment secret).
-- **A token can never mint another token.** Issuing requires an admin _session_; a
+- **A token can never mint another token.** Issuing requires operator gcloud credentials
+  (the CLI or the ops console below) or the account holder's own browser _session_; a
   request authenticated with a token gets 404 from every operator surface, even when the
   token belongs to an admin. One leaked credential cannot become self-renewing.
 - **Expiry is mandatory**, 90 days by default and 365 at most.
@@ -94,14 +95,13 @@ npm run token:list   -w @gamedevpl/api -- bot:e2e
 npm run token:revoke -w @gamedevpl/api -- <tokenId>
 ```
 
-**HTTP — for anyone already signed in as an admin.** Requires an `ADMIN_UIDS` session;
-answers 404 to everyone else, including a token-authenticated admin.
-
-```
-POST   /api/admin/access-tokens          {"uid":"bot:e2e","name":"ci","expiresInDays":30}
-GET    /api/admin/access-tokens?uid=bot:e2e
-DELETE /api/admin/access-tokens/<tokenId>
-```
+**Operator console — the private ops repo.** The local
+[operator console](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)
+(`console/`) mints, lists and revokes with the operator's own gcloud credentials, calling
+the same `mintAccessTokenFor`. There is no site HTTP route for it any more: the browser
+`/admin/tokens` page and `/api/admin/access-tokens` were removed, and the console's
+`/api/internal/ops/*` door (see [architecture](architecture.md)) does not expose token
+issuance.
 
 The token is readable exactly once, in the mint response. Nothing stores it — a caller who
 loses it revokes and mints again.
@@ -221,7 +221,7 @@ challenge anyway the moment it is used from an unfamiliar IP.
 
 A grant approved this way (at `/oauth/authorize` or `/device`) is **bound to the PAT**:
 the cookie carries the token's id, the grant stores it as `viaTokenId` together with the
-token's expiry, and the grant dies with the token. Revoking the PAT (admin route, the
+token's expiry, and the grant dies with the token. Revoking the PAT (the ops console, the
 creator's own tokens page, or `token:revoke`) revokes its bound grants in the same call,
 which kills their access tokens on the next use. Access tokens stop at the PAT's expiry
 without an extra read, and every refresh re-reads the PAT and revokes the grant if it
@@ -310,7 +310,6 @@ issuing a credential is an admission decision in itself.
 | ----------------------------------------------- | ------------------------------------------------------------------- |
 | `apps/api/src/platform/access-token.ts`         | Pure format, mint, hash, verify — no I/O                            |
 | `apps/api/src/platform/access-token-service.ts` | Shared issuance rules (namespace, cap, expiry) and token resolution |
-| `apps/api/src/platform/access-token-routes.ts`  | Operator HTTP surface                                               |
 | `apps/api/src/platform/auth.ts`                 | Bearer resolution in the `onRequest` hook; `POST /api/auth/session` |
 | `apps/api/src/platform/oauth-token-login.ts`    | `/oauth/token-login` — the same exchange as a browser form          |
 | `apps/api/scripts/access-token.ts`              | The `token:mint` / `token:list` / `token:revoke` CLI                |

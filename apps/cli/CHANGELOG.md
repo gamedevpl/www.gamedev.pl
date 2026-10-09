@@ -7,6 +7,58 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.27.1 — 2026-10-09
+
+### Fixed
+
+- Play build errors replace endless loading with readable diagnostics, Copy error, Retry build and a repair request prepared in Chat with the error attached; the last working game stays playable (#1716).
+
+### Internal
+
+- genaicode 2.13.2: approvals work on Node 20.0–20.2, and Codex permission profiles are denied without asking under a sandbox (#1715).
+
+## 0.27.0 — 2026-10-08
+
+### Added
+
+- Claude command approvals offer “Always allow this exact command (this session)”; matching commands in the same checkout no longer ask again until the CLI exits or `/permissions ask` clears remembered approvals (#1711).
+
+## 0.26.0 — 2026-10-08
+
+### Breaking
+
+- Default `stop` targets the current checkout; an explicit game slug with sessions in multiple directories requires `--session <id>` or `--all` (#1703).
+
+### Added
+
+- `play` shows running local sessions; `play --list` lists their IDs, games, directories and URLs, and `play --stop --session <id>` or `--all` stops one or all (#1703).
+- Choose how local agents handle permissions: Ask (default), Auto-approve (sandboxed) or YOLO (full access, no questions), with `--permissions <mode>` or `/permissions`; the active mode is shown before each task, and Auto-approve or YOLO also run unattended (#1687).
+
+### Fixed
+
+- Push verification skips copying working-tree ignore files before reading the pushed commit’s rules, so a dangling ignore symlink does not abort setup (#1703).
+
+### Internal
+
+- Agent approval protocols (Claude prompt tool, Codex and Muse approvals) now come from genaicode 2.13.0 instead of local copies (#1687).
+
+## 0.25.0 — 2026-10-08
+
+### Added
+
+- `gamedevpl stop` (and `/stop`) stops any running browser Play session or local preview from the terminal (#1680).
+
+### Fixed
+
+- The Play browser tab displays the mascot favicon instead of falling back to a missing icon (#1680).
+- Local Claude, Codex and Muse tasks ask for tool approval in the Play panel or terminal (one invocation, or explicitly the current turn for Codex permission profiles) and continue after your decision; Stop cancels pending approvals (#1679).
+
+## 0.24.1 — 2026-10-06
+
+### Fixed
+
+- Keys typed in the terminal session at the moment its screen changes (a prompt appearing, a local task starting) are no longer dropped or read against the previous screen (#1648).
+
 ## 0.24.0 — 2026-10-05
 
 ### Added

@@ -80,11 +80,15 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
   }
   // Scanning games every two minutes was most of the day's reads.
   const publicationsTtlMs = 10 * 60_000;
+  // Past the in-flight TTL, the nightly sweep re-requests a pending check.
+  const HEALTH_PENDING_WINDOW_MS = 48 * 60 * 60_000;
   let publicationsCache: { expiresAt: number; value: PublicationRecord[] } | null = null;
   async function publicationsForHealth(): Promise<PublicationRecord[]> {
     if (!store) return [];
     if (publicationsCache && publicationsCache.expiresAt > now()) return publicationsCache.value;
-    const value = await store.listPublications().catch(() => []);
+    // Older pending checks are re-requested by the nightly health sweep.
+    const since = new Date(now() - HEALTH_PENDING_WINDOW_MS).toISOString();
+    const value = await store.listPublicationsWithHealthRequestedSince(since).catch(() => []);
     publicationsCache = { expiresAt: now() + publicationsTtlMs, value };
     return value;
   }

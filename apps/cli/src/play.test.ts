@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -52,7 +52,7 @@ describe('play', () => {
     writeFileSync(source, '<!doctype html><h1>First</h1>');
     writeFileSync(
       join(root, 'tools/lib/assemble.ts'),
-      `import {readFileSync} from 'node:fs'; export function assembleGame(slug) { const html=readFileSync('games/'+slug+'/game.html','utf8'); if(html==='broken') throw new Error('compile failed'); return {html: html + readFileSync('templates/title.txt', 'utf8')}; }`,
+      `import {readFileSync, writeFileSync, existsSync} from 'node:fs'; export function assembleGame(slug) { writeFileSync('build-count.txt', String(existsSync('build-count.txt') ? Number(readFileSync('build-count.txt','utf8')) + 1 : 1)); const html=readFileSync('games/'+slug+'/game.html','utf8'); if(html==='broken') throw new Error('compile failed'); return {html: html + readFileSync('templates/title.txt', 'utf8')}; }`,
     );
     const input = { root, slug: 'robot', env: process.env, write: () => undefined };
     try {
@@ -70,6 +70,19 @@ describe('play', () => {
       const red = await eventually(first!.url, (state) => state.error.includes('compile failed'));
       expect(red.revision).toBe(b.revision);
       expect(red.stale).toBe(true);
+      expect(red.canRetry).toBe(true);
+      const count = readFileSync(join(root, 'build-count.txt'), 'utf8');
+      expect(
+        (await fetch(first!.url + 'retry', { method: 'POST', headers: { Origin: 'https://evil.test' } })).status,
+      ).toBe(403);
+      await previewSource(first!.url, AbortSignal.timeout(5000)).retry!();
+      await eventually(
+        first!.url,
+        (state) =>
+          !state.busy &&
+          state.error.includes('compile failed') &&
+          readFileSync(join(root, 'build-count.txt'), 'utf8') !== count,
+      );
       await expect(previewSource(first!.url, AbortSignal.timeout(2000)).snapshot()).rejects.toThrow('compile failed');
       expect(await fetch(first!.url + 'game').then((r) => r.text())).toContain('Second');
       writeFileSync(source, '<!doctype html><h1>Recovered</h1>');

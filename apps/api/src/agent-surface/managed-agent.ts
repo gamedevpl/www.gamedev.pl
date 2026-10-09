@@ -102,6 +102,8 @@ export interface ManagedAgentProvider {
   readonly model: string;
   // Whether startSession accepts workspaceFiles.
   readonly supportsSeedFiles?: boolean;
+  // A sandbox shell with egress: the agent can unpack the kit locally.
+  readonly shell?: boolean;
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   sendMessage?(sessionId: string, message: string): Promise<void>;

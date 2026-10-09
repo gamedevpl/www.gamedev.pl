@@ -14,7 +14,11 @@ describe('buildPrompt', () => {
   it('tells the round what to give up, and to submit before the clock runs out', () => {
     const prompt = buildPrompt(BRIEF);
     expect(prompt).toContain('This round is on a clock');
-    expect(prompt).toContain('do not download or browse the kit');
+    expect(prompt).toContain('do not download or unpack the kit archive');
+    expect(prompt).toContain('`get_kit_api` once');
+    expect(prompt).toContain('`read_source_files` only the files you change');
+    expect(prompt).not.toContain('injected digest');
+    expect(prompt).not.toContain('two minutes');
     expect(prompt).toContain('Stage source content directly');
     expect(prompt).toContain('audio.sounds');
     expect(prompt).toContain('engine.modules array');
@@ -29,6 +33,16 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
+  });
+
+  it('sends a shell sandbox to the unpacked kit instead of the MCP-only lane', () => {
+    const prompt = buildPrompt(BRIEF, { shell: true });
+    expect(prompt).toContain('Unpack `get_kit`’s kitUrl once');
+    expect(prompt).toContain('GET its `archive` once');
+    expect(prompt).not.toContain('read_source_files');
+    expect(prompt).not.toContain('Do not use bash');
+    expect(prompt).not.toContain('do not download or unpack');
+    expect(prompt).not.toContain('get_kit_api');
   });
 
   it('opens a creation round through create_game before start', () => {
@@ -98,7 +112,7 @@ describe('buildPrompt', () => {
     const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' });
     expect(prompt).not.toContain('npm run restore');
     expect(prompt).toContain('`start` then `get_sources`');
-    expect(prompt).toContain('Do not run bash exploration commands');
+    expect(prompt).toContain('Do not explore the filesystem');
     expect(prompt).toContain('If get_sources reports nothing delivered yet');
   });
 

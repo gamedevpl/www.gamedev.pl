@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 import { createElement } from 'react';
 import { render } from 'ink';
@@ -12,14 +12,24 @@ const cleanup: Array<() => void> = [];
 afterEach(() => {
   for (const close of cleanup.splice(0)) close();
 });
-const wait = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
+// Only for timer-driven changes: animation frames, the silence clock.
+const until = (check: () => void) => vi.waitFor(check, { timeout: 5000 });
 function screen(columns: number, rows: number, openPreview?: (url: string) => void, readLogs?: () => string[]) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
-  const output = Object.assign(new PassThrough(), { columns, rows, isTTY: true });
   const frames: string[] = [];
-  output.on('data', (chunk) => frames.push(stripVTControlCharacters(String(chunk))));
-  const app = render(createElement(ReplApp, { session, color: false, openPreview, readLogs }), {
+  // Debug-mode Ink writes each commit synchronously; record frames without buffering.
+  const output = Object.assign(
+    new Writable({
+      write(chunk, _encoding, done) {
+        frames.push(stripVTControlCharacters(String(chunk)));
+        done();
+      },
+    }),
+    { columns, rows, isTTY: true },
+  );
+  const element = () => createElement(ReplApp, { session, color: false, openPreview, readLogs });
+  const app = render(element(), {
     stdin: input as unknown as NodeJS.ReadStream,
     stdout: output as unknown as NodeJS.WriteStream,
     debug: true,
@@ -32,9 +42,19 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
     input.end();
     output.end();
   });
+  // A sync re-render flushes pending effects: subscriptions, stdin, key handlers.
+  const settle = () => app.rerender(element());
+  settle();
   return {
     session,
     input,
+    // Resolves once Ink has read the keys and flushed their effects.
+    async press(keys: string) {
+      settle();
+      input.write(keys);
+      await vi.waitFor(() => expect(input.readableLength).toBe(0));
+      settle();
+    },
     frame: () =>
       frames.filter((frame) => frame.includes('gamedevpl') || frame.includes('Task diagnostics')).at(-1) ?? '',
   };
@@ -46,26 +66,21 @@ describe('TUI feedback', () => {
     const view = screen(width, 16, openPreview);
     view.session.setLocalTask('codex');
     view.session.setPreview('http://127.0.0.1:1234/test/');
-    await wait();
-    view.input.write('more ramps');
-    await wait();
+    await view.press('more ramps');
     expect(view.session.get().draft).toBe('more ramps');
     expect(openPreview).not.toHaveBeenCalled();
-    view.input.write('\r');
-    await wait();
+    await view.press('\r');
     expect(view.session.get().queued).toEqual(['more ramps']);
     expect(view.frame()).toContain('1 queued');
-    view.input.write('\u000f');
-    await wait();
+    await view.press('\u000f');
     expect(openPreview).toHaveBeenCalledOnce();
   });
-  it('shows the selected model and effort in a narrow picker', async () => {
+  it('shows the selected model and effort in a narrow picker', () => {
     const view = screen(40, 12);
     void view.session.prompt(
       ['codex — model: gpt-5.3-codex; effort: xhigh — this checkout; own billing', 'Configure agent model and effort…'],
       'Who should build this task?',
     );
-    await wait();
     expect(view.frame()).toContain('effort: xhigh');
     expect(view.frame()).toContain('gpt-5.3-codex');
   });
@@ -73,12 +88,9 @@ describe('TUI feedback', () => {
     const view = screen(40, 12);
     void view.session.prompt();
     view.session.setDraft('0123456789'.repeat(5));
-    await wait();
     expect(view.frame()).toContain('█');
-    view.input.write('\u001b[D');
-    await wait();
-    view.input.write('X');
-    await wait();
+    await view.press('\u001b[D');
+    await view.press('X');
     expect(view.session.get()).toMatchObject({ draft: `${'0123456789'.repeat(4)}012345678X9`, draftCursor: 50 });
     expect(view.frame()).toContain('█9');
     expect(view.frame()).toContain('←→');
@@ -88,17 +100,13 @@ describe('TUI feedback', () => {
     const openPreview = vi.fn();
     const view = screen(80, 24, openPreview);
     view.session.setPreview('http://127.0.0.1:64897/preview/');
-    await wait();
     expect(view.frame()).toContain('o open preview');
-    view.input.write('o');
-    await wait();
+    await view.press('o');
     expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
 
     view.session.clearPreview();
-    await wait();
     expect(view.frame()).not.toContain('o open preview');
-    view.input.write('o');
-    await wait();
+    await view.press('o');
     expect(openPreview).toHaveBeenCalledTimes(1);
   });
 
@@ -112,34 +120,29 @@ describe('TUI feedback', () => {
       abort: { current: null },
       write: view.session.writeLine,
     });
-    await wait();
+    await until(() => expect(view.session.get().mode).toBe('pick'));
     expect(view.frame()).toContain('how would you like to work?');
     expect(view.frame()).toContain('Open a local checkout');
     view.session.movePick(1);
     view.session.submit();
     expect(await opened).toMatchObject({ slug: 'sky', token: 'tok' });
     void view.session.prompt();
-    await wait();
     expect(view.frame()).toContain('What would you like to do?');
     expect(view.frame()).toContain('/checkout');
   });
   it('immediately replaces input with an animated activity and returns to a ready prompt', async () => {
     const view = screen(80, 24);
     const pending = view.session.prompt();
-    await wait();
     view.session.setDraft('chce zagrac');
     view.session.submit();
     await pending;
     view.session.setActivity('Thinking about your request');
-    await wait();
     const first = view.frame();
     expect(first).toContain('Thinking about your request');
     expect(first).toContain('input paused');
     expect(first).not.toContain('What would you like');
-    await wait(150);
-    expect(view.frame()).not.toBe(first);
+    await until(() => expect(view.frame()).not.toBe(first));
     void view.session.prompt();
-    await wait();
     expect(view.frame()).toContain('What would you like to do?');
     expect(view.frame()).not.toContain('Thinking about your request');
   });
@@ -147,7 +150,7 @@ describe('TUI feedback', () => {
     [40, 12],
     [80, 24],
     [120, 40],
-  ])('keeps controls visible at %i × %i with long text and a long picker', async (columns, rows) => {
+  ])('keeps controls visible at %i × %i with long text and a long picker', (columns, rows) => {
     const view = screen(columns, rows);
     view.session.writeLine('Bardzo długa odpowiedź o grze i aktualizacji '.repeat(30));
     view.session.setLive(['published', 'https://www.gamedev.pl/play/airtime']);
@@ -156,7 +159,6 @@ describe('TUI feedback', () => {
       'Które narzędzie ma wykonać zmianę?',
     );
     view.session.movePick(19);
-    await wait();
     const frame = view.frame();
     expect(frame).toContain('20. Agent 20');
     expect(frame).toContain('gamedevpl');
@@ -170,13 +172,11 @@ it('shows the Kit choice, then installation activity instead of an idle textbox'
     ['Update Creator Kit now', 'Later'],
     'Update the game tools? Your local game edits will be kept.',
   );
-  await wait();
   expect(view.frame()).toContain('Update Creator Kit now');
   expect(view.frame()).toContain('Later');
   view.session.submit();
   expect(await choice).toBe('Update Creator Kit now');
   view.session.setActivity('Downloading Creator Kit and installing dependencies');
-  await wait();
   expect(view.frame()).toContain('Downloading Creator Kit');
   expect(view.frame()).toContain('input paused');
   expect(view.frame()).not.toContain('What would you like');
@@ -186,31 +186,24 @@ describe('command completion keyboard', () => {
   it('completes /pu with Tab without submitting, then sends on Enter', async () => {
     const view = screen(80, 24);
     const pending = view.session.prompt();
-    await wait();
-    view.input.write('/pu');
-    await wait();
+    await view.press('/pu');
     expect(view.frame()).toContain('/pull — update a checkout');
-    view.input.write('\t');
-    await wait();
+    await view.press('\t');
     expect(view.session.get().draft).toBe('/pull ');
     expect(view.session.get().mode).toBe('prompt');
-    view.input.write('\r');
+    await view.press('\r');
     expect(await pending).toBe('/pull ');
   });
 
   it('selects matches with arrows and fills a partial command with Enter', async () => {
     const view = screen(80, 24);
     void view.session.prompt();
-    await wait();
-    view.input.write('/p');
-    await wait();
+    await view.press('/p');
+    expect(view.frame()).toContain('▸ /permissions');
+    await view.press('\x1b[B');
     expect(view.frame()).toContain('▸ /play');
-    view.input.write('\x1b[B');
-    await wait();
-    expect(view.frame()).toContain('▸ /profile');
-    view.input.write('\r');
-    await wait();
-    expect(view.session.get().draft).toBe('/profile ');
+    await view.press('\r');
+    expect(view.session.get().draft).toBe('/play ');
     expect(view.session.get().mode).toBe('prompt');
   });
 
@@ -220,21 +213,15 @@ describe('command completion keyboard', () => {
     view.session.setDraft('previous request');
     view.session.submit();
     void view.session.prompt();
-    await wait();
-    view.input.write('/p');
-    await wait();
-    view.input.write('\x1b');
-    await wait();
+    await view.press('/p');
+    await view.press('\x1b');
     expect(view.session.get().draft).toBe('/p');
     expect(view.frame()).not.toContain('▸ /play');
-    view.input.write('\x1b[A');
-    await wait();
+    await view.press('\x1b[A');
     expect(view.session.get().draft).toBe('previous request');
-    view.input.write('\t');
-    await wait();
+    await view.press('\t');
     expect(view.session.get().draft).toBe('previous request');
-    view.input.write('\x1b[B');
-    await wait();
+    await view.press('\x1b[B');
     expect(view.session.get().draft).toBe('/p');
   });
 
@@ -247,28 +234,20 @@ describe('command completion keyboard', () => {
     }
     void view.session.prompt();
     view.session.setDraft('unfinished request');
-    await wait();
-    view.input.write('\x1b[A');
-    await wait();
+    await view.press('\x1b[A');
     expect(view.session.get().draft).toBe('/help');
     expect(view.frame()).not.toContain('▸ /help');
-    view.input.write('\x1b[A');
-    await wait();
+    await view.press('\x1b[A');
     expect(view.session.get().draft).toBe('older request');
-    view.input.write('\x1b[B');
-    await wait();
+    await view.press('\x1b[B');
     expect(view.session.get().draft).toBe('/help');
-    view.input.write('\x1b[B');
-    await wait();
+    await view.press('\x1b[B');
     expect(view.session.get().draft).toBe('unfinished request');
-    view.input.write('\x1b[A');
-    await wait();
-    view.input.write('\x7f');
-    await wait();
+    await view.press('\x1b[A');
+    await view.press('\x7f');
     expect(view.session.get().draft).toBe('/hel');
     expect(view.frame()).toContain('▸ /help');
-    view.input.write('\t');
-    await wait();
+    await view.press('\t');
     expect(view.session.get().draft).toBe('/help ');
   });
 
@@ -280,11 +259,8 @@ describe('command completion keyboard', () => {
     const view = screen(columns, rows);
     view.session.setLive(['building', 'gate_not_started', 'live preview', 'czekamy na zakończenie']);
     void view.session.prompt();
-    await wait();
-    view.input.write('/');
-    await wait();
-    view.input.write('\x1b[A');
-    await wait();
+    await view.press('/');
+    await view.press('\x1b[A');
     expect(view.frame()).toContain('▸ /whoami');
     expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
     expect(view.frame()).toContain('Tab fill');
@@ -297,29 +273,24 @@ it('reports silence without claiming progress and clears it on new output', asyn
   try {
     const view = screen(80, 24);
     now += 45_000;
-    await wait(150);
-    expect(view.frame()).toContain('No new output for 45s');
+    await until(() => expect(view.frame()).toContain('No new output for 45s'));
     view.session.writeLine('Muse is reading game.ts');
-    await wait();
     expect(view.frame()).not.toContain('No new output');
   } finally {
     clock.mockRestore();
   }
 });
 
-it('shows local ownership instead of a stale remote no-agent status', async () => {
+it('shows local ownership instead of a stale remote no-agent status', () => {
   const view = screen(80, 24);
   view.session.setLive(['Studio: queued (no_agent_yet)']);
   view.session.setLocalTask('muse');
-  await wait();
   expect(view.frame()).toContain('Local task: muse');
   expect(view.frame()).toContain('after /submit');
   expect(view.frame()).not.toContain('no_agent_yet');
   view.session.setLive(['Studio: queued (no_agent_yet)']);
-  await wait();
   expect(view.frame()).not.toContain('no_agent_yet');
   view.session.setLocalTask('');
-  await wait();
   expect(view.frame()).toContain('Studio: queued');
 });
 
@@ -334,21 +305,16 @@ it.each([40, 110])('distinguishes live send and explicit queue at width %s', asy
   );
   view.session.setLocalTask('muse');
   view.session.setSteering(send);
-  await wait();
-  view.input.write('change the ramps');
-  await wait();
-  view.input.write('\r');
-  await wait();
+  await view.press('change the ramps');
+  await view.press('\r');
   expect(send).toHaveBeenCalledWith('change the ramps');
   expect(view.frame()).toContain('Message the active agent');
   expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(16);
   expect(view.session.get().queued).toEqual([]);
   acknowledge();
-  await wait();
-  view.input.write('later task');
-  await wait();
-  view.input.write('\u0011');
-  await wait();
+  await until(() => expect(view.session.get().sendStatus).toBe('Accepted by the agent'));
+  await view.press('later task');
+  await view.press('\u0011');
   expect(view.session.get().queued).toEqual(['later task']);
   expect(send).toHaveBeenCalledOnce();
 });
@@ -359,16 +325,13 @@ it.each([40, 110])('opens live logs at width %s without sending or queuing /logs
   const send = vi.fn(async () => {});
   view.session.setSteering(send);
   view.session.setDraft('/logs');
-  await wait();
-  view.input.write('\r');
-  await wait(100);
+  await view.press('\r');
   expect(view.frame()).toContain('Task diagnostics');
   expect(view.frame()).toContain('diagnostic detail');
   expect(view.session.get().queued).toEqual([]);
   expect(send).not.toHaveBeenCalled();
   expect(view.session.get().draft).toBe('');
-  view.input.write('\u001b');
-  await wait(100);
+  await view.press('\u001b');
   expect(view.frame()).not.toContain('Task diagnostics');
 });
 
@@ -376,12 +339,9 @@ it('keeps diagnostics out of conversation history after a task', async () => {
   const view = screen(110, 24, undefined, () => ['private diagnostic detail']);
   void view.session.prompt();
   view.session.setDraft('/logs');
-  await wait();
-  view.input.write('\r');
-  await wait(100);
+  await view.press('\r');
   expect(view.frame()).toContain('Task diagnostics');
   expect(view.session.savedHistory().lines.join('\n')).not.toContain('private diagnostic detail');
-  view.input.write('\u001b');
-  await wait(100);
+  await view.press('\u001b');
   expect(view.session.get().mode).toBe('prompt');
 });

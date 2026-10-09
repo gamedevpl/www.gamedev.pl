@@ -296,15 +296,18 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
-  it('refuses when the shared daily cap is spent', async () => {
-    const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 0 } });
+  it('refuses when the shared daily cap is spent, before paying for ideas', async () => {
+    const { store, ideas, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 0 } });
     expect(await run()).toBe('no_capacity');
+    expect(ideas.requests).toEqual([]);
+    expect((await store.getSubmission(7))?.costs ?? []).toEqual([]);
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
   it('refuses when only one of the two frames would fit the cap', async () => {
-    const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 1 } });
+    const { store, ideas, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 1 } });
     expect(await run()).toBe('no_capacity');
+    expect(ideas.requests).toEqual([]);
     // Nothing spent: a lone frame is a paid call for nothing.
     expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
     expect(await store.listCreatorMessages(7)).toEqual([]);
@@ -358,9 +361,18 @@ describe('createDreamJob', () => {
   });
 
   it('records the builder the card was drawn under', async () => {
-    const { store, run } = await harness({ hud: [], record: { builder: 'self' } });
+    const { store, run } = await harness({ hud: [], record: { builder: 'platform' } });
     expect(await run()).toBe('posted');
-    expect((await store.listCreatorMessages(7))[0]?.proposal?.builder).toBe('self');
+    expect((await store.listCreatorMessages(7))[0]?.proposal?.builder).toBe('platform');
+  });
+
+  it('draws nothing for a round an external agent builds', async () => {
+    const { store, frames, ideas: generator, run } = await harness({ hud: [], record: { builder: 'self' } });
+    expect(await run()).toBe('external_builder');
+    expect(generator.requests).toEqual([]);
+    expect(frames.requests).toEqual([]);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    expect((await store.getSubmission(7))?.dreamRun).toBeUndefined();
   });
 
   it('needs a real PNG capture to start from', async () => {

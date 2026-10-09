@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { generateAccessToken, parseAccessToken } from './access-token.js';
 import { buildApp } from './app.js';
-import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { newCsrfNonce, originAllowed, sanitizeOAuthReturnPath, TOKEN_LOGIN_PATH } from './oauth-token-login.js';
 import { InMemoryStore } from './store.js';
+import { mintAccessTokenFor } from './access-token-service.js';
 
 /**
- * Driven through the fully assembled app for the same reason access-token-routes.test.ts
- * is: the private-beta wall lives in app.ts, and a sign-in page that unit-tests green
+ * Driven through the fully assembled app on purpose: the private-beta wall lives in app.ts, and a sign-in page that unit-tests green
  * while the wall 401s it in production would be worse than no page at all — it is the
  * one route whose entire job is to be reachable by someone with no session.
  */
@@ -18,15 +18,9 @@ function appWith(store: InMemoryStore, extra: { betaAllowedUids?: string } = {})
   return buildApp({ store, sessionSecret, adminUids: 'g:boss', ...extra });
 }
 
-async function mintToken(app: Awaited<ReturnType<typeof buildApp>>, uid: string): Promise<string> {
-  const res = await app.inject({
-    method: 'POST',
-    url: '/api/admin/access-tokens',
-    headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` },
-    payload: { uid, name: 'reviewer' },
-  });
-  expect(res.statusCode).toBe(201);
-  return res.json().token as string;
+async function mintToken(store: InMemoryStore, uid: string): Promise<string> {
+  const { token } = await mintAccessTokenFor(store, { uid, name: 'reviewer', createdByUid: 'g:boss' });
+  return token;
 }
 
 const CSRF_COOKIE = 'gamedev_token_login_csrf';
@@ -169,7 +163,7 @@ describe('POST /oauth/token-login', () => {
 
   it('signs in the token holder and lands them in the studio', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     const res = await visitAndPost(app, { token });
 
@@ -184,38 +178,36 @@ describe('POST /oauth/token-login', () => {
     // Without the stamp this page would be an escalation: a leaked PAT for an admin
     // account could be traded for a cookie that satisfied the session-only surfaces.
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     const res = await visitAndPost(app, { token });
 
     expect(readSessionToken(sessionFrom(res)!, sessionSecret).src).toBe('token');
   });
 
-  it('refuses to mint further tokens with the cookie it just handed out', async () => {
+  it('keeps the cookie it just handed out off session-only surfaces', async () => {
     // The concrete consequence of the stamp above, asserted end to end rather than by
-    // reading a claim: minting is an operator surface and must stay session-only.
+    // reading a claim: scheduling an account's deletion must stay session-only.
     const app = await appWith(store);
-    await store.upsertUser({ uid: 'g:boss2' });
-    const token = await mintToken(app, 'g:boss');
+    const token = await mintToken(store, 'g:boss');
 
     const res = await visitAndPost(app, { token });
     const cookie = sessionFrom(res)!;
 
-    const mint = await app.inject({
-      method: 'POST',
-      url: '/api/admin/access-tokens',
+    const deletion = await app.inject({
+      method: 'DELETE',
+      url: '/api/me/account',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
-      payload: { uid: 'g:boss2', name: 'laundered' },
+      payload: { confirm: true },
     });
-    // 404, not 403: the admin surface does not advertise itself to a caller that
-    // fails isAdminSession. The same call with a real session cookie returns 201
-    // above, so this is the refusal and not a missing route.
-    expect(mint.statusCode).toBe(404);
+    // 404, not 403: the session-only surface does not advertise itself.
+    expect(deletion.statusCode).toBe(404);
+    expect((await store.getUser('g:boss'))?.deletionScheduledFor).toBeUndefined();
   });
 
   it('returns to the authorize URL when one was carried through', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     const res = await visitAndPost(app, { token, oauth_return: '/oauth/authorize?client_id=abc' });
 
@@ -225,7 +217,7 @@ describe('POST /oauth/token-login', () => {
 
   it('ignores an off-site oauth_return and lands in the studio instead', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     const res = await visitAndPost(app, { token, oauth_return: 'https://evil.example/steal' });
 
@@ -236,7 +228,7 @@ describe('POST /oauth/token-login', () => {
     // The end the page exists for: an account with no Google identity, in private beta,
     // getting far enough to approve an MCP client.
     const app = await appWith(store, { betaAllowedUids: 'g:boss' });
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
     const cookie = sessionFrom(await visitAndPost(app, { token }))!;
 
     const authorize = await app.inject({
@@ -254,7 +246,7 @@ describe('POST /oauth/token-login', () => {
 
   it('rejects a POST with no form token', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     const res = await post(app, { token });
 
@@ -269,7 +261,7 @@ describe('POST /oauth/token-login', () => {
     // existed to stop went through. Binding the nonce to a cookie is what closes it,
     // so the attack has to be the test.
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     // The attacker loads the page and keeps the nonce it rendered...
     const attackerPage = await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH });
@@ -286,7 +278,7 @@ describe('POST /oauth/token-login', () => {
 
   it("rejects a nonce that is not the one in this browser's cookie", async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
     const page = await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH });
     const mine = cookieFrom(page, CSRF_COOKIE)!;
 
@@ -298,7 +290,7 @@ describe('POST /oauth/token-login', () => {
 
   it('rejects a malformed nonce without measuring it against anything', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
     const nonce = cookieFrom(await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH }), CSRF_COOKIE)!;
 
     for (const bad of ['', 'x'.repeat(100_000), `${nonce}!`, nonce.slice(0, 42)]) {
@@ -312,7 +304,7 @@ describe('POST /oauth/token-login', () => {
     // A refusal that renders a dead nonce would strand the visitor in a loop of
     // "that form expired" with no way out.
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
 
     const refused = await post(app, { token });
     expect(refused.statusCode).toBe(403);
@@ -343,7 +335,7 @@ describe('POST /oauth/token-login', () => {
 
   it('clears the nonce once it has been spent', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
     const nonce = cookieFrom(await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH }), CSRF_COOKIE)!;
 
     const res = await post(app, { token, form_token: nonce }, `${CSRF_COOKIE}=${nonce}`);
@@ -399,7 +391,7 @@ describe('POST /oauth/token-login', () => {
 
   it('refuses a blocked account', async () => {
     const app = await appWith(store);
-    const token = await mintToken(app, 'bot:reviewer');
+    const token = await mintToken(store, 'bot:reviewer');
     await store.upsertUser({ uid: 'bot:reviewer', tier: 'blocked' });
 
     const res = await visitAndPost(app, { token });

@@ -255,7 +255,7 @@ describe('MCP continue_draft', () => {
     expect(started.isError).toBe(false);
   });
 
-  it('records the relayed feedback as the agent’s words, not the creator’s', async () => {
+  it('records the relayed feedback as the agent’s words, in the transcript but not the inbox', async () => {
     // The agent writes this sentence; the creator said something else, somewhere else.
     // Studio shows it on the creator's side of the thread, so it has to carry who typed
     // it — otherwise a paraphrase reads as a message the creator wrote themselves.
@@ -273,10 +273,10 @@ describe('MCP continue_draft', () => {
 
     const messages = await store.listCreatorMessages(DRAFT_ISSUE);
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject({
-      text: 'Make the paddle wider and add a second ball.',
-      origin: 'agent',
-    });
+    expect(messages[0]).toMatchObject({ text: 'Make the paddle wider and add a second ball.', origin: 'agent' });
+    const started = (await callTool(app, 'start', { slug: SLUG }, headers)).structured as { sessionKey: string };
+    const read = await callTool(app, 'read_inbox', { sessionKey: started.sessionKey }, headers);
+    expect(read.structured).toMatchObject({ messages: [], pendingMessages: [] });
   });
 
   it('stores the relayed request in the creator’s language, translated on the write', async () => {

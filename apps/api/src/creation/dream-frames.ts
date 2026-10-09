@@ -36,6 +36,7 @@ export interface DreamFrameGenerator {
 // Owner policy: 3.x only; VERTEX_MODEL must not leak in.
 export const DEFAULT_DREAM_IMAGE_MODEL = 'gemini-3.1-flash-image';
 export const DEFAULT_DREAM_TIMEOUT_MS = 60_000;
+export const DREAM_JPEG_QUALITY = 85;
 
 function describeRegion(region: HudRegion, index: number): string {
   const name = region.label ? `"${region.label}"` : `HUD element ${index + 1}`;
@@ -87,7 +88,11 @@ export class VertexDreamFrameGenerator implements DreamFrameGenerator {
         defaultRegion: 'global',
         model: this.model,
         defaultModel: DEFAULT_DREAM_IMAGE_MODEL,
-        generationConfig: { responseModalities: ['IMAGE'] } as VertexGenerationConfig,
+        // PNG frames run past the 600 KB a shot document holds.
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+          imageConfig: { outputMimeType: 'image/jpeg', outputCompressionQuality: DREAM_JPEG_QUALITY },
+        } as VertexGenerationConfig,
       });
     return this.client;
   }

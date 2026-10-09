@@ -31,7 +31,7 @@ describe('oauth authorize url', () => {
   });
 });
 
-it.each(['force', 'publish', 'handoff', 'submit', 'json', 'help', 'platform', 'no-open', 'stop'])(
+it.each(['force', 'publish', 'handoff', 'submit', 'json', 'help', 'platform', 'no-open', 'stop', 'list', 'all'])(
   'keeps positional arguments after --%s',
   (flag) => {
     expect(parseArgv(['node', 'cli', 'submit', '--' + flag, './my-game'])).toMatchObject({

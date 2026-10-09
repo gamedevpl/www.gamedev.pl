@@ -1,6 +1,6 @@
 {
   "name": "@gamedevpl/cli",
-  "version": "0.24.0",
+  "version": "0.27.1",
   "private": true,
   "type": "module",
   "bin": {
@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@gamedevpl/contract": "*",
-    "genaicode": "^2.9.1",
+    "genaicode": "^2.13.2",
     "ink": "^5.2.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

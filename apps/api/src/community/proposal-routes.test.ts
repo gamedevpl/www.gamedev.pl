@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { opsInject, opsTestVerifier } from '../platform/ops-console.fixture.js';
 import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
 import { openProposal, reconcileProposalGate } from './proposals.js';
 import { InMemoryStore, type ProposalRecord } from '../platform/store.js';
@@ -110,6 +111,7 @@ describe('proposal routes', () => {
       store,
       sessionSecret,
       adminUids: ADMIN,
+      opsConsole: { verifier: opsTestVerifier },
       submissionRoutes: { agentChannel: { gamesStore: gamesStore as unknown as GamesStore } },
     });
     apps.push(app);
@@ -344,16 +346,12 @@ describe('proposal routes', () => {
     await reconcileProposalGate(deps, result.proposal.id);
     const app = await appWith(store, gamesStore);
 
-    const ops = await app.inject({ method: 'GET', url: '/api/admin/proposals', headers: { cookie: cookie(ADMIN) } });
+    const ops = await opsInject(app, ADMIN, { method: 'GET', url: '/api/admin/proposals' });
     expect(ops.json().proposals).toHaveLength(1);
     expect(ops.json().proposals[0]).toMatchObject({ platformOwned: true });
 
     // Non-admins do not learn the queue exists.
-    const nosy = await app.inject({
-      method: 'GET',
-      url: '/api/admin/proposals',
-      headers: { cookie: cookie(STRANGER) },
-    });
+    const nosy = await opsInject(app, STRANGER, { method: 'GET', url: '/api/admin/proposals' });
     expect(nosy.statusCode).toBe(404);
   });
 
@@ -375,12 +373,14 @@ describe('proposal routes', () => {
     await reconcileProposalGate(deps, result.proposal.id);
     const app = await appWith(store, gamesStore);
 
-    const decline = await app.inject({
-      method: 'POST',
-      url: `/api/proposals/${result.proposal.id}/decline`,
-      headers: { cookie: cookie(ADMIN) },
-      payload: { reason: 'unsafe' },
-    });
+    const url = `/api/proposals/${result.proposal.id}/decline`;
+    const payload = { reason: 'unsafe' };
+    // A plain browser session carries no operator authority.
+    const headers = { cookie: cookie(ADMIN) };
+    expect((await app.inject({ method: 'POST', url, headers, payload })).statusCode).toBe(404);
+    expect((await store.getProposal(result.proposal.id))?.decision).toBeFalsy();
+
+    const decline = await opsInject(app, ADMIN, { method: 'POST', url, payload });
     expect(decline.statusCode).toBe(200);
     // A platform moderation decline owes a statement of reasons; the record proves we know.
     expect((await store.getProposal(result.proposal.id))?.decision?.statementSentAt).toBeTruthy();

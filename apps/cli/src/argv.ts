@@ -5,6 +5,7 @@ export const SLASH_VERBS = [
   'logs',
   'kit',
   'play',
+  'stop',
   'games',
   'status',
   'share',
@@ -25,6 +26,7 @@ export const SLASH_VERBS = [
   'push',
   'diff',
   'update',
+  'permissions',
 ] as const;
 
 export type SlashVerb = (typeof SLASH_VERBS)[number];
@@ -65,6 +67,8 @@ const BOOLEAN_FLAGS = new Set([
   'reset',
   'no-open',
   'stop',
+  'list',
+  'all',
   'force',
   'publish',
   'handoff',

@@ -17,6 +17,7 @@ import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
 import { registerAgentChannelSeedRoutes, type AgentChannelSeedRoutesDeps } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
+import { registerAgentChannelSourcesRoutes } from './agent-channel-sources.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
 import { authedRoundGeneration } from './round-generation-guard.js';
 import {
@@ -34,11 +35,11 @@ import {
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
   mintUploadToken,
   UPLOAD_TOKEN_HEADER,
-  uploadCurlCommand,
   verifyUploadToken,
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { uploadRequest } from './upload-request.js';
 import type { BuildShot } from '../store/records/build-log.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
@@ -58,7 +59,6 @@ import { createKitFileStore } from './kit-files.js';
 import { registerAgentChannelKitFileRoutes } from './agent-channel-kit-files.js';
 import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
-import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
 import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-version.js';
@@ -73,6 +73,7 @@ import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } 
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import { currentOwnerUid } from '../platform/game-access-resolve.js';
+import { KIT_OUTDATED_MARK } from './mcp-round-guide.js';
 
 // The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
 // Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.
@@ -148,7 +149,7 @@ const ShotUploadUrlInputSchema = z.object({
     .optional(),
 });
 
-const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then run its \`upload\` one-liner (curl -H "Authorization: Bearer <upload token>" --upload-file <png> "$url")`;
+const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then PUT the raw PNG bytes to the returned url with the returned method and headers`;
 
 const MAX_PREVIEW_LABEL = 120;
 /**
@@ -950,28 +951,27 @@ export async function registerAgentChannelRoutes(
           ? {
               mustFixGate:
                 gate.status === 'kit_outdated'
-                  ? `The gate refused your delivery (${gate.version}) because the Creator Kit is ` +
-                    'outdated (`kit_outdated`). Re-run get_kit for a fresh engineRef, then ' +
-                    'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do NOT ' +
-                    're-stage or re-upload the whole tree through the model (burns tokens). Only ' +
-                    'pass files[] for paths you actually changed for the new kit.'
+                  ? `The gate refused delivery ${gate.version} because ${KIT_OUTDATED_MARK}. A fresh engineRef ` +
+                    'from get_kit plus submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) re-delivers ' +
+                    'the same files on the new kit in the same mode; ' +
+                    'files[] is only needed for paths changed for the new kit.'
                   : gate.status === 'preview_failed'
-                    ? `The preview check refused your delivery (${gate.version}). Fix typecheck/smoke/build, ` +
-                      'then submit_sources again with mode=preview. TRACE.json is not required until mode=publish.'
-                    : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
-                      'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
-                      'with the check that stopped the chain — fix the cause in your game, and deliver ' +
-                      'again with submit_sources mode=publish (or `npm run submit -- <slug>` in a shell ' +
-                      'sandbox). Re-delivering without a fix just stores another version that fails the same way.',
+                    ? `The preview check (typecheck, smoke, build) refused delivery ${gate.version}. The gate ` +
+                      're-runs on the next submit_sources with mode=preview once the cause is fixed; TRACE.json is ' +
+                      'not required until mode=publish.'
+                    : `The publish gate refused delivery ${gate.version}, so nothing can be published until it ` +
+                      'passes. gate.report ends with the check that stopped the chain; delivering again without ' +
+                      'fixing that cause stores another version that fails the same way.',
             }
           : {}),
         ...(record.deliveredVersion || record.previewVersion
           ? {}
           : {
               mustDeliver:
-                'Nothing has been delivered for this build yet. Pushing a branch is not delivering — ' +
-                'call submit_sources with mode=preview at least once (mode=publish to seal, or ' +
-                '`npm run submit -- <slug>` in a shell sandbox) before you finish, or this session produces nothing.',
+                'Nothing has been delivered for this build yet; a pushed branch or staged files are not a ' +
+                'delivery. A session that ends without submit_sources (mode=preview at least once, mode=publish ' +
+                "to seal; a shell sandbox's submit script also delivers) produces nothing, unless the round only " +
+                'answers a question.',
             }),
       },
     };
@@ -1175,7 +1175,7 @@ export async function registerAgentChannelRoutes(
         url,
         expiresAt,
         expiresInSeconds: ttlSeconds,
-        upload: uploadCurlCommand(url, token, 'shot.png', 'image/png'),
+        ...uploadRequest(token, 'image/png'),
         maxBytes: parsed.data.purpose === 'concept' ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES,
         ...(await channelState(jobId, record)),
       });
@@ -2144,90 +2144,6 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * Hands a build back the sources it should continue from.
-   *
-   * The channel was upload-only, and that quietly made the agent's *branch* the real
-   * home of a game: a follow-up session could only continue the work if it happened to
-   * land on the same branch, and when it did not — which is what happens whenever the
-   * branch is unknown at resume time — the creator's game started again from nothing.
-   * The store already holds every delivered version, immutably; this is the read that
-   * makes it the source of truth rather than a copy nobody can get back.
-   *
-   * Prefer the job's own latest candidate — previewVersion first (mode=preview may be
-   * the only upload so far, or a fix after a red publish), then deliveredVersion. A new
-   * sibling round inherits the newest eligible sibling delivery before the live
-   * publication. Without that, `npm run restore` reports nothing to restore and the
-   * agent rebuilds a stranger's game instead of revising what the creator played.
-   *
-   * Scoped to the job's own game by the same token that authorizes its delivery, so a
-   * build can restore what it (or its published predecessor) delivered and nothing else.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.SOURCES,
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      const { record } = resolved;
-
-      if (!options.gamesStore) {
-        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
-      }
-
-      const slug = record.slug;
-      const version = slug ? await resolveAuthorizedRoundBaseVersion(store!, record, slug, resolved.actorUid) : null;
-
-      // Round 0 arrives here, not through a verb of its own: one read for every round.
-      if (slug && !version && (record.seed?.files.length ?? 0) > 0) {
-        const seed = record.seed!;
-        return reply.send({
-          delivery: null,
-          origin: 'seed',
-          files: withoutRetiredPaths(seed.files).map((file) => ({ path: file.path, content: file.content })),
-          references: seed.references,
-          notes: seed.notes ?? null,
-          ...seedPayload(record),
-        });
-      }
-
-      // Nothing drafted and nothing delivered; seedStatus says whether to wait.
-      if (!slug || !version) {
-        return reply.send({ delivery: null, origin: null, files: [], ...seedPayload(record) });
-      }
-
-      const manifest = await options.gamesStore.getManifest(slug, version);
-      if (!manifest) {
-        request.log.error(
-          { slug, version },
-          'delivered version has no manifest — the store lost a version a job still points at',
-        );
-        return reply.status(502).send({ error: 'the delivered version could not be read back' });
-      }
-
-      const files = await Promise.all(
-        manifest.sourceFiles.map(async (path) => ({
-          path,
-          content: await options.gamesStore!.getSourceFile(slug, version, path),
-        })),
-      );
-      // A manifest listing a file the bucket does not have is a broken version, not a
-      // partial one. Handing back a game with holes would have the agent "restore" a
-      // deletion it never made.
-      const missing = files.filter((file) => file.content === null).map((file) => file.path);
-      if (missing.length > 0) {
-        request.log.error({ slug, version, missing }, 'delivered version is missing files its manifest lists');
-        return reply.status(502).send({ error: 'the delivered version could not be read back' });
-      }
-
-      return reply.send({
-        delivery: { slug, version },
-        origin: 'delivery',
-        files,
-      });
-    },
-  );
-
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.
   app.get(
@@ -2397,7 +2313,7 @@ export async function registerAgentChannelRoutes(
     return imageSize(source);
   }
 
-  registerAgentChannelBriefRoutes(app, { resolveBuild, store });
+  registerAgentChannelBriefRoutes(app, { resolveBuild, store, agentTokenSecret, now });
 
   registerAgentChannelProposalRoutes(app, {
     resolveBuild,
@@ -2417,6 +2333,7 @@ export async function registerAgentChannelRoutes(
   });
 
   registerAgentChannelKitRoutes(app, { resolveBuild, store, objectStore: options.objectStore, gateVerdict });
+  registerAgentChannelSourcesRoutes(app, { resolveBuild, resolveUploadBuild, store, gamesStore: options.gamesStore });
 
   registerAgentChannelKitFileRoutes(app, { resolveBuild, kitFileStore });
 

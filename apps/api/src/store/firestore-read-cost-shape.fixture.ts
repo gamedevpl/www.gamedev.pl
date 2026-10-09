@@ -24,13 +24,13 @@ export const POLLED_ROUTES = [
   'GET /api/submissions/:token (share link, steady state)',
   'GET /api/submissions/:token (prior rounds)',
   'GET /api/submissions/:token (prior rounds, steady state)',
+  'GET /api/submissions/:token (prior rounds, 31s cadence)',
   'GET /api/submissions/:token (stale dispatch, steady state)',
   'GET /api/submissions/mine',
   'GET /api/submissions/mine (derived-only owner)',
   'GET /api/submissions/mine (document, steady state)',
   'GET /api/review/status',
   'GET /api/notifications',
-  'GET /api/admin/summary (steady state)',
   'POST /api/internal/notify-sweep (steady state)',
 ] as const;
 

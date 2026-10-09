@@ -9,7 +9,7 @@ that same browser session.
 
 Use `gamedevpl --terminal`, explicit `repl`, or `connect` for terminal conversation.
 `play --preview` retains raw preview. JSON, redirected/non-TTY and `play --stop` keep
-their previous behavior. Explicit `create --play` and `play --edit` also launch a
+the raw-preview path. Explicit `create --play` and `play --edit` also launch a
 browser without a TTY; they cannot be combined with JSON, stop or raw-preview flags.
 `--no-open` prints the complete session URL instead of opening it.
 
@@ -24,6 +24,24 @@ legacy mutation blocks a new create until reconciled; existing recovery journals
 acknowledged game identities remain authoritative. Explicit `play --edit` without a
 slug retains the legacy directory journal for recovery. Interactive terminal `/play`
 remains attached to that terminal's lifetime.
+
+## Finding and stopping sessions
+
+`gamedevpl play --list` shows active workbenches and previews across directories.
+Every row includes an ID, game, directory, URL and a stop command. Ordinary `play`
+shows the same inventory before opening or reusing its requested session.
+`--json` returns the list under `sessions` without opening a browser.
+
+`gamedevpl play --stop` and `gamedevpl stop` target the current checkout; an explicit
+slug selects that game. When the same game has sessions in different directories,
+stop refuses the ambiguous selection and shows IDs. `--session <id>` stops exactly
+one registered server from any directory, and `--all` explicitly stops them all.
+The same selection flags work in `/stop` and `/play --stop`.
+
+Legacy previews without directory metadata are listed by ID, and can also be matched
+from their original checkout. Unreachable records are ignored. A stop is sent through
+the verified loopback server's authenticated endpoint; stale PIDs are never killed.
+Closing a remote game tab is outside this local session registry.
 
 ## Edit and operate
 
@@ -156,3 +174,21 @@ unknown remote outcomes and phone authority. Phone protocol tests bind only loop
 Real device/codec behavior needs a physical phone; desktop narrow viewports do not prove
 it. Browser integration checks use synthetic game/API fixtures and incur no paid agent
 or platform changes.
+
+## Recovering from a build error
+
+A failed first build replaces “Preparing your game…” with “Build failed”. If an update
+fails, Play keeps the last working game and labels the failure “Update could not build”.
+The error card provides expandable compiler diagnostics and **Copy error**. Diagnostics
+render as text, including paths and line numbers reported by the compiler.
+
+**Retry build** runs the local assembler again without requiring a file edit. It appears
+only when the preview server supports retries. Saving source changes still rebuilds
+automatically; a successful build clears the error card.
+
+**Fix with agent** opens Chat and stages the compiler output as a diagnostic attachment.
+It preserves an existing draft, or fills an empty draft with a repair request. Review the
+request and press **Send** to use the normal builder selection and permission flow. The
+button is unavailable while answering a question or choosing a builder; it does not answer
+an approval or dispatch an agent automatically. If the game changes while evidence is
+being attached, Play discards that staged attachment rather than submitting stale evidence.

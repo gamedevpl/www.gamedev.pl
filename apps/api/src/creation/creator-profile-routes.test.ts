@@ -3,6 +3,7 @@ import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { CatalogGameEntry, GitHubClient } from '../catalog/github-client.js';
+import { withSnapshot } from '../catalog/local-snapshot-reader.js';
 import { InMemoryStore } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -29,10 +30,9 @@ describe('creator profile routes', () => {
                 ? {
                     githubToken: 'test-github-token',
                     submissionTokenSecret: 'test-submission-secret',
-                    snapshotReader: null,
-                    githubClient: {
+                    ...withSnapshot({
                       getCatalog: async () => repoCatalog,
-                    } as unknown as GitHubClient,
+                    } as unknown as GitHubClient),
                   }
                 : {}),
             }

@@ -16,10 +16,11 @@ live round. Connector-only requests are inert; do not treat the connector as a r
 The GitHub Agents-side secret reference must use the `COPILOT_MCP_` prefix. Copilot's
 firewall does not cover MCP servers, so the round-key boundary is the isolation layer.
 
-## Session loop (what agents must do)
+## Session loop (what a round usually does)
 
-Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
-`apps/api/src/agent-surface/mcp-server.ts` (returned by `start`, appended to every tool description).
+Source of truth: `ROUND_SEQUENCE` (returned by `start` as `sequence`) and `MCP_INSTRUCTIONS`
+(`initialize.instructions`) in `apps/api/src/agent-surface/mcp-round-guide.ts`, plus each tool's
+own description. They describe; the client decides — see "Server text states facts" below.
 
 1. `start` → `show_round` (once) → `get_brief` → `get_sources` → `get_kit` as needed
    - `start` returns a compact, signed `sessionKey` for later calls. Previously issued
@@ -28,6 +29,12 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - `get_sources` is the first read of **every** round. A new game arrives with a
      generated round-0 draft (`origin: seed`), a later round with what it delivered
      (`origin: delivery`); `seedStatus: pending` means call again rather than scaffold
+   - A tree over `INLINE_SOURCES_MAX_CHARS` (20k chars) comes back as `manifest[]` plus
+     `GAME.json`/`SPEC.md` (`truncated: true`). Contents come from `read_source_files` (up to
+     12 paths) or, for a shell agent, `archive`: a signed GET of the same base as one
+     `.tar.gz` (`SOURCES_ARCHIVE`, upload-token kind `sources`, bound to the base version so
+     a newer delivery answers 409). Measured: a follow-up round re-read ~20k tokens of
+     sources it mostly never touched. `full: true` keeps the old shape.
    - The draft is a starting point, not an authority: where it and the brief disagree, the
      brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
      describes — then keep building rather than waiting on it
@@ -45,15 +52,15 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      shipped game source) — `page.screenshot({path:'shot.png'})` writes PNG directly. Decode a
      data URL to disk in-process (`fs.writeFileSync('shot.png',
 Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
-     data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` +
-     the returned `upload` one-liner. A black frame means those WebGL flags
+     data URL). Keep PNG ≤700 KB, then `screenshot_upload_url` and PUT the PNG to
+     its `url` with its returned `headers`. A black frame means those WebGL flags
      were missing or the drawing
      buffer was discarded. Fallback: `GAME_CAPTURE_GFX=canvas2d` / `?gfx=canvas2d`
      (force2d). There is **no** base64 `send_screenshot` — PNG bytes must never
      enter the model
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
-     the returned `upload` one-liner — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
+     PUT each file to its returned `url` with its returned `headers` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
@@ -152,7 +159,7 @@ clamped rather than erroring on a stale or malformed value, so it always degrade
 something sane rather than refusing the call.
 
 The workflow's `get_brief` step and the managed system prompt
-(`infra/managed-agent.json`) both tell agents: when the latest message is terse
+(`apps/api/src/agent-surface/builder-system-prompt.ts`, sent to every managed vendor) both tell agents: when the latest message is terse
 ("continue", "build my game") or references anything unseen, call `get_transcript`
 before deciding what to build (it returns the tail on the plain call) — and only page
 further back with `cursor` when that window genuinely does not answer what is needed,
@@ -306,19 +313,19 @@ backticks), and never let the summary grow into a diff. A data-only change (Edit
 defaults/content, same declaration) skips the agent entirely and lands as an
 `origin: 'editor'` content candidate.
 
-### Context budget — one contract, not one suffix per tool
+### Context budget — one short overview, not one suffix per tool
 
-The shared behavioural contract belongs in MCP `initialize.instructions`, not in every tool
-description. Repeating it across the advertised schemas made the live 31-tool `tools/list`
-payload about 208 KiB — roughly 50k JSON/code tokens before the creator prompt or any tool
-result. `tools/list` strips the repeated suffix at serialization time and the Anthropic
+Shared guidance belongs once, in MCP `initialize.instructions` (`MCP_INSTRUCTIONS`, kept under
+3,000 characters so no client cuts it off), not in every tool description. Repeating a long
+contract across the advertised schemas once made the live 31-tool `tools/list` payload about
+208 KiB — roughly 50k JSON/code tokens before the creator prompt or any tool result. The
 managed provider defers optional MCP tools; keep the round-start/read/delivery path eager.
 Prompt caching lowers processing cost but does not remove those tokens from the context window.
 When adding or expanding a tool description, measure the serialized `tools/list` payload and
 keep the full contract single-copy; a short creator-text safety reminder may stay eager.
 
 **`get_kit_api` — the orientation path that did not exist before 2026-08-09.** `get_kit`
-returns tarball metadata only (engineRef, sha256, unpack one-liner) — it was never the API
+returns tarball metadata only (engineRef, `kitUrl`, sha256) — it was never the API
 reference its own description claimed to be pointing at, because nothing injected a digest
 into the MCP surface. `appendKitDigest` (`apps/api/src/agent-surface/kit-digest.ts`) had exactly one
 caller, the platform Copilot system prompt (`managed-backend.ts`); a BYOCA agent with no
@@ -337,9 +344,10 @@ is sized to a safe _MCP single-tool-result_ limit, not to the API's own size —
 "A digest-sized tool result is not free" below before touching this constant again. Same
 `engineRef` convention as the browse routes: optional, defaults to the registry's current
 entry when omitted, but pass the `engineRef` `get_kit` returned so a mid-round registry
-bump cannot mix kit revisions. `get_kit` and `get_kit_api` both carry
-`BEHAVIOURAL_CONTRACT`'s line that the platform and kit are not on the public web — an
-unanswered capability question is answered by `get_kit_api` / browse, never a web search.
+bump cannot mix kit revisions. `get_kit` and `get_kit_api` both state that the platform
+and kit are not on the public web — a
+capability question is answered by `get_kit_api`, `knowledge_query` or browse. State the
+fact; do not phrase it as a prohibition.
 
 **The digest itself had a silent-drop bug the surface fix didn't touch.**
 `compactKitDigestForPrompt` (`apps/api/src/agent-surface/kit-digest.ts`) used to keep only API lines
@@ -823,8 +831,8 @@ compositing the default buffer is gone). Do not bake
 `preserveDrawingBuffer:true` into shipped game source — only a disposable
 capture harness. Decode the data URL to
 `shot.png` in-process (`Buffer.from(dataUrl.split(',')[1], 'base64')`; never
-print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` and run
-its returned `upload` one-liner verbatim — it carries the capability in an
+print or return it). Keep PNG ≤700 KB, then `screenshot_upload_url` and PUT to
+its `url` with its returned `headers` — the capability travels in the
 `Authorization: Bearer` header, never in the URL, and the PUT receipt carries
 no channel state. `page.screenshot({path:'shot.png'})` writes
 PNG directly — that is the gate's path.
@@ -1124,7 +1132,7 @@ throwaway `Bearer handshake`; a case that means to arrive without one says so.
   duplicate round card in the conversation per call. Re-run it only after a call is refused as
   unauthenticated. Observed 2026-08-05: ChatGPT called `start` before each operation and said it
   did so "to reacquire the key" — a fair reading of _short-lived_ that nothing in the contract
-  corrected. `SESSION_WORKFLOW`'s first step now does.
+  corrected. The first `sequence` step and the `start` description now do.
   Therefore revoking or rotating a creator key, revoking an OAuth grant, or detecting
   refresh-token reuse must also advance every open self round for that creator via
   `endOpenAgentSessions`. Revoking the opener alone would leave minted session keys live.
@@ -1157,10 +1165,65 @@ meeting it as a refusal after the engine pin moves. The list lives in
 `apps/api/src/agent-surface/kit-upcoming-rules.ts`; add an entry when a rule is
 decided and remove it once it is enforced. It is omitted entirely when empty.
 
-Uploads: run the `upload` one-liner `stage_upload_url` / `screenshot_upload_url`
-returns, verbatim. It carries `-H 'Content-Type: …'`. A PUT that declares no type (or
-one curl guessed from the extension) is now read as bytes rather than refused with a
-415 that left staging silently empty — but the one-liner remains the supported form.
+Uploads: `stage_upload_url` / `screenshot_upload_url` / `concept_frame_upload_url` return
+the upload as data — `url`, `method: "PUT"`, `headers` (`Authorization` + `Content-Type`),
+`maxBytes` — and the client performs it with whatever HTTP client it has. A PUT that
+declares no type (or one guessed from the extension) is read as bytes rather than refused
+with a 415 that left staging silently empty, but sending the returned `headers` is the
+supported form.
+
+### Server text is data, never a command to run
+
+Whatever a tool reply contains could otherwise execute on someone's computer, and it can
+change after the surface was reviewed. So a reply never hands out a shell command to run
+verbatim: uploads are a request described as data (above), the kit is `kitUrl` + `sha256`,
+and recipes that need a shell — headless capture flags, the kit's local create script —
+live in documentation (this playbook and the shipped `gamedevpl` skill), not in tool text.
+The old command fields (`upload`, `uploadScript`, and `unpack` on `get_kit` and
+`get_example`) are gone; `get_example` returns `tarballUrl` + `sha256`. `SHELL_COMMAND`
+(`apps/api/src/agent-surface/shell-command-text.ts`) is the one pattern the tests share:
+`mcp-tool-text.test.ts` fails if any instruction, description or schema field matches it,
+with no exemption, and `mcp-server.test.ts`, `agent-build-reads.test.ts` and
+`agent-channel-proposal.test.ts` assert the same of the upload, kit and example results.
+
+### Server text states facts; the client decides
+
+Tool replies used to order the agent about — a `start` workflow to "follow exactly", warnings
+to "act on", a pending gate that said "STOP this agent run now". A client should not take
+behaviour from a tool response: the reply is not what was reviewed, it can change at any time,
+and in a chat client the person talking to the model is the creator, who outranks the server.
+So server text describes and the client decides:
+
+- `start` returns `sequence` (the usual order of a round) and `nextSuggestedTool: get_brief`
+  (or `get_kit` after a `kit_outdated` refusal); its own description carries the same order
+  where a reviewer can read it.
+  `workflow` still ships as a deprecated alias of `sequence` for clients that cached the old
+  `tools/list` schema; remove it with the other deprecated fields.
+- Replies carry state as data — `stop`, `pendingMessages`, `warnings[].code` with a message
+  that says what is true, and `nextSuggestedTool`. No "honour", "ALWAYS", "STOP" or "do not".
+- `initialize.instructions` is a short overview (`MCP_INSTRUCTIONS`), not a rulebook.
+- Kit-checkout scripts (`npm run typecheck` / `check:game` / `play` / `trace`) and the capture
+  recipe live in the shipped `gamedevpl` skill. `mcp-tool-text.test.ts` fails if a shell
+  command reappears in the instructions, the sequence, a description or a schema field.
+
+Our own managed builder still runs a strict loop — but that loop now lives in its system
+prompt (`builderSystemPrompt` in `apps/api/src/agent-surface/builder-system-prompt.ts`), which
+we write and which tells it to act on `stop` and `warnings` and to treat `nextSuggestedTool` as a
+hint that never replaces finishing or verifying a change. The backend sends it on every managed
+session (shell lane for Anthropic, MCP-only lane for OpenAI/Gemini), so it ships by deploy;
+`apps/api/scripts/managed-agent-apply.ts` also copies the shell lane onto the Anthropic Agent so
+the Console shows the same text.
+
+**Measuring the change.** Every `mcp session started` log line carries `guideVersion`
+(`MCP_GUIDE_VERSION`). Compare self rounds before and after a version change on the outcomes
+the old wording existed to protect: the share that call `end` after submit (`agentEndedBy`),
+the share that deliver at least one preview, and the share that resubmit after a refused gate.
+If one drops, restore the specific sentence that carried it — in a tool description, as a
+fact — rather than bringing back the imperative contract.
+
+**`submit_sources` never publishes by default.** An omitted `mode` is `preview`;
+`publish` must be passed explicitly (`fromLatestDelivery` still reuses the previous lane).
+Sealing a green preview later still runs the full publish gate (`origin: 'seal'`).
 
 A batch `stage_upload_url({ paths })` mints every path it can and lists the rest in
 `rejected: [{ path, reason }]`. It used to refuse the whole batch over one bad path,
@@ -1190,7 +1253,7 @@ cannot forget it. Before that, a refusal failed the declared schema and clients 
 back to `error` text otherwise — never parse the message.
 
 The refusal vocabulary and the warnings vocabulary are both declared once in `initialize`
-(`MCP_REFUSAL_CONTRACT`, `MCP_WARNINGS_CONTRACT`), not per tool: `tools/list` is capped at 120 KB
+(`MCP_INSTRUCTIONS`), not per tool: `tools/list` is capped at 120 KB
 and every byte there is context the building agent pays for on connect.
 
 Adding a code: extend `MCP_ERROR_CODES` in `mcp-tool-support.ts`, return it with `toolRefusal`,
@@ -1198,7 +1261,17 @@ and add a row here.
 
 ## Soft warnings (never `isError`)
 
-Merged by `applySessionNudges` / submit handler. Act, then continue:
+Merged by `applySessionNudges` / submit handler. Each message states the round's state. The
+reply's `nextSuggestedTool` (`nextSuggestedTool()` in `mcp-round-guide.ts`) is set only when
+the state alone justifies a step: `end` on `stop` with `builder_handoff` or `gate_pending`;
+`get_kit` for a `kit_outdated` refusal until this instance has answered a `get_kit` (then
+nothing, since a breaking kit can need code changes); `read_inbox` for notes that arrived since the last
+read; `get_transcript` / `get_sources` for unread context; `end` on the `submit_sources` or
+`get_gate_verdict` reply that carries `call_end`, unless `gate_not_started` rides with it. It is omitted otherwise — never
+`submit_sources`, because `must_deliver` / `must_fix_gate` say what must happen before the
+round can finish, not that the sources are ready, and never while a staged file carries a
+known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
+`audio_catalog_hint`):
 
 | Code                    | Meaning                                                                                                                                                                                                                                                                                        |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1208,7 +1281,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | `gate_not_started`      | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                                                                                                                                     |
 | `gate_poll_backoff`     | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                                                                                                                                               |
 | `progress_stale`        | Call `report_progress`                                                                                                                                                                                                                                                                         |
-| `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                                                                                                                                             |
+| `inbox_pending`         | Notes `read_inbox` has not returned yet (with image count); `read_inbox` → apply → `ack_inbox`                                                                                                                                                                                                 |
 | `seed_unread`           | Call `get_sources` before scaffolding from the kit                                                                                                                                                                                                                                             |
 | `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                                                                                                                                            |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that breaks the gate (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting. (`index.html` isn't in this lane: a fresh write is a hard refusal, not a warning — see "index.html can never be freshly written again") |

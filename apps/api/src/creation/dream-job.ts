@@ -16,6 +16,7 @@ import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream-frames.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
+import { dreamHistory } from './dream-history.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
 import { currentOwnerUid, gameOwnerUid } from '../platform/game-access-resolve.js';
 
@@ -45,6 +46,7 @@ export type DreamOutcome =
   | 'no_ideas'
   | 'no_frames'
   | 'superseded'
+  | 'external_builder'
   | 'failed';
 
 // Naming for the store's refusal; a lost claim means superseded.
@@ -103,15 +105,17 @@ function isThrottled(error: unknown): boolean {
   return /\b429\b|RESOURCE_EXHAUSTED/.test(message);
 }
 
-function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | null {
+// Why a frame was dropped, or the decoded frame.
+function decodeFrame(frame: DreamFrame): { bytes: Buffer; size: ImageSize } | { refused: string } {
   const bytes = Buffer.from(frame.data, 'base64');
-  if (bytes.length === 0 || bytes.length > MAX_DREAM_FRAME_BYTES) return null;
+  if (bytes.length === 0) return { refused: 'empty' };
+  if (bytes.length > MAX_DREAM_FRAME_BYTES) return { refused: `${bytes.length} bytes over the shot limit` };
   // The card outlives the claim, so an unrenderable frame is permanent.
-  if (!carriesPixels(bytes)) return null;
+  if (!carriesPixels(bytes)) return { refused: 'no pixels' };
   const declared = frame.mediaType === 'image/png' ? isPng(bytes) : isJpeg(bytes);
-  if (!declared) return null;
+  if (!declared) return { refused: `not a ${frame.mediaType}` };
   const size = imageSize(bytes);
-  return size ? { bytes, size } : null;
+  return size ? { bytes, size } : { refused: 'unmeasurable' };
 }
 
 export function createDreamJob(deps: DreamJobDeps): DreamJob {
@@ -159,7 +163,10 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       );
       if (!frame) return null;
       const decoded = decodeFrame(frame);
-      if (!decoded) return null;
+      if ('refused' in decoded) {
+        log.warn({ jobId: input.jobId, reason: decoded.refused }, 'dream frame refused');
+        return null;
+      }
       // Spike rule: a frame that changed shape redrew the HUD.
       if (!sameAspectRatio(decoded.size, input.size)) {
         log.warn({ jobId: input.jobId, size: decoded.size, source: input.size }, 'dream frame changed aspect ratio');
@@ -184,6 +191,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   async function run(input: DreamRunInput, claimedAt: string): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
+    // External agents draw their own frames; the platform draws none.
+    if (record.builder === 'self') return 'external_builder';
     // The same predicate the claim uses; two spellings would drift apart.
     if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString(), record.roundGeneration ?? 1))
       return 'already_ran';
@@ -223,15 +232,25 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The reads above take real time; either flag may have moved since.
     halt = await stopped();
     if (halt) return halt;
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    if (!(await availability.hasFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     // Booked before the answer: a call that failed still billed.
     await bookConcept(jobId, ideas.model);
+    // Fail open: the spec alone still gives ideas.
+    const history = await dreamHistory(store, jobId, record.slug).catch(() => []);
+    // Awaited below: the seed request's CPU ends with this run.
+    const retryBookings: Promise<void>[] = [];
     const generated = await ideas.generate({
+      screenshotPng: source.toString('base64'),
+      onRetry: () => retryBookings.push(bookConcept(jobId, ideas.model)),
+      ...(history.length ? { history } : {}),
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
       title: record.title,
       published,
       ...(record.locale ? { locale: record.locale } : {}),
     });
+    await Promise.all(retryBookings);
     const candidates = generated.slice(0, DREAM_OPTIONS);
     // A slot and an image call for a card that cannot post.
     if (candidates.length < DREAM_OPTIONS) return 'no_ideas';
@@ -239,7 +258,6 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const sourcePng = source.toString('base64');
     const styleNote = styleNoteFor(record);
     const dreamed: { frame: DreamFrame; idea: NextIdea }[] = [];
-    const dateStr = new Date(now()).toISOString().slice(0, 10);
     // Both frames or neither; one buys nothing.
     if (!(await availability.spendFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     for (const idea of candidates) {
@@ -322,7 +340,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         sourceRef: sourceShot.id,
         version,
         options,
-        builder: record.builder === 'self' ? 'self' : 'platform',
+        builder: 'platform',
       };
       // The transaction re-reads the mute, so it needs the same owner.
       const proposalOwnerUid = record.slug ? await gameOwnerUid(store, record) : record.ownerUid;

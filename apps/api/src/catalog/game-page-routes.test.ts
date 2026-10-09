@@ -3,6 +3,7 @@ import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { extractSpecDescription } from './game-page-routes.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
+import { withSnapshot } from './local-snapshot-reader.js';
 import { InMemoryStore } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -66,11 +67,10 @@ describe('game page routes', () => {
                 ? {
                     githubToken: 'test-github-token',
                     submissionTokenSecret: 'test-submission-secret',
-                    snapshotReader: null,
-                    githubClient: {
+                    ...withSnapshot({
                       getCatalog: async () => opts.repoCatalog,
                       getGameFile: async (_ref: string, _slug: string, path: string) => opts.gameFiles?.[path] ?? null,
-                    } as unknown as GitHubClient,
+                    } as unknown as GitHubClient),
                   }
                 : {}),
             }

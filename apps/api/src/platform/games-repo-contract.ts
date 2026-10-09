@@ -88,11 +88,46 @@ export const GAME_KIT_MODULES = [
   // Studio-editable content (EditorKit L2, games-repo Check 31). Opt-in, receive-only
   // bridge module; the Studio pushes drafts, the game re-enters play.
   'editor',
+  'settings',
   // Studio scene inspection; the shell owns the inspector UI.
   'inspect',
 ] as const;
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
+
+// Unguarded cross-module calls between GameKit modules.
+// Lockstep twin: games-repo assemble.ts GAME_KIT_MODULE_REQUIRES.
+export const GAME_KIT_MODULE_REQUIRES: Readonly<Record<string, readonly GameKitModuleName[]>> = {
+  actors: ['drawing'],
+  gfx: ['drawing'],
+  gfx3d: ['gfx'],
+  urban: ['world'],
+  settings: ['ui', 'gfx', 'audio'],
+};
+
+// typecheck cannot see this: game-kit.d.ts declares every module at once.
+export function missingModuleDependency(modules: readonly string[]): string | null {
+  for (const [owner, needs] of Object.entries(GAME_KIT_MODULE_REQUIRES)) {
+    if (!modules.includes(owner)) continue;
+    const missing = needs.find((need) => !modules.includes(need));
+    if (!missing) continue;
+    return (
+      `GAME.json engine.modules lacks "${missing}", which "${owner}" calls at runtime ` +
+      `(the game crashes with "GameKit.<fn> is not a function"). Add "${missing}" in canonical order.`
+    );
+  }
+  return null;
+}
+
+// Null when the games tip predates the map; absence is not drift.
+export function extractGameKitModuleRequires(assembleSource: string): Record<string, string[]> | null {
+  const match = assembleSource.match(/GAME_KIT_MODULE_REQUIRES\s*=\s*\{([\s\S]*?)\}/);
+  if (!match) return null;
+  const entries = [...match[1].matchAll(/([a-z0-9]+)\s*:\s*\[([^\]]*)\]/g)];
+  return Object.fromEntries(
+    entries.map(([, owner, list]) => [owner, [...list.matchAll(/['"]([a-z0-9-]+)['"]/g)].map((entry) => entry[1])]),
+  );
+}
 
 /**
  * Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`.
@@ -112,15 +147,12 @@ export const GAME_BUDGET_BYTES = 936 * 1024;
  * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
  * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
  * mission-ladder work. 336 → 708 KiB to stay above the 624 KiB author budget.
+ * 1062 → 1593 KiB (+50%) when ink-and-fury's acts reached the old ceiling.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 1062 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 1593 * 1024;
 
-/**
- * Raw TypeScript source-graph module ceiling for the bake/play/seed bundlers
- * (`MAX_SOURCE_GRAPH_MODULES` in `github-client.ts`, `MAX_GAME_MODULES` in
- * `seed-bundle.ts`). Raised 64 → 128 for mexico-86.
- */
-export const MAX_SOURCE_GRAPH_MODULES = 128;
+// Raw TypeScript source-graph module ceiling (github-client, seed-bundle).
+export const MAX_SOURCE_GRAPH_MODULES = 256;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
@@ -205,6 +237,7 @@ export const MUSIC_CONTRACT = {
  * the nightly bake had to be the thing that noticed.
  */
 export const GAME_KIT_VERTICAL_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
+  settings: 'shared/modules/settings/index.ts',
   gfx3d: 'shared/modules/gfx3d/index.ts',
   vehicles: 'shared/verticals/vehicles/index.ts',
   urban: 'shared/verticals/urban/index.ts',

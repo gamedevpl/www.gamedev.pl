@@ -1,5 +1,5 @@
 // Loopback callback pages — same chrome as the consent screen.
-import { MASCOT_SVG } from './mascot-svg.js';
+import { MASCOT_SVG, MASCOT_FAVICON_DATA_URL } from './mascot-svg.js';
 
 const STYLES = `<style>
   :root {
@@ -40,6 +40,7 @@ export function loopbackPage(kind: LoopbackPageKind): string {
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>gamedevpl</title>
+  <link rel="icon" type="image/svg+xml" href="${MASCOT_FAVICON_DATA_URL}"/>
   ${STYLES}
 </head>
 <body>

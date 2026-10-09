@@ -546,7 +546,7 @@ describe('operator alerts on the notify sweep', () => {
 
     expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 1 });
     const [notification] = await store.listNotifications('g:boss');
-    expect(notification).toMatchObject({ type: 'operator.review_ready', link: '/admin/queue' });
+    expect(notification).toMatchObject({ type: 'operator.review_ready', link: '/' });
 
     // Twice through the scheduler is one notification: the situation has not changed.
     expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0 });
@@ -654,6 +654,7 @@ describe('undelivered feedback reaches the operator, not just the log', () => {
 describe('health re-gate verdicts on the notify sweep', () => {
   const REQUESTED_AT = '2026-07-30T12:00:00.000Z';
   const RAN_AT = '2026-07-30T12:20:00.000Z';
+  const SWEEP_AT = Date.parse('2026-07-30T13:30:00.000Z');
 
   async function sweep(app: Awaited<ReturnType<typeof buildApp>>) {
     const res = await app.inject({
@@ -701,24 +702,28 @@ describe('health re-gate verdicts on the notify sweep', () => {
         githubClient: publishedGithubClient(),
         internalAuthVerifier: acceptAll,
         agentChannel: { gamesStore },
+        now: () => SWEEP_AT,
       },
     });
     return { app, store };
   }
 
-  it('scans the games collection once per window, not on every two-minute run', async () => {
+  it('queries recent checks once per window and never scans every game', async () => {
     // Every run listed every publication; at 120 games that was most of the day's reads.
     const { app, store } = await appWithPendingCheck(null);
-    const list = vi.spyOn(store, 'listPublications');
+    const scan = vi.spyOn(store, 'listPublications');
+    const recent = vi.spyOn(store, 'listPublicationsWithHealthRequestedSince');
     await sweep(app);
     await sweep(app);
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(recent).toHaveBeenCalledTimes(1);
+    expect(recent).toHaveBeenCalledWith('2026-07-28T13:30:00.000Z');
+    expect(scan).not.toHaveBeenCalled();
     await app.close();
   });
 
   it('forgets the cached scan the moment a verdict is recorded', async () => {
     const { app, store } = await appWithPendingCheck({ green: true, ranAt: RAN_AT });
-    const list = vi.spyOn(store, 'listPublications');
+    const list = vi.spyOn(store, 'listPublicationsWithHealthRequestedSince');
     expect(await sweep(app)).toMatchObject({ healthResolved: 1 });
     // A stale list would re-resolve — and re-notify — the same check next run.
     expect(await sweep(app)).toMatchObject({ healthResolved: 0 });
@@ -765,6 +770,7 @@ describe('health re-gate verdicts on the notify sweep', () => {
         githubClient: publishedGithubClient(),
         internalAuthVerifier: acceptAll,
         agentChannel: { gamesStore },
+        now: () => SWEEP_AT,
       },
     });
 

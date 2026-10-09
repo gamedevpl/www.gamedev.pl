@@ -2,6 +2,7 @@ import { WORKBENCH_ONBOARDING_SCRIPT } from './workbench-onboarding-script.js';
 import { WORKBENCH_PLAYER_SCRIPT } from './workbench-player-script.js';
 import { WORKBENCH_NAVIGATION_SCRIPT } from './workbench-navigation-script.js';
 import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
+import { WORKBENCH_BUILD_ERROR_SCRIPT } from './workbench-build-error-script.js';
 export const SESSION_BROWSER_SCRIPT = String.raw`
 const el = id => document.getElementById(id);
 const panel = el('panel'), draft = el('prompt');
@@ -27,10 +28,11 @@ function controls() {
   const ready = online && state && !pending && !sending;
   el('send').disabled = !ready || state.mode === 'pick' || (state.mode === 'busy' && !state.localTask);
   el('send').textContent = state?.mode === 'busy' ? 'Queue request' : 'Send';
-  el('stop').disabled = !online || !state?.localTask || state.mode !== 'busy' || stopping === state.taskId || Boolean(pending);
+  el('stop').disabled = !online || !state?.localTask || (state.mode !== 'busy' && !state.approvalPending) || stopping === state.taskId || Boolean(pending);
   draft.disabled = state?.mode === 'pick';
   for (const button of el('choices').children) button.disabled = !ready;
   el('retry').hidden = !pending || sending;
+  buildErrorControls();
 }
 function reconcilePending(sessionId) {
   if(pending&&pending.envelope.sessionId!==sessionId) {
@@ -43,7 +45,6 @@ function render(next) {
   const old = state;
   state = next;
   el('session-lifetime').textContent=state.detached?'This session runs independently. Use Commands → End session to stop it.':'Shared with your terminal. Keep the terminal session open.';
-  updateWorkspace(next);
   const fingerprint=JSON.stringify([next.addresses,next.phone,next.reports]);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;devices(next);}
   if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
@@ -51,7 +52,7 @@ function render(next) {
   el('game-name').textContent = state.identity || 'gamedev.pl';
   el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
   window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,workspace:state.workspace}}));
-  el('task').textContent = (state.mode === 'busy' ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
+  el('task').textContent = (state.mode === 'busy' || state.approvalPending ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('task').dataset.tone = /^(?:blocked|failed|error)\b/i.test(state.activity) ? 'red' : '';
   el('queue').textContent = state.queued.length ? 'Queued (' + state.queued.length + ')\n' + state.queued.map((v, i) => (i + 1) + '. ' + v).join('\n') : '';
   el('question').textContent = state.question;
@@ -68,7 +69,9 @@ function render(next) {
   if (sourceId !== state.sourceId) {
     sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';
     swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
+    failedBuild=undefined;el('notice').textContent='';updateBuildError();
   }
+  updateWorkspace(next);
   controls();
   updateOnboarding(next);
 }
@@ -125,8 +128,9 @@ async function previewTick() {
     if (online && state?.hasPreview && !loading) {
       const build = await api('/preview/status');
       if (build.sourceId === sourceId) {
-        el('notice').textContent = build.error || (build.busy || build.stale ? 'Building update…' : lastSwapError);
-        if (!build.busy && !build.stale && build.revision) {
+        observeBuild(build);
+        el('notice').textContent = build.error && !build.busy ? '' : (build.busy || build.stale ? 'Building update…' : lastSwapError);
+        if (!build.error && !build.busy && !build.stale && build.revision) {
           candidate = build.revision;
           if (!revision) await apply();
           else {el('apply').hidden=candidate===revision||el('policy').value==='freeze';if(candidate!==revision&&el('policy').value==='auto'&&lastAuto!==candidate){const caps=await gameRequest(frame,'capabilities').catch(()=>null);if(caps?.validate&&caps.safe){lastAuto=candidate;await apply(false,true);}else el('notice').textContent='Update ready · waiting for a supported safe point, or apply manually.';}}
@@ -145,5 +149,6 @@ ${WORKBENCH_PLAYER_SCRIPT}
 ${WORKBENCH_TOOLS_SCRIPT}
 ${WORKBENCH_NAVIGATION_SCRIPT}
 ${WORKBENCH_ONBOARDING_SCRIPT}
+${WORKBENCH_BUILD_ERROR_SCRIPT}
 tick(); previewTick();
 `;

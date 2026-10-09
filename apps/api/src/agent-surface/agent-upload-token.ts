@@ -8,15 +8,17 @@ import {
 } from '../platform/agent-token.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS } from '../delivery/gcs-sign.js';
 
-// Short-lived PUT URLs for curl --upload-file.
+// Short-lived signed PUT URLs for raw file uploads.
 
 const SCOPE = 'agent-upload-v1';
+const UPLOAD_KINDS: ReadonlySet<UploadKind> = new Set(['screenshot', 'stage', 'sources']);
 
 // Match kit signed-read TTL (15 min).
 export const DEFAULT_UPLOAD_URL_TTL_SECONDS = DEFAULT_SIGNED_URL_TTL_SECONDS;
 export const UPLOAD_TOKEN_HEADER = 'authorization';
 
-export type UploadKind = 'screenshot' | 'stage';
+// 'sources' is a read: the round's base sources as one archive.
+export type UploadKind = 'screenshot' | 'stage' | 'sources';
 
 export interface UploadTokenClaims {
   jobId: number;
@@ -128,7 +130,7 @@ export function mintUploadToken(secret: string, options: MintUploadTokenOptions)
   if (!Number.isSafeInteger(options.roundGeneration) || options.roundGeneration < 1) {
     throw new InvalidAgentTokenError('invalid round generation');
   }
-  if (options.kind !== 'screenshot' && options.kind !== 'stage') {
+  if (!UPLOAD_KINDS.has(options.kind)) {
     throw new InvalidAgentTokenError('invalid upload kind');
   }
   if (options.kind === 'stage' && (!options.path || !options.path.trim())) {
@@ -184,7 +186,7 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
       !signature ||
       !/^\d+$/.test(jobIdRaw) ||
       !/^\d+$/.test(generationRaw) ||
-      (kindRaw !== 'screenshot' && kindRaw !== 'stage') ||
+      !UPLOAD_KINDS.has(kindRaw as UploadKind) ||
       !/^\d+$/.test(expRaw) ||
       !/^[a-f0-9]+$/i.test(nonce) ||
       !/^[a-f0-9]{64}$/i.test(signature)
@@ -242,11 +244,4 @@ export function assertUploadTokenUnexpired(claims: UploadTokenClaims, nowMs: num
   if (claims.exp * 1000 <= nowMs) {
     throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
   }
-}
-
-// Explicit Content-Type: no parser claims a missing one.
-export function uploadCurlCommand(url: string, token: string, localPath: string, contentType: string): string {
-  const escaped = url.replace(/'/g, `'\\''`);
-  const escapedToken = token.replace(/'/g, `'\\''`);
-  return `curl -H 'Authorization: Bearer ${escapedToken}' -H 'Content-Type: ${contentType}' --upload-file ${localPath} '${escaped}'`;
 }

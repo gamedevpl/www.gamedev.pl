@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { createJobReconciler, type JobReconcilerDeps } from './job-reconciler.js';
-import { retryClosedPreviewDream } from './closed-preview-dream-retry.js';
+import { CLOSED_PREVIEW_DREAM_WINDOW_MS, retryClosedPreviewDream } from './closed-preview-dream-retry.js';
 
 const AT = '2026-09-26T12:00:00.000Z';
 async function setup(accepted = false) {
+  const clock = { now: Date.parse(AT) };
   const store = new InMemoryStore();
   await store.createSubmission(9, 'g:owner', 'Preview');
   await store.setSubmissionSlug(9, 'preview-game');
@@ -24,7 +25,7 @@ async function setup(accepted = false) {
     store,
     gamesStore: { getManifest } as unknown as GamesStore,
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    now: () => Date.parse(AT),
+    now: () => clock.now,
     observeQuietMs: 0,
     maxDeliveryNudges: 1,
     backendForRecord: async () => undefined,
@@ -36,7 +37,7 @@ async function setup(accepted = false) {
     onPreviewGateGreen: handoff,
   });
   const poll = async () => reconciler.reconcileGateVerdict((await store.getSubmission(9))!);
-  return { store, manifest, getManifest, handoff, poll };
+  return { store, manifest, getManifest, handoff, poll, clock };
 }
 
 describe('dream handoff after a preview round closes', () => {
@@ -53,6 +54,17 @@ describe('dream handoff after a preview round closes', () => {
     });
     expect((await store.getSubmission(9))?.roundGeneration).toBe(closed.roundGeneration);
     expect((await store.getSubmission(9))?.transitions).toEqual(closed.transitions);
+    await poll();
+    expect(handoff).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a round sealed longer ago than the window alone', async () => {
+    const { handoff, poll, clock } = await setup();
+    await poll();
+    clock.now += CLOSED_PREVIEW_DREAM_WINDOW_MS;
+    await poll();
+    expect(handoff).toHaveBeenCalledOnce();
+    clock.now -= 1;
     await poll();
     expect(handoff).toHaveBeenCalledTimes(2);
   });
@@ -76,11 +88,25 @@ describe('dream handoff after a preview round closes', () => {
 });
 
 it.each([false, true])('retries only superseded ended old-generation claims: %s', async (superseded) => {
-  const { store, handoff, poll } = await setup(true);
+  const { store, handoff, poll } = await setup();
+  // Claimed before the seal, while the session was still open.
+  await store.claimDreamRun(9, 'v1', AT, (await store.getSubmission(9))!.roundGeneration!);
   await poll();
   await store.finishDreamRun(9, { version: 'v1', claimedAt: AT, superseded }, AT);
   await poll();
   expect(handoff).toHaveBeenCalledTimes(superseded ? 2 : 1);
+});
+
+it('hands the dream off after the seal, with the generation that will post it', async () => {
+  const { store, handoff, poll } = await setup();
+  const open = (await store.getSubmission(9))!;
+  await poll();
+  const sealed = (await store.getSubmission(9))!;
+  expect(sealed.roundGeneration).not.toBe(open.roundGeneration);
+  expect(handoff.mock.calls[0][0].record).toMatchObject({
+    state: 'ready_for_review',
+    roundGeneration: sealed.roundGeneration,
+  });
 });
 
 it('never repeats a posted claim even with a superseded marker', async () => {

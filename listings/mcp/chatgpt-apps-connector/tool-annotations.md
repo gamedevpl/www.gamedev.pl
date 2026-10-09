@@ -5,7 +5,7 @@ Derived from `apps/api/src/agent-surface/mcp-server.ts`, so the tool list and an
 server's, not a transcription.
 
 Covers exactly the tools `tools/list` advertises (`MCP_VISIBLE_TOOLS`), in the order the
-server lists them. Tools that exist only for REST compatibility and are never advertised
+server lists them, plus the two app-only tools an MCP Apps client also sees (marked as such). Tools that exist only for REST compatibility and are never advertised
 to a model (`MCP_UNADVERTISED_TOOLS`) are deliberately absent — the review sees only the
 advertised surface.
 
@@ -60,6 +60,136 @@ Creates a game and consumes the creator's limited daily creation quota, reducing
 
 ```
 Each call attempts to create a new game, so two calls are two creations (bounded by the daily quota).
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `list_account_games`
+
+**Read Only: True**
+
+```
+Lists the games on the caller's own account (slug, title, state, whether a round is open) and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only; listing games changes no game, round or account.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `get_game_performance`
+
+**Read Only: True**
+
+```
+Returns anonymous, aggregated frame-rate measurements for a published game the caller owns, and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only; reading the aggregates changes no game, build or measurement, and it does not trigger any change to the game.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same aggregates (cached for up to ten minutes) or newer ones of the same shape, with no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `get_game_access`
+
+**Read Only: True**
+
+```
+Returns the caller's role and the member list of a game the caller already belongs to, and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only; it grants, revokes and changes no access.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `propose_game_transfer`
+
+**Read Only: False**
+
+```
+Creates an expiring transfer proposal record for a game the caller owns, so it writes state.
+```
+
+**Destructive: False**
+
+```
+Additive and reversible: the proposal moves nothing. It names no recipient and completes no transfer; a person reviews and acts on it in Studio, and an unused proposal simply expires.
+```
+
+**Idempotent: True**
+
+```
+The call requires an idempotency key: repeating it with the same key returns the same proposal instead of creating another.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `get_game_transfer_proposal_receipt`
+
+**Read Only: True**
+
+```
+Looks up an existing transfer proposal by its idempotency key and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only; it neither creates, changes nor cancels a proposal.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
 ```
 
 **Open World: False**
@@ -146,76 +276,76 @@ Read-only: repeating the call returns the same data (or newer data of the same s
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
-## `get_reference_images`
-
-**Read Only: True**
-
-```
-Returns the sketches and photos the creator attached to the round, and writes nothing.
-```
-
-**Destructive: False**
-
-```
-Read-only; the attached images are returned as-is and are not consumed or altered by reading them.
-```
-
-**Idempotent: True**
-
-```
-Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-## `get_seed`
-
-**Read Only: True**
-
-```
-Returns the platform-generated starter draft for the round, if one exists, and writes nothing.
-```
-
-**Destructive: False**
-
-```
-Read-only; the seed is returned as-is and is not consumed or altered by reading it.
-```
-
-**Idempotent: True**
-
-```
-Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-## `regenerate_seed`
+## `report_progress`
 
 **Read Only: False**
 
 ```
-Queues generation of a replacement starter draft for the round, which writes state.
+Appends a progress note to the creator's thread for this round, which writes state.
 ```
 
-**Destructive: True**
+**Destructive: False**
 
 ```
-Marked destructive because it replaces the round's current generated draft: once the replacement lands, the prior one is gone. It is refused once anything has been staged or delivered, so it can only ever discard a platform-generated draft, never creator-authored work — but replacing existing content is still not additive.
+Additive: it appends one note to the round's thread. It edits or removes nothing, and the note only reports what the agent is doing.
 ```
 
 **Idempotent: False**
 
 ```
-Each accepted call queues another regeneration, and the call is capped per round, so repeat calls are not free.
+Two calls produce two notes, so repeating the call is not a no-op.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `screenshot_upload_url`
+
+**Read Only: False**
+
+```
+Mints a short-lived upload request, returned as data (URL, method PUT, headers, size limit), whose Authorization header lets the agent upload a PNG into the round. The subsequent PUT writes state.
+```
+
+**Destructive: False**
+
+```
+Minting the URL does not delete anything. The subsequent PUT is additive: it adds an image to the round.
+```
+
+**Idempotent: False**
+
+```
+Each call mints a fresh URL, and each upload adds another screenshot.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The returned URL is same-origin.
+```
+
+## `end`
+
+**Read Only: False**
+
+```
+Closes this session (and acknowledges a builder switch if one is pending), which writes state.
+```
+
+**Destructive: True**
+
+```
+Marked destructive because it closes the session for good (a further change needs a new start) and can post a persistent, unretractable closing summary and, via ackInboxIds, acknowledge creator messages so they stop being surfaced to the agent (same reasoning as ack_inbox) — even though delivered sources, screenshots, progress notes and the gate verdict all remain untouched.
+```
+
+**Idempotent: True**
+
+```
+Calling it again on a closed round changes nothing further; re-acknowledging already-acked ids is a no-op the same way ack_inbox is.
 ```
 
 **Open World: False**
@@ -406,6 +536,84 @@ Read-only: repeating the call returns the same data (or newer data of the same s
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `get_reference_images`
+
+**Read Only: True**
+
+```
+Returns the sketches and photos the creator attached to the round, and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only; the attached images are returned as-is and are not consumed or altered by reading them.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `get_seed`
+
+**Read Only: True**
+
+```
+Returns the platform-generated starter draft for the round, if one exists, and writes nothing.
+```
+
+**Destructive: False**
+
+```
+Read-only; the seed is returned as-is and is not consumed or altered by reading it.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
+## `regenerate_seed`
+
+**Read Only: False**
+
+```
+Queues generation of a replacement starter draft for the round, which writes state.
+```
+
+**Destructive: True**
+
+```
+Marked destructive because it replaces the round's current generated draft: once the replacement lands, the prior one is gone. It is refused once anything has been staged or delivered, so it can only ever discard a platform-generated draft, never creator-authored work — but replacing existing content is still not additive.
+```
+
+**Idempotent: False**
+
+```
+Each accepted call queues another regeneration, and the call is capped per round, so repeat calls are not free.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+```
+
 ## `knowledge_query`
 
 **Read Only: True**
@@ -458,24 +666,24 @@ Read-only: repeating the call returns the same data (or newer data of the same s
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
-## `report_progress`
+## `read_source_files`
 
-**Read Only: False**
-
-```
-Appends a progress note to the creator's thread for this round, which writes state.
-```
-
-**Destructive: True**
+**Read Only: True**
 
 ```
-Marked destructive because it sends a persistent, creator-visible message that this tool cannot retract or edit — the same reasoning that already applies to a closing summary from end.
+Returns the contents of up to twelve of this game's source files by path, from the latest delivery or the round-0 draft, and writes nothing.
 ```
 
-**Idempotent: False**
+**Destructive: False**
 
 ```
-Two calls produce two notes, so repeating the call is not a no-op.
+Read-only; reading files changes no staged or delivered source.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
 ```
 
 **Open World: False**
@@ -484,48 +692,12 @@ Two calls produce two notes, so repeating the call is not a no-op.
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
-## `screenshot_upload_url`
-
-Produces a PNG only when the agent has a shell. Headless Chromium needs
-`--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader
---enable-webgl --ignore-gpu-blocklist` (never `--disable-gpu`); capture
-`canvas.toDataURL` inside the same render callback (`preserveDrawingBuffer:true`
-only in a disposable capture harness, never in shipped game source), decode to `shot.png` with `Buffer.from(dataUrl.split(',')[1],'base64')`
-without printing it, or `page.screenshot({path:'shot.png'})`. Keep PNG ≤700 KB.
-Without a shell or browser, skip this tool and read frames via
-`get_gate_media` in a later/resumed run: call `get_gate_verdict` once first,
-then fetch media if a preview verdict is already available after `mode=preview`.
-
-**Read Only: False**
-
-```
-Mints a short-lived PUT command whose authorization header lets the agent upload a PNG into the round. The subsequent PUT writes state.
-```
-
-**Destructive: False**
-
-```
-Minting the URL does not delete anything. The subsequent PUT is additive: it adds an image to the round.
-```
-
-**Idempotent: False**
-
-```
-Each call mints a fresh URL, and each upload adds another screenshot.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The returned URL is same-origin.
-```
-
 ## `stage_upload_url`
 
 **Read Only: False**
 
 ```
-Mints short-lived PUT commands whose authorization headers let the agent upload source files into the round’s staging area. The subsequent PUT writes state.
+Mints short-lived upload requests, returned as data (URL, method PUT, headers, size limit), whose Authorization headers let the agent upload source files into the round’s staging area. The subsequent PUT writes state.
 ```
 
 **Destructive: False**
@@ -681,7 +853,7 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 **Read Only: False**
 
 ```
-Delivers the staged sources to the automated quality gate, which writes state and queues a gate run.
+Delivers the staged sources to the automated quality gate, which writes state and queues a gate run. It defaults to mode=preview; publish must be passed explicitly, and even a green publish verdict sends the game to review rather than making it public.
 ```
 
 **Destructive: True**
@@ -700,32 +872,6 @@ Each call spends another delivery from the round’s fixed allowance.
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Source content is agent-authored but purely inbound: it is bounded by a filename allowlist and size caps, and nothing in it can cause the server to fetch anything.
-```
-
-## `end`
-
-**Read Only: False**
-
-```
-Commits and closes the round, which writes state.
-```
-
-**Destructive: True**
-
-```
-Marked destructive because it can send a persistent, unretractable closing message (same reasoning as report_progress) and, via ackInboxIds, acknowledge creator messages so they stop being surfaced to the agent (same reasoning as ack_inbox) — even though delivered sources, screenshots, progress notes and the gate verdict all remain untouched.
-```
-
-**Idempotent: True**
-
-```
-Calling it again on a closed round changes nothing further; re-acknowledging already-acked ids is a no-op the same way ack_inbox is.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `show_round`
@@ -808,6 +954,8 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 
 ## `get_round_status`
 
+Advertised only to clients that declare the MCP Apps (`io.modelcontextprotocol/ui`) extension, marked app-only: the round card calls it, never the model.
+
 **Read Only: True**
 
 ```
@@ -860,6 +1008,8 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 
 ## `get_round_media`
 
+Advertised only to clients that declare the MCP Apps (`io.modelcontextprotocol/ui`) extension, marked app-only: the round card calls it, never the model.
+
 **Read Only: True**
 
 ```
@@ -889,11 +1039,7 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 **Read Only: True**
 
 ```
-Returns the gate's screenshots and gameplay recording for inspection, and writes nothing.
-Without a shell or browser, this is how the agent sees the game once a preview
-verdict is already available after a mode=preview delivery — not immediately after
-submit_sources, and not by waiting or polling. On resume, call get_gate_verdict
-once first; start does not surface preview_passed.
+Returns the gate's own screenshots and gameplay recording for a delivery that already has a verdict, and writes nothing.
 ```
 
 **Destructive: False**
@@ -912,6 +1058,58 @@ Read-only: repeating the call returns the same data (or newer data of the same s
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Media is served from our own storage via short-lived signed URLs we mint.
+```
+
+## `concept_frame_upload_url`
+
+**Read Only: False**
+
+```
+Mints a short-lived upload request, returned as data (URL, method PUT, headers, size limit), for one concept frame the agent drew itself. The subsequent PUT writes state.
+```
+
+**Destructive: False**
+
+```
+Minting the URL deletes nothing, and the subsequent PUT is additive: it stores one frame, which appears only inside a proposal card if suggest_next_round uses it. The platform captions it as AI-made.
+```
+
+**Idempotent: False**
+
+```
+Each call mints a fresh URL, and each upload stores another frame (capped at the two a proposal needs).
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The returned URL is same-origin.
+```
+
+## `suggest_next_round`
+
+**Read Only: False**
+
+```
+Posts a two-option decision card to the creator's Studio thread, so it writes state.
+```
+
+**Destructive: True**
+
+```
+Marked destructive deliberately. Nothing is erased, but each delivered version gets exactly one proposal: posting it spends that slot irreversibly, and the card cannot be withdrawn or replaced for that version. We would rather a client confirm before spending it.
+```
+
+**Idempotent: False**
+
+```
+A repeat call for the same version is refused because the one proposal is already spent, and a call for a later version posts a new card.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `read_inbox`

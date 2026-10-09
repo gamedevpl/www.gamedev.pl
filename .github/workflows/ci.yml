@@ -219,3 +219,8 @@ jobs:
             "$E2E_CHROMIUM_PATH" | sudo tee "$PROFILE"
           sudo apparmor_parser -r "$PROFILE"
       - run: npm run e2e:hermetic -w @gamedevpl/e2e
+      # Framed play needs the real shell, worker and headers, so it runs against the API
+      # serving this branch's web build on loopback. Embedding regressions surfaced only in
+      # deploy.yml's browser gate, after merge; this catches them before.
+      - run: npm run build -w @gamedevpl/web
+      - run: npm run e2e:framed-local -w @gamedevpl/e2e

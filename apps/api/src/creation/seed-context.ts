@@ -29,7 +29,7 @@ const GAME_TOP_LEVEL_FILES = [
 
 const MAX_REFERENCE_FILE_BYTES = 80_000;
 
-const CONTEXT_SCAFFOLD_BUDGET = 60_000;
+const CONTEXT_SCAFFOLD_BUDGET = 8_000;
 
 export interface SeedContext {
   catalogIndex: string;

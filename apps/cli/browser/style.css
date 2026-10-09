@@ -153,12 +153,7 @@ button:disabled {
   top: 12px;
 }
 #notice {
-  z-index: 7;
   margin: 0;
-  position: fixed;
-  top: calc(var(--height) - var(--notice-space, 0px) + 14px);
-  left: 14px;
-  max-width: min(560px, calc(100% - 28px));
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   background: #161c22ed;
@@ -364,6 +359,7 @@ textarea {
   margin: 0;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 #choices {
   display: grid;

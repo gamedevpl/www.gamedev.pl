@@ -18,6 +18,9 @@ export interface PublicationStore {
 
   // Every slug currently live -- the input the snapshot bake reads.
   listPublications(): Promise<PublicationRecord[]>;
+
+  // Health checks requested at or after `since`; a range, not a scan.
+  listPublicationsWithHealthRequestedSince(since: string): Promise<PublicationRecord[]>;
 }
 
 export class InMemoryPublicationStore implements PublicationStore {
@@ -55,6 +58,10 @@ export class InMemoryPublicationStore implements PublicationStore {
 
   async listPublications(): Promise<PublicationRecord[]> {
     return Array.from(this.publications.values()).map((record) => ({ ...record }));
+  }
+
+  async listPublicationsWithHealthRequestedSince(since: string): Promise<PublicationRecord[]> {
+    return (await this.listPublications()).filter((record) => (record.healthCheck?.requestedAt ?? '') >= since);
   }
 }
 
@@ -126,6 +133,14 @@ export class FirestorePublicationStore implements PublicationStore {
 
   async listPublications(): Promise<PublicationRecord[]> {
     const snap = await this.db.collection('games').get();
+    return snap.docs
+      .map((doc) => (doc.data() as { publication?: PublicationRecord }).publication)
+      .filter((publication): publication is PublicationRecord => Boolean(publication));
+  }
+
+  async listPublicationsWithHealthRequestedSince(since: string): Promise<PublicationRecord[]> {
+    // Single-field range on a map subfield; Firestore indexes it by default.
+    const snap = await this.db.collection('games').where('publication.healthCheck.requestedAt', '>=', since).get();
     return snap.docs
       .map((doc) => (doc.data() as { publication?: PublicationRecord }).publication)
       .filter((publication): publication is PublicationRecord => Boolean(publication));

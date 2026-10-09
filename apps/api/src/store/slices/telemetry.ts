@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DocumentData, Firestore, Query } from '@google-cloud/firestore';
+import type { CollectionReference, DocumentData, Firestore, Query } from '@google-cloud/firestore';
 import {
   TELEMETRY_COLLECTION,
   TELEMETRY_TTL_FIELD,
@@ -9,6 +9,9 @@ import {
   type VisitEvent,
 } from '../records/telemetry.js';
 import type { DailyTelemetryAggregate } from '../../platform/telemetry-daily.js';
+
+type VisitType = VisitEvent['type'];
+export type VisitListOptions = { visitId?: string; limit?: number; type?: VisitType; excludeType?: VisitType };
 
 export interface TelemetryStore {
   // Date-partitioned so a TTL policy expires a whole day at once.
@@ -26,11 +29,11 @@ export interface TelemetryStore {
   // Overwrites the day's rollup. Sealed days are written once.
   putTelemetryDaily(dateStr: string, aggregate: DailyTelemetryAggregate): Promise<void>;
 
+  // Many days in one query; only BigQuery-backed stores offer it.
+  listTelemetryEventsAcross?(days: string[], opts: { slugs?: string[]; limit: number }): Promise<TelemetryEvent[]>;
+
   // One day's visit events -- funnel, depth, and acquisition reads.
-  listVisitEvents(
-    dateStr: string,
-    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
-  ): Promise<VisitEvent[]>;
+  listVisitEvents(dateStr: string, opts?: VisitListOptions): Promise<VisitEvent[]>;
 }
 
 // One document per day, holding every game played.
@@ -72,10 +75,7 @@ export class InMemoryTelemetryStore implements TelemetryStore {
     this.visits.set(dateStr, existing);
   }
 
-  async listVisitEvents(
-    dateStr: string,
-    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
-  ): Promise<VisitEvent[]> {
+  async listVisitEvents(dateStr: string, opts?: VisitListOptions): Promise<VisitEvent[]> {
     return (this.visits.get(dateStr) ?? [])
       .filter((event) => opts?.visitId === undefined || event.visitId === opts.visitId)
       .filter((event) => opts?.type === undefined || event.type === opts.type)
@@ -110,20 +110,26 @@ export class FirestoreTelemetryStore implements TelemetryStore {
     await this.dailyDoc(dateStr).set(aggregate);
   }
 
-  async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {
+  // `ids` lets a BigQuery copy share the document's id.
+  async appendVisitEvents(dateStr: string, events: VisitEvent[], ids?: string[]): Promise<void> {
+    await this.append(this.visitCollection(dateStr), events, ids);
+  }
+
+  // One batch per flush; well inside Firestore's 500-write batch limit.
+  private async append(collection: CollectionReference, events: (VisitEvent | TelemetryEvent)[], ids?: string[]) {
     if (events.length === 0) return;
-    const collection = this.visitCollection(dateStr);
     const batch = this.db.batch();
-    events.forEach((event) =>
-      batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
+    events.forEach((event, index) =>
+      // A Date, not a string -- TTL only expires a real Timestamp.
+      batch.set(collection.doc(ids?.[index] ?? randomUUID()), {
+        ...event,
+        [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at),
+      }),
     );
     await batch.commit();
   }
 
-  async listVisitEvents(
-    dateStr: string,
-    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
-  ): Promise<VisitEvent[]> {
+  async listVisitEvents(dateStr: string, opts?: VisitListOptions): Promise<VisitEvent[]> {
     const base = this.visitCollection(dateStr);
     let query: Query<DocumentData> = base;
     if (opts?.visitId !== undefined) query = query.where('visitId', '==', opts.visitId);
@@ -137,16 +143,8 @@ export class FirestoreTelemetryStore implements TelemetryStore {
     });
   }
 
-  async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
-    if (events.length === 0) return;
-    // One batch per flush; well inside Firestore's 500-write batch limit.
-    const collection = this.telemetryCollection(dateStr);
-    const batch = this.db.batch();
-    events.forEach((event) =>
-      // A Date, not a string -- TTL only expires a real Timestamp.
-      batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
-    );
-    await batch.commit();
+  async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[], ids?: string[]): Promise<void> {
+    await this.append(this.telemetryCollection(dateStr), events, ids);
   }
 
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {

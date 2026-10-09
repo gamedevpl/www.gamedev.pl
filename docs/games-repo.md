@@ -161,8 +161,8 @@ validation gate so it guards published bundles.
   `gs://…-games-snapshots`. When `GAMES_SNAPSHOT_BUCKET` is set, the API serves
   published `GET /api/catalog`, `GET /api/games/:slug`, and media routes **only**
   from that snapshot — misses and Storage errors fail the request (503 / 502 /
-  404 as appropriate); they do not assemble from GitHub. Unset the env var for
-  local/dev. GitHub remains the source of truth for content (the bake reads it)
+  404 as appropriate); they do not assemble from GitHub. Local dev bakes from the
+  local tree through an in-process snapshot reader instead. GitHub remains the source of truth for content (the bake reads it)
   and for PR / draft previews. The API remains the games origin — the bucket is
   not public. Details: [`games-snapshot.md`](./games-snapshot.md).
 - **Repository ownership and merge authority.** Agent PRs need a human gate initially,

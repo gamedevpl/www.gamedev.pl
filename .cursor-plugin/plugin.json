@@ -2,7 +2,7 @@
   "name": "gamedev-pl",
   "displayName": "gamedev.pl",
   "description": "Build browser games on gamedev.pl from your coding agent.",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "author": "gamedev.pl",
   "license": "GPL-3.0-only",
   "homepage": "https://www.gamedev.pl",

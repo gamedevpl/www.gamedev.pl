@@ -7,7 +7,6 @@ import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
-import { fetchAdminSummary } from './surfaces/admin/adminApi.js';
 import { fetchReviewStatus } from './surfaces/review/reviewApi.js';
 import { creatorPath } from './core/router.js';
 import { usePageScrolling } from './usePageScrolling.js';
@@ -19,8 +18,6 @@ type NavHeaderProps = {
   onHome: () => void;
   /** Opens the creator control panel. */
   onStudio: () => void;
-  /** Opens the operator console. Only ever called from a link only operators are shown. */
-  onAdmin: () => void;
   onReview: () => void;
   // The creation landing page — a real destination, same as Studio.
   onCreate: () => void;
@@ -44,7 +41,6 @@ export function NavHeader({
   activeBuildCount,
   onHome,
   onStudio,
-  onAdmin,
   onReview,
   onCreate,
   isOnCreate = false,
@@ -64,35 +60,9 @@ export function NavHeader({
   const menuContainerRef = useRef<HTMLDivElement>(null);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
-  // Operator badge uses the session, not a 404 probe.
-  const [alertCount, setAlertCount] = useState<number | null>(null);
   const [reviewRemaining, setReviewRemaining] = useState<number | null>(null);
   const isOperator = user?.admin === true;
   const isReviewer = user?.reviewer === true || isOperator;
-
-  useEffect(() => {
-    if (!isOperator) {
-      setAlertCount(null);
-      return;
-    }
-    let cancelled = false;
-    const read = () =>
-      fetchAdminSummary()
-        .then((summary) => {
-          if (!cancelled) setAlertCount(summary ? summary.alerts.length : 0);
-        })
-        .catch(() => {
-          // A failed read is not evidence of anything; leave the badge as it was.
-        });
-    void read();
-    // Slower than the console's own poll: this is a badge somebody glances at, not a
-    // queue they are working, and it rides along on every page of the site.
-    const timer = setInterval(read, 120_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [isOperator]);
 
   useEffect(() => {
     if (!isReviewer) {
@@ -321,25 +291,6 @@ export function NavHeader({
               >
                 <PixelIcon name="code" size={14} /> {t('header.navConnect')}
               </button>
-
-              {/* Operators only — everyone else never learns this exists, which is the
-                  same posture the API takes when asked. */}
-              {isOperator ? (
-                <button
-                  className="nav-link"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onAdmin();
-                  }}
-                >
-                  <PixelIcon name="wrench" size={14} /> Operator
-                  {alertCount !== null && alertCount > 0 ? (
-                    <span className="specs-count-badge" aria-label={`${alertCount} waiting on you`}>
-                      {alertCount}
-                    </span>
-                  ) : null}
-                </button>
-              ) : null}
 
               {isReviewer ? (
                 <button

@@ -3,7 +3,6 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
   toolOk,
   toolErr,
-  BEHAVIOURAL_CONTRACT,
   SESSION_KEY_PROP,
   type ToolContext,
   type ToolHandler,
@@ -62,8 +61,7 @@ export function createExampleTools(deps: ExampleToolsDeps): Record<string, Examp
         required: ['examples'],
       },
       description:
-        'List curated first-party exemplar games (never creator-originating sources). Filter by genre/feature/module when provided. ' +
-        BEHAVIOURAL_CONTRACT,
+        'List curated first-party exemplar games (never creator-originating sources). Filter by genre/feature/module when provided.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -116,15 +114,13 @@ export function createExampleTools(deps: ExampleToolsDeps): Record<string, Examp
           title: { type: 'string' },
           tarballUrl: { type: 'string' },
           sha256: { type: 'string' },
-          unpack: { type: 'string' },
         },
-        required: ['slug', 'title', 'tarballUrl', 'unpack'],
+        required: ['slug', 'title', 'tarballUrl'],
       },
       description:
         'Fetch one allowlisted exemplar as a signed tarball URL. Unknown or non-allowlisted slugs fail. ' +
         'Requires a client that can fetch a URL — if yours cannot, use list_example_files and ' +
-        'read_example_file instead, which return the same sources inline. ' +
-        BEHAVIOURAL_CONTRACT,
+        'read_example_file instead, which return the same sources inline.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -177,8 +173,7 @@ export function createExampleTools(deps: ExampleToolsDeps): Record<string, Examp
       description:
         'List the source files inside an allowlisted exemplar game, without downloading its tarball. ' +
         'Use this (and read_example_file) when you cannot fetch URLs — get_example returns a link that ' +
-        'a client without shell or network access cannot follow. ' +
-        BEHAVIOURAL_CONTRACT,
+        'a client without shell or network access cannot follow.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -231,8 +226,7 @@ export function createExampleTools(deps: ExampleToolsDeps): Record<string, Examp
       description:
         'Read one file from an allowlisted exemplar game, inline — no fetching required. ' +
         'Paths come from list_example_files and may be given relative (game.ts) or full (games/<slug>/game.ts). ' +
-        'Binary files need encoding=base64. Large files are refused rather than truncated. ' +
-        BEHAVIOURAL_CONTRACT,
+        'Binary files need encoding=base64. Large files are refused rather than truncated.',
       inputSchema: {
         type: 'object',
         properties: {

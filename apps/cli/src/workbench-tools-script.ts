@@ -7,7 +7,7 @@ async function attach(name,mime,data,purpose='diagnostic',shown=revision) {
   if(staged().length>=8)throw Error('Up to 8 attachments per request');
   const item=await api('/artifacts',{name,mime,data,purpose,revision:shown,device,capturedAt:new Date().toISOString()},30000);
   if(attachments.length>=8)attachments.splice(attachments.findIndex(a=>a.sent),1);
-  if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;attachments.push(item);tray();
+  if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;attachments.push(item);tray();return item;
 }
 function base64(bytes){let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out);}
 async function upload(file){
@@ -31,7 +31,7 @@ function devices(next){
 }
 let deviceFingerprint='';
 tray();
-const labels={checkout:'Open checkout',connect:'Connect to game',share:'Game link',handle:'Set account handle',update:'Update CLI (next launch)',publish:'Verify and submit for publication',takeover:'Take over and deliver', 'cancel-round':'Cancel platform round','share-draft':'Share draft publicly','unshare-draft':'Disable public draft sharing',play:'Open local game',status:'Platform status',diff:'Inspect changes',pull:'Pull platform changes',submit:'Verify and deliver preview',push:'Push preview',logs:'Task logs',agents:'Available agents',model:'Agent settings',kit:'Creator Kit status','kit-update':'Update Creator Kit','builder-local':'Use local builder','builder-platform':'Use platform builder',retry:'Retry pending task',games:'My games',quota:'Account limits',notifications:'Notifications',profile:'Profile',recover:'Recover checkout',verify:'Verify local sources',checkpoint:'Save source checkpoint','restore-checkpoint':'Restore source checkpoint',login:'Sign in','end-session':'End session'};
+const labels={checkout:'Open checkout',connect:'Connect to game',share:'Game link',handle:'Set account handle',update:'Update CLI (next launch)',publish:'Verify and submit for publication',takeover:'Take over and deliver', 'cancel-round':'Cancel platform round','share-draft':'Share draft publicly','unshare-draft':'Disable public draft sharing',play:'Open local game',status:'Platform status',diff:'Inspect changes',pull:'Pull platform changes',submit:'Verify and deliver preview',push:'Push preview',logs:'Task logs',agents:'Available agents',model:'Agent settings',permissions:'Agent permissions',kit:'Creator Kit status','kit-update':'Update Creator Kit','builder-local':'Use local builder','builder-platform':'Use platform builder',retry:'Retry pending task',games:'My games',quota:'Account limits',notifications:'Notifications',profile:'Profile',recover:'Recover checkout',verify:'Verify local sources',checkpoint:'Save source checkpoint','restore-checkpoint':'Restore source checkpoint',login:'Sign in','end-session':'End session'};
 for(const [value,label] of Object.entries(labels)){const option=document.createElement('option');option.value=value;option.textContent=label;el('operation').append(option);}
 function runAction(action,argument,clearDraft=false){
   if(!state||state.mode!=='prompt'||state.question||pending)return;
