@@ -21,6 +21,14 @@ Releases tagged `cli-v*` carry the standalone `gamedevpl` script and an npm-inst
 `gamedevpl-npm.tgz` archive. Both contain the same bundled CLI. `gamedevpl update`
 uses the standalone script; Creator Kit checkouts can pin the archive by release URL.
 
+After installing, `gamedevpl update` shows the old and new versions and the Breaking,
+Added and Fixed entries from every intervening release, newest first. The changelog
+comes from the installed version's release tag, with a link to the full file. If notes
+cannot be fetched within three seconds, installation still succeeds and shows the link.
+Reinstalling the same version reports no version change; a downgrade shows only the
+target release's notes. `--json` returns one object with a structured `releaseNotes`
+field. `/update` also reminds you to restart the current session.
+
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
 

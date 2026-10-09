@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl update` shows what changed since your previous version, including skipped releases, and links to the full changelog; `/update` shows the same notes (#0).
+
 ### Breaking
 
 - Browser Play and raw local previews stay in the terminal by default; Ctrl+C ends the session and cancels local work. Use `gamedevpl --detach`, `play --detach` or `create --detach` to run in the background (#1723).

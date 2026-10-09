@@ -2,7 +2,8 @@ import type { ApiClient } from './api.js';
 import { cliUsage } from './bin-name.js';
 import { jsonMode } from './argv.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
-import { defaultInstallDest, updateCli } from './update.js';
+import { CLI_VERSION, defaultInstallDest, updateCli } from './update.js';
+import { fetchUpdateNotes, formatUpdateNotes } from './update-notes.js';
 import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
 
@@ -102,13 +103,16 @@ export async function dispatchReadVerb(input: {
     const version = typeof flags.version === 'string' ? flags.version : undefined;
     const result = await updateCli({ dest, version });
     if (input.env) noteInstallChannel(input.env, 'update');
+    const previousVersion = input.runningVersion ?? CLI_VERSION;
+    const releaseNotes = await fetchUpdateNotes({ previousVersion, version: result.version });
     emit(
       io,
       asJson,
-      result,
-      input.runningVersion
+      { ...result, releaseNotes },
+      (input.runningVersion
         ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
-        : `updated ${result.asset} to ${result.version}`,
+        : `updated ${result.asset} ${previousVersion} -> ${result.version}`) +
+        `\n\n${formatUpdateNotes(releaseNotes, io.stdout.columns)}`,
     );
     return EXIT_GREEN;
   }
