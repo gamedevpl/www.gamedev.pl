@@ -343,6 +343,8 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     ['cards', Date.parse('2026-08-15T00:00:00.000Z')],
     // games-repo #690 (platformer vertical). Remove once it lands.
     ['platformer', Date.parse('2026-08-29T00:00:00.000Z')],
+    // games-repo #2100 (settings module). Remove once it lands.
+    ['settings', Date.parse('2026-10-31T00:00:00.000Z')],
   ]);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
   const now = options.now?.() ?? Date.now();
