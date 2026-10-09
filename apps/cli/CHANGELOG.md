@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Running Play and terminal commands share one token refresh, so concurrent sessions no longer accidentally revoke your sign-in; credential updates are saved atomically (#0).
+- Running Play and terminal commands share one token refresh, so concurrent sessions no longer accidentally revoke your sign-in; credential updates are saved atomically (#1727).
 
 ### Added
 
