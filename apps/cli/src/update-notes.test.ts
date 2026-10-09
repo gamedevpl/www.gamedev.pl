@@ -129,7 +129,7 @@ describe('update release notes', () => {
         new Response('## 0.29.0\n### Fixed\n- `play` \u001b[31mred\u001b[0m\u0007\u202elong words for a narrow screen'),
     });
     const output = formatUpdateNotes(notes, 25);
-    expect(output).not.toMatch(/[\u001b\u0007\u202e`]/);
+    for (const control of ['\u001b', '\u0007', '\u202e', '`']) expect(output).not.toContain(control);
     expect(
       output
         .split('\n')

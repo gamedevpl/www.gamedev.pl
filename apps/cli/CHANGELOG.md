@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl update` shows what changed since your previous version, including skipped releases, and links to the full changelog; `/update` shows the same notes (#0).
+- `gamedevpl update` shows what changed since your previous version, including skipped releases, and links to the full changelog; `/update` shows the same notes (#1726).
 
 ### Breaking
 
