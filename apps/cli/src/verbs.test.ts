@@ -1,9 +1,16 @@
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { dispatchReadVerb } from './verbs.js';
 import { EXIT_GREEN } from './exit-codes.js';
+import { CLI_VERSION } from './update.js';
+
+afterEach(() => vi.unstubAllGlobals());
 
 function out() {
   const stdout = new PassThrough();
@@ -18,6 +25,65 @@ function out() {
 }
 
 describe('dispatchReadVerb', () => {
+  it.each([false, true])('prints installed changes as text or a single JSON object (json=%s)', async (json) => {
+    const io = out();
+    const api = createApi({ origin: 'https://www.gamedev.pl', store: memoryStore(null) });
+    const bytes = Buffer.from('#!/usr/bin/env node\n');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-update-notes-')), 'gamedevpl');
+    vi.stubGlobal('fetch', async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path.endsWith('SHA256SUMS')) return new Response(`${hash}  gamedevpl\n`);
+      if (path.endsWith('/gamedevpl')) return new Response(bytes);
+      if (path.endsWith('CHANGELOG.md')) return new Response('## 9.0.0 — 2026-10-10\n### Fixed\n- Repair details');
+      throw new Error(`Unexpected URL ${path}`);
+    });
+    expect(await dispatchReadVerb({ verb: 'update', args: [], flags: { version: '9.0.0', dest, json }, api, io })).toBe(
+      EXIT_GREEN,
+    );
+    expect(readFileSync(dest)).toEqual(bytes);
+    if (json) {
+      const data = JSON.parse(io.read());
+      expect(data).toMatchObject({
+        version: '9.0.0',
+        asset: 'gamedevpl',
+        releaseNotes: { previousVersion: CLI_VERSION, status: 'available' },
+      });
+      expect(data.releaseNotes.releases[0].changes[0].text).toBe('Repair details');
+    } else {
+      expect(io.read()).toContain(`updated gamedevpl ${CLI_VERSION} -> 9.0.0`);
+      expect(io.read()).toContain('Fixed: Repair details');
+    }
+  });
+
+  it('keeps a successful install green when release notes fail', async () => {
+    const io = out();
+    const api = createApi({ origin: 'https://www.gamedev.pl', store: memoryStore(null) });
+    const bytes = Buffer.from('#!/usr/bin/env node\n');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-update-offline-')), 'gamedevpl');
+    vi.stubGlobal('fetch', async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path.endsWith('SHA256SUMS')) return new Response(`${hash}  gamedevpl\n`);
+      if (path.endsWith('/gamedevpl')) return new Response(bytes);
+      throw new Error('offline');
+    });
+    expect(
+      await dispatchReadVerb({
+        verb: 'update',
+        args: [],
+        flags: { version: '9.0.0', dest },
+        api,
+        io,
+        runningVersion: CLI_VERSION,
+      }),
+    ).toBe(EXIT_GREEN);
+    expect(readFileSync(dest)).toEqual(bytes);
+    expect(io.read()).toContain('Release notes unavailable. Changelog:');
+    expect(io.read()).toContain('This session is still running');
+    expect(io.read()).toContain('Use /exit');
+  });
+
   it('lists games from /api/submissions/mine', async () => {
     const io = out();
     const api = createApi({
