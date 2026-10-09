@@ -3,6 +3,7 @@ import { WORKBENCH_PLAYER_SCRIPT } from './workbench-player-script.js';
 import { WORKBENCH_NAVIGATION_SCRIPT } from './workbench-navigation-script.js';
 import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
 import { WORKBENCH_BUILD_ERROR_SCRIPT } from './workbench-build-error-script.js';
+import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
 export const SESSION_BROWSER_SCRIPT = String.raw`
 const el = id => document.getElementById(id);
 const panel = el('panel'), draft = el('prompt');
@@ -44,7 +45,7 @@ function render(next) {
   reconcilePending(next.sessionId);
   const old = state;
   state = next;
-  el('session-lifetime').textContent=state.detached?'This session runs independently. Use Commands → End session to stop it.':'Shared with your terminal. Keep the terminal session open.';
+  el('session-lifetime').textContent=state.detached?'Play ends 60 seconds after its last tab closes, once active work finishes. Commands → End session stops it now.':'Shared with your terminal. Keep the terminal session open.';
   const fingerprint=JSON.stringify([next.addresses,next.phone,next.reports]);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;devices(next);}
   if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
@@ -150,5 +151,7 @@ ${WORKBENCH_TOOLS_SCRIPT}
 ${WORKBENCH_NAVIGATION_SCRIPT}
 ${WORKBENCH_ONBOARDING_SCRIPT}
 ${WORKBENCH_BUILD_ERROR_SCRIPT}
+const presencePath='/presence',presenceProtocols=['gamedevpl-presence','token.'+token];
+${PLAY_PRESENCE_SCRIPT}
 tick(); previewTick();
 `;

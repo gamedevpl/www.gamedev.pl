@@ -1,5 +1,6 @@
 import { PLAY_EMBED_SCRIPT } from './generated/play-ui.js';
 import { MASCOT_FAVICON_DATA_URL } from './mascot-svg.js';
+import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
 
 export const PLAY_PAGE = String.raw`<!doctype html>
 <html lang="en">
@@ -25,6 +26,8 @@ pre{position:fixed;bottom:max(12px,env(safe-area-inset-bottom));left:12px;right:
 <pre id="error" role="status" hidden></pre>
 <script>
 ${PLAY_EMBED_SCRIPT}
+const presencePath=location.pathname+'presence',presenceProtocols=[];
+${PLAY_PRESENCE_SCRIPT}
 let revision = '', paused = false, muted = false;
 const frame = document.querySelector('iframe');
 const status = document.querySelector('#status');

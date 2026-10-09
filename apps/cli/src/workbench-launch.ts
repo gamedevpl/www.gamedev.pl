@@ -143,7 +143,7 @@ export async function launchWorkbench(input: {
       if (state?.url && (await health(state))) {
         input.write(`Play session: ${state.url}`);
         input.write(
-          'Runs in the background; Ctrl+C does not stop it. Stop it from the browser: Commands → End session, or run: gamedevpl stop.',
+          'Runs in the background; Ctrl+C does not stop it. After the last Play tab closes, it ends in 60 seconds once active work finishes. Stop now: Commands → End session, or gamedevpl stop.',
         );
         if (!input.noOpen && !(await openUrl(state.url)))
           input.write('Browser could not open. Copy the Play session URL above.');

@@ -98,11 +98,13 @@ export async function runInkRepl(input: {
   let token = input.token;
   let slug = input.checkout?.slug ?? input.slug ?? '';
   let initialLine = input.initialLine;
-  const browser = sessionBrowserHost(session, input.browserOnly, () => ({
-    mode: slug ? 'game' : (input.entryMode ?? 'home'),
-    slug,
-    suggestedSlug: input.suggestedSlug,
-  }));
+  let working = true;
+  const browser = sessionBrowserHost(
+    session,
+    input.browserOnly,
+    () => ({ mode: slug ? 'game' : (input.entryMode ?? 'home'), slug, suggestedSlug: input.suggestedSlug }),
+    () => !working && !abort.current,
+  );
   if (input.browserOnly) {
     input.onReady?.(await browser.start());
     session.writeLine('Play session ready. Closing the terminal does not stop this session.');
@@ -244,7 +246,9 @@ export async function runInkRepl(input: {
   });
   try {
     for (;;) {
+      working = Boolean(initialLine);
       const line = initialLine ?? (await session.prompt());
+      working = true;
       if (initialLine && !line.startsWith('/')) session.writeLine('› ' + line);
       initialLine = undefined;
       if (!spoke && (!input.checkout || token) && line.trim() && !line.trim().startsWith('/')) {

@@ -76,3 +76,16 @@ await writeFile(
     ';\n',
 );
 await rm(serverFile);
+const runtime = await build({
+  entryPoints: [join(root, 'scripts/play-runtime-entry.mjs')],
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'esm',
+  write: false,
+  banner: { js: 'import {createRequire} from "node:module";const require=createRequire(import.meta.url);' },
+});
+await writeFile(
+  join(generated, 'play-runtime.ts'),
+  'export const PLAY_RUNTIME = ' + JSON.stringify(runtime.outputFiles[0].text) + ';\n',
+);
