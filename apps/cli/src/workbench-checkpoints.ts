@@ -12,7 +12,10 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathInside } from './checkout-sync.js';
-import { runLadderAsync } from './verify.js';
+import { runLadderAsync, VerificationError } from './verify.js';
+import { recoverVerification } from './repl-delivery.js';
+import { formatError } from './errors.js';
+import type { ApiClient } from './api.js';
 import type { Workshop } from './workshop.js';
 
 type File = { path: string; data: string };
@@ -42,6 +45,7 @@ async function localActionUnlocked(
   line: string,
   ws: Workshop | undefined,
   write: (s: string) => void,
+  api?: ApiClient,
 ): Promise<boolean> {
   if (!['/verify', '/checkpoint', '/restore-checkpoint'].includes(line)) return false;
   if (!ws) throw Error('Open a local checkout first');
@@ -52,19 +56,38 @@ async function localActionUnlocked(
     const abort = new AbortController();
     ws.abort.current = abort;
     ws.onLocalTask?.('verification');
+    let failure: VerificationError | undefined;
     try {
-      const result = await runLadderAsync({ cwd: ws.root, abort: abort.signal });
-      write(
-        digest(checkpointFiles(game)) !== hash
-          ? 'Sources changed during verification; result is stale.'
-          : result.ok
-            ? `Local checks passed for sources ${hash}. Publishing gate runs on delivery.`
-            : `Verification failed at ${result.stage}: ${result.detail}`,
-      );
+      const result = await runLadderAsync({ cwd: ws.root, run: ws.run, abort: abort.signal });
+      if (abort.signal.aborted) write('Verification stopped. Your edits remain local.');
+      else if (digest(checkpointFiles(game)) !== hash) write('Sources changed during verification; result is stale.');
+      else if (result.ok) write(`Local checks passed for sources ${hash}. Publishing gate runs on delivery.`);
+      else {
+        failure = new VerificationError(result, ws.root);
+        write(api && !ws.unattended ? failure.message : formatError(failure));
+      }
     } finally {
       ws.abort.current = null;
       ws.onLocalTask?.('');
     }
+    if (failure && api && !ws.unattended)
+      await recoverVerification(
+        {
+          line,
+          api,
+          token: ws.token,
+          workshop: ws,
+          write,
+          pick: ws.pick,
+          onActivity: ws.onActivity,
+          telemetry: ws.telemetry,
+        },
+        { api, slug: ws.slug, dest: ws.root, run: ws.run },
+        failure,
+        ws.pick,
+        ws,
+        false,
+      );
     return true;
   }
   const path = join(ws.root, '.gamedev-play-checkpoint.json');

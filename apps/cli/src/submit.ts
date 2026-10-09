@@ -16,7 +16,7 @@ import { inspectGame, ignoredGameFiles, localGameFiles, trackedTree, writeBase, 
 import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
-import { CliError, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { assertLadderGreen, runLadder } from './verify.js';
 
 export type DeliverMode = 'preview' | 'publish';
@@ -137,10 +137,7 @@ async function submitGameUnlocked(input: {
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
   const verify = runLadder({ cwd: input.dest, publish: input.publish === true, run: input.run });
-  if (!verify.ok) {
-    throw new CliError(`verify failed at ${verify.stage}`, EXIT_RED, 'fix locally, then submit again');
-  }
-  assertLadderGreen(verify);
+  assertLadderGreen(verify, input.dest);
 
   const latest = await inspectGame(input);
   if (!input.force && latest.sync.kind === 'conflict') {

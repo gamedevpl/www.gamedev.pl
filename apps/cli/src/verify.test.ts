@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runLadder } from './verify.js';
+import { runLadder, runLadderAsync, VerificationError } from './verify.js';
 
 describe('verification ladder', () => {
   it('runs typecheck and check:static always, check:game only for publish', () => {
@@ -79,6 +79,42 @@ describe('verification ladder', () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+});
+
+it('checks the publication stage when an asynchronous retry targets publication', async () => {
+  const checks: string[] = [];
+  const result = await runLadderAsync({
+    cwd: '/checkout',
+    abort: new AbortController().signal,
+    publish: true,
+    run: (_cmd, args) => {
+      checks.push(args[1]!);
+      return args[1] === 'check:game' ? { status: 1, stderr: 'publication check failed' } : { status: 0, stderr: '' };
+    },
+  });
+  expect(checks).toEqual(['typecheck', 'check:static', 'check:game']);
+  expect(result).toEqual({ ok: false, stage: 'check_game', detail: 'publication check failed' });
+});
+
+it('uses the failed Creator Kit script in actionable diagnostics and removes terminal controls', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'gamedev-verification-error-'));
+  try {
+    writeFileSync(
+      join(cwd, 'kit.json'),
+      JSON.stringify({
+        cliVerification: { typecheck: 'check:types', checkStatic: 'check:assets', checkGame: 'check:publish' },
+      }),
+    );
+    const failure = new VerificationError(
+      { stage: 'check_static', detail: '\u001b[31mGAME.json: missing title\u001b[0m\nasset missing' },
+      cwd,
+    );
+    expect(failure.detail).toBe('GAME.json: missing title\nasset missing');
+    expect(failure.message).toContain('GAME.json: missing title');
+    expect(failure.next).toContain('npm run check:assets');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 it('retains filenames and stdout in a failed verification', () => {

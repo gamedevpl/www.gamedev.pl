@@ -20,7 +20,7 @@ import type { ApiClient } from './api.js';
 import { diffGame, pullGame, readCheckoutSlug } from './checkout.js';
 import { formatDiffReport } from './working-copy.js';
 import { connectSession, checkoutSession } from './connect-flow.js';
-import { formatSubmitLines, submitGame } from './submit.js';
+import { submitRepl } from './repl-delivery.js';
 import { dispatchReadVerb } from './verbs.js';
 import { postCliChat } from './chat.js';
 import { CLI_VERSION } from './update.js';
@@ -62,7 +62,8 @@ export async function handleReplLine(input: {
   cwd?: string;
 }): Promise<ReplLineResult> {
   if (await workbenchPlatformAction(input)) return { next: 'continue' };
-  if (await workbenchLocalAction(input.line.trim(), input.workshop, input.write)) return { next: 'continue' };
+  if (await workbenchLocalAction(input.line.trim(), input.workshop, input.write, input.api))
+    return { next: 'continue' };
   if (input.cwd && !input.token && input.line.trim() && !input.line.trim().startsWith('/')) {
     input.write(
       'This checkout is not connected yet. Use /recover to restore it or /connect to retry. Your files are safe.',
@@ -174,26 +175,7 @@ export async function handleReplLine(input: {
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'submit' || cmd === 'push') {
-      try {
-        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
-        const dest = parsed.args[0] ?? input.workshop?.root ?? input.cwd ?? process.cwd();
-        const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
-        if (!slug) {
-          input.write(`run it as ${cliUsage(cmd, '[dir]')}`);
-          return { next: 'continue', conversationId: input.conversationId };
-        }
-        const result = await submitGame({
-          api: input.api,
-          slug,
-          dest,
-          force: parsed.flags.force === true,
-          publish: parsed.flags.publish === true,
-          takeover: parsed.flags.takeover === true,
-        });
-        input.write(formatSubmitLines(result, slug).join('\n'));
-      } catch (error) {
-        input.write(formatError(error));
-      }
+      await submitRepl(input, cmd, rest);
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
