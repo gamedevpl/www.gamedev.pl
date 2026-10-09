@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.27.2 — 2026-10-09
+
 ### Fixed
 
 - Failed `/push`, `/submit` and `/verify` show the diagnostic report and offer Fix with agent, Check again or Back; repairs receive the actual errors, and sending a repaired checkout remains an explicit choice (#1718).
