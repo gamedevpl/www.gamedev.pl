@@ -33,11 +33,27 @@ function throwForStatus(res: Response, errBody: { error?: string; message?: stri
   throw error;
 }
 
+async function waitForRefresh(refresh: Promise<void>, signal?: AbortSignal | null): Promise<void> {
+  if (!signal) return refresh;
+  let stop: () => void;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      stop = () => reject(signal.reason);
+      signal.addEventListener('abort', stop, { once: true });
+      refresh.then(resolve, reject);
+      if (signal.aborted) stop();
+    });
+  } finally {
+    signal.removeEventListener('abort', stop!);
+  }
+}
+
 export function createApi(input: {
   origin: string;
   store: TokenStore;
   fetch?: FetchLike;
   env?: NodeJS.ProcessEnv;
+  shutdownSignal?: AbortSignal;
 }): ApiClient {
   const fetchImpl = input.fetch ?? fetch;
   const env = input.env ?? process.env;
@@ -54,7 +70,7 @@ export function createApi(input: {
     });
   }
 
-  async function refreshOnce(signal?: AbortSignal): Promise<void> {
+  async function refreshOnce(): Promise<void> {
     if (env.GAMEDEV_TOKEN?.trim()) return;
     const tokens = await input.store.get();
     if (!tokens?.refreshToken) return;
@@ -62,7 +78,7 @@ export function createApi(input: {
       origin: input.origin,
       refreshToken: tokens.refreshToken,
       fetch: fetchImpl,
-      signal,
+      signal: input.shutdownSignal,
     });
     await input.store.set({
       accessToken: next.accessToken,
@@ -79,11 +95,11 @@ export function createApi(input: {
     const tokens = await input.store.get();
     if (!tokens?.refreshToken) return first;
     if (!refreshWait) {
-      refreshWait = refreshOnce(init.signal ?? undefined).finally(() => {
+      refreshWait = refreshOnce().finally(() => {
         refreshWait = null;
       });
     }
-    await refreshWait;
+    await waitForRefresh(refreshWait, init.signal);
     return send(path, init);
   }
 

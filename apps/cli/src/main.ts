@@ -198,6 +198,7 @@ export async function runCli(
         foreground: (path, onReady) =>
           runPlayWorker({
             api,
+            apiForShutdown: (shutdownSignal) => createApi({ origin, store, env, shutdownSignal }),
             path,
             env,
             entry: argv[1]!,
@@ -213,6 +214,7 @@ export async function runCli(
       const { runPlayWorker, workbenchLogin } = await import('./workbench-launch.js');
       await runPlayWorker({
         api,
+        apiForShutdown: (shutdownSignal) => createApi({ origin, store, env, shutdownSignal }),
         path: args[0] ?? '',
         env,
         entry: argv[1]!,

@@ -138,3 +138,44 @@ it.each([false, true])(
   },
   20000,
 );
+
+it('ends a raw preview cleanly when interrupted during checkout setup', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'preview-startup-'));
+  mkdirSync(join(root, 'games/robot'), { recursive: true });
+  writeFileSync(join(root, '.gamedev-slug'), 'robot');
+  writeFileSync(join(root, 'package.json'), '{"type":"module"}');
+  writeFileSync(join(root, 'gamedev.lock'), '{}');
+  const marker = join(root, 'setup-running');
+  writeFileSync(
+    join(root, 'setup.mjs'),
+    `
+    import { writeFileSync } from 'node:fs';
+    writeFileSync(${JSON.stringify(marker)}, String(process.pid));
+    setInterval(() => {}, 1000);
+  `,
+  );
+  const { child, read } = launch(root, ['play', '--preview', '--no-open']);
+  let setupPid: number | undefined;
+  try {
+    await vi.waitFor(
+      () => {
+        setupPid = Number(readFileSync(marker, 'utf8'));
+      },
+      { timeout: 8000 },
+    );
+    child.kill('SIGINT');
+    await stopped(child, read);
+    expect(read()).not.toContain('checkout setup did not complete');
+    expect(read()).not.toContain('preview startup cancelled');
+    expect(read()).not.toContain('local live preview:');
+    await vi.waitFor(() => expect(() => process.kill(setupPid!, 0)).toThrow());
+  } finally {
+    child.kill();
+    try {
+      if (setupPid) process.kill(setupPid, 'SIGTERM');
+    } catch {
+      // Already stopped.
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20000);

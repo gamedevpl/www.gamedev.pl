@@ -5,7 +5,13 @@ import { withPlaySignals } from './play-signals.js';
 
 export function playForeground(input: Parameters<typeof playGame>[0]) {
   return withPlaySignals(async (signal) => {
-    const played = await playGame({ ...input, abort: signal, detached: false });
+    let played: Awaited<ReturnType<typeof playGame>>;
+    try {
+      played = await playGame({ ...input, abort: signal, detached: false });
+    } catch (error) {
+      if (signal.aborted) return { mode: 'local' as const };
+      throw error;
+    }
     if (played.mode !== 'local' || !played.url) return played;
     const owner = new AbortController();
     const presence = holdPreview(played.url, AbortSignal.any([signal, owner.signal]));

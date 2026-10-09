@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { CliError, EXIT_AUTH } from './exit-codes.js';
@@ -92,6 +92,50 @@ describe('oauth refresh', () => {
       },
     });
     await Promise.all([api.request('GET', '/api/me/profile'), api.request('GET', '/api/me/quota')]);
+    expect(refreshes).toBe(1);
+  });
+
+  it('cancels one refresh waiter without aborting another request', async () => {
+    const store = memoryStore({
+      accessToken: 'old',
+      refreshToken: 'refresh',
+      tokenType: 'Bearer',
+      scope: 'creator',
+    });
+    const caller = new AbortController();
+    let release!: () => void;
+    let refreshes = 0;
+    let expired = 0;
+    const api = createApi({
+      origin: 'https://example.test',
+      store,
+      env: {},
+      fetch: async (url, init) => {
+        if (url.endsWith('/oauth/token')) {
+          refreshes++;
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          expect(init?.signal?.aborted).not.toBe(true);
+          return json({ access_token: 'new', token_type: 'Bearer', scope: 'creator' });
+        }
+        if ((init?.headers as Record<string, string>).authorization === 'Bearer old') {
+          expired++;
+          return json({}, 401);
+        }
+        expect(init?.signal?.aborted).not.toBe(true);
+        return json({ ok: true });
+      },
+    });
+    const first = api.request('GET', '/first', undefined, caller.signal);
+    const cancelled = expect(first).rejects.toThrow();
+    await vi.waitFor(() => expect(refreshes).toBe(1));
+    const second = api.request('POST', '/second', { title: 'Game' });
+    await vi.waitFor(() => expect(expired).toBe(2));
+    caller.abort();
+    await cancelled;
+    release();
+    await expect(second).resolves.toEqual({ ok: true });
     expect(refreshes).toBe(1);
   });
 

@@ -263,6 +263,7 @@ export function journalApi(api: ApiClient, journal: PlayJournal, save: () => voi
 }
 export async function runPlayWorker(input: {
   api: ApiClient;
+  apiForShutdown?: (signal: AbortSignal) => ApiClient;
   path: string;
   env: NodeJS.ProcessEnv;
   entry: string;
@@ -286,7 +287,7 @@ export async function runPlayWorker(input: {
   try {
     await withPlaySignals(async (shutdownSignal) =>
       runInkRepl({
-        api: playApi(journalApi(input.api, journal, save), shutdownSignal),
+        api: playApi(journalApi(input.apiForShutdown?.(shutdownSignal) ?? input.api, journal, save), shutdownSignal),
         env: { ...input.env, GAMEDEV_PLAY_WORKBENCH: '1' },
         io: { stdin: process.stdin, stdout: process.stdout },
         browserOnly: true,

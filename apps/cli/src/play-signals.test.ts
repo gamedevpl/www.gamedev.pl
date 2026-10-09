@@ -45,6 +45,7 @@ it('cancels an archive download and token refresh when Play shuts down', async (
   let pending: AbortSignal | undefined;
   const raw = createApi({
     origin: 'https://example.test',
+    shutdownSignal: shutdown.signal,
     env: {},
     store: memoryStore({
       accessToken: 'expired',
