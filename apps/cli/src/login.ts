@@ -212,19 +212,21 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
       cliUsage('login'),
     );
   }
-  const tokens = await exchangeCode({
-    origin: input.origin,
-    code: result.code,
-    redirectUri: loop.redirectUri,
-    verifier,
-    fetch: fetchImpl,
-    signal: input.abort,
-  });
-  await input.store.set({
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    tokenType: tokens.tokenType,
-    scope: tokens.scope,
-  });
+  await input.store.withLock(async () => {
+    const tokens = await exchangeCode({
+      origin: input.origin,
+      code: result.code,
+      redirectUri: loop.redirectUri,
+      verifier,
+      fetch: fetchImpl,
+      signal: input.abort,
+    });
+    await input.store.set({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenType: tokens.tokenType,
+      scope: tokens.scope,
+    });
+  }, input.abort);
   input.stdout.write(`${g.ok} signed in\n`);
 }

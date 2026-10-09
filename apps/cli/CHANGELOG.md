@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Running Play and terminal commands share one token refresh, so concurrent sessions no longer accidentally revoke your sign-in; credential updates are saved atomically (#0).
+
 ### Added
 
 - `gamedevpl update` shows what changed since your previous version, including skipped releases, and links to the full changelog; `/update` shows the same notes (#1726).

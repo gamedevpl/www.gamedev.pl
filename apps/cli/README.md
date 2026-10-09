@@ -29,6 +29,13 @@ Reinstalling the same version reports no version change; a downgrade shows only 
 target release's notes. `--json` returns one object with a structured `releaseNotes`
 field. `/update` also reminds you to restart the current session.
 
+Play sessions and terminal commands coordinate token refresh through a private lock
+beside the credential file. A process rereads saved credentials after acquiring the
+lock and uses the refreshed token if another process already renewed it. Login,
+logout and credential writes use the same lock; credential files are replaced
+atomically so readers see a complete old or new record. A lock left by an exited
+process is recovered automatically, while a live owner is allowed to finish.
+
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
 

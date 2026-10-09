@@ -1,7 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { withCredentialLock } from './credential-lock.js';
 
 export interface StoredTokens {
   accessToken: string;
@@ -14,21 +16,42 @@ export interface TokenStore {
   get(): Promise<StoredTokens | null>;
   set(tokens: StoredTokens): Promise<void>;
   clear(): Promise<void>;
+  withLock<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T>;
   readonly kind: 'keychain' | 'encrypted-file' | 'memory';
 }
 
 export function memoryStore(initial?: StoredTokens | null): TokenStore {
   let value = initial ?? null;
+  let queue = Promise.resolve();
+  const held = new AsyncLocalStorage<boolean>();
+  async function withLock<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    signal?.throwIfAborted();
+    if (held.getStore()) return run();
+    const result = queue.then(() => {
+      signal?.throwIfAborted();
+      return held.run(true, run);
+    });
+    queue = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  }
   return {
     kind: 'memory',
+    withLock,
     async get() {
       return value;
     },
     async set(tokens) {
-      value = tokens;
+      await withLock(async () => {
+        value = tokens;
+      });
     },
     async clear() {
-      value = null;
+      await withLock(async () => {
+        value = null;
+      });
     },
   };
 }
@@ -46,8 +69,29 @@ function fileKey(env: NodeJS.ProcessEnv): Buffer {
 export function encryptedFileStore(env: NodeJS.ProcessEnv = process.env): TokenStore {
   const path = filePath(env);
   const key = fileKey(env);
+  const withLock = <T>(run: () => Promise<T>, signal?: AbortSignal) => withCredentialLock(path, run, signal);
+  async function write(tokens: StoredTokens | null): Promise<void> {
+    await withLock(async () => {
+      mkdirSync(dirname(path), { recursive: true });
+      let buf = Buffer.alloc(0);
+      if (tokens) {
+        const iv = randomBytes(12);
+        const cipher = createCipheriv('aes-256-gcm', key, iv);
+        const encrypted = Buffer.concat([cipher.update(JSON.stringify(tokens), 'utf8'), cipher.final()]);
+        buf = Buffer.concat([iv, cipher.getAuthTag(), encrypted]);
+      }
+      const temporary = `${path}.${process.pid}-${randomBytes(12).toString('hex')}`;
+      try {
+        writeFileSync(temporary, buf, { mode: 0o600, flag: 'wx' });
+        renameSync(temporary, path);
+      } finally {
+        rmSync(temporary, { force: true });
+      }
+    });
+  }
   return {
     kind: 'encrypted-file',
+    withLock,
     async get() {
       try {
         const buf = readFileSync(path);
@@ -63,19 +107,10 @@ export function encryptedFileStore(env: NodeJS.ProcessEnv = process.env): TokenS
       }
     },
     async set(tokens) {
-      mkdirSync(dirname(path), { recursive: true });
-      const iv = randomBytes(12);
-      const cipher = createCipheriv('aes-256-gcm', key, iv);
-      const encrypted = Buffer.concat([cipher.update(JSON.stringify(tokens), 'utf8'), cipher.final()]);
-      const tag = cipher.getAuthTag();
-      writeFileSync(path, Buffer.concat([iv, tag, encrypted]), { mode: 0o600 });
+      await write(tokens);
     },
     async clear() {
-      try {
-        writeFileSync(path, '', { mode: 0o600 });
-      } catch {
-        // missing file is already cleared
-      }
+      await write(null);
     },
   };
 }
