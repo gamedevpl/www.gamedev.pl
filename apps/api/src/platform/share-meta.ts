@@ -1,6 +1,6 @@
 // Link previews for shared game links: unfurlers never run the SPA.
 
-import { attachCatalogEnrichments } from '../catalog/catalog-enricher.js';
+import { attachCatalogEnrichment } from '../catalog/catalog-enricher.js';
 import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { PLATFORM_HANDLE, RESERVED_HANDLES } from './creator-profile.js';
@@ -199,8 +199,8 @@ export function createSharePreviewShell(options: SharePreviewShellOptions) {
   async function render(slug: string): Promise<SharePreview | undefined> {
     const raw = await lookup(slug);
     if (!raw || raw === GAME_NOT_FOUND) return raw;
-    // Taglines live in stored enrichments, as on GET /api/catalog.
-    const [entry = raw] = await attachCatalogEnrichments([raw], options.store);
+    // One game's tagline: one document, not the whole collection.
+    const entry = await attachCatalogEnrichment(raw, options.store);
     shell ??= options.readIndexHtml().catch((error: unknown) => {
       shell = null;
       throw error;
