@@ -23,9 +23,9 @@ it('stops the actual preview child after its last consumer leaves, despite healt
   writeFileSync(clock, '0');
   writeFileSync(
     script,
-    `import {readFileSync as readClock} from 'node:fs';const realNow=Date.now;Date.now=()=>realNow()+Number(readClock(${JSON.stringify(clock)},'utf8'));\n${PLAY_RUNTIME}`,
+    `import {readFileSync as readClock} from 'node:fs';const realNow=Date.now;Date.now=()=>realNow()+Number(readClock(process.argv[6],'utf8'));\n${PLAY_RUNTIME}`,
   );
-  const child = spawn(process.execPath, [script, root, 'robot', state, 'test-key'], { stdio: 'pipe' });
+  const child = spawn(process.execPath, [script, root, 'robot', state, 'test-key', clock], { stdio: 'pipe' });
   let output = '';
   child.stderr.on('data', (chunk) => {
     output += String(chunk);
