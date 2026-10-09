@@ -486,7 +486,7 @@ async function workshopTurnUnlocked(input: {
     return false;
   }
   delete input.ws.failedTask;
-  if (ok && input.offerDelivery !== false) await offerSubmit(input);
+  if (input.offerDelivery !== false) await offerSubmit(input);
   return ok;
 }
 

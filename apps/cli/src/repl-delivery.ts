@@ -1,4 +1,7 @@
 import { realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import { checkpointFiles, checkpointDigest } from './checkpoint-files.js';
+import { pathInside } from './checkout-sync.js';
 import { parseArgv } from './argv.js';
 import { cliUsage } from './bin-name.js';
 import { readCheckoutSlug } from './checkout.js';
@@ -33,15 +36,19 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
   input.onActivity?.('Checking the local game');
   input.write('Checking the local game…');
   try {
-    const result = await withCheckoutWriter(delivery.dest, () =>
-      runLadderAsync({
+    return await withCheckoutWriter(delivery.dest, async () => {
+      const game = pathInside(join(delivery.dest, 'games'), delivery.slug);
+      const hash = checkpointDigest(checkpointFiles(game));
+      const result = await runLadderAsync({
         cwd: delivery.dest,
         publish: delivery.publish,
         run: ws?.run,
         abort: controller.signal,
-      }),
-    );
-    return controller.signal.aborted ? undefined : result;
+      });
+      if (controller.signal.aborted) return undefined;
+      if (checkpointDigest(checkpointFiles(game)) !== hash) return 'stale' as const;
+      return result;
+    });
   } finally {
     if (holder?.current === controller) holder.current = null;
     ws?.onLocalTask?.('');
@@ -85,6 +92,10 @@ export async function recoverVerification(
       if (!result) {
         input.write('Verification stopped. Your edits remain local.');
         return false;
+      }
+      if (result === 'stale') {
+        input.write('Sources changed during verification; result is stale. Check again for the current files.');
+        continue;
       }
       if (!result.ok) {
         failure = new VerificationError(result, delivery.dest);

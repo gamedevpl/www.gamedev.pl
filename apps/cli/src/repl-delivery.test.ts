@@ -265,3 +265,30 @@ it('offers the same diagnostic repair after /verify and never sends that repair 
   expect(f.lines.join('\n')).toContain('Local checks passed.');
   expect(f.writes()).toEqual([]);
 });
+
+it.each(['/verify', '/push'])('rejects changed sources during %s retries and accepts a fresh retry', async (line) => {
+  const f = fixture();
+  let retries = 0;
+  f.pick.mockImplementation(async (_choices, question) => {
+    if (!question.startsWith('Local checks')) return BACK;
+    retries += 1;
+    if (retries === 1) {
+      f.state.red = false;
+      const original = f.ws.run!;
+      f.ws.run = (...args) => {
+        writeFileSync(f.source, 'external IDE edit');
+        return original(...args);
+      };
+    } else {
+      expect(f.lines.join('\n')).toContain('Sources changed during verification; result is stale.');
+      expect(f.lines.join('\n')).not.toContain('Local checks passed.');
+    }
+    return 'Check again';
+  });
+  await f.run(line);
+  expect(retries).toBe(2);
+  expect(f.lines.join('\n')).toContain('Local checks passed.');
+  expect(f.ws.abort.current).toBeNull();
+  expect(f.ws.runAdapter).not.toHaveBeenCalled();
+  expect(f.writes()).toEqual([]);
+});
