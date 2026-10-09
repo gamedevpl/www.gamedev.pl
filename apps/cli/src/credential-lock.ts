@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -80,7 +81,9 @@ export async function withCredentialLock<T>(file: string, run: () => Promise<T>,
         renameSync(candidate, lock);
         acquired = true;
       } catch (error) {
-        if (!['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+        const code = (error as NodeJS.ErrnoException).code ?? '';
+        if (!['EEXIST', 'ENOTEMPTY'].includes(code) && !(['EACCES', 'EPERM'].includes(code) && existsSync(lock)))
+          throw error;
         recoverDeadOwner(lock);
         if (Date.now() >= deadline) {
           throw new CliError('another gamedevpl process is updating sign-in', EXIT_REFUSED, 'retry in a moment');

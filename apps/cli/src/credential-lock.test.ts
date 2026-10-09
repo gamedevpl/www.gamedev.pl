@@ -18,7 +18,7 @@ import { withCredentialLock } from './credential-lock.js';
 
 vi.mock('node:fs', async () => {
   const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
-  return { ...fs, unlinkSync: vi.fn(fs.unlinkSync) };
+  return { ...fs, unlinkSync: vi.fn(fs.unlinkSync), renameSync: vi.fn(fs.renameSync) };
 });
 
 const roots: string[] = [];
@@ -83,6 +83,26 @@ it('cancels a waiter without releasing a live owner', async () => {
   expect(readdirSync(roots.at(-1)!)).toEqual(['credentials.bin.lock']);
   release();
   await first;
+});
+
+it('waits on Windows-style rename contention when the existing lock is valid', async () => {
+  const path = file();
+  let release!: () => void;
+  const first = withCredentialLock(
+    path,
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  await vi.waitFor(() => expect(release).toBeDefined());
+  vi.mocked(renameSync).mockImplementationOnce(() => {
+    throw Object.assign(new Error('target exists'), { code: 'EPERM' });
+  });
+  const second = withCredentialLock(path, async () => 'second');
+  release();
+  await first;
+  await expect(second).resolves.toBe('second');
 });
 
 it('recovers a dead owner safely when two contenders race', async () => {
