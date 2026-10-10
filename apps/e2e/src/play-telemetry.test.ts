@@ -94,7 +94,11 @@ describe.skipIf(!prerequisite.ok)('published play telemetry through native Chrom
         const result = await app.inject({
           method: 'POST',
           url,
-          headers: { cookie: request.headers.cookie ?? '' },
+          headers: {
+            cookie: request.headers.cookie?.includes('fixture-reviewer=1')
+              ? `${SESSION_COOKIE_NAME}=${mintSessionToken('g:reviewer', secret)}`
+              : '',
+          },
           payload: JSON.parse(payload),
         });
         response.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
@@ -127,10 +131,7 @@ describe.skipIf(!prerequisite.ok)('published play telemetry through native Chrom
         send({}, 404);
       } else {
         if (mode && mode !== 'public')
-          response.setHeader(
-            'Set-Cookie',
-            `${SESSION_COOKIE_NAME}=${mintSessionToken('g:reviewer', secret)}; Path=/; HttpOnly; SameSite=Lax`,
-          );
+          response.setHeader('Set-Cookie', `fixture-reviewer=1; Path=/; HttpOnly; SameSite=Lax`);
         response.writeHead(200, { 'Content-Type': 'text/html' });
         response.end(
           '<style>html,body,#mount{height:100%;margin:0}iframe{height:80vh;width:100%;border:0}</style><div id="mount"></div><script type="module" src="/fixture.js"></script>',
