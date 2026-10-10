@@ -115,6 +115,11 @@ repo in the same session.
   Likewise, poll the final React view after a native host event closes the chat:
   the host's `hidden` flag changes before React commits its corresponding layout.
 
+- **Control polling clocks in jsdom unit tests.** A real 1.1-second sleep plus
+  fixture parsing and another poll can exceed Vitest's default five seconds under
+  load. Advance fake timers through the relevant polls, keeping the behavior
+  assertions; do not give the entire CLI a larger timeout for that fixture.
+
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository
   history and hit GitHub's 125 000-character body limit (release run 3, 2026-09-04).
   Notes come from the changelog section.
