@@ -65,6 +65,7 @@ export function suggestSlash(command: string): SlashVerb | undefined {
 }
 
 export function suggestVerb(command: string): (typeof CLI_VERBS)[number] | undefined {
+  if (command.replace(/^\//, '').toLowerCase() === 'logs') return undefined;
   return suggestCommand(command, CLI_VERBS);
 }
 

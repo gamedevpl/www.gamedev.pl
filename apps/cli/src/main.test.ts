@@ -47,6 +47,7 @@ describe('runCli verbs', () => {
     ['udpate', 'update'],
     ['craete', 'create'],
     ['repp', 'repl'],
+    ['logs', undefined],
     ['xyzzyq', undefined],
   ])('suggests a command for %s without running it', async (verb, suggestion) => {
     const streams = io();

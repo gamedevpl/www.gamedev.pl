@@ -69,5 +69,6 @@ it('suggests shell verbs including browser entry points, excluding session-only 
   expect(suggestVerb('craete')).toBe('create');
   expect(suggestVerb('repp')).toBe('repl');
   expect(CLI_VERBS).not.toContain('logs');
+  expect(suggestVerb('logs')).toBeUndefined();
   expect(suggestVerb('xyzzyq')).toBeUndefined();
 });
