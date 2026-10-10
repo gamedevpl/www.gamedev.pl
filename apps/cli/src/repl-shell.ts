@@ -4,6 +4,7 @@ import type { Workshop } from './workshop.js';
 
 const OUTPUT_LIMIT = 256_000;
 const LINE_LIMIT = 8000;
+const LINE_COUNT_LIMIT = 2000;
 
 export function shellInvocation(command: string, env: NodeJS.ProcessEnv, platform = process.platform) {
   return {
@@ -38,21 +39,46 @@ export async function runReplShell(input: {
   const buffers = { stdout: '', stderr: '' };
   let remaining = OUTPUT_LIMIT;
   let truncated = false;
+  let lineCount = 0;
+  let pending: string[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
   const emit = (text: string): void => input.write(stripTerminalControls(text));
+  const flush = (): void => {
+    clearTimeout(flushTimer);
+    flushTimer = undefined;
+    if (pending.length) emit(pending.join('\n'));
+    pending = [];
+  };
+  const schedule = (): void => {
+    flushTimer ??= setTimeout(flush, 50);
+  };
+  const truncate = (): void => {
+    if (truncated) return;
+    truncated = true;
+    pending.push('Shell output truncated; redirect to a file to keep the full output.');
+    schedule();
+  };
+  const queueLine = (line: string): void => {
+    if (lineCount >= LINE_COUNT_LIMIT) {
+      remaining = 0;
+      truncate();
+      return;
+    }
+    lineCount++;
+    pending.push(line);
+    schedule();
+  };
   const receive = (stream: keyof typeof buffers, chunk: string): void => {
     const accepted = chunk.slice(0, remaining);
     remaining -= accepted.length;
     const lines = (buffers[stream] + accepted).split('\n');
     buffers[stream] = lines.pop()!;
-    for (const line of lines) emit(line);
+    for (const line of lines) queueLine(line);
     while (buffers[stream].length >= LINE_LIMIT) {
-      emit(buffers[stream].slice(0, LINE_LIMIT));
+      queueLine(buffers[stream].slice(0, LINE_LIMIT));
       buffers[stream] = buffers[stream].slice(LINE_LIMIT);
     }
-    if (accepted.length < chunk.length && !truncated) {
-      truncated = true;
-      emit('Shell output truncated; redirect to a file to keep the full output.');
-    }
+    if (accepted.length < chunk.length) truncate();
   };
   try {
     input.onActivity?.('Running shell command — Ctrl+C to stop');
@@ -68,7 +94,8 @@ export async function runReplShell(input: {
       child.once('error', reject);
       child.once('close', (code, signal) => resolve({ code, signal }));
     });
-    for (const tail of Object.values(buffers)) if (tail) emit(tail);
+    for (const tail of Object.values(buffers)) if (tail) queueLine(tail);
+    flush();
     emit(
       controller.signal.aborted
         ? 'Shell command stopped.'
@@ -77,8 +104,10 @@ export async function runReplShell(input: {
           : `Shell command exited with code ${result.code}.`,
     );
   } catch (error) {
+    flush();
     emit(`Could not run shell command: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
+    clearTimeout(flushTimer);
     if (input.abort?.current === controller) input.abort.current = null;
   }
 }

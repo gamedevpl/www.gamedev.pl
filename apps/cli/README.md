@@ -49,7 +49,8 @@ In the terminal session, `!<command>` runs a local shell command, for example `!
 directory before selecting a game), the user's shell and environment. Output appears
 in the transcript with the exit code; Ctrl+C stops the command and its child processes.
 Commands work offline and are not sent to the assistant. Each invocation uses a fresh
-shell, so `cd` and exports do not persist. Output is capped at 256,000 characters;
+shell, so `cd` and exports do not persist. Output is batched and capped at 256,000
+characters or 2,000 lines;
 redirect to a file for larger reports. While an agent works, Enter queues a shell
 command until the task finishes. Browser chat does not execute shell commands.
 

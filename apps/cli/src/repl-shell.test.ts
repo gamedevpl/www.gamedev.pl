@@ -12,6 +12,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'gdpl-shell-'));
   roots.push(root);
   const lines: string[] = [];
+  const writes: string[] = [];
   const abort: { current: AbortController | null } = { current: null };
   const request = vi.fn(() => {
     throw new Error('Shell commands must stay local');
@@ -20,6 +21,7 @@ function fixture() {
   return {
     root,
     lines,
+    writes,
     request,
     input: {
       api,
@@ -29,7 +31,10 @@ function fixture() {
       cwd: root,
       env: { ...process.env, SHELL: '/bin/bash', SHELL_MARK: 'local-value' },
       abort,
-      write: (line: string) => lines.push(line),
+      write: (line: string) => {
+        writes.push(line);
+        lines.push(...line.split('\n'));
+      },
     },
   };
 }
@@ -131,6 +136,16 @@ setInterval(()=>{},1000);`,
     expect(f.lines.join('')).not.toContain('\u001b');
     expect(f.lines.join('')).toContain('Shell output truncated');
     expect(f.lines.join('').length).toBeLessThan(257_000);
+    expect(f.lines.at(-1)).toBe('Shell command exited with code 0.');
+  });
+
+  it('batches newline-heavy output and bounds transcript rows', async () => {
+    const f = fixture();
+    writeFileSync(join(f.root, 'lines.cjs'), `process.stdout.write('x\\n'.repeat(128000));`);
+    await handleReplLine({ ...f.input, line: `!"${process.execPath}" lines.cjs` });
+    expect(f.writes.length).toBeLessThan(20);
+    expect(f.lines.length).toBeLessThanOrEqual(2002);
+    expect(f.lines).toContain('Shell output truncated; redirect to a file to keep the full output.');
     expect(f.lines.at(-1)).toBe('Shell command exited with code 0.');
   });
 });
