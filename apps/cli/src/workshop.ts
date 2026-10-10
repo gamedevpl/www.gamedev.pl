@@ -1,14 +1,14 @@
 import { PROGRESS_INSTRUCTIONS } from './local-progress.js';
 
 import { withCheckoutWriter } from './workbench-lock.js';
-import { localPreviewTools, startWorkshopPreview, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
+import { startWorkshopPreview } from './local-preview-tools.js';
 import { workshopBrief } from './workshop-brief.js';
 export { workshopBrief } from './workshop-brief.js';
-import { defaultAdapterRun } from './workshop-runner.js';
+import { runPermissionTask, claudeLocalFlags } from './permission-task.js';
+export { claudeLocalFlags, claudeAbsolutePath } from './permission-task.js';
 import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
-import { approvalEnv } from './agent-approval.js';
-import { permissionLabel, permissionMode, taskPermissions, type PermissionMode } from './agent-permissions.js';
+import { applyPermissionMode, permissionLabel, permissionMode, type PermissionMode } from './agent-permissions.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
@@ -17,7 +17,6 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
-import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { preflightAdapter, type AdapterSpec } from './adapters.js';
@@ -168,21 +167,6 @@ export async function settleBuilder(input: {
   }
 }
 
-export function claudeAbsolutePath(path: string): string {
-  const posix = path.replaceAll('\\', '/').replace(/^([A-Za-z]):\//, (_, drive: string) => `/${drive.toLowerCase()}/`);
-  return `/${posix.replace(/\/+$/, '')}`;
-}
-
-export function claudeLocalFlags(root: string, cwd: string): string[] {
-  const readRoot = { permissions: { allow: [`Read(${claudeAbsolutePath(realpathSync(root))}/**)`] } };
-  return [
-    ...(cwd === root ? [] : ['--settings', JSON.stringify(readRoot)]),
-    '--strict-mcp-config',
-    '--setting-sources',
-    'project,local',
-  ];
-}
-
 export async function runLocalBuild(input: {
   ws: Workshop;
   spec: AdapterSpec;
@@ -191,7 +175,7 @@ export async function runLocalBuild(input: {
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws } = input;
-  let spec = configureAdapter(input.spec, ws.env);
+  const spec = configureAdapter(input.spec, ws.env);
   const output = taskOutput(input.write, ws.onActivity);
   ws.lastLog = output.path;
   input = { ...input, write: output.write };
@@ -203,14 +187,13 @@ export async function runLocalBuild(input: {
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
-  const permitted = taskPermissions({ ws, spec, mode, cwd, signal: controller.signal, write: input.write });
-  spec = permitted.spec;
-  const { onApproval, permissions } = permitted;
+  const permitted = applyPermissionMode(spec, mode);
   ws.abort.current = controller;
   let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
+  const captureBudget = { used: 0 };
+  const permissionState = { mode };
   let authCheck: Promise<void> | undefined;
-  let localTools: Awaited<ReturnType<typeof localPreviewTools>>;
   try {
     if (!(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
     if (!ws.runAdapter && spec.name === 'claude') {
@@ -218,7 +201,7 @@ export async function runLocalBuild(input: {
         command: spec.command,
         cwd,
         env: subscriptionEnv(childEnv(ws.env, '')),
-        args: [...claudeLocalFlags(ws.root, cwd), ...spec.headless],
+        args: [...claudeLocalFlags(ws.root, cwd), ...permitted.spec.headless],
         abort: controller.signal,
       });
       await authCheck;
@@ -251,17 +234,6 @@ export async function runLocalBuild(input: {
         input.write(formatError(error));
       }
     }
-    localTools = await localPreviewTools({
-      spec,
-      onApproval: spec.name === 'claude' ? onApproval : undefined,
-      sandbox: { permissions, cwd },
-      previewUrl,
-      abort: controller.signal,
-      write: input.write,
-      progress: output.progress,
-    });
-    if (localTools) spec = localTools.spec;
-    if (spec.name === 'claude') spec = { ...spec, headless: [...claudeLocalFlags(ws.root, cwd), ...spec.headless] };
     if (controller.signal.aborted) return false;
     ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
     input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
@@ -271,7 +243,7 @@ export async function runLocalBuild(input: {
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
     success = await repairLoop({
-      brief: `${input.brief}\n${PROGRESS_INSTRUCTIONS}\n${localTools && previewUrl ? LOCAL_PREVIEW_INSTRUCTIONS : ''}${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
+      brief: `${input.brief}\n${PROGRESS_INSTRUCTIONS}\n${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Use this exact URL for visual checks with an available browser tool or permitted local browser automation. Do not start or stop another preview server. Browser unavailability must not stop implementation.` : 'No live preview was supplied. Continue implementation without visual verification; report that limitation. The creator can start /play in their terminal.'}`,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
@@ -284,18 +256,25 @@ export async function runLocalBuild(input: {
         presence?.phase('editing');
         const before = localGameFiles(ws.root, ws.slug);
         const render = createEventRenderer(spec.name);
-        const failure = trackAgentFailure(spec.name);
+        let failure = trackAgentFailure(spec.name);
         let blocked = false;
         let conversation: string | undefined;
-        const result = await (ws.runAdapter ?? defaultAdapterRun)({
+        const result = await runPermissionTask({
+          ws,
+          permissionState,
+          previewUrl,
+          captureBudget,
+          output,
+          write: input.write,
+          onRestart: () => {
+            blocked = false;
+            failure = trackAgentFailure(spec.name);
+          },
           spec,
           prompt,
           authCheck,
-          onApproval,
-          permissions,
           onSteering: ws.unattended ? undefined : ws.onSteering,
           cwd,
-          env: { ...approvalEnv(childEnv(ws.env, ''), localTools?.approvals), ...permitted.env },
           abort: controller.signal,
           onDiagnostic: output.raw,
           onLine: (line) => {
@@ -361,7 +340,6 @@ export async function runLocalBuild(input: {
     return success;
   } finally {
     ws.onSteering?.(undefined);
-    await localTools?.close();
     output.flush();
     await presence?.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
     if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);

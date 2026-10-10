@@ -63,6 +63,7 @@ export const MAX_CAPTURES_PER_TASK = 12;
 
 export async function startLocalPreviewMcp(input: {
   previewUrl?: string;
+  captureBudget?: { used: number };
   progress?: (text: string, blocked: boolean) => void;
   abort: AbortSignal;
   write: (line: string) => void;
@@ -86,7 +87,7 @@ export async function startLocalPreviewMcp(input: {
   let render: { id: string; html: string } | undefined;
   let origin = '';
   let lastStarted = 0;
-  let captures = 0;
+  const captureBudget = input.captureBudget ?? { used: 0 };
   async function execute(job: Job, viewport: CaptureViewport): Promise<void> {
     try {
       input.write('Local capture: waiting for the current build…');
@@ -124,12 +125,12 @@ export async function startLocalPreviewMcp(input: {
       const viewport = value.viewport ?? 'desktop';
       if (viewport !== 'desktop' && viewport !== 'mobile') throw new Error('Unknown viewport.');
       if (current) throw new Error('A capture is already running. Use capture_status.');
-      if (captures >= MAX_CAPTURES_PER_TASK)
+      if (captureBudget.used >= MAX_CAPTURES_PER_TASK)
         throw new Error(
           `This task used its ${MAX_CAPTURES_PER_TASK} captures. Continue without more visual checks and report what is unverified.`,
         );
       if (Date.now() - lastStarted < 2000) throw new Error('Wait two seconds before another capture.');
-      captures++;
+      captureBudget.used++;
       lastStarted = Date.now();
       while (jobs.size >= 3) jobs.delete(jobs.keys().next().value!);
       const job: Job = { id: randomUUID(), state: 'building', startedAt: new Date().toISOString() };

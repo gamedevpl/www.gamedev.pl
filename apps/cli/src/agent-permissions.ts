@@ -96,6 +96,7 @@ export function taskPermissions(input: {
   ws: Pick<Workshop, 'unattended' | 'pick' | 'onActivity' | 'permissionMode'>;
   signal: AbortSignal;
   write: (line: string) => void;
+  autoResume?: { available: () => boolean; start: () => void };
 }): {
   spec: AdapterSpec;
   env: Record<string, string>;
@@ -115,8 +116,20 @@ export function taskPermissions(input: {
         activity: ws.onActivity,
         cwd: input.cwd,
         remembered: commandApprovalMemory(ws),
+        autoResume:
+          agent === 'claude' && input.autoResume
+            ? {
+                available: input.autoResume.available,
+                start: () => {
+                  setPermissionMode('auto');
+                  delete ws.permissionMode;
+                  input.autoResume!.start();
+                },
+              }
+            : undefined,
+        autoNextAvailable: () => (ws.permissionMode ?? permissionMode()) !== 'auto',
         autoNext:
-          agent === 'claude'
+          agent === 'claude' && (ws.permissionMode ?? permissionMode()) !== 'auto'
             ? () => {
                 setPermissionMode('auto');
                 delete ws.permissionMode;
