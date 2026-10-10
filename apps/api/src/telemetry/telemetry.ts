@@ -7,7 +7,6 @@ import {
   MAX_MULTIPLAYER_SLOTS,
   ZONE_LINK_STEPS,
 } from '@gamedevpl/contract';
-import { loadReviewCandidate } from '../community/review-candidate.js';
 import { isReviewer } from '../platform/reviewer-role.js';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
@@ -130,6 +129,7 @@ export interface TelemetryRoutesOptions {
    * every flush is accepted and dropped — the same answer an unknown slug gets.
    */
   publishedSlugs?: PublishedSlugGate | null;
+  isReviewable?: (slug: string) => Promise<boolean>;
   now?: () => number;
   // Ladder rung 2. Absent keeps every session.
   keepsSession?: (sessionId: string) => Promise<boolean>;
@@ -175,7 +175,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
     // Unknown slugs receive the same response as unavailable review candidates.
     const published = (await publishedSlugs?.isPublished(parsed.data.slug)) ?? false;
     const reviewer = isReviewer(request.user?.uid, options.reviewerUids, options.adminUids);
-    const reviewable = !published && reviewer && Boolean(await loadReviewCandidate(store, parsed.data.slug));
+    const reviewable = !published && reviewer && ((await options.isReviewable?.(parsed.data.slug)) ?? false);
     if (!published && !reviewable) {
       droppedUnknownSlug += 1;
       if (droppedUnknownSlug % DROP_LOG_INTERVAL === 1) {
