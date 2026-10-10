@@ -81,11 +81,14 @@ describe('NextIdeaModelGenerator providers', () => {
     ]);
   });
 
-  it('does not fall back on a non-retryable Claude error', async () => {
+  it('answers from Gemini when Claude rejects the key, without retrying Claude', async () => {
     const unauthorized = Object.assign(new Error('invalid x-api-key'), { status: 401 });
     const { clientFor, calls } = fakeClients({ [DEFAULT_NEXT_IDEAS_MODEL]: unauthorized });
+    const booked: string[] = [];
     const generator = new NextIdeaModelGenerator({ clientFor, env: { ANTHROPIC_API_KEY: 'k' } });
-    expect(await generator.generate(base)).toEqual([]);
-    expect(calls).toEqual([DEFAULT_NEXT_IDEAS_MODEL]);
+    const ideas = await generator.generate({ ...base, onAttempt: (model) => booked.push(model) });
+    expect(ideas.length).toBeGreaterThan(0);
+    expect(calls).toEqual([DEFAULT_NEXT_IDEAS_MODEL, NEXT_IDEAS_GEMINI_MODEL]);
+    expect(booked).toEqual([DEFAULT_NEXT_IDEAS_MODEL, NEXT_IDEAS_GEMINI_MODEL]);
   });
 });

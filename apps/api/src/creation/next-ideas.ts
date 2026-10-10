@@ -195,18 +195,28 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
       const request = params.screenshotPng
         ? user(promptText, { images: [image(params.screenshotPng, 'image/png')] })
         : promptText;
+      const draw = (model: string, budgetMs: number) =>
+        this.clientFor(model)(request)
+          .temperature(0.4)
+          .thinking({ level: 'low' })
+          .signal(AbortSignal.timeout(budgetMs))
+          .json((value) => NextIdeaResultSchema.parse(value));
+      let fellBack = false;
       // Malformed JSON or a capacity blip earns one more draw.
       const parsed = await callWithVertexResilience({
         // The first draw gets 60%; keep it above the budget.
         timeoutMs: this.timeoutMs * 2,
         ...(this.fallbackModel ? { fallbackModel: this.fallbackModel } : {}),
-        onAttempt: (model) => params.onAttempt?.(model ?? this.model),
-        attempt: (model, budgetMs) =>
-          this.clientFor(model ?? this.model)(request)
-            .temperature(0.4)
-            .thinking({ level: 'low' })
-            .signal(AbortSignal.timeout(budgetMs))
-            .json((value) => NextIdeaResultSchema.parse(value)),
+        onAttempt: (model) => {
+          if (model) fellBack = true;
+          params.onAttempt?.(model ?? this.model);
+        },
+        attempt: (model, budgetMs) => draw(model ?? this.model, budgetMs),
+      }).catch(async (error: unknown) => {
+        // A bad key or request skips the retry loop; Gemini still answers.
+        if (!this.fallbackModel || fellBack) throw error;
+        params.onAttempt?.(this.fallbackModel);
+        return draw(this.fallbackModel, this.timeoutMs);
       });
 
       const ideas: NextIdea[] = [];
