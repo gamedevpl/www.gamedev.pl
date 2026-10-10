@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.29.1 — 2026-10-10
+
 ### Fixed
 
 - Choosing Auto in a Claude permission prompt resumes the current conversation in a sandbox, instead of repeatedly asking until the next task (#1729).
