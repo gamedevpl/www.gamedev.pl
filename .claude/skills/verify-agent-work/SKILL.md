@@ -42,6 +42,12 @@ Clean up when done (`git worktree remove --force`, delete the temp branch/clone)
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
+**Install dependencies inside the isolated checkout.** A root-only `node_modules` symlink
+does not reproduce nested workspace dependencies. Observed during local Play verification:
+CLI used `wrap-ansi` 9 with declarations in its own `node_modules`, while the root held
+version 7 without declarations. Linking only the root resolved version 7 and produced
+`TS7016` despite identical lockfiles. Run `npm ci` in the verification checkout.
+
 ## Keep flow tests independent of live conversation routing
 
 A transfer test calling `/improve` must inject a `chatAgent` whose `decide` returns
