@@ -3,6 +3,7 @@ import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, startedBefore, toSubmissionStatus } from '../creation/job-state.js';
 import { lastMovementAt, statusPollFloorMs, stillBooting } from './status-poll-floor.js';
+import { dreamRunInProgress } from '../store/slices/dream-claim.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
 import { canActOnGame, canActOnSlug, canonicalCreatorOwnerUid } from '../platform/game-access-permissions.js';
@@ -51,13 +52,14 @@ function withoutAuthoredDetail(build: RecentBuild): RecentBuild {
 // Newest stamp that means this round moved.
 function sinceMovement(
   record: { stateSince?: string; lastAgentSignalAt?: string; createdAt: string },
-  status: { events?: Array<{ createdAt: string }> },
+  status: { events?: Array<{ createdAt: string }>; dreaming?: { since: string } },
   at: number,
 ): number {
   const movedAt = lastMovementAt([
     record.stateSince,
     record.lastAgentSignalAt,
     status.events?.[0]?.createdAt,
+    status.dreaming?.since,
     record.createdAt,
   ]);
   return movedAt === undefined ? Number.NaN : at - movedAt;
@@ -429,6 +431,12 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     });
     if (stall) next.stall = stall;
     else delete next.stall;
+    // The card lands in the member thread; only members wait.
+    const dreamAt = new Date(now()).toISOString();
+    const version = record.previewVersion ?? record.deliveredVersion;
+    if (viewerOwns && dreamRunInProgress(record.dreamRun, version, dreamAt, record.roundGeneration ?? 1)) {
+      next.dreaming = { since: record.dreamRun!.claimedAt };
+    } else delete next.dreaming;
 
     // Recomputed with the stall: a cache hit overlays a fresher signal.
     const floor = statusPollFloorMs({

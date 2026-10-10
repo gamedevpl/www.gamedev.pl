@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { gatedPollDelayMs, idleFloorMs, IDLE_AFTER_MS } from './pollGating.js';
+import { ACTIVE_POLL_MS, pollDelayMs } from './studioStatusPoll.js';
 
 describe('idleFloorMs', () => {
   it('imposes nothing while the tab is being touched', () => {
@@ -60,5 +61,25 @@ describe('gatedPollDelayMs', () => {
     expect(
       gatedPollDelayMs({ wantedMs: 3_000, hidden: false, msSinceInteraction: 0, serverFloorMs: Number.NaN }),
     ).toBe(3_000);
+  });
+});
+
+describe('cadence while a concept proposal is drawing', () => {
+  it('skips the idle floor so the card lands promptly', () => {
+    const idle = { wantedMs: 3_000, hidden: false, msSinceInteraction: 11 * 60_000 };
+    expect(gatedPollDelayMs(idle)).toBe(30_000);
+    expect(gatedPollDelayMs({ ...idle, dreaming: true })).toBe(3_000);
+  });
+
+  it('still stops on a hidden tab and honours the server floor', () => {
+    expect(gatedPollDelayMs({ wantedMs: 3_000, hidden: true, msSinceInteraction: 0, dreaming: true })).toBeNull();
+    const floored = { wantedMs: 3_000, hidden: false, msSinceInteraction: 0, serverFloorMs: 10_000, dreaming: true };
+    expect(gatedPollDelayMs(floored)).toBe(10_000);
+  });
+
+  it('asks for the active cadence after a green preview', () => {
+    expect(pollDelayMs('in_review')).toBeGreaterThan(ACTIVE_POLL_MS);
+    expect(pollDelayMs('in_review', undefined, 'ready_for_review', true)).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('published', undefined, undefined, true)).toBeNull();
   });
 });

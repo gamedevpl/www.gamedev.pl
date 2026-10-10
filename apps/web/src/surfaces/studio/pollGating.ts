@@ -31,11 +31,14 @@ export interface PollGateInput {
   msSinceInteraction: number;
   // `pollAfterMs` from the newest status, when the server sent one.
   serverFloorMs?: number | undefined;
+  // A concept run is drawing; its card should not wait out idleness.
+  dreaming?: boolean;
 }
 
 export function gatedPollDelayMs(input: PollGateInput): number | null {
   if (input.wantedMs === null) return null;
   if (input.hidden) return null;
   const server = Number.isFinite(input.serverFloorMs ?? NaN) ? (input.serverFloorMs as number) : 0;
-  return Math.max(input.wantedMs, idleFloorMs(input.msSinceInteraction), server);
+  const idle = input.dreaming ? 0 : idleFloorMs(input.msSinceInteraction);
+  return Math.max(input.wantedMs, idle, server);
 }

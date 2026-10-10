@@ -401,7 +401,9 @@ export function SubmissionStatusView({
             // Transient failure (network blip, rate limit) — retry at the idle cadence.
             return pollDelayMs('queued');
           }
-          return latest ? pollDelayMs(latest.status, latest.stall, latest.phase) : pollDelayMs('queued');
+          return latest
+            ? pollDelayMs(latest.status, latest.stall, latest.phase, Boolean(latest.dreaming))
+            : pollDelayMs('queued');
         },
         onUpdate: (next) => {
           wasCachedBootstrapRef.current = synchronousDelivery;
@@ -794,6 +796,7 @@ export function SubmissionStatusView({
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
                 priorSlug={status.slug}
                 proposals={proposalPrefs.muted === null ? undefined : proposalHandlers}
+                dreaming={status.dreaming && !proposalPrefs.muted ? t('statusView.proposal.dreaming') : null}
                 stickNonce={(isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0) + (agentWorking ? 1 : 0)}
                 working={
                   agentWorking

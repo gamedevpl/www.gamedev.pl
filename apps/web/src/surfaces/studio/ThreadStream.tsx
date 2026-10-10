@@ -31,6 +31,7 @@ export function ThreadStream({
   working = null,
   stickNonce = 0,
   proposals,
+  dreaming = null,
 }: {
   token: string;
   entries: ActivityEntry[];
@@ -46,6 +47,8 @@ export function ThreadStream({
   stickNonce?: number;
   // Concept proposals on studio turns; absent renders them as plain text.
   proposals?: ProposalHandlers;
+  // A concept proposal is being drawn; the card replaces this line.
+  dreaming?: string | null;
 }) {
   const { t, i18n } = useTranslation();
   const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
@@ -68,7 +71,7 @@ export function ThreadStream({
     if (!pane || !stickToBottomRef.current) return;
     // Do not scroll into the Claude/Cursor runway.
     pane.scrollTop = studioThreadContentScrollTop(pane);
-  }, [entries.length, stickNonce, showsProposalCard, working?.label, working?.thoughtLabel]);
+  }, [entries.length, stickNonce, showsProposalCard, working?.label, working?.thoughtLabel, dreaming]);
 
   // One timeout at expiry — no poll needed.
   useEffect(() => {
@@ -183,6 +186,14 @@ export function ThreadStream({
                   <BuildHeartbeat at={working.heartbeatAt} />
                 </span>
               ) : null}
+            </li>
+          ) : null}
+          {dreaming ? (
+            <li className="studio-turn is-dreaming" aria-live="polite">
+              <div className="studio-turn-working">
+                <span className="studio-turn-working-pulse" aria-hidden="true" />
+                <span className="studio-turn-working-label">{dreaming}</span>
+              </div>
             </li>
           ) : null}
         </ol>

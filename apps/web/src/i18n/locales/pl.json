@@ -1141,7 +1141,8 @@
       "close": "Zamknij",
       "enlarge": "Powiększ: {{name}}",
       "compare": "Porównaj ze swoją grą",
-      "holdHint": "Albo przytrzymaj obrazek, aby zobaczyć swoją grę."
+      "holdHint": "Albo przytrzymaj obrazek, aby zobaczyć swoją grę.",
+      "dreaming": "Szkicuję dwa kierunki na następną rundę…"
     },
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",

@@ -302,6 +302,15 @@
   line-height: 1.35;
 }
 
+.studio-turn.is-dreaming .studio-turn-working-pulse {
+  background: var(--accent-blue);
+}
+
+.studio-turn.is-dreaming .studio-turn-working-label {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .studio-turn.is-working.is-thought .studio-turn-working-label {
   color: var(--turquoise);
   animation: studio-thought-flash 0.55s ease-out;
