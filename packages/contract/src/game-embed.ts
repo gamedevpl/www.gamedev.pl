@@ -445,7 +445,8 @@ const HIDE_CHROME =
   `@media (hover:hover),(pointer:fine){` +
   `.gamekit-touch{display:none!important}` +
   `}` +
-  `html,body{width:100%;height:100%;margin:0;background:#000}` +
+  // Beat the shell gradient; phones showed a navy, framed inset.
+  `html,body{width:100%;height:100%;margin:0;background:#000!important}` +
   `body{display:flex;align-items:center;justify-content:center;` +
   `min-height:100%;overflow:hidden}` +
   `.wrap{` +
@@ -470,7 +471,9 @@ const HIDE_CHROME =
   `max-width:var(--gdpl-embed-width)!important;` +
   `max-height:100%!important;` +
   `min-height:0!important;` +
-  `box-shadow:none!important` +
+  `box-shadow:none!important;` +
+  `border:none!important;` +
+  `border-radius:0!important` +
   `}` +
   `html,body,canvas,img,video{` +
   `-webkit-touch-callout:none;` +
