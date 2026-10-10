@@ -58,9 +58,9 @@ describe('gatedPollDelayMs', () => {
 
   it('ignores a missing or nonsensical server floor instead of stalling', () => {
     expect(gatedPollDelayMs({ wantedMs: 3_000, hidden: false, msSinceInteraction: 0 })).toBe(3_000);
-    expect(
-      gatedPollDelayMs({ wantedMs: 3_000, hidden: false, msSinceInteraction: 0, serverFloorMs: Number.NaN }),
-    ).toBe(3_000);
+    expect(gatedPollDelayMs({ wantedMs: 3_000, hidden: false, msSinceInteraction: 0, serverFloorMs: Number.NaN })).toBe(
+      3_000,
+    );
   });
 });
 
@@ -80,6 +80,9 @@ describe('cadence while a concept proposal is drawing', () => {
   it('asks for the active cadence after a green preview', () => {
     expect(pollDelayMs('in_review')).toBeGreaterThan(ACTIVE_POLL_MS);
     expect(pollDelayMs('in_review', undefined, 'ready_for_review', true)).toBe(ACTIVE_POLL_MS);
-    expect(pollDelayMs('published', undefined, undefined, true)).toBeNull();
+    // A card may still post after publication; keep fetching until it lands.
+    expect(pollDelayMs('published', undefined, undefined, true)).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('published')).toBeNull();
+    expect(pollDelayMs('abandoned', undefined, undefined, true)).toBeNull();
   });
 });

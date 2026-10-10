@@ -711,7 +711,7 @@ export function SubmissionStatusView({
   const onActivityCountRef = useRef(onActivityCount);
   onActivityCountRef.current = onActivityCount;
 
-  const proposalPrefs = useProposalsMuted(activity.some((entry) => entry.proposal));
+  const proposalPrefs = useProposalsMuted(activity.some((entry) => entry.proposal) || Boolean(status?.dreaming));
   const proposalHandlers: ProposalHandlers = {
     builder: status?.builder === 'self' ? 'self' : 'platform',
     muted: proposalPrefs.muted === true,
@@ -796,7 +796,7 @@ export function SubmissionStatusView({
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
                 priorSlug={status.slug}
                 proposals={proposalPrefs.muted === null ? undefined : proposalHandlers}
-                dreaming={status.dreaming && !proposalPrefs.muted ? t('statusView.proposal.dreaming') : null}
+                dreaming={status.dreaming && proposalPrefs.muted === false ? t('statusView.proposal.dreaming') : null}
                 stickNonce={(isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0) + (agentWorking ? 1 : 0)}
                 working={
                   agentWorking

@@ -20,7 +20,7 @@ export function pollDelayMs(
   // starts another round, and stopping the poll meant the UI kept saying "needs changes"
   // after a successful send until the creator refreshed. Published and abandoned are
   // finished for good — nothing the composer can do moves them.
-  if (status === 'published' || status === 'abandoned') return null;
+  if (status === 'abandoned' || (status === 'published' && !dreaming)) return null;
   if (status === 'needs_changes') return IDLE_POLL_MS;
   // Flip the connect card to live progress as soon as the agent signals.
   if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
