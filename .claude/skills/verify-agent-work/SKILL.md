@@ -153,6 +153,12 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **A clean merge can bury new CLI notes inside an already-published section.**
+  Observed (#1735): releases advanced on master during development; GitHub merged
+  without conflicts, placing the feature's four notes under 0.30.0. CI's changelog
+  guard only checked that the file changed. The proposer returned `none`, so no
+  editor release followed. Inspect the final merge tree's Unreleased section and
+  next version; compare published sections with their tags before accepting the merge.
 - **A security upgrade can exceed the repository's Node floor.** PR #1251 selected
   Vitest 5, which requires Node 22.12+, while CI and the repo support Node 20.
   Check the target package's `engines` before installing; npm only warns by default.
