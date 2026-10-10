@@ -589,8 +589,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // not a published contact point. Rate-limited and moderated in the handler.
   await registerContactRoutes(app, options.contactRoutes);
 
-  // Published-play telemetry shares the catalog/publication gate below.
-  // One env-derived gate is shared by telemetry, votes, and written feedback: all
   // All anonymous surfaces share the combined publication gate.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
     repoGate: repoPublishedSlugs,
