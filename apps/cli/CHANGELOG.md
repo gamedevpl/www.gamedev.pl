@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation.
+- `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation (#1736).
 
 ### Fixed
 
