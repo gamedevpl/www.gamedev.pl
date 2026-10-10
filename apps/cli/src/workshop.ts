@@ -8,7 +8,7 @@ import { runPermissionTask, claudeLocalFlags } from './permission-task.js';
 export { claudeLocalFlags, claudeAbsolutePath } from './permission-task.js';
 import type { Steer } from './live-agent.js';
 import { permissionHandoff } from './permission-handoff.js';
-import { applyPermissionMode, permissionLabel, permissionMode, type PermissionMode } from './agent-permissions.js';
+import { applyPermissionMode, permissionLabel, taskPermissionMode, type PermissionMode } from './agent-permissions.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
@@ -180,7 +180,7 @@ export async function runLocalBuild(input: {
   ws.lastLog = output.path;
   input = { ...input, write: output.write };
   input.write(`\n── ${ws.slug} · local task ──`);
-  const mode = ws.permissionMode ?? permissionMode();
+  const mode = taskPermissionMode(spec, ws.permissionMode);
   input.write(`${selectionLabel(spec.name, spec.selection ?? {})} · permissions: ${permissionLabel(mode)}`);
   input.write(ws.unattended ? `Full transcript: ${output.path}` : 'Settings: /model · full transcript: /logs');
   ws.onActivity?.(`Preparing ${spec.name}`);

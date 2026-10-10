@@ -1,10 +1,11 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadAdapters } from './adapters.js';
 import { AUTO_NEXT, AUTO_RESUME } from './agent-approval.js';
 import { permissionMode, setPermissionMode } from './agent-permissions.js';
+beforeEach(() => setPermissionMode('ask'));
 import { runLocalBuild, type Workshop } from './workshop.js';
 
 const roots: string[] = [];

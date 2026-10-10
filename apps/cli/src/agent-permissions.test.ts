@@ -6,6 +6,8 @@ import {
   PERMISSIONS_ENV,
   parsePermissionMode,
   permissionMode,
+  permissionEnvironment,
+  taskPermissionMode,
   permissionsCommand,
   setPermissionMode,
   taskPermissions,
@@ -15,14 +17,13 @@ import { liveArgs } from './live-agent.js';
 import { AUTO_NEXT } from './agent-approval.js';
 import type { PermissionMode } from './agent-permissions.js';
 
-afterEach(() => setPermissionMode('ask'));
+afterEach(() => setPermissionMode());
 
 const spec = (name: string) =>
   loadAdapters({ HOME: '/tmp/does-not-exist-gamedev' }).adapters.find((row) => row.name === name)!;
 const ws = { pick: async () => '', unattended: undefined };
 
-it('defaults to Ask and keeps the adapter flags and the creator prompt', () => {
-  expect(permissionMode()).toBe('ask');
+it('keeps explicit Ask adapter flags and the creator prompt', () => {
   const claude = spec('claude');
   const task = taskPermissions({
     spec: claude,
@@ -44,6 +45,23 @@ it('defaults to Ask and keeps the adapter flags and the creator prompt', () => {
     write: vi.fn(),
   });
   expect(unattended.onApproval).toBeUndefined();
+});
+
+it('defaults to sandboxed Auto and uses Ask for unsupported agents', () => {
+  expect(permissionMode()).toBe('auto');
+  for (const name of ['claude', 'codex', 'gemini']) expect(taskPermissionMode(spec(name))).toBe('auto');
+  for (const name of ['cursor', 'agy', 'muse']) expect(taskPermissionMode(spec(name))).toBe('ask');
+  expect(taskPermissionMode({ ...spec('claude'), name: 'custom' })).toBe('ask');
+  expect(permissionEnvironment()[PERMISSIONS_ENV]).toBe('');
+  choosePermissionMode(undefined, permissionEnvironment());
+  expect(taskPermissionMode(spec('cursor'))).toBe('ask');
+  setPermissionMode('auto');
+  expect(() => applyPermissionMode(spec('cursor'), taskPermissionMode(spec('cursor')))).toThrow();
+  expect(permissionEnvironment()[PERMISSIONS_ENV]).toBe('auto');
+  setPermissionMode('ask');
+  expect(taskPermissionMode(spec('claude'))).toBe('ask');
+  setPermissionMode();
+  expect(taskPermissionMode(spec('claude'), 'ask')).toBe('ask');
 });
 
 it('translates Auto-approve and YOLO into each adapter’s flags', () => {
@@ -202,6 +220,7 @@ it('offers Auto fourth, allowing once while sandboxing only future Claude tasks'
 });
 
 it('does not switch permissions when Auto is cancelled', async () => {
+  setPermissionMode('ask');
   const abort = new AbortController();
   const pick = vi.fn(async () => {
     abort.abort();

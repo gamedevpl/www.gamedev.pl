@@ -1,7 +1,8 @@
 import { workbenchScope, workerEntry, assertRequestedGame, type WorkbenchEntry } from './workbench-entry.js';
 import { acquireStartupLock } from './workbench-startup-lock.js';
-import { CliError } from './exit-codes.js';
-import { PERMISSIONS_ENV, permissionMode } from './agent-permissions.js';
+import { CliError, EXIT_REFUSED } from './exit-codes.js';
+import { permissionEnvironment, permissionMode } from './agent-permissions.js';
+import { CLI_VERSION } from './update.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, openSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
@@ -31,6 +32,7 @@ export function workbenchLogin(input: Omit<Parameters<typeof runLoopbackLogin>[0
 
 export type PlayJournal = {
   version: 1;
+  cliVersion?: string;
   instance: string;
   cwd: string;
   pid?: number;
@@ -57,18 +59,19 @@ function journalAt(path: string): PlayJournal | undefined {
     throw Error('Invalid Play journal');
   return value;
 }
-async function health(journal: PlayJournal): Promise<boolean> {
+async function health(journal: PlayJournal): Promise<{ cliVersion?: string } | false> {
   if (!journal.url) return false;
   const url = new URL(journal.url);
   if (url.hostname !== '127.0.0.1' || url.protocol !== 'http:' || !/^#[a-f0-9]{64}$/.test(url.hash)) return false;
   try {
-    return (
-      await fetch(`${url.origin}/state`, {
-        headers: { Authorization: `Bearer ${url.hash.slice(1)}` },
-        signal: AbortSignal.timeout(1000),
-        redirect: 'error',
-      })
-    ).ok;
+    const response = await fetch(`${url.origin}/state`, {
+      headers: { Authorization: `Bearer ${url.hash.slice(1)}` },
+      signal: AbortSignal.timeout(1000),
+      redirect: 'error',
+    });
+    if (!response.ok) return false;
+    const state = (await response.json()) as { cliVersion?: unknown };
+    return { cliVersion: typeof state.cliVersion === 'string' ? state.cliVersion : undefined };
   } catch {
     return false;
   }
@@ -121,7 +124,14 @@ export async function launchWorkbench(input: {
     );
   const existing = journalAt(path);
   assertRequestedGame(existing, input.launch);
-  if (existing && (await health(existing))) {
+  const existingHealth = existing ? await health(existing) : false;
+  if (existing && existingHealth) {
+    if (existingHealth.cliVersion !== CLI_VERSION)
+      throw new CliError(
+        `Play is running ${existingHealth.cliVersion ?? 'an older CLI'}; this CLI is ${CLI_VERSION}.`,
+        EXIT_REFUSED,
+        'Finish any active task, run gamedevpl stop, then gamedevpl play to start the updated session.',
+      );
     input.write(`Existing Play session: ${existing.url}`);
     input.write('Reopened the running session; its lifetime stays with the original launch. Stop: gamedevpl stop.');
     if (permissionMode() !== 'ask')
@@ -171,7 +181,7 @@ export async function launchWorkbench(input: {
     try {
       child = spawn(process.execPath, [...process.execArgv, resolve(input.entry), '__play-session', path], {
         cwd,
-        env: { ...input.env, [PERMISSIONS_ENV]: permissionMode() },
+        env: { ...input.env, ...permissionEnvironment() },
         detached: true,
         stdio: ['ignore', log, log],
         windowsHide: true,
@@ -277,6 +287,7 @@ export async function runPlayWorker(input: {
   const journal = journalAt(input.path);
   if (!journal) throw Error('Session journal missing');
   journal.pid = process.pid;
+  journal.cliVersion = CLI_VERSION;
   delete journal.url;
   const save = () => savePlayJournal(input.path, journal);
   save();

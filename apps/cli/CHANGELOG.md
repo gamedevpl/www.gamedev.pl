@@ -7,6 +7,18 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Local agents default to Auto with a sandbox; agents without sandbox support keep asking, and `/permissions ask` restores prompts (#0).
+
+### Added
+
+- `gamedevpl update` also updates the current project's npm CLI package, so `npm exec -- gamedevpl` uses the new version (#0).
+
+### Fixed
+
+- Updated CLI versions restart old raw previews and explain how to restart an older browser workspace after active work finishes (#0).
+
 ## 0.30.0 — 2026-10-10
 
 ### Added

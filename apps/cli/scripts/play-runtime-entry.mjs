@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 const [root, slug, statePath, key] = process.argv.slice(2);
+const cliVersion = process.env.GAMEDEVPL_PREVIEW_VERSION;
 const token = randomBytes(24).toString('hex');
 let html = '',
   revision = '',
@@ -133,6 +134,7 @@ const server = createServer((req, res) => {
     res.end(
       JSON.stringify({
         key,
+        cliVersion,
         revision,
         error: attemptedFingerprint === stamp ? error : '',
         busy,
@@ -185,7 +187,7 @@ server.listen(0, '127.0.0.1', () => {
       req.url === '/' + token + '/presence',
   );
   const pendingState = statePath + '.' + token;
-  writeFileSync(pendingState, JSON.stringify({ url: origin + '/' + token + '/', key, root, slug }), {
+  writeFileSync(pendingState, JSON.stringify({ url: origin + '/' + token + '/', key, root, slug, cliVersion }), {
     mode: 0o600,
     flag: 'wx',
   });

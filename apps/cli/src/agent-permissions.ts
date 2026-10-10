@@ -5,7 +5,7 @@ import { clearCommandApprovals, commandApprovalMemory } from './agent-approval-m
 import { CliError, EXIT_INPUT } from './exit-codes.js';
 import type { Workshop } from './workshop.js';
 
-// Ask is the default; other modes are chosen per process.
+// Default Auto falls back to Ask when sandbox translation is unsupported.
 export type PermissionMode = 'ask' | 'auto' | 'yolo';
 export const PERMISSION_MODES: readonly PermissionMode[] = ['ask', 'auto', 'yolo'];
 
@@ -15,14 +15,28 @@ const LABELS: Record<PermissionMode, string> = {
   yolo: 'YOLO (full access, no questions)',
 };
 
-let current: PermissionMode = 'ask';
+let current: PermissionMode | undefined;
 
 export function permissionMode(): PermissionMode {
-  return current;
+  return current ?? 'auto';
 }
 
-export function setPermissionMode(mode: PermissionMode): void {
+export function setPermissionMode(mode?: PermissionMode): void {
   current = mode;
+}
+
+export function permissionEnvironment(): Record<string, string> {
+  return { [PERMISSIONS_ENV]: current ?? '' };
+}
+
+export function taskPermissionMode(spec: AdapterSpec, override?: PermissionMode): PermissionMode {
+  if (override || current) return override ?? current!;
+  try {
+    applyPermissionMode(spec, 'auto');
+    return 'auto';
+  } catch {
+    return 'ask';
+  }
 }
 
 export function permissionLabel(mode: PermissionMode): string {
@@ -42,7 +56,7 @@ export const PERMISSIONS_ENV = 'GAMEDEVPL_PERMISSIONS';
 export function choosePermissionMode(flag: string | boolean | undefined, env: NodeJS.ProcessEnv): void {
   if (flag === true) throw new CliError('--permissions needs a mode', EXIT_INPUT, 'ask, auto or yolo');
   const value = typeof flag === 'string' ? flag : env[PERMISSIONS_ENV];
-  if (value) setPermissionMode(parsePermissionMode(value));
+  setPermissionMode(value ? parsePermissionMode(value) : undefined);
 }
 
 // Ask keeps each adapter's own flags and the creator's prompts.
@@ -153,7 +167,7 @@ export async function permissionsCommand(input: {
   let value = input.args[0];
   if (!value && input.pick) {
     const labels = PERMISSION_MODES.map(permissionLabel);
-    const chosen = await input.pick(labels, `Agent permissions (now: ${permissionLabel(current)})`);
+    const chosen = await input.pick(labels, `Agent permissions (now: ${permissionLabel(permissionMode())})`);
     value = PERMISSION_MODES[labels.indexOf(chosen)];
   }
   if (value) {
@@ -163,7 +177,8 @@ export async function permissionsCommand(input: {
       input.write('Remembered command approvals cleared.');
     }
   }
-  input.write(`Permissions: ${permissionLabel(current)}`);
+  input.write(`Permissions: ${permissionLabel(permissionMode())}`);
+  if (!current) input.write('Agents without a supported sandbox use Ask.');
   if (current === 'yolo') input.write('YOLO: agents run without a sandbox and nothing asks you first.');
   if (!value) input.write('permissions ask|auto|yolo; --permissions <mode> sets it for one run');
 }

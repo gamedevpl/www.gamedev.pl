@@ -28,6 +28,7 @@ import { openUrl } from './open-url.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 import { PLAY_RUNTIME } from './play-runtime.js';
 import type { CliTelemetry } from './telemetry.js';
+import { CLI_VERSION, compareSemver } from './update.js';
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -65,7 +66,7 @@ export async function startLocalPlay(input: {
     input.write(existing ? 'local preview stopped' : 'no local preview is running');
     return null;
   }
-  if (existing) return existing;
+  if (existing?.cliVersion === CLI_VERSION) return existing;
   for (let attempt = 0; ; attempt++) {
     checkAbort();
     try {
@@ -75,7 +76,7 @@ export async function startLocalPlay(input: {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const running = await alive(statePath, key);
-      if (running) return running;
+      if (running?.cliVersion === CLI_VERSION) return running;
       const age = lockAge(lock);
       if (age === null) continue;
       let abandoned = false;
@@ -100,7 +101,19 @@ export async function startLocalPlay(input: {
   }
   try {
     const raced = await alive(statePath, key);
-    if (raced) return raced;
+    if (raced?.cliVersion === CLI_VERSION) return raced;
+    if (raced) {
+      if (raced.cliVersion && compareSemver(raced.cliVersion, CLI_VERSION) > 0)
+        throw new CliError('The preview uses a newer CLI.', EXIT_REFUSED, 'Run gamedevpl update, then retry play.');
+      input.write(`Restarting preview from ${raced.cliVersion ?? 'an older CLI'} with gamedevpl ${CLI_VERSION}…`);
+      await stopDiscoveredSession({ id: `p-${key}`, key, kind: 'preview', url: raced.url });
+      for (let attempt = 0; await alive(statePath, key); attempt++) {
+        checkAbort();
+        if (attempt >= 40)
+          throw new CliError('The old preview has not stopped.', EXIT_REFUSED, 'Run gamedevpl stop, then retry play.');
+        await delay(100);
+      }
+    }
     checkAbort();
     if (!input.prepared) await prepareWorkspace({ cwd: root, env: input.env, write: input.write, abort: input.abort });
     checkAbort();
@@ -112,7 +125,7 @@ export async function startLocalPlay(input: {
     try {
       child = spawn(process.execPath, [runtime, root, input.slug, statePath, key], {
         cwd: root,
-        env: childEnv(input.env, ''),
+        env: { ...childEnv(input.env, ''), GAMEDEVPL_PREVIEW_VERSION: CLI_VERSION },
         stdio: ['ignore', log, log],
         detached: input.detached ?? true,
         windowsHide: true,
@@ -142,7 +155,7 @@ export async function startLocalPlay(input: {
         checkAbort();
       }
       const ready = await alive(statePath, key);
-      if (ready) {
+      if (ready?.cliVersion === CLI_VERSION) {
         if (input.abort?.aborted) {
           child.kill();
           checkAbort();
