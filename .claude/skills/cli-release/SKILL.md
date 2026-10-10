@@ -50,6 +50,20 @@ open a PR — the publish step is the same.
 To make it **fully automatic**, set the repository variable `CLI_RELEASE_AUTOMERGE=true`:
 the release PR arms `gh pr merge --auto` and merges itself once checks pass.
 
+## Keep Creator Kit installations current
+
+After publishing a CLI release, update `tools/pack-kit/cli-package-pin.json` in
+`gamedevpl/www.gamedev.pl-games` to its published `gamedevpl-npm.tgz` URL and SHA-512
+integrity. Hash the downloaded release bytes; never reuse the previous integrity.
+Run the games repo's scoped PR gate and pack the Kit with its real npm lockfile before
+merging the pin update. That merge triggers Kit publication; verify the published
+artifact when access is available and distinguish a merged pin from a confirmed publish.
+
+Starting with 0.31.0, `gamedevpl update` updates the project's npm CLI dependency too.
+Older running versions update only the standalone binary: run the installed CLI's
+update once more from the game directory, or update the Creator Kit. A global version
+change alone does not prove that `npm exec -- gamedevpl` uses the new version.
+
 ## Local commands
 
 ```bash
