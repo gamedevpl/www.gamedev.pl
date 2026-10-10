@@ -92,6 +92,10 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **Auto-merge can close the release PR while verification is running.** Check the
+  PR's current state before pushing another release-branch commit. A commit pushed
+  after the cutoff needs a separate PR; it is not part of the published tag.
+
 - **Rebase can put unreleased entries below an already-published header.** Before a
   cut, compare the release tag with the feature merge. If `next` says `none` but the
   published artifact predates the feature, move that feature's entries back to
