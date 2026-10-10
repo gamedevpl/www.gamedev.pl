@@ -331,6 +331,8 @@ const FILE_BUCKET = {
   'symbol-map': 'creation',
   'type-check': 'creation',
   'tab-complete': 'creation',
+  'tab-complete-budget': 'creation',
+  'code-completion-routes': 'creation',
   'editor-assist': 'creation',
   'editor-contract': 'platform',
   'editor-contract-fields': 'platform',

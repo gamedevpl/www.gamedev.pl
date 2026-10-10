@@ -39,7 +39,9 @@ export function codeCompletion(env: NodeJS.ProcessEnv, request: typeof fetch = f
             AbortSignal.timeout(4000),
           )
         ).enabled;
-      } catch {}
+      } catch {
+        platformAvailable = false;
+      }
     }
     if (previous && !platformAvailable && selected === 'gamedev') select(null, false);
     return status();
