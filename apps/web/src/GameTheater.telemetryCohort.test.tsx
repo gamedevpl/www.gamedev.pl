@@ -26,15 +26,12 @@ vi.mock('./gamePlayer', async () => {
 vi.mock('./PublishedGameFrame', () => ({
   PublishedGameFrame: ({
     frameRef,
-    trackPlay,
     agentMode,
   }: {
     frameRef?: { current: HTMLIFrameElement | null };
-    trackPlay?: boolean;
     agentMode?: boolean;
   }) => (
     <iframe
-      data-track={String(trackPlay)}
       data-agent={String(agentMode)}
       className="game-frame"
       title="game"
@@ -98,13 +95,11 @@ async function draw() {
 it('collects ordinary reviewer play while identifying active agent sessions', async () => {
   agentBridgeMock.source = 'diagnostic-bridge';
   await draw();
-  expect(container.querySelector('iframe')?.getAttribute('data-track')).toBe('true');
   expect(container.querySelector('iframe')?.getAttribute('data-agent')).toBe('false');
   expect(container.querySelector('.agent-play')).toBeNull();
   await act(async () => root?.unmount());
   root = null;
   window.history.pushState(null, '', '?agent=1');
   await draw();
-  expect(container.querySelector('iframe')?.getAttribute('data-track')).toBe('true');
   expect(container.querySelector('iframe')?.getAttribute('data-agent')).toBe('true');
 });

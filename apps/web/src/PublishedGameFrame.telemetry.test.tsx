@@ -18,14 +18,12 @@ import type { PublishedGame } from './catalog.js';
 type WireEvent = { type: string; msSinceOpen: number; slots?: number };
 type TelemetryBody = { slug: string; sessionId: string; flushMsSinceOpen: number; events: WireEvent[] };
 type FetchSpy = MockInstance<typeof globalThis.fetch>;
-
 function telemetryBodies(fetchSpy: FetchSpy): TelemetryBody[] {
   return fetchSpy.mock.calls
     .filter(([url]) => String(url).includes('/api/telemetry'))
     .map(([, init]) => JSON.parse(String(init?.body)) as TelemetryBody);
 }
 
-/** The event minus its timing offset, which every event carries and is asserted apart. */
 function payloads(events: WireEvent[]) {
   return events.map(({ msSinceOpen: _ignored, ...event }) => event);
 }
@@ -59,10 +57,8 @@ describe('PublishedGameFrame telemetry', () => {
     expect(payloads(opened[0].events)).toMatchObject([
       { type: 'game_opened', device: { deviceClass: expect.any(String) } },
     ]);
-    // Every event carries its age within the session, so batching cannot lose timing.
     expect(opened[0].events[0].msSinceOpen).toBeGreaterThanOrEqual(0);
     expect(typeof opened[0].flushMsSinceOpen).toBe('number');
-    // A per-open uuid, not anything stable across sessions.
     expect(opened[0].sessionId).toMatch(/^[0-9a-f-]{36}$/);
 
     await act(async () => {
@@ -108,21 +104,5 @@ describe('PublishedGameFrame telemetry', () => {
       { type: 'game_opened', device: { deviceClass: expect.any(String) } },
     ]);
     await act(async () => root.unmount());
-  });
-
-  it('stays silent when trackPlay is off — editorial mounts are not plays', async () => {
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<PublishedGameFrame slug="space-hop" title="Space Hop" embed trackPlay={false} />);
-    });
-
-    expect(telemetryBodies(fetchSpy)).toHaveLength(0);
-
-    await act(async () => {
-      root.unmount();
-    });
-
-    expect(telemetryBodies(fetchSpy)).toHaveLength(0);
   });
 });

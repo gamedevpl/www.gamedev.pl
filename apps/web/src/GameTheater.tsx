@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { gamePageHandle, isPlatformAuthor, type CatalogEditor, type CatalogTouch } from './catalog.js';
+import {
+  gamePageHandle,
+  isPlatformAuthor,
+  type CatalogEditor,
+  type CatalogTouch,
+  type PublishedGame,
+} from './catalog.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
 import { useAgentBridge } from './useAgentBridge.js';
@@ -61,7 +67,7 @@ function BackdropVideo({ stream, facing }: { stream: MediaStream; facing: Backdr
   );
 }
 
-export type GameTheaterSource = { html: string } | { slug: string; reviewVersion?: string };
+export type GameTheaterSource = { html: string } | { slug: string; reviewVersion?: string; loadedGame?: PublishedGame };
 
 type GameTheaterProps = {
   title: string;
@@ -107,7 +113,6 @@ type GameTheaterProps = {
   initialRemixOpen?: boolean;
   /** A request written before theater entry; RemixPanel starts it once safely ready. */
   initialRemixRequest?: string;
-  trackPlay?: boolean;
   remixable?: boolean;
 };
 
@@ -139,7 +144,6 @@ export function GameTheater({
   via,
   initialRemixOpen = false,
   initialRemixRequest,
-  trackPlay = true,
   remixable = true,
 }: GameTheaterProps) {
   const { t } = useTranslation();
@@ -826,12 +830,12 @@ export function GameTheater({
             key={source.slug}
             slug={source.slug}
             reviewVersion={source.reviewVersion}
+            loadedGame={source.loadedGame}
             title={title}
             frameRef={frameRef}
             embed
             via={via}
             remixable={canRemix}
-            trackPlay={trackPlay}
             agentMode={agentOpen}
             agentBridge={agentBridge ?? null}
             agentBridgePending={agentBridge === undefined}

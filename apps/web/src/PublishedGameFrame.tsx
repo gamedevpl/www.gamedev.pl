@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame.js';
 import { GameLoadScreen } from './GameLoadScreen.js';
+import type { PublishedGame } from './catalog.js';
 import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
@@ -17,6 +18,7 @@ import './remix-host.css';
 type PublishedGameFrameProps = {
   slug: string;
   reviewVersion?: string;
+  loadedGame?: PublishedGame;
   title: string;
   agentBridge?: string | null;
   // True only while the executor answer is still in flight.
@@ -29,8 +31,6 @@ type PublishedGameFrameProps = {
   via?: PlayVia;
   // Hidden mounted frames must not accrue play time.
   active?: boolean;
-  // Off on review desk so editorial play does not skew telemetry.
-  trackPlay?: boolean;
   agentMode?: boolean;
   /**
    * Whether this surface offers Remix. Off for party mode and embeds, where the
@@ -63,13 +63,13 @@ type PublishedGameFrameProps = {
 export function PublishedGameFrame({
   slug,
   reviewVersion,
+  loadedGame,
   title,
   frameRef,
   embed,
   slots,
   via,
   active = true,
-  trackPlay = true,
   agentMode = false,
   remixable,
   remixOpenNonce,
@@ -84,7 +84,12 @@ export function PublishedGameFrame({
   const { t } = useTranslation();
   const [gameTitle, setGameTitle] = useState<string>(title);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const { game, progress, error } = usePublishedGameFetch(slug, loadAttempt, reviewVersion);
+  const { game, progress, error } = usePublishedGameFetch(
+    slug,
+    loadAttempt,
+    reviewVersion,
+    loadAttempt === 0 ? loadedGame : undefined,
+  );
   const html = game?.html ?? null;
   /**
    * A remix swaps the whole document — the only way new code can enter an
@@ -107,16 +112,13 @@ export function PublishedGameFrame({
   const [restoreReady, setRestoreReady] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
-  // Present only when the player arrived on a link the server vouched for.
   const [sharedParams, clearSharedParams] = useSharedTune(slug, Boolean(remixable) && slots === undefined);
 
-  // Starts only once the document is in hand, so a session means "a game was handed
-  // to a player" rather than "a card was clicked". A fetch that never resolves is a
-  // catalog problem, and this is not the place that would report it.
+  // Open only when a published document is available.
   useGameTelemetry(
     slug,
     activeFrameRef,
-    trackPlay && html !== null && remixHtml === null,
+    html !== null && remixHtml === null,
     slots,
     active,
     via,
@@ -124,13 +126,11 @@ export function PublishedGameFrame({
     agentMode,
   );
 
-  // Account play affinity (signed-in) + device-local recent list (everyone). Both are
-  // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.
   useEffect(() => {
-    if (!trackPlay || html === null) return;
+    if (html === null || reviewVersion !== undefined) return;
     rememberRecentPlay(slug);
     recordGamePlayed(slug);
-  }, [slug, html, trackPlay]);
+  }, [slug, html, reviewVersion]);
 
   useEffect(() => {
     setGameTitle(title);

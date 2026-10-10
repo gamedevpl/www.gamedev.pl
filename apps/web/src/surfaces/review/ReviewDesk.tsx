@@ -633,7 +633,6 @@ export function ReviewDesk() {
           badge={{ icon: 'star', label: t('review.tryPlay') }}
           source={reviewGameSource(current)}
           onExit={() => setPlaying(false)}
-          trackPlay={false}
           remixable={false}
           submittedBy={current.creatorHandle}
           creatorHandle={current.creatorHandle}

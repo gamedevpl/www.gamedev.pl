@@ -119,6 +119,7 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-s
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
 import { mintToken } from './submission-token.js';
+import { loadReviewCandidate } from '../community/review-candidate.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from '../telemetry/telemetry.js';
 import { registerVisitTelemetryRoutes } from '../telemetry/visit-telemetry.js';
 import { registerCliSurfaceRoutes } from './cli-surface.js';
@@ -588,12 +589,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // not a published contact point. Rate-limited and moderated in the handler.
   await registerContactRoutes(app, options.contactRoutes);
 
-  // Published-play telemetry shares the catalog/publication gate below.
-  // One env-derived gate is shared by telemetry, votes, and written feedback: all
-  // three ask the same question ("is this a published slug?") and must not drift.
-  // The combined gate OR's the games-repo catalog with store publications so
-  // self-build games (never in catalog.json) are visible to the same callers the
-  // /play route already serves. Call-site overrides still win via the spreads below.
+  // All anonymous surfaces share the combined publication gate.
   const envPublishedSlugs = createCombinedPublishedSlugGate({
     repoGate: repoPublishedSlugs,
     store,
@@ -603,6 +599,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reviewerUids,
     adminUids,
     publishedSlugs: envPublishedSlugs,
+    isReviewable: async (slug) => Boolean(await loadReviewCandidate(store, slug)),
     // Rung 2 sheds both streams or the runbook's promise is only half true.
     keepsSession: (id) => loadShed.keepsVisitTelemetry(id),
     ...options.telemetryRoutes,

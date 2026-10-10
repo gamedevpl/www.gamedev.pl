@@ -13,8 +13,7 @@ hardware. Missing values remain unknown; a Mac cannot reliably identify an M4.
 
 `game_opened.artifactVersion` is SHA-256 of the exact served HTML, computed once per
 cached document. Store builds, repository snapshots and assembled fallbacks share
-this identity. It describes content, not a source commit. Draft/review traffic must
-remain excluded; an in-session remix suspends published-game tracking.
+this identity. It describes content, not a source commit. Unshared drafts remain excluded; authorized review candidates are collected and flagged by the API; an in-session remix suspends published-game tracking.
 
 `alive.performance` version 1 includes:
 
@@ -67,7 +66,33 @@ Validation covers the executable bridge, hostile optional inputs, legacy compati
 interleaved progress/FPS calculation, device classification, grouped aggregation,
 publication-lane content identity and the existing platform gate.
 
+## Playback surfaces
+
+Public `/play/:slug` uses `PublishedGameFrame` with the document already fetched by
+`PublicPlayView`, so it starts the existing collector without fetching the game twice.
+Signed-in catalog play and version-pinned Review use the same component. Review never
+disables collection based on account role; the API stamps the reviewer flag.
+
+Studio collects when the creator enters Play with a delivered document and a published
+slug. Watch posture is not a play. Covered, paused, idle and background windows do not
+accrue focused play time or performance. Staged previews, seeds and local drafts stay
+out of published-game telemetry. An improvement round can still play its delivered
+fallback. The delivered origin carries the API's HTML content hash separately from
+its source/gate version; pending updates keep attribution on the shown document.
+Applying a new content hash closes the old session and opens another. The full-screen
+theater takes sole ownership of collection: Studio closes its inline collector while
+the overlay is open, then starts another inline session when returning to Play.
+
+These surfaces share `useGameTelemetry`, batching and the existing read-side filters.
+Neither the device payload nor the anonymous session contains account identity.
+
 ## Reviewer cohorts
+
+An unpublished slug is accepted only from a resolved reviewer/admin account and
+only while it has a delivered, shared, non-abandoned candidate in the review pool.
+Anonymous and ordinary player batches cannot opt into this exception. Unknown or
+unavailable slugs keep the same accepted-zero response. Version-pinned review HTML
+returns the same SHA-256 content identity as published playback.
 
 The API stamps `reviewer: true` on play and visit events from authenticated reviewer
 or admin accounts, using existing resolved request identity. Clients cannot set this

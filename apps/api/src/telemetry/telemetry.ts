@@ -129,6 +129,7 @@ export interface TelemetryRoutesOptions {
    * every flush is accepted and dropped — the same answer an unknown slug gets.
    */
   publishedSlugs?: PublishedSlugGate | null;
+  isReviewable?: (slug: string) => Promise<boolean>;
   now?: () => number;
   // Ladder rung 2. Absent keeps every session.
   keepsSession?: (sessionId: string) => Promise<boolean>;
@@ -171,14 +172,11 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
-    // Unknown, unpublished, or draft-only slug: accept and drop. Reporting the
-    // difference would turn this endpoint into a slug oracle, and a client cannot act
-    // on the answer. Note this branch is *silent by design*, which is precisely how it
-    // hid a bug that discarded ~95% of real play — hence the counter below, so the
-    // drop rate is visible in logs instead of being invisible until someone queries
-    // Firestore and finds nothing.
+    // Unknown slugs receive the same response as unavailable review candidates.
     const published = (await publishedSlugs?.isPublished(parsed.data.slug)) ?? false;
-    if (!published) {
+    const reviewer = isReviewer(request.user?.uid, options.reviewerUids, options.adminUids);
+    const reviewable = !published && reviewer && ((await options.isReviewable?.(parsed.data.slug)) ?? false);
+    if (!published && !reviewable) {
       droppedUnknownSlug += 1;
       if (droppedUnknownSlug % DROP_LOG_INTERVAL === 1) {
         request.log.warn(
@@ -210,7 +208,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
 
     const events: TelemetryEvent[] = parsed.data.events.slice(0, room).map((event) => {
       const base = {
-        ...(isReviewer(request.user?.uid, options.reviewerUids, options.adminUids) ? { reviewer: true } : {}),
+        ...(reviewer ? { reviewer: true } : {}),
         ...(event.agentMode === undefined ? {} : { agentMode: event.agentMode }),
         slug: parsed.data.slug,
         sessionId: parsed.data.sessionId,

@@ -987,9 +987,7 @@ export function CreatorStudioView({
                         rule) — see docs/studio-game-first-implementation-plan.md Workstream C. */}
                       <div className="studio-stage-layout">
                         <StudioStage
-                          // Remounts on game switch — StudioStage's own per-document caches
-                          // (pendingHtml, lastGoodRef, …) must not carry over from the
-                          // previous game (Codex review of PR #739).
+                          // Remounts on game switch to discard document caches.
                           key={playtestGame?.token ?? activeGame.token}
                           token={playtestGame?.token ?? activeGame.token}
                           title={activeGame.title}
@@ -999,7 +997,8 @@ export function CreatorStudioView({
                           source={stageSource}
                           posture={posture}
                           onPostureChange={setPosture}
-                          covered={covered}
+                          covered={covered || theaterOpen}
+                          telemetryEnabled={!theaterOpen}
                           onStatusChange={setStageStatus}
                           onFixIt={(message) => {
                             setChatDraft({ text: t('studioPanel.stage.fixItPrompt', { message }), seq: Date.now() });
