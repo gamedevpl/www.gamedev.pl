@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect`.
+- Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect` (#1734).
 - `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
 
 ## 0.29.1 — 2026-10-10
