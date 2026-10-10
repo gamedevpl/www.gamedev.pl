@@ -1382,15 +1382,15 @@ describe('the Code surface routes (creator-code.ts)', () => {
         await withTabComplete(() =>
           withApp(
             async (app) => {
-              const request = () =>
+              const request = (local = false) =>
                 app.inject({
                   method: 'POST',
-                  url: '/api/me/studio/games/sky-dodge/sources/complete',
+                  url: local ? '/api/me/code/completion' : '/api/me/studio/games/sky-dodge/sources/complete',
                   headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
                   payload: { path: 'game.ts', prefixWindow: 'a', suffixWindow: 'b' },
                 });
               for (let i = 0; i < 3; i += 1) {
-                expect((await request()).statusCode).toBe(200);
+                expect((await request(i === 1)).statusCode).toBe(200);
               }
               expect((await request()).statusCode).toBe(429);
             },

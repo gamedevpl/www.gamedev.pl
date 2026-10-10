@@ -8,14 +8,18 @@ import {
   saveCodeFile,
   type CodeCheckout,
 } from './workbench-code-files.js';
-import { codeCompletion, CODE_PROVIDERS } from './workbench-code-completion.js';
+import { codeCompletion, CODE_PROVIDERS, type PlatformCompletion } from './workbench-code-completion.js';
 import { PLAY_CODE_WORKER } from './generated/play-code-worker.js';
 
-export type CodeOptions = { checkout?: () => CodeCheckout | null; env?: NodeJS.ProcessEnv };
+export type CodeOptions = {
+  checkout?: () => CodeCheckout | null;
+  env?: NodeJS.ProcessEnv;
+  platform?: PlatformCompletion;
+};
 const projectRequest = z.object({ projectId: z.string().regex(/^[a-f0-9]{64}$/), path: z.string().min(1).max(240) });
 
 export function codeRoutes(options: CodeOptions) {
-  const completion = codeCompletion(options.env ?? {});
+  const completion = codeCompletion(options.env ?? {}, undefined, options.platform);
   let observedProject = '';
   const route = async (
     req: IncomingMessage,
@@ -39,7 +43,7 @@ export function codeRoutes(options: CodeOptions) {
       return true;
     }
     if (req.method === 'GET' && req.url === '/code/project') {
-      reply(200, { ...readCodeProject(checkout), completion: completion.status() });
+      reply(200, { ...readCodeProject(checkout), completion: await completion.refresh() });
       return true;
     }
     if (req.method !== 'POST' || req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
@@ -93,7 +97,12 @@ export function codeRoutes(options: CodeOptions) {
       const disconnect = () => abort.abort();
       req.socket.once('close', disconnect);
       try {
-        const text = await completion.complete(request.prefix, request.suffix, abort.signal);
+        const text = await completion.complete(
+          request.prefix,
+          request.suffix,
+          abort.signal,
+          request.path.slice(`games/${checkout.slug}/`.length),
+        );
         reply(current() ? 200 : 409, current() ? { text } : { error: 'Project changed' });
       } finally {
         req.socket.off('close', disconnect);

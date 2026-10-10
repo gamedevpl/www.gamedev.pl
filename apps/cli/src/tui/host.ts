@@ -117,6 +117,7 @@ export async function runInkRepl(input: {
     {
       checkout: () => (workshop?.slug === slug ? workshop : input.checkout?.slug === slug ? input.checkout : null),
       env: input.env,
+      platform: { api: input.api, signedIn: () => Boolean(uid || token) },
     },
   );
   let stopUpdateNotice: (() => void) | undefined;

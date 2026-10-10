@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { codeCompletion, type CodeProvider } from './workbench-code-completion.js';
+import type { ApiClient } from './api.js';
 const env = { OPENAI_API_KEY: 'mock-openai', ANTHROPIC_API_KEY: 'mock-anthropic', GEMINI_API_KEY: 'mock-google' };
 it('detects only availability, stays off until explicit consent and never exposes keys', async () => {
   const fetch = vi.fn();
@@ -11,6 +12,37 @@ it('detects only availability, stays off until explicit consent and never expose
   expect(() => completion.select('openai', false)).toThrow('consent');
   expect(() => codeCompletion({}).select('openai', true)).toThrow('unavailable');
   expect(fetch).not.toHaveBeenCalled();
+});
+it('offers account-funded completion without keys, caches availability and requires consent', async () => {
+  const request = vi.fn(async (method: string) => (method === 'GET' ? { enabled: true } : { completion: ' = 2;' }));
+  const direct = vi.fn();
+  let signedIn = true;
+  const completion = codeCompletion({}, direct, {
+    api: { origin: 'http://fixture', request, requestBytes: vi.fn() } as ApiClient,
+    signedIn: () => signedIn,
+  });
+  await completion.refresh();
+  await completion.refresh();
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(completion.status().providers.find((provider) => provider.id === 'gamedev')?.available).toBe(true);
+  await expect(completion.complete('const score', '')).rejects.toThrow('Enable');
+  expect(() => completion.select('gamedev', false)).toThrow('consent');
+  completion.select('gamedev', true);
+  expect(await completion.complete('const score', '', undefined, 'game/logic.ts')).toBe(' = 2;');
+  expect(request).toHaveBeenLastCalledWith(
+    'POST',
+    '/api/me/code/completion',
+    {
+      path: 'game/logic.ts',
+      prefixWindow: 'const score',
+      suffixWindow: '',
+    },
+    expect.any(AbortSignal),
+  );
+  expect(direct).not.toHaveBeenCalled();
+  signedIn = false;
+  await completion.refresh();
+  expect(completion.status().selected).toBeNull();
 });
 it.each<CodeProvider>(['openai', 'anthropic', 'google'])(
   'uses the opted-in %s provider with a mock',

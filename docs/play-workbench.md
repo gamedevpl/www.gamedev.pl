@@ -122,18 +122,31 @@ navigation run in a local worker using the installed TypeScript libraries and Cr
 sources/declarations. No API key, Studio completion endpoint or CDN is needed. Kit
 context is read-only; TypeScript library definitions are not editable project files.
 
-AI completion is optional and off initially. Known CLI process environment variables
-`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) expose only
-provider availability to the browser. Play does not read arbitrary home directories,
-agent credential stores or env files. In Code → Optional AI completion, choose an available
-provider, accept the disclosure and press **Enable AI completion**. Code fragments around
-the cursor (up to 3000 characters before and 1200 after) go directly from the CLI to that
-provider; costs belong to the user's provider account. Keys never enter browser responses.
-Play never uses the Studio or platform-funded completion service. Models are currently
-fixed to GPT-4.1 mini, Claude Haiku 4.5 and Gemini 2.5 Flash; account/model access is the
-provider's responsibility. Suggestions use Studio's existing ghost text and Tab acceptance,
-with a local limit of 12 requests/minute. Disable cancels active requests. Consent lasts
-for this CLI session and is cleared when the selected checkout changes.
+AI completion is optional and off initially. In Code → Optional AI completion, choose a
+service, accept the disclosure and press **Enable AI completion**. Code fragments around
+the cursor (up to 3000 characters before and 1200 after) are sent through the CLI.
+
+Signed-in members can select **gamedev.pl**, included within the platform's limits, without
+an API key or personal provider charges. Sign in through `/login` in Conversation. The CLI
+uses its normal authenticated client; platform credentials never reach the browser.
+`/api/me/code/completion` accepts local files without requiring a published game or Studio
+round. It shares Studio's completer, per-account daily quota, global token budget and
+`TAB_COMPLETE` kill switch. The default model is Gemini 3.8 Flash (server configuration
+may override it). Availability is cached for 60 seconds; an account or service failure
+stops suggestions and never silently switches to a personal provider. Authentication,
+blocked accounts, input bounds, hourly rate limits and quota checks precede model calls.
+
+Alternatively, use a personal OpenAI, Anthropic or Google account. Known CLI environment
+variables `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
+expose only availability. Play does not read arbitrary home directories, agent credential
+stores or env files. Personal-provider costs belong to that account; keys never enter
+browser responses. Personal models are fixed to GPT-4.1 mini, Claude Haiku 4.5 and Gemini
+2.5 Flash; account/model access is the provider's responsibility.
+
+Suggestions use Studio's existing ghost text and Tab acceptance, with a local limit of
+12 requests/minute. Disable cancels active local requests. Consent lasts for this CLI
+session and is cleared when the selected checkout changes. An already-started platform
+model call may finish and consume its normal budget after a client disconnect.
 
 ## State-preserving updates
 
@@ -280,4 +293,4 @@ The local editor browser regression runs without a deployed site or credentials:
 (after the CLI UI build). It uses a temporary checkout, the real preview watcher and a
 fixture assembler. It covers drafts/undo, local completion/hover/definitions/diagnostics,
 writer locks, external conflicts, state-preserving updates, narrow layouts, the iframe
-sandbox and absence of Studio/provider requests. Provider adapters use mocked fetches.
+sandbox and absence of Studio/provider requests. Provider adapters use mocked fetches; funded ghost text uses a mocked authenticated client.

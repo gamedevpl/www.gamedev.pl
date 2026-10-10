@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { startSessionBrowser } from '../../cli/src/session-browser-server.js';
 import { createSessionController } from '../../cli/src/session-controller.js';
 import { startLocalPlay } from '../../cli/src/play.js';
+import type { ApiClient } from '../../cli/src/api.js';
 
 export const INITIAL_CODE =
   "import { GameKit } from '../../shared/game-kit.js';\nexport const score: number = 1;\nGameKit.math.clamp(score, 0, 100);\n";
-export async function playCodeFixture() {
+export async function playCodeFixture(funded = false) {
   const root = mkdtempSync(join(tmpdir(), 'play-code-browser-'));
   mkdirSync(join(root, 'games/demo/game'), { recursive: true });
   mkdirSync(join(root, 'tools/lib'), { recursive: true });
@@ -32,16 +33,30 @@ export function assembleGame(slug: string) {
 }`,
   );
   const session = createSessionController('Fixture');
+  const completions: unknown[] = [];
+  const api = {
+    origin: 'http://mock-account',
+    request: async (method: string, _path: string, body: unknown) => {
+      if (method === 'GET') return { enabled: true };
+      completions.push(body);
+      return { completion: ' = 42;' };
+    },
+  } as ApiClient;
   const preview = await startLocalPlay({ root, slug: 'demo', env: process.env, write: () => {}, prepared: true });
   if (!preview) throw Error('No fixture preview');
   const server = await startSessionBrowser(session, {
-    code: { checkout: () => ({ root, slug: 'demo' }), env: { OPENAI_API_KEY: 'mock-browser-unused' } },
+    code: {
+      checkout: () => ({ root, slug: 'demo' }),
+      env: { OPENAI_API_KEY: 'mock-browser-unused' },
+      ...(funded ? { platform: { api, signedIn: () => true } } : {}),
+    },
     workspace: () => ({ mode: 'game', slug: 'demo' }),
   });
   server.setPreview(preview.url);
   return {
     root,
     url: server.url,
+    completions,
     async close() {
       await server.close();
       session.close();

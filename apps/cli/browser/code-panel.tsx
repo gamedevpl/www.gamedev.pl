@@ -406,9 +406,10 @@ export function CodePanel() {
           Optional AI completion {project?.completion.selected ? `· ${project.completion.selected} enabled` : '· off'}
         </summary>
         <p>
-          TypeScript works locally without an API key. AI sends code fragments around the cursor to your selected
-          provider and charges your provider account. Keys stay in the CLI process. Availability is detected only from
-          known environment variables.
+          TypeScript works locally. AI sends code fragments around the cursor to your selected service. Signed-in
+          members can use gamedev.pl within platform limits, without an API key. gamedev.pl forwards fragments to its AI
+          provider and covers model costs. Personal providers charge your account; keys stay in the CLI process. Sign in
+          with /login in Conversation to use gamedev.pl.
         </p>
         <label htmlFor="code-provider">Provider</label>
         <select
@@ -423,14 +424,14 @@ export function CodePanel() {
           <option value="">Choose a provider</option>
           {project?.completion.providers.map((entry) => (
             <option key={entry.id} value={entry.id} disabled={!entry.available}>
-              {entry.id}
-              {entry.available ? ' · key available' : ' · no key'}
+              {entry.id === 'gamedev' ? 'gamedev.pl · included for members' : entry.id}
+              {entry.available ? ' · available' : ' · unavailable'}
             </option>
           ))}
         </select>
         <label className="code-consent">
           <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />I agree to
-          send code fragments and pay my provider.
+          send code fragments{provider === 'gamedev' ? ' to gamedev.pl.' : ' and pay my provider.'}
         </label>
         <button
           disabled={completionBusy || !project || (!project.completion.selected && (!provider || !consent))}
