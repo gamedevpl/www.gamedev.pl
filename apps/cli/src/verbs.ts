@@ -4,11 +4,12 @@ import { jsonMode } from './argv.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { CLI_VERSION, defaultInstallDest, updateCli } from './update.js';
 import { fetchUpdateNotes, formatUpdateNotes } from './update-notes.js';
+import { updateProgress } from './update-progress.js';
 import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
 
 type Flags = Record<string, string | boolean>;
-type Io = { stdout: NodeJS.WriteStream };
+type Io = { stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
 
 function emit(io: Io, asJson: boolean, data: unknown, line: string): void {
   io.stdout.write(asJson ? `${JSON.stringify(data)}\n` : `${line}\n`);
@@ -30,6 +31,7 @@ export async function dispatchReadVerb(input: {
   env?: NodeJS.ProcessEnv;
   currentPath?: string;
   runningVersion?: string;
+  onActivity?: (message: string) => void;
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
@@ -101,19 +103,30 @@ export async function dispatchReadVerb(input: {
         ? flags.dest
         : defaultInstallDest({ env: input.env, currentPath: input.currentPath });
     const version = typeof flags.version === 'string' ? flags.version : undefined;
-    const result = await updateCli({ dest, version });
-    if (input.env) noteInstallChannel(input.env, 'update');
-    const previousVersion = input.runningVersion ?? CLI_VERSION;
-    const releaseNotes = await fetchUpdateNotes({ previousVersion, version: result.version });
-    emit(
-      io,
-      asJson,
-      { ...result, releaseNotes },
-      (input.runningVersion
-        ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
-        : `updated ${result.asset} ${previousVersion} -> ${result.version}`) +
-        `\n\n${formatUpdateNotes(releaseNotes, io.stdout.columns)}`,
-    );
+    const progress = updateProgress({
+      stream: io.stderr ?? io.stdout,
+      enabled: !asJson,
+      activity: input.onActivity,
+    });
+    try {
+      const result = await updateCli({ dest, version, onProgress: progress.stage });
+      if (input.env) noteInstallChannel(input.env, 'update');
+      const previousVersion = input.runningVersion ?? CLI_VERSION;
+      progress.stage('Loading release notes…');
+      const releaseNotes = await fetchUpdateNotes({ previousVersion, version: result.version });
+      progress.stop();
+      emit(
+        io,
+        asJson,
+        { ...result, releaseNotes },
+        (input.runningVersion
+          ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
+          : `updated ${result.asset} ${previousVersion} -> ${result.version}`) +
+          `\n\n${formatUpdateNotes(releaseNotes, io.stdout.columns)}`,
+      );
+    } finally {
+      progress.stop();
+    }
     return EXIT_GREEN;
   }
   return null;
