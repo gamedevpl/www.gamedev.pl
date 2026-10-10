@@ -7,17 +7,19 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
-### Fixed
+## 0.29.0 — 2026-10-09
 
-- Running Play and terminal commands share one token refresh, so concurrent sessions no longer accidentally revoke your sign-in; credential updates are saved atomically (#1727).
+### Breaking
+
+- Browser Play and raw local previews stay in the terminal by default; Ctrl+C ends the session and cancels local work. Use `gamedevpl --detach`, `play --detach` or `create --detach` to run in the background (#1723).
 
 ### Added
 
 - `gamedevpl update` shows what changed since your previous version, including skipped releases, and links to the full changelog; `/update` shows the same notes (#1726).
 
-### Breaking
+### Fixed
 
-- Browser Play and raw local previews stay in the terminal by default; Ctrl+C ends the session and cancels local work. Use `gamedevpl --detach`, `play --detach` or `create --detach` to run in the background (#1723).
+- Running Play and terminal commands share one token refresh, so concurrent sessions no longer accidentally revoke your sign-in; credential updates are saved atomically (#1727).
 
 ## 0.28.0 — 2026-10-09
 
