@@ -44,7 +44,9 @@ process is recovered automatically, while a live owner is allowed to finish.
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
 
-In the terminal session, `!<command>` runs a local shell command, for example `!pwd`,
+In the terminal session, typing `!` switches the input to a visibly marked Shell mode.
+Enter runs the command; Esc or Backspace on an empty command returns to conversation.
+`!<command>` runs a local shell command, for example `!pwd`,
 `!git status` or `!npm test`. Commands use the current game checkout (or the launch
 directory before selecting a game), the user's shell and environment. Output appears
 in the transcript with the exit code; Ctrl+C stops the command and its child processes.
