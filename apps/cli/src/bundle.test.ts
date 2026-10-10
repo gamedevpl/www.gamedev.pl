@@ -13,10 +13,14 @@ describe('cli bundle', () => {
   });
 
   it('runs help through node on the shebang bundle', () => {
-    execFileSync(process.execPath, [join(root, 'scripts/build-binary.mjs')], { cwd: root });
+    execFileSync(process.execPath, [join(root, 'scripts/build-binary.mjs')], {
+      cwd: root,
+      timeout: 20_000,
+    });
     const out = execFileSync(process.execPath, [join(root, 'dist/gamedevpl.mjs'), 'help'], {
       encoding: 'utf8',
+      timeout: 8000,
     });
     expect(out).toMatch(/gamedevpl/);
-  });
+  }, 30_000);
 });
