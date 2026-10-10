@@ -53,6 +53,12 @@ export function ReplApp({
       stdout.off('resize', onResize);
     };
   }, [stdout]);
+  const shellMode =
+    !state.question &&
+    (state.mode === 'prompt' || Boolean(state.localTask && state.mode === 'busy')) &&
+    state.draft.trimStart().startsWith('!');
+  const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
+  const shellDraft = state.draft.slice(shellPrefix);
   const onInput = (input: string, key: Key): void => {
     if (debug) {
       if (key.ctrl && input === 'c') session.cancel();
@@ -66,6 +72,14 @@ export function ReplApp({
       session.setDraft('');
       setDebug(true);
       return;
+    }
+    if (shellMode) {
+      if (key.escape || ((key.backspace || key.delete) && !shellDraft)) {
+        session.setDraft('');
+        return;
+      }
+      if ((key.leftArrow || key.backspace || key.delete) && state.draftCursor <= shellPrefix) return;
+      if ((key.return || (key.ctrl && input === 'q')) && !shellDraft.trim()) return;
     }
     if (state.mode === 'busy') {
       if (key.ctrl && input === 'c') {
@@ -151,8 +165,8 @@ export function ReplApp({
   useInput(useCallback((input: string, key: Key) => latestInput.current(input, key), []));
 
   const border = color ? 'round' : 'single';
-  const accent = color ? 'cyan' : undefined;
-  const prompt = glyphs(color).prompt;
+  const accent = color ? (shellMode ? 'yellow' : 'cyan') : undefined;
+  const prompt = shellMode ? '!' : glyphs(color).prompt;
   const choiceWidth = Math.max(1, Math.min(stdout.columns || 80, 110) - 4);
   const selectedRows = Math.max(1, Math.ceil(((state.choices[state.pickIndex]?.length ?? 0) + 5) / choiceWidth));
   const choiceCount = Math.min(state.choices.length, Math.max(1, rows - 10 - (selectedRows - 1)));
@@ -176,13 +190,17 @@ export function ReplApp({
         ? state.localTask
           ? 6 + Number(Boolean(state.sendStatus))
           : 2
-        : 3);
+        : 3 + Number(shellMode));
   const live = state.localTask
     ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
     : state.live;
   const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
-  const draft = draftViewport(state.draft, state.draftCursor, Math.min(stdout.columns || 80, 110) - 5);
+  const draft = draftViewport(
+    shellDraft,
+    Math.max(0, state.draftCursor - shellPrefix),
+    Math.min(stdout.columns || 80, 110) - 5,
+  );
   return (
     <Box flexDirection="column" width={Math.min(stdout.columns || 80, 110)}>
       <Static items={state.lines.slice(historyOffset)} style={{ width: Math.min(stdout.columns || 80, 110) }}>
@@ -236,27 +254,41 @@ export function ReplApp({
                 })}
               </>
             ) : (
-              <Text wrap="truncate-start">
-                <Text color={accent} bold>
-                  {prompt}
-                </Text>{' '}
-                {state.draft ? (
-                  <>
-                    {draft.hiddenBefore ? '…' : ''}
-                    {draft.before}█{draft.after}
-                    {draft.hiddenAfter ? '…' : ''}
-                  </>
-                ) : (
-                  <Text dimColor>What would you like to do? /help</Text>
+              <>
+                {shellMode && (
+                  <Text bold color={accent}>
+                    Shell · local terminal
+                  </Text>
                 )}
-              </Text>
+                <Text wrap="truncate-start">
+                  <Text color={accent} bold>
+                    {prompt}
+                  </Text>{' '}
+                  {shellMode && !shellDraft ? (
+                    <Text dimColor>█Enter a shell command</Text>
+                  ) : state.draft ? (
+                    <>
+                      {draft.hiddenBefore ? '…' : ''}
+                      {draft.before}█{draft.after}
+                      {draft.hiddenAfter ? '…' : ''}
+                    </>
+                  ) : (
+                    <Text dimColor>What would you like to do? /help</Text>
+                  )}
+                </Text>
+              </>
             )}
           </Box>
         )}
         {state.mode === 'busy' && state.localTask && (
           <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
             <Text dimColor>
-              {state.canSteer ? 'Message the active agent' : 'Follow-up after this task'} · {state.queued.length} queued
+              {shellMode
+                ? 'Shell after this task'
+                : state.canSteer
+                  ? 'Message the active agent'
+                  : 'Follow-up after this task'}{' '}
+              · {state.queued.length} queued
             </Text>
             {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
             <Text wrap="truncate-start">
@@ -278,13 +310,15 @@ export function ReplApp({
             : state.mode === 'prompt'
               ? completion.suggestions.length
                 ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
-                : state.draft.trimStart().startsWith('!') && !state.question
-                  ? 'Shell command · Enter run · Ctrl+C clear'
+                : shellMode
+                  ? 'Enter run · Esc exit · ←→ edit'
                   : 'Enter · ←→ edit · / commands · ! shell · ↑↓ history · Tab fill'
               : state.localTask
-                ? state.canSteer
-                  ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop'
-                  : 'Enter queue · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop and clear queue'
+                ? shellMode
+                  ? 'Enter queue · Esc exit · Ctrl+C stop'
+                  : state.canSteer
+                    ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop'
+                    : 'Enter queue · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop and clear queue'
                 : 'Working — input paused'}
         </Text>
         <Text dimColor wrap="truncate-end">

@@ -184,11 +184,12 @@ it('copies compiler diagnostics and offers selection when clipboard access fails
   await f.ready();
   const copy = vi.fn(async () => {});
   Object.defineProperty(f.dom.window.navigator, 'clipboard', { value: { writeText: copy } });
-  f.button('build-error-copy').click();
-  await vi.waitFor(() => expect(copy).toHaveBeenCalledWith(error));
+  const button = f.button('build-error-copy');
+  await button.onclick!(new f.dom.window.MouseEvent('click'));
+  expect(copy).toHaveBeenCalledWith(error);
   copy.mockRejectedValueOnce(new Error('Denied'));
-  f.button('build-error-copy').click();
-  await vi.waitFor(() => expect((f.doc.getElementById('build-error-details') as HTMLDetailsElement).open).toBe(true));
+  await button.onclick!(new f.dom.window.MouseEvent('click'));
+  expect((f.doc.getElementById('build-error-details') as HTMLDetailsElement).open).toBe(true);
   await new Promise((resolve) => setTimeout(resolve, 1100));
   expect(f.dom.window.getSelection()!.toString()).toBe(error);
 });
