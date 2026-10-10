@@ -31,7 +31,13 @@ it.skipIf(!executablePath)(
       await page.keyboard.insertText('\n// fullscreen draft');
       const editor = (await page.locator('.cm-content').elementHandle())!;
       await page.click('#edit');
+      await page.waitForFunction(
+        () =>
+          document.getElementById('notice')?.textContent === '' &&
+          document.body.style.getPropertyValue('--notice-space') === '0px',
+      );
       const previous = await page.locator('#code-panel').boundingBox();
+      expect(previous).toEqual({ x: 12, y: 84, width: 720, height: 902 });
       await page.getByRole('button', { name: 'Maximize Code editor' }).click();
       expect(await page.locator('#code-panel').boundingBox()).toEqual({ x: 0, y: 0, width: 1440, height: 1000 });
       expect(await editor.evaluate((node) => node === document.querySelector('.cm-content'))).toBe(true);
@@ -48,7 +54,7 @@ it.skipIf(!executablePath)(
       expect(await page.locator('#code-panel').getAttribute('data-maximized')).toBe('true');
       await page.keyboard.press('Escape');
       expect(await page.locator('#code-panel').getAttribute('data-maximized')).toBe('false');
-      expect(await page.locator('#code-panel').boundingBox()).toEqual(previous);
+      await expect.poll(() => page.locator('#code-panel').boundingBox()).toEqual(previous);
       expect(await page.locator('#panel').isVisible()).toBe(true);
       await page.keyboard.press('Control+z');
       expect(await page.locator('.cm-content').innerText()).toContain('fullscreen draft');
@@ -60,7 +66,7 @@ it.skipIf(!executablePath)(
       await page.keyboard.press('Control+z');
       expect(await page.locator('.cm-content').innerText()).not.toContain('fullscreen draft');
       await page.getByRole('button', { name: 'Restore Code panel' }).click();
-      expect(await page.locator('#code-panel').boundingBox()).toEqual(previous);
+      await expect.poll(() => page.locator('#code-panel').boundingBox()).toEqual(previous);
       await page.getByRole('button', { name: 'Maximize Code editor' }).click();
       await page.evaluate(() => document.getElementById('edit')!.click());
       expect(await page.locator('#code-panel').getAttribute('data-maximized')).toBe('false');

@@ -98,6 +98,13 @@ repo in the same session.
   suite: the deployment browser gate does not build CLI assets. CI runs the local
   suite in the hermetic browser job, without credentials or live provider calls.
 
+- **Wait for transient preview notices before recording layout geometry.** Local Play
+  briefly shows “Build loaded”; the next preview poll clears it, and `ResizeObserver`
+  releases the reserved bottom space. A fast CI browser can capture the smaller panel
+  before this happens and compare it with the settled panel after restoring a view.
+  Wait for the notice and its reserved space to clear, then assert the exact geometry.
+  Poll restored geometry when an observer participates; do not add arbitrary sleeps.
+
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository
   history and hit GitHub's 125 000-character body limit (release run 3, 2026-09-04).
   Notes come from the changelog section.
