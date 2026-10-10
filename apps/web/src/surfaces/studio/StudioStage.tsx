@@ -57,6 +57,7 @@ export type StudioStageProps = {
   published: boolean;
   source: StageSource;
   posture: StagePosture;
+  telemetryEnabled?: boolean;
   onPostureChange: (posture: StagePosture) => void;
   /** True whenever a surface (rail/details/edit/shelf) covers the stage. */
   covered: boolean;
@@ -88,6 +89,7 @@ export function StudioStage({
   published,
   source,
   posture,
+  telemetryEnabled = true,
   onPostureChange,
   covered,
   onStatusChange,
@@ -365,7 +367,7 @@ export function StudioStage({
   useGameTelemetry(
     slug ?? '',
     frameRef,
-    Boolean(slug) && shownOrigin.kind === 'delivered' && active,
+    telemetryEnabled && Boolean(slug) && shownOrigin.kind === 'delivered' && active,
     undefined,
     active && !covered && !paused && !idle,
     undefined,

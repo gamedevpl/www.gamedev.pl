@@ -79,7 +79,9 @@ accrue focused play time or performance. Staged previews, seeds and local drafts
 out of published-game telemetry. An improvement round can still play its delivered
 fallback. The delivered origin carries the API's HTML content hash separately from
 its source/gate version; pending updates keep attribution on the shown document.
-Applying a new content hash closes the old session and opens another.
+Applying a new content hash closes the old session and opens another. The full-screen
+theater takes sole ownership of collection: Studio closes its inline collector while
+the overlay is open, then starts another inline session when returning to Play.
 
 These surfaces share `useGameTelemetry`, batching and the existing read-side filters.
 Neither the device payload nor the anonymous session contains account identity.

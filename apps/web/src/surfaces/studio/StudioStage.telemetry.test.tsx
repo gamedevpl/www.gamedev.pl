@@ -114,3 +114,17 @@ it('keeps attribution on the displayed build until a pending swap is applied', a
   expect(batches[2].events[0].artifactVersion).toBe('b'.repeat(64));
   expect(batches[2].sessionId).not.toBe(batches[0].sessionId);
 });
+
+it('closes inline collection while the full theater owns playback', async () => {
+  const base = props();
+  await render(base);
+  alive();
+  await render({ ...base, covered: true, telemetryEnabled: false });
+  expect(playBatches(fetchSpy)).toHaveLength(2);
+  expect(playBatches(fetchSpy)[1].events).toMatchObject([{ type: 'alive' }, { type: 'game_closed' }]);
+  alive();
+  expect(playBatches(fetchSpy)).toHaveLength(2);
+  await render(base);
+  expect(playBatches(fetchSpy)).toHaveLength(3);
+  expect(playBatches(fetchSpy)[2].sessionId).not.toBe(playBatches(fetchSpy)[0].sessionId);
+});
