@@ -19,7 +19,10 @@ curl -fsSL https://www.gamedev.pl/install.sh | bash
 The installer is 404 until the `CLI_SURFACE` deploy flag is on. Checksums come from GitHub
 Releases tagged `cli-v*` carry the standalone `gamedevpl` script and an npm-installable
 `gamedevpl-npm.tgz` archive. Both contain the same bundled CLI. `gamedevpl update`
-uses the standalone script; Creator Kit checkouts can pin the archive by release URL.
+updates the standalone script and, when the current project depends on `@gamedevpl/cli`,
+its npm package, manifest and lockfile. `npm exec -- gamedevpl` then uses the same
+version. Downloads are checked against release checksums; npm installs skip lifecycle
+scripts. Run the update from your game directory.
 
 During `gamedevpl update`, a terminal spinner shows the current step and elapsed time.
 Redirected output uses plain step messages; `/update` shows the steps in its activity
@@ -396,10 +399,19 @@ If a previous MCP agent stopped without ending its session, preview delivery can
 
 Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
 
+Local tasks default to **Auto (sandboxed)** for agents with supported sandbox flags.
+Other agents default to Ask. `/permissions ask` selects prompts explicitly; choosing
+Auto explicitly for an unsupported agent reports an error. Sandbox startup failures
+stop the task.
+
 Claude permission prompts also offer **Resume this task in Auto (sandboxed)**.
 This resumes the same conversation with a sandbox and keeps local edits; later tasks
 in this CLI session use Auto too. To select it before starting a task, use
 `/permissions auto` or `gamedevpl --permissions auto`. A sandbox escape is denied.
+
+An updated CLI restarts raw previews from older versions. For an existing browser
+workspace, it tells you to finish active work and run `gamedevpl stop`, then
+`gamedevpl play`, so an agent is not interrupted by an update.
 
 ### Antigravity permissions
 

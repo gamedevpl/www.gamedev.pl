@@ -1,4 +1,5 @@
 import { isJsonContentType } from './workbench-http.js';
+import { CLI_VERSION } from './update.js';
 import { EVIDENCE_MARKER, shownPrompt } from './workbench-evidence.js';
 import { lanAddresses, startPhonePreview, type PhoneReport } from './workbench-phone.js';
 import { embedGameHtml } from '@gamedevpl/contract';
@@ -171,6 +172,7 @@ export async function startSessionBrowser(
         const state = session.get();
         reply(200, {
           version: 1,
+          cliVersion: CLI_VERSION,
           workspace: options.workspace?.(),
           detached: options.detached === true,
           sessionId,

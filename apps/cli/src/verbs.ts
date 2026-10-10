@@ -7,6 +7,7 @@ import { fetchUpdateNotes, formatUpdateNotes } from './update-notes.js';
 import { updateProgress } from './update-progress.js';
 import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
+import { npmCliProject, updateProjectCli } from './update-project.js';
 
 type Flags = Record<string, string | boolean>;
 type Io = { stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
@@ -30,6 +31,7 @@ export async function dispatchReadVerb(input: {
   io: Io;
   env?: NodeJS.ProcessEnv;
   currentPath?: string;
+  cwd?: string;
   runningVersion?: string;
   onActivity?: (message: string) => void;
 }): Promise<number | null> {
@@ -110,6 +112,15 @@ export async function dispatchReadVerb(input: {
     });
     try {
       const result = await updateCli({ dest, version, onProgress: progress.stage });
+      const projectRoot = npmCliProject(input.cwd ?? process.cwd());
+      const project = projectRoot
+        ? await updateProjectCli({
+            root: projectRoot,
+            version: result.version,
+            env: input.env,
+            onProgress: progress.stage,
+          })
+        : undefined;
       if (input.env) noteInstallChannel(input.env, 'update');
       const previousVersion = input.runningVersion ?? CLI_VERSION;
       progress.stage('Loading release notes…');
@@ -118,10 +129,11 @@ export async function dispatchReadVerb(input: {
       emit(
         io,
         asJson,
-        { ...result, releaseNotes },
+        { ...result, project, releaseNotes },
         (input.runningVersion
           ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
           : `updated ${result.asset} ${previousVersion} -> ${result.version}`) +
+          (project ? `\nProject @gamedevpl/cli updated to ${project.version}; npm exec uses this version.` : '') +
           `\n\n${formatUpdateNotes(releaseNotes, io.stdout.columns)}`,
       );
     } finally {

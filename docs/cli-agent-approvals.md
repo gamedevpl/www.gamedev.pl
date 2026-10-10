@@ -1,6 +1,6 @@
 # Local agent approvals
 
-Interactive `gamedevpl play` and terminal sessions offer **Allow once** (first), **Deny**, and then
+In **Ask** mode, interactive `gamedevpl play` and terminal sessions offer **Allow once** (first), **Deny**, and then
 **Always allow** where supported when a supported local agent requests tool permission. The prompt
 shows the vendor payload, including the command/tool arguments and any supplied
 working directory, paths and reason. It never rewrites the command. Claude Bash
@@ -22,7 +22,7 @@ cannot approve the next request. Follow-up game requests do not answer approvals
 Stop aborts the task and dismisses the question. Escape rejects the current request.
 Closing a browser tab leaves the task waiting for a decision; reconnect or answer
 in the terminal. Task cancellation, process exit, or the existing task timeout
-ends pending decisions. In the default **Ask** mode no unattended delegate run gains
+ends pending decisions. In **Ask** mode no unattended delegate run gains
 automatic approval; see [Permission modes](#permission-modes).
 
 Payloads too large to display completely are denied. Approval payloads remain
@@ -35,8 +35,11 @@ Approval counts and wait time are not separately measured.
 
 `--permissions <mode>` (any verb) or `/permissions` (terminal, and **Agent permissions** in
 the Play panel) picks the mode for the rest of the CLI process. Every local task prints it
-next to the agent settings (`permissions: Ask`). The default is **Ask**, and nothing is
-saved between runs.
+next to the agent settings. Without an explicit selection, supported agents default
+to **Auto** with a workspace sandbox. Agents without a supported sandbox default to
+**Ask**. `/permissions ask` or `--permissions ask` explicitly restores prompts.
+Nothing is saved between runs; detached Play workers preserve whether the launch mode
+was explicit or implicit.
 
 | Mode   | GenAIcode `permissions`                                    | Effect                                                                                                                          |
 | ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,10 +62,11 @@ An unavailable sandbox or a failed resume stops the task; it does not fall back 
 an unsandboxed run. Use `/diff` to inspect retained edits and `/retry` to continue.
 
 GenAIcode translates the mode into each adapter's flags (`applyPermissionArgs`) and into
-the Codex/Muse live session. An agent that cannot honor a mode refuses the task with the
-reason, instead of running in another mode: Auto-approve needs a vendor sandbox, so Cursor
-(`--force` runs unsandboxed), Copilot, OpenCode, Vibe and Muse refuse it; Antigravity refuses
-both automatic modes. Automatic decisions appear in the transcript as `Permission
+the Codex/Muse live session. Implicit Auto uses sandboxed Claude, Codex and Gemini;
+unsupported agents use Ask. Explicit Auto still refuses an unsupported adapter with
+a reason: Cursor (`--force` runs unsandboxed), Copilot, OpenCode, Vibe and Muse refuse it;
+Antigravity refuses both automatic modes. A sandbox startup failure stops the task;
+it never retries without the sandbox. Automatic decisions appear in the transcript as `Permission
 auto-approved: <summary>` (Claude: `claude: auto-approved command: …`). Approvals are
 still scoped as requested: one invocation, or the current turn for a Codex profile.
 Remembered Claude commands receive a separate one-invocation reply each time;

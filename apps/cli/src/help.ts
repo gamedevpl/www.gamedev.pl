@@ -10,7 +10,7 @@ export const BLURB: Record<SlashVerb, string> = {
   logs: 'show the full transcript of the last local task (interactive session)',
   model: 'view or choose delegated model and effort — model [agent]',
   agents: 'detect local agents and show supported modes',
-  permissions: 'agent approvals — permissions [ask|auto|yolo]; --permissions <mode> for one run (default ask)',
+  permissions: 'agent approvals — permissions [ask|auto|yolo]; default Auto with a sandbox, Ask for other agents',
   games: 'list your games',
   status: 'round status — status <token>; in a checkout, the working copy',
   share: 'play URL — share <slug>',
@@ -30,7 +30,7 @@ export const BLURB: Record<SlashVerb, string> = {
   push: 'send local changes as a preview after checks — push [dir] [--publish]',
   pull: 'update a checkout from the platform',
   diff: 'patch local changes against the platform, skipping ignored files',
-  update: 'install a newer CLI',
+  update: 'update the CLI and this project’s npm CLI dependency',
 };
 
 export function formatHelp(slash = false): string {

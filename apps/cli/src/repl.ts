@@ -243,6 +243,7 @@ export async function handleReplLine(input: {
           io: { stdout },
           env: input.env,
           currentPath: input.currentPath,
+          cwd: input.workshop?.root ?? input.cwd,
           runningVersion: CLI_VERSION,
           onActivity: input.onActivity ?? input.write,
         });
