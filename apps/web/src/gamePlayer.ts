@@ -82,15 +82,7 @@ export function withGameLocale(html: string, lang: string | undefined | null): s
   return html.replace(/<html\b/i, `<html lang="${locale}"`);
 }
 
-/**
- * Records one play session of a published game (docs/improvement-loop-plan.md IL-1).
- *
- * Lives here rather than in `GameTheater` on purpose: the theater also stages drafts
- * and multiplayer, and a creator playtesting their own work-in-progress is developer
- * traffic that must not land in the funnel. Mounting alongside the *published* game
- * makes "is this a real play of a real game" a structural fact instead of a condition
- * someone has to remember to write.
- */
+// Every published play surface shares this collector, including reviewer sessions.
 /**
  * The open play session, for shell code that observes something the game cannot report.
  *

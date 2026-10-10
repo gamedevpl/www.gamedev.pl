@@ -30,7 +30,6 @@ function statusFor(slug: string, headSha: string): SubmissionStatus {
   };
 }
 
-/** Renders the hook and reports what it returned on the most recent settled render. */
 function probe() {
   let latest: ReturnType<typeof useStageSource> | null = null;
   function Probe(props: {
@@ -84,12 +83,7 @@ describe('useStageSource', () => {
     // The gate version tags the stage, never an agent caption.
     expect(latest().origin).toMatchObject({ kind: 'staged', version: 'sha-a', versionLabel: null });
 
-    // Switching to a different game's token — with `status` not caught up yet, exactly
-    // as it arrives from CreatorStudioView on the render where `stageToken` first
-    // flips — must clear the previous game's html on this exact render, not one render
-    // later once some effect catches up. The concrete failure mode this guards: a
-    // freshly key-remounted `StudioStage` seeding its very first `shownHtml` from this
-    // value.
+    // Switching games clears the previous document before children mount.
     await render('token-b', null);
     expect(latest().rawHtml).toBeNull();
     expect(latest().origin.kind).toBe('none');
@@ -231,7 +225,12 @@ describe('useStageSource', () => {
   });
 
   it('falls back to the last published build while a new round has not delivered anything yet', async () => {
-    mockedFetchPublishedGame.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>live</p>' });
+    mockedFetchPublishedGame.mockResolvedValue({
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      html: '<p>live</p>',
+      artifactVersion: 'a'.repeat(64),
+    });
 
     const { render, latest, root } = probe();
     await render('token-a', { status: 'dispatched', slug: 'sky-dodge' } as unknown as SubmissionStatus);
@@ -242,7 +241,7 @@ describe('useStageSource', () => {
 
     expect(mockedFetchPublishedGame).toHaveBeenCalledWith('sky-dodge');
     expect(latest().rawHtml).toBe('<p>live</p>');
-    expect(latest().origin.kind).toBe('delivered');
+    expect(latest().origin).toMatchObject({ kind: 'delivered', artifactVersion: 'a'.repeat(64) });
 
     root.unmount();
   });

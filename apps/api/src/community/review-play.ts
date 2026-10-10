@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 
 export type CreatorReviewPreview = { slug: string; title: string; html: string };
 export type CreatorReviewPreviewLoader = (slug: string, version: string) => Promise<CreatorReviewPreview | null>;
@@ -20,7 +21,8 @@ export function registerReviewPlay(
       if (!load) return reply.status(503).send({ error: 'review previews are not configured' });
       const game = await load(params.data.slug, query.data.version);
       if (!game) return reply.status(409).send({ error: 'review candidate unavailable — reload the queue' });
-      return reply.header('Cache-Control', 'private, no-store').send(game);
+      const artifactVersion = createHash('sha256').update(game.html).digest('hex');
+      return reply.header('Cache-Control', 'private, no-store').send({ ...game, artifactVersion });
     },
   );
 }

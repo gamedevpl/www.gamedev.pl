@@ -1,5 +1,6 @@
 import type { GamesStore } from '../delivery/games-store.js';
 import type { ReviewCatalogEntry } from './review-queue-cache.js';
+import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -82,6 +83,7 @@ it.each(['none', 'abandoned', 'undelivered', 'unshared', 'shared'])(
       const preview = await app.inject({ method: 'GET', url: '/api/review/games/creator-game?version=v1', headers });
       expect(preview.statusCode).toBe(200);
       expect(preview.json().html).toBe('<title>v1</title>');
+      expect(preview.json().artifactVersion).toBe(createHash('sha256').update('<title>v1</title>').digest('hex'));
       const owner = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:owner', secret)}` };
       expect(
         (await app.inject({ method: 'GET', url: '/api/review/games/creator-game?version=v1', headers: owner }))

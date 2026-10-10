@@ -451,3 +451,15 @@ and group reviewers separately, with `include` as the default. Host-captured
 `agentMode` marks events while the agent panel is open; exclude those windows from
 performance and their entire sessions from play health. Legacy unflagged events
 remain unknown. See [frame performance](../../../docs/frame-performance-telemetry.md).
+
+Published playback hosts must mount the shared collector on public play, Studio Play
+and version-pinned Review. Reviewer capability is never a collection off switch.
+A raw-HTML theater bypasses `PublishedGameFrame`; use a loaded published source when
+the document came from the published route. Studio attribution follows shown HTML
+and its content hash, not a pending update or a gate/source commit. Regression tests
+must exercise real outgoing play batches from each surface, not only hook mocks.
+
+Shared creator candidates in Review are not published yet. The API may accept their
+play batches only from authenticated reviewers/admins while the candidate remains
+reviewable; preserve slug gating for everyone else. Review HTML must return its
+content hash, just like published HTML. Never label it with the delivery version.

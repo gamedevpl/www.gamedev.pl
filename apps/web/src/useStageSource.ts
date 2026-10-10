@@ -26,6 +26,7 @@ export type StageOrigin = {
   versionLabel: string | null;
   // Gate version on stage; versionLabel may be a free-text caption.
   version?: string | null;
+  artifactVersion?: string;
 };
 
 export type StageSource = {
@@ -72,7 +73,7 @@ export function useStageSource(
     label: string | null;
     seed: boolean;
   } | null>(null);
-  const [published, setPublished] = useState<{ html: string; slug: string } | null>(null);
+  const [published, setPublished] = useState<{ html: string; slug: string; artifactVersion?: string } | null>(null);
   const [dataToken, setDataToken] = useState(token);
 
   const loadedVersionPreviewKeyRef = useRef<string | null>(null);
@@ -90,17 +91,10 @@ export function useStageSource(
   const previewRetryRef = useRef(0);
   const [previewRetryTick, setPreviewRetryTick] = useState(0);
 
-  // Every fetch below closes over the token it was issued for and checks this ref
-  // before applying its result — a game switch must never show the previous game's
-  // stage under the new title, even when the old request is still in flight and
-  // resolves after the switch.
+  // Ignore completed fetches belonging to a previously selected game.
   const activeTokenRef = useRef(token);
 
-  // React's sanctioned render-phase bailout ("adjusting state when a prop changes"):
-  // an *effect*-based reset alone would let this same render pass the previous game's
-  // preview/channel/published HTML to a freshly key-remounted `StudioStage` before the
-  // effect ever runs — the parent renders the new `token` and the new stage in the
-  // same pass (Codex review of PR #739).
+  // Reset before children can render the previous token's content.
   if (token !== dataToken) {
     setDataToken(token);
     activeTokenRef.current = token;
@@ -264,11 +258,7 @@ export function useStageSource(
       });
   }, [preview, status?.playable, token, channelRetryTick]);
 
-  // Once the game has published, the stage shows the delivered build itself — the
-  // same document a player sees — rather than a stale staged/channel copy. Fetched
-  // whenever a slug exists, not only while the round is currently `published`: an
-  // improvement round on an already-live game keeps this as the fallback under the
-  // "building" card, instead of the stage going blank the moment a new round opens.
+  // Published HTML and its content hash remain the fallback during improvement.
   useEffect(() => {
     const slug = status?.slug;
     if (!slug) return;
@@ -284,7 +274,7 @@ export function useStageSource(
         if (activeTokenRef.current !== requestToken) return;
         loadedPublishedSlugRef.current = key;
         publishedRetryRef.current = 0;
-        setPublished({ html: game.html, slug });
+        setPublished({ html: game.html, slug, artifactVersion: game.artifactVersion });
       })
       .catch(() => {
         if (activeTokenRef.current !== requestToken) return;
@@ -309,9 +299,7 @@ export function useStageSource(
   const isPublished = !selectedPreviewVersion && status?.status === 'published' && Boolean(status.slug);
   // When a historical version preview is explicitly selected, it takes precedence over normal stage sources.
   const hasVersionPreview = Boolean(selectedPreviewVersion && versionPreview?.html);
-  // The fetch-freshness fix above (CE-12) is wasted if display still prefers `preview`
-  // unconditionally — a fresher `channel` document that gets fetched must also get
-  // shown, or the stage keeps rendering the stale gate-built preview underneath it.
+  // Prefer the freshest fetched document.
   const showChannel = !hasVersionPreview && channel != null && (preview === null || channel.at > preview.at);
   const rawHtml = hasVersionPreview
     ? versionPreview!.html
@@ -327,7 +315,13 @@ export function useStageSource(
     const { at, version } = versionPreview!;
     origin = { kind: 'staged', at, versionLabel: version, version };
   } else if (isPublished) {
-    origin = { kind: 'delivered', at: null, versionLabel: null, version: publishedBuildVersion(status) };
+    origin = {
+      kind: 'delivered',
+      at: null,
+      versionLabel: null,
+      version: publishedBuildVersion(status),
+      artifactVersion: published?.artifactVersion,
+    };
   } else if (showChannel) {
     origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
@@ -335,12 +329,17 @@ export function useStageSource(
   } else if (channel) {
     origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
   } else if (published) {
-    origin = { kind: 'delivered', at: null, versionLabel: null, version: publishedBuildVersion(status) };
+    origin = {
+      kind: 'delivered',
+      at: null,
+      versionLabel: null,
+      version: publishedBuildVersion(status),
+      artifactVersion: published?.artifactVersion,
+    };
   } else if (status && !status.preview && !status.playable?.length) {
     origin = NONE_ORIGIN;
   }
 
-  // Track 2: a synchronous preview beats waiting on the next status poll.
   const pushPreview = useCallback((nextHtml: string) => {
     setPreview({ html: nextHtml, at: Date.now(), version: null });
   }, []);

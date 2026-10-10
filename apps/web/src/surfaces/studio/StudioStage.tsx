@@ -4,6 +4,7 @@ import { GameFrame } from '../../GameFrame.js';
 import {
   useCreatorPlaytest,
   useGamePlayer,
+  useGameTelemetry,
   postGameHostMessage,
   requestStateSnapshot,
   requestStateRestore,
@@ -105,15 +106,9 @@ export function StudioStage({
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
 
-  // The document actually rendered. Distinct from `source.rawHtml`: while playing, a
-  // new stage never replaces this mid-run (A4's swap policy) — it waits in
-  // `pendingHtml`. Uses the pre-embed document — this component is the one that passes
-  // `embed` to `GameFrame`, so feeding it `source.html` (already embedded) would inject
-  // the player bridge twice.
+  // Track the displayed document separately from pending stage updates.
   const [shownHtml, setShownHtml] = useState<string | null>(source.rawHtml);
-  // What's actually on screen, for the ribbon — distinct from `source.origin` while a
-  // swap is held during play (Codex review of PR #739: the ribbon must not claim the
-  // held/pending build's provenance for a document that hasn't been applied yet).
+  // Attribution follows the displayed build while a swap is pending.
   const [shownOrigin, setShownOrigin] = useState<StageOrigin>(source.origin);
   const shownVersion = shownOrigin.version ?? null;
   const shownCheck = checkVerdict ? checkVerdict(shownVersion) : null;
@@ -165,7 +160,10 @@ export function StudioStage({
   // Reacts only to a new source, not a bare posture change.
   useEffect(() => {
     const next = source.rawHtml;
-    if (next === shownHtml) return;
+    if (next === shownHtml) {
+      setShownOrigin(source.origin);
+      return;
+    }
     const inputActive = pointerHeldRef.current || Date.now() - lastInputAtRef.current < INPUT_IDLE_MS;
     if (posture === 'play' && shownHtml !== null && inputActive) {
       setPendingHtml(next);
@@ -174,7 +172,14 @@ export function StudioStage({
     }
     applySwap(next, source.origin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source.rawHtml]);
+  }, [
+    source.rawHtml,
+    source.origin.kind,
+    source.origin.at,
+    source.origin.versionLabel,
+    source.origin.version,
+    source.origin.artifactVersion,
+  ]);
 
   // Applies a held swap once input idles, or on leaving play.
   useEffect(() => {
@@ -357,6 +362,15 @@ export function StudioStage({
   // Play posture: absorbed from StudioPlaytestPanel's theater internals.
   const active = posture === 'play' && Boolean(shownHtml);
   const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(frameRef, active);
+  useGameTelemetry(
+    slug ?? '',
+    frameRef,
+    Boolean(slug) && shownOrigin.kind === 'delivered' && active,
+    undefined,
+    active && !covered && !paused && !idle,
+    undefined,
+    shownOrigin.artifactVersion,
+  );
   const requestWatch = useCallback(() => onPostureChange('watch'), [onPostureChange]);
   const onGameActivity = useCallback(() => {
     lastInputAtRef.current = Date.now();

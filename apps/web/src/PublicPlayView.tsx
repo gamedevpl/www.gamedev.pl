@@ -38,7 +38,7 @@ export function PublicPlayView({ slug, onExit }: { slug: string; onExit: () => v
     <GameTheater
       title={game.title}
       badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
-      source={{ html: game.html }}
+      source={{ slug, loadedGame: game }}
       reportSlug={slug}
       remixable={false}
       onExit={onExit}
