@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.30.0 — 2026-10-10
+
 ### Added
 
 - `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation (#1736).
