@@ -79,9 +79,81 @@ describe('TUI feedback', () => {
     const view = screen(110, 24);
     const pending = view.session.prompt();
     await view.press('!pwd');
-    expect(view.frame()).toContain('Shell command');
+    expect(view.frame()).toContain('Shell · local terminal');
+    expect(view.frame()).toContain('! pwd█');
     await view.press('\r');
     expect(await pending).toBe('!pwd');
+  });
+
+  it.each([
+    [40, 12],
+    [80, 24],
+    [110, 40],
+  ])('enters and exits shell input at %i × %i', async (columns, rows) => {
+    const view = screen(columns, rows);
+    void view.session.prompt();
+    await view.press('!');
+    expect(view.frame()).toContain('Shell · local terminal');
+    expect(view.frame()).toContain('! █Enter a shell command');
+    expect(view.frame()).toContain('Esc exit');
+    expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+    await view.press('\r');
+    expect(view.session.get().mode).toBe('prompt');
+    await view.press('\u007f');
+    expect(view.session.get().draft).toBe('');
+    expect(view.frame()).not.toContain('Shell · local terminal');
+    await view.press('!pwd');
+    await view.press('\u001b');
+    expect(view.session.get().draft).toBe('');
+    expect(view.session.get().mode).toBe('prompt');
+  });
+
+  it('keeps the shell marker outside editable command text', async () => {
+    const view = screen(80, 24);
+    const pending = view.session.prompt();
+    await view.press('!é');
+    await view.press('\u001b[D');
+    await view.press('\u001b[D');
+    await view.press('\u007f');
+    expect(view.session.get().draftCursor).toBe(1);
+    await view.press('pwd ');
+    expect(view.session.get().draft).toBe('!pwd é');
+    await view.press('\r');
+    expect(await pending).toBe('!pwd é');
+    void view.session.prompt();
+    await view.press('\u001b[A');
+    expect(view.frame()).toContain('Shell · local terminal');
+    expect(view.frame()).toContain('! pwd é█');
+  });
+
+  it('exits queued shell input without stopping the active agent', async () => {
+    const view = screen(40, 12);
+    const cancel = vi.spyOn(view.session, 'cancel');
+    view.session.setLocalTask('claude');
+    await view.press('!');
+    await view.press('\u0011');
+    expect(view.session.get().queued).toEqual([]);
+    await view.press('pwd');
+    expect(view.frame()).toContain('Shell after this task');
+    expect(view.frame()).toContain('Enter queue · Esc exit');
+    expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(12);
+    await view.press('\u001b');
+    expect(view.session.get().draft).toBe('');
+    expect(cancel).not.toHaveBeenCalled();
+    expect(view.session.get().mode).toBe('busy');
+  });
+
+  it('keeps bangs in question answers and ordinary messages as text', async () => {
+    const view = screen(80, 24);
+    const answer = view.session.prompt([], 'Enter a title');
+    await view.press('!title');
+    expect(view.frame()).not.toContain('Shell · local terminal');
+    expect(view.frame()).toContain('> !title█');
+    await view.press('\r');
+    expect(await answer).toBe('!title');
+    void view.session.prompt();
+    await view.press('great!');
+    expect(view.frame()).not.toContain('Shell · local terminal');
   });
 
   it.each([

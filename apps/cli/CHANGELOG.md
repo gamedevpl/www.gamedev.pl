@@ -13,6 +13,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Typing `!` immediately opens a clearly marked Shell input; Esc or Backspace on an empty command returns to conversation (#1737).
 - Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect` (#1734).
 - `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
 
