@@ -1131,7 +1131,8 @@
       "close": "Close",
       "enlarge": "Enlarge: {{name}}",
       "compare": "Compare with your game",
-      "holdHint": "Or press and hold the picture to see your game."
+      "holdHint": "Or press and hold the picture to see your game.",
+      "dreaming": "Sketching two directions for the next round…"
     },
     "gallery": {
       "alt": "The game as it looks right now",

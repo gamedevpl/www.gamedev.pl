@@ -43,3 +43,14 @@ export function dreamClaimHolds(
 export function finishClaim(held: DreamRunClaim, claim: DreamClaimRef, at: string): DreamRunClaim {
   return { ...held, endedAt: at, ...(claim.superseded ? { superseded: true } : {}) };
 }
+
+// Still drawing: held for this version and round, neither posted nor ended.
+export function dreamRunInProgress(
+  claim: DreamRunClaim | undefined,
+  version: string | undefined,
+  at: string,
+  roundGeneration: number,
+): boolean {
+  if (!version || !claim || claim.postedAt || claim.endedAt) return false;
+  return dreamClaimHolds(claim, version, at, roundGeneration);
+}

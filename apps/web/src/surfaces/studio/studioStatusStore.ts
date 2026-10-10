@@ -90,6 +90,7 @@ function schedule(key: string, state: PollState): void {
     hidden: typeof document !== 'undefined' && document.hidden,
     msSinceInteraction: attentionWired ? at - lastInteractionAt : 0,
     serverFloorMs: state.latest?.pollAfterMs,
+    dreaming: Boolean(state.latest?.dreaming),
   });
   if (wanted === null) {
     state.timer = undefined;

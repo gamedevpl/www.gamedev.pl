@@ -23,7 +23,7 @@ export function useGatedStatusPoll(
         intervalMs: (latest, error) => {
           if (error) return ERROR_RETRY_MS;
           if (!latest) return ERROR_RETRY_MS;
-          return pollDelayMs(latest.status, latest.stall, latest.phase);
+          return pollDelayMs(latest.status, latest.stall, latest.phase, Boolean(latest.dreaming));
         },
         onUpdate: (next) => {
           setStatus(next);

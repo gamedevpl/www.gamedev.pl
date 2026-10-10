@@ -190,12 +190,10 @@ export interface SubmissionStatusResponseBase {
   builder?: BuilderKind;
   // Last builder used here — default for the next round.
   defaultBuilder?: BuilderKind;
-  builderHandoff?: {
-    target: BuilderKind;
-    requestedAt: string;
-    acknowledgedAt?: string;
-  };
+  builderHandoff?: { target: BuilderKind; requestedAt: string; acknowledgedAt?: string };
   platformBuilder?: PlatformBuilderAvailability;
+  // A concept-proposal run is still drawing for this version.
+  dreaming?: import('./dream-status.js').DreamingStatus;
   // Machine-readable cause; render translated copy, never this string.
   failure?: { reason: string };
   // Who opened this improvement round, when it is one.
