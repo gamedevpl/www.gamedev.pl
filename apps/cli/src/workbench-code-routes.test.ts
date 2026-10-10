@@ -32,11 +32,15 @@ async function fixture() {
   const post = (path: string, body: unknown, extra = {}) =>
     fetch(url.origin + path, { method: 'POST', headers: { ...headers, ...extra }, body: JSON.stringify(body) });
   const project = await get('/code/project').then((response) => response.json());
+  const file = await post('/code/file', { projectId: project.projectId, path: project.files[0].path }).then(
+    (response) => response.json(),
+  );
   return {
     root,
     get,
     post,
     project,
+    file: file.file,
     switchProject: () => {
       checkout = null;
     },
@@ -51,7 +55,7 @@ it('authenticates editor, worker and writes; prevents foreign origin and stale c
   const request = {
     projectId: f.project.projectId,
     path: f.project.files[0].path,
-    version: f.project.files[0].version,
+    version: f.file.version,
     content: 'export const score = 2;',
   };
   expect((await f.post('/code/save', request, { Origin: 'https://evil.test' })).status).toBe(403);

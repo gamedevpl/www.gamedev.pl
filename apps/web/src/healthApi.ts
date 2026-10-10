@@ -1,9 +1,8 @@
 // Ops console imports these telemetry reads; session cookie authenticates.
 
-import type { ReviewerCohort, GameHealth, FramePerformanceGroup } from '@gamedevpl/contract';
+import type { ReviewerCohort, GameHealth, FramePerformanceGroup, LocalCodeMetrics } from '@gamedevpl/contract';
 
 export type { GameHealth };
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export interface HealthResponse {
@@ -110,6 +109,7 @@ export interface VisitFunnel {
     declined: number;
   };
   imageExport?: { requested: number; saved: number; dismissed: number; failed?: number; rejected: number };
+  localCode?: LocalCodeMetrics;
   completion?: {
     requests: number;
     shown: number;

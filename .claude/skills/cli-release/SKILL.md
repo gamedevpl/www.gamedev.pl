@@ -98,6 +98,14 @@ repo in the same session.
   suite: the deployment browser gate does not build CLI assets. CI runs the local
   suite in the hermetic browser job, without credentials or live provider calls.
 
+- **Lazy editor assets are release artifacts.** Publish `play-typescript-worker.js.gz`
+  beside the CLI and include it in `SHA256SUMS` and provenance. The CLI embeds its
+  digest, verifies download/cache bytes, and caches by content hash. Keep developer
+  copies in `dist/generated`; leave the worker out of the npm install archive so
+  users who never open Code do not download TypeScript. Test first download and
+  cached offline use with mocks, plus bundle/worker size budgets. First editor use
+  needs GitHub access when its worker is not cached; document this limitation.
+
 - **Wait for transient preview notices before recording layout geometry.** Local Play
   briefly shows “Build loaded”; the next preview poll clears it, and `ResizeObserver`
   releases the reserved bottom space. A fast CI browser can capture the smaller panel

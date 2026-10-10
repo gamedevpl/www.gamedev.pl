@@ -95,7 +95,7 @@ export function CodePanelViewControls({
         <option value="editor">Editor only</option>
         <option value="editor-chat">Editor + chat</option>
         <option value="editor-chat-preview">Editor + chat + preview</option>
-        <option value="game">Game only</option>
+        <option value="game">Game only · hide controls</option>
       </select>
       <button
         id="code-maximize"

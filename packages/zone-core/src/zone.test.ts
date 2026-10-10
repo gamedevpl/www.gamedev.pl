@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createNodeVmCage, type SimCage, type SimInstance } from './cage.js';
-import { MAX_TICK_MS, ZONE_SNAPSHOT_VERSION, type ZoneSnapshot } from './contract.js';
+import { ZONE_SNAPSHOT_VERSION, type ZoneSnapshot } from './contract.js';
 import { parseZoneSchema, type ZoneSchema } from './schema.js';
 import {
   PARK_GRACE_MS,
@@ -15,6 +15,7 @@ import {
   BLOATED_SIM,
   COUNTER_SIM,
   MODULE_STATE_SIM,
+  SLOW_SIM,
   TEST_SIM_MATH_JS,
   THROWING_SIM,
   UNSTORABLE_SIM,
@@ -73,7 +74,6 @@ interface Harness {
 
 function harness(
   options: { sim?: string; store?: FakeStore; schema?: ZoneSchema; startAt?: number; idleMs?: number } = {},
-  monotonicMs?: () => number,
 ): Harness {
   const store = options.store ?? new FakeStore();
   const broadcasts: ZoneOutboundFrame[] = [];
@@ -90,7 +90,6 @@ function harness(
     broadcast: (frame) => broadcasts.push(frame),
     sendTo: (slot, frame) => direct.push({ slot, frame }),
     now: () => clock,
-    monotonicMs,
     newSeed: () => 4242,
     idleMs: options.idleMs,
   });
@@ -636,8 +635,9 @@ describe('hibernation', () => {
 
 describe('runtime budgets', () => {
   it('stops a zone whose ticks keep running long', async () => {
-    let meteredMs = 0;
-    const h = harness({}, () => (meteredMs += MAX_TICK_MS + 1));
+    // Check 23 proves a sim *can* tick in 8 ms on a build machine. This is what happens
+    // when it does not on a real one, with fifteen other zones on the same core.
+    const h = harness({ sim: SLOW_SIM });
     await h.zone.join('player-a');
     h.runTicks(200);
 

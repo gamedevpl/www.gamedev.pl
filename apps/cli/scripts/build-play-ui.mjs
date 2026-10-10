@@ -2,6 +2,8 @@ import { build } from 'esbuild';
 import { mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, dirname } from 'node:path';
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const generated = join(root, 'src/generated');
@@ -39,35 +41,39 @@ const worker = await build({
     {
       name: 'play-local-typescript-libs',
       setup(build) {
-        build.onLoad({ filter: /[/\\]tsWorker\.ts$/ }, async ({ path }) => {
-          const { readdir } = await import('node:fs/promises');
+        build.onLoad({ filter: /[/\\]tsWorkerLibraries\.ts$/ }, () => ({
+          contents:
+            'import libs from "play:typescript-libs"; export async function loadLibFiles() { return new Map(Object.entries(libs)); }',
+          loader: 'ts',
+        }));
+        build.onResolve({ filter: /^play:typescript-libs$/ }, () => ({ path: 'libs', namespace: 'play-libs' }));
+        build.onLoad({ filter: /.*/, namespace: 'play-libs' }, async () => {
           const libDir = join(root, '../../node_modules/typescript/lib');
-          const entries = await Promise.all(
-            (await readdir(libDir))
-              .filter((name) => /^lib.*\.d\.ts$/.test(name))
-              .map(async (name) => [name, await readFile(join(libDir, name), 'utf8')]),
-          );
-          const loaders = entries
-            .map(
-              ([name, content]) => `${JSON.stringify('/' + name)}: () => Promise.resolve(${JSON.stringify(content)})`,
-            )
-            .join(',');
+          const libs = new Map();
+          const load = async (name) => {
+            if (libs.has(name)) return;
+            const content = await readFile(join(libDir, name), 'utf8');
+            libs.set(name, content);
+            for (const match of content.matchAll(/<reference lib="([a-z0-9.]+)"/g)) await load(`lib.${match[1]}.d.ts`);
+          };
+          await load('lib.es2022.d.ts');
+          await load('lib.dom.d.ts');
           return {
-            contents: (await readFile(path, 'utf8')).replace(
-              /import\.meta\.glob\([\s\S]*?\) as Record<string, \(\) => Promise<string>>/,
-              () => `{${loaders}}`,
-            ),
-            loader: 'ts',
-            resolveDir: dirname(path),
+            contents: JSON.stringify(Object.fromEntries([...libs].map(([name, content]) => ['/' + name, content]))),
+            loader: 'json',
           };
         });
       },
     },
   ],
 });
+const workerBytes = gzipSync(worker.outputFiles[0].text, { level: 9 });
+await writeFile(join(generated, 'play-typescript-worker.js.gz'), workerBytes);
 await writeFile(
   join(generated, 'play-code-worker.ts'),
-  'export const PLAY_CODE_WORKER = ' + JSON.stringify(worker.outputFiles[0].text) + ';\n',
+  'export const PLAY_CODE_WORKER_HASH = ' +
+    JSON.stringify(createHash('sha256').update(workerBytes).digest('hex')) +
+    ';\n',
 );
 const serverFile = join(generated, 'play-shell.mjs');
 await build({

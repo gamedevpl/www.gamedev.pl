@@ -1,23 +1,16 @@
-import { autocompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { search } from '@codemirror/search';
 import { syntaxHighlighting } from '@codemirror/language';
 import { forceLinting, linter, lintGutter } from '@codemirror/lint';
-import { Compartment, Transaction, type Extension } from '@codemirror/state';
+import { Compartment, Transaction } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
-import { tsFacet, tsGoto, tsSync } from '@valtown/codemirror-ts';
 import type { CodeLanguage } from './codeTokens.js';
 import { vsCodeSearchPanel } from './codeMirrorSearchPanel.js';
-import {
-  completionVisibilityExtension,
-  measuredTsAutocomplete,
-  type CompletionTracker,
-} from './codeMirrorCompletion.js';
-import { tsAdvisoryLintSource, toCmDiagnostics } from './codeMirrorDiagnostics.js';
+import { toCmDiagnostics } from './codeMirrorDiagnostics.js';
+import { languageServiceExtensions } from './codeMirrorLanguageService.js';
 import { makeGhostTextExtension } from './codeMirrorGhostText.js';
-import { makeGotoHandler, modifierAwareHover, modifierHoverExtension, modifierHoverState } from './codeMirrorHover.js';
 import { colorPickerExtension } from './codeMirrorColorPicker.js';
 import { languageExtension } from './codeMirrorLanguage.js';
 import { darkChrome, darkHighlight } from './codeMirrorTheme.js';
@@ -41,38 +34,22 @@ export type CodeMirrorEditorProps = {
   value: string;
   language: CodeLanguage;
   onChange: (value: string) => void;
+  // Bound to Mod-S — else the browser's save dialog opens.
   onSave?: () => void;
   diagnostics: CodeMirrorDiagnostic[];
   readOnly?: boolean;
+  // GA-05: TypeScript extensions reconfigure when the worker becomes ready.
   languageService?: CodeMirrorLanguageService;
   onGotoDefinition?: GotoDefinitionHandler;
+  // GA-09: mount-only selection for a cross-file jump landing.
   initialSelection?: { anchor: number; head: number };
+  // TA-02: the host supplies the optional ghost-text transport.
   fetchGhostText?: FetchGhostText;
   colorPickerLabel?: string;
+  // Saved per-file state lets undo survive switching to Play.
   initialEditorState?: CodeSurfaceEditorState;
   onEditorStateChange?: (state: CodeSurfaceEditorState) => void;
 };
-
-function languageServiceExtensions(
-  languageService: CodeMirrorLanguageService | undefined,
-  onGotoDefinitionRef: { current: GotoDefinitionHandler | undefined },
-  report?: CompletionReporter,
-): Extension[] {
-  if (!languageService) return [];
-  const hover = modifierAwareHover();
-  const completionTracker: CompletionTracker = { pending: [], report };
-  return [
-    tsFacet.of({ worker: languageService.worker, path: languageService.path }),
-    tsSync(),
-    modifierHoverState,
-    autocompletion({ override: [measuredTsAutocomplete(completionTracker)] }),
-    completionVisibilityExtension(completionTracker),
-    hover,
-    modifierHoverExtension(hover),
-    tsGoto({ gotoHandler: makeGotoHandler(onGotoDefinitionRef) }),
-    linter(tsAdvisoryLintSource),
-  ];
-}
 
 export default function CodeMirrorEditor({
   reportCompletion,
@@ -92,6 +69,7 @@ export default function CodeMirrorEditor({
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // Mount-once extensions read refs without resetting the document or history.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onSaveRef = useRef(onSave);
@@ -119,6 +97,7 @@ export default function CodeMirrorEditor({
         value,
         [
           basicSetup,
+          // After basicSetup, so our panel replaces the stock search bar.
           search({ top: true, createPanel: vsCodeSearchPanel }),
           keymap.of([
             indentWithTab,
@@ -143,6 +122,7 @@ export default function CodeMirrorEditor({
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
+            // A document pushed by the parent is not a creator edit.
             if (update.transactions.some((transaction) => transaction.annotation(Transaction.remote))) return;
             onChangeRef.current(update.state.doc.toString());
           }),
@@ -154,14 +134,20 @@ export default function CodeMirrorEditor({
       ),
     });
     viewRef.current = view;
+    const capture = () => onEditorStateChangeRef.current?.(serializeCodeSurfaceEditorState(view.state));
+    window.addEventListener('beforeunload', capture, true);
+    window.addEventListener('pagehide', capture, true);
     return () => {
-      onEditorStateChangeRef.current?.(serializeCodeSurfaceEditorState(view.state));
+      capture();
+      window.removeEventListener('beforeunload', capture, true);
+      window.removeEventListener('pagehide', capture, true);
       view.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry live values
   }, []);
 
+  // External values preserve caret offsets without reviving stale undo entries.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -171,10 +157,12 @@ export default function CodeMirrorEditor({
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
       selection: { anchor: Math.min(anchor, value.length), head: Math.min(head, value.length) },
+      // Out of undo too — else Ctrl+Z restores pre-refresh text.
       annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)],
     });
   }, [value]);
 
+  // GA-09: clamp same-file search and cross-file jump offsets.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !initialSelection) return;
@@ -200,6 +188,7 @@ export default function CodeMirrorEditor({
         languageServiceExtensions(languageService, onGotoDefinitionRef, reportCompletion),
       ),
     });
+    forceLinting(view);
   }, [languageService, reportCompletion]);
 
   useEffect(() => {

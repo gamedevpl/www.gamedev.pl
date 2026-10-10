@@ -6,9 +6,10 @@ export class CodeRequestError extends Error {
     super(data.error ?? `Code request failed (${status})`);
   }
 }
-export type CodeFile = { path: string; content: string; version: string; readOnly: boolean };
+export type CodeFile = { path: string; content: string; version: string; revision: string; readOnly: boolean };
 export type CompletionStatus = { providers: { id: string; available: boolean }[]; selected: string | null };
 export type CodeProject = { projectId: string; files: CodeFile[]; completion: CompletionStatus };
+export type CodeIndex = Omit<CodeProject, 'files'> & { files: Pick<CodeFile, 'path' | 'revision' | 'readOnly'>[] };
 export async function codeApi<T>(path: string, data?: unknown, signal?: AbortSignal): Promise<T> {
   const token = sessionStorage.getItem('session-token') ?? '';
   const response = await fetch(path, {

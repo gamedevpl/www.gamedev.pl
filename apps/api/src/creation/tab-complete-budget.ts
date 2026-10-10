@@ -17,6 +17,7 @@ export async function completeWithBudget(
   input: TabCompleteRequest,
   warn: (error: unknown) => void,
   jobId?: number,
+  recordUsage?: (usage: { model: string; inputTokens: number; outputTokens: number }) => void,
 ) {
   const nowMs = (options.now ?? Date.now)();
   const dateStr = new Date(nowMs).toISOString().slice(0, 10);
@@ -45,6 +46,8 @@ export async function completeWithBudget(
     return { status: 503, body: { error: 'no completion right now — try again' } };
   }
   const tokens = result.tokens;
+  if (tokens)
+    recordUsage?.({ model: result.model ?? 'vertex', inputTokens: tokens.input, outputTokens: tokens.output });
   await options.tabCompleteGate?.spend(uid, dateStr, tokens ? tokens.input + tokens.output : 0, reserved);
   if (tokens && jobId !== undefined)
     await options.store

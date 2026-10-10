@@ -118,14 +118,19 @@ Edits stay as drafts until **Save** or **Ctrl/Cmd+S**. Switching files or closin
 keeps drafts and undo history in the current tab. Closing Code never reconstructs the
 game. Saving writes locally and the existing Play watcher rebuilds; Ask, Auto and Freeze
 continue to govern when a playable replacement is shown. Save does not deliver, publish
-or invoke a platform gate. Drafts and undo stacks are held in tab memory: reload or
-closing the tab discards them; save or copy important drafts first.
+or invoke a platform gate. Dirty drafts, their disk base versions and CodeMirror undo
+stacks are backed up in `sessionStorage` and recovered after refreshing the same tab
+on the same local controller. Before leaving a tab with unsaved code, the browser
+requests confirmation. Closing the tab ends this backup; it is not a cross-session or
+machine-restart recovery system. A storage quota failure shows a copy/save warning.
 
 Saves acquire the same checkout writer lock as agents and CLI mutations and compare a
 version derived from the read file's contents and filesystem identity. A busy checkout,
 stale project, deleted file or changed disk version refuses the write and keeps the draft.
 The conflict panel shows disk contents; explicitly reviewing that version allows saving
-the draft against its new version. Another disk change requires another review.
+the draft against its new version. The button states that the next save overwrites those
+disk changes; this is an explicit replacement, not a three-way merge. Another disk
+change requires another review. Deleted dirty files remain drafts but cannot be saved.
 Ordinary editors do not share the CLI lock: version checks catch changes observed before
 the atomic replacement, but the filesystem offers no transaction spanning an unrelated
 writer's last-moment write. Do not concurrently save the same file from two editors.
@@ -133,9 +138,19 @@ Symbolic and hard links are refused. New files and renaming remain tasks for an 
 editor or the agent. Text files are capped at 1 MB, the editor snapshot at 16 MB/2000 files.
 
 TypeScript completion, advisory diagnostics, modifier-key hover and Ctrl/Cmd-click
-navigation run in a local worker using the installed TypeScript libraries and Creator Kit
-sources/declarations. No API key, Studio completion endpoint or CDN is needed. Kit
-context is read-only; TypeScript library definitions are not editable project files.
+navigation run in a local worker with ES2022/DOM TypeScript libraries and local Creator
+Kit sources/declarations. No API key or completion service is required. Released CLIs
+download the compressed worker from their own versioned GitHub release on first use;
+an embedded SHA-256 verifies it before execution. Later uses work offline from the cache
+at `$XDG_CACHE_HOME/gamedevpl/code`, or `~/.cache/gamedevpl/code`. Developer builds carry
+the worker locally. A first use without network/cache leaves editing and saving available
+and reports unavailable TypeScript. Kit context is read-only; TypeScript library
+definitions are not editable project files.
+
+The file picker has a full-path search. Polling sends only a bounded path/stat-revision
+index; contents are fetched per changed file. Unchanged files never invalidate the TS
+program, and removed files are deleted from its virtual filesystem. Changed dependencies
+refresh visible diagnostics even when the selected document has not been edited.
 
 AI completion is optional and off initially. In Code → Optional AI completion, choose a
 service, accept the disclosure and press **Enable AI completion**. Code fragments around
@@ -146,20 +161,29 @@ an API key or personal provider charges. Sign in through `/login` in Conversatio
 uses its normal authenticated client; platform credentials never reach the browser.
 `/api/me/code/completion` accepts local files without requiring a published game or Studio
 round. It shares Studio's completer, per-account daily quota, global token budget and
-`TAB_COMPLETE` kill switch. The default model is Gemini 3.8 Flash (server configuration
+`TAB_COMPLETE` kill switch. It additionally requires `CODE_SURFACE` and the separate
+`LOCAL_TAB_COMPLETE=true` flag, which defaults off and is threaded through both deployment
+paths. Disabling local completion does not disable Studio. The default model is Gemini
+3.8 Flash through **Google Vertex AI** (server configuration
 may override it). Availability is cached for 60 seconds; an account or service failure
 stops suggestions and never silently switches to a personal provider. Authentication,
-blocked accounts, input bounds, hourly rate limits and quota checks precede model calls.
+blocked accounts, input bounds, minute rate limits and quota checks precede model calls.
+Completed local calls log `local_code_completion_usage` with model and actual input/output
+token counts, separately from Studio round costs, without source, file paths or identity.
+These logs support local token/cost attribution; they are not a job ledger or an invoice.
 
 Alternatively, use a personal OpenAI, Anthropic or Google account. Known CLI environment
 variables `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
 expose only availability. Play does not read arbitrary home directories, agent credential
 stores or env files. Personal-provider costs belong to that account; keys never enter
-browser responses. Personal models are fixed to GPT-4.1 mini, Claude Haiku 4.5 and Gemini
-2.5 Flash; account/model access is the provider's responsibility.
+browser responses. Default personal models are GPT-4.1 mini, Claude Haiku 4.5 and Gemini
+2.5 Flash. Override them with `GAMEDEV_CODE_OPENAI_MODEL`, `GAMEDEV_CODE_ANTHROPIC_MODEL`
+or `GAMEDEV_CODE_GOOGLE_MODEL` in the CLI environment. Provider calls use bounded output,
+stop sequences and insertion cleanup; model/account access remains the provider's responsibility.
 
 Suggestions use Studio's existing ghost text and Tab acceptance, with a local limit of
-12 requests/minute. Disable cancels active local requests. Consent lasts for this CLI
+120 requests/minute. Rate/quota failures show a message while local TypeScript remains
+available. Disable cancels active local requests. Consent lasts for this CLI
 session and is cleared when the selected checkout changes. An already-started platform
 model call may finish and consume its normal budget after a client disconnect.
 
@@ -250,9 +274,14 @@ Creation and editing reuse the existing CLI `first_turn`, `build_requested`,
 No attachment content, paths, pairing capabilities or prompts enter telemetry.
 `play_requested` remains an opening request, not render evidence. Workbench adoption,
 state-restore success, capture success and phone latency have no aggregate read-side yet;
-these are explicit measurement gaps. Local code-panel adoption, save/conflict outcomes
-and completion quality also remain unmeasured; Studio completion telemetry stays wired
-only in Studio, with no source text or file paths sent from Play.
+these are explicit measurement gaps. Local editor events reuse `code_step` and
+`code_completion` with `codeSurface: local_play`: opened, file selection, edits, TypeScript
+readiness, conflicts, completion latency/results, ghost-text acceptance and dismissal.
+Anonymous session ids last for the CLI process. Completion events sample its first 50;
+counts are not total billing usage. The private operator console has a separate local
+editor aggregate; legacy/Studio events stay separate. No source text, paths, game slug,
+credentials or user identity enter these events. Successful saves and layout usage remain
+measurement gaps. Paid local usage is attributed separately in server logs as above.
 
 Tests cover command retries, attachment validation, source checkpoint recovery,
 unknown remote outcomes and phone authority. Phone protocol tests bind only loopback.
@@ -306,7 +335,8 @@ specific Creator Kit command to run. They do not open a recovery menu.
 The local editor browser regression runs without a deployed site or credentials:
 `E2E_CHROMIUM_PATH=/path/to/chromium npm run e2e:play-code -w @gamedevpl/e2e`
 (after the CLI UI build). It uses a temporary checkout, the real preview watcher and a
-fixture assembler. It covers drafts/undo, local completion/hover/definitions/diagnostics,
+fixture assembler. It covers drafts/undo after refresh, incremental content loading,
+deleted TS dependencies, local completion/hover/definitions/diagnostics,
 writer locks, external conflicts, state-preserving updates, narrow layouts, the iframe
 sandbox and absence of Studio/provider requests. The view-switching regression covers
 all four focus views, restoring layouts, drafts and undo, chat focus, completion-aware

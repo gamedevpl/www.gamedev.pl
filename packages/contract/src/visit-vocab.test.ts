@@ -215,7 +215,7 @@ describe('visit vocab', () => {
   });
 
   it('lists code completion outcomes', () => {
-    expect(CODE_COMPLETION_OUTCOMES).toEqual(['shown', 'empty', 'failed']);
+    expect(CODE_COMPLETION_OUTCOMES).toEqual(['shown', 'empty', 'failed', 'accepted', 'dismissed']);
   });
 
   it('lists cli funnel steps in order', () => {

@@ -19,6 +19,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect` (#1734).
 - `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
 - Selecting compiler diagnostics when clipboard access fails now survives Play's status refresh (#1735).
+- Local Play recovers unsaved code and undo after a tab refresh, warns before leaving, shows AI quota failures, and refreshes changed files without reloading the whole project (#1735).
 
 ## 0.29.1 — 2026-10-10
 

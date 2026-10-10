@@ -1,15 +1,16 @@
 import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { isJsonContentType } from './workbench-http.js';
+import { codeProjectId, readCodeFile, saveCodeFile, type CodeCheckout } from './workbench-code-files.js';
 import {
-  codeProjectId,
-  readCodeFile,
-  readCodeProject,
-  saveCodeFile,
-  type CodeCheckout,
-} from './workbench-code-files.js';
-import { codeCompletion, CODE_PROVIDERS, type PlatformCompletion } from './workbench-code-completion.js';
-import { PLAY_CODE_WORKER } from './generated/play-code-worker.js';
+  codeCompletion,
+  CODE_PROVIDERS,
+  CodeCompletionError,
+  type PlatformCompletion,
+} from './workbench-code-completion.js';
+import { loadCodeWorker } from './workbench-code-worker.js';
+import { readCodeIndex } from './workbench-code-index.js';
+import { codeTelemetry } from './workbench-code-telemetry.js';
 
 export type CodeOptions = {
   checkout?: () => CodeCheckout | null;
@@ -20,7 +21,9 @@ const projectRequest = z.object({ projectId: z.string().regex(/^[a-f0-9]{64}$/),
 
 export function codeRoutes(options: CodeOptions) {
   const completion = codeCompletion(options.env ?? {}, undefined, options.platform);
+  const telemetry = codeTelemetry(options.platform?.api.origin);
   let observedProject = '';
+  let worker: Promise<string> | undefined;
   const route = async (
     req: IncomingMessage,
     origin: string,
@@ -39,11 +42,15 @@ export function codeRoutes(options: CodeOptions) {
       return true;
     }
     if (req.method === 'GET' && req.url === '/code/worker') {
-      reply(200, { script: PLAY_CODE_WORKER });
+      worker ??= loadCodeWorker({ env: options.env }).catch((error: unknown) => {
+        worker = undefined;
+        throw error;
+      });
+      reply(200, { script: await worker });
       return true;
     }
     if (req.method === 'GET' && req.url === '/code/project') {
-      reply(200, { ...readCodeProject(checkout), completion: await completion.refresh() });
+      reply(200, { ...(await readCodeIndex(checkout)), completion: await completion.refresh() });
       return true;
     }
     if (req.method !== 'POST' || req.headers.origin !== origin || !isJsonContentType(req.headers['content-type'])) {
@@ -51,10 +58,27 @@ export function codeRoutes(options: CodeOptions) {
       return true;
     }
     const currentId = codeProjectId(checkout);
+    if (req.url === '/code/telemetry') {
+      telemetry(await body(req));
+      reply(202, { ok: true });
+      return true;
+    }
     const current = () => {
       const latest = options.checkout?.();
       return Boolean(latest && codeProjectId(latest) === currentId);
     };
+    if (req.url === '/code/file') {
+      const request = projectRequest.strict().parse(await body(req));
+      if (request.projectId !== currentId) reply(409, { error: 'Project changed' });
+      else {
+        try {
+          reply(200, { file: readCodeFile(checkout, request.path) });
+        } catch {
+          reply(415, { error: 'File is unavailable, unsafe, too large or not UTF-8 text' });
+        }
+      }
+      return true;
+    }
     if (req.url === '/code/save') {
       const request = projectRequest
         .extend({ version: z.string().regex(/^[a-f0-9]{64}$/), content: z.string().max(1_000_000) })
@@ -104,6 +128,9 @@ export function codeRoutes(options: CodeOptions) {
           request.path.slice(`games/${checkout.slug}/`.length),
         );
         reply(current() ? 200 : 409, current() ? { text } : { error: 'Project changed' });
+      } catch (error) {
+        if (error instanceof CodeCompletionError) reply(error.status, { error: error.message });
+        else throw error;
       } finally {
         req.socket.off('close', disconnect);
       }
@@ -112,5 +139,22 @@ export function codeRoutes(options: CodeOptions) {
     reply(404, { error: 'Not found' });
     return true;
   };
-  return { route, close: completion.close };
+  return {
+    route: async (...args: Parameters<typeof route>) => {
+      try {
+        return await route(...args);
+      } catch (error) {
+        args[3](error instanceof CodeCompletionError ? error.status : error instanceof z.ZodError ? 400 : 503, {
+          error:
+            error instanceof CodeCompletionError
+              ? error.message
+              : error instanceof z.ZodError
+                ? 'Invalid editor request'
+                : 'Editor request unavailable. Check the checkout and retry; drafts are preserved.',
+        });
+        return true;
+      }
+    },
+    close: completion.close,
+  };
 }

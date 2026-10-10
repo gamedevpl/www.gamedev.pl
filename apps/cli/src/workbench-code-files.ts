@@ -6,7 +6,6 @@ import {
   lstatSync,
   openSync,
   readFileSync,
-  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -18,7 +17,7 @@ import { withCheckoutWriter } from './workbench-lock.js';
 import { pathInside } from './checkout-sync.js';
 
 export type CodeCheckout = { root: string; slug: string };
-export type CodeFile = { path: string; content: string; version: string; readOnly: boolean };
+export type CodeFile = { path: string; content: string; version: string; revision: string; readOnly: boolean };
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const MAX_FILE_BYTES = 1_000_000;
 
@@ -26,7 +25,7 @@ export function codeProjectId(checkout: CodeCheckout): string {
   return digest(`${realpathSync(checkout.root)}\0${checkout.slug}`);
 }
 
-function safePath(checkout: CodeCheckout, path: string): string {
+export function codeFileAllowed(checkout: CodeCheckout, path: string): boolean {
   if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(checkout.slug)) throw Error('Invalid project');
   const projectPrefix = `games/${checkout.slug}/`;
   const own =
@@ -34,7 +33,11 @@ function safePath(checkout: CodeCheckout, path: string): string {
     isDeliverablePath(path.slice(projectPrefix.length)) &&
     !isRasterSourcePath(path.slice(projectPrefix.length));
   const kit = /^shared\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.ts$/.test(path);
-  if (!own && !kit) throw Error('File outside this project');
+  return own || kit;
+}
+
+function safePath(checkout: CodeCheckout, path: string): string {
+  if (!codeFileAllowed(checkout, path)) throw Error('File outside this project');
   const root = realpathSync(checkout.root);
   const absolute = pathInside(root, path);
   let current = root;
@@ -49,57 +52,35 @@ export function readCodeFile(checkout: CodeCheckout, path: string): CodeFile {
   const absolute = safePath(checkout, path);
   const fd = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.size > MAX_FILE_BYTES) throw Error('File too large or unavailable');
+    const stat = fstatSync(fd, { bigint: true });
+    if (!stat.isFile() || stat.nlink !== 1n || stat.size > BigInt(MAX_FILE_BYTES))
+      throw Error('File too large or unavailable');
     const bytes = readFileSync(fd);
+    const revision = codeFileRevision(stat);
+    if (revision !== codeFileRevision(fstatSync(fd, { bigint: true }))) throw Error('File changed while reading');
     const content = bytes.toString('utf8');
     if (content.includes('\0') || !Buffer.from(content).equals(bytes)) throw Error('Only UTF-8 text is available');
-    const version = digest(`${stat.dev}:${stat.ino}:${stat.mtimeMs}:${stat.ctimeMs}:${digest(content)}`);
-    return { path, content, version, readOnly: path.startsWith('shared/') };
+    const version = digest(`${revision}:${digest(content)}`);
+    return {
+      path,
+      content,
+      version,
+      revision,
+      readOnly: path.startsWith('shared/'),
+    };
   } finally {
     closeSync(fd);
   }
 }
 
-export function readCodeProject(checkout: CodeCheckout): { projectId: string; files: CodeFile[] } {
-  if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(checkout.slug)) throw Error('Invalid project');
-  const files: CodeFile[] = [];
-  let size = 0;
-  let visited = 0;
-  const walk = (path: string) => {
-    let absolute: string;
-    try {
-      absolute = pathInside(realpathSync(checkout.root), path);
-      let current = realpathSync(checkout.root);
-      for (const part of path.split('/')) {
-        current = join(current, part);
-        if (lstatSync(current).isSymbolicLink()) return;
-      }
-    } catch {
-      return;
-    }
-    if (path.split('/').length > 20) throw Error('Project tree exceeds editor limits');
-    for (const entry of readdirSync(absolute, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (++visited > 20_000) throw Error('Project tree exceeds editor limits');
-      if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
-      const next = `${path}/${entry.name}`;
-      if (entry.isDirectory()) walk(next);
-      else if (entry.isFile()) {
-        let file: CodeFile;
-        try {
-          file = readCodeFile(checkout, next);
-        } catch {
-          continue;
-        }
-        size += Buffer.byteLength(file.content);
-        if (files.length >= 2000 || size > 16_000_000) throw Error('Project exceeds editor limits');
-        files.push(file);
-      }
-    }
-  };
-  walk(`games/${checkout.slug}`);
-  walk('shared');
-  return { projectId: codeProjectId(checkout), files };
+export function codeFileRevision(stat: {
+  dev: bigint;
+  ino: bigint;
+  size: bigint;
+  mtimeNs: bigint;
+  ctimeNs: bigint;
+}): string {
+  return digest(`${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`);
 }
 
 export async function saveCodeFile(

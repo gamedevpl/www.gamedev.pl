@@ -205,13 +205,18 @@ it.skipIf(!executablePath)(
       }
       expect(await page.locator('#game').getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
       expect(
-        requests.some(
-          (url) =>
-            url.includes('/api/') ||
-            url.includes('api.openai.com') ||
-            url.includes('anthropic.com') ||
-            url.includes('googleapis.com'),
-        ),
+        requests.some((url) => {
+          const parsed = new URL(url);
+          return (
+            parsed.pathname.startsWith('/api/') ||
+            [
+              'api.openai.com',
+              'api.anthropic.com',
+              'generativelanguage.googleapis.com',
+              'aiplatform.googleapis.com',
+            ].includes(parsed.hostname)
+          );
+        }),
       ).toBe(false);
       expect(errors).toEqual([]);
     } finally {

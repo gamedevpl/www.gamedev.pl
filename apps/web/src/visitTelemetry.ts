@@ -9,6 +9,7 @@ import {
   type CliVerifyStage,
   type CodeCompletionKind,
   type CodeCompletionOutcome,
+  type CodeTelemetrySurface,
   type CodeStep,
   type CreateStep,
   type EditorStep,
@@ -131,7 +132,7 @@ export type VisitEvent =
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
   | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl }
-  | { type: 'code_step'; step: CodeStep }
+  | { type: 'code_step'; step: CodeStep; codeSurface?: CodeTelemetrySurface }
   | {
       type: 'cli_step';
       step: CliStep;
@@ -142,6 +143,7 @@ export type VisitEvent =
     }
   | {
       type: 'code_completion';
+      codeSurface?: CodeTelemetrySurface;
       kind: CodeCompletionKind;
       outcome: CodeCompletionOutcome;
       latencyMs: number;
@@ -149,7 +151,6 @@ export type VisitEvent =
       completionChars?: number;
     };
 
-// Untrusted input from a URL — the runtime check, not just the type.
 export function isPlayVia(value: unknown): value is PlayVia {
   return typeof value === 'string' && (PLAY_VIAS as readonly string[]).includes(value);
 }
@@ -540,7 +541,7 @@ let recordedCodeSteps = new Set<CodeStep>();
 export function recordCodeStep(step: CodeStep): void {
   if (!currentSession || recordedCodeSteps.has(step)) return;
   recordedCodeSteps.add(step);
-  currentSession.record({ type: 'code_step', step });
+  currentSession.record({ type: 'code_step', step, codeSurface: 'studio' });
 }
 
 export type RecordCliStepInput = {
@@ -599,6 +600,7 @@ export function recordCodeCompletion(input: {
       : boundedCompletionMetric(input.completionChars, MAX_COMPLETION_CHARS);
   currentSession.record({
     type: 'code_completion',
+    codeSurface: 'studio',
     kind: input.kind,
     outcome: input.outcome,
     latencyMs,

@@ -151,6 +151,13 @@ apply in BigQuery: no shared key between the two tables, and no identity columns
 
 ## Known gaps (prefer closing one over inventing new metrics)
 
+Local Play editor events use `codeSurface: local_play`; Studio emits `studio` and old
+events may omit the field. Keep the operator aggregates separate. Ghost text acceptance
+and dismissal are outcomes, not new model requests; exclude them from request/latency
+denominators. Local completion events sample the first 50 per CLI process, while
+`local_code_completion_usage` logs actual paid input/output tokens and model separately.
+Anonymous visit events must never carry code, paths, credentials, slug or account ids.
+
 Current state, audited 2026-07-25 and updated as gaps close. When your task touches an
 adjacent flow, close the gap in the same change or flag it explicitly in the PR.
 

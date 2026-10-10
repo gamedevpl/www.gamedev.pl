@@ -1,13 +1,18 @@
 import './build-play-ui.mjs';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
-import { chmodSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'dist');
 mkdirSync(outDir, { recursive: true });
+mkdirSync(join(outDir, 'generated'), { recursive: true });
+copyFileSync(
+  join(root, 'src/generated/play-typescript-worker.js.gz'),
+  join(outDir, 'generated/play-typescript-worker.js.gz'),
+);
 
 // One source for the version a creator sees: this package's own manifest.
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));

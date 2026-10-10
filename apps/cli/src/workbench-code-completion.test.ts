@@ -68,6 +68,20 @@ it.each<CodeProvider>(['openai', 'anthropic', 'google'])(
     expect(fetch).toHaveBeenCalledTimes(1);
   },
 );
+it('honours configured BYOK models and exposes a safe 429 without provider details', async () => {
+  const request = vi.fn<typeof fetch>(
+    async () => new Response(JSON.stringify({ choices: [{ message: { content: 'code' } }] })),
+  );
+  const completion = codeCompletion({ ...env, GAMEDEV_CODE_OPENAI_MODEL: 'my-model' }, request);
+  completion.select('openai', true);
+  for (let i = 0; i < 13; i++) await completion.complete('', '');
+  expect(JSON.parse(request.mock.calls[0][1]!.body as string).model).toBe('my-model');
+  request.mockResolvedValueOnce(new Response('secret error detail', { status: 429 }));
+  await expect(completion.complete('', '')).rejects.toMatchObject({
+    status: 429,
+    message: 'Provider completion unavailable',
+  });
+});
 it('cancels in-flight requests when disabled and returns no provider error details', async () => {
   let signal: AbortSignal | undefined;
   const fetch = vi.fn(async (_url: unknown, options?: RequestInit) => {
@@ -83,3 +97,33 @@ it('cancels in-flight requests when disabled and returns no provider error detai
   expect(signal?.aborted).toBe(true);
   await expect(pending).rejects.toThrow('Provider completion unavailable');
 });
+it.each(['openai', 'anthropic', 'google'] as const)(
+  'normalizes %s insertion and configures its model and stops',
+  async (provider) => {
+    const request = vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '```ts\nconst score = 42;\n```' } }],
+            content: [{ text: 'const score = 42;\n' }],
+            candidates: [{ content: { parts: [{ text: 'const score = 42;\n' }] } }],
+          }),
+        ),
+    );
+    const completion = codeCompletion(
+      { ...env, [`GAMEDEV_CODE_${provider.toUpperCase()}_MODEL`]: 'configured-model' },
+      request,
+    );
+    completion.select(provider, true);
+    expect(await completion.complete('// earlier\nconst score', '\n')).toBe(' = 42;');
+    const [url, options] = request.mock.calls[0];
+    const body = JSON.parse(options!.body as string);
+    if (provider === 'google') {
+      expect(new URL(String(url)).pathname).toContain('/configured-model:generateContent');
+      expect(body.generationConfig.stopSequences).toContain('<CURSOR>');
+    } else {
+      expect(body.model).toBe('configured-model');
+      expect(provider === 'openai' ? body.stop : body.stop_sequences).toContain('<CURSOR>');
+    }
+  },
+);

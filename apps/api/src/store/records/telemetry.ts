@@ -166,6 +166,7 @@ export interface VisitEvent {
   latencyMs?: number;
   candidateCount?: number;
   completionChars?: number;
+  codeSurface?: 'studio' | 'local_play';
   /**
    * `how_to_play_opened`: true when this open is a second-or-later open of the *same*
    * theater card (same published play). Absent means first open — or a legacy event

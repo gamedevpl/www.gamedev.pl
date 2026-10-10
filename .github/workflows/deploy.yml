@@ -300,6 +300,7 @@ jobs:
           SEED_PROVIDER: ${{ vars.SEED_PROVIDER }}
           SUGGESTION_SWEEP_AUDIENCE: ${{ vars.SUGGESTION_SWEEP_AUDIENCE }}
           TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}
+          LOCAL_TAB_COMPLETE: ${{ vars.LOCAL_TAB_COMPLETE }}
           TELEMETRY_BACKEND: ${{ vars.TELEMETRY_BACKEND }}
           TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
           VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
@@ -522,6 +523,9 @@ jobs:
           # TA-01's ghost-text completion route: off unless set, same reasoning as
           # EDITOR_ASSIST above — a hand-set value would vanish on the next deploy.
           TAB_COMPLETE_VAL="${TAB_COMPLETE}"
+          if [ -n "$LOCAL_TAB_COMPLETE" ]; then
+            ENV_VARS="${ENV_VARS}|LOCAL_TAB_COMPLETE=${LOCAL_TAB_COMPLETE}"
+          fi
           if [ -n "$TAB_COMPLETE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"
           fi

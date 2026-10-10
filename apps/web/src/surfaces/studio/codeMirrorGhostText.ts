@@ -93,9 +93,10 @@ function ghostTextDecorations(state: EditorState): DecorationSet {
   ]);
 }
 
-function acceptGhostText(view: EditorView): boolean {
+function acceptGhostText(view: EditorView, report: CompletionReporter): boolean {
   const value = view.state.field(ghostTextField, false);
   if (!value || completionStatus(view.state) === 'active') return false;
+  report({ kind: 'ghost_text', outcome: 'accepted', latencyMs: 0, completionChars: value.text.length });
   const pos = view.state.selection.main.head;
   view.dispatch({
     changes: { from: pos, insert: value.text },
@@ -105,10 +106,10 @@ function acceptGhostText(view: EditorView): boolean {
   return true;
 }
 
-function acceptGhostTextFromEvent(event: Event, view: EditorView): boolean {
+function acceptGhostTextFromEvent(event: Event, view: EditorView, report: CompletionReporter): boolean {
   if (!(event.target instanceof HTMLElement) || !event.target.closest('.cm-ghost-text-accept')) return false;
   event.preventDefault();
-  return acceptGhostText(view);
+  return acceptGhostText(view, report);
 }
 
 // TA-02: debounces on doc change; cancels its own timer and fetch.
@@ -197,20 +198,21 @@ export function makeGhostTextExtension(
     fetchPlugin,
     EditorView.domEventHandlers({
       // click covers AT/automation activation; both firing once is harmless.
-      mousedown: acceptGhostTextFromEvent,
-      click: acceptGhostTextFromEvent,
+      mousedown: (event, view) => acceptGhostTextFromEvent(event, view, report),
+      click: (event, view) => acceptGhostTextFromEvent(event, view, report),
     }),
     Prec.highest(
       keymap.of([
         {
           key: 'Tab',
-          run: (view) => acceptGhostText(view),
+          run: (view) => acceptGhostText(view, report),
         },
         {
           key: 'Escape',
           run: (view) => {
             const value = view.state.field(ghostTextField, false);
             if (!value) return false;
+            report({ kind: 'ghost_text', outcome: 'dismissed', latencyMs: 0, completionChars: value.text.length });
             view.plugin(fetchPlugin)?.cancel();
             view.dispatch({ effects: setGhostText.of(null) });
             return true;

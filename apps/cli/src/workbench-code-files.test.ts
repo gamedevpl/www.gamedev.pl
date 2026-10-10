@@ -2,7 +2,8 @@ import { afterEach, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { codeProjectId, readCodeFile, readCodeProject, saveCodeFile } from './workbench-code-files.js';
+import { codeProjectId, readCodeFile, saveCodeFile } from './workbench-code-files.js';
+import { readCodeIndex } from './workbench-code-index.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -27,17 +28,18 @@ function fixture() {
   };
   return { root, checkout, file, request };
 }
-it('lists only this game and read-only local kit, excluding secrets and links', () => {
+it('lists only this game and read-only local kit, excluding secrets and links', async () => {
   const { root, checkout } = fixture();
   symlinkSync(join(root, '.env'), join(root, 'games/demo/sneak.ts'));
   symlinkSync(join(root, 'games/other'), join(root, 'games/demo/escape'));
-  const project = readCodeProject(checkout);
+  const project = await readCodeIndex(checkout);
   expect(project.files.map((file) => file.path)).toEqual([
     'games/demo/game/logic.ts',
     'games/demo/game.ts',
     'shared/game-kit.d.ts',
   ]);
   expect(project.files.find((file) => file.path.startsWith('shared/'))?.readOnly).toBe(true);
+  expect(project.files.every((file) => !('content' in file) && !('version' in file))).toBe(true);
   for (const path of [
     '../.env',
     '/etc/passwd',
@@ -48,6 +50,16 @@ it('lists only this game and read-only local kit, excluding secrets and links', 
     'shared/../.env',
   ])
     expect(() => readCodeFile(checkout, path)).toThrow();
+});
+it('changes index revisions on external edits and removes deleted files', async () => {
+  const { root, checkout, file } = fixture();
+  const before = await readCodeIndex(checkout);
+  expect(before.files.find((entry) => entry.path === file.path)?.revision).toBe(file.revision);
+  writeFileSync(join(root, file.path), 'export const score = 2;');
+  const edited = await readCodeIndex(checkout);
+  expect(edited.files.find((entry) => entry.path === file.path)?.revision).not.toBe(file.revision);
+  rmSync(join(root, file.path));
+  expect((await readCodeIndex(checkout)).files.some((entry) => entry.path === file.path)).toBe(false);
 });
 it('saves with a version and preserves changes made by an external editor', async () => {
   const { root, checkout, request } = fixture();

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import CodeMirrorEditor from '../../web/src/surfaces/studio/CodeMirrorEditor.js';
-import type { CodeSurfaceEditorState } from '../../web/src/surfaces/studio/codeSurfaceEditorState.js';
 import {
   createCodeSurfaceLanguageService,
   fromVfsPath,
@@ -11,14 +10,13 @@ import { languageFor } from '../../web/src/surfaces/studio/codeLanguages.js';
 import { buildSourceTree, type TreeNode } from '../../web/src/surfaces/studio/codeSurfaceTreeModel.js';
 import { CodePanelViewControls, useCodePanelView } from './code-panel-view.js';
 import { codeApi, CodeRequestError, type CodeFile, type CodeProject, type CompletionStatus } from './code-api.js';
+import { refreshCodeProject, syncCodeLanguageFiles } from './code-project-sync.js';
+import { useCodeDrafts, reconcileCodeDrafts } from './code-drafts.js';
+import { reportCodeCompletion, reportCodeStep } from './code-telemetry.js';
 
-type Draft = { content: string; base: CodeFile; editor?: CodeSurfaceEditorState };
-type Workspace = { drafts: Map<string, Draft>; selected: string };
-function fileOptions(nodes: TreeNode[], depth = 0): { path: string; label: string }[] {
+function fileOptions(nodes: TreeNode[]): { path: string; label: string }[] {
   return nodes.flatMap((node) =>
-    node.kind === 'folder'
-      ? fileOptions(node.children, depth + 1)
-      : [{ path: node.path, label: `${'　'.repeat(depth)}${node.name}` }],
+    node.kind === 'folder' ? fileOptions(node.children) : [{ path: node.path, label: node.path }],
   );
 }
 
@@ -28,12 +26,16 @@ export function CodePanel() {
   const [project, setProject] = useState<CodeProject | null>(null);
   const projectRef = useRef(project);
   projectRef.current = project;
-  const workspaces = useRef(new Map<string, Workspace>());
+  const { workspaces, persist, backupWarning } = useCodeDrafts();
+  const syncedFiles = useRef(new Map<string, string>());
+  const unavailableFiles = useRef(new Map<string, string>());
+  const [fileSearch, setFileSearch] = useState('');
   const [selected, setSelected] = useState('');
   const [, redraw] = useState(0);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
+  const [languageRevision, setLanguageRevision] = useState(0);
   const service = useRef<CodeSurfaceLanguageService | null>(null);
   const [selection, setSelection] = useState<{ anchor: number; head: number }>();
   const [provider, setProvider] = useState('');
@@ -49,10 +51,10 @@ export function CodePanel() {
   const conflict = Boolean(draft && dirty && (!diskFile || draft.base.version !== diskFile.version));
   const languageService = useMemo(
     () =>
-      ready && service.current && file?.path.endsWith('.ts')
-        ? { worker: service.current.worker, path: toVfsPath(file.path) }
+      ready && service.current && diskFile?.path.endsWith('.ts')
+        ? { worker: service.current.worker, path: toVfsPath(diskFile.path), revision: languageRevision }
         : undefined,
-    [ready, file?.path],
+    [ready, diskFile?.path, languageRevision],
   );
   const options = useMemo(
     () =>
@@ -69,12 +71,16 @@ export function CodePanel() {
 
   useEffect(() => {
     if (!open) completionEpoch.current++;
+    else reportCodeStep('opened');
     document.getElementById('code-open')?.setAttribute('aria-expanded', String(open));
     document.body.dataset.codeOpen = String(open);
     return () => {
       delete document.body.dataset.codeOpen;
     };
   }, [open]);
+  useEffect(() => {
+    if (conflict) reportCodeStep('conflict_seen');
+  }, [conflict]);
 
   useEffect(() => {
     if (!open) return;
@@ -83,7 +89,7 @@ export function CodePanel() {
     const refresh = async () => {
       try {
         const epoch = refreshEpoch.current;
-        const next = await codeApi<CodeProject>('/code/project');
+        const next = await refreshCodeProject(projectRef.current, unavailableFiles.current);
         if (cancelled || epoch !== refreshEpoch.current) return;
         const changed = projectRef.current?.projectId !== next.projectId;
         let stored = workspaces.current.get(next.projectId);
@@ -97,14 +103,22 @@ export function CodePanel() {
           };
           workspaces.current.set(next.projectId, stored);
         }
-        for (const entry of next.files) {
-          const existing = stored.drafts.get(entry.path);
-          if (!existing) stored.drafts.set(entry.path, { content: entry.content, base: entry });
-          else if (existing.content === existing.base.content && existing.base.version !== entry.version) {
-            stored.drafts.set(entry.path, { content: entry.content, base: entry });
-          }
-          service.current?.updateFile(entry.path, stored.drafts.get(entry.path)!.content);
-        }
+        reconcileCodeDrafts(stored, next.files);
+        setSelected(stored.selected);
+        if (
+          !changed &&
+          service.current &&
+          syncCodeLanguageFiles(
+            service.current,
+            syncedFiles.current,
+            Object.fromEntries(
+              next.files
+                .filter((entry) => entry.path.endsWith('.ts'))
+                .map((entry) => [entry.path, stored!.drafts.get(entry.path)!.content]),
+            ),
+          )
+        )
+          setLanguageRevision((revision) => revision + 1);
         if (changed) {
           setSelected(stored.selected);
           setSelection(undefined);
@@ -112,9 +126,11 @@ export function CodePanel() {
           setProvider('');
           setConsent(false);
           completionEpoch.current++;
+          setFileSearch('');
         }
         projectRef.current = next;
         setProject(next);
+        persist();
       } catch (error) {
         if (!cancelled) {
           setNotice(
@@ -136,7 +152,7 @@ export function CodePanel() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open]);
+  }, [open, persist, workspaces]);
 
   useEffect(() => {
     const initial = projectRef.current;
@@ -163,13 +179,22 @@ export function CodePanel() {
           return;
         }
         service.current = created;
+        syncedFiles.current = new Map(Object.entries(files));
         if (created)
-          for (const entry of projectRef.current?.files ?? [])
-            created.updateFile(
-              entry.path,
-              workspaces.current.get(initial.projectId)?.drafts.get(entry.path)?.content ?? entry.content,
-            );
+          syncCodeLanguageFiles(
+            created,
+            syncedFiles.current,
+            Object.fromEntries(
+              (projectRef.current?.files ?? [])
+                .filter((entry) => entry.path.endsWith('.ts'))
+                .map((entry) => [
+                  entry.path,
+                  workspaces.current.get(initial.projectId)?.drafts.get(entry.path)?.content ?? entry.content,
+                ]),
+            ),
+          );
         setReady(Boolean(created));
+        if (created) reportCodeStep('typechecked');
       } catch {
         if (!cancelled) setNotice('Local TypeScript service could not start. Reopen Play to retry.');
       }
@@ -181,19 +206,26 @@ export function CodePanel() {
       setReady(false);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [project?.projectId]);
+  }, [project?.projectId, workspaces]);
 
   const chooseFile = (path: string) => {
     if (!workspace) return;
     workspace.selected = path;
+    persist();
     setSelected(path);
+    reportCodeStep('file_opened');
     setSelection(undefined);
     setNotice('');
   };
   const edit = (content: string) => {
     if (!draft || !file || file.readOnly) return;
     draft.content = content;
-    service.current?.updateFile(file.path, content);
+    reportCodeStep('edited');
+    if (diskFile && file.path.endsWith('.ts')) {
+      service.current?.updateFile(file.path, content);
+      syncedFiles.current.set(file.path, content);
+    }
+    persist();
     redraw((value) => value + 1);
   };
   const save = async () => {
@@ -238,6 +270,7 @@ export function CodePanel() {
       }
     } finally {
       setSaving(false);
+      persist();
       redraw((value) => value + 1);
     }
   };
@@ -266,11 +299,22 @@ export function CodePanel() {
     project?.completion.selected && open
       ? async (prefix: string, suffix: string, signal: AbortSignal) => {
           const epoch = completionEpoch.current;
-          const result = await codeApi<{ text: string }>(
-            '/code/completion',
-            { projectId: project.projectId, path: selected, prefix, suffix },
-            signal,
-          );
+          let result;
+          try {
+            result = await codeApi<{ text: string }>(
+              '/code/completion',
+              { projectId: project.projectId, path: selected, prefix, suffix },
+              signal,
+            );
+          } catch (error) {
+            if (!signal.aborted)
+              setNotice(
+                error instanceof CodeRequestError && error.status === 429
+                  ? 'AI completion rate or quota limit reached. Wait before retrying; TypeScript suggestions remain available.'
+                  : 'AI completion is unavailable. TypeScript suggestions remain available.',
+              );
+            throw error;
+          }
           return epoch === completionEpoch.current ? result.text : '';
         }
       : undefined;
@@ -288,6 +332,12 @@ export function CodePanel() {
         <CodePanelViewControls {...panelView} />
       </header>
       <div className="code-toolbar">
+        <input
+          aria-label="Search project files"
+          placeholder="Find a file…"
+          value={fileSearch}
+          onChange={(event) => setFileSearch(event.target.value)}
+        />
         <label className="sr-only" htmlFor="code-file">
           Project file
         </label>
@@ -297,11 +347,13 @@ export function CodePanel() {
           onChange={(event) => chooseFile(event.target.value)}
           disabled={!project}
         >
-          {options.map((entry) => (
-            <option key={entry.path} value={entry.path}>
-              {entry.label}
-            </option>
-          ))}
+          {options
+            .filter((entry) => entry.path === selected || entry.label.toLowerCase().includes(fileSearch.toLowerCase()))
+            .map((entry) => (
+              <option key={entry.path} value={entry.path}>
+                {entry.label}
+              </option>
+            ))}
         </select>
         <button id="code-save" onClick={() => void save()} disabled={!dirty || saving || file?.readOnly || !file}>
           {saving ? 'Saving…' : 'Save'}
@@ -340,13 +392,14 @@ export function CodePanel() {
               }
             }}
           >
-            I reviewed this version · keep my draft
+            I reviewed this version · next save overwrites disk changes
           </button>
         </div>
       )}
       {draft && file && (
         <div className="code-editor">
           <CodeMirrorEditor
+            reportCompletion={reportCodeCompletion}
             key={`${project?.projectId}:${file.path}`}
             value={draft.content}
             language={languageFor(file.path)}
@@ -367,12 +420,13 @@ export function CodePanel() {
             initialEditorState={draft.editor}
             onEditorStateChange={(state) => {
               draft.editor = state;
+              persist();
             }}
           />
         </div>
       )}
       <p className="code-message" role="status">
-        {notice}
+        {notice || backupWarning}
       </p>
       <details className="code-ai">
         <summary>
@@ -381,8 +435,8 @@ export function CodePanel() {
         <p>
           TypeScript works locally. AI sends code fragments around the cursor to your selected service. Signed-in
           members can use gamedev.pl within platform limits, without an API key. gamedev.pl forwards fragments to its AI
-          provider and covers model costs. Personal providers charge your account; keys stay in the CLI process. Sign in
-          with /login in Conversation to use gamedev.pl.
+          provider, Google Vertex AI, and covers model costs. Personal providers charge your account; keys stay in the
+          CLI process. Sign in with /login in Conversation to use gamedev.pl.
         </p>
         <label htmlFor="code-provider">Provider</label>
         <select
