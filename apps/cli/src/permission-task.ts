@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs';
 import type { AdapterRunInput } from './headless-agent.js';
 import type { Workshop } from './workshop.js';
 import { defaultAdapterRun } from './workshop-runner.js';
-import { taskPermissions, permissionMode } from './agent-permissions.js';
+import { taskPermissions, type PermissionMode } from './agent-permissions.js';
 import { approvalEnv } from './agent-approval.js';
 import { childEnv } from './delegate.js';
 import { localPreviewTools, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
@@ -27,6 +27,7 @@ export function claudeLocalFlags(root: string, cwd: string): string[] {
 export async function runPermissionTask(
   input: Omit<AdapterRunInput, 'env' | 'permissions' | 'onApproval'> & {
     ws: Workshop;
+    permissionState: { mode: PermissionMode };
     previewUrl?: string;
     captureBudget?: { used: number };
     output: ReturnType<typeof taskOutput>;
@@ -50,13 +51,14 @@ export async function runPermissionTask(
     const permitted = taskPermissions({
       ws,
       spec: input.spec,
-      mode: ws.permissionMode ?? permissionMode(),
+      mode: input.permissionState.mode,
       cwd: input.cwd,
       signal,
       write: input.write,
       autoResume: {
         available: () => Boolean(session),
         start: () => {
+          input.permissionState.mode = 'auto';
           restart = true;
           switching.abort();
         },

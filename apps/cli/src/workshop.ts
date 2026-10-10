@@ -192,6 +192,7 @@ export async function runLocalBuild(input: {
   let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
   const captureBudget = { used: 0 };
+  const permissionState = { mode };
   let authCheck: Promise<void> | undefined;
   try {
     if (!(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
@@ -260,6 +261,7 @@ export async function runLocalBuild(input: {
         let conversation: string | undefined;
         const result = await runPermissionTask({
           ws,
+          permissionState,
           previewUrl,
           captureBudget,
           output,

@@ -6,7 +6,7 @@ import { claudeApprovalTool } from 'genaicode/agents';
 import { runPermissionTask } from './permission-task.js';
 import { loadAdapters } from './adapters.js';
 import { AUTO_RESUME } from './agent-approval.js';
-import { permissionMode, setPermissionMode } from './agent-permissions.js';
+import { permissionMode, setPermissionMode, type PermissionMode } from './agent-permissions.js';
 import { taskOutput } from './task-output.js';
 import type { Workshop } from './workshop.js';
 import type { AdapterRunInput } from './headless-agent.js';
@@ -44,6 +44,7 @@ function setup() {
   };
   const input = {
     ws,
+    permissionState: { mode: 'ask' as PermissionMode },
     spec,
     cwd: root,
     prompt: 'Fix the game',

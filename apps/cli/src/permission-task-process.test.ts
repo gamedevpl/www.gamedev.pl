@@ -72,6 +72,7 @@ process.on('SIGTERM', () => {
   try {
     const result = await runPermissionTask({
       ws,
+      permissionState: { mode: 'ask' },
       spec,
       cwd: root,
       prompt: 'Fix game',
