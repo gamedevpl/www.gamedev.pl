@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.31.0 — 2026-10-10
+
 ### Breaking
 
 - Local agents default to Auto with a sandbox; agents without sandbox support keep asking, and `/permissions ask` restores prompts (#1740).
