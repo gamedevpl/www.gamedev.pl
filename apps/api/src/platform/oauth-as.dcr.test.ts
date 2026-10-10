@@ -26,12 +26,19 @@ describe('DCR redirect URIs', () => {
       'data:text/html,hi',
       'file:///etc/passwd',
       'https://example.com/callback#frag',
+      'https://example.com/callback#',
+      'ftp://example.com/callback',
+      'chrome://settings',
     ]) {
       const res = await register(uri);
       expect(res.statusCode, uri).toBe(400);
       expect(res.json()).toEqual({ error: 'invalid_redirect_uri' });
     }
-    for (const uri of ['https://example.com/callback', 'cursor://anysphere.cursor-mcp/oauth/callback']) {
+    for (const uri of [
+      'https://example.com/callback',
+      'cursor://anysphere.cursor-mcp/oauth/callback',
+      'com.example.agent:/oauth/callback',
+    ]) {
       expect((await register(uri)).statusCode, uri).toBe(201);
     }
   });
