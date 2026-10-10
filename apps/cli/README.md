@@ -44,6 +44,15 @@ process is recovered automatically, while a live owner is allowed to finish.
 The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
 starts only when that chat decides you asked for one.
 
+In the terminal session, `!<command>` runs a local shell command, for example `!pwd`,
+`!git status` or `!npm test`. Commands use the current game checkout (or the launch
+directory before selecting a game), the user's shell and environment. Output appears
+in the transcript with the exit code; Ctrl+C stops the command and its child processes.
+Commands work offline and are not sent to the assistant. Each invocation uses a fresh
+shell, so `cd` and exports do not persist. Output is capped at 256,000 characters;
+redirect to a file for larger reports. While an agent works, Enter queues a shell
+command until the task finishes. Browser chat does not execute shell commands.
+
 Interactive sessions save the last 200 output lines and 50 prompts locally under
 `~/.config/gamedevpl/history/`, with owner-only file permissions. History is separated
 by signed-in account, server, and game (or launch directory before selecting a game).

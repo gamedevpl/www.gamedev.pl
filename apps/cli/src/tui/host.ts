@@ -267,10 +267,11 @@ export async function runInkRepl(input: {
       if (input.shutdownSignal?.aborted) break;
       working = Boolean(initialLine);
       const line = initialLine ?? (await session.prompt());
+      const allowShell = !input.browserOnly && initialLine === undefined;
       working = true;
       if (initialLine && !line.startsWith('/')) session.writeLine('› ' + line);
       initialLine = undefined;
-      if (!spoke && (!input.checkout || token) && line.trim() && !line.trim().startsWith('/')) {
+      if (!spoke && (!input.checkout || token) && line.trim() && !/^[!/]/.test(line.trimStart())) {
         spoke = true;
         telemetry.record('first_turn');
       }
@@ -290,6 +291,7 @@ export async function runInkRepl(input: {
       try {
         result = await handleReplLine({
           line,
+          allowShell,
           api: foregroundApi,
           token,
           conversationId,

@@ -1,4 +1,5 @@
 import { splitEvidence, withEvidence } from './workbench-evidence.js';
+import { runReplShell } from './repl-shell.js';
 import { workbenchPlatformAction } from './workbench-platform-actions.js';
 import { workbenchLocalAction } from './workbench-checkpoints.js';
 import { runReplPlay } from './repl-play.js';
@@ -60,7 +61,12 @@ export async function handleReplLine(input: {
   onLocalPreview?: (url: string) => void;
   currentPath?: string;
   cwd?: string;
+  allowShell?: boolean;
 }): Promise<ReplLineResult> {
+  if (input.line.trimStart().startsWith('!')) {
+    await runReplShell(input);
+    return { next: 'continue', conversationId: input.conversationId };
+  }
   if (await workbenchPlatformAction(input)) return { next: 'continue' };
   if (await workbenchLocalAction(input.line.trim(), input.workshop, input.write, input.api))
     return { next: 'continue' };

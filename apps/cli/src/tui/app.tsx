@@ -81,7 +81,7 @@ export function ReplApp({
             setDebug(true);
             return;
           }
-          if (state.canSteer) void session.sendDraft();
+          if (state.canSteer && !state.draft.trimStart().startsWith('!')) void session.sendDraft();
           else session.queueDraft();
         } else if (key.leftArrow) session.moveDraftCursor(-1);
         else if (key.rightArrow) session.moveDraftCursor(1);
@@ -278,7 +278,9 @@ export function ReplApp({
             : state.mode === 'prompt'
               ? completion.suggestions.length
                 ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
-                : 'Enter send · / commands · Tab fill · ←→ cursor · ↑↓ history'
+                : state.draft.trimStart().startsWith('!') && !state.question
+                  ? 'Shell command · Enter run · Ctrl+C clear'
+                  : 'Enter · ←→ edit · / commands · ! shell · ↑↓ history · Tab fill'
               : state.localTask
                 ? state.canSteer
                   ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop'
