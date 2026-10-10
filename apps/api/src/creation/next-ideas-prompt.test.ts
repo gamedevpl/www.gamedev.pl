@@ -1,6 +1,6 @@
 import type { GenAIClient } from 'genaicode';
 import { describe, expect, it, vi } from 'vitest';
-import { VertexNextIdeaGenerator } from './next-ideas.js';
+import { NEXT_IDEAS_GEMINI_MODEL, NextIdeaModelGenerator } from './next-ideas.js';
 
 // Records what the model was asked; answers one idea.
 function fakeClient() {
@@ -21,10 +21,10 @@ function fakeClient() {
 
 const base = { spec: 'Top-down Great War trench warfare.', title: 'Trenchline Command', published: false };
 
-describe('VertexNextIdeaGenerator prompt', () => {
+describe('NextIdeaModelGenerator prompt', () => {
   it('shows the model the current game and its recent rounds', async () => {
     const { client, requests } = fakeClient();
-    const ideas = await new VertexNextIdeaGenerator({ client }).generate({
+    const ideas = await new NextIdeaModelGenerator({ clientFor: () => client, env: {} }).generate({
       ...base,
       screenshotPng: 'QUFB',
       history: ['Creator asked: add artillery', 'Delivered: artillery strikes on Q'],
@@ -36,11 +36,12 @@ describe('VertexNextIdeaGenerator prompt', () => {
     expect(request.text).toContain('real screenshot of the game as it is now');
     expect(request.text).toContain('never propose it again');
     expect(request.text).toContain('Visible in the game world');
+    expect(request.text).toContain('One focused change a builder can finish in a single round');
   });
 
   it('stays a plain text prompt without a screenshot', async () => {
     const { client, requests } = fakeClient();
-    await new VertexNextIdeaGenerator({ client }).generate(base);
+    await new NextIdeaModelGenerator({ clientFor: () => client, env: {} }).generate(base);
     expect(typeof requests[0]).toBe('string');
     expect(requests[0]).not.toContain('Recent rounds');
   });
@@ -58,10 +59,13 @@ describe('VertexNextIdeaGenerator prompt', () => {
       },
     };
     const client = vi.fn(() => chain) as unknown as GenAIClient;
-    const onRetry = vi.fn();
-    const ideas = await new VertexNextIdeaGenerator({ client }).generate({ ...base, onRetry });
+    const onAttempt = vi.fn();
+    const ideas = await new NextIdeaModelGenerator({ clientFor: () => client, env: {} }).generate({
+      ...base,
+      onAttempt,
+    });
     expect(ideas.map((idea) => idea.label.en)).toEqual(['Fog']);
-    expect(onRetry).toHaveBeenCalledOnce();
+    expect(onAttempt.mock.calls).toEqual([[NEXT_IDEAS_GEMINI_MODEL], [NEXT_IDEAS_GEMINI_MODEL]]);
   });
 
   it('gives the first draw at least the whole configured budget', async () => {
@@ -81,7 +85,7 @@ describe('VertexNextIdeaGenerator prompt', () => {
       return new AbortController().signal;
     });
     const client = vi.fn(() => chain) as unknown as GenAIClient;
-    await new VertexNextIdeaGenerator({ client, timeoutMs: 45_000 }).generate(base);
+    await new NextIdeaModelGenerator({ clientFor: () => client, env: {}, timeoutMs: 45_000 }).generate(base);
     timeout.mockRestore();
     expect(budgets[0]).toBeGreaterThanOrEqual(45_000);
   });

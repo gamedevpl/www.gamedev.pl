@@ -156,6 +156,8 @@ OPTION_IMAGE_MODEL="${OPTION_IMAGE_MODEL:-}"
 OPTION_IMAGE_BASE_URL="${OPTION_IMAGE_BASE_URL:-}"
 OPTION_IMAGE_TIMEOUT_MS="${OPTION_IMAGE_TIMEOUT_MS:-}"
 DREAM_IMAGE_MODEL="${DREAM_IMAGE_MODEL:-}"
+# Unset means claude-sonnet-5-5; gemini-3.8-flash switches back.
+DREAM_IDEAS_MODEL="${DREAM_IDEAS_MODEL:-}"
 DREAM_TIMEOUT_MS="${DREAM_TIMEOUT_MS:-}"
 NEXT_IDEAS_TIMEOUT_MS="${NEXT_IDEAS_TIMEOUT_MS:-}"
 GLOBAL_DAILY_DREAM_CAP="${GLOBAL_DAILY_DREAM_CAP:-}"
@@ -482,9 +484,9 @@ for OPTION_IMAGE_VAR in OPTION_IMAGE_MODEL OPTION_IMAGE_BASE_URL OPTION_IMAGE_TI
     ENV_VARS="${ENV_VARS}|${OPTION_IMAGE_VAR}=${OPTION_IMAGE_VAL}"
   fi
 done
-# Concept proposals. Repointing the image model or either timeout must survive the
+# Concept proposals. Repointing either model or either timeout must survive the
 # next deploy, so they thread here rather than being set by hand.
-for DREAM_VAR in DREAM_IMAGE_MODEL DREAM_TIMEOUT_MS NEXT_IDEAS_TIMEOUT_MS; do
+for DREAM_VAR in DREAM_IMAGE_MODEL DREAM_IDEAS_MODEL DREAM_TIMEOUT_MS NEXT_IDEAS_TIMEOUT_MS; do
   eval "DREAM_VAL=\${${DREAM_VAR}:-}"
   if [ -n "${DREAM_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${DREAM_VAR}=${DREAM_VAL}"

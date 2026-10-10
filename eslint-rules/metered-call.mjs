@@ -26,6 +26,7 @@ import path from 'node:path';
 // vendor seam should be a deliberate line here, not something a regex quietly covers.
 const PAID_SEAMS = [
   'platform/genai.js',
+  'platform/genai-anthropic.js',
   'creation/knowledge-search.js',
   'catalog/embedding-service.js',
   'agent-surface/managed-provider',

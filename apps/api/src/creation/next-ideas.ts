@@ -1,5 +1,6 @@
 import { image, user, type GenAIClient } from 'genaicode';
 import { z } from 'zod';
+import { createAnthropicClient, resolveAnthropicApiKey } from '../platform/genai-anthropic.js';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { normalizeLocale } from '../platform/translate.js';
@@ -32,21 +33,23 @@ export interface NextIdeasParams {
   screenshotPng?: string;
   // Recent round notes, oldest first: what was asked and delivered.
   history?: string[];
-  // Each retry is another billed call; the caller books it.
-  onRetry?: () => void;
+  // Every billed call, first included, named by the model that ran.
+  onAttempt?: (model: string) => void;
 }
 
 export interface NextIdeaGenerator {
   generate(params: NextIdeasParams): Promise<NextIdea[]>;
-  // Named by whatever bills, so the ledger entry cannot drift.
+  // The primary model; onAttempt names each call that billed.
   readonly model: string;
 }
 
 // Async dream job; an image prompt ran past 8s.
 export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 45_000;
 export const MAX_NEXT_IDEAS = 3;
-// Owner policy: 3.x only.
-export const DEFAULT_NEXT_IDEAS_MODEL = 'gemini-3.8-flash';
+// Won a blind benchmark on 12 games; DREAM_IDEAS_MODEL switches back.
+export const DEFAULT_NEXT_IDEAS_MODEL = 'claude-sonnet-5-5';
+// Owner policy: Gemini 3.x only, never 2.x.
+export const NEXT_IDEAS_GEMINI_MODEL = 'gemini-3.8-flash';
 
 const NextIdeaResultSchema = z.object({
   ideas: z
@@ -76,42 +79,78 @@ function cleanBilingual(
 const MAX_LABEL_LENGTH = 60;
 const MAX_PROMPT_LENGTH = 300;
 
-export interface VertexNextIdeaGeneratorOptions {
+export interface NextIdeaModelGeneratorOptions {
   projectId?: string;
   region?: string;
   model?: string;
   timeoutMs?: number;
-  client?: GenAIClient;
+  anthropicApiKey?: string;
+  // Tests inject fakes here; the default builds one client per model.
+  clientFor?: (model: string) => GenAIClient;
+  env?: NodeJS.ProcessEnv;
 }
 
-export class VertexNextIdeaGenerator implements NextIdeaGenerator {
-  private options: VertexNextIdeaGeneratorOptions;
+const isClaude = (model: string) => model.startsWith('claude-');
+
+let warnedNoAnthropicKey = false;
+
+// Claude primary needs a key; without one Gemini runs alone.
+function resolvePrimaryModel(requested: string, apiKey: string | undefined): string {
+  if (isClaude(requested) && !apiKey) {
+    if (!warnedNoAnthropicKey && process.env.NODE_ENV !== 'test') {
+      console.warn(`No Anthropic key for ${requested}; next ideas use ${NEXT_IDEAS_GEMINI_MODEL}.`);
+    }
+    warnedNoAnthropicKey = true;
+    return NEXT_IDEAS_GEMINI_MODEL;
+  }
+  if (isClaude(requested) || requested.startsWith('gemini-')) return requested;
+  if (process.env.NODE_ENV !== 'test') {
+    console.warn(`Unknown next-ideas model ${requested}; using ${NEXT_IDEAS_GEMINI_MODEL}.`);
+  }
+  return NEXT_IDEAS_GEMINI_MODEL;
+}
+
+// Claude via Anthropic, Gemini via Vertex; Gemini backs Claude up.
+export class NextIdeaModelGenerator implements NextIdeaGenerator {
+  private options: NextIdeaModelGeneratorOptions;
   private timeoutMs: number;
-  private client?: GenAIClient;
+  private apiKey?: string;
+  private clients = new Map<string, GenAIClient>();
 
+  // The primary; the ledger takes each attempt's own model.
   readonly model: string;
+  readonly fallbackModel?: string;
 
-  constructor(options: VertexNextIdeaGeneratorOptions = {}) {
+  constructor(options: NextIdeaModelGeneratorOptions = {}) {
+    const env = options.env ?? process.env;
     this.options = options;
-    this.timeoutMs = options.timeoutMs ?? Number(process.env.NEXT_IDEAS_TIMEOUT_MS ?? DEFAULT_NEXT_IDEAS_TIMEOUT_MS);
-    // VERTEX_MODEL stays in the chain; the client read it before.
-    this.model = options.model ?? process.env.VERTEX_MODEL ?? DEFAULT_NEXT_IDEAS_MODEL;
+    this.timeoutMs = options.timeoutMs ?? Number(env.NEXT_IDEAS_TIMEOUT_MS ?? DEFAULT_NEXT_IDEAS_TIMEOUT_MS);
+    this.apiKey = options.anthropicApiKey ?? resolveAnthropicApiKey(env);
+    // VERTEX_MODEL no longer reaches here: it names other call sites' Gemini.
+    const requested = options.model ?? (env.DREAM_IDEAS_MODEL?.trim() || DEFAULT_NEXT_IDEAS_MODEL);
+    this.model = resolvePrimaryModel(requested, this.apiKey);
+    if (isClaude(this.model)) this.fallbackModel = NEXT_IDEAS_GEMINI_MODEL;
   }
 
-  private getClient(): GenAIClient {
-    this.client ??=
-      this.options.client ??
-      createVertexClient({
-        projectId: this.options.projectId,
-        region: this.options.region,
-        defaultRegion: 'global',
-        model: this.model,
-        defaultModel: DEFAULT_NEXT_IDEAS_MODEL,
-        generationConfig: {
-          responseMimeType: 'application/json',
-        } as VertexGenerationConfig,
-      });
-    return this.client;
+  private clientFor(model: string): GenAIClient {
+    if (this.options.clientFor) return this.options.clientFor(model);
+    let client = this.clients.get(model);
+    if (!client) {
+      client = isClaude(model)
+        ? createAnthropicClient({ model, apiKey: this.apiKey })
+        : createVertexClient({
+            projectId: this.options.projectId,
+            region: this.options.region,
+            defaultRegion: 'global',
+            model,
+            defaultModel: NEXT_IDEAS_GEMINI_MODEL,
+            generationConfig: {
+              responseMimeType: 'application/json',
+            } as VertexGenerationConfig,
+          });
+      this.clients.set(model, client);
+    }
+    return client;
   }
 
   async generate(params: NextIdeasParams): Promise<NextIdea[]> {
@@ -130,6 +169,7 @@ Propose up to ${MAX_NEXT_IDEAS} concrete, distinct next steps. Each must be:
 - New to this game. The concept below is only the starting point: the game has grown since. If a screenshot or recent rounds are given, treat what they show as already built and never propose it again — extend or deepen it instead.
 - Visible in the game world. An artist will repaint the screenshot to show each idea while keeping the game's interface untouched, so prefer changes to what is on the field (units, terrain, effects, enemies, weather, level layout) over ideas that are only a new menu, meter or HUD panel.
 - Something a single build round could plausibly finish — never "add multiplayer" or "rebuild the engine".
+- One focused change a builder can finish in a single round: one new unit, effect, hazard or system — not several combined.
 - Specific enough to act on immediately, not a vague direction like "make it more fun".
 - Genuinely different from the others (do not propose three variations of the same idea).
 
@@ -155,21 +195,28 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
       const request = params.screenshotPng
         ? user(promptText, { images: [image(params.screenshotPng, 'image/png')] })
         : promptText;
+      const draw = (model: string, budgetMs: number) =>
+        this.clientFor(model)(request)
+          .temperature(0.4)
+          .thinking({ level: 'low' })
+          .signal(AbortSignal.timeout(budgetMs))
+          .json((value) => NextIdeaResultSchema.parse(value));
+      let fellBack = false;
       // Malformed JSON or a capacity blip earns one more draw.
-      let attempts = 0;
       const parsed = await callWithVertexResilience({
         // The first draw gets 60%; keep it above the budget.
         timeoutMs: this.timeoutMs * 2,
-        onAttempt: () => {
-          attempts += 1;
-          if (attempts > 1) params.onRetry?.();
+        ...(this.fallbackModel ? { fallbackModel: this.fallbackModel } : {}),
+        onAttempt: (model) => {
+          if (model) fellBack = true;
+          params.onAttempt?.(model ?? this.model);
         },
-        attempt: (_model, budgetMs) =>
-          this.getClient()(request)
-            .temperature(0.4)
-            .thinking({ level: 'low' })
-            .signal(AbortSignal.timeout(budgetMs))
-            .json((value) => NextIdeaResultSchema.parse(value)),
+        attempt: (model, budgetMs) => draw(model ?? this.model, budgetMs),
+      }).catch(async (error: unknown) => {
+        // A bad key or request skips the retry loop; Gemini still answers.
+        if (!this.fallbackModel || fellBack) throw error;
+        params.onAttempt?.(this.fallbackModel);
+        return draw(this.fallbackModel, this.timeoutMs);
       });
 
       const ideas: NextIdea[] = [];
@@ -184,7 +231,7 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
     } catch (err) {
       // Fail open: never surface a generation failure as an error.
       if (process.env.NODE_ENV !== 'test') {
-        console.warn(`Vertex AI next-idea generation failed/timed out (budget ${this.timeoutMs}ms):`, err);
+        console.warn(`Next-idea generation failed/timed out (${this.model}, budget ${this.timeoutMs}ms):`, err);
       }
       return [];
     }
@@ -199,6 +246,7 @@ export class StubNextIdeaGenerator implements NextIdeaGenerator {
 
   async generate(params: NextIdeasParams): Promise<NextIdea[]> {
     this.requests.push(params);
+    params.onAttempt?.(this.model);
     return this.ideas;
   }
 }
