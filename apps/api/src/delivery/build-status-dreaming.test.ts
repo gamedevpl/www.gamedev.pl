@@ -35,6 +35,9 @@ describe('status payload while a concept proposal is drawing', () => {
     const quiet = { stateSince: ago(10 * 60_000), createdAt: ago(20 * 60_000) };
     expect((await poll({ ...quiet })).pollAfterMs).toBe(10_000);
     expect((await poll({ ...quiet, dreamRun: run() })).pollAfterMs).toBe(3_000);
+    // Throttled frames can draw past the two-minute quiet threshold.
+    const slow = run({ claimedAt: ago(5 * 60_000) });
+    expect((await poll({ ...quiet, dreamRun: slow })).pollAfterMs).toBe(3_000);
   });
 
   it('drops the field once the run ended or posted', async () => {

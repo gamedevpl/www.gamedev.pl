@@ -59,10 +59,10 @@ function sinceMovement(
     record.stateSince,
     record.lastAgentSignalAt,
     status.events?.[0]?.createdAt,
-    status.dreaming?.since,
     record.createdAt,
   ]);
-  return movedAt === undefined ? Number.NaN : at - movedAt;
+  // A running dream is live until it ends, however long it draws.
+  return status.dreaming ? 0 : movedAt === undefined ? Number.NaN : at - movedAt;
 }
 
 export function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' | 'studio' | undefined {

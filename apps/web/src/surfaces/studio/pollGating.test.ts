@@ -83,6 +83,7 @@ describe('cadence while a concept proposal is drawing', () => {
     // A card may still post after publication; keep fetching until it lands.
     expect(pollDelayMs('published', undefined, undefined, true)).toBe(ACTIVE_POLL_MS);
     expect(pollDelayMs('published')).toBeNull();
+    expect(pollDelayMs('needs_changes', undefined, undefined, true)).toBe(ACTIVE_POLL_MS);
     expect(pollDelayMs('abandoned', undefined, undefined, true)).toBeNull();
   });
 });

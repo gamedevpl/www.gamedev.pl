@@ -21,7 +21,7 @@ export function pollDelayMs(
   // after a successful send until the creator refreshed. Published and abandoned are
   // finished for good — nothing the composer can do moves them.
   if (status === 'abandoned' || (status === 'published' && !dreaming)) return null;
-  if (status === 'needs_changes') return IDLE_POLL_MS;
+  if (status === 'needs_changes' && !dreaming) return IDLE_POLL_MS;
   // Flip the connect card to live progress as soon as the agent signals.
   if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
   // Resume after end/quiet: pick up MCP start in ~3s, not 10s.
