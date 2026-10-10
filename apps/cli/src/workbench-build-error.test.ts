@@ -189,5 +189,6 @@ it('copies compiler diagnostics and offers selection when clipboard access fails
   copy.mockRejectedValueOnce(new Error('Denied'));
   f.button('build-error-copy').click();
   await vi.waitFor(() => expect((f.doc.getElementById('build-error-details') as HTMLDetailsElement).open).toBe(true));
+  await new Promise((resolve) => setTimeout(resolve, 1100));
   expect(f.dom.window.getSelection()!.toString()).toBe(error);
 });

@@ -14,6 +14,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
+- Selecting compiler diagnostics when clipboard access fails now survives Play's status refresh (#1735).
 
 ## 0.29.1 — 2026-10-10
 
