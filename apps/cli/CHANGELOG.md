@@ -7,6 +7,16 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local Play includes the Studio code editor with local TypeScript help, drafts and undo history, guarded checkout saves, and optional AI suggestions available by default for signed-in members after consent, or using your own provider account (#1735).
+- Local Play offers full-window editor, editor with chat, editor with chat and a small game preview, and game-only views; switching keeps the running game, drafts and undo history (#1735).
+
+### Fixed
+
+- Selecting compiler diagnostics when clipboard access fails now survives Play's status refresh (#1735).
+- Local Play recovers unsaved code and undo after a tab refresh, warns before leaving, shows AI quota failures, and refreshes changed files without reloading the whole project (#1735).
+
 ## 0.31.0 — 2026-10-10
 
 ### Breaking
@@ -25,8 +35,6 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Local Play includes the Studio code editor with local TypeScript help, drafts and undo history, guarded checkout saves, and optional AI suggestions available by default for signed-in members after consent, or using your own provider account (#1735).
-- Local Play offers full-window editor, editor with chat, editor with chat and a small game preview, and game-only views; switching keeps the running game, drafts and undo history (#1735).
 - `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation (#1736).
 
 ### Fixed
@@ -34,8 +42,6 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Typing `!` immediately opens a clearly marked Shell input; Esc or Backspace on an empty command returns to conversation (#1737).
 - Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect` (#1734).
 - `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
-- Selecting compiler diagnostics when clipboard access fails now survives Play's status refresh (#1735).
-- Local Play recovers unsaved code and undo after a tab refresh, warns before leaving, shows AI quota failures, and refreshes changed files without reloading the whole project (#1735).
 
 ## 0.29.1 — 2026-10-10
 

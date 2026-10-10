@@ -96,11 +96,14 @@ repo in the same session.
   PR's current state before pushing another release-branch commit. A commit pushed
   after the cutoff needs a separate PR; it is not part of the published tag.
 
-- **Rebase can put unreleased entries below an already-published header.** Before a
+- **Rebase or a conflict-free merge can put entries below an already-published header.** Before a
   cut, compare the release tag with the feature merge. If `next` says `none` but the
   published artifact predates the feature, move that feature's entries back to
   Unreleased, preserving the released section from its tag, then cut a new version.
   Never republish the existing tag. Observed with #1223 after cli-v0.8.0.
+  Before merging a CLI feature, inspect the changelog in the final merge tree,
+  not only its branch: #1735 merged cleanly after 0.31.0 shipped, but its four
+  entries landed under 0.30.0 and the release proposer reported nothing to release.
 
 - **Check the workspace version in `package-lock.json`.** The release cut currently
   updates the two version sources but leaves the CLI workspace lock entry stale.
