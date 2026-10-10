@@ -8,7 +8,8 @@
     "e2e": "vitest run",
     "e2e:hermetic": "vitest run src/frame-document.test.ts src/editor-sensing.test.ts src/editor-dock-geometry.test.ts src/play-telemetry.test.ts",
     "e2e:framed-local": "bash scripts/with-local-site.sh vitest run src/framed-play.test.ts",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "e2e:play-code": "vitest run --config vitest.play-code.config.ts"
   },
   "devDependencies": {
     "@types/node": "^20.14.15",

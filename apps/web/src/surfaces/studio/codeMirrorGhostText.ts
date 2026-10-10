@@ -9,7 +9,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import { recordCodeCompletion } from '../../visitTelemetry.js';
+import { ignoreCompletionMetric, type CompletionReporter } from './codeMirrorTypes.js';
 import type { FetchGhostText } from './codeMirrorTypes.js';
 
 // TA-01's own caps — a window, never the whole file.
@@ -112,7 +112,7 @@ function acceptGhostTextFromEvent(event: Event, view: EditorView): boolean {
 }
 
 // TA-02: debounces on doc change; cancels its own timer and fetch.
-function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | undefined }) {
+function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | undefined }, report: CompletionReporter) {
   return ViewPlugin.fromClass(
     class {
       timer: number | null = null;
@@ -142,7 +142,7 @@ function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | und
           text = await fetchGhostTextRef.current(prefixWindow, suffixWindow, controller.signal);
         } catch {
           if (!controller.signal.aborted) {
-            recordCodeCompletion({
+            report({
               kind: 'ghost_text',
               outcome: 'failed',
               latencyMs: performance.now() - startedAt,
@@ -152,7 +152,7 @@ function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | und
         }
         if (controller.signal.aborted) return;
         if (!text) {
-          recordCodeCompletion({
+          report({
             kind: 'ghost_text',
             outcome: 'empty',
             latencyMs: performance.now() - startedAt,
@@ -161,7 +161,7 @@ function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | und
         }
         // Nothing may have moved on while the network call was in flight.
         if (!view.state.doc.eq(state.doc) || view.state.selection.main.head !== pos) return;
-        recordCodeCompletion({
+        report({
           kind: 'ghost_text',
           outcome: 'shown',
           latencyMs: performance.now() - startedAt,
@@ -186,8 +186,11 @@ function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | und
   );
 }
 
-export function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | undefined }): Extension[] {
-  const fetchPlugin = ghostTextFetchPlugin(fetchGhostTextRef);
+export function makeGhostTextExtension(
+  fetchGhostTextRef: { current: FetchGhostText | undefined },
+  report: CompletionReporter = ignoreCompletionMetric,
+): Extension[] {
+  const fetchPlugin = ghostTextFetchPlugin(fetchGhostTextRef, report);
   return [
     ghostTextField,
     EditorView.decorations.compute([ghostTextField], ghostTextDecorations),

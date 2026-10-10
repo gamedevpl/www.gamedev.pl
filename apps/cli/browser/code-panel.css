@@ -1,0 +1,119 @@
+#code-panel {
+  position: fixed;
+  z-index: 5;
+  top: 84px;
+  left: 12px;
+  width: min(720px, calc(100vw - 24px));
+  height: calc(var(--height) - 98px - var(--notice-space, 0px));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  background: var(--panel, #161c22);
+  box-shadow: 0 16px 48px #0005;
+}
+body[data-code-open='true'] :is(#panel, #workbench-tools) {
+  max-width: calc(50vw - 24px);
+}
+body:has(#panel:not([hidden])) #code-panel {
+  width: min(720px, calc(100vw - min(var(--panel-width, 390px), 50vw) - 36px));
+}
+.code-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.code-toolbar select {
+  min-width: 0;
+}
+.code-status,
+.code-message {
+  padding: 0 12px 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.code-editor {
+  flex: 1;
+  min-height: 100px;
+  overflow: hidden;
+}
+.code-editor .code-surface-codemirror {
+  height: 100%;
+}
+.code-conflict {
+  background: #4a301c;
+  padding: 10px;
+  font-size: 12px;
+  max-height: 35%;
+  overflow: auto;
+}
+.code-conflict pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.code-ai {
+  padding: 10px 12px;
+  font-size: 12px;
+  max-height: 38%;
+  overflow: auto;
+  border-top: 1px solid var(--panel-border);
+}
+.code-ai p {
+  line-height: 1.5;
+}
+.code-ai summary {
+  cursor: pointer;
+}
+.code-consent {
+  display: flex;
+  gap: 8px;
+  align-items: start;
+  margin: 10px 0;
+}
+.code-consent input {
+  width: auto;
+  flex-shrink: 0;
+}
+@media (max-width: 1000px) {
+  #code-panel,
+  body:has(#panel:not([hidden])) #code-panel {
+    z-index: 7;
+    width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 600px) {
+  #code-panel {
+    top: 78px;
+    height: calc(var(--height) - 86px - var(--notice-space, 0px));
+  }
+}
+body[data-compact='true'] #code-panel {
+  overflow: auto;
+}
+body[data-compact='true'] .code-editor {
+  flex: none;
+  height: 180px;
+}
+body[data-compact='true'] :is(.code-conflict, .code-ai) {
+  flex-shrink: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body[data-code-open='true'] #panel-resize {
+  left: auto;
+  right: calc(12px + min(var(--panel-width, 390px), calc(50vw - 24px)));
+}
+
+body[data-dock='left'][data-code-open='true'] #code-panel {
+  left: auto;
+  right: 12px;
+}
+body[data-dock='left'][data-code-open='true'] #panel-resize {
+  right: auto;
+  left: calc(12px + min(var(--panel-width, 390px), calc(50vw - 24px)));
+}

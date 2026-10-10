@@ -29,11 +29,12 @@ export async function createCodeSurfaceLanguageService(
   files: Record<string, string>,
   kitDeclaration: string | null,
   kitFiles: Record<string, string> = {},
+  createWorker: () => Worker = () => new Worker(new URL('./tsWorker.ts', import.meta.url), { type: 'module' }),
 ): Promise<CodeSurfaceLanguageService | null> {
   let innerWorker: Worker | null = null;
   try {
     const Comlink = await import('comlink');
-    innerWorker = new Worker(new URL('./tsWorker.ts', import.meta.url), { type: 'module' });
+    innerWorker = createWorker();
     const worker = Comlink.wrap<WorkerShape & { deleteFile(path: string): void }>(innerWorker);
     await worker.initialize();
     const vfs = { ...kitFiles, ...files };

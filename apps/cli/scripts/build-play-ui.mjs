@@ -27,6 +27,48 @@ const shared = {
   ],
   define: { 'process.env.NODE_ENV': '"production"' },
 };
+const worker = await build({
+  entryPoints: [join(root, '../web/src/surfaces/studio/tsWorker.ts')],
+  bundle: true,
+  minify: true,
+  platform: 'browser',
+  format: 'iife',
+  write: false,
+  external: ['path', 'fs'],
+  plugins: [
+    {
+      name: 'play-local-typescript-libs',
+      setup(build) {
+        build.onLoad({ filter: /[/\\]tsWorker\.ts$/ }, async ({ path }) => {
+          const { readdir } = await import('node:fs/promises');
+          const libDir = join(root, '../../node_modules/typescript/lib');
+          const entries = await Promise.all(
+            (await readdir(libDir))
+              .filter((name) => /^lib.*\.d\.ts$/.test(name))
+              .map(async (name) => [name, await readFile(join(libDir, name), 'utf8')]),
+          );
+          const loaders = entries
+            .map(
+              ([name, content]) => `${JSON.stringify('/' + name)}: () => Promise.resolve(${JSON.stringify(content)})`,
+            )
+            .join(',');
+          return {
+            contents: (await readFile(path, 'utf8')).replace(
+              /import\.meta\.glob\([\s\S]*?\) as Record<string, \(\) => Promise<string>>/,
+              () => `{${loaders}}`,
+            ),
+            loader: 'ts',
+            resolveDir: dirname(path),
+          };
+        });
+      },
+    },
+  ],
+});
+await writeFile(
+  join(generated, 'play-code-worker.ts'),
+  'export const PLAY_CODE_WORKER = ' + JSON.stringify(worker.outputFiles[0].text) + ';\n',
+);
 const serverFile = join(generated, 'play-shell.mjs');
 await build({
   ...shared,
@@ -43,6 +85,7 @@ const client = await build({
   platform: 'browser',
   format: 'iife',
   target: 'es2022',
+  define: { ...shared.define, 'import.meta.url': 'location.href' },
   outfile: 'play.js',
   write: false,
 });

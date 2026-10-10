@@ -91,6 +91,50 @@ not reclaimed from its PID alone: a detached child agent may still be running. C
 that the previous child exited before removing that lock. Other editors and arbitrary
 shell commands do not participate in this lock.
 
+## Local code editor
+
+**Code** opens the Studio editor beside the game and Conversation. Select an existing
+text file from the current game's local checkout; Creator Kit TypeScript files appear
+as read-only context. Other games, credentials, hidden files, raster assets and build
+configuration are unavailable. The editor uses Studio's CodeMirror, search, undo history,
+TypeScript extensions and ghost text rather than a separate editor implementation.
+
+Edits stay as drafts until **Save** or **Ctrl/Cmd+S**. Switching files or closing panels
+keeps drafts and undo history in the current tab. Closing Code never reconstructs the
+game. Saving writes locally and the existing Play watcher rebuilds; Ask, Auto and Freeze
+continue to govern when a playable replacement is shown. Save does not deliver, publish
+or invoke a platform gate. Drafts and undo stacks are held in tab memory: reload or
+closing the tab discards them; save or copy important drafts first.
+
+Saves acquire the same checkout writer lock as agents and CLI mutations and compare a
+version derived from the read file's contents and filesystem identity. A busy checkout,
+stale project, deleted file or changed disk version refuses the write and keeps the draft.
+The conflict panel shows disk contents; explicitly reviewing that version allows saving
+the draft against its new version. Another disk change requires another review.
+Ordinary editors do not share the CLI lock: version checks catch changes observed before
+the atomic replacement, but the filesystem offers no transaction spanning an unrelated
+writer's last-moment write. Do not concurrently save the same file from two editors.
+Symbolic and hard links are refused. New files and renaming remain tasks for an external
+editor or the agent. Text files are capped at 1 MB, the editor snapshot at 16 MB/2000 files.
+
+TypeScript completion, advisory diagnostics, modifier-key hover and Ctrl/Cmd-click
+navigation run in a local worker using the installed TypeScript libraries and Creator Kit
+sources/declarations. No API key, Studio completion endpoint or CDN is needed. Kit
+context is read-only; TypeScript library definitions are not editable project files.
+
+AI completion is optional and off initially. Known CLI process environment variables
+`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) expose only
+provider availability to the browser. Play does not read arbitrary home directories,
+agent credential stores or env files. In Code → Optional AI completion, choose an available
+provider, accept the disclosure and press **Enable AI completion**. Code fragments around
+the cursor (up to 3000 characters before and 1200 after) go directly from the CLI to that
+provider; costs belong to the user's provider account. Keys never enter browser responses.
+Play never uses the Studio or platform-funded completion service. Models are currently
+fixed to GPT-4.1 mini, Claude Haiku 4.5 and Gemini 2.5 Flash; account/model access is the
+provider's responsibility. Suggestions use Studio's existing ghost text and Tab acceptance,
+with a local limit of 12 requests/minute. Disable cancels active requests. Consent lasts
+for this CLI session and is cleared when the selected checkout changes.
+
 ## State-preserving updates
 
 The shell uses the same game embedding bridge as Studio. Generated shell titles,
@@ -178,7 +222,9 @@ Creation and editing reuse the existing CLI `first_turn`, `build_requested`,
 No attachment content, paths, pairing capabilities or prompts enter telemetry.
 `play_requested` remains an opening request, not render evidence. Workbench adoption,
 state-restore success, capture success and phone latency have no aggregate read-side yet;
-these are explicit measurement gaps.
+these are explicit measurement gaps. Local code-panel adoption, save/conflict outcomes
+and completion quality also remain unmeasured; Studio completion telemetry stays wired
+only in Studio, with no source text or file paths sent from Play.
 
 Tests cover command retries, attachment validation, source checkpoint recovery,
 unknown remote outcomes and phone authority. Phone protocol tests bind only loopback.
@@ -228,3 +274,10 @@ Repairing a failure from `/verify` only repairs and checks the local game.
 
 Non-interactive commands keep their failure exit code and print diagnostics plus the
 specific Creator Kit command to run. They do not open a recovery menu.
+
+The local editor browser regression runs without a deployed site or credentials:
+`E2E_CHROMIUM_PATH=/path/to/chromium npm run e2e:play-code -w @gamedevpl/e2e`
+(after the CLI UI build). It uses a temporary checkout, the real preview watcher and a
+fixture assembler. It covers drafts/undo, local completion/hover/definitions/diagnostics,
+writer locks, external conflicts, state-preserving updates, narrow layouts, the iframe
+sandbox and absence of Studio/provider requests. Provider adapters use mocked fetches.

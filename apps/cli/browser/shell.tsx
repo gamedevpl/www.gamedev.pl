@@ -1,3 +1,4 @@
+import { CodePanel } from './code-panel.js';
 import { WorkspaceHome } from './home.js';
 import { PixelIcon, type PixelIconName } from '../../web/src/PixelIcon.js';
 import { Conversation } from './conversation.js';
@@ -12,6 +13,7 @@ export function PlayShell() {
   return (
     <>
       <WorkspaceHome />
+      <CodePanel />
       <nav id="tools" aria-label="Play controls">
         <div className="game-badge">
           <Icon name="gamepad" />
@@ -42,6 +44,10 @@ export function PlayShell() {
           </button>
           <button id="clean" title="Hide controls" aria-label="Hide controls">
             <Icon name="eye" />
+          </button>
+          <button id="code-open" aria-controls="code-panel" aria-expanded="false" title="Code">
+            <Icon name="code" />
+            <span>Code</span>
           </button>
           <button id="edit" className="primary" aria-controls="panel" aria-expanded="false">
             <Icon name="chat" />

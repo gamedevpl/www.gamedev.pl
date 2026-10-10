@@ -1,3 +1,4 @@
+import type { CodeOptions } from './workbench-code-routes.js';
 import { platformPreview } from './workbench-platform.js';
 import type { ApiClient } from './api.js';
 import { openUrl } from './open-url.js';
@@ -10,6 +11,7 @@ export function sessionBrowserHost(
   workspace?: () => { mode: string; slug: string; suggestedSlug?: string },
   canStop?: () => boolean,
   detached = headless,
+  code?: CodeOptions,
 ) {
   let preview = '';
   let opening: ReturnType<typeof startSessionBrowser> | undefined;
@@ -21,7 +23,7 @@ export function sessionBrowserHost(
     }
   });
   const start = () =>
-    (opening ??= startSessionBrowser(session, { detached, workspace, canStop }).catch((error: unknown) => {
+    (opening ??= startSessionBrowser(session, { detached, workspace, canStop, code }).catch((error: unknown) => {
       opening = undefined;
       throw error;
     }));
@@ -51,7 +53,7 @@ export function sessionBrowserHost(
     async open(url: string): Promise<boolean> {
       if (closed) return false;
       if (!preview || preview !== url) return openUrl(url);
-      opening ??= startSessionBrowser(session, { detached, workspace, canStop }).catch((error: unknown) => {
+      opening ??= startSessionBrowser(session, { detached, workspace, canStop, code }).catch((error: unknown) => {
         opening = undefined;
         throw error;
       });

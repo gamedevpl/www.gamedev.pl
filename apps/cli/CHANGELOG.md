@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local Play includes the Studio code editor with local TypeScript help, drafts and undo history, guarded checkout saves, and optional AI suggestions using your own provider account (#0).
+
 ## 0.29.1 — 2026-10-10
 
 ### Fixed
