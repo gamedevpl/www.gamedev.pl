@@ -11,7 +11,7 @@ import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
-import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
+import { parseArgv, jsonMode, SLASH_VERBS, suggestVerb } from './argv.js';
 import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
 import { createApi, requireTtyFlag, type ApiClient } from './api.js';
 import {
@@ -456,7 +456,10 @@ export async function runCli(
         ...(await replStart(api, process.cwd(), args[0], typeof flags.token === 'string' ? flags.token : undefined)),
       });
     }
-    io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);
+    const suggestion = suggestVerb(verb);
+    io.stderr.write(
+      `unknown verb ${verb}.${suggestion ? ` Did you mean ${cliUsage(suggestion)}?` : ''} ${cliUsage('help')} lists commands.\n`,
+    );
     return EXIT_INPUT;
   } catch (error) {
     const shown = describeError(error);

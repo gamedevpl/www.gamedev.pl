@@ -43,6 +43,30 @@ async function inPrivateTmpdir(run: () => Promise<void>): Promise<void> {
 
 describe('runCli verbs', () => {
   it.each([
+    ['conect', 'connect'],
+    ['udpate', 'update'],
+    ['craete', 'create'],
+    ['repp', 'repl'],
+    ['xyzzyq', undefined],
+  ])('suggests a command for %s without running it', async (verb, suggestion) => {
+    const streams = io();
+    const fetch = vi.fn(() => {
+      throw new Error('Unknown verbs must not make network requests');
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      expect(await runCli(['node', 'gamedevpl', verb], {}, streams)).toBe(EXIT_INPUT);
+      expect(streams.read().out).toBe('');
+      expect(streams.read().err).toBe(
+        `unknown verb ${verb}.${suggestion ? ` Did you mean gamedevpl ${suggestion}?` : ''} gamedevpl help lists commands.\n`,
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
     ['model', '--help'],
     ['model', 'codex', '--help'],
     ['model', 'codex', '-h'],
