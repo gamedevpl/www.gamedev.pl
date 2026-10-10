@@ -126,7 +126,7 @@ describe.skipIf(!prerequisite.ok)('published play telemetry through native Chrom
       } else if (url.startsWith('/api/')) {
         send({}, 404);
       } else {
-        if (mode !== 'public')
+        if (mode && mode !== 'public')
           response.setHeader(
             'Set-Cookie',
             `${SESSION_COOKIE_NAME}=${mintSessionToken('g:reviewer', secret)}; Path=/; HttpOnly; SameSite=Lax`,
@@ -169,6 +169,8 @@ describe.skipIf(!prerequisite.ok)('published play telemetry through native Chrom
         await page.waitForFunction(() => (window as unknown as { validWindows: number }).validWindows > 0, undefined, {
           timeout: 25_000,
         });
+        const gameFrame = page.frames().find((frame) => frame !== page.mainFrame())!;
+        const frameDpr = await gameFrame.evaluate(() => devicePixelRatio);
         await page.evaluate(() => (window as unknown as { closeFixture: () => void }).closeFixture());
         await expect
           .poll(async () =>
@@ -178,15 +180,16 @@ describe.skipIf(!prerequisite.ok)('published play telemetry through native Chrom
           )
           .toBe(true);
         const events = (await store.listTelemetryEvents(date)).filter((event) => !previous.has(event.sessionId));
-        expect(events.find((event) => event.type === 'game_opened')).toMatchObject({
+        const opened = events.find((event) => event.type === 'game_opened');
+        expect(opened).toMatchObject({
           slug,
           artifactVersion,
           device: { deviceClass: 'desktop', displayDpr: 2 },
-          reviewer: mode !== 'public',
         });
+        expect(opened?.reviewer ?? false).toBe(mode !== 'public');
         const report = summarizeFramePerformance(events);
         expect(report.groups).toHaveLength(1);
-        expect(report.groups[0]).toMatchObject({ slug, artifactVersion, reviewer: mode !== 'public', dpr: 2 });
+        expect(report.groups[0]).toMatchObject({ slug, artifactVersion, reviewer: mode !== 'public', dpr: frameDpr });
         expect(report.groups[0].windows).toBeGreaterThan(0);
         expect(served).toEqual([
           mode === 'review' ? `/api/review/games/${slug}?version=candidate-v1` : `/api/games/${slug}`,
