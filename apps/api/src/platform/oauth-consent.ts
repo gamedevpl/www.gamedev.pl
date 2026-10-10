@@ -165,11 +165,18 @@ export function copyForScope(lang: Locale, client: string, scope: string): Conse
   return copy;
 }
 
+function unverifiedNote(lang: Locale): string {
+  return lang === 'pl'
+    ? 'Tę nazwę podała sama aplikacja; gamedev.pl jej nie weryfikuje. Sprawdź adres powrotu poniżej.'
+    : 'The app chose this name itself; gamedev.pl does not verify it. Check the return address below.';
+}
+
 export function consentHtml(input: {
   lang: Locale;
   redirectUri: string;
   clientId: string;
   clientName?: string;
+  clientNameUnverified?: boolean;
   account?: string;
   state?: string;
   codeChallenge: string;
@@ -207,6 +214,7 @@ export function consentHtml(input: {
     <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
     <h1>${escapeHtml(copy.title)}</h1>
     <p class="lead">${escapeHtml(copy.lead)}</p>
+    ${input.clientNameUnverified && input.clientName?.trim() ? `<p class="hint unverified">${escapeHtml(unverifiedNote(input.lang))}</p>` : ''}
     ${input.account ? `<p class="who">${escapeHtml(copy.as)} <strong>${escapeHtml(input.account)}</strong></p>` : ''}
 
     <h2>${escapeHtml(copy.canTitle)}</h2>

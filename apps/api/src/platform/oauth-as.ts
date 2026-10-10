@@ -27,6 +27,7 @@ import {
   scopeHasMcp,
 } from './oauth-scopes.js';
 import { redirectUriAllowed } from './oauth-redirect.js';
+import { validCimdRedirect, validDcrRedirect } from './oauth-redirect-policy.js';
 import { verifyPkceS256 } from './oauth-pkce.js';
 import {
   AS_ACCESS_TOKEN_TTL_MS,
@@ -138,12 +139,6 @@ const CimdDocumentSchema = z.object({
   token_endpoint_auth_method: z.string().optional(),
   token_endpoint_auth_methods_supported: z.array(z.string()).optional(),
 });
-
-function validCimdRedirect(uri: string): boolean {
-  const url = new URL(uri);
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase());
-  return (url.protocol === 'https:' || (url.protocol === 'http:' && loopback)) && redirectUriAllowed(uri, [uri]);
-}
 
 // Prefer Choices list; ChatGPT prefers private_key_jwt but also supports none.
 export function cimdSupportsPublicClientAuth(body: {
@@ -351,6 +346,9 @@ export function registerOAuthAuthorizationServerRoutes(
       if (body.token_endpoint_auth_method && body.token_endpoint_auth_method !== 'none') {
         return reply.status(400).send({ error: 'invalid_client_metadata' });
       }
+      if (!body.redirect_uris.every(validDcrRedirect)) {
+        return reply.status(400).send({ error: 'invalid_redirect_uri' });
+      }
 
       noteDcrHit(request.clientIp, nowMs);
       const clientId = randomBytes(16).toString('hex');
@@ -431,6 +429,7 @@ export function registerOAuthAuthorizationServerRoutes(
         redirectUri: params.redirect_uri,
         clientId: params.client_id,
         clientName: client?.clientName,
+        clientNameUnverified: client.registrationType === 'dcr',
         account: user?.email,
         state: params.state,
         codeChallenge: params.code_challenge,
