@@ -379,6 +379,11 @@ If a previous MCP agent stopped without ending its session, preview delivery can
 
 Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
 
+Claude permission prompts also offer **Resume this task in Auto (sandboxed)**.
+This resumes the same conversation with a sandbox and keeps local edits; later tasks
+in this CLI session use Auto too. To select it before starting a task, use
+`/permissions auto` or `gamedevpl --permissions auto`. A sandbox escape is denied.
+
 ### Antigravity permissions
 
 Before a local Antigravity task starts, the interactive CLI offers to enable

@@ -1,7 +1,7 @@
 # Local agent approvals
 
-Interactive `gamedevpl play` and terminal sessions offer **Deny** (the default) and
-**Allow once** when a supported local agent requests tool permission. The prompt
+Interactive `gamedevpl play` and terminal sessions offer **Allow once** (first), **Deny**, and then
+**Always allow** where supported when a supported local agent requests tool permission. The prompt
 shows the vendor payload, including the command/tool arguments and any supplied
 working directory, paths and reason. It never rewrites the command. Claude Bash
 requests also offer **Always allow this exact command (this session)**: subsequent
@@ -43,6 +43,20 @@ saved between runs.
 | `ask`  | none (each adapter's own flags)                            | The creator answers requests or explicitly remembers an exact Claude command. Unattended runs get no approvals.                 |
 | `auto` | `{ approval: 'auto-approve', sandbox: 'workspace-write' }` | The agent's own sandbox limits writes to the checkout; requests inside it are approved without asking, also in unattended runs. |
 | `yolo` | `'yolo'` (`auto-approve`, `unrestricted`)                  | No sandbox and no questions, also in unattended runs.                                                                           |
+
+Claude prompts offer **Resume this task in Auto (sandboxed)** as the fourth choice.
+The CLI stops the Ask process, waits for it to exit, closes its approval endpoint,
+and resumes the same Claude conversation with workspace sandbox flags and a fresh,
+sandbox-aware endpoint. The pending invocation is denied in the old process; Claude
+continues the unfinished request in the resumed conversation. Local edits, task
+cancellation, and the per-task capture budget are preserved. Auto also applies to
+later tasks in this CLI session. Sandbox escapes remain denied.
+
+If Claude has not supplied a conversation ID, the fallback is **Allow once and use
+Auto for next tasks**. It changes later tasks only and disappears after selection.
+To switch that task immediately, stop it and use `/permissions auto`, then `/retry`.
+An unavailable sandbox or a failed resume stops the task; it does not fall back to
+an unsandboxed run. Use `/diff` to inspect retained edits and `/retry` to continue.
 
 GenAIcode translates the mode into each adapter's flags (`applyPermissionArgs`) and into
 the Codex/Muse live session. An agent that cannot honor a mode refuses the task with the

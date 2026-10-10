@@ -11,6 +11,7 @@ export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for vis
 export async function localPreviewTools(input: {
   spec: AdapterSpec;
   previewUrl?: string;
+  captureBudget?: { used: number };
   abort: AbortSignal;
   write: (line: string) => void;
   progress?: (text: string, blocked: boolean) => void;

@@ -193,6 +193,7 @@ it('offers Auto fourth, allowing once while sandboxing only future Claude tasks'
   pick.mockResolvedValue('Deny');
   expect(await active.onApproval!({ ...request, id: 'b' })).toBe('deny');
   expect(pick).toHaveBeenCalledTimes(2);
+  expect(pick.mock.calls[1]?.[0]).not.toContain(AUTO_NEXT);
   const next = taskPermissions({ ...options, mode: permissionMode() });
   expect(next.permissions).toEqual({ approval: 'auto-approve', sandbox: 'workspace-write' });
   const settings = JSON.parse(next.spec.headless[next.spec.headless.indexOf('--settings') + 1]!);

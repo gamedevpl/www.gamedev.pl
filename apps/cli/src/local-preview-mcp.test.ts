@@ -29,7 +29,7 @@ async function fixture() {
   const previewUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/${'a'.repeat(48)}/`;
   return { state, revision, controller, previewUrl };
 }
-async function bridge() {
+async function bridge(captureBudget?: { used: number }) {
   const f = await fixture();
   const capture = vi.fn(async ({ url }: { url: string }) => {
     const response = await fetch(url);
@@ -37,7 +37,7 @@ async function bridge() {
     expect(await response.text()).toContain('sandbox="allow-scripts allow-pointer-lock"');
     return { png: 'test-png', errors: ['test console error'] };
   });
-  const mcp = await startLocalPreviewMcp({ ...f, abort: f.controller.signal, write: vi.fn(), capture });
+  const mcp = await startLocalPreviewMcp({ ...f, abort: f.controller.signal, write: vi.fn(), capture, captureBudget });
   cleanup.push(() => mcp.close());
   const rpc = async (method: string, params = {}, extra: Record<string, string> = {}) => {
     const response = await fetch(mcp.url, {
@@ -177,4 +177,18 @@ it('reports validated, deduplicated progress without requiring a preview', async
     expect((await rpc('tools/call', { name: 'report_progress', arguments: args })).result.isError).toBe(true);
   expect((await rpc('tools/call', { name: 'capture' })).result.isError).toBe(true);
   expect(progress).toHaveBeenCalledTimes(1);
+});
+
+it('retains the capture budget after an approval server is replaced', async () => {
+  const budget = { used: MAX_CAPTURES_PER_TASK - 1 };
+  const first = await bridge(budget);
+  const started = (await first.rpc('tools/call', { name: 'capture', arguments: {} })).data.result;
+  expect(started.isError).toBeFalsy();
+  expect(budget.used).toBe(MAX_CAPTURES_PER_TASK);
+  await first.mcp.close();
+  const resumed = await bridge(budget);
+  const refused = (await resumed.rpc('tools/call', { name: 'capture', arguments: {} })).data.result;
+  expect(refused.isError).toBe(true);
+  expect(refused.content[0].text).toContain('used its');
+  expect(resumed.capture).not.toHaveBeenCalled();
 });

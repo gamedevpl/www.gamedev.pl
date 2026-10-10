@@ -4,6 +4,7 @@ import { commandApprovalKey, type commandApprovalMemory } from './agent-approval
 
 const REMEMBER = 'Always allow this exact command (this session)';
 export const AUTO_NEXT = 'Allow once and use Auto for next tasks';
+export const AUTO_RESUME = 'Resume this task in Auto (sandboxed)';
 
 function requestDetail(request: ApprovalRequest): string {
   const detail = request.detail as { input?: { command?: unknown } } | undefined;
@@ -29,6 +30,8 @@ export function approvalPrompt(input: {
   cwd?: string;
   remembered?: ReturnType<typeof commandApprovalMemory>;
   autoNext?: () => void;
+  autoNextAvailable?: () => boolean;
+  autoResume?: { available: () => boolean; start: () => void };
 }): ApproveTool {
   let queue: Promise<unknown> = Promise.resolve();
   return (request, cancelled) => {
@@ -47,8 +50,14 @@ export function approvalPrompt(input: {
       const memory = key
         ? `\nAlways allow remembers only this exact command and execution options, for ${input.agent} in ${input.cwd}, until this CLI session ends. /permissions ask clears remembered commands.`
         : '';
-      const auto = input.autoNext && !turn;
-      const autoNote = auto ? '\nAuto starts with a sandbox on the next task. This task stays in Ask.' : '';
+      const resume = !turn && input.autoResume?.available();
+      const auto = !turn && (resume || (input.autoNext && (input.autoNextAvailable?.() ?? true)));
+      const autoChoice = resume ? AUTO_RESUME : AUTO_NEXT;
+      const autoNote = resume
+        ? '\nAuto stops this Claude process and resumes the same conversation in a sandbox. Local edits are kept.'
+        : auto
+          ? '\nAuto starts with a sandbox on the next task. This task stays in Ask.'
+          : '';
       const question = `${input.agent} requests ${request.kind} permission.\n${detail}\n${duration}${memory}${autoNote}`;
       if (question.length > 7500) {
         input.write(`${input.agent}: permission request is too large to display completely; denied.`);
@@ -60,11 +69,16 @@ export function approvalPrompt(input: {
       }
       input.activity?.(`${input.agent} needs your approval`);
       try {
-        const choices = [allow, 'Deny', ...(key ? [REMEMBER] : []), ...(auto ? [AUTO_NEXT] : [])];
+        const choices = [allow, 'Deny', ...(key ? [REMEMBER] : []), ...(auto ? [autoChoice] : [])];
         const choice = await input.pick(choices, question, signal);
         const remember = Boolean(key && choice === REMEMBER && !signal.aborted);
-        const useAuto = Boolean(auto && choice === AUTO_NEXT && !signal.aborted);
+        const useAuto = Boolean(auto && choice === autoChoice && !signal.aborted);
         const decision = !signal.aborted && (choice === allow || remember || useAuto) ? 'approve' : 'deny';
+        if (useAuto && resume) {
+          input.autoResume!.start();
+          input.write(`${input.agent}: switching this task to Auto; the pending tool was not approved here.`);
+          return 'deny';
+        }
         if (useAuto) input.autoNext!();
         input.write(
           `${input.agent}: tool permission ${decision === 'approve' ? (remember ? 'allowed and remembered for this session' : turn ? 'allowed for this turn' : 'allowed once') : 'denied'}.`,
