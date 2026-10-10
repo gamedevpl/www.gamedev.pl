@@ -132,26 +132,49 @@ export async function updateCli(input: {
   dest: string;
   version?: string;
   fetchImpl?: FetchLike;
+  onProgress?: (message: string) => void;
+  timeoutMs?: number;
 }): Promise<{ version: string; asset: string }> {
-  const fetchImpl = input.fetchImpl ?? fetch;
-  const version = await resolveUpdateVersion({ version: input.version, fetchImpl });
-  const asset = assetName();
-  const sumsRes = await fetchImpl(releaseUrl(version, 'SHA256SUMS'));
-  if (!sumsRes.ok) {
-    throw new CliError(`update: SHA256SUMS missing for cli-v${version}`, EXIT_REFUSED, 'wait for a cli-v* release');
+  const signal = AbortSignal.timeout(input.timeoutMs ?? 120_000);
+  const fetchImpl: FetchLike = (url, init) => (input.fetchImpl ?? fetch)(url, { ...init, signal });
+  let stage = 'checking releases';
+  const progress = (message: string, operation: string) => {
+    stage = operation;
+    input.onProgress?.(message);
+  };
+  try {
+    progress('Checking CLI releases…', 'checking releases');
+    const version = await resolveUpdateVersion({ version: input.version, fetchImpl });
+    const asset = assetName();
+    progress(`Downloading checksums for ${version}…`, 'downloading checksums');
+    const sumsRes = await fetchImpl(releaseUrl(version, 'SHA256SUMS'));
+    if (!sumsRes.ok) {
+      throw new CliError(`update: SHA256SUMS missing for cli-v${version}`, EXIT_REFUSED, 'wait for a cli-v* release');
+    }
+    const expected = expectedHash(await sumsRes.text(), asset);
+    if (!expected) throw new CliError(`update: ${asset} not in SHA256SUMS`, EXIT_REFUSED);
+    progress(`Downloading gamedevpl ${version}…`, 'downloading the CLI');
+    const binRes = await fetchImpl(releaseUrl(version, asset));
+    if (!binRes.ok) throw new CliError(`update: could not fetch ${asset}`, EXIT_REFUSED);
+    const buf = Buffer.from(await binRes.arrayBuffer());
+    progress('Verifying download…', 'verifying the download');
+    const actual = createHash('sha256').update(buf).digest('hex');
+    if (actual !== expected) throw new CliError('update: checksum mismatch', EXIT_REFUSED);
+    progress('Installing CLI…', 'installing the CLI');
+    mkdirSync(dirname(input.dest), { recursive: true });
+    writeFileSync(input.dest, buf, { mode: 0o755 });
+    const helper = helperDest(input.dest);
+    if (helper !== input.dest && dirname(helper) === dirname(input.dest)) {
+      copyFileSync(input.dest, helper);
+    }
+    return { version, asset };
+  } catch (error) {
+    if (signal.aborted)
+      throw new CliError(
+        `update: timed out while ${stage}`,
+        EXIT_REFUSED,
+        'check your connection, then retry gamedevpl update',
+      );
+    throw error;
   }
-  const expected = expectedHash(await sumsRes.text(), asset);
-  if (!expected) throw new CliError(`update: ${asset} not in SHA256SUMS`, EXIT_REFUSED);
-  const binRes = await fetchImpl(releaseUrl(version, asset));
-  if (!binRes.ok) throw new CliError(`update: could not fetch ${asset}`, EXIT_REFUSED);
-  const buf = Buffer.from(await binRes.arrayBuffer());
-  const actual = createHash('sha256').update(buf).digest('hex');
-  if (actual !== expected) throw new CliError('update: checksum mismatch', EXIT_REFUSED);
-  mkdirSync(dirname(input.dest), { recursive: true });
-  writeFileSync(input.dest, buf, { mode: 0o755 });
-  const helper = helperDest(input.dest);
-  if (helper !== input.dest && dirname(helper) === dirname(input.dest)) {
-    copyFileSync(input.dest, helper);
-  }
-  return { version, asset };
 }

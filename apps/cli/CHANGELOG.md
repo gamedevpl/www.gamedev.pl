@@ -11,6 +11,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Local Play includes the Studio code editor with local TypeScript help, drafts and undo history, guarded checkout saves, and optional AI suggestions using your own provider account (#1735).
 
+### Fixed
+
+- `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
+
 ## 0.29.1 — 2026-10-10
 
 ### Fixed
