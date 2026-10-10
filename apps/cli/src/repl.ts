@@ -238,6 +238,7 @@ export async function handleReplLine(input: {
           env: input.env,
           currentPath: input.currentPath,
           runningVersion: CLI_VERSION,
+          onActivity: input.onActivity ?? input.write,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);

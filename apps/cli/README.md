@@ -21,6 +21,11 @@ Releases tagged `cli-v*` carry the standalone `gamedevpl` script and an npm-inst
 `gamedevpl-npm.tgz` archive. Both contain the same bundled CLI. `gamedevpl update`
 uses the standalone script; Creator Kit checkouts can pin the archive by release URL.
 
+During `gamedevpl update`, a terminal spinner shows the current step and elapsed time.
+Redirected output uses plain step messages; `/update` shows the steps in its activity
+panel. `--json` stays free of progress output. Update requests time out after two minutes
+with a retry hint; release notes keep their separate three-second limit.
+
 After installing, `gamedevpl update` shows the old and new versions and the Breaking,
 Added and Fixed entries from every intervening release, newest first. The changelog
 comes from the installed version's release tag, with a link to the full file. If notes
