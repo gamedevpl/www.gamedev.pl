@@ -74,7 +74,7 @@ import { NumberScrubber } from './NumberScrubber.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from '../../studioApi.js';
 import type { EditorContentPush } from '../../editorBridge.js';
-import { recordCodeStep } from '../../visitTelemetry.js';
+import { recordCodeStep, recordCodeCompletion } from '../../visitTelemetry.js';
 import './code-surface.css';
 import './code-surface-agent.css';
 import './code-surface-explorer.css';
@@ -82,7 +82,6 @@ import './code-surface-editor.css';
 import './code-surface-statusbar.css';
 import './code-actions-menu.css';
 
-// Rewrite the words, or wait out an outage: different answers.
 const DELIVER_REFUSAL_KEYS: Record<string, string> = {
   content_rejected: 'studioPanel.code.deliverContentRejected',
   moderation_unavailable: 'studioPanel.code.deliverModerationUnavailable',
@@ -1140,6 +1139,7 @@ export function CodeSurface({
                   key={selected}
                   value={content}
                   language={languageFor(file.path)}
+                  reportCompletion={recordCodeCompletion}
                   onChange={onEdit}
                   onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}

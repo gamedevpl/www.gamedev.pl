@@ -99,6 +99,7 @@ export async function runInkRepl(input: {
   });
   let token = input.token;
   let slug = input.checkout?.slug ?? input.slug ?? '';
+  let workshop: Workshop | undefined;
   let initialLine = input.initialLine;
   let working = true;
   const stop = () => {
@@ -113,6 +114,11 @@ export async function runInkRepl(input: {
     () => ({ mode: slug ? 'game' : (input.entryMode ?? 'home'), slug, suggestedSlug: input.suggestedSlug }),
     () => !working && !abort.current,
     input.detached ?? input.browserOnly,
+    {
+      checkout: () => (workshop?.slug === slug ? workshop : input.checkout?.slug === slug ? input.checkout : null),
+      env: input.env,
+      platform: { api: input.api, signedIn: () => Boolean(uid || token) },
+    },
   );
   let stopUpdateNotice: (() => void) | undefined;
   let watch: ReturnType<typeof createRoundWatch> | undefined;
@@ -167,7 +173,7 @@ export async function runInkRepl(input: {
         if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
       });
     };
-    let workshop: Workshop | undefined;
+
     const readLogs = () => taskLogTail(workshop?.lastLog);
     const mount = (historyOffset = 0) => {
       if (input.browserOnly) return;

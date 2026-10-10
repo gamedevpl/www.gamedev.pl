@@ -169,11 +169,7 @@ export const CODE_STEPS = [
 ] as const;
 export type CodeStep = (typeof CODE_STEPS)[number];
 
-export const CODE_COMPLETION_KINDS = ['language_service', 'ghost_text'] as const;
-export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
-
-export const CODE_COMPLETION_OUTCOMES = ['shown', 'empty', 'failed'] as const;
-export type CodeCompletionOutcome = (typeof CODE_COMPLETION_OUTCOMES)[number];
+export * from './code-completion-vocab.js';
 
 // One rung per visit per route; `via` says which drove it.
 export const PARTY_STEPS = [

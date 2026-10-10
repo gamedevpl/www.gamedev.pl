@@ -1377,20 +1377,21 @@ describe('the Code surface routes (creator-code.ts)', () => {
       ));
 
     it('429s once the per-creator daily quota is spent', async () => {
-      process.env.DAILY_TAB_COMPLETE_QUOTA = '3';
+      vi.stubEnv('DAILY_TAB_COMPLETE_QUOTA', '3');
+      vi.stubEnv('LOCAL_TAB_COMPLETE', 'true');
       try {
         await withTabComplete(() =>
           withApp(
             async (app) => {
-              const request = () =>
+              const request = (local = false) =>
                 app.inject({
                   method: 'POST',
-                  url: '/api/me/studio/games/sky-dodge/sources/complete',
+                  url: local ? '/api/me/code/completion' : '/api/me/studio/games/sky-dodge/sources/complete',
                   headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
                   payload: { path: 'game.ts', prefixWindow: 'a', suffixWindow: 'b' },
                 });
               for (let i = 0; i < 3; i += 1) {
-                expect((await request()).statusCode).toBe(200);
+                expect((await request(i === 1)).statusCode).toBe(200);
               }
               expect((await request()).statusCode).toBe(429);
             },
@@ -1398,10 +1399,9 @@ describe('the Code surface routes (creator-code.ts)', () => {
           ),
         );
       } finally {
-        delete process.env.DAILY_TAB_COMPLETE_QUOTA;
+        vi.unstubAllEnvs();
       }
     });
-
     it('refuses on the global pause without spending the per-creator quota', async () =>
       withTabComplete(() =>
         withApp(

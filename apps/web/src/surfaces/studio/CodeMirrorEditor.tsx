@@ -1,27 +1,21 @@
-import { autocompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { search } from '@codemirror/search';
 import { syntaxHighlighting } from '@codemirror/language';
 import { forceLinting, linter, lintGutter } from '@codemirror/lint';
-import { Compartment, Transaction, type Extension } from '@codemirror/state';
+import { Compartment, Transaction } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
-import { tsFacet, tsGoto, tsSync } from '@valtown/codemirror-ts';
 import type { CodeLanguage } from './codeTokens.js';
 import { vsCodeSearchPanel } from './codeMirrorSearchPanel.js';
-import {
-  completionVisibilityExtension,
-  measuredTsAutocomplete,
-  type CompletionTracker,
-} from './codeMirrorCompletion.js';
-import { tsAdvisoryLintSource, toCmDiagnostics } from './codeMirrorDiagnostics.js';
+import { toCmDiagnostics } from './codeMirrorDiagnostics.js';
+import { languageServiceExtensions } from './codeMirrorLanguageService.js';
 import { makeGhostTextExtension } from './codeMirrorGhostText.js';
-import { makeGotoHandler, modifierAwareHover, modifierHoverExtension, modifierHoverState } from './codeMirrorHover.js';
 import { colorPickerExtension } from './codeMirrorColorPicker.js';
 import { languageExtension } from './codeMirrorLanguage.js';
 import { darkChrome, darkHighlight } from './codeMirrorTheme.js';
 import type {
+  CompletionReporter,
   CodeMirrorDiagnostic,
   CodeMirrorLanguageService,
   FetchGhostText,
@@ -36,6 +30,7 @@ import {
 export type { CodeMirrorDiagnostic, CodeMirrorLanguageService } from './codeMirrorTypes.js';
 
 export type CodeMirrorEditorProps = {
+  reportCompletion?: CompletionReporter;
   value: string;
   language: CodeLanguage;
   onChange: (value: string) => void;
@@ -43,40 +38,21 @@ export type CodeMirrorEditorProps = {
   onSave?: () => void;
   diagnostics: CodeMirrorDiagnostic[];
   readOnly?: boolean;
-  // Once set, wires tsSync/tsAutocomplete/tsHover/tsLinter; else plain CodeMirror.
+  // GA-05: TypeScript extensions reconfigure when the worker becomes ready.
   languageService?: CodeMirrorLanguageService;
   onGotoDefinition?: GotoDefinitionHandler;
   // GA-09: mount-only selection for a cross-file jump landing.
   initialSelection?: { anchor: number; head: number };
+  // TA-02: the host supplies the optional ghost-text transport.
   fetchGhostText?: FetchGhostText;
   colorPickerLabel?: string;
-  // Saved per-file state lets the undo stack survive switching to Play.
+  // Saved per-file state lets undo survive switching to Play.
   initialEditorState?: CodeSurfaceEditorState;
   onEditorStateChange?: (state: CodeSurfaceEditorState) => void;
 };
 
-// GA-05: ts extensions, or none — worker can turn ready mid-file.
-function languageServiceExtensions(
-  languageService: CodeMirrorLanguageService | undefined,
-  onGotoDefinitionRef: { current: GotoDefinitionHandler | undefined },
-): Extension[] {
-  if (!languageService) return [];
-  const hover = modifierAwareHover();
-  const completionTracker: CompletionTracker = { pending: [] };
-  return [
-    tsFacet.of({ worker: languageService.worker, path: languageService.path }),
-    tsSync(),
-    modifierHoverState,
-    autocompletion({ override: [measuredTsAutocomplete(completionTracker)] }),
-    completionVisibilityExtension(completionTracker),
-    hover,
-    modifierHoverExtension(hover),
-    tsGoto({ gotoHandler: makeGotoHandler(onGotoDefinitionRef) }),
-    linter(tsAdvisoryLintSource),
-  ];
-}
-
 export default function CodeMirrorEditor({
+  reportCompletion,
   value,
   language,
   onChange,
@@ -93,7 +69,7 @@ export default function CodeMirrorEditor({
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
-  // Refs so mount-once extensions see the latest values, no remount.
+  // Mount-once extensions read refs without resetting the document or history.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onSaveRef = useRef(onSave);
@@ -106,9 +82,10 @@ export default function CodeMirrorEditor({
   fetchGhostTextRef.current = fetchGhostText;
   const onEditorStateChangeRef = useRef(onEditorStateChange);
   onEditorStateChangeRef.current = onEditorStateChange;
-  // GA-05: reconfigured live below — a ready worker never remounts.
   const languageServiceCompartmentRef = useRef(new Compartment());
   const colorPickerCompartmentRef = useRef(new Compartment());
+  const ghostTextCompartmentRef = useRef(new Compartment());
+  const ghostTextEnabled = Boolean(fetchGhostText) && !readOnly;
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -120,7 +97,7 @@ export default function CodeMirrorEditor({
         value,
         [
           basicSetup,
-          // After basicSetup, so this createPanel wins over the stock search bar.
+          // After basicSetup, so our panel replaces the stock search bar.
           search({ top: true, createPanel: vsCodeSearchPanel }),
           keymap.of([
             indentWithTab,
@@ -135,13 +112,17 @@ export default function CodeMirrorEditor({
           ...(langExt ? [langExt] : []),
           lintGutter(),
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
-          languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService, onGotoDefinitionRef)),
-          ...(readOnly ? [] : makeGhostTextExtension(fetchGhostTextRef)),
+          languageServiceCompartmentRef.current.of(
+            languageServiceExtensions(languageService, onGotoDefinitionRef, reportCompletion),
+          ),
+          ghostTextCompartmentRef.current.of(
+            ghostTextEnabled ? makeGhostTextExtension(fetchGhostTextRef, reportCompletion) : [],
+          ),
           ...(readOnly ? [] : [colorPickerCompartmentRef.current.of(colorPickerExtension(colorPickerLabel))]),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
-            // A doc the parent pushed in is not the creator's edit.
+            // A document pushed by the parent is not a creator edit.
             if (update.transactions.some((transaction) => transaction.annotation(Transaction.remote))) return;
             onChangeRef.current(update.state.doc.toString());
           }),
@@ -153,25 +134,25 @@ export default function CodeMirrorEditor({
       ),
     });
     viewRef.current = view;
+    const capture = () => onEditorStateChangeRef.current?.(serializeCodeSurfaceEditorState(view.state));
+    window.addEventListener('beforeunload', capture, true);
+    window.addEventListener('pagehide', capture, true);
     return () => {
-      onEditorStateChangeRef.current?.(serializeCodeSurfaceEditorState(view.state));
+      capture();
+      window.removeEventListener('beforeunload', capture, true);
+      window.removeEventListener('pagehide', capture, true);
       view.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry live values
   }, []);
 
-  // Takes an externally changed `value` into the doc.
-
-  // The mount effect reads `value` once; rewrites needed a reload.
-
-  // A typing creator gets their own draft back, already matching.
+  // External values preserve caret offsets without reviving stale undo entries.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();
     if (current === value) return;
-    // The caret keeps its offset where the text allows.
     const { anchor, head } = view.state.selection.main;
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
@@ -181,7 +162,7 @@ export default function CodeMirrorEditor({
     });
   }, [value]);
 
-  // GA-09 jumps, including same-file search hits; offsets clamped to doc.
+  // GA-09: clamp same-file search and cross-file jump offsets.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !initialSelection) return;
@@ -204,10 +185,11 @@ export default function CodeMirrorEditor({
     if (!view) return;
     view.dispatch({
       effects: languageServiceCompartmentRef.current.reconfigure(
-        languageServiceExtensions(languageService, onGotoDefinitionRef),
+        languageServiceExtensions(languageService, onGotoDefinitionRef, reportCompletion),
       ),
     });
-  }, [languageService]);
+    forceLinting(view);
+  }, [languageService, reportCompletion]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -217,5 +199,12 @@ export default function CodeMirrorEditor({
     });
   }, [colorPickerLabel, readOnly]);
 
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: ghostTextCompartmentRef.current.reconfigure(
+        ghostTextEnabled ? makeGhostTextExtension(fetchGhostTextRef, reportCompletion) : [],
+      ),
+    });
+  }, [ghostTextEnabled, reportCompletion]);
   return <div ref={containerRef} className="code-surface-codemirror" data-testid="codemirror-editor" />;
 }

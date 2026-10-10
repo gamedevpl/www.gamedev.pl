@@ -42,6 +42,17 @@ Clean up when done (`git worktree remove --force`, delete the temp branch/clone)
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
+**Install dependencies inside the isolated checkout.** A root-only `node_modules` symlink
+does not reproduce nested workspace dependencies. Observed during local Play verification:
+CLI used `wrap-ansi` 9 with declarations in its own `node_modules`, while the root held
+version 7 without declarations. Linking only the root resolved version 7 and produced
+`TS7016` despite identical lockfiles. Run `npm ci` in the verification checkout.
+
+**Budget tests can reach a lower-level guard first.** A slow-loop zone fixture sometimes
+hit the VM's 200 ms deadline before the zone counted repeated 8 ms overruns. Check which
+guard fired. Inject the separate monotonic meter for the zone-policy test and keep its
+exact failure assertion; exercise VM deadlines in the cage tests.
+
 ## Keep flow tests independent of live conversation routing
 
 A transfer test calling `/improve` must inject a `chatAgent` whose `decide` returns
@@ -78,6 +89,12 @@ Two concrete instances of that (observed 2026-07-23):
 - **`actions/runs?head_sha=<short-sha>` silently returns zero runs.** The API needs the
   full 40-char SHA; a short SHA is not an error, just an empty list — a monitor polling it
   waits forever while everything already completed. Always `git rev-parse` to full length.
+- **A PR-only workflow wrapper omits dynamic CodeQL/Code Quality runs.** Use the generic
+  GitHub GET tool for `actions/runs?head_sha=<full-sha>` and
+  `commits/<full-sha>/check-runs`, then inspect their actual conclusions and summaries.
+  Closing scanner review threads does not change the security verdict. A neutral
+  CodeQL check warning about a missing configuration is not a completed clean analysis;
+  wait for the JavaScript/TypeScript analysis and its final alert verdict.
 - **A green unit suite + "I checked it in a browser" can still fail the deploy browser
   gate when the UX flow changed and e2e was not updated.** Observed (#599, 2026-08-05):
   published `/play/<slug>` briefly became preview-first (screenshot + Play, no

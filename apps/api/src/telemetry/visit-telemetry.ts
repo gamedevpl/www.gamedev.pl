@@ -2,6 +2,7 @@ import {
   ASSIST_STEPS,
   BETA_WELCOME_STEPS,
   CODE_COMPLETION_KINDS,
+  CODE_SURFACES,
   CODE_COMPLETION_OUTCOMES,
   CODE_STEPS,
   CREATE_STEPS,
@@ -137,10 +138,16 @@ const EventSchema = z.discriminatedUnion('type', [
     control: RemixControlSchema.optional(),
     ...offsetField,
   }),
-  z.object({ type: z.literal('code_step'), step: CodeStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('code_step'),
+    step: CodeStepSchema,
+    codeSurface: z.enum(CODE_SURFACES).optional(),
+    ...offsetField,
+  }),
   cliStepEventSchema(offsetField),
   z.object({
     type: z.literal('code_completion'),
+    codeSurface: z.enum(CODE_SURFACES).optional(),
     kind: CodeCompletionKindSchema,
     outcome: CodeCompletionOutcomeSchema,
     latencyMs: z.number().int().min(0).max(30_000),
@@ -287,7 +294,12 @@ export async function registerVisitTelemetryRoutes(
         case 'assist_step':
           return { ...base, type: event.type, step: event.step };
         case 'code_step':
-          return { ...base, type: event.type, step: event.step };
+          return {
+            ...base,
+            type: event.type,
+            step: event.step,
+            ...(event.codeSurface === undefined ? {} : { codeSurface: event.codeSurface }),
+          };
         case 'cli_step':
           return toCliVisitEvent(base, event);
         case 'code_completion':
@@ -295,6 +307,7 @@ export async function registerVisitTelemetryRoutes(
             ...base,
             type: event.type,
             kind: event.kind,
+            ...(event.codeSurface === undefined ? {} : { codeSurface: event.codeSurface }),
             outcome: event.outcome,
             latencyMs: event.latencyMs,
             ...(event.candidateCount === undefined ? {} : { candidateCount: event.candidateCount }),

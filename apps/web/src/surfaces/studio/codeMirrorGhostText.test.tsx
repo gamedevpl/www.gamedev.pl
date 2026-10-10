@@ -22,15 +22,23 @@ describe('ghost text accept affordance', () => {
     container.remove();
   });
 
-  // The iOS accept target must carry real button semantics, not role="button".
+  // iOS needs a native button, not an emulated role.
   it('offers the accept affordance as a native button outside the tab order', async () => {
     const fetchGhostText = vi.fn(async () => ' = 2;');
     const onChange = vi.fn();
+    const reportCompletion = vi.fn();
 
     async function render(value: string) {
       await act(async () => {
         root.render(
-          createElement(CodeMirrorEditor, { value, language: 'typescript', onChange, diagnostics: [], fetchGhostText }),
+          createElement(CodeMirrorEditor, {
+            value,
+            language: 'typescript',
+            onChange,
+            diagnostics: [],
+            fetchGhostText,
+            reportCompletion,
+          }),
         );
       });
     }
@@ -47,8 +55,16 @@ describe('ghost text accept affordance', () => {
     expect(accept).not.toBeNull();
     expect(accept?.tagName).toBe('BUTTON');
     expect(accept?.getAttribute('type')).toBe('button');
-    // A focusable control here would compete with Tab, which already accepts.
+    // Tab already accepts; the button must not steal keyboard focus.
     expect((accept as HTMLButtonElement).tabIndex).toBe(-1);
     expect(accept?.getAttribute('role')).toBeNull();
+    act(() => {
+      accept!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      (accept as HTMLButtonElement).click();
+    });
+    expect(reportCompletion.mock.calls.filter(([metric]) => metric.outcome === 'accepted')).toEqual([
+      [{ kind: 'ghost_text', outcome: 'accepted', latencyMs: 0, completionChars: 5 }],
+    ]);
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 });

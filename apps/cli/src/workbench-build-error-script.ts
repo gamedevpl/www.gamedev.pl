@@ -12,7 +12,7 @@ function updateBuildError(){
   if(failedBuild){
     el('build-error-title').textContent=revision?'Update could not build':'Build failed';
     el('build-error-description').textContent=revision?'The last working game is still playable. Fix the source error to load an update.':'The game cannot start until this source error is fixed. Saving a fix rebuilds automatically.';
-    el('build-error-text').textContent=failedBuild.error;
+    if(el('build-error-text').textContent!==failedBuild.error)el('build-error-text').textContent=failedBuild.error;
     if(!revision){el('empty-title').textContent='Build failed';el('empty-description').textContent='Open error details below, retry the build, or prepare a repair request in Chat.';}
   }
   buildErrorControls();

@@ -1,4 +1,5 @@
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
+import type { CodeCompletionKind, CodeCompletionOutcome } from '@gamedevpl/contract';
 
 export type CodeMirrorDiagnostic = { line: number; message: string; severity?: 'error' | 'warning' };
 
@@ -10,3 +11,13 @@ export type GotoDefinitionHandler = (path: string, from: number, to: number) => 
 
 // TA-02: ghost-text proposal for the window around the cursor.
 export type FetchGhostText = (prefixWindow: string, suffixWindow: string, signal: AbortSignal) => Promise<string>;
+
+export type CompletionMetric = {
+  kind: CodeCompletionKind;
+  outcome: CodeCompletionOutcome;
+  latencyMs: number;
+  candidateCount?: number;
+  completionChars?: number;
+};
+export type CompletionReporter = (metric: CompletionMetric) => void;
+export const ignoreCompletionMetric: CompletionReporter = () => {};

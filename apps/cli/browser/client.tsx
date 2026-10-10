@@ -3,6 +3,8 @@ import { flushSync } from 'react-dom';
 import { PlayShell } from './shell.js';
 import '../../web/src/core/styles/tokens.css';
 import './style.css';
+import '../../web/src/surfaces/studio/code-surface-editor.css';
+import './code-panel.css';
 import './build-error.css';
 import './panel-resize.css';
 import './drawers.css';

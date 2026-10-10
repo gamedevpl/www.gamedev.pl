@@ -110,6 +110,34 @@ repo in the same session.
   `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
   works; locally cached `packages/contract/dist` can otherwise hide a broken release.
 
+- **Local Play browser tests need the generated UI and TypeScript worker.** After
+  `npm ci` and `npm run build:packages`, run `npm run prebuild -w @gamedevpl/cli`
+  before `npm run e2e:play-code -w @gamedevpl/e2e`. Keep these fixtures in their own
+  suite: the deployment browser gate does not build CLI assets. CI runs the local
+  suite in the hermetic browser job, without credentials or live provider calls.
+
+- **Lazy editor assets are release artifacts.** Publish `play-typescript-worker.js.gz`
+  beside the CLI and include it in `SHA256SUMS` and provenance. The CLI embeds its
+  digest, verifies download/cache bytes, and caches by content hash. Keep developer
+  copies in `dist/generated`; leave the worker out of the npm install archive so
+  users who never open Code do not download TypeScript. Test first download and
+  cached offline use with mocks, plus bundle/worker size budgets. First editor use
+  needs GitHub access when its worker is not cached; document this limitation.
+
+- **Wait for transient preview notices before recording layout geometry.** Local Play
+  briefly shows “Build loaded”; the next preview poll clears it, and `ResizeObserver`
+  releases the reserved bottom space. A fast CI browser can capture the smaller panel
+  before this happens and compare it with the settled panel after restoring a view.
+  Wait for the notice and its reserved space to clear, then assert the exact geometry.
+  Poll restored geometry when an observer participates; do not add arbitrary sleeps.
+  Likewise, poll the final React view after a native host event closes the chat:
+  the host's `hidden` flag changes before React commits its corresponding layout.
+
+- **Control polling clocks in jsdom unit tests.** A real 1.1-second sleep plus
+  fixture parsing and another poll can exceed Vitest's default five seconds under
+  load. Advance fake timers through the relevant polls, keeping the behavior
+  assertions; do not give the entire CLI a larger timeout for that fixture.
+
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository
   history and hit GitHub's 125 000-character body limit (release run 3, 2026-09-04).
   Notes come from the changelog section.

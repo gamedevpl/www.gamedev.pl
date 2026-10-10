@@ -10,6 +10,7 @@ mkdir -p "$out"
 npm run build --workspace @gamedevpl/contract --prefix "$root/../.."
 node "$root/scripts/build-binary.mjs"
 install -m 0755 "$root/dist/gamedevpl.mjs" "$out/gamedevpl"
+install -m 0644 "$root/dist/generated/play-typescript-worker.js.gz" "$out/play-typescript-worker.js.gz"
 package_dir="$root/dist/npm-package"
 mkdir -p "$package_dir/bin"
 install -m 0755 "$root/dist/gamedevpl.mjs" "$package_dir/bin/gamedevpl.mjs"
@@ -28,6 +29,6 @@ cat > "$package_dir/package.json" <<EOF
 EOF
 package_name=$(npm pack "$package_dir" --pack-destination "$out" --ignore-scripts --silent)
 mv "$out/$package_name" "$out/gamedevpl-npm.tgz"
-(cd "$out" && sha256sum gamedevpl gamedevpl-npm.tgz > SHA256SUMS)
+(cd "$out" && sha256sum gamedevpl gamedevpl-npm.tgz play-typescript-worker.js.gz > SHA256SUMS)
 echo "cli-v$version artifact in $out"
 cat "$out/SHA256SUMS"

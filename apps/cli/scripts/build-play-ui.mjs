@@ -2,6 +2,8 @@ import { build } from 'esbuild';
 import { mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, dirname } from 'node:path';
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const generated = join(root, 'src/generated');
@@ -27,6 +29,52 @@ const shared = {
   ],
   define: { 'process.env.NODE_ENV': '"production"' },
 };
+const worker = await build({
+  entryPoints: [join(root, '../web/src/surfaces/studio/tsWorker.ts')],
+  bundle: true,
+  minify: true,
+  platform: 'browser',
+  format: 'iife',
+  write: false,
+  external: ['path', 'fs'],
+  plugins: [
+    {
+      name: 'play-local-typescript-libs',
+      setup(build) {
+        build.onLoad({ filter: /[/\\]tsWorkerLibraries\.ts$/ }, () => ({
+          contents:
+            'import libs from "play:typescript-libs"; export async function loadLibFiles() { return new Map(Object.entries(libs)); }',
+          loader: 'ts',
+        }));
+        build.onResolve({ filter: /^play:typescript-libs$/ }, () => ({ path: 'libs', namespace: 'play-libs' }));
+        build.onLoad({ filter: /.*/, namespace: 'play-libs' }, async () => {
+          const libDir = join(root, '../../node_modules/typescript/lib');
+          const libs = new Map();
+          const load = async (name) => {
+            if (libs.has(name)) return;
+            const content = await readFile(join(libDir, name), 'utf8');
+            libs.set(name, content);
+            for (const match of content.matchAll(/<reference lib="([a-z0-9.]+)"/g)) await load(`lib.${match[1]}.d.ts`);
+          };
+          await load('lib.es2022.d.ts');
+          await load('lib.dom.d.ts');
+          return {
+            contents: JSON.stringify(Object.fromEntries([...libs].map(([name, content]) => ['/' + name, content]))),
+            loader: 'json',
+          };
+        });
+      },
+    },
+  ],
+});
+const workerBytes = gzipSync(worker.outputFiles[0].text, { level: 9 });
+await writeFile(join(generated, 'play-typescript-worker.js.gz'), workerBytes);
+await writeFile(
+  join(generated, 'play-code-worker.ts'),
+  'export const PLAY_CODE_WORKER_HASH = ' +
+    JSON.stringify(createHash('sha256').update(workerBytes).digest('hex')) +
+    ';\n',
+);
 const serverFile = join(generated, 'play-shell.mjs');
 await build({
   ...shared,
@@ -43,6 +91,7 @@ const client = await build({
   platform: 'browser',
   format: 'iife',
   target: 'es2022',
+  define: { ...shared.define, 'import.meta.url': 'location.href' },
   outfile: 'play.js',
   write: false,
 });

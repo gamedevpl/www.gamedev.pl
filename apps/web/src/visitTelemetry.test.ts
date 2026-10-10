@@ -416,13 +416,13 @@ describe('recordCodeCompletion', () => {
     });
     session.flush();
     setVisitSessionForTesting(null);
-
     expect(batches[0].events).toEqual([
       {
         type: 'code_completion',
         kind: 'language_service',
         outcome: 'shown',
         latencyMs: 30_000,
+        codeSurface: 'studio',
         candidateCount: 5_000,
         completionChars: 0,
         msSinceStart: 0,

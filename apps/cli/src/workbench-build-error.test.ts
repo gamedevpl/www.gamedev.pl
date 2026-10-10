@@ -5,6 +5,7 @@ import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 const windows: JSDOM[] = [];
 afterEach(() => {
   for (const dom of windows.splice(0)) dom.window.close();
+  vi.useRealTimers();
 });
 const error = 'No matching export in "game/sound.ts" for import "cue"\ngame/mines.ts:1:9\n<script>untrusted()</script>';
 function fixture() {
@@ -86,19 +87,19 @@ function fixture() {
 }
 
 it('replaces endless loading with an actionable failure and renders diagnostics as text', async () => {
+  vi.useFakeTimers();
   const f = fixture();
   await f.ready();
   expect(f.doc.getElementById('empty-title')!.textContent).toBe('Build failed');
   expect(f.doc.getElementById('build-error-text')!.textContent).toBe(error);
   expect(f.doc.getElementById('build-error-text')!.children).toHaveLength(0);
-  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await vi.advanceTimersByTimeAsync(1100);
   expect(f.doc.getElementById('empty-title')!.textContent).toBe('Build failed');
   f.build.error = '';
   f.build.busy = true;
-  await vi.waitFor(() => expect(f.doc.getElementById('build-error')!.hidden).toBe(true), { timeout: 2000 });
-  await vi.waitFor(() => expect(f.doc.getElementById('empty-title')!.textContent).toBe('Preparing your game…'), {
-    timeout: 2000,
-  });
+  await vi.advanceTimersByTimeAsync(1100);
+  expect(f.doc.getElementById('build-error')!.hidden).toBe(true);
+  expect(f.doc.getElementById('empty-title')!.textContent).toBe('Preparing your game…');
 });
 
 it.each(['', 'My existing request'])(
@@ -188,8 +189,8 @@ it('copies compiler diagnostics and offers selection when clipboard access fails
   await button.onclick!(new f.dom.window.MouseEvent('click'));
   expect(copy).toHaveBeenCalledWith(error);
   copy.mockRejectedValueOnce(new Error('Denied'));
-  // Await the handler before polling rewrites the selected text.
   await button.onclick!(new f.dom.window.MouseEvent('click'));
   expect((f.doc.getElementById('build-error-details') as HTMLDetailsElement).open).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 1100));
   expect(f.dom.window.getSelection()!.toString()).toBe(error);
 });

@@ -8,7 +8,7 @@ import {
 import type { Extension } from '@codemirror/state';
 import { ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { tsAutocomplete } from '@valtown/codemirror-ts';
-import { recordCodeCompletion } from '../../visitTelemetry.js';
+import { ignoreCompletionMetric, type CompletionReporter } from './codeMirrorTypes.js';
 
 type CompletionAttempt = {
   context: CompletionContext;
@@ -18,13 +18,13 @@ type CompletionAttempt = {
   settled: boolean;
 };
 
-export type CompletionTracker = { pending: CompletionAttempt[] };
+export type CompletionTracker = { pending: CompletionAttempt[]; report?: CompletionReporter };
 
 function settleCompletionAttempt(tracker: CompletionTracker, attempt: CompletionAttempt, shown: boolean): void {
   if (attempt.settled) return;
   attempt.settled = true;
   tracker.pending = tracker.pending.filter((pending) => pending !== attempt);
-  recordCodeCompletion({
+  (tracker.report ?? ignoreCompletionMetric)({
     kind: 'language_service',
     outcome: shown ? 'shown' : 'empty',
     latencyMs: performance.now() - attempt.startedAt,
@@ -68,7 +68,7 @@ export function measuredTsAutocomplete(tracker: CompletionTracker): CompletionSo
     try {
       const result = await source(context);
       if (context.aborted) {
-        recordCodeCompletion({
+        (tracker.report ?? ignoreCompletionMetric)({
           kind: 'language_service',
           outcome: 'empty',
           latencyMs: performance.now() - startedAt,
@@ -77,7 +77,7 @@ export function measuredTsAutocomplete(tracker: CompletionTracker): CompletionSo
         return null;
       }
       if (!result?.options.length) {
-        recordCodeCompletion({
+        (tracker.report ?? ignoreCompletionMetric)({
           kind: 'language_service',
           outcome: 'empty',
           latencyMs: performance.now() - startedAt,
@@ -96,7 +96,7 @@ export function measuredTsAutocomplete(tracker: CompletionTracker): CompletionSo
       context.addEventListener('abort', () => settleCompletionAttempt(tracker, attempt, false), { onDocChange: true });
       return result ? { ...result, validFor: result.validFor ?? /^[\w$]*$/ } : null;
     } catch (error) {
-      recordCodeCompletion({
+      (tracker.report ?? ignoreCompletionMetric)({
         kind: 'language_service',
         outcome: 'failed',
         latencyMs: performance.now() - startedAt,

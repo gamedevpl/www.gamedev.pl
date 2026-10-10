@@ -1,4 +1,4 @@
-import type { CodeLanguage } from './codeTokens.js';
+export { languageFor, isTsPath } from './codeLanguages.js';
 import type { CodeSurfaceSources } from './codeSurfaceApi.js';
 
 export const AUTOSAVE_MS = 1500;
@@ -25,20 +25,6 @@ export function parseDiagnostic(raw: string): { path: string; line: number; mess
   const match = /^(.+?):(\d+): (.+)$/.exec(raw);
   if (!match) return null;
   return { path: match[1]!, line: Number(match[2]), message: match[3]! };
-}
-
-export function languageFor(path: string): CodeLanguage {
-  if (path.endsWith('.ts') || path.endsWith('.tsx')) return 'typescript';
-  if (path.endsWith('.json')) return 'json';
-  if (path.endsWith('.css')) return 'css';
-  if (path.endsWith('.html')) return 'html';
-  if (path.endsWith('.md')) return 'markdown';
-  return 'text';
-}
-
-// GA-04: mirrors type-check.ts's own .ts filter.
-export function isTsPath(path: string): boolean {
-  return path.endsWith('.ts') || path.endsWith('.tsx');
 }
 
 export function markFileStaged(sources: CodeSurfaceSources, path: string, content: string): CodeSurfaceSources {

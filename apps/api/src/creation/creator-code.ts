@@ -38,6 +38,7 @@ import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { buildSpecStub } from './spec-stub.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
+import { completeWithBudget } from './tab-complete-budget.js';
 import { studioKitFromTree } from './language-kit-sources.js';
 import { typeCheckGame } from './type-check.js';
 
@@ -99,7 +100,7 @@ export interface CreatorCodeRoutesOptions {
 export const DELIVER_COOLDOWN_MS = 10 * 60 * 1000;
 
 // TA-01: per-creator daily ceiling on completion calls, generous for typing.
-export const DEFAULT_DAILY_TAB_COMPLETE_QUOTA = 2000;
+export { DEFAULT_DAILY_TAB_COMPLETE_QUOTA } from './tab-complete-budget.js';
 
 /** One entry in the merged "what the next delivery would contain" file list (CE-03). */
 export interface CreatorCodeFile {
@@ -977,60 +978,14 @@ export async function registerCreatorCodeRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      const nowMs = (options.now ?? Date.now)();
-      const dateStr = new Date(nowMs).toISOString().slice(0, 10);
-      const uid = request.user!.uid;
-
-      // Global refusal first — must not spend a creator's own daily slot.
-      let reserved = false;
-      if (options.tabCompleteGate) {
-        const gate = await options.tabCompleteGate.peek(uid, dateStr);
-        if (!gate.allowed) {
-          return reply.status(503).send({ error: 'completions are resting right now — try again later' });
-        }
-        reserved = gate.reserved;
-      }
-
-      const quota = await store.checkAndIncrementQuota(
-        uid,
-        dateStr,
-        options.dailyTabCompleteQuota ??
-          Number(process.env.DAILY_TAB_COMPLETE_QUOTA ?? DEFAULT_DAILY_TAB_COMPLETE_QUOTA),
-        'tabCompletes',
+      const result = await completeWithBudget(
+        options,
+        request.user!.uid,
+        parsed.data,
+        (error) => request.log.warn({ slug: resolved.slug, err: error }, 'tab-complete call failed'),
+        resolved.record.jobId,
       );
-      if (!quota.allowed) {
-        // The peek above may reserve a slot — free it on refusal.
-        await options.tabCompleteGate?.spend(uid, dateStr, 0, reserved);
-        return reply.status(429).send({ error: 'daily tab-complete quota exceeded' });
-      }
-
-      let result;
-      try {
-        result = await options.tabCompleter.complete({
-          path: parsed.data.path,
-          prefixWindow: parsed.data.prefixWindow,
-          suffixWindow: parsed.data.suffixWindow,
-        });
-      } catch (error) {
-        request.log.warn({ slug: resolved.slug, err: error }, 'tab-complete call failed');
-        await options.tabCompleteGate?.spend(uid, dateStr, 0, reserved);
-        return reply.status(503).send({ error: 'no completion right now — try again' });
-      }
-
-      const tokens = result.tokens;
-      await options.tabCompleteGate?.spend(uid, dateStr, tokens ? tokens.input + tokens.output : 0, reserved);
-      if (tokens) {
-        await store
-          .recordJobCost(resolved.record.jobId, {
-            kind: 'tab_complete',
-            at: new Date(nowMs).toISOString(),
-            by: result.model ?? 'vertex',
-            tokens,
-          })
-          .catch(() => {});
-      }
-
-      return reply.send({ completion: result.completion });
+      return reply.status(result.status).send(result.body);
     },
   );
 

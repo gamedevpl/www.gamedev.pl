@@ -49,7 +49,8 @@ import { invalidateRemixOnSlugs } from '../catalog/remix-on.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes } from './spend-brake.js';
-import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from '../creation/creator-code.js';
+import type { CreatorCodeRoutesOptions } from '../creation/creator-code.js';
+import { registerCodeEditorRoutes } from '../creation/code-completion-routes.js';
 import { createKitFileStore } from '../agent-surface/kit-files.js';
 import { createSourceDeliveryService, isSourceDeliveryValidationError } from '../delivery/source-delivery.js';
 import { assertDeliverableSourcePath } from '../delivery/games-store.js';
@@ -898,7 +899,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
       })
     : null;
-  await registerCreatorCodeRoutes(app, {
+  await registerCodeEditorRoutes(app, {
     store,
     gamesStore,
     objectStore,
@@ -907,7 +908,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     onSourcesDelivered: gateTrigger,
     githubClient: submissionSeams.githubClient ?? undefined,
     log: app.log,
-    // TA-01: built unconditionally (the Vertex client is lazy); TAB_COMPLETE gates it.
     tabCompleter: options.tabCompleter ?? new VertexTabCompleter(),
     tabCompleteGate: createTabCompleteGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,

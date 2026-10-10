@@ -1,3 +1,4 @@
+import { codeRoutes, type CodeOptions } from './workbench-code-routes.js';
 import { isJsonContentType } from './workbench-http.js';
 import { CLI_VERSION } from './update.js';
 import { EVIDENCE_MARKER, shownPrompt } from './workbench-evidence.js';
@@ -66,11 +67,13 @@ async function body(req: IncomingMessage, limit = 40_000): Promise<unknown> {
 export async function startSessionBrowser(
   session: SessionController,
   options: {
+    code?: CodeOptions;
     detached?: boolean;
     workspace?: () => { mode: string; slug: string; suggestedSlug?: string };
     canStop?: () => boolean;
   } = {},
 ) {
+  const code = codeRoutes(options.code ?? {});
   const sessionId = randomUUID();
   const token = randomBytes(32).toString('hex');
   const artifacts = workbenchArtifacts();
@@ -123,7 +126,7 @@ export async function startSessionBrowser(
     res.setHeader('referrer-policy', 'no-referrer');
     res.setHeader(
       'content-security-policy',
-      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; worker-src blob:; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     );
     const reply = (status: number, value: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -156,6 +159,7 @@ export async function startSessionBrowser(
       return;
     }
     try {
+      if (await code.route(req, origin, body, reply)) return;
       if (req.method === 'POST' && req.url === '/stop') {
         reply(200, { ok: true });
         setTimeout(() => {
@@ -373,6 +377,7 @@ export async function startSessionBrowser(
     },
     async close() {
       stopped = true;
+      code.close();
       presence.close();
       unsubscribe();
       await phone?.close();
