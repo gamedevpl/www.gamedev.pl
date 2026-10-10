@@ -129,7 +129,7 @@ it.skipIf(!executablePath)(
       expect(await page.locator('#prompt').evaluate((node) => node === document.activeElement)).toBe(true);
       await page.keyboard.press('Escape');
       expect(await page.locator('#panel').isVisible()).toBe(false);
-      expect(await page.locator('#code-panel').getAttribute('data-view')).toBe('editor');
+      await expect.poll(() => page.locator('#code-panel').getAttribute('data-view')).toBe('editor');
       expect(await page.locator('#code-panel').boundingBox()).toEqual({ x: 0, y: 0, width: 1440, height: 1000 });
       await page.getByRole('combobox', { name: 'Code view' }).selectOption('game');
       expect(await page.locator('#code-panel').isVisible()).toBe(false);

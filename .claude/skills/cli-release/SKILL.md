@@ -104,6 +104,8 @@ repo in the same session.
   before this happens and compare it with the settled panel after restoring a view.
   Wait for the notice and its reserved space to clear, then assert the exact geometry.
   Poll restored geometry when an observer participates; do not add arbitrary sleeps.
+  Likewise, poll the final React view after a native host event closes the chat:
+  the host's `hidden` flag changes before React commits its corresponding layout.
 
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository
   history and hit GitHub's 125 000-character body limit (release run 3, 2026-09-04).
