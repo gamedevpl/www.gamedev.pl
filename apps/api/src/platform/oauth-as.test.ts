@@ -787,6 +787,8 @@ describe('oauth token helpers', () => {
     expect(page.body).toContain('Test Agent');
     expect(page.body).not.toContain('A coding agent is asking');
     expect(page.body).toContain('creator@example.com');
+    // A DCR name is self-asserted, so the screen says so.
+    expect(page.body).toMatch(/does not verify it/i);
     // It says what the grant permits, and for how long.
     expect(page.body).toMatch(/build rounds on games you own/i);
     expect(page.body).toMatch(/until you revoke it/i);
