@@ -77,7 +77,7 @@ the diff, and both have blocked a merge on work that was correct:
   a failure as yours.
 - **CPU contention against the test timeout.** Vitest's default 5000 ms is wall clock, not work,
   so a suite that needs 13 s on a loaded machine fails a test that asserts nothing about time.
-  `apps/api` and `apps/web` therefore set `testTimeout` and `hookTimeout` to 20 s. That buys
+  `apps/api`, `apps/web` and `apps/cli` therefore set `testTimeout` and `hookTimeout` to 20 s. That buys
   headroom without hiding a hang: a genuinely stuck test still fails, 15 s later.
 
 Raising a timeout is the right fix **only** when the test asserts behaviour. If a test is
