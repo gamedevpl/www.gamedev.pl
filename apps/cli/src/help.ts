@@ -45,6 +45,7 @@ export function formatHelp(slash = false): string {
         '',
         '  type to talk — a game starts when you ask · /quit to leave',
         '  in a checkout: say what to change; a local agent edits it, /push delivers a preview',
+        '  in the terminal: !<command> runs locally · Ctrl+C stops it',
         '  /retry resumes a task waiting for builder handoff',
         '',
       ]

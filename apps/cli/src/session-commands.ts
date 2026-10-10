@@ -53,7 +53,7 @@ export function createSessionCommands(
     if (command.kind === 'action' && !Object.hasOwn(WORKBENCH_ACTIONS, command.action))
       return { id, status: 'invalid' };
     const message = command.kind === 'queue' || (command.kind === 'input' && !state.question && !state.choices.length);
-    if (message && command.text.trimStart().startsWith('/')) return { id, status: 'invalid' };
+    if (message && /^[!/]/.test(command.text.trimStart())) return { id, status: 'invalid' };
     let text = command.kind === 'input' || command.kind === 'queue' ? command.text : '';
     if ((command.kind === 'input' || command.kind === 'queue') && command.attachments?.length) {
       if (!attachmentText || (command.kind === 'input' && (state.question || state.choices.length)))

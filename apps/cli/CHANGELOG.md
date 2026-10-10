@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation (#1736).
+
 ### Fixed
 
 - Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect` (#1734).
