@@ -37,6 +37,11 @@ it.skipIf(!executablePath)(
       );
       await page.click('.cm-content');
       await page.keyboard.press('Control+End');
+      await page.keyboard.insertText("\nconst accent = '#0be3a3';");
+      const swatch = await page.locator('.cm-color-picker').boundingBox();
+      expect(swatch?.width).toBeGreaterThan(5);
+      expect(swatch?.width).toBeLessThan(24);
+      await page.keyboard.press('Control+z');
       await page.keyboard.type('\n// local draft');
       await page.selectOption('#code-file', 'games/demo/game/logic.ts');
       await page.selectOption('#code-file', 'games/demo/game.ts');
