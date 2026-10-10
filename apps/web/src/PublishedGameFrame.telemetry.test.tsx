@@ -105,27 +105,4 @@ describe('PublishedGameFrame telemetry', () => {
     ]);
     await act(async () => root.unmount());
   });
-
-  it('collects pinned review play with the served content version', async () => {
-    const { fetchPublishedGame } = await import('./catalog.js');
-    vi.mocked(fetchPublishedGame).mockResolvedValue({
-      slug: 'space-hop',
-      title: 'Space Hop',
-      html: '<html>review candidate</html>',
-      artifactVersion: 'a'.repeat(64),
-    });
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<PublishedGameFrame slug="space-hop" title="Space Hop" reviewVersion="candidate-v1" embed />);
-    });
-    expect(fetchPublishedGame).toHaveBeenLastCalledWith(
-      'space-hop',
-      expect.objectContaining({ reviewVersion: 'candidate-v1' }),
-    );
-    expect(telemetryBodies(fetchSpy)[0].events).toMatchObject([
-      { type: 'game_opened', artifactVersion: 'a'.repeat(64) },
-    ]);
-    await act(async () => root.unmount());
-    expect(telemetryBodies(fetchSpy).at(-1)?.events).toMatchObject([{ type: 'game_closed' }]);
-  });
 });

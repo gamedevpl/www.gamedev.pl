@@ -127,10 +127,10 @@ export function PublishedGameFrame({
   );
 
   useEffect(() => {
-    if (html === null) return;
+    if (html === null || reviewVersion !== undefined) return;
     rememberRecentPlay(slug);
     recordGamePlayed(slug);
-  }, [slug, html]);
+  }, [slug, html, reviewVersion]);
 
   useEffect(() => {
     setGameTitle(title);
