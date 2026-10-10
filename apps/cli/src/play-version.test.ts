@@ -48,25 +48,30 @@ it('replaces a legacy preview under its startup lock and reuses the current serv
   }
 });
 
-it('gives a restart action for an older workspace without stopping its active work', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'gdpl-workbench-version-'));
-  const registry = privatePlayDirectory(join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`));
-  const path = join(registry, createHash('sha256').update(root).digest('hex') + '.json');
-  const server = createServer((_req, res) => res.end('{}'));
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/#${'a'.repeat(64)}`;
-  savePlayJournal(path, { version: 1, instance: 'old', cwd: root, url });
-  const foreground = vi.fn();
-  try {
-    await expect(
-      launchWorkbench({ cwd: root, entry: 'cli', env: {}, noOpen: true, write: vi.fn(), foreground }),
-    ).rejects.toMatchObject({ next: expect.stringContaining('gamedevpl stop, then gamedevpl play') });
-    expect(foreground).not.toHaveBeenCalled();
-    expect((await fetch(new URL(url).origin)).ok).toBe(true);
-  } finally {
-    rmSync(path, { force: true });
-    server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+it.each([undefined, '99.0.0'])(
+  'gives a safe action for workspace version %s without stopping its work',
+  async (cliVersion) => {
+    const root = mkdtempSync(join(tmpdir(), 'gdpl-workbench-version-'));
+    const registry = privatePlayDirectory(join(tmpdir(), `gamedev-workbench-${process.getuid?.() ?? 'user'}`));
+    const path = join(registry, createHash('sha256').update(root).digest('hex') + '.json');
+    const server = createServer((_req, res) => res.end(JSON.stringify({ cliVersion })));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/#${'a'.repeat(64)}`;
+    savePlayJournal(path, { version: 1, instance: 'old', cwd: root, url });
+    const foreground = vi.fn();
+    try {
+      await expect(
+        launchWorkbench({ cwd: root, entry: 'cli', env: {}, noOpen: true, write: vi.fn(), foreground }),
+      ).rejects.toMatchObject({
+        next: expect.stringContaining(cliVersion ? 'gamedevpl update' : 'gamedevpl stop, then gamedevpl play'),
+      });
+      expect(foreground).not.toHaveBeenCalled();
+      expect((await fetch(new URL(url).origin)).ok).toBe(true);
+    } finally {
+      rmSync(path, { force: true });
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

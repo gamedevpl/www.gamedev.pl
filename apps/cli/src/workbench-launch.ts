@@ -2,7 +2,7 @@ import { workbenchScope, workerEntry, assertRequestedGame, type WorkbenchEntry }
 import { acquireStartupLock } from './workbench-startup-lock.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { permissionEnvironment, permissionMode } from './agent-permissions.js';
-import { CLI_VERSION } from './update.js';
+import { CLI_VERSION, compareSemver } from './update.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, openSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
@@ -126,6 +126,12 @@ export async function launchWorkbench(input: {
   assertRequestedGame(existing, input.launch);
   const existingHealth = existing ? await health(existing) : false;
   if (existing && existingHealth) {
+    if (existingHealth.cliVersion && compareSemver(existingHealth.cliVersion, CLI_VERSION) > 0)
+      throw new CliError(
+        `Play uses newer CLI ${existingHealth.cliVersion}; this CLI is ${CLI_VERSION}.`,
+        EXIT_REFUSED,
+        'Run gamedevpl update to update this CLI, then reopen Play.',
+      );
     if (existingHealth.cliVersion !== CLI_VERSION)
       throw new CliError(
         `Play is running ${existingHealth.cliVersion ?? 'an older CLI'}; this CLI is ${CLI_VERSION}.`,

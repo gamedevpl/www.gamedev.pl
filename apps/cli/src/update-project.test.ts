@@ -105,3 +105,23 @@ it('rejects tampered archives before changing the project', async () => {
   ).rejects.toThrow('checksum mismatch');
   expect(readFileSync(join(root, 'package.json'), 'utf8')).toContain('"old"');
 });
+
+it('gives a retry action when a project download stalls', async () => {
+  const root = temporary();
+  writeFileSync(join(root, 'package.json'), '{"devDependencies":{"@gamedevpl/cli":"old"}}');
+  await expect(
+    updateProjectCli({
+      root,
+      version: '9.0.0',
+      timeoutMs: 30,
+      fetchImpl: (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), { once: true });
+        }),
+    }),
+  ).rejects.toMatchObject({
+    message: 'Project CLI update timed out.',
+    next: expect.stringContaining('retry gamedevpl update'),
+  });
+  expect(readFileSync(join(root, 'package.json'), 'utf8')).toContain('"old"');
+});

@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { childEnv, spawnCommand } from './delegate.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { expectedHash, releaseUrl, type FetchLike } from './update.js';
 import { withCheckoutWriter } from './workbench-lock.js';
+import { projectCliBackup } from './update-project-rollback.js';
 
 const PACKAGE = '@gamedevpl/cli';
 type Manifest = { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
@@ -54,8 +55,8 @@ export async function updateProjectCli(input: {
   onProgress?: (message: string) => void;
   timeoutMs?: number;
 }): Promise<{ version: string }> {
+  const signal = AbortSignal.timeout(input.timeoutMs ?? 120_000);
   return withCheckoutWriter(input.root, async () => {
-    const signal = AbortSignal.timeout(input.timeoutMs ?? 120_000);
     const request: FetchLike = (url) => (input.fetchImpl ?? fetch)(url, { signal });
     const asset = 'gamedevpl-npm.tgz';
     const url = releaseUrl(input.version, asset);
@@ -72,7 +73,6 @@ export async function updateProjectCli(input: {
     const manifestPath = join(input.root, 'package.json');
     const lockPath = join(input.root, 'package-lock.json');
     const manifest = readFileSync(manifestPath);
-    const lock = existsSync(lockPath) ? readFileSync(lockPath) : undefined;
     const kind = (JSON.parse(manifest.toString()) as Manifest).dependencies?.[PACKAGE] ? '--save-prod' : '--save-dev';
     const flags = ['--ignore-scripts', '--no-audit', '--no-fund'];
     const checkLock = () => {
@@ -80,6 +80,7 @@ export async function updateProjectCli(input: {
       if (record?.version !== input.version || record?.resolved !== url || record?.integrity !== integrity)
         throw new CliError('Project CLI lock does not match the verified release.', EXIT_REFUSED);
     };
+    const backup = projectCliBackup(input.root);
     try {
       input.onProgress?.(`Updating project CLI dependency to ${input.version}…`);
       await npm(
@@ -89,18 +90,30 @@ export async function updateProjectCli(input: {
         signal,
       );
       checkLock();
+      input.onProgress?.('Installing verified project CLI…');
+      await npm(input.root, ['install', ...flags], input.env ?? process.env, signal);
+      checkLock();
+      const installed = JSON.parse(readFileSync(join(input.root, 'node_modules', PACKAGE, 'package.json'), 'utf8'));
+      if (installed.name !== PACKAGE || installed.version !== input.version)
+        throw new CliError(
+          'Installed project CLI does not match the release.',
+          EXIT_REFUSED,
+          'Retry gamedevpl update.',
+        );
+      return { version: installed.version };
     } catch (error) {
-      writeFileSync(manifestPath, manifest);
-      if (lock) writeFileSync(lockPath, lock);
-      else rmSync(lockPath, { force: true });
+      backup.restore();
       throw error;
+    } finally {
+      backup.close();
     }
-    input.onProgress?.('Installing verified project CLI…');
-    await npm(input.root, ['install', ...flags], input.env ?? process.env, signal);
-    checkLock();
-    const installed = JSON.parse(readFileSync(join(input.root, 'node_modules', PACKAGE, 'package.json'), 'utf8'));
-    if (installed.name !== PACKAGE || installed.version !== input.version)
-      throw new CliError('Installed project CLI does not match the release.', EXIT_REFUSED, 'Retry gamedevpl update.');
-    return { version: installed.version };
+  }).catch((error: unknown) => {
+    if (signal.aborted)
+      throw new CliError(
+        'Project CLI update timed out.',
+        EXIT_REFUSED,
+        'Check your connection, then retry gamedevpl update.',
+      );
+    throw error;
   });
 }
