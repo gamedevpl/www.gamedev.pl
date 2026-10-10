@@ -39,7 +39,12 @@ export async function runPermissionTask(
   for (;;) {
     if (input.abort?.aborted) return { code: 1 };
     const switching = new AbortController();
-    const signal = input.abort ? AbortSignal.any([input.abort, switching.signal]) : switching.signal;
+    const signal =
+      input.spec.name === 'claude'
+        ? input.abort
+          ? AbortSignal.any([input.abort, switching.signal])
+          : switching.signal
+        : (input.abort ?? switching.signal);
     let session: string | undefined;
     let restart = false;
     const permitted = taskPermissions({
