@@ -1377,7 +1377,8 @@ describe('the Code surface routes (creator-code.ts)', () => {
       ));
 
     it('429s once the per-creator daily quota is spent', async () => {
-      process.env.DAILY_TAB_COMPLETE_QUOTA = '3';
+      vi.stubEnv('DAILY_TAB_COMPLETE_QUOTA', '3');
+      vi.stubEnv('LOCAL_TAB_COMPLETE', 'true');
       try {
         await withTabComplete(() =>
           withApp(
@@ -1398,10 +1399,9 @@ describe('the Code surface routes (creator-code.ts)', () => {
           ),
         );
       } finally {
-        delete process.env.DAILY_TAB_COMPLETE_QUOTA;
+        vi.unstubAllEnvs();
       }
     });
-
     it('refuses on the global pause without spending the per-creator quota', async () =>
       withTabComplete(() =>
         withApp(

@@ -89,6 +89,12 @@ Two concrete instances of that (observed 2026-07-23):
 - **`actions/runs?head_sha=<short-sha>` silently returns zero runs.** The API needs the
   full 40-char SHA; a short SHA is not an error, just an empty list — a monitor polling it
   waits forever while everything already completed. Always `git rev-parse` to full length.
+- **A PR-only workflow wrapper omits dynamic CodeQL/Code Quality runs.** Use the generic
+  GitHub GET tool for `actions/runs?head_sha=<full-sha>` and
+  `commits/<full-sha>/check-runs`, then inspect their actual conclusions and summaries.
+  Closing scanner review threads does not change the security verdict. A neutral
+  CodeQL check warning about a missing configuration is not a completed clean analysis;
+  wait for the JavaScript/TypeScript analysis and its final alert verdict.
 - **A green unit suite + "I checked it in a browser" can still fail the deploy browser
   gate when the UX flow changed and e2e was not updated.** Observed (#599, 2026-08-05):
   published `/play/<slug>` briefly became preview-first (screenshot + Play, no
