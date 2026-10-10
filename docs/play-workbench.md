@@ -99,6 +99,21 @@ as read-only context. Other games, credentials, hidden files, raster assets and 
 configuration are unavailable. The editor uses Studio's CodeMirror, search, undo history,
 TypeScript extensions and ghost text rather than a separate editor implementation.
 
+The **Code view** menu switches between the floating panel, **Editor only**,
+**Editor + chat**, **Editor + chat + preview**, and **Game only**. Focus views fill
+all available window space without rounded cards; the preview occupies a smaller
+area below Conversation. Conversation's left/right dock preference is respected.
+On phones, the editor, chat and optional preview stack vertically, with scrolling
+for the editor and composer when space is limited, including while the keyboard is open.
+Game only uses the existing **Hide controls** action; **Show Play controls** restores navigation.
+
+The expand button fills the window with the editor; **Restore Code panel** or **Esc**
+returns to the previous view. Editor menus and search consume Esc first. All views
+keep the same editor, conversation and game iframe mounted, preserving drafts,
+undo history, chat drafts and the running game. Closing Code or opening another tool
+returns to the floating layout. Opening Conversation from the toolbar also leaves
+an editor focus view so that the requested panel is visible and can receive focus.
+
 Edits stay as drafts until **Save** or **Ctrl/Cmd+S**. Switching files or closing panels
 keeps drafts and undo history in the current tab. Closing Code never reconstructs the
 game. Saving writes locally and the existing Play watcher rebuilds; Ask, Auto and Freeze
@@ -293,4 +308,8 @@ The local editor browser regression runs without a deployed site or credentials:
 (after the CLI UI build). It uses a temporary checkout, the real preview watcher and a
 fixture assembler. It covers drafts/undo, local completion/hover/definitions/diagnostics,
 writer locks, external conflicts, state-preserving updates, narrow layouts, the iframe
-sandbox and absence of Studio/provider requests. Provider adapters use mocked fetches; funded ghost text uses a mocked authenticated client.
+sandbox and absence of Studio/provider requests. The view-switching regression covers
+all four focus views, restoring layouts, drafts and undo, chat focus, completion-aware
+Escape and a running game's state at desktop, tablet and phone-keyboard sizes. CI builds the CLI UI and runs these local tests
+separately from the deployment browser gate. Provider adapters use mocked fetches; funded
+ghost text uses a mocked authenticated client.

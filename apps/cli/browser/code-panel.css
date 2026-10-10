@@ -25,6 +25,11 @@ body:has(#panel:not([hidden])) #code-panel {
   gap: 8px;
   padding: 10px 12px;
 }
+.code-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .code-toolbar select {
   min-width: 0;
 }
@@ -116,4 +121,110 @@ body[data-dock='left'][data-code-open='true'] #code-panel {
 body[data-dock='left'][data-code-open='true'] #panel-resize {
   right: auto;
   left: calc(12px + min(var(--panel-width, 390px), calc(50vw - 24px)));
+}
+
+/* All focus views share the same mounted editor, conversation and game. */
+body:has(#code-panel[data-view^='editor']:not([hidden])) {
+  --code-rail: min(var(--panel-width, 390px), 45vw);
+  --code-height: var(--height);
+  --code-chat-height: var(--height);
+  --code-preview-height: min(32vh, 260px);
+}
+body:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) {
+  --code-chat-height: calc(var(--height) - var(--code-preview-height));
+}
+body:has(#code-panel[data-view^='editor']:not([hidden])) #code-panel {
+  inset: 0 auto auto 0;
+  width: calc(100% - var(--code-rail));
+  height: var(--code-height);
+  z-index: 8;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body:has(#code-panel[data-view='editor']:not([hidden])) #code-panel {
+  width: 100%;
+}
+body:has(#code-panel[data-view^='editor']:not([hidden])) :is(#code-panel, #panel) > .panel-head {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+body:has(#code-panel[data-view^='editor']:not([hidden]))
+  :is(#tools, #panel-resize, #workbench-tools, #preview-feedback, #reveal, #empty, #workspace-home) {
+  visibility: hidden;
+}
+body:has(#code-panel[data-view='editor']:not([hidden])) #panel,
+body:has(#code-panel:is([data-view='editor'], [data-view='editor-chat']):not([hidden])) #game {
+  visibility: hidden;
+}
+body:has(#code-panel[data-view^='editor-chat']:not([hidden])) #panel {
+  inset: 0 0 auto auto;
+  width: var(--code-rail);
+  max-width: none;
+  height: var(--code-chat-height);
+  border: 0;
+  border-left: 1px solid var(--panel-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+body:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) #game {
+  inset: auto 0 0 auto;
+  width: var(--code-rail);
+  height: var(--code-preview-height);
+}
+body[data-dock='left']:has(#code-panel[data-view^='editor-chat']:not([hidden])) #code-panel {
+  left: auto;
+  right: 0;
+}
+body[data-dock='left']:has(#code-panel[data-view^='editor-chat']:not([hidden])) #panel {
+  left: 0;
+  right: auto;
+}
+body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) #game {
+  left: 0;
+  right: auto;
+}
+#code-panel .panel-head {
+  gap: 6px;
+  padding: 12px;
+}
+.code-panel-actions {
+  min-width: 0;
+}
+.code-panel-actions select {
+  width: min(240px, 40vw);
+  min-width: 0;
+  font-size: 12px;
+}
+.code-panel-actions button {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) {
+    --code-height: calc(var(--height) * 0.55);
+    --code-chat-height: calc(var(--height) - var(--code-height));
+    --code-rail: 100%;
+  }
+  body:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) {
+    --code-height: calc(var(--height) * 0.45);
+    --code-preview-height: calc(var(--height) * 0.15);
+    --code-chat-height: calc(var(--height) - var(--code-height) - var(--code-preview-height));
+  }
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) #code-panel {
+    width: 100%;
+    overflow: auto;
+  }
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) #panel {
+    top: var(--code-height);
+    overflow: auto;
+  }
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) :is(.code-editor, #conversation) {
+    flex: none;
+    height: 180px;
+  }
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) #composer {
+    flex-shrink: 0;
+  }
 }

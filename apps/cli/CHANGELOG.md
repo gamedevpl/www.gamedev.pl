@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Added
 
 - Local Play includes the Studio code editor with local TypeScript help, drafts and undo history, guarded checkout saves, and optional AI suggestions included for signed-in members or using your own provider account (#1735).
+- Local Play offers full-window editor, editor with chat, editor with chat and a small game preview, and game-only views; switching keeps the running game, drafts and undo history (#1735).
 - `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation (#1736).
 
 ### Fixed

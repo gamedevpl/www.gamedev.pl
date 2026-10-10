@@ -2,7 +2,7 @@ export const WORKBENCH_NAVIGATION_SCRIPT = String.raw`
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{document.body.style.setProperty('--notice-space',el('notice').textContent.trim()||!el('build-error').hidden?(el('preview-feedback').getBoundingClientRect().height+28)+'px':'0px');}).observe(el('preview-feedback'));
 let historyIndex=-1, historyDraft='', lastHistory='', firstWorkspace=true, lastQuestion='';
 function openChat(){window.dispatchEvent(new Event('play-open-panel'));document.exitPointerLock?.();panel.hidden=false;el('edit').setAttribute('aria-expanded','true');draft.focus();}
-function closeChat(){panel.hidden=true;leaveOnboarding();el('edit').setAttribute('aria-expanded','false');frame.focus();}
+function closeChat(){panel.hidden=true;window.dispatchEvent(new Event('play-close-conversation'));leaveOnboarding();el('edit').setAttribute('aria-expanded','false');frame.focus();}
 function drawer(section,title){window.dispatchEvent(new Event('play-open-panel'));document.exitPointerLock?.();el('workbench-tools').hidden=false;el('drawer-title').textContent=title;for(const key of ['commands','media','devices','history','details'])el(key+'-section').hidden=key!==section;el(section==='commands'?'command-search':'drawer-close').focus();}
 el('dock').onclick=()=>{const left=document.body.dataset.dock!=='left';document.body.dataset.dock=left?'left':'right';el('dock').setAttribute('aria-label',left?'Move conversation right':'Move conversation left');};
 let panelWidth=390;

@@ -9,7 +9,7 @@ import {
 } from '../../web/src/surfaces/studio/codeSurfaceLanguageService.js';
 import { languageFor } from '../../web/src/surfaces/studio/codeLanguages.js';
 import { buildSourceTree, type TreeNode } from '../../web/src/surfaces/studio/codeSurfaceTreeModel.js';
-import { PixelIcon } from '../../web/src/PixelIcon.js';
+import { CodePanelViewControls, useCodePanelView } from './code-panel-view.js';
 import { codeApi, CodeRequestError, type CodeFile, type CodeProject, type CompletionStatus } from './code-api.js';
 
 type Draft = { content: string; base: CodeFile; editor?: CodeSurfaceEditorState };
@@ -23,7 +23,8 @@ function fileOptions(nodes: TreeNode[], depth = 0): { path: string; label: strin
 }
 
 export function CodePanel() {
-  const [open, setOpen] = useState(false);
+  const panelView = useCodePanelView();
+  const { open, view } = panelView;
   const [project, setProject] = useState<CodeProject | null>(null);
   const projectRef = useRef(project);
   projectRef.current = project;
@@ -66,38 +67,6 @@ export function CodePanel() {
     [project?.files, workspace],
   );
 
-  useEffect(() => {
-    const button = document.getElementById('code-open');
-    const show = () => {
-      document.exitPointerLock?.();
-      setOpen((value) => !value);
-    };
-    button?.addEventListener('click', show);
-    const hide = () => {
-      completionEpoch.current++;
-      setOpen(false);
-    };
-    const otherPanel = () => {
-      if (innerWidth <= 1000) hide();
-    };
-    window.addEventListener('play-open-panel', otherPanel);
-    document.getElementById('clean')?.addEventListener('click', hide);
-    const escape = (event: KeyboardEvent) => {
-      if (
-        event.key === 'Escape' &&
-        !event.defaultPrevented &&
-        !(event.target instanceof Element && event.target.closest('.cm-editor'))
-      )
-        setOpen(false);
-    };
-    window.addEventListener('keydown', escape);
-    return () => {
-      button?.removeEventListener('click', show);
-      window.removeEventListener('play-open-panel', otherPanel);
-      document.getElementById('clean')?.removeEventListener('click', hide);
-      window.removeEventListener('keydown', escape);
-    };
-  }, []);
   useEffect(() => {
     if (!open) completionEpoch.current++;
     document.getElementById('code-open')?.setAttribute('aria-expanded', String(open));
@@ -307,12 +276,16 @@ export function CodePanel() {
       : undefined;
 
   return (
-    <aside id="code-panel" hidden={!open} aria-labelledby="code-panel-title">
+    <aside
+      id="code-panel"
+      hidden={!open}
+      data-view={view}
+      data-maximized={view === 'editor'}
+      aria-labelledby="code-panel-title"
+    >
       <header className="panel-head">
         <h2 id="code-panel-title">Code</h2>
-        <button aria-label="Close Code" onClick={() => setOpen(false)}>
-          <PixelIcon name="close" size={16} />
-        </button>
+        <CodePanelViewControls {...panelView} />
       </header>
       <div className="code-toolbar">
         <label className="sr-only" htmlFor="code-file">

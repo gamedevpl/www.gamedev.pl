@@ -1,10 +1,10 @@
-import { defineConfig } from 'vitest/config';
-
+import { configDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    // Every test here drives a real browser against a real deployment: page loads,
+    exclude: [...configDefaults.exclude, 'src/play-*-code.test.ts'],
+    // Tests drive real browsers against deployments: page loads,
     // SPA hydration, and a generated game booting inside an iframe. The 5s default
     // fails on network latency alone and says nothing about the site.
     testTimeout: 90_000,

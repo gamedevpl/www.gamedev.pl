@@ -92,6 +92,12 @@ repo in the same session.
   `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
   works; locally cached `packages/contract/dist` can otherwise hide a broken release.
 
+- **Local Play browser tests need the generated UI and TypeScript worker.** After
+  `npm ci` and `npm run build:packages`, run `npm run prebuild -w @gamedevpl/cli`
+  before `npm run e2e:play-code -w @gamedevpl/e2e`. Keep these fixtures in their own
+  suite: the deployment browser gate does not build CLI assets. CI runs the local
+  suite in the hermetic browser job, without credentials or live provider calls.
+
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository
   history and hit GitHub's 125 000-character body limit (release run 3, 2026-09-04).
   Notes come from the changelog section.
