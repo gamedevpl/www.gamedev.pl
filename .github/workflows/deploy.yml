@@ -236,6 +236,7 @@ jobs:
           SHELF_DOCUMENT_READS: ${{ vars.SHELF_DOCUMENT_READS }}
           GLOBAL_DAILY_DREAM_CAP: ${{ vars.GLOBAL_DAILY_DREAM_CAP }}
           DREAM_IMAGE_MODEL: ${{ vars.DREAM_IMAGE_MODEL }}
+          DREAM_IDEAS_MODEL: ${{ vars.DREAM_IDEAS_MODEL }}
           DREAM_TIMEOUT_MS: ${{ vars.DREAM_TIMEOUT_MS }}
           NEXT_IDEAS_TIMEOUT_MS: ${{ vars.NEXT_IDEAS_TIMEOUT_MS }}
           EDITOR_ASSIST: ${{ vars.EDITOR_ASSIST }}
@@ -480,9 +481,9 @@ jobs:
               ENV_VARS="${ENV_VARS}|${OPTION_IMAGE_VAR}=${OPTION_IMAGE_VAL}"
             fi
           done
-          # Concept proposals. Repointing the image model or either timeout must survive
+          # Concept proposals. Repointing either model or either timeout must survive
           # the next deploy, so they thread here rather than being set by hand.
-          for DREAM_VAR in DREAM_IMAGE_MODEL DREAM_TIMEOUT_MS NEXT_IDEAS_TIMEOUT_MS; do
+          for DREAM_VAR in DREAM_IMAGE_MODEL DREAM_IDEAS_MODEL DREAM_TIMEOUT_MS NEXT_IDEAS_TIMEOUT_MS; do
             DREAM_VAL="${!DREAM_VAR}"
             if [ -n "$DREAM_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${DREAM_VAR}=${DREAM_VAL}"

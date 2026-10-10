@@ -3,7 +3,7 @@ import { createDreamAvailabilityGate, type DreamAvailabilityGate } from './dream
 import { VertexDreamFrameGenerator, type DreamFrameGenerator } from './dream-frames.js';
 import { createDreamJob, type DreamJob, type DreamLog } from './dream-job.js';
 import { createHudRegionsReader } from './hud-regions.js';
-import { VertexNextIdeaGenerator, type NextIdeaGenerator } from './next-ideas.js';
+import { NextIdeaModelGenerator, type NextIdeaGenerator } from './next-ideas.js';
 
 export interface DreamJobEnvOptions {
   store?: Store;
@@ -34,7 +34,7 @@ export function createDreamJobFromEnv(options: DreamJobEnvOptions): DreamJob | n
         store,
         logWarn: (payload, message) => options.log.warn(payload, message),
       }),
-    ideas: options.nextIdeaGenerator ?? new VertexNextIdeaGenerator(),
+    ideas: options.nextIdeaGenerator ?? new NextIdeaModelGenerator(),
     frames: options.dreamFrameGenerator ?? new VertexDreamFrameGenerator(),
     readHudRegions: createHudRegionsReader(gamesStore),
     log: options.log,

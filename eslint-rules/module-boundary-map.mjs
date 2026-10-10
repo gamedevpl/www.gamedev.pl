@@ -166,6 +166,8 @@ const FILE_BUCKET = {
   // packages, and is a leaf sink or single-client-factory called from most domains,
   // not domain business logic of its own bucket.
   genai: 'platform',
+  // Anthropic client factory beside genai. No relative imports at all.
+  'genai-anthropic': 'platform',
   'moderation-metrics': 'platform',
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',

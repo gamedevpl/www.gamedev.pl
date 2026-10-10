@@ -234,15 +234,13 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (halt) return halt;
     const dateStr = new Date(now()).toISOString().slice(0, 10);
     if (!(await availability.hasFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
-    // Booked before the answer: a call that failed still billed.
-    await bookConcept(jobId, ideas.model);
     // Fail open: the spec alone still gives ideas.
     const history = await dreamHistory(store, jobId, record.slug).catch(() => []);
-    // Awaited below: the seed request's CPU ends with this run.
-    const retryBookings: Promise<void>[] = [];
+    // Booked as each call starts: a failed one still billed.
+    const attemptBookings: Promise<void>[] = [];
     const generated = await ideas.generate({
       screenshotPng: source.toString('base64'),
-      onRetry: () => retryBookings.push(bookConcept(jobId, ideas.model)),
+      onAttempt: (model) => attemptBookings.push(bookConcept(jobId, model)),
       ...(history.length ? { history } : {}),
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
@@ -250,7 +248,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       published,
       ...(record.locale ? { locale: record.locale } : {}),
     });
-    await Promise.all(retryBookings);
+    await Promise.all(attemptBookings);
     const candidates = generated.slice(0, DREAM_OPTIONS);
     // A slot and an image call for a card that cannot post.
     if (candidates.length < DREAM_OPTIONS) return 'no_ideas';
