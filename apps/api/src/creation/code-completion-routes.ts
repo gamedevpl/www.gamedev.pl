@@ -8,7 +8,7 @@ import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled } from './tab-co
 import { codeSurfaceEnabled } from './code-surface.js';
 
 export const localTabCompleteEnabled = () =>
-  codeSurfaceEnabled() && tabCompleteEnabled() && process.env.LOCAL_TAB_COMPLETE === 'true';
+  codeSurfaceEnabled() && tabCompleteEnabled() && process.env.LOCAL_TAB_COMPLETE !== 'false';
 
 const inputSchema = z
   .object({

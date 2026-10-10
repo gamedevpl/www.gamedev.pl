@@ -11,7 +11,7 @@ afterEach(async () => {
 });
 async function fixture(quota = 2) {
   vi.stubEnv('TAB_COMPLETE', 'true');
-  vi.stubEnv('LOCAL_TAB_COMPLETE', 'true');
+  vi.stubEnv('LOCAL_TAB_COMPLETE', undefined);
   const store = new InMemoryStore();
   await store.upsertUser({ uid: 'g:local-editor' });
   const { token } = await mintAccessTokenFor(store, {
@@ -34,7 +34,7 @@ async function fixture(quota = 2) {
   ) => app.inject({ method: 'POST', url: '/api/me/code/completion', headers: auth, payload });
   return { store, app, headers, post, complete };
 }
-it('requires a real account, without requiring a registered game or Studio round', async () => {
+it('enables completion by default for a real account, without requiring a game or Studio round', async () => {
   const f = await fixture();
   expect((await f.post(undefined, { authorization: '' })).statusCode).toBe(401);
   const availability = await f.app.inject({ method: 'GET', url: '/api/me/code/completion', headers: f.headers });

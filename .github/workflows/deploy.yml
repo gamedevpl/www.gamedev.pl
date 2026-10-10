@@ -300,7 +300,7 @@ jobs:
           SEED_PROVIDER: ${{ vars.SEED_PROVIDER }}
           SUGGESTION_SWEEP_AUDIENCE: ${{ vars.SUGGESTION_SWEEP_AUDIENCE }}
           TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}
-          LOCAL_TAB_COMPLETE: ${{ vars.LOCAL_TAB_COMPLETE }}
+          LOCAL_TAB_COMPLETE: ${{ vars.LOCAL_TAB_COMPLETE || 'true' }}
           TELEMETRY_BACKEND: ${{ vars.TELEMETRY_BACKEND }}
           TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
           VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}

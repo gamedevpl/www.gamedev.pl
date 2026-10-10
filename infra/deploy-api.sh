@@ -419,6 +419,7 @@ done
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
+LOCAL_TAB_COMPLETE="${LOCAL_TAB_COMPLETE:-true}"
 for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE LOCAL_TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY TELEMETRY_BACKEND; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then

@@ -161,9 +161,12 @@ an API key or personal provider charges. Sign in through `/login` in Conversatio
 uses its normal authenticated client; platform credentials never reach the browser.
 `/api/me/code/completion` accepts local files without requiring a published game or Studio
 round. It shares Studio's completer, per-account daily quota, global token budget and
-`TAB_COMPLETE` kill switch. It additionally requires `CODE_SURFACE` and the separate
-`LOCAL_TAB_COMPLETE=true` flag, which defaults off and is threaded through both deployment
-paths. Disabling local completion does not disable Studio. The default model is Gemini
+`TAB_COMPLETE` kill switch. It additionally respects `CODE_SURFACE`. Funded local
+completion is available by default to signed-in members, including local projects without
+a registered game or Studio round. Both deployment paths default `LOCAL_TAB_COMPLETE`
+to `true`; set it to `false` to disable local completion without disabling Studio.
+Availability never enables AI in the editor: provider selection and consent are still
+required for each CLI session. The default model is Gemini
 3.8 Flash through **Google Vertex AI** (server configuration
 may override it). Availability is cached for 60 seconds; an account or service failure
 stops suggestions and never silently switches to a personal provider. Authentication,
