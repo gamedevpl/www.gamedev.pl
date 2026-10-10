@@ -10,9 +10,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Added
 
 - Local Play includes the Studio code editor with local TypeScript help, drafts and undo history, guarded checkout saves, and optional AI suggestions included for signed-in members or using your own provider account (#1735).
+- `!<command>` runs local shell commands from the terminal session, with live output, exit codes and Ctrl+C cancellation (#1736).
 
 ### Fixed
 
+- Misspelled shell commands suggest the closest command, for example `conect` → `gamedevpl connect` (#1734).
 - `gamedevpl update` shows a spinner, elapsed time and the current step instead of going silent; stalled downloads time out with a retry hint (#1732).
 - Selecting compiler diagnostics when clipboard access fails now survives Play's status refresh (#1735).
 

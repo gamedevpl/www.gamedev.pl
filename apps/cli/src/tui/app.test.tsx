@@ -63,6 +63,27 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
 }
 
 describe('TUI feedback', () => {
+  it('queues a shell command instead of sending it to an active agent', async () => {
+    const view = screen(110, 24);
+    const steer = vi.fn(async () => undefined);
+    view.session.setLocalTask('codex');
+    view.session.setSteering(steer);
+    await view.press('!pwd');
+    await view.press('\r');
+    expect(steer).not.toHaveBeenCalled();
+    expect(view.session.get().queued).toEqual(['!pwd']);
+    expect(await view.session.prompt()).toBe('!pwd');
+  });
+
+  it('shows shell mode and submits bang commands through the terminal prompt', async () => {
+    const view = screen(110, 24);
+    const pending = view.session.prompt();
+    await view.press('!pwd');
+    expect(view.frame()).toContain('Shell command');
+    await view.press('\r');
+    expect(await pending).toBe('!pwd');
+  });
+
   it.each([
     [40, 12],
     [80, 24],

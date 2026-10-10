@@ -24,7 +24,8 @@ export function spawnCommand(input: {
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
-  timeoutMs: number;
+  timeoutMs?: number;
+  shell?: string;
   abort?: AbortSignal;
 }): ChildProcess {
   const child = spawn(input.command, input.args, {
@@ -32,9 +33,18 @@ export function spawnCommand(input: {
     env: input.env,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
+    shell: input.shell,
   });
   let escalation: ReturnType<typeof setTimeout> | undefined;
   const signalGroup = (signal: NodeJS.Signals) => {
+    if (process.platform === 'win32' && child.pid) {
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      killer.once('error', () => child.kill(signal));
+      return;
+    }
     try {
       if (child.pid) process.kill(-child.pid, signal);
     } catch {
@@ -45,7 +55,7 @@ export function spawnCommand(input: {
     signalGroup('SIGTERM');
     escalation ??= setTimeout(() => signalGroup('SIGKILL'), 2_000);
   };
-  const timer = setTimeout(kill, input.timeoutMs);
+  const timer = input.timeoutMs === undefined ? undefined : setTimeout(kill, input.timeoutMs);
   const cleanup = () => {
     clearTimeout(timer);
     clearTimeout(escalation);

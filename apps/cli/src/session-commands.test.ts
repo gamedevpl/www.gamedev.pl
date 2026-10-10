@@ -110,11 +110,20 @@ it('does not route browser messages into terminal commands or control escapes', 
   const dispatch = createSessionCommands(session);
   const pending = session.prompt();
   const promptId = session.get().promptId;
-  for (const text of ['/push', '  /quit', String.fromCharCode(27) + '[2J']) {
+  for (const text of ['/push', '  /quit', '!touch example', '  !pwd', String.fromCharCode(27) + '[2J']) {
     expect(dispatch({ id: 'unsafe', kind: 'input', promptId, text }).status).toBe('invalid');
   }
   session.close();
   await pending;
+});
+
+it('rejects browser shell commands in the follow-up queue', () => {
+  const session = createSessionController('');
+  session.setLocalTask('codex');
+  const dispatch = createSessionCommands(session);
+  expect(dispatch({ id: 'shell', kind: 'queue', taskId: session.get().taskId, text: ' !pwd' }).status).toBe('invalid');
+  expect(session.get().queued).toEqual([]);
+  session.close();
 });
 
 it('terminal stop rejects subsequent browser follow-ups for the stopping task', () => {

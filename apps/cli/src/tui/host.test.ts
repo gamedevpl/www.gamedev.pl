@@ -55,3 +55,19 @@ it.each(['/connect second', '/checkout second'])('keeps restored platform conver
   expect(vi.mocked(handleReplLine).mock.calls[1]![0].conversationId).toBe(conversationId);
   expect(saved.load().conversationId).toBe(conversationId);
 });
+
+it.each([false, true])('enables shell execution only for terminal prompts (browserOnly=%s)', async (browserOnly) => {
+  vi.mocked(handleReplLine).mockResolvedValueOnce({ next: 'continue' }).mockResolvedValueOnce({ next: 'quit' });
+  await runInkRepl({
+    api: { origin: 'https://shell.test', request: vi.fn().mockResolvedValue({ user: { uid: 'owner' } }) } as Parameters<
+      typeof runInkRepl
+    >[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '!pwd',
+    browserOnly,
+  });
+  expect(vi.mocked(handleReplLine).mock.calls[0]![0].allowShell).toBe(false);
+  expect(vi.mocked(handleReplLine).mock.calls[1]![0].allowShell).toBe(!browserOnly);
+});

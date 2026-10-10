@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { completeSlash, parseArgv, suggestSlash } from './argv.js';
+import { CLI_VERBS, completeSlash, parseArgv, suggestSlash, suggestVerb } from './argv.js';
 import { authorizeUrl, GAMEDEV_CLI_CLIENT_ID } from './oauth.js';
 
 describe('argv and slash completion', () => {
@@ -61,4 +61,14 @@ it('suggests the nearest slash verb for a typo and nothing for noise', () => {
   expect(suggestSlash('delagate')).toBe('delegate');
   expect(suggestSlash('/stauts')).toBe('status');
   expect(suggestSlash('xyzzyq')).toBeUndefined();
+});
+
+it('suggests shell verbs including browser entry points, excluding session-only commands', () => {
+  expect(suggestVerb('conect')).toBe('connect');
+  expect(suggestVerb('udpate')).toBe('update');
+  expect(suggestVerb('craete')).toBe('create');
+  expect(suggestVerb('repp')).toBe('repl');
+  expect(CLI_VERBS).not.toContain('logs');
+  expect(suggestVerb('logs')).toBeUndefined();
+  expect(suggestVerb('xyzzyq')).toBeUndefined();
 });
