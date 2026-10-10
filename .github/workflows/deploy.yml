@@ -158,7 +158,6 @@ jobs:
           printf '%s' "${GAMES_TOKEN}" > /tmp/games_token
           if docker build -f infra/gate-runner.Dockerfile \
             --secret id=games_token,src=/tmp/games_token \
-            --metadata-file /tmp/gate-meta.json \
             -t "${GATE_IMAGE}" . \
             && docker push "${GATE_IMAGE}"; then
             rm -f /tmp/games_token
@@ -168,22 +167,19 @@ jobs:
             exit 0
           fi
 
-          # A tag is mutable: this same commit can be redeployed by hand
-          # (workflow_dispatch), and node:22 / apt packages float, so a second build of
-          # the identical commit is not guaranteed byte-identical to the first. A gate
-          # started later against an older Cloud Run revision would then pull whatever
-          # :SHORT_SHA currently resolves to, not what that revision was built beside —
-          # quietly undermining the reason this image exists (checking a candidate
-          # against the platform actually serving the site). Handed to the gate by digest
-          # instead, which is exactly what was pushed. Falls back to the tag, still
-          # strictly better than the from-scratch path, if the digest cannot be read —
-          # the metadata-file format is BuildKit's, not a registry guarantee.
-          GATE_IMAGE_REF="${GATE_IMAGE}"
-          DIGEST=$(jq -r '."containerimage.digest" // empty' /tmp/gate-meta.json 2>/dev/null || true)
-          if [ -n "${DIGEST}" ]; then
-            GATE_IMAGE_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner@${DIGEST}"
-          else
-            echo "::warning::could not read the pushed image digest from BuildKit's metadata file; GATE_RUNNER_IMAGE will use the mutable :${SHORT_SHA} tag instead."
+          # Registry manifests can differ from BuildKit's local image metadata.
+          DIGEST=$(gcloud artifacts docker images describe "${GATE_IMAGE}" \
+            --project="${PROJECT_ID}" --format='value(image_summary.digest)' 2>/dev/null || true)
+          if [[ ! "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::warning::could not resolve the pushed gate-runner digest; using the from-scratch gate."
+            exit 0
+          fi
+          GATE_IMAGE_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/gate-runner@${DIGEST}"
+          VERIFIED_DIGEST=$(gcloud artifacts docker images describe "${GATE_IMAGE_REF}" \
+            --project="${PROJECT_ID}" --format='value(image_summary.digest)' 2>/dev/null || true)
+          if [ "${VERIFIED_DIGEST}" != "${DIGEST}" ]; then
+            echo "::warning::could not verify the pinned gate-runner image; using the from-scratch gate."
+            exit 0
           fi
 
           # Naming the image to the service is only safe once gate-runner may PULL it.
