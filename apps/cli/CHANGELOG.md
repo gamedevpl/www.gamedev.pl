@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.37.0 — 2026-10-11
+
 ### Added
 
 - Terminal sessions show a toggleable workspace sidebar with task, Studio status and local file changes, plus a scrollable conversation on wide terminals (#1767).
