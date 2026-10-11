@@ -17,7 +17,7 @@ import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type Tr
 import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
-import { assertLadderGreen, runLadder } from './verify.js';
+import { assertLadderGreen, runLadder, runLadderAsync } from './verify.js';
 import { verificationSourceHash } from './verification-source.js';
 
 export type DeliverMode = 'preview' | 'publish';
@@ -117,7 +117,10 @@ async function submitGameUnlocked(input: {
   takeover?: boolean;
   expectedSession?: DeliverySession;
   run?: Parameters<typeof runLadder>[0]['run'];
+  onProgress?: (message: string) => void;
+  abort?: AbortSignal;
 }): Promise<SubmitResult> {
+  input.onProgress?.('Checking platform sources');
   let recovered = isRecoveryReady(input.dest, input.slug);
   let first = await inspectGame(input);
   if (recovered && (await reconcileRecoveryDelivery(input.api, input.dest, input.slug, first.tree))) {
@@ -138,7 +141,14 @@ async function submitGameUnlocked(input: {
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
   const sourceHash = verificationSourceHash(input.dest, input.slug);
-  const verify = runLadder({ cwd: input.dest, publish: input.publish === true, run: input.run });
+  const verify = await runLadderAsync({
+    cwd: input.dest,
+    publish: input.publish === true,
+    run: input.run,
+    abort: input.abort ?? new AbortController().signal,
+    onStage: input.onProgress,
+  });
+  input.abort?.throwIfAborted();
   assertLadderGreen(verify, input.dest, sourceHash);
   if (verificationSourceHash(input.dest, input.slug) !== sourceHash)
     throw new CliError(
@@ -147,6 +157,7 @@ async function submitGameUnlocked(input: {
       'Run /verify or retry /push for the current files.',
     );
 
+  input.onProgress?.('Rechecking platform sources after local checks');
   const latest = await inspectGame(input);
   if (!input.force && latest.sync.kind === 'conflict') {
     const refused = syncRefuse(latest.sync, 'submit');
@@ -161,6 +172,7 @@ async function submitGameUnlocked(input: {
   }
 
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, latest.tree.version);
+  input.onProgress?.('Preparing delivery session');
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
   const remoteFiles = trackedTree(input.dest, input.slug, latest.tree.files);
   const paths =
@@ -178,6 +190,7 @@ async function submitGameUnlocked(input: {
         ? changedPathsForced(localGameFiles(input.dest, input.slug), remoteFiles)
         : latest.sync.local;
   let extra: string[] = [];
+  input.onProgress?.('Checking staged files');
   try {
     extra = await extraStagedPaths(input.api, input.slug, paths);
   } catch (error) {
@@ -209,9 +222,10 @@ async function submitGameUnlocked(input: {
   const staged: string[] = [];
   const matching = recovered ? await matchingStaged(input.api, input.slug, uploaded) : new Set<string>();
   try {
-    for (const path of paths) {
+    for (const [index, path] of paths.entries()) {
       const file = localMap.get(path);
       if (matching.has(path)) continue;
+      input.onProgress?.(`${file ? 'Uploading' : 'Deleting'} file ${index + 1}/${paths.length}: ${path}`);
       if (file) await stagePath(input.api, input.slug, file);
       else await deletePath(input.api, input.slug, path);
       staged.push(path);
@@ -223,6 +237,7 @@ async function submitGameUnlocked(input: {
   if (recovered) markRecoveryDelivery(input.dest, uploaded);
   let delivered: DeliverReply;
   try {
+    input.onProgress?.(`Sending ${mode} — waiting for platform acceptance`);
     delivered = await input.api.request<DeliverReply>('POST', `/api/me/studio/games/${input.slug}/sources/deliver`, {
       mode,
       attestation: true,
@@ -242,6 +257,7 @@ async function submitGameUnlocked(input: {
   const version = delivered.version ?? latest.sync.version;
   let files = uploaded;
   try {
+    input.onProgress?.('Delivery accepted — updating local checkout');
     const tree = await fetchLatestTree(input.api, input.slug);
     mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
     files = trackedTree(input.dest, input.slug, tree.files);

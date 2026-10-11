@@ -31,7 +31,7 @@ import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js'
 import { colorCheckoutLines } from './checkout-style.js';
 import { wantsColor } from './renderer.js';
 import { connectGame } from './connect.js';
-import { formatSubmitLines, submitGame } from './submit.js';
+import { submitCommand } from './submit-command.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
@@ -387,16 +387,18 @@ export async function runCli(
       const dest = here?.root ?? requested;
       const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? here?.slug ?? readCheckoutSlug(dest);
       if (!slug) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
-      const result = await submitGame({
-        api,
-        slug,
-        dest,
-        force: flags.force === true,
-        publish: flags.publish === true,
-        takeover: flags.takeover === true,
+      await submitCommand({
+        delivery: {
+          api,
+          slug,
+          dest,
+          force: flags.force === true,
+          publish: flags.publish === true,
+          takeover: flags.takeover === true,
+        },
+        io,
+        asJson,
       });
-      if (asJson) io.stdout.write(`${JSON.stringify(result)}\n`);
-      else io.stdout.write(`${formatSubmitLines(result, slug).join('\n')}\n`);
       return EXIT_GREEN;
     }
     if (verb === 'recover') {

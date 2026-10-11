@@ -11,6 +11,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Terminal sessions show a toggleable workspace sidebar with task, Studio status and local file changes, plus a scrollable conversation on wide terminals (#1767).
 
+### Fixed
+
+- `gamedevpl push` and `submit` show live progress like `update`, including elapsed time, local checks and file upload counts; interactive delivery shows the current stage too.
+
 ## 0.36.0 — 2026-10-11
 
 ### Added
