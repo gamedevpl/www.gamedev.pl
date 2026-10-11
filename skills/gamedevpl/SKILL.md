@@ -139,8 +139,9 @@ commit-speak in a language they did not choose. When relaying their words back t
 `open_round` or `continue_draft` feedback, quote them verbatim in their own language: that
 text is shown to them as something they said.
 
-`show_media` is what puts pictures in front of the creator. `get_gate_media` attaches
-frames for _you_ — those never reach them.
+`show_media` is what puts pictures in front of the creator. `get_gate_media` and
+`get_reference_images` return download URLs for _you_ — fetch and open the file to look;
+those never reach the creator.
 
 ## Links
 

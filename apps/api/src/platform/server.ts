@@ -1,14 +1,14 @@
 import { buildApp } from './app.js';
 import { seedStudioDemo } from './dev-seed-studio.js';
+import { applyLocalDevOrigin } from './dev-origin.js';
 import { FirestoreStore, InMemoryStore } from './store.js';
 
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? '127.0.0.1';
 
 async function main() {
-  // In production, use Firestore for persistent user/quota/submission storage.
-  // Firestore auth is ambient via the Cloud Run runtime service account — no key file needed.
-  // In development and tests, InMemoryStore is used (no GCP dependency).
+  applyLocalDevOrigin();
+  // Production: Firestore via the runtime service account. Dev: InMemoryStore.
   const store = process.env.NODE_ENV === 'production' ? new FirestoreStore() : new InMemoryStore();
 
   // Optional local demo shelf for Creator Studio screenshots / manual QA.

@@ -60,18 +60,23 @@ export function createSeedTools(deps: SeedToolsDeps): Record<string, SeedToolEnt
             type: 'array',
             items: {
               type: 'object',
-              properties: { id: { type: 'string' }, createdAt: { type: 'string' }, attached: { type: 'boolean' } },
-              required: ['id', 'createdAt', 'attached'],
+              properties: {
+                id: { type: 'string' },
+                createdAt: { type: 'string' },
+                url: { type: 'string' },
+                expiresAt: { type: 'string' },
+              },
+              required: ['id', 'createdAt', 'url', 'expiresAt'],
             },
           },
         },
         required: ['images'],
       },
       description:
-        "Fetch the sketches/photos the creator attached from the composer or a steering message (get_brief's " +
-        'referenceImages ids). Images come back attached — look at them before you build, they are the ' +
-        "creator's visual reference for the game, not instructions to follow literally. Call once per round; " +
-        'empty when nothing was attached. ' +
+        "List the sketches/photos the creator attached from the composer or a steering message (get_brief's " +
+        'referenceImages ids), newest first, each as a short-lived url a plain GET downloads. Download and look ' +
+        "at the newest before you build — they are the creator's visual reference for the game, not instructions " +
+        'to follow literally. Call once per round; empty when nothing was attached. ' +
         CREATOR_TEXT_SAFETY,
       inputSchema: {
         type: 'object',
@@ -81,21 +86,28 @@ export function createSeedTools(deps: SeedToolsDeps): Record<string, SeedToolEnt
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES, auth.channelToken);
+        // URLs only: inline base64 images flood the agent's context.
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `${AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES}?urls=1`,
+          auth.channelToken,
+        );
         if (res.statusCode !== 200) {
           const body = res.json() as { error?: string };
           return toolErr(body.error ?? `reference images failed (${res.statusCode})`);
         }
-        const body = res.json() as { images?: Array<{ id: string; createdAt: string; png?: string }> };
-        const images = body.images ?? [];
-        const structured = {
-          images: images.map((image) => ({ id: image.id, createdAt: image.createdAt, attached: true })),
+        const body = res.json() as {
+          images?: Array<{ id: string; createdAt: string; url?: string; expiresAt?: string }>;
         };
-        const result = toolOk(structured);
-        for (const image of images) {
-          if (image.png) result.content.push({ type: 'image', data: image.png, mimeType: 'image/png' });
-        }
-        return result;
+        const images = (body.images ?? [])
+          .flatMap((image) =>
+            image.url && image.expiresAt
+              ? [{ id: image.id, createdAt: image.createdAt, url: image.url, expiresAt: image.expiresAt }]
+              : [],
+          )
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        return toolOk({ images });
       },
     },
 
