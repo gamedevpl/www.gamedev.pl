@@ -131,6 +131,8 @@ import { registerRecommendationRoutes, type RecommendationRoutesOptions } from '
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from '../catalog/published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from '../catalog/catalog-genre-source.js';
 import { registerRateLimit } from './rate-limit.js';
+import { csvSet } from './csv-set.js';
+import { PUBLIC_KIT_ROUTE_PREFIX, publicKitDownloadEnabled, registerPublicKitRoutes } from './public-kit-routes.js';
 import { registerSpaShellFallback } from './spa-shell-fallback.js';
 import { registerOAuthProtectedResourceRoutes } from '../agent-surface/mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from '../agent-surface/mcp-server-discovery.js';
@@ -268,18 +270,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       ? true // explicit test injection implies beta mode
       : (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
 
-  const betaAllowedUids = new Set(
-    (options.betaAllowedUids ?? process.env.BETA_ALLOWED_UIDS ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
-  const betaAllowedEmails = new Set(
-    (options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS ?? '')
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  const betaAllowedUids = csvSet(options.betaAllowedUids ?? process.env.BETA_ALLOWED_UIDS);
+  const betaAllowedEmails = csvSet(options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS, (e) => e.toLowerCase());
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
@@ -404,6 +396,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
   if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict, objectStore });
+  registerPublicKitRoutes(app, { objectStore, enabled: publicKitDownloadEnabled() });
   // Wrapped once here so every entry point — delivery, editor, remix, proposals,
   // re-gate and the health sweep — starts builds through the same daily ceiling.
   const gateTrigger = withGateRunCeiling(
@@ -1145,6 +1138,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (request.url.startsWith('/api/mp/ws')) return;
     // Pre-login arrivals stay public; role flags contain no account identifiers.
     if (request.url.startsWith('/api/telemetry/visit')) return;
+    // Unlisted npm kit tarball; 404 unless PUBLIC_KIT_DOWNLOAD is on.
+    if (!closedByRung && request.url.startsWith(PUBLIC_KIT_ROUTE_PREFIX)) return;
     if (request.url === '/api/csp-report') return; // browser-posted, mostly before sign-in
     if (!closedByRung && isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
     if (!request.user) {
