@@ -1,10 +1,10 @@
 #code-panel {
   position: fixed;
   z-index: 5;
-  top: 84px;
+  top: var(--panel-top);
   left: 12px;
   width: min(720px, calc(100vw - 24px));
-  height: calc(var(--height) - 98px - var(--notice-space, 0px));
+  height: calc(var(--height) - var(--panel-top) - 14px - var(--notice-space, 0px));
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -92,12 +92,6 @@ body:has(#panel:not([hidden])) #code-panel {
   body:has(#panel:not([hidden])) #code-panel {
     z-index: 7;
     width: calc(100vw - 24px);
-  }
-}
-@media (max-width: 600px) {
-  #code-panel {
-    top: 78px;
-    height: calc(var(--height) - 86px - var(--notice-space, 0px));
   }
 }
 body[data-compact='true'] #code-panel {

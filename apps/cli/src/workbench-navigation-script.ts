@@ -1,5 +1,9 @@
 export const WORKBENCH_NAVIGATION_SCRIPT = String.raw`
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{document.body.style.setProperty('--notice-space',el('notice').textContent.trim()||!el('build-error').hidden?(el('preview-feedback').getBoundingClientRect().height+28)+'px':'0px');}).observe(el('preview-feedback'));
+function toolsLayout(){document.documentElement.style.setProperty('--panel-top',Math.max(Number(getComputedStyle(document.documentElement).getPropertyValue('--panel-min-top')),Math.ceil(el('tools').getBoundingClientRect().bottom+8))+'px');}
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(toolsLayout).observe(el('tools'));
+addEventListener('resize',toolsLayout);toolsLayout();
+el('drawer-fullscreen').onclick=()=>el('fullscreen').click();
 let historyIndex=-1, historyDraft='', lastHistory='', firstWorkspace=true, lastQuestion='';
 function openChat(){window.dispatchEvent(new Event('play-open-panel'));document.exitPointerLock?.();panel.hidden=false;el('edit').setAttribute('aria-expanded','true');draft.focus();}
 function closeChat(){panel.hidden=true;window.dispatchEvent(new Event('play-close-conversation'));leaveOnboarding();el('edit').setAttribute('aria-expanded','false');frame.focus();}

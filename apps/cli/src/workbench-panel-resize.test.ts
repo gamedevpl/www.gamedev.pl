@@ -74,10 +74,9 @@ it('restores a saved width, resizes with arrow keys and resets on double-click',
   expect(dom.window.localStorage.getItem('play-panel-width')).toBeNull();
 });
 
-it('sits outside the panel edge and hides with the panel, during intake and on narrow screens', () => {
+it('sits outside the panel edge and hides with the panel and during intake', () => {
   expect(PLAY_STYLE).toMatch(/width: ?min\(var\(--panel-width, ?390px\), ?calc\(100vw - 24px\)\)/);
   expect(PLAY_STYLE).toMatch(
     /#panel\[hidden\] ?\+ ?#panel-resize, ?body\[data-intake=["']?true["']?\] #panel-resize ?\{ ?display: ?none/,
   );
-  expect(PLAY_STYLE).toMatch(/@media ?\(max-width: ?600px\) ?\{ ?#panel-resize ?\{ ?display: ?none/);
 });

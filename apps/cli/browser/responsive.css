@@ -1,0 +1,123 @@
+.mobile-action {
+  display: none;
+}
+@media (max-width: 600px), (max-width: 900px) and (max-height: 520px) {
+  :root {
+    --toolbar-height: calc(52px + env(safe-area-inset-top));
+    --panel-top: calc(var(--toolbar-height) + 8px);
+    --panel-min-top: 0;
+  }
+  #tools {
+    inset: 0 0 auto;
+    height: var(--toolbar-height);
+    padding: calc(4px + env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) 4px
+      max(4px, env(safe-area-inset-left));
+    align-items: center;
+    gap: 8px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+  }
+  body:not(:has(#code-panel[data-view^='editor']:not([hidden]))):has(#tools:not([hidden]))
+    :is(#game, .game-stage, #empty) {
+    top: var(--toolbar-height);
+    height: calc(var(--height) - var(--toolbar-height));
+  }
+  .game-badge {
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    max-width: none;
+    min-width: 0;
+    flex: 1;
+    gap: 6px;
+  }
+  .game-badge div {
+    overflow: hidden;
+  }
+  .game-badge > svg {
+    display: none;
+  }
+  #game-name {
+    font-size: 13px;
+  }
+  #connection {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage-actions {
+    padding: 0;
+    border: 0;
+    gap: 0;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .stage-actions button {
+    padding: 0;
+    width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+  .stage-actions button > span {
+    display: none;
+  }
+  .stage-actions button > .update-icon {
+    display: inline-flex;
+  }
+  #fullscreen {
+    display: none;
+  }
+  .mobile-action {
+    display: inline-flex;
+  }
+  #apply {
+    color: var(--turquoise);
+  }
+  #restart {
+    color: #ffd29b;
+  }
+  #panel,
+  #workbench-tools {
+    right: max(8px, env(safe-area-inset-right));
+    width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));
+  }
+  body[data-dock='left'] :is(#panel, #workbench-tools) {
+    left: max(8px, env(safe-area-inset-left));
+  }
+  #code-panel:not([data-view^='editor']) {
+    left: max(8px, env(safe-area-inset-left));
+    right: auto;
+    width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));
+  }
+  body[data-code-open='true'] :is(#panel, #workbench-tools) {
+    max-width: none;
+  }
+  #panel-resize {
+    display: none;
+  }
+  textarea,
+  input,
+  select {
+    font-size: 16px;
+  }
+  #reveal {
+    top: calc(var(--height) / 2 - 22px);
+    right: env(safe-area-inset-right);
+    width: 32px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 12px 0 0 12px;
+    background: #161c22b3;
+    color: var(--muted);
+  }
+  #reveal span {
+    display: none;
+  }
+}
+@media (max-width: 420px) {
+  .game-badge {
+    display: none;
+  }
+}

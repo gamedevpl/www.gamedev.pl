@@ -20,6 +20,11 @@ Raw preview uses the same full bleed game embedding as the workbench. Reload, so
 and game instructions live in the overlaid Preview controls; they reserve no stage
 space. Build errors appear over the last playable build.
 
+On phones, Play keeps its controls in one compact row above the game, including
+landscape screens. Fullscreen is available in the tools drawer on phones. Hide controls gives the game the full viewport and leaves a small
+handle on the right edge to reopen them. Chat and tools scroll within the available
+height when the on-screen keyboard opens.
+
 With `--detach`, the launcher exits; Play ends 60 seconds after the last browser or
 paired phone tab closes, once active work finishes. Reopening a tab cancels the
 countdown. **Commands → End session** and `gamedevpl stop` end it immediately.
