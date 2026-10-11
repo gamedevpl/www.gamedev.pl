@@ -64,6 +64,12 @@ export async function registerDraftPreviewRoutes(
     if (!store || !record || record.abandonedAt) return null;
     // The owner sees their own red build; a stranger never does.
     if (uid && (await canActOnSubmissionOrSlug(store, record, uid, 'read'))) return { jobId: record.jobId, record };
+    return sharedGrantForRecord(record);
+  }
+
+  // The visitor half of grantForRecord: only a shared, green, unpulled build.
+  async function sharedGrantForRecord(record: SubmissionRecord): Promise<DraftGrant | null> {
+    if (!store || record.abandonedAt) return null;
     // A pulled game is not re-opened by flipping the switch.
     if (record.moderationBlockedAt) return null;
     if (!record.draftSharedAt || !record.slug) return null;
@@ -83,7 +89,16 @@ export async function registerDraftPreviewRoutes(
     if (!record && uid) {
       record = (await listAuthorizedRoundsForSlug(store, uid, slug))[0] ?? null;
     }
-    return grantForRecord(record, uid);
+    const grant = await grantForRecord(record, uid);
+    if (grant || !record) return grant;
+    if (record.moderationBlockedAt) return null;
+    const rounds = await store.listSubmissionsBySlug(slug);
+    for (const older of rounds) {
+      if (older.jobId === record.jobId) continue;
+      const shared = await sharedGrantForRecord(older);
+      if (shared) return shared;
+    }
+    return null;
   }
 
   // Serves the gate's own bundle, never raw delivered sources.

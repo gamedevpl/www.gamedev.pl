@@ -190,4 +190,32 @@ describe('sharing a draft', () => {
     });
     expect(stranger.statusCode).toBe(404);
   });
+
+  it('keeps an earlier round shared when a new, unshared round opens on the game', async () => {
+    // trenchline-command: round 2 opened unshared and the shared link went 404.
+    const { app, store, jobId } = await draftApp({ shared: true });
+    expect((await app.inject({ method: 'GET', url: `/api/games/${SLUG}` })).statusCode).toBe(200);
+
+    const nextRound = jobId + 2;
+    await store.createSubmission(nextRound, OWNER, 'TV Tycoon');
+    await store.setSubmissionSlug(nextRound, SLUG);
+    await store.setSubmissionDeliveredVersion(nextRound, 'v9');
+    expect((await store.getSubmissionBySlug(SLUG))?.jobId).toBe(nextRound);
+
+    const visitor = await app.inject({ method: 'GET', url: `/api/games/${SLUG}` });
+    expect(visitor.statusCode).toBe(200);
+    // The owner still gets the newest round.
+    expect((await app.inject({ method: 'GET', url: `/api/games/${SLUG}`, headers: headers() })).statusCode).toBe(200);
+  });
+
+  it('does not reopen an older share when the newest round was pulled', async () => {
+    const { app, store, jobId } = await draftApp({ shared: true });
+    const nextRound = jobId + 2;
+    await store.createSubmission(nextRound, OWNER, 'TV Tycoon');
+    await store.setSubmissionSlug(nextRound, SLUG);
+    await store.setSubmissionDeliveredVersion(nextRound, 'v9');
+    const tip = (await store.getSubmission(nextRound))!;
+    store.getSubmissionBySlug = async () => ({ ...tip, moderationBlockedAt: '2026-09-02T00:00:00.000Z' });
+    expect((await app.inject({ method: 'GET', url: `/api/games/${SLUG}` })).statusCode).toBe(404);
+  });
 });
