@@ -129,10 +129,17 @@ it.skipIf(!executablePath)(
     });
     try {
       const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+      await page.addInitScript(() => {
+        for (const key of ['play-panel-width', 'play-preview-height', 'play-files-width'])
+          localStorage.setItem(key, '1');
+      });
       await page.goto(fixture.url);
       await page.getByRole('button', { name: 'Code', exact: true }).click();
       await page.locator('.cm-content').waitFor();
       await chooseCodeView(page, 'editor-chat-preview');
+      expect((await bounds(page, '#panel')).width).toBe(300);
+      expect((await bounds(page, '#game')).height).toBe(64);
+      expect((await bounds(page, '.code-files-container')).width).toBe(140);
       for (const selector of ['#panel-resize', '#code-preview-resize', '#code-files-resize']) {
         await page.locator(selector).focus();
         await page.keyboard.press('End');

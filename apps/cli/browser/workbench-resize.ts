@@ -22,12 +22,14 @@ export function initializeWorkbenchResize() {
       axis: 'x' | 'y';
       sign: () => number;
       bounds: () => [number, number];
+      storageBounds: [number, number];
     },
   ) => {
     let saved: number | undefined;
     try {
       const value = Number(localStorage.getItem(key));
-      if (Number.isFinite(value) && value > 0) saved = Math.min(value, 10_000);
+      if (Number.isFinite(value) && value > 0)
+        saved = Math.min(config.storageBounds[1], Math.max(config.storageBounds[0], value));
     } catch {
       // Preferences are optional when browser storage is unavailable.
     }
@@ -66,6 +68,7 @@ export function initializeWorkbenchResize() {
         axis: 'x',
         sign: () => (body.dataset.dock === 'left' && code.dataset.view !== 'editor-preview' ? 1 : -1),
         bounds: widthBounds,
+        storageBounds: [300, 900],
       },
     ),
     bind(
@@ -77,6 +80,7 @@ export function initializeWorkbenchResize() {
         axis: 'y',
         sign: () => -1,
         bounds: () => [64, Math.max(64, height() - 280)],
+        storageBounds: [64, 10_000],
       },
     ),
     bind(
@@ -87,6 +91,7 @@ export function initializeWorkbenchResize() {
       {
         axis: 'x',
         sign: () => 1,
+        storageBounds: [140, 480],
         bounds: () => {
           const max = Math.min(480, element('code-workspace').clientWidth - 186);
           return [Math.min(140, Math.max(0, max)), Math.max(0, max)];
