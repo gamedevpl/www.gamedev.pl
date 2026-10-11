@@ -1,0 +1,83 @@
+.studio-pat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 140px);
+  align-items: end;
+  gap: 10px;
+}
+
+.studio-pat-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.studio-pat-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+}
+
+.studio-pat-form > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.studio-pat-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-pat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.studio-pat-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.studio-pat-summary {
+  display: flex;
+  flex: 1 1 140px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.studio-pat-summary strong {
+  color: var(--text-heading, #fff);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.studio-pat-summary span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.studio-pat-secret {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (max-width: 360px) {
+  .studio-pat-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
