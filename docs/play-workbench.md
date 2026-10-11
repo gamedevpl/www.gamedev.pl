@@ -98,19 +98,24 @@ shell commands do not participate in this lock.
 
 ## Local code editor
 
-**Code** opens the Studio editor beside the game and Conversation. Select an existing
-text file from the current game's local checkout; Creator Kit TypeScript files appear
-as read-only context. Other games, credentials, hidden files, raster assets and build
+**Code** opens the Studio editor beside the game and Conversation. Its sidebar uses
+Studio's file tree, with collapsible folders and paths relative to the current game.
+**Files** toggles the sidebar; on phones it opens over the editor and closes when a
+file is selected. Creator Kit `shared/` and `tools/` remain locked placeholders,
+without listing their modules. Their TypeScript sources stay available for local
+completion, diagnostics, hover and definitions; following a definition may open its
+read-only source. Other games, credentials, hidden files, raster assets and build
 configuration are unavailable. The editor uses Studio's CodeMirror, search, undo history,
 TypeScript extensions and ghost text rather than a separate editor implementation.
 
-The **Code view** menu switches between the floating panel, **Editor only**,
-**Editor + chat**, **Editor + chat + preview**, and **Game only**. Focus views fill
-all available window space without rounded cards; the preview occupies a smaller
-area below Conversation. Conversation's left/right dock preference is respected.
-On phones, the editor, chat and optional preview stack vertically, with scrolling
-for the editor and composer when space is limited, including while the keyboard is open.
-Game only uses the existing **Hide controls** action; **Show Play controls** restores navigation.
+The **Conversation** and **Game preview** buttons show or hide those panels beside
+Code. **Dock Code panel** fills the window with the editor, conversation and a small
+preview; **Float Code panel** returns to the floating layout. Conversation and preview
+can be toggled independently. Focus views use all available space without rounded
+cards and respect Conversation's left/right dock preference. On phones the panels
+stack vertically, with scrolling when space is limited or the keyboard is open.
+**Maximize game** uses the existing **Hide controls** action; **Show Play controls**
+restores navigation.
 
 The expand button fills the window with the editor; **Restore Code panel** or **Esc**
 returns to the previous view. Editor menus and search consume Esc first. All views

@@ -1,3 +1,4 @@
+import type { Page } from 'playwright-core';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,4 +67,41 @@ export function assembleGame(slug: string) {
       rmSync(root, { recursive: true, force: true });
     },
   };
+}
+
+export async function selectCodeFile(page: Page, path: string) {
+  if (!(await page.locator('.code-files-container').isVisible()))
+    await page.getByRole('button', { name: 'Toggle files', exact: true }).click();
+  const relative = path.replace(/^games\/[^/]+\//, '');
+  const parts = relative.split('/');
+  for (let i = 1; i < parts.length; i++) {
+    const folder = page.locator('.code-surface-tree-folder-toggle').filter({ has: page.locator('span') });
+    const toggle = folder.and(page.getByTitle(parts.slice(0, i).join('/'), { exact: true }));
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  }
+  await page.locator(`.code-surface-tree-row[data-path="${relative}"] .code-surface-rail-item`).click();
+}
+
+export async function chooseCodeView(page: Page, view: string) {
+  if (view === 'game') {
+    const preview = page.getByRole('button', { name: 'Toggle game preview beside Code', exact: true });
+    if ((await preview.getAttribute('aria-pressed')) !== 'true') await preview.click();
+    await page.getByRole('button', { name: 'Maximize game', exact: true }).click();
+    return;
+  }
+  if (view === 'panel') {
+    await page.getByRole('button', { name: 'Float Code panel', exact: true }).click();
+    return;
+  }
+  if (view === 'editor') {
+    await page.getByRole('button', { name: 'Maximize Code editor', exact: true }).click();
+    return;
+  }
+  const panel = page.locator('#code-panel');
+  const current = await panel.getAttribute('data-view');
+  if (current === 'panel') await page.getByRole('button', { name: 'Dock Code panel', exact: true }).click();
+  const chat = page.getByRole('button', { name: 'Toggle conversation beside Code', exact: true });
+  if (((await chat.getAttribute('aria-pressed')) === 'true') !== view.startsWith('editor-chat')) await chat.click();
+  const preview = page.getByRole('button', { name: 'Toggle game preview beside Code', exact: true });
+  if (((await preview.getAttribute('aria-pressed')) === 'true') !== view.endsWith('preview')) await preview.click();
 }

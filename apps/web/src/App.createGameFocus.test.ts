@@ -45,8 +45,7 @@ describe('Create Game menu focus', () => {
       return new Response('{}', { status: 404 });
     });
 
-    // Page-load autofocus is desktop-only; force the narrow path so focus comes
-    // only from the menu click under test.
+    // Narrow view makes focus depend on the deliberate menu click.
     vi.stubGlobal(
       'matchMedia',
       vi.fn().mockReturnValue({
@@ -57,7 +56,7 @@ describe('Create Game menu focus', () => {
       }),
     );
 
-    // jsdom has no scrollIntoView; install a stub first so spyOn can restore it.
+    // jsdom needs a configurable method for spy restoration.
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
       configurable: true,
       writable: true,
@@ -361,14 +360,14 @@ describe('Party navigation from elsewhere', () => {
 
     expect(window.location.pathname).toBe('/party');
 
-    // The catalog fetch resolves asynchronously; give it a beat before asserting content.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    });
-
-    const partyPage = container.querySelector('.party-page');
-    expect(partyPage).not.toBeNull();
-    expect(container.textContent).toContain('Party Karts');
+    // Lazy routes can outlive a fixed settle delay.
+    await vi.waitFor(
+      async () => {
+        await act(flushEffects);
+        expect(container.querySelector('.party-page')?.textContent).toContain('Party Karts');
+      },
+      { timeout: 10_000 },
+    );
 
     await act(async () => root.unmount());
   });

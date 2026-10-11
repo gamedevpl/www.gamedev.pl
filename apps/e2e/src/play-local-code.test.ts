@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 import { expect, it } from 'vitest';
 import { findChromium } from './browser.js';
 import { chromiumSandbox } from './sandbox.js';
-import { playCodeFixture, INITIAL_CODE } from './play-code-fixture.js';
+import { playCodeFixture, INITIAL_CODE, selectCodeFile } from './play-code-fixture.js';
 import { withCheckoutWriter } from '../../cli/src/workbench-lock.js';
 const executablePath = findChromium();
 
@@ -35,6 +35,11 @@ it.skipIf(!executablePath)(
       await page.waitForFunction(() =>
         document.querySelector('.code-status')?.textContent?.includes('TypeScript ready'),
       );
+      expect(await page.locator('#code-file').count()).toBe(0);
+      expect(await page.getByRole('combobox', { name: 'Code view' }).count()).toBe(0);
+      expect(await page.locator('.code-files .code-surface-tree').count()).toBe(1);
+      expect(await page.locator('.code-files [data-path^="shared/"]').count()).toBe(0);
+      expect(await page.locator('.code-files').innerText()).not.toContain('game-kit.d.ts');
       await page.click('.cm-content');
       await page.keyboard.press('Control+End');
       await page.keyboard.insertText("\nconst accent = '#0be3a3';");
@@ -43,8 +48,16 @@ it.skipIf(!executablePath)(
       expect(swatch?.width).toBeLessThan(24);
       await page.keyboard.press('Control+z');
       await page.keyboard.type('\n// local draft');
-      await page.selectOption('#code-file', 'games/demo/game/logic.ts');
-      await page.selectOption('#code-file', 'games/demo/game.ts');
+      const folder = page.locator('.code-surface-tree-folder-toggle[title="game"]');
+      if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.click();
+      await folder.click();
+      await expect.poll(() => page.locator('.code-surface-tree-row[data-path="game/logic.ts"]').count()).toBe(0);
+      await folder.click();
+      await expect
+        .poll(() => page.locator('.code-surface-tree-row[data-path="game.ts"] .has-staged-edits').count())
+        .toBe(1);
+      await selectCodeFile(page, 'games/demo/game/logic.ts');
+      await selectCodeFile(page, 'games/demo/game.ts');
       expect(await page.locator('.cm-content').innerText()).toContain('local draft');
       await page.click('[aria-label="Close Code"]');
       await page.click('#edit');
@@ -91,10 +104,10 @@ it.skipIf(!executablePath)(
       await page.mouse.click(symbol.x, symbol.y);
       await page.keyboard.up('Control');
       await page.waitForFunction(
-        () => (document.querySelector('#code-file') as HTMLSelectElement).value === 'shared/game-kit.d.ts',
+        () => document.querySelector('.code-current-file')?.getAttribute('data-path') === 'shared/game-kit.d.ts',
       );
       expect(await page.locator('.code-status').innerText()).toContain('read-only');
-      await page.selectOption('#code-file', 'games/demo/game.ts');
+      await selectCodeFile(page, 'games/demo/game.ts');
       await page.click('.cm-content');
       await page.keyboard.press('Control+a');
       await page.keyboard.insertText("const broken: number = 'text';");
