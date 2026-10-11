@@ -117,6 +117,14 @@ stack vertically, with scrolling when space is limited or the keyboard is open.
 **Maximize game** uses the existing **Hide controls** action; **Show Play controls**
 restores navigation.
 
+On desktop and tablets wider than 600 px, drag the divider beside Code to resize
+Conversation and its game preview. Drag the divider above the preview to change its
+height, or the edge of Files to resize the sidebar. These dividers work on either
+dock side and keep the editor, drafts and game mounted. Focus a divider and use arrow
+keys (Shift for larger steps), Home or End; double-click restores its default.
+Sizes stay in local storage for the same local server origin and are clamped when
+the window shrinks. Phone layouts keep their stacked panels and Files overlay.
+
 The expand button fills the window with the editor; **Restore Code panel** or **Esc**
 returns to the previous view. Editor menus and search consume Esc first. All views
 keep the same editor, conversation and game iframe mounted, preserving drafts,

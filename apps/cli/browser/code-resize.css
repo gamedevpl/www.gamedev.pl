@@ -1,0 +1,82 @@
+.code-resize {
+  touch-action: none;
+  outline-offset: -2px;
+}
+#code-files-resize {
+  flex: 0 0 6px;
+  cursor: ew-resize;
+  border-left: 1px solid var(--panel-border);
+}
+#code-preview-resize {
+  display: none;
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  top: calc(var(--height) - var(--code-preview-height) - 4px);
+  width: var(--code-rail);
+  height: 8px;
+  cursor: ns-resize;
+  border-top: 1px solid var(--panel-border);
+}
+.code-resize:is(:hover, :focus-visible) {
+  background: #00e4ac66;
+}
+body[data-resizing='true'][data-resize-axis='y'] {
+  cursor: ns-resize;
+}
+@media (min-width: 601px) {
+  body:has(#code-panel[data-view^='editor']:not([hidden])) {
+    --code-rail: clamp(
+      min(300px, calc(100vw - 320px)),
+      var(--panel-width, min(390px, 45vw)),
+      min(60vw, calc(100vw - 320px), 900px)
+    );
+  }
+  body:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) {
+    --code-preview-height: clamp(
+      64px,
+      var(--play-preview-height, min(32vh, 260px)),
+      max(64px, calc(var(--height) - 280px))
+    );
+  }
+  .code-files-container {
+    width: clamp(
+      min(140px, max(0px, calc(100% - 186px))),
+      var(--play-files-width, min(240px, 36%)),
+      min(480px, max(0px, calc(100% - 186px)))
+    );
+    border-right: 0;
+  }
+
+  body:has(
+      #code-panel:is([data-view='editor-chat'], [data-view='editor-chat-preview'], [data-view='editor-preview']):not(
+          [hidden]
+        )
+    )
+    #panel-resize {
+    display: block;
+    visibility: visible;
+    z-index: 10;
+    top: 0;
+    right: calc(var(--code-rail) - 5px);
+    left: auto;
+    height: var(--height);
+  }
+  body[data-dock='left']:has(#code-panel[data-view^='editor-chat']:not([hidden])) #panel-resize {
+    right: auto;
+    left: calc(var(--code-rail) - 5px);
+  }
+  body:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) #code-preview-resize {
+    display: block;
+  }
+  body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hidden])) #code-preview-resize {
+    right: auto;
+    left: 0;
+  }
+}
+@media (max-width: 600px) {
+  #code-files-resize,
+  #code-preview-resize {
+    display: none;
+  }
+}

@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local Play resizes Code’s conversation/preview rail, game preview height and Files sidebar with draggable, keyboard-accessible dividers, retaining sizes after reload (#1763).
+
 ## 0.34.0 — 2026-10-11
 
 ### Added
