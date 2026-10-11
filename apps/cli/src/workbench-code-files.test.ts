@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { codeProjectId, readCodeFile, saveCodeFile } from './workbench-code-files.js';
@@ -60,6 +60,34 @@ it('changes index revisions on external edits and removes deleted files', async 
   expect(edited.files.find((entry) => entry.path === file.path)?.revision).not.toBe(file.revision);
   rmSync(join(root, file.path));
   expect((await readCodeIndex(checkout)).files.some((entry) => entry.path === file.path)).toBe(false);
+});
+it('indexes npm Kit declarations as read-only shared files and keeps game writes available', async () => {
+  const { root, checkout, request } = fixture();
+  const kitRoot = join(root, 'node_modules/@gamedevpl/gamekit');
+  mkdirSync(kitRoot, { recursive: true });
+  renameSync(join(root, 'shared'), join(kitRoot, 'shared'));
+  const project = await readCodeIndex(checkout);
+  expect(project.files.find((file) => file.path === 'shared/game-kit.d.ts')?.readOnly).toBe(true);
+  const kit = readCodeFile(checkout, 'shared/game-kit.d.ts');
+  expect(kit).toMatchObject({ content: 'declare const GameKit: unknown;', readOnly: true });
+  await expect(
+    saveCodeFile(checkout, { ...request, path: kit.path, version: kit.version }, () => true),
+  ).rejects.toThrow('read-only');
+  expect((await saveCodeFile(checkout, request, () => true)).status).toBe('saved');
+  expect(() => readCodeFile(checkout, 'node_modules/@gamedevpl/gamekit/shared/game-kit.d.ts')).toThrow();
+});
+it('refuses links in npm Kit declarations and a linked package root', async () => {
+  const { root, checkout } = fixture();
+  const kitRoot = join(root, 'node_modules/@gamedevpl/gamekit');
+  mkdirSync(kitRoot, { recursive: true });
+  renameSync(join(root, 'shared'), join(kitRoot, 'shared'));
+  symlinkSync(join(root, '.env'), join(kitRoot, 'shared/sneak.ts'));
+  expect((await readCodeIndex(checkout)).files.some((file) => file.path === 'shared/sneak.ts')).toBe(false);
+  expect(() => readCodeFile(checkout, 'shared/sneak.ts')).toThrow('Symbolic');
+  renameSync(kitRoot, join(root, 'other-kit'));
+  symlinkSync(join(root, 'other-kit'), kitRoot);
+  expect((await readCodeIndex(checkout)).files.some((file) => file.path.startsWith('shared/'))).toBe(false);
+  expect(() => readCodeFile(checkout, 'shared/game-kit.d.ts')).toThrow('Symbolic');
 });
 it('saves with a version and preserves changes made by an external editor', async () => {
   const { root, checkout, request } = fixture();

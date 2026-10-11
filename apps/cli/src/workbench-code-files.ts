@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   constants,
   closeSync,
+  existsSync,
   fstatSync,
   lstatSync,
   openSync,
@@ -39,13 +40,21 @@ export function codeFileAllowed(checkout: CodeCheckout, path: string): boolean {
 function safePath(checkout: CodeCheckout, path: string): string {
   if (!codeFileAllowed(checkout, path)) throw Error('File outside this project');
   const root = realpathSync(checkout.root);
-  const absolute = pathInside(root, path);
+  const storagePath = codeStoragePath(root, path);
+  const absolute = pathInside(root, storagePath);
   let current = root;
-  for (const part of path.split('/')) {
+  for (const part of storagePath.split('/')) {
     current = join(current, part);
     if (lstatSync(current).isSymbolicLink()) throw Error('Symbolic links are unavailable');
   }
   return absolute;
+}
+
+export function codeStoragePath(root: string, path: string): string {
+  const kit = 'node_modules/@gamedevpl/gamekit';
+  return (path === 'shared' || path.startsWith('shared/')) && existsSync(join(root, kit, 'shared'))
+    ? `${kit}/${path}`
+    : path;
 }
 
 export function readCodeFile(checkout: CodeCheckout, path: string): CodeFile {
