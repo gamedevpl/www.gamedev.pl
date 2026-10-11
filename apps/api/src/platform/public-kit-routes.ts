@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
+import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, isKitEngineRefSupported, parseKitRegistry } from './kit-window.js';
 
 export const PUBLIC_KIT_ROUTE_PREFIX = '/api/kit/';
@@ -23,8 +24,12 @@ export function registerPublicKitRoutes(
       const engineRef = match[1]!;
       const registryBody = await deps.objectStore.readObject(KIT_REGISTRY_OBJECT);
       if (!registryBody) return reply.status(404).send({ error: 'not found' });
-      // N/N−1 only: never hand out retired kits anonymously.
-      if (!isKitEngineRefSupported(engineRef, parseKitRegistry(registryBody.toString('utf8')))) {
+      // Same window the gate accepts, sidecar version included.
+      const version = await deps.objectStore
+        .readObject(`kits/${engineRef}.json`)
+        .then((body) => (body ? parseKitSidecar(body.toString('utf8')).version : undefined))
+        .catch(() => undefined);
+      if (!isKitEngineRefSupported(engineRef, parseKitRegistry(registryBody.toString('utf8')), version)) {
         return reply.status(404).send({ error: 'not found' });
       }
       const object = `kits/${engineRef}.tgz`;
