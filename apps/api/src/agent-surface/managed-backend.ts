@@ -254,12 +254,20 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       }
 
       const started = startedAt.get(ref) ?? (session.startedAt ? Date.parse(session.startedAt) : NaN);
-      const expired =
+      const overClock =
         options.maxDurationSeconds !== undefined &&
         Number.isFinite(started) &&
         Date.now() - started >= options.maxDurationSeconds * 1000 &&
         !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
-      if (expired) {
+      // Idle after a delivery or end is finished work; the gate decides.
+      const idleSignals =
+        overClock && session.state === 'idle' && options.readSignals && observeOptions.jobId !== undefined
+          ? await options.readSignals(observeOptions.jobId)
+          : null;
+      const finishedIdle = Boolean(
+        idleSignals?.deliveredVersion || idleSignals?.previewVersion || idleSignals?.agentEndedAt,
+      );
+      if (overClock && !finishedIdle) {
         await options.provider.cancelSession(ref);
         await releaseCredential(ref, observeOptions.jobId);
         return {
