@@ -45,6 +45,7 @@ function screen(columns = 150, rows = 28, historyOffset = 0, checkout: () => Wor
   return {
     session,
     frame: () => frames.at(-1) ?? '',
+    takeOutput: () => frames.splice(0).join(''),
     async press(keys: string) {
       settle();
       input.write(keys);
@@ -80,7 +81,9 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   expect(view.session.get().draft).toBe('unfinished request');
   await view.press('\u0002');
   expect(view.frame()).toContain('WORKSPACE');
+  view.takeOutput();
   view.resize(80, 24);
+  expect(view.takeOutput()).toContain('Message 39');
   expect(view.frame()).not.toContain('WORKSPACE');
   expect(view.session.get().draft).toBe('unfinished request');
   view.resize(150, 28);

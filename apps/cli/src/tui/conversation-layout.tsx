@@ -69,17 +69,14 @@ export function ConversationLayout({
   panel?: ReactNode;
   children: ReactNode;
 }) {
+  // Keep Ink's static node mounted while split output waits for scrollback.
   const printed = useRef(offset);
-  if (split) printed.current = lines.length;
+  if (!split) printed.current = lines.length;
   return (
     <Box width={width} height={split ? rows : undefined} flexDirection={split ? 'row' : 'column'}>
-      {!split && (
-        <Static items={lines.slice(printed.current)} style={{ width }}>
-          {(line, index) => (
-            <TranscriptLine key={index} line={line} previous={lines[printed.current + index - 1]} color={color} />
-          )}
-        </Static>
-      )}
+      <Static items={lines.slice(offset, printed.current)} style={{ width }}>
+        {(line, index) => <TranscriptLine key={index} line={line} previous={lines[offset + index - 1]} color={color} />}
+      </Static>
       <Box flexGrow={1} minWidth={0} flexDirection="column">
         {split && !blocked && (
           <TranscriptViewport lines={lines} offset={offset} color={color} blocked={blocked} layout={children} />
