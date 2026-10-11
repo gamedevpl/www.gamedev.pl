@@ -127,6 +127,7 @@ it('preserves wide messages in scrollback on shrink without replaying earlier st
     await new Promise((resolve) => setTimeout(resolve, 100));
     output = '';
     await resize(80);
+    for (const line of stripAnsi(output).split('\n')) expect(line.length).toBeLessThanOrEqual(80);
     expect(
       stripAnsi(output)
         .split('\n')
@@ -142,6 +143,7 @@ it('preserves wide messages in scrollback on shrink without replaying earlier st
     await new Promise((resolve) => setTimeout(resolve, 100));
     output = '';
     await resize(80);
+    for (const line of stripAnsi(output).split('\n')) expect(line.length).toBeLessThanOrEqual(80);
     expect(
       stripAnsi(output)
         .split('\n')

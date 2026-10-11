@@ -70,7 +70,8 @@ export function ReplApp({
   useEffect(() => session.subscribe(setState), [session]);
   useEffect(() => {
     const onResize = (): void => setDimensions({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
-    stdout.on('resize', onResize);
+    // Resize the layout before Ink redraws against the new terminal width.
+    stdout.prependListener('resize', onResize);
     return () => {
       stdout.off('resize', onResize);
     };
