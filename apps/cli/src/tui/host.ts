@@ -177,12 +177,22 @@ export async function runInkRepl(input: {
     const readLogs = () => taskLogTail(workshop?.lastLog);
     const mount = (historyOffset = 0) => {
       if (input.browserOnly) return;
-      host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview, readLogs }), {
-        stdin: input.io.stdin,
-        stdout: input.io.stdout,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      });
+      host.instance = render(
+        createElement(ReplApp, {
+          session,
+          color,
+          historyOffset,
+          openPreview,
+          readLogs,
+          checkout: () => (workshop?.slug === slug ? workshop : input.checkout?.slug === slug ? input.checkout : null),
+        }),
+        {
+          stdin: input.io.stdin,
+          stdout: input.io.stdout,
+          exitOnCtrlC: false,
+          patchConsole: false,
+        },
+      );
     };
     mount();
     stopUpdateNotice = startUpdateNotice({ write: session.writeLine });

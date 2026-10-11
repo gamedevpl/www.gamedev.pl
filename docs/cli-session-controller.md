@@ -37,6 +37,24 @@ not emit a second event for a queued prompt or introduce prompt/path identifiers
 analytics. Tests cover two clients sharing the queue, retry/conflict, stale questions
 and task cancellation, draft preservation and terminal behavior.
 
+## Terminal workspace
+
+The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns /
+16 rows it renders a full-height conversation with a right sidebar; smaller terminals
+retain the static transcript. Both use `TranscriptLine`, the existing composer,
+choice handling, diagnostics and diff viewer. Ctrl+B hides the sidebar, and PgUp/PgDn
+scroll the conversation unless an active choice owns those keys.
+
+The sidebar reads task/queue/preview and Studio updates from the shared session.
+`useWorkspaceChanges` samples local game files every three seconds only while visible,
+reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching
+checkouts clears stale summaries; unmounting or hiding the sidebar stops the timer.
+It excludes shared Kit files and makes no network requests or checkout writes. A missing
+baseline is unknown, not clean. Remote conflicts still require `/status` or `/diff`.
+
+This passive view adds no telemetry event. Existing `cli_step` actions and funnel
+aggregation continue to measure creator progress; sidebar use itself is unmeasured.
+
 ## Local browser client
 
 In an interactive terminal session, `/play` opens the local preview with an **Edit game**

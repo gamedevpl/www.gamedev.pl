@@ -2,14 +2,17 @@ import { TaskDebug } from './debug.js';
 import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Static, Text, useInput, useStdout, type Key } from 'ink';
+import { Box, Text, useInput, useStdout, type Key } from 'ink';
 import wrapAnsi from 'wrap-ansi';
-import { TranscriptLine, RichText } from './transcript.js';
+import { RichText } from './transcript.js';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
 import { CLI_VERSION } from '../update.js';
 import type { TuiSession, TuiState } from './session.js';
 import { DiffViewer } from './diff.js';
+import { ConversationLayout } from './conversation-layout.js';
+import { WorkspacePanel, useWorkspaceChanges } from './workspace-panel.js';
+import type { WorkspaceCheckout } from './workspace-status.js';
 
 export function draftViewport(draft: string, cursor: number, width: number) {
   const chars = [...draft];
@@ -33,12 +36,14 @@ export function ReplApp({
   historyOffset = 0,
   openPreview,
   readLogs,
+  checkout,
 }: {
   session: TuiSession;
   color: boolean;
   historyOffset?: number;
   openPreview?: (url: string) => void;
   readLogs?: () => string[];
+  checkout?: () => WorkspaceCheckout | null;
 }) {
   const [state, setState] = useState<TuiState>(session.get);
   const [debug, setDebug] = useState(false);
@@ -54,12 +59,19 @@ export function ReplApp({
   }, [newestDiff]);
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
-  const [rows, setRows] = useState(stdout.rows || 24);
+  const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
+  const [sidebar, setSidebar] = useState(true);
+  const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
+  const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
+  const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
+  const rows = dimensions.rows - Number(split);
+  const changes = useWorkspaceChanges(checkout?.() ?? null, split && sidebar);
   const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
   useEffect(() => session.subscribe(setState), [session]);
   useEffect(() => {
-    const onResize = (): void => setRows(stdout.rows || 24);
-    stdout.on('resize', onResize);
+    const onResize = (): void => setDimensions({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
+    // Resize the layout before Ink redraws against the new terminal width.
+    stdout.prependListener('resize', onResize);
     return () => {
       stdout.off('resize', onResize);
     };
@@ -72,6 +84,10 @@ export function ReplApp({
   const shellDraft = state.draft.slice(shellPrefix);
   const onInput = (input: string, key: Key): void => {
     if (viewDiff) return;
+    if (key.ctrl && input === 'b' && split) {
+      setSidebar((visible) => !visible);
+      return;
+    }
     if (key.ctrl && input === 'd' && newestDiff) {
       setDebug(false);
       setViewDiff(true);
@@ -184,7 +200,7 @@ export function ReplApp({
   const border = color ? 'round' : 'single';
   const accent = color ? (shellMode ? 'yellow' : 'cyan') : undefined;
   const prompt = shellMode ? '!' : glyphs(color).prompt;
-  const choiceWidth = Math.max(1, Math.min(stdout.columns || 80, 110) - 4);
+  const choiceWidth = Math.max(1, width - 4);
   const selectedRows = Math.max(1, Math.ceil(((state.choices[state.pickIndex]?.length ?? 0) + 5) / choiceWidth));
   const choiceCount = Math.min(state.choices.length, Math.max(1, rows - 10 - (selectedRows - 1)));
   const choiceStart = Math.max(
@@ -213,24 +229,28 @@ export function ReplApp({
     : state.live;
   const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
-  const draft = draftViewport(
-    shellDraft,
-    Math.max(0, state.draftCursor - shellPrefix),
-    Math.min(stdout.columns || 80, 110) - 5,
-  );
+  const draft = draftViewport(shellDraft, Math.max(0, state.draftCursor - shellPrefix), width - 5);
   return (
-    <Box flexDirection="column" width={Math.min(stdout.columns || 80, 110)}>
-      <Static items={state.lines.slice(historyOffset)} style={{ width: Math.min(stdout.columns || 80, 110) }}>
-        {(line, index) => (
-          <TranscriptLine key={index} line={line} previous={state.lines[historyOffset + index - 1]} color={color} />
-        )}
-      </Static>
+    <ConversationLayout
+      lines={state.lines}
+      offset={historyOffset}
+      color={color}
+      split={split}
+      width={split ? dimensions.columns : width}
+      rows={rows}
+      blocked={debug || viewDiff || state.mode === 'pick'}
+      panel={
+        panelWidth > 0 ? (
+          <WorkspacePanel state={state} changes={changes} rows={rows} width={panelWidth} color={color} />
+        ) : undefined
+      }
+    >
       {debug && readLogs && <TaskDebug read={readLogs} rows={rows} close={() => setDebug(false)} />}
       {viewDiff && newestDiff && (
         <DiffViewer
           diff={newestDiff}
           rows={Math.max(5, rows - 1)}
-          columns={Math.min(stdout.columns || 80, 110)}
+          columns={width}
           color={color}
           close={() => setViewDiff(false)}
         />
@@ -348,9 +368,9 @@ export function ReplApp({
                 : 'Working — input paused'}
         </Text>
         <Text dimColor wrap="truncate-end">
-          <RichText text={footer} color={color} />
+          <RichText text={`${footer}${split ? ' · Ctrl+B sidebar · PgUp/PgDn chat' : ''}`} color={color} />
         </Text>
       </Box>
-    </Box>
+    </ConversationLayout>
   );
 }

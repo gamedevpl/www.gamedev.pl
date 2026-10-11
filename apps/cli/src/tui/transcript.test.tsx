@@ -98,3 +98,71 @@ it('restores input after a terminal handoff without replaying old transcript lin
     stdout.end();
   }
 });
+
+it('preserves wide messages in scrollback on shrink without replaying earlier static messages', async () => {
+  const session = createTuiSession('');
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 24, isTTY: true });
+  let output = '';
+  stdout.on('data', (chunk) => {
+    output += String(chunk);
+  });
+  const app = render(createElement(ReplApp, { session, color: false, checkout: () => null }), {
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  const resize = async (columns: number) => {
+    stdout.columns = columns;
+    stdout.emit('resize');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  };
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    void session.prompt();
+    session.writeLine('classic-first');
+    await resize(150);
+    session.writeLine('wide-first');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    output = '';
+    await resize(80);
+    for (const line of stripAnsi(output).split('\n')) expect(line.length).toBeLessThanOrEqual(80);
+    expect(
+      stripAnsi(output)
+        .split('\n')
+        .map((line) => line.trim()),
+    ).toContain('wide-first');
+    expect(
+      stripAnsi(output)
+        .split('\n')
+        .map((line) => line.trim()),
+    ).not.toContain('classic-first');
+    await resize(150);
+    session.writeLine('wide-second');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    output = '';
+    await resize(80);
+    for (const line of stripAnsi(output).split('\n')) expect(line.length).toBeLessThanOrEqual(80);
+    expect(
+      stripAnsi(output)
+        .split('\n')
+        .map((line) => line.trim()),
+    ).toContain('wide-second');
+    expect(
+      stripAnsi(output)
+        .split('\n')
+        .map((line) => line.trim()),
+    ).not.toContain('wide-first');
+    expect(
+      stripAnsi(output)
+        .split('\n')
+        .map((line) => line.trim()),
+    ).not.toContain('classic-first');
+  } finally {
+    app.unmount();
+    session.close();
+    stdin.end();
+    stdout.end();
+  }
+});
